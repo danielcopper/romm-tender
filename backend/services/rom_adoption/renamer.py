@@ -30,23 +30,17 @@ from domain.adoption_rename import (
     split_collisions,
 )
 from domain.rom_files import detect_launch_file
-from domain.save_layout import ContentDir, InSaveDir
-from domain.save_path import resolve_save_dir
+from domain.savestate_location import NoSavestates, SavestateLocation
 
 if TYPE_CHECKING:
     import logging
 
-    from domain.save_layout import SaveLayout
     from services.protocols import (
         ActiveCoreReader,
         AdoptionMoveStore,
-        CoreNameProviderFn,
         DownloadFileStore,
-        RetroArchSaveLayoutProvider,
-        RetroArchSavestateLayoutProvider,
-        RetroDeckPaths,
+        SaveLocationReader,
         SaveQuarantineFn,
-        SaveSortingProvider,
         SystemM3uSupportFn,
     )
 
@@ -57,8 +51,9 @@ def _travels_with(rom_source: str, directory: str) -> bool:
     """Whether *directory* moves with *rom_source* rather than standing beside it.
 
     True for a directory inside the content being renamed — a multi-file ROM
-    whose emulator writes saves next to the game. Its files arrive at the new
-    name as part of the ROM's own move, so pairing them up would move them twice.
+    whose emulator writes saves next to the game, which the resolver answers
+    with a ``content_directory`` root. Its files arrive at the new name as part
+    of the ROM's own move, so pairing them up would move them twice.
     """
     return directory == rom_source or directory.startswith(rom_source + os.sep)
 
@@ -67,10 +62,8 @@ def _travels_with(rom_source: str, directory: str) -> bool:
 class AdoptionRenamerConfig:
     """Frozen wiring bundle handed to ``AdoptionRenamer.__init__``.
 
-    The three layout seams are separate because they answer three different
-    questions from two different sources — see
-    :meth:`AdoptionRenamer._savefile_layout`. ``active_core`` / ``get_core_name``
-    answer the per-core subdirectory only when a layout says there is one, and
+    ``save_locations`` answers where the save and the savestate directory are,
+    asked of the emulator ``active_core`` names for this ROM, and
     ``download_file_store`` is here for one read: the launch file inside a
     directory candidate, which is what its saves are named after.
     ``quarantine_save`` is the sanctioned save-backup funnel — an Overwrite
@@ -80,13 +73,9 @@ class AdoptionRenamerConfig:
     adoption_move: AdoptionMoveStore
     quarantine_save: SaveQuarantineFn
     download_file_store: DownloadFileStore
-    retrodeck_paths: RetroDeckPaths
     m3u_support: SystemM3uSupportFn
-    save_layout: RetroArchSaveLayoutProvider
-    save_sorting: SaveSortingProvider
-    savestate_layout: RetroArchSavestateLayoutProvider
+    save_locations: SaveLocationReader
     active_core: ActiveCoreReader
-    get_core_name: CoreNameProviderFn
     logger: logging.Logger
 
 
@@ -97,13 +86,9 @@ class AdoptionRenamer:
         self._adoption_move = config.adoption_move
         self._quarantine_save = config.quarantine_save
         self._download_file_store = config.download_file_store
-        self._retrodeck_paths = config.retrodeck_paths
         self._m3u_support = config.m3u_support
-        self._save_layout = config.save_layout
-        self._save_sorting = config.save_sorting
-        self._savestate_layout = config.savestate_layout
+        self._save_locations = config.save_locations
         self._active_core = config.active_core
-        self._get_core_name = config.get_core_name
         self._logger = config.logger
 
     def target_taken(self, target: Target) -> bool:
@@ -329,35 +314,41 @@ class AdoptionRenamer:
     ) -> tuple[CompanionDir, ...]:
         """The save and savestate directories this rename has to carry files out of.
 
-        The two are read independently because RetroArch sorts them
-        independently — a stock RetroDECK install content-sorts its savefiles and
-        leaves its savestates unsorted, so assuming one from the other addresses
-        the wrong directory. A directory that sits **inside** the content being
-        moved is skipped: it travels with the rename already, and pairing its
-        files up would move them a second time.
+        Both come from the resolver, asked about the launch file under its old
+        name and under its new one — the new one need not exist, because the
+        resolver places a game's saves by the content path's own coordinates. The
+        two are asked independently because an emulator keeps them independently:
+        a stock RetroDECK install content-sorts its savefiles and leaves its
+        savestates unsorted. A directory that could not be established is not a
+        companion — nothing is carried out of a place nobody could name — and
+        neither is one that sits **inside** the content being moved: it travels
+        with the rename already, and pairing its files up would move them a
+        second time.
         """
         if not launch_source:
             return ()
-        # The two sides read from different sources, and the asymmetry is not an
-        # oversight. Savefiles are addressed the way the save sync addresses them
-        # (see :meth:`_savefile_layout`); savestates come from the live config
-        # because nothing records them — MigrationService's markers track savefile
-        # sorting only, so there is no "previous" savestate layout to honour and a
-        # pending savefile migration says nothing about where savestates sit.
-        layouts = (
-            (SAVE, self._savefile_layout(), self._retrodeck_paths.saves_path()),
-            (SAVESTATE, self._savestate_layout(), self._retrodeck_paths.states_path()),
-        )
-        core_name = (
-            self._core_name_for(rom_id)
-            if any(isinstance(layout, InSaveDir) and layout.sort_by_core for _kind, layout, _root in layouts)
-            else None
+        emulator = self._active_core.active_emulator_for_rom(rom_id)
+        label = emulator.label if emulator is not None else None
+        directories = (
+            (
+                SAVE,
+                self._save_dir(target.system, launch_source, label, installed=True),
+                self._save_dir(target.system, launch_target, label, installed=False),
+            ),
+            (
+                SAVESTATE,
+                self._savestate_dir(target.system, launch_source, label),
+                self._savestate_dir(target.system, launch_target, label),
+            ),
         )
         found: list[CompanionDir] = []
-        for kind, layout, root in layouts:
-            source_dir, target_dir = self._layout_dirs(
-                layout, root, target.system, launch_source, launch_target, core_name
-            )
+        for kind, source_dir, target_dir in directories:
+            if isinstance(source_dir, NoSavestates) or isinstance(target_dir, NoSavestates):
+                self._logger.info(f"The emulator keeps no savestates for rom {rom_id}; carrying none")
+                continue
+            if source_dir is None or target_dir is None:
+                self._logger.info(f"No {kind} directory could be established for rom {rom_id}; carrying none")
+                continue
             if _travels_with(source_path, source_dir) or _travels_with(source_path, target_dir):
                 continue
             names = self._adoption_move.list_names(source_dir)
@@ -365,73 +356,20 @@ class AdoptionRenamer:
                 found.append(CompanionDir(kind=kind, source_dir=source_dir, target_dir=target_dir, names=names))
         return tuple(found)
 
-    def _savefile_layout(self) -> SaveLayout:
-        """Where this device's savefiles sit right now — the sync's own answer.
+    def _save_dir(self, system: str, content_path: str, emulator_label: str | None, *, installed: bool) -> str | None:
+        """The directory the resolver answers for the save of the game at *content_path*."""
+        return self._save_locations.resolve_save_answer(
+            system=system, content_path=content_path, emulator_label=emulator_label, content_installed=installed
+        ).directory
 
-        A rename has to know where the existing files **are**, which is not the
-        same question as where RetroArch will write next. The two differ exactly
-        while a save-sort migration is pending: the files are still in the old
-        layout, the sync deliberately keeps looking there (#238), and a rename
-        reading the live config would move them out from under it and leave the
-        pending migration reaching for files that are no longer where it left
-        them. So the sorting comes from ``SaveSortingProvider`` — the same
-        decision the sync resolves its own paths with — and never from the cfg.
+    def _savestate_dir(self, system: str, content_path: str, emulator_label: str | None) -> str | NoSavestates | None:
+        """The directory the resolver answers for the savestates of the game at *content_path*.
 
-        ``savefiles_in_content_dir`` is the one part that must come from the live
-        config: saves written next to the ROM are outside the tree the plugin
-        syncs, so MigrationService records no marker for that state and there is
-        nothing recorded to prefer.
+        :class:`NoSavestates` where the emulator keeps none and ``None`` where
+        nothing could be established — the rename carries nothing either way,
+        and its log line says which.
         """
-        live = self._save_layout()
-        return live if isinstance(live, ContentDir) else self._save_sorting()
-
-    def _layout_dirs(
-        self,
-        layout: SaveLayout,
-        root: str,
-        system: str,
-        launch_source: str,
-        launch_target: str,
-        core_name: str | None,
-    ) -> tuple[str, str]:
-        """Resolve one layout's directory for the old name and for the new one.
-
-        The same resolver the save sync itself uses, pointed at the root the
-        layout belongs to. A ``ContentDir`` layout has RetroArch writing beside
-        the ROM, which is a directory the resolver does not describe — so it is
-        answered directly, and for a multi-file ROM the caller then drops it
-        because that directory moves with the ROM.
-        """
-        if not isinstance(layout, InSaveDir):
-            return (os.path.dirname(launch_source), os.path.dirname(launch_target))
-        roms_base = self._retrodeck_paths.roms_path()
-
-        def resolved(rom_path: str) -> str:
-            return resolve_save_dir(
-                rom_path,
-                root,
-                system,
-                roms_base=roms_base,
-                sort_by_content=layout.sort_by_content,
-                sort_by_core=layout.sort_by_core,
-                core_name=core_name,
-            )
-
-        return (resolved(launch_source), resolved(launch_target))
-
-    def _core_name_for(self, rom_id: int) -> str | None:
-        """The RetroArch ``corename`` whose subdirectory this ROM's saves sit in, or ``None``.
-
-        Warn-and-fall-back rather than fail-loud, matching what the save sync does
-        with the same question: an unresolvable corename sends both this rename and
-        every later sync to the parent directory, so they stay pointed at the same
-        place instead of disagreeing about where the saves are.
-        """
-        core_so, _label = self._active_core.active_core_for_rom(rom_id)
-        core_name = self._get_core_name(core_so) if core_so else None
-        if core_name is None:
-            self._logger.warning(
-                f"RetroArch sorts this ROM's saves per core, but its corename could not be resolved "
-                f"(core={core_so or 'unresolved'}) — looking in the parent directory instead"
-            )
-        return core_name
+        answer = self._save_locations.resolve_savestate_location(
+            system=system, content_path=content_path, emulator_label=emulator_label
+        )
+        return answer.directory if isinstance(answer, SavestateLocation) else answer

@@ -2,8 +2,8 @@
 
 Services query the host RetroDECK/RetroArch/ES-DE environment through
 these Protocols: filesystem path getters (saves, roms, BIOS,
-RetroDECK home), platform-to-system resolution, the RetroArch save-file
-layout, and RetroArch core lookups for ES-DE configured systems.
+RetroDECK home), platform-to-system resolution, where a game's save
+lives, and RetroArch core lookups for ES-DE configured systems.
 ``PlatformCoreReader`` exposes the plugin-owned per-platform core
 selection (stored in ``settings.json``, not the ES-DE gamelist) that the
 resolver layers over the es_systems default.
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from domain.firmware_wants import FirmwareCatalogue
     from domain.save_answer import SaveAnswer
-    from domain.save_layout import SaveLayout
+    from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
     from lib.retrodeck_health import RetroDeckConfigHealth
 
@@ -85,8 +85,6 @@ class RetroDeckPaths(Protocol):
 
     def saves_path(self) -> str: ...
 
-    def states_path(self) -> str: ...
-
     def roms_path(self) -> str: ...
 
     def bios_path(self) -> str: ...
@@ -96,24 +94,6 @@ class RetroDeckPaths(Protocol):
     def config_path(self) -> str: ...
 
     def config_health(self) -> RetroDeckConfigHealth: ...
-
-
-class RetroArchSaveLayoutProvider(Protocol):
-    """Return the live RetroArch save-file layout as a ``SaveLayout`` value object."""
-
-    def __call__(self) -> SaveLayout: ...
-
-
-class RetroArchSavestateLayoutProvider(Protocol):
-    """Return the live RetroArch save**state** layout as a ``SaveLayout`` value object.
-
-    A separate seam from :class:`RetroArchSaveLayoutProvider` because RetroArch
-    sorts the two independently — a stock RetroDECK install content-sorts its
-    savefiles and leaves its savestates unsorted — so a consumer that needs to
-    address savestates must ask about savestates.
-    """
-
-    def __call__(self) -> SaveLayout: ...
 
 
 class CoreResolverFn(Protocol):
@@ -182,17 +162,29 @@ class SaveLocationReader(Protocol):
     Within one sync operation the entry gate's reading is handed down rather
     than taken again — live is a property of operations, not of layers.
 
-    Named ``…Reader`` although it has a single method, which the suffix
-    convention reserves for object-shaped Protocols with several. It is not
-    ``__call__``-only, so ``…Fn`` would be the wrong half of that rule, and the
-    named method is load-bearing: `scripts/check_uow_seam_nesting.py` matches
-    this seam by ``resolve_save_answer``, where a call-shaped seam is matchable
-    only by whatever attribute a consumer happens to bind it to.
+    ``resolve_savestate_location`` puts the savestate question to the same
+    entry. Its ``None`` is the same honest "nothing could be established", kept
+    apart from :class:`domain.savestate_location.NoSavestates`, which is the
+    resolver stating that the emulator has none.
+
+    ``installation_detected`` says whether any emulator installation was found
+    to ask at all, so a caller can tell "every answer refused" apart from "there
+    was nothing to ask yet".
+
+    The named methods are load-bearing: `scripts/check_uow_seam_nesting.py`
+    matches this seam by them, where a call-shaped seam is matchable only by
+    whatever attribute a consumer happens to bind it to.
     """
 
     def resolve_save_answer(
         self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
     ) -> SaveAnswer: ...
+
+    def resolve_savestate_location(
+        self, *, system: str, content_path: str, emulator_label: str | None
+    ) -> SavestateLocation | NoSavestates | None: ...
+
+    def installation_detected(self) -> bool: ...
 
 
 class SandboxLauncherFn(Protocol):
@@ -272,44 +264,3 @@ class PlatformCoreReader(Protocol):
     """
 
     def get_platform_core(self, platform_slug: str) -> str | None: ...
-
-
-class CoreNameProviderFn(Protocol):
-    """Return the RetroArch canonical ``corename`` for a core shared object.
-
-    Implemented by :class:`adapters.retroarch_core_info.RetroArchCoreInfoAdapter`.
-    ``core_so`` is the full ``.so`` basename including the ``_libretro``
-    suffix (e.g. ``"snes9x_libretro"``). Returns ``None`` when the ``.info``
-    file is missing or lacks a ``corename`` field — callers must fail loud,
-    not fall back to ES-DE labels.
-    """
-
-    def __call__(self, core_so: str) -> str | None: ...
-
-
-class RetroArchConfigReader(Protocol):
-    """Object seam for ``retroarch.cfg`` reads.
-
-    Held by ``main.py`` to bind the layout getters as callables
-    forwarded into service wiring. Distinct from
-    :class:`RetroArchSaveLayoutProvider` / :class:`RetroArchSavestateLayoutProvider`
-    (the call-shaped Protocols for the bound methods themselves) — those are what
-    services receive; this one is what ``main.py`` holds.
-    """
-
-    def get_save_layout(self) -> SaveLayout: ...
-
-    def get_savestate_layout(self) -> SaveLayout: ...
-
-
-class RetroArchCoreInfoReader(Protocol):
-    """Object seam for RetroArch per-core ``.info`` reads.
-
-    Held by ``main.py`` to bind ``get_corename`` as a callable
-    forwarded into service wiring. Distinct from
-    :class:`CoreNameProviderFn` (the call-shaped Protocol for the
-    bound method itself) — that one is what services receive; this
-    one is what ``main.py`` holds.
-    """
-
-    def get_corename(self, core_so: str) -> str | None: ...

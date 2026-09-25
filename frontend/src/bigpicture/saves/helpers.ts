@@ -4,7 +4,7 @@
  * belongs here; rendering helpers live alongside their components.
  */
 
-import type { DeviceSyncInfo, SaveStatus, SyncConflict, SlotDeleteInfo } from "../../types";
+import type { DeviceSyncInfo, RollbackStatus, SaveStatus, SyncConflict, SlotDeleteInfo } from "../../types";
 
 export const MUTED_COLOR = "#8f98a0";
 
@@ -97,6 +97,17 @@ export function slotDeleteFailureToast(info: SlotDeleteInfo): string {
     return info.message ?? "Cannot inspect slot — RomM server is not reachable";
   }
   return info.message ?? "Cannot delete this slot";
+}
+
+/** The toast for a restore refused as unsupported — the backend's own explanation where it gave one. */
+export function unsupportedRestoreMessage(result: Extract<RollbackStatus, { status: "unsupported" }>): string {
+  if (result.reason === "savefiles_in_content_dir") {
+    return "Save sync is off for this game: its saves are written beside the game file.";
+  }
+  if (result.reason === "save_shape_unsupported" && result.message) {
+    return result.message;
+  }
+  return "Restoring isn't available for multi-file saves yet.";
 }
 
 /** Map a save file status to color and label */

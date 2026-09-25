@@ -619,7 +619,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       ),
     );
 
-    // Benign skip: either RetroArch writes saves to the content dir (#239), or
+    // Benign skip: either the saves are written beside the game file (#239), or
     // this game's emulator keeps no per-game save file set the plugin can carry
     // (#1858). NOT a failure — proceed to launch silently (no toast, no
     // fallback-launch confirm). Both are standing facts about the machine, so a
@@ -643,7 +643,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       );
       // Any resolved failure must surface as sync_failed, not silently proceed.
       // Failures with no errors array — DEVICE_NOT_REGISTERED,
-      // blocked_by_migration, save_sort_changed — still mean sync didn't run;
+      // blocked_by_migration — still mean sync didn't run;
       // without this the user plays on stale local saves believing pre-launch
       // sync happened (#1050).
       return { success: false, message: result.message };
@@ -998,13 +998,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
   };
 
-  // Resolve the conflict the button is already showing. This is a READ, not a
-  // re-sync: it pulls the already-known conflict via `getSaveStatus` and hands
-  // it to the shared resolution modal. Re-running the act-capable
-  // `preLaunchSync` here (the pre-#1276 behavior) could upload/download OTHER
-  // files in the ROM as a side effect and re-derive the conflict through a
-  // different path than the one that set the button to "conflict" — so the
-  // launch path keeps `preLaunchSync`, but conflict resolution must not act.
+  // Resolve the conflict the button is already showing. This is not a re-sync:
+  // it pulls the already-known conflict via `getSaveStatus` and hands it to the
+  // shared resolution modal. `getSaveStatus` uploads and downloads nothing, but
+  // it may follow a moved save directory first and so move local files.
+  // Re-running the act-capable `preLaunchSync` here (the pre-#1276 behavior)
+  // could upload/download OTHER files in the ROM as a side effect and re-derive
+  // the conflict through a different path than the one that set the button to
+  // "conflict" — so the launch path keeps `preLaunchSync`, but conflict
+  // resolution must not act.
   const handleResolveConflict = async () => {
     if (!romId) return;
     setState("syncing");

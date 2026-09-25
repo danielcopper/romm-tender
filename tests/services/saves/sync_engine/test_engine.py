@@ -1,5 +1,5 @@
 """Tests for SyncEngine — public-callable orchestration: lock dispatch, save-sync
-gates (enabled, migration-pending, save-sort changed), heartbeat probe,
+gates (enabled, migration-pending, content directory), heartbeat probe,
 device-registration fallback, error/conflict count surfacing, and matrix/registry
 delegate wiring. Per-file matrix dispatch lives in tests/services/saves/sync_engine/test_matrix.py;
 device registration in tests/services/saves/sync_engine/test_devices.py;
@@ -8,17 +8,18 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 
 import asyncio
 import io
-import logging
 import struct
 import threading
 import time
 import zipfile
+from typing import cast
 
 import pytest
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_layout import ContentDir, InSaveDir
+from domain.save_answer import SaveAnswer
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -45,11 +46,10 @@ from tests.services.saves._helpers import (
     _install_rom,
     _require_save_state,
     _seed_save_state,
+    _seed_save_state_dict,
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
-    _set_sort_settings,
-    _set_sort_settings_previous,
     make_service,
 )
 
@@ -120,93 +120,6 @@ class TestSyncRomSaves:
         assert downloaded == 0
         assert len(errors) == 1
         assert "Failed to fetch saves" in errors[0]
-
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — pending-migration handling.
-    # Rule 2: skip server_only downloads while a save-sort migration is
-    # pending so the mtime-naive resolver cannot prefer freshly-downloaded
-    # stale server content over real user progress at the other layout.
-    # ------------------------------------------------------------------
-
-    def test_sync_rom_saves_skips_server_only_downloads_during_pending_migration(self, tmp_path):
-        """server_only matches must be skipped while migration is pending (#238)."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _install_rom(svc, tmp_path)
-        # Mark migration pending — detect has fired, user hasn't resolved yet.
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": True, "sort_by_core": False})
-        # Server has a save, no local file anywhere.
-        ss = _server_save()
-        fake.saves[100] = ss
-
-        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
-
-        assert uploaded == 0
-        assert downloaded == 0
-        assert errors == []
-        assert conflicts == []
-        # No download was initiated.
-        assert fake.downloaded_files == {}
-        # No file landed on disk under either layout.
-        saves_dir = tmp_path / "saves" / "gba"
-        assert not (saves_dir / "pokemon.srm").exists()
-
-    def test_sync_rom_saves_uploads_local_only_during_pending_migration(self, tmp_path):
-        """local_only matches must still upload during pending migration (#238)."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "dev-1")
-        _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": True, "sort_by_core": False})
-        # Local save at the (previous == current, same layout) location.
-        _create_save(tmp_path, content=b"user progress")
-
-        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
-
-        assert uploaded == 1
-        assert downloaded == 0
-        assert errors == []
-        assert conflicts == []
-        # Upload went through.
-        assert any(c[0] == "upload_save" for c in fake.call_log)
-
-    @pytest.mark.asyncio
-    async def test_sync_rom_saves_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """Manual sync_rom_saves must also refresh save-sort state first (#238).
-
-        Without the detect-first call, a user editing retroarch.cfg outside
-        of a session and then triggering manual sync would race the same
-        way that direct-Steam-launch does — sync would compute saves_dir
-        from stale state and risk landing stale server content at the
-        wrong layout.
-        """
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.sync_rom_saves(42)
-
-        assert result["success"] is True
-        # detect fired exactly once, before sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_message_includes_conflict_count(self, tmp_path):
@@ -329,42 +242,6 @@ class TestSyncAllSaves:
         result = await svc.sync_all_saves()
         assert result["synced"] >= 1
         assert len(result["errors"]) >= 1
-
-    @pytest.mark.asyncio
-    async def test_sync_all_saves_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """Manual sync_all_saves must also refresh save-sort state first (#238).
-
-        Same race as sync_rom_saves but for the bulk path: detect must
-        fire once at the top of the method, before any per-ROM sync runs.
-        """
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
-        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
-
-        # Every ROM decides via the local matrix now (ADR-0017) — the worker is
-        # do_sync_rom_saves, wrapped to record call ordering.
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.sync_all_saves()
-
-        assert result["success"] is True
-        # detect fired exactly once, before any per-ROM sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_success_stays_true_with_only_conflicts(self, tmp_path):
@@ -495,34 +372,6 @@ class TestPreLaunchSync:
         result = await svc.pre_launch_sync(42)
         assert result["synced"] == 0
 
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_invokes_detect_sort_change_before_migration_gate(self, tmp_path):
-        """detect_sort_change is called before the _is_save_sort_changed gate (#238)."""
-        order: list[str] = []
-
-        def fake_detect() -> None:
-            # Simulate detect discovering a pending migration.
-            order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-
-        # Track when is_save_sort_changed is consulted.
-        orig_gate = svc._rom_info.is_save_sort_changed
-
-        def wrapped_gate():
-            order.append("gate")
-            return orig_gate()
-
-        svc._rom_info.is_save_sort_changed = wrapped_gate  # type: ignore[method-assign]
-
-        await svc.pre_launch_sync(42)
-
-        assert "detect" in order
-        assert "gate" in order
-        assert order.index("detect") < order.index("gate")
-
 
 class TestPostExitSync:
     @pytest.mark.asyncio
@@ -565,67 +414,6 @@ class TestPostExitSync:
         result = await svc.post_exit_sync(42)
         assert result["success"] is True
         assert _get_device_id(svc) is not None
-
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — detect-first invariant.
-    #
-    # Save-sync must refresh save-sort state via detect_sort_change
-    # before computing saves_dir, so that Rule 1 / Rule 2 engage even
-    # when a direct-Steam-launch race delivers post_exit_sync before
-    # refreshMigrationState. See #238.
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """detect_sort_change is called exactly once before the sync path runs (#238)."""
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        # Patch do_sync_rom_saves to record call ordering.
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.post_exit_sync(42)
-
-        assert result["success"] is True
-        # detect fired exactly once, before sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_continues_when_detect_sort_change_raises(self, tmp_path, caplog):
-        """If detect_sort_change raises, save-sync logs a warning and proceeds (#238)."""
-
-        def boom() -> None:
-            raise RuntimeError("cfg file unreadable")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=boom)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        with caplog.at_level(logging.WARNING, logger="test"):
-            result = await svc.post_exit_sync(42)
-
-        assert result["success"] is True
-        # Sync still ran despite detect failure.
-        assert result["synced"] == 1
-        # Warning was logged.
-        assert any("detect_sort_change failed" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_message_includes_conflict_count(self, tmp_path):
@@ -1409,11 +1197,11 @@ class TestResolveCore:
 
 
 class TestSaveSyncContentDirGate:
-    """All four public sync entry points hard-gate save sync when RetroArch
-    writes saves to the content dir (savefiles_in_content_dir=true). The gate
-    reads ``_current_layout``, populated from ``detect_sort_change``'s return at
-    the top of each flow. The result is the benign-skip shape the frontend
-    treats as "skip, no error, launch proceeds" (#239)."""
+    """Save sync is gated off where the emulator writes a game's save beside its
+    content (RetroArch's savefiles_in_content_dir). The gate reads the save
+    answer's root, per ROM. The three single-ROM entry points return the
+    benign-skip shape the frontend treats as "skip, no error, launch proceeds";
+    the whole-library sweep passes such a ROM over inside its run."""
 
     _CONTENT_DIR_SKIP_MESSAGE_FRAGMENT = "content directory"
 
@@ -1432,7 +1220,7 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_skips_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1447,7 +1235,7 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_skips_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1461,7 +1249,7 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_skips_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1474,7 +1262,138 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_skips_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
+
+        _seed_save_state_dict(svc, 1, {"active_slot": "default", "slot_confirmed": True})
+
+        result = await svc.sync_all_saves()
+
+        # Every ROM the sweep read saves beside its content: the same skip a
+        # single-ROM sync returns, in the sweep's shape, and no server round-trip.
+        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
+        assert result["roms_checked"] == 1
+        assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @staticmethod
+    def _inside_the_content(tmp_path, caveat: str, emulator: str) -> SaveAnswer:
+        """A save written INTO the game file — anchored in its directory, as the resolver answers it."""
+        return SaveAnswer(
+            state="inside_content",
+            unestablished=None,
+            emulator=emulator,
+            directory=str(tmp_path / "retrodeck" / "roms" / "gba"),
+            backing_directory=None,
+            granularity=None,
+            needs=(),
+            components=(),
+            caveats=(caveat,),
+            content_installed=True,
+            root_kind="content_directory",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("caveat", "emulator"),
+        [
+            ("save-inside-content", "PUAE"),
+            ("save-inside-content", "Hatari"),
+            ("save-inside-image", "an image-backed core"),
+        ],
+        ids=["amiga-adf", "atari-st", "inside-a-disk-image"],
+    )
+    async def test_a_save_inside_the_game_file_gets_the_save_shape_refusal(self, tmp_path, caveat, emulator):
+        svc, fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+            "gba", self._inside_the_content(tmp_path, caveat, emulator)
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        result = await svc.sync_rom_saves(42)
+
+        assert result["reason"] == "save_shape_unsupported"
+        assert "inside the game file" in result["message"]
+        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_sweep_over_saves_inside_the_game_file_is_not_the_content_directory_skip(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+            "gba", self._inside_the_content(tmp_path, "save-inside-content", "PUAE")
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+
+        result = await svc.sync_all_saves()
+
+        assert result.get("reason") != "savefiles_in_content_dir"
+        assert "skipped" not in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_a_sweep_with_nothing_confirmed_still_names_the_content_directory(self, tmp_path):
+        svc, fake = make_service(
+            tmp_path,
+            save_locations=FakeSaveLocationReader(beside_content=True),
+            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
+
+        result = await svc.sync_all_saves()
+
+        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
+        assert result["roms_checked"] == 2
+        # One installed game was asked, not every one.
+        asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+        assert len(asked) == 1
+        assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_the_probe_passes_a_standalone_emulator_over_for_a_retroarch_game(self, tmp_path):
+        # The lowest rom_id runs a standalone emulator, whose answer says
+        # nothing about RetroArch's content-directory setting.
+        svc, _fake = make_service(
+            tmp_path,
+            save_locations=FakeSaveLocationReader(beside_content=True),
+            active_core=FakeActiveCoreResolver(
+                default=("mgba_libretro", "mGBA"), per_rom={1: (None, "PCSX2 (Standalone)")}
+            ),
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
+
+        result = await svc.sync_all_saves()
+
+        assert result["reason"] == "savefiles_in_content_dir"
+        asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+        assert [call[1] for call in asked] == [str(tmp_path / "retrodeck" / "roms" / "gba" / "game2.gba")]
+
+    @pytest.mark.asyncio
+    async def test_no_retroarch_game_to_ask_reports_as_before(self, tmp_path):
+        svc, _fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+
+        result = await svc.sync_all_saves()
+
+        assert "reason" not in result
+        assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
+
+    @pytest.mark.asyncio
+    async def test_a_sweep_with_nothing_confirmed_elsewhere_reports_as_before(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
@@ -1482,16 +1401,42 @@ class TestSaveSyncContentDirGate:
 
         result = await svc.sync_all_saves()
 
-        self._assert_benign_skip(result, all_saves=True)
-        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
+        assert result["success"] is True
+        assert "reason" not in result
+        assert result["synced"] == 0
+        assert result["roms_checked"] == 1
+        assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
+
+    @pytest.mark.asyncio
+    async def test_a_mixed_sweep_syncs_the_rest_and_says_what_it_held_back(self, tmp_path):
+        beside = FakeSaveLocationReader(beside_content=True).resolve_save_answer(
+            system="gba",
+            content_path=str(tmp_path / "retrodeck" / "roms" / "gba" / "game1.gba"),
+            emulator_label=None,
+        )
+        svc, fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", beside)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")
+        _create_save(tmp_path, system="snes", rom_name="game2", content=b"save2")
+        _seed_save_state_dict(svc, 1, {"active_slot": "default", "slot_confirmed": True}, platform_slug="gba")
+        _seed_save_state_dict(svc, 2, {"active_slot": "default", "slot_confirmed": True}, platform_slug="snes")
+
+        result = await svc.sync_all_saves()
+
+        assert result["success"] is True
+        assert "reason" not in result
+        assert result["synced"] == 1
+        assert result["message"].endswith("; 1 game(s) skipped — their saves are written beside the game file")
+        uploads = [c for c in fake.call_log if c[0] == "upload_save"]
+        assert len(uploads) == 1
 
     @pytest.mark.asyncio
     async def test_in_save_dir_layout_does_not_block(self, tmp_path):
-        """Control: a supported InSaveDir layout syncs normally — no gate."""
-        svc, _ = make_service(
-            tmp_path,
-            detect_sort_change=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-        )
+        """Control: a save under the save root syncs normally — no gate."""
+        svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
@@ -1502,49 +1447,6 @@ class TestSaveSyncContentDirGate:
         assert result["success"] is True
         assert "reason" not in result
         assert result["synced"] == 1
-
-    @pytest.mark.asyncio
-    async def test_detect_failure_fails_open_does_not_block(self, tmp_path):
-        """A detect that raises leaves ``_current_layout`` unset — sync proceeds."""
-
-        def boom():
-            raise RuntimeError("cfg unreadable")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=boom)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        result = await svc.sync_rom_saves(42)
-
-        # Fail-open: no benign-skip reason, sync ran.
-        assert "reason" not in result
-        assert result["success"] is True
-        assert result["synced"] == 1
-
-
-class TestPreLaunchSaveSortGate:
-    """pre_launch_sync short-circuits when a save-sort migration is pending
-    (engine.py line 297-303)."""
-
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_save_sort_changed(self, tmp_path):
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        # Flag save-sort changed via the kv_config markers RomInfoService reads.
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": False, "sort_by_core": False})
-
-        result = await svc.pre_launch_sync(42)
-
-        assert result["success"] is False
-        assert result["save_sort_changed"] is True
-        assert result["synced"] == 0
-        # No sync ran.
-        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
 
 class TestSaveSyncDeviceGate:

@@ -14,6 +14,7 @@ from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
@@ -25,7 +26,6 @@ from adapters.rom_files import RomFileAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.save_layout import InSaveDir
 from domain.version_metadata import VersionMetadata
 from lib.list_result import ErrorCode
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
@@ -205,11 +205,8 @@ def plugin(emit, logger, home):
             # ``None`` is "es_systems.xml could not answer", which the search
             # reads as permission to proceed — the behaviour these tests predate.
             system_known=lambda system_name: None,
-            save_layout=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-            save_sorting=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-            savestate_layout=lambda: InSaveDir(sort_by_content=False, sort_by_core=False),
+            save_locations=FakeSaveLocationReader(saves_root=retrodeck_paths.saves_path()),
             active_core=p._active_core,
-            get_core_name=lambda core_so: None,
             # Late-bound like production: DownloadService is constructed below.
             sibling_supersede=lambda: p._download_service.supersede_sibling_installs,
             uow_factory=FakeUnitOfWorkFactory(p._uow),

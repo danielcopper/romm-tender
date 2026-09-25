@@ -1,9 +1,12 @@
 """SyncEngine entry point: per-rom lock dispatch and public-callable orchestration.
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
-sequencing rules every public save-sync callable must follow (save-sync
-enabled check, retrodeck migration gate, save-sort detect, device-
-registration fallback, dispatch into the matrix executor, persistence).
+sequencing rules the public save-sync callables follow (save-sync
+enabled check, retrodeck migration gate, device-registration fallback,
+dispatch into the matrix executor, persistence), plus following a moved
+save directory, which the sync entry points and ``resolve_sync_conflict`` do
+here and the other write paths and the delete, count and status paths of the
+peer services do through ``follow_save_directory``.
 Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
@@ -35,7 +38,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_layout import ContentDir
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._messages import (
@@ -43,7 +45,6 @@ from services.saves._messages import (
     DEVICE_NOT_REGISTERED_REASON,
     DEVICE_SYNC_DISABLED,
     DEVICE_SYNC_DISABLED_REASON,
-    SAVE_SHAPE_UNSUPPORTED,
     SAVE_SYNC_BUSY,
     SAVE_SYNC_BUSY_REASON,
     SAVE_SYNC_DISABLED,
@@ -58,6 +59,7 @@ from services.saves._settings import (
     sync_after_exit,
     sync_before_launch,
 )
+from services.saves.save_directory import SaveDirectoryFollower
 from services.saves.sync_engine._gate import (
     POST_EXIT_GATE_TIMEOUT,
     PRE_LAUNCH_GATE_TIMEOUT,
@@ -66,16 +68,15 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
-from services.saves.sync_engine._shape_refusal import live_save_answer, save_shape_skip
+from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, sync_refusal
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from domain.save_answer import SaveAnswer
-    from domain.save_layout import SaveLayout
     from services.protocols import (
         ActiveCoreReader,
         Clock,
@@ -89,7 +90,6 @@ if TYPE_CHECKING:
         RommSyncApi,
         SaveFileStore,
         SaveInventoryBuilderFn,
-        SaveSortChangeFn,
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
@@ -162,8 +162,8 @@ class SyncEngineConfig:
     infrastructure (loop, logger, clock), the Protocol-typed filesystem
     adapter, the ``DebugLogger`` seam, the per-ROM active-core resolver,
     the hostname provider + machine-id provider passed through to device
-    registration, and the optional sort-change and migration-pending
-    callbacks SyncEngine consults at the entry of every public flow.
+    registration, and the migration-pending callback SyncEngine consults at
+    the entry of every public flow.
     """
 
     settings: dict[str, Any]
@@ -182,7 +182,6 @@ class SyncEngineConfig:
     active_core: ActiveCoreReader
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
-    detect_sort_change: SaveSortChangeFn
     is_retrodeck_migration_pending: MigrationPendingFn
     build_inventory: SaveInventoryBuilderFn
 
@@ -206,14 +205,8 @@ class SyncEngine:
         self._active_core = config.active_core
         self._hostname_provider = config.hostname_provider
         self._machine_id_provider = config.machine_id_provider
-        self._detect_sort_change = config.detect_sort_change
         self._is_retrodeck_migration_pending = config.is_retrodeck_migration_pending
         self._build_inventory = config.build_inventory
-        # Last observed RetroArch save-file layout, refreshed by
-        # ``_refresh_save_sort_state`` at the entry of every public sync flow.
-        # ``None`` until the first refresh — treated as "not blocked" so a
-        # transient cfg read error fails OPEN (never blocks sync on a blip).
-        self._current_layout: SaveLayout | None = None
         # Per-rom lock dict — serializes concurrent sync operations on the
         # same rom_id (pre_launch_sync, post_exit_sync, manual sync, resolve).
         self._rom_sync_locks: dict[int, asyncio.Lock] = {}
@@ -242,6 +235,14 @@ class SyncEngine:
             log_debug=config.log_debug,
             resolve_core=self.resolve_core,
             settings=config.settings,
+        )
+        self._follower = SaveDirectoryFollower(
+            uow_factory=config.uow_factory,
+            rom_info=config.rom_info,
+            save_file_store=config.save_file_store,
+            quarantine=self._matrix.quarantine_local_file,
+            logger=config.logger,
+            log_debug=config.log_debug,
         )
         # Device-level single-owner serialization gate: only one save-sync run
         # in flight at a time per device. A second trigger queues behind the
@@ -281,8 +282,7 @@ class SyncEngine:
         ``emulator_override`` pin over the system default. Used to stamp the
         upload emulator tag.
         """
-        info = self._rom_info.get_rom_save_info(rom_id)
-        if not info:
+        if not self._rom_info.is_content_installed(rom_id):
             return None
         core_so, _label = self._active_core.active_core_for_rom(rom_id)
         return core_so
@@ -474,89 +474,87 @@ class SyncEngine:
     # Public sync orchestration callables
     # ------------------------------------------------------------------
 
-    async def _refresh_save_sort_state(self, where: str) -> None:
-        """Refresh save-sort state from the live RetroArch config.
+    async def follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
+        """Carry this ROM's save files to the directory *answer* names, where it moved.
 
-        Save-sync must observe fresh save-sort state before computing
-        ``saves_dir``. This call ensures ``detect_save_sort_change`` has
-        run at least once before we read state, closing the race where
-        another frontend detect trigger arrives after our backend entry
-        point. Without this, a direct-Steam-launch with no pre-detect
-        would silently download stale server content to the wrong
-        layout and destroy real user progress during the subsequent
-        migration (#238).
-
-        Graceful degradation: if detect fails (e.g. retroarch.cfg is
-        temporarily unreadable) we log and continue with the
-        previously-known state — save-sync must not abort because of a
-        config read error. The returned ``SaveLayout`` is stashed on
-        ``_current_layout`` so :meth:`_save_sync_blocked` can hard-gate
-        sync when RetroArch writes saves to the content dir (#239); on
-        failure ``_current_layout`` is left as-is (fail-OPEN).
+        The caller holds ``rom_lock`` and hands over the reading it already
+        took, and calls this before it looks at any local file. Public
+        (peer-called): the peer services' write, delete, count and status paths
+        follow first as well; ``resolve_sync_conflict`` does so here.
+        The follow belongs to the sync, so it does nothing while save sync is
+        off, and nothing while a RetroDECK home migration is pending or still
+        running: the files are that migration's to move, and a follow then would
+        get past the user's overwrite-or-skip choice. A failure is logged and
+        leaves the record as it was, so the caller goes on and the next caller
+        tries again.
         """
+        if answer is None or not self.is_save_sync_enabled():
+            return
+        if await self._loop.run_in_executor(None, self._is_retrodeck_migration_pending):
+            self._log_debug(f"follow_save_directory: rom {rom_id}: a home migration is pending; not following")
+            return
         try:
-            self._current_layout = await self._loop.run_in_executor(None, self._detect_sort_change)
-        except Exception as e:
-            self._logger.warning(
-                "%s: detect_sort_change failed (%s) — proceeding with stale state",
-                where,
-                e,
-            )
+            await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
+        except Exception:
+            self._logger.exception("Following the save directory of rom %d failed; its record stays", rom_id)
 
-    def _save_sync_blocked(self) -> bool:
-        """Whether save sync must be hard-gated off for the live save-file layout.
+    async def record_save_directories(self) -> bool:
+        """Record the answered save directory of each installed ROM that has none — the one-time backfill.
 
-        ``True`` only when the last observed layout is ``ContentDir``
-        (RetroArch ``savefiles_in_content_dir=true``) — saves live next to
-        the ROM, outside the saves tree the plugin syncs, so every sync
-        flow short-circuits with the benign-skip shape (#239). ``None``
-        (no layout observed yet, or a refresh that failed) is not blocked:
-        a transient cfg read error must never disable sync.
+        Returns whether every ROM was recorded without a failure.
         """
-        return isinstance(self._current_layout, ContentDir)
+        return await self._record_each_installed_rom(self._follower.do_record_if_absent)
 
-    async def content_dir_blocked(self, where: str) -> bool:
-        """Refresh the live layout and report whether ContentDir gates save writes.
+    async def rerecord_save_directories(self) -> bool:
+        """Replace each installed ROM's record with today's answer, or drop it where that is not followable.
 
-        The shared gate every save-WRITE callable consults at its entry —
-        the four sync entry points (``pre_launch_sync`` / ``post_exit_sync``
-        / ``sync_rom_saves`` / ``sync_all_saves``) inline the refresh + check
-        themselves; the secondary write callables (rollback, slot switch,
-        conflict resolve, slot-choice migration) call this so the
-        ``saves_dir`` write is never attempted in content-dir mode (#239).
-
-        Public (peer-called, no leading underscore): the slots / versions /
-        rollback sub-services invoke it across the saves bounded context.
-        Refreshes ``_current_layout`` from the live RetroArch config (fail
-        OPEN on a transient read error) before reporting the verdict.
+        Returns whether every ROM was recorded without a failure. Asks once
+        whether an emulator installation is detected, and touches no record
+        where none is.
         """
-        await self._refresh_save_sort_state(where)
-        return self._save_sync_blocked()
+        if not await self._loop.run_in_executor(None, self._rom_info.installation_detected):
+            self._logger.info("No emulator installation detected; the save directories are left as recorded")
+            return True
+        return await self._record_each_installed_rom(self._follower.do_rerecord)
 
-    @staticmethod
-    def _content_dir_skip(*, all_saves: bool = False) -> dict[str, Any]:
-        """Build the benign-skip result returned when saves go to the content dir.
+    async def _record_each_installed_rom(self, record: Callable[[int], None]) -> bool:
+        """Run *record* for each installed ROM, serially, each under its own lock.
 
-        Carries ``success: False`` + the ``savefiles_in_content_dir`` reason
-        slug the frontend routes on (treat as skip, no error, launch
-        proceeds) alongside zero/empty counts. *all_saves* selects the
-        ``sync_all_saves`` return shape (``conflicts`` int + ``conflicts_list``
-        / ``roms_checked``) over the single-ROM shape (``conflicts`` list).
+        Each call is offloaded to the executor, so the pass never holds the
+        event loop, and the lock keeps it from racing a follow of the same ROM.
+        One ROM's failure is logged and the pass goes on to the rest; the
+        answer says whether any failed.
         """
-        base: dict[str, Any] = {
-            "success": False,
-            "reason": SAVE_SYNC_IN_CONTENT_DIR_REASON,
-            "message": SAVE_SYNC_IN_CONTENT_DIR,
-            "synced": 0,
-            "errors": [],
-        }
-        if all_saves:
-            base["conflicts"] = 0
-            base["conflicts_list"] = []
-            base["roms_checked"] = 0
-        else:
-            base["conflicts"] = []
-        return base
+        all_recorded = True
+        for rom_id in await self._loop.run_in_executor(None, self._installed_rom_ids):
+            async with self.rom_lock(rom_id):
+                try:
+                    await self._loop.run_in_executor(None, record, rom_id)
+                except Exception:
+                    all_recorded = False
+                    self._logger.exception("Recording the save directory of rom %d failed", rom_id)
+        return all_recorded
+
+    async def read_save_answer(self, rom_id: int) -> SaveAnswer | None:
+        """This ROM's save answer, read live, or ``None`` when it is not installed.
+
+        Public (peer-called): an entry gate takes the one reading its whole
+        operation uses, and hands it on rather than reading again.
+        """
+        return await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+
+    def content_dir_blocked(self, rom_id: int, answer: SaveAnswer | None, where: str) -> bool:
+        """Whether *answer* places this ROM's save beside the game's content.
+
+        The entry gate of the conflict resolution and the slot-choice migration,
+        so neither writes into a directory the sync leaves alone. Public
+        (peer-called by the slot setup). An uninstalled ROM (``None``) is not
+        blocked here; its caller's not-installed branch owns that case.
+        """
+        blocked = answer is not None and answer.in_content_directory
+        if blocked:
+            self._log_debug(f"{where}: rom {rom_id} saves beside its content; refusing")
+        return blocked
 
     def _heartbeat_failure_result(self, where: str, exc: Exception) -> dict[str, Any]:
         """Build the sync-result dict for a heartbeat failure, classified by type.
@@ -598,6 +596,7 @@ class SyncEngine:
         session_id: int | None = None,
         session_counts: list[int] | None = None,
         save_answer: SaveAnswer | None = None,
+        content_dir_tally: ContentDirTally | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Read inputs → sync in executor → persist, for one ROM under its lock.
 
@@ -618,7 +617,9 @@ class SyncEngine:
         single-ROM entry points check it themselves so they can name the skip in
         their result, and that backstop is what makes the rule hold for the
         whole-library sweep, whose one result has no room to say which ROM was
-        passed over.
+        passed over. It does count the ROMs held back because their save sits
+        beside their content, into *content_dir_tally*, so that result can still
+        say that much.
 
         When *require_confirmed* is set (the bulk ``sync_all_saves`` sweep), a ROM
         whose slot the user has not confirmed is skipped entirely — no transfer,
@@ -638,14 +639,20 @@ class SyncEngine:
         shared ``[completed, failed]`` accumulator) collects the run's tallies;
         the bulk run completes that session once after the loop.
         """
-        info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
-        if not info:
+        if not await self._loop.run_in_executor(None, self._rom_info.is_content_installed, rom_id):
             self._log_debug(f"_run_rom_sync({rom_id}): ROM not installed, skipping")
             return 0, 0, [], []
         save_state, device_id = await self._loop.run_in_executor(None, self._read_sync_inputs, rom_id)
         if require_confirmed and not save_state.slot_confirmed:
             self._log_debug(f"_run_rom_sync({rom_id}): slot not confirmed, skipping bulk sync")
             return 0, 0, [], []
+        if save_answer is None:
+            # The whole-library sweep's per-ROM step: its one reading follows a
+            # moved directory and is then handed down.
+            save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+            await self.follow_save_directory(rom_id, save_answer)
+            if content_dir_tally is not None:
+                content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)
         default_slot = resolve_default_slot(self._settings)
         cleanup_limit = autocleanup_limit(self._settings)
@@ -766,25 +773,11 @@ class SyncEngine:
                         "blocked_by_migration": True,
                     }
 
-                # Refresh save-sort state before the migration gate — see #238.
-                await self._refresh_save_sort_state("pre_launch_sync")
-
-                # Hard-gate: saves go to the content dir — sync is impossible (#239).
-                if self._save_sync_blocked():
-                    return self._content_dir_skip()
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                if save_answer is not None and not save_answer.syncable:
-                    return save_shape_skip(save_answer)
-
-                if self._rom_info.is_save_sort_changed():
-                    return {
-                        "success": False,
-                        "reason": "save_sort_changed",
-                        "message": "RetroArch save sorting changed — migrate saves in Settings first",
-                        "synced": 0,
-                        "save_sort_changed": True,
-                    }
+                await self.follow_save_directory(rom_id, save_answer)
+                refusal = sync_refusal(save_answer)
+                if refusal is not None:
+                    return refusal
 
                 if not sync_before_launch(self._settings):
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
@@ -866,18 +859,12 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: sync_after_exit disabled")
                     return {"success": True, "message": "Post-exit sync disabled", "synced": 0}
 
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                await self._refresh_save_sort_state("post_exit_sync")
-
-                # Hard-gate: saves go to the content dir — sync is impossible (#239).
-                if self._save_sync_blocked():
-                    self._logger.info("post_exit_sync skipped: savefiles_in_content_dir")
-                    return self._content_dir_skip()
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                if save_answer is not None and not save_answer.syncable:
-                    self._logger.info("post_exit_sync skipped: %s", SAVE_SHAPE_UNSUPPORTED)
-                    return save_shape_skip(save_answer)
+                await self.follow_save_directory(rom_id, save_answer)
+                refusal = sync_refusal(save_answer)
+                if refusal is not None:
+                    self._logger.info("post_exit_sync skipped: %s", refusal["reason"])
+                    return refusal
 
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
@@ -951,19 +938,11 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                # Manual sync paths must observe fresh sort state too: a user could
-                # edit retroarch.cfg outside of a session and then trigger a manual
-                # sync before any detect has fired.
-                await self._refresh_save_sort_state("sync_rom_saves")
-
-                # Hard-gate: saves go to the content dir — sync is impossible (#239).
-                if self._save_sync_blocked():
-                    return self._content_dir_skip()
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                if save_answer is not None and not save_answer.syncable:
-                    return save_shape_skip(save_answer)
+                await self.follow_save_directory(rom_id, save_answer)
+                refusal = sync_refusal(save_answer)
+                if refusal is not None:
+                    return refusal
 
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
@@ -1005,6 +984,10 @@ class SyncEngine:
                 "errors": [],
                 "conflicts": [],
             }
+
+    def _first_retroarch_rom(self, rom_ids: list[int]) -> int | None:
+        """The first of *rom_ids* that launches with a RetroArch core, or ``None``."""
+        return next((rom_id for rom_id in rom_ids if self.resolve_core(rom_id) is not None), None)
 
     def _installed_rom_ids(self) -> list[int]:
         """Read the installed-ROM ids from the rom_installs aggregate (WS3)."""
@@ -1061,16 +1044,6 @@ class SyncEngine:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
             # sweep; each ROM still takes its own rom_lock inside the loop.
             async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                # Manual sync paths must observe fresh sort state too: a user could
-                # edit retroarch.cfg outside of a session and then trigger a manual
-                # sync before any detect has fired.
-                await self._refresh_save_sort_state("sync_all_saves")
-
-                # Hard-gate: saves go to the content dir — sync is impossible (#239).
-                if self._save_sync_blocked():
-                    return self._content_dir_skip(all_saves=True)
-
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure
@@ -1087,6 +1060,7 @@ class SyncEngine:
                 with self._save_file_store.hash_memo_scope():
                     session_id = await self._bulk_pre_negotiate(device_id)
                     session_counts = [0, 0]
+                    content_dir_tally = ContentDirTally()
 
                     total_synced = 0
                     total_errors: list[str] = []
@@ -1106,6 +1080,7 @@ class SyncEngine:
                                     require_confirmed=True,
                                     session_id=session_id,
                                     session_counts=session_counts if session_id is not None else None,
+                                    content_dir_tally=content_dir_tally,
                                 )
                             total_synced += uploaded + downloaded
                             total_errors.extend(errors)
@@ -1129,12 +1104,27 @@ class SyncEngine:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
 
+                if not content_dir_tally.answered:
+                    # No ROM had a confirmed slot, so the sweep read none. One
+                    # RetroArch game's reading still says whether saves are
+                    # written beside the content, instead of a bare "Synced 0";
+                    # a standalone emulator's answer would say nothing about it.
+                    probe = await self._loop.run_in_executor(None, self._first_retroarch_rom, rom_ids)
+                    if probe is not None:
+                        content_dir_tally.count(
+                            await self._loop.run_in_executor(None, live_save_answer, self._rom_info, probe)
+                        )
+                content_dir_skip = content_dir_tally.sweep_skip(roms_checked=rom_count)
+                if content_dir_skip is not None:
+                    return content_dir_skip
                 conflicts_count = len(all_conflicts)
-                msg = _summarize_sync_result(
-                    f"Synced {total_synced} save(s) across {rom_count} ROM(s)",
-                    synced=total_synced,
-                    errors=total_errors,
-                    conflicts=conflicts_count,
+                msg = content_dir_tally.annotate(
+                    _summarize_sync_result(
+                        f"Synced {total_synced} save(s) across {rom_count} ROM(s)",
+                        synced=total_synced,
+                        errors=total_errors,
+                        conflicts=conflicts_count,
+                    )
                 )
                 return {
                     "success": len(total_errors) == 0,
@@ -1201,12 +1191,14 @@ class SyncEngine:
         """
         rom_id_int = int(rom_id)
         async with self.rom_lock(rom_id_int):
-            # #239: RetroArch writes saves to the content dir — both keep_local
-            # (POST after reading the local file under saves_dir) and use_server
-            # (download into saves_dir) write to a directory RetroArch ignores,
-            # so the resolution could not take effect. Refuse before the
-            # orchestrator does any server fetch or file write.
-            if await self.content_dir_blocked("resolve_sync_conflict"):
+            # The emulator writes this game's save beside its content — both
+            # keep_local (POST after reading the local file) and use_server
+            # (download into the save directory) act on a directory the sync
+            # leaves alone. Refuse before the orchestrator does any server fetch
+            # or file write.
+            save_answer = await self.read_save_answer(rom_id_int)
+            await self.follow_save_directory(rom_id_int, save_answer)
+            if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 return {
                     "success": False,
                     "reason": SAVE_SYNC_IN_CONTENT_DIR_REASON,
@@ -1218,4 +1210,5 @@ class SyncEngine:
                 server_save_id,
                 action,
                 loop=self._loop,
+                save_answer=save_answer,
             )

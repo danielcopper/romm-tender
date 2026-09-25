@@ -95,9 +95,7 @@ class FakeMigrationReader:
         side_effect: BaseException | None = None,
         pending: bool = False,
     ) -> None:
-        self.payload: dict[str, Any] = (
-            payload if payload is not None else {"retrodeck": {"pending": False}, "save_sort": {"pending": False}}
-        )
+        self.payload: dict[str, Any] = payload if payload is not None else {"retrodeck": {"pending": False}}
         self.side_effect = side_effect
         self.pending = pending
         self.refresh_calls = 0
@@ -822,11 +820,10 @@ class TestFinalizeConflicts:
 
 
 class TestFinalizeMigrationRefresh:
-    def test_typed_pair_returned(self, event_loop, logger):
+    def test_typed_status_returned(self, event_loop, logger):
         """``refresh_state`` payload is repacked into the typed migration aggregate."""
         migration_payload = {
             "retrodeck": {"pending": True, "old_path": "/old", "new_path": "/new"},
-            "save_sort": {"pending": False},
         }
         migration = FakeMigrationReader(payload=migration_payload)
         service = _make_service(
@@ -841,14 +838,12 @@ class TestFinalizeMigrationRefresh:
         event_loop.run_until_complete(_drain_background_tasks(service))
 
         assert result.migration.retrodeck == migration_payload["retrodeck"]
-        assert result.migration.save_sort == migration_payload["save_sort"]
         assert migration.refresh_calls == 1
 
     def test_refresh_success_returns_populated_aggregate(self, event_loop, logger):
         """Happy path returns a populated ``SessionFinalizeMigration``, not ``None``."""
         migration_payload = {
             "retrodeck": {"pending": False},
-            "save_sort": {"pending": False},
         }
         migration = FakeMigrationReader(payload=migration_payload)
         service = _make_service(
@@ -864,7 +859,6 @@ class TestFinalizeMigrationRefresh:
 
         assert isinstance(result.migration, SessionFinalizeMigration)
         assert result.migration.retrodeck == {"pending": False}
-        assert result.migration.save_sort == {"pending": False}
 
     def test_refresh_exception_returns_none(self, event_loop, logger):
         """``refresh_state`` raises → ``migration`` is ``None`` (frontend leaves stores untouched)."""
@@ -900,7 +894,7 @@ class TestFinalizeMigrationRefresh:
 
     def test_refresh_partial_payload_keeps_aggregate(self, event_loop, logger):
         """``refresh_state`` returns a dict with non-dict fields → aggregate present, fields cleared."""
-        migration = FakeMigrationReader(payload={"retrodeck": None, "save_sort": "garbage"})  # type: ignore[arg-type]
+        migration = FakeMigrationReader(payload={"retrodeck": "garbage"})  # type: ignore[arg-type]
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=FakePostExitSync(),
@@ -913,10 +907,9 @@ class TestFinalizeMigrationRefresh:
         event_loop.run_until_complete(_drain_background_tasks(service))
 
         # Outer payload was a dict — the aggregate is still returned, but
-        # each non-dict field falls back to the safe "not pending" default.
+        # the non-dict field falls back to the safe "not pending" default.
         assert isinstance(result.migration, SessionFinalizeMigration)
         assert result.migration.retrodeck == {"pending": False}
-        assert result.migration.save_sort == {"pending": False}
 
 
 class TestFinalizeMigrationGate:
@@ -999,7 +992,7 @@ class TestFinalizeResultShape:
         post = FakePostExitSync(
             payload={"success": True, "synced": 2, "uploaded": 2, "downloaded": 0, "conflicts": conflicts}
         )
-        migration = FakeMigrationReader(payload={"retrodeck": {"pending": False}, "save_sort": {"pending": False}})
+        migration = FakeMigrationReader(payload={"retrodeck": {"pending": False}})
         service = _make_service(
             playtime_recorder=playtime,
             post_exit_sync=post,
@@ -1025,7 +1018,6 @@ class TestFinalizeResultShape:
             ),
             migration=SessionFinalizeMigration(
                 retrodeck={"pending": False},
-                save_sort={"pending": False},
             ),
         )
 

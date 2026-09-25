@@ -48,20 +48,6 @@ class TestPathResolution:
         adapter = _make_adapter(tmp_path)
         assert adapter.saves_path() == os.path.join(str(tmp_path), "retrodeck", "saves")
 
-    def test_states_path_from_config(self, tmp_path):
-        # ``states_path`` is the key a real ``retrodeck.json`` carries beside
-        # ``saves_path``; savestates live under their own root, not under saves.
-        adapter = _make_adapter(tmp_path, {"paths": {"states_path": "/custom/states"}})
-        assert adapter.states_path() == "/custom/states"
-
-    def test_states_path_fallback(self, tmp_path):
-        adapter = _make_adapter(tmp_path)
-        assert adapter.states_path() == os.path.join(str(tmp_path), "retrodeck", "states")
-
-    def test_states_path_is_not_derived_from_saves_path(self, tmp_path):
-        adapter = _make_adapter(tmp_path, {"paths": {"saves_path": "/custom/saves"}})
-        assert adapter.states_path() == os.path.join(str(tmp_path), "retrodeck", "states")
-
     def test_retrodeck_home_from_config(self, tmp_path):
         adapter = _make_adapter(tmp_path, {"paths": {"rd_home_path": "/custom/home"}})
         assert adapter.retrodeck_home() == "/custom/home"
@@ -115,7 +101,6 @@ class TestSymlinkResolvedRoots:
                     "bios_path": str(linked / "bios"),
                     "roms_path": str(linked / "roms"),
                     "saves_path": str(linked / "saves"),
-                    "states_path": str(linked / "states"),
                 }
             },
         )
@@ -123,7 +108,6 @@ class TestSymlinkResolvedRoots:
         assert adapter.bios_path() == str(retrodeck / "bios")
         assert adapter.roms_path() == str(retrodeck / "roms")
         assert adapter.saves_path() == str(retrodeck / "saves")
-        assert adapter.states_path() == str(retrodeck / "states")
 
     def test_fallback_content_roots_are_resolved(self, tmp_path):
         linked_home, retrodeck = self._linked_home(tmp_path)
@@ -132,7 +116,6 @@ class TestSymlinkResolvedRoots:
         assert adapter.bios_path() == str(retrodeck / "bios")
         assert adapter.roms_path() == str(retrodeck / "roms")
         assert adapter.saves_path() == str(retrodeck / "saves")
-        assert adapter.states_path() == str(retrodeck / "states")
 
     def test_a_root_that_is_not_on_disk_resolves_as_far_as_it_can(self, tmp_path):
         """``realpath`` never raises on a missing tail, so the getters stay best-effort."""

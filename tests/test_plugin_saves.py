@@ -8,10 +8,8 @@ from _factories import _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
-from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
@@ -23,7 +21,6 @@ from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.gavel_native import GavelNativeAdapter
-from adapters.migration_file import MigrationFileAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.save_file import SaveFileAdapter
 from adapters.steam_config import SteamConfigAdapter
@@ -31,9 +28,7 @@ from domain.playtime import Playtime
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_layout import InSaveDir
 from services.library import LibraryService, LibraryServiceConfig
-from services.migration import MigrationService, MigrationServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 
@@ -116,16 +111,13 @@ def plugin(tmp_path, logger, home, project_root):
                 saves=saves_path,
                 roms=str(tmp_path / "retrodeck" / "roms"),
             ),
-            save_locations=FakeSaveLocationReader(),
+            save_locations=FakeSaveLocationReader(saves_root=saves_path),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             active_core=FakeActiveCoreResolver(default=(None, None)),
             hostname_provider=FakeHostnameReader(),
             machine_id_provider=FakeMachineIdReader(),
             log_debug=p._log_debug,
             emit=AsyncMock(),
-            get_core_name=lambda core_so: None,
-            get_save_layout=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-            detect_sort_change=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
             is_retrodeck_migration_pending=lambda: False,
             uow_factory=p._uow_factory,
         ),
@@ -404,199 +396,6 @@ class TestPostExitSync:
 
         assert result["synced"] == 0
         assert "disabled" in result["message"].lower()
-
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — post-exit sync must not blow away
-    # user progress when a save-sort migration is pending.
-    #
-    # The two scenarios cover:
-    #  1. Mid-session sort change: save was written to the previous layout
-    #     during the session that just ended; Rule 1 ensures sync reads
-    #     that layout so local progress is uploaded before anything can
-    #     touch it.
-    #  2. NEW-from-start: the session ran entirely under the new layout
-    #     (user changed retroarch.cfg outside of a session then launched
-    #     directly via Steam), detect fires at session end, and Rule 2
-    #     must prevent sync from downloading stale server content to
-    #     the (empty) previous layout — otherwise the mtime-naive
-    #     migration resolver would pick that fresh download over the real
-    #     user progress at the new layout.
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_new_from_start_skips_stale_download(self, plugin, tmp_path):
-        """NEW-from-start edge: sync must not download stale server content to previous layout (#238)."""
-        import json
-
-        _install_rom(plugin, tmp_path)
-        # Detect just fired at session end. Session ran entirely under the
-        # NEW layout because the user had already flipped the setting before
-        # launching.
-        with plugin._uow_factory.uow as uow:
-            uow.kv_config.set("save_sort_settings", json.dumps({"sort_by_content": False, "sort_by_core": False}))
-            uow.kv_config.set(
-                "save_sort_settings_previous", json.dumps({"sort_by_content": True, "sort_by_core": False})
-            )
-
-        # Real user progress at the NEW layout (where the session wrote).
-        new_save_path = tmp_path / "retrodeck" / "saves" / "pokemon.srm"
-        new_save_path.parent.mkdir(parents=True, exist_ok=True)
-        new_save_path.write_bytes(b"ACTUAL_USER_PROGRESS")
-
-        # Server has a stale save from a previous device.
-        plugin._fake_api.saves[100] = {
-            "id": 100,
-            "rom_id": 42,
-            "file_name": "pokemon.srm",
-            "updated_at": "2020-01-01T00:00:00Z",
-            "file_size_bytes": len(b"STALE_SERVER_CONTENT"),
-            "emulator": "retroarch",
-            "download_path": "/saves/pokemon.srm",
-        }
-        plugin._fake_api.uploaded_files[100] = str(tmp_path / "server_stale.srm")
-        (tmp_path / "server_stale.srm").write_bytes(b"STALE_SERVER_CONTENT")
-
-        # Nothing at the PREVIOUS layout path before sync.
-        prev_save_path = tmp_path / "retrodeck" / "saves" / "gba" / "pokemon.srm"
-        assert not prev_save_path.exists()
-
-        result = await plugin._save_sync_service.post_exit_sync(42)
-
-        assert result["success"] is True
-        # No download happened (Rule 2 skipped server_only).
-        assert plugin._fake_api.downloaded_files == {}
-        # No file created at the PREVIOUS layout path.
-        assert not prev_save_path.exists()
-        # NEW layout file is untouched — byte-identical to what we wrote.
-        assert new_save_path.exists()
-        assert new_save_path.read_bytes() == b"ACTUAL_USER_PROGRESS"
-        # No upload either — previous layout is empty (nothing to upload).
-        upload_calls = [c for c in plugin._fake_api.call_log if c[0] == "upload_save"]
-        assert upload_calls == []
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_detects_stale_state_and_skips_stale_download_c2(self, plugin, tmp_path):
-        """End-to-end C2 regression (#238).
-
-        Race scenario: user changes retroarch.cfg outside of a session
-        (plugin hasn't detected yet — state still has stale OLD
-        settings, no ``previous``). User launches directly via Steam
-        (no pre-launch detect). Session runs under NEW layout. Session
-        ends. ``post_exit_sync`` arrives at the backend BEFORE
-        ``refresh_migration_state`` does.
-
-        Previous behavior: Rule 2 wouldn't engage because ``previous``
-        wasn't set yet — sync would compute ``saves_dir`` from the
-        stale OLD settings, find it empty, match the server save as
-        ``server_only``, download the stale content to the OLD path,
-        and the later migration resolver would prefer the
-        freshly-downloaded stale file over the real NEW-layout user
-        progress.
-
-        Fix: ``post_exit_sync`` calls ``detect_save_sort_change`` at
-        the top, which populates ``save_sort_settings_previous``. Rule
-        1 then returns the OLD layout for ``_get_rom_save_info``, and
-        Rule 2 skips the ``server_only`` match. Real user progress at
-        the NEW path stays untouched.
-        """
-        _install_rom(plugin, tmp_path)
-
-        import json
-
-        # Preconditions:
-        # - The kv_config marker thinks save sort is still "sort_by_content only"
-        #   (this is what detect LAST wrote — before the user flipped cfg).
-        # - No ``previous`` marker at all — detect has never seen the change.
-        with plugin._uow_factory.uow as uow:
-            uow.kv_config.set("save_sort_settings", json.dumps({"sort_by_content": True, "sort_by_core": False}))
-            assert uow.kv_config.get("save_sort_settings_previous") is None
-
-        # Real user progress at the NEW layout (where the session wrote).
-        # NEW layout: sort_by_content=True + sort_by_core=True adds /mGBA.
-        # Simplify: simulate NEW = sort_by_content=False (no gba/ subdir).
-        new_save_path = tmp_path / "retrodeck" / "saves" / "pokemon.srm"
-        new_save_path.parent.mkdir(parents=True, exist_ok=True)
-        new_save_path.write_bytes(b"ACTUAL_USER_PROGRESS")
-
-        # Server has stale content from an earlier device/session.
-        plugin._fake_api.saves[100] = {
-            "id": 100,
-            "rom_id": 42,
-            "file_name": "pokemon.srm",
-            "updated_at": "2020-01-01T00:00:00Z",
-            "file_size_bytes": len(b"STALE_SERVER_CONTENT"),
-            "emulator": "retroarch",
-            "download_path": "/saves/pokemon.srm",
-        }
-        stale_upload = tmp_path / "server_stale.srm"
-        stale_upload.write_bytes(b"STALE_SERVER_CONTENT")
-        plugin._fake_api.uploaded_files[100] = str(stale_upload)
-
-        # Wire a REAL MigrationService on the SAME UoW as the plugin's
-        # SaveService, then point SaveService's ``detect_sort_change`` at the
-        # real bound method. ``get_save_layout`` reports the CURRENT on-disk
-        # cfg (NEW: sort_by_content=False, sort_by_core=False) — the mismatch
-        # with the stored marker is what detect will discover.
-        real_migration = MigrationService(
-            config=MigrationServiceConfig(
-                migration_file_store=MigrationFileAdapter(),
-                settings={},
-                loop=asyncio.get_running_loop(),
-                logger=logging.getLogger("test"),
-                settings_persister=MagicMock(),
-                emit=MagicMock(),
-                firmware_resolver=FakeFirmwareResolver(),
-                retrodeck_paths=FakeRetroDeckPaths(),
-                get_save_layout=lambda: InSaveDir(sort_by_content=False, sort_by_core=False),
-                save_locations=FakeSaveLocationReader(),
-                active_core=FakeActiveCoreResolver(default=(None, None)),
-                relaunch_options=FakeRelaunchOptionsResolver(),
-                get_core_name=lambda core_so: None,
-                uow_factory=plugin._uow_factory,
-            ),
-        )
-        # Sanity: same UoW — marker writes through migration are visible to
-        # SaveService's RomInfoService on the next kv_config read.
-        assert real_migration._uow_factory() is plugin._save_sync_service._rom_info._uow_factory()
-
-        plugin._save_sync_service._sync_engine._detect_sort_change = real_migration.detect_save_sort_change
-
-        # Nothing at the PREVIOUS (OLD: sort_by_content=True → gba/) path.
-        prev_save_path = tmp_path / "retrodeck" / "saves" / "gba" / "pokemon.srm"
-        assert not prev_save_path.exists()
-
-        result = await plugin._save_sync_service.post_exit_sync(42)
-
-        assert result["success"] is True
-
-        # 1. detect fired inside post_exit_sync and populated the
-        #    ``save_sort_settings_previous`` marker through the shared UoW.
-        with plugin._uow_factory.uow as uow:
-            assert json.loads(uow.kv_config.get("save_sort_settings_previous")) == {
-                "sort_by_content": True,
-                "sort_by_core": False,
-            }
-            assert json.loads(uow.kv_config.get("save_sort_settings")) == {
-                "sort_by_content": False,
-                "sort_by_core": False,
-            }
-
-        # 2. NO file was written to the OLD layout path (no stale download).
-        assert not prev_save_path.exists()
-        # FakeSaveApi records any download — confirm none happened.
-        assert plugin._fake_api.downloaded_files == {}
-
-        # 3. The file at NEW layout path is byte-identical to what the
-        #    session wrote — not touched, not overwritten.
-        assert new_save_path.exists()
-        assert new_save_path.read_bytes() == b"ACTUAL_USER_PROGRESS"
-
-        # 4. No upload either: Rule 1 points sync at the OLD layout
-        #    (empty), so there's nothing to upload from there. The real
-        #    NEW-layout save will be picked up after the user resolves
-        #    the migration via the Settings UI.
-        upload_calls = [c for c in plugin._fake_api.call_log if c[0] == "upload_save"]
-        assert upload_calls == []
 
 
 # ============================================================================

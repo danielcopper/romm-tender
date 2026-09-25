@@ -139,7 +139,15 @@ describe("useCopyToSlot", () => {
     { result: { status: "not_found", message: "HTTP 404" }, needle: "couldn't find this game's save data" },
     { result: { status: "preflight_failed", errors: ["net"] }, needle: "Sync failed before copy" },
     { result: { status: "copy_failed", message: "oops" }, needle: "Couldn't copy the save" },
-    { result: { status: "unsupported", reason: "savefiles_in_content_dir" }, needle: "writes saves next to the ROM" },
+    { result: { status: "unsupported", reason: "savefiles_in_content_dir" }, needle: "written beside the game file" },
+    {
+      result: {
+        status: "unsupported",
+        reason: "save_shape_unsupported",
+        message: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
+      },
+      needle: "inside the game file itself",
+    },
     { result: { status: "unsupported" }, needle: "multi-file" },
   ];
 

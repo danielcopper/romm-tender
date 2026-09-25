@@ -21,14 +21,12 @@ import { refreshMigrationState, logError } from "../api/backend";
 import { AchievementsTab } from "./AchievementsTab";
 import { BiosTab } from "./BiosTab";
 import { PanelTabBar } from "./PanelTabBar";
-import { SaveSortWarning } from "./SaveSortWarning";
 import { bindRomInState, loadData, type PanelReadSeqs, type PanelState } from "./panelState";
 import { wirePanelEvents } from "./panelEvents";
 import { useSaveSlotsLoad } from "./panelSlotsLoad";
 import { buildTabContent } from "./panelTabContent";
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
 import { useSettingsResetState } from "../utils/settingsResetStore";
-import { setSaveSortMigrationStatus, useSaveSortMigrationState } from "../utils/saveSortMigrationStore";
 import { VersionErrorCard, useVersionError } from "./VersionErrorCard";
 import { MigrationBlockedCard } from "./MigrationBlockedCard";
 import { SettingsResetCard } from "./SettingsResetCard";
@@ -83,13 +81,11 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 });
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
-  const saveSortPending = useSaveSortMigrationState().pending;
 
   useEffect(() => {
     refreshMigrationState()
-      .then(({ retrodeck, save_sort }) => {
+      .then(({ retrodeck }) => {
         setMigrationStatus(retrodeck);
-        setSaveSortMigrationStatus(save_sort);
       })
       .catch((e) => logError(`Failed to refresh migration state: ${e}`));
   }, [appId]);
@@ -164,7 +160,6 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
 
   return (
     <div data-romm="true">
-      {saveSortPending ? <SaveSortWarning key="save-sort-warning" /> : null}
       <PanelTabBar
         activeTab={state.activeTab}
         hasAchievements={!!state.raId}

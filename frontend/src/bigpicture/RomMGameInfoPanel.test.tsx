@@ -33,15 +33,7 @@ import {
   setServerRetryProgress,
   getServerRetryProgress,
 } from "../utils/connectionState";
-import type {
-  MigrationStatus,
-  SaveSortMigrationStatus,
-  RomMetadata,
-  DownloadCompleteEvent,
-  CoreInfo,
-  InstalledRom,
-  SaveStatus,
-} from "../types";
+import type { MigrationStatus, RomMetadata, DownloadCompleteEvent, CoreInfo, InstalledRom, SaveStatus } from "../types";
 
 // Type-only imports — vi.mock(...) below replaces the runtime impl, but
 // pinning captured-props shapes to the real component keeps assertions in
@@ -140,33 +132,6 @@ vi.mock("../utils/migrationStore", () => {
 });
 import * as migrationStore from "../utils/migrationStore";
 
-// ----- saveSortMigrationStore — same listener-array pattern as
-// migrationStore. The panel reads .pending on mount and re-renders when the
-// store notifies.
-const saveSortListeners: Array<() => void> = [];
-let currentSaveSortState: SaveSortMigrationStatus = { pending: false };
-vi.mock("../utils/saveSortMigrationStore", () => {
-  const subscribe = (cb: () => void) => mod.onSaveSortMigrationChange(cb);
-  const snapshot = () => mod.getSaveSortMigrationState();
-  const mod = {
-    getSaveSortMigrationState: vi.fn(() => currentSaveSortState),
-    setSaveSortMigrationStatus: vi.fn((s: SaveSortMigrationStatus) => {
-      currentSaveSortState = s;
-      saveSortListeners.forEach((fn) => fn());
-    }),
-    onSaveSortMigrationChange: vi.fn((cb: () => void) => {
-      saveSortListeners.push(cb);
-      return () => {
-        const i = saveSortListeners.indexOf(cb);
-        if (i >= 0) saveSortListeners.splice(i, 1);
-      };
-    }),
-    useSaveSortMigrationState: () => useSyncExternalStore(subscribe, snapshot),
-  };
-  return mod;
-});
-import * as saveSortMigrationStore from "../utils/saveSortMigrationStore";
-
 // ----- @decky/ui — global stub from test-setup.ts covers Focusable +
 // DialogButton. Pass-through is enough for this panel.
 
@@ -244,9 +209,7 @@ describe("RomMGameInfoPanel", () => {
     capturedVersionErrorCard.length = 0;
     capturedMigrationBlockedCard.length = 0;
     migrationListeners.length = 0;
-    saveSortListeners.length = 0;
     currentMigrationState = { pending: false };
-    currentSaveSortState = { pending: false };
     testAppId++;
     installDomEventListenerSpy();
     // A shared read releases itself only by settling, so a test that leaves one
@@ -273,19 +236,6 @@ describe("RomMGameInfoPanel", () => {
         if (i >= 0) migrationListeners.splice(i, 1);
       };
     });
-    // Re-stub saveSortMigrationStore impls.
-    vi.mocked(saveSortMigrationStore.getSaveSortMigrationState).mockImplementation(() => currentSaveSortState);
-    vi.mocked(saveSortMigrationStore.setSaveSortMigrationStatus).mockImplementation((s: SaveSortMigrationStatus) => {
-      currentSaveSortState = s;
-      saveSortListeners.forEach((fn) => fn());
-    });
-    vi.mocked(saveSortMigrationStore.onSaveSortMigrationChange).mockImplementation((cb: () => void) => {
-      saveSortListeners.push(cb);
-      return () => {
-        const i = saveSortListeners.indexOf(cb);
-        if (i >= 0) saveSortListeners.splice(i, 1);
-      };
-    });
 
     // Defaults — cached.found=false; tests opt into specific shapes per case.
     vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
@@ -295,7 +245,6 @@ describe("RomMGameInfoPanel", () => {
     vi.mocked(backend.debugLog).mockResolvedValue(undefined);
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
       retrodeck: { pending: false },
-      save_sort: { pending: false },
     });
     vi.mocked(backend.getRomMetadata).mockResolvedValue(makeMetadata());
     vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
@@ -375,7 +324,6 @@ describe("RomMGameInfoPanel", () => {
       // useEffect resolves.
       vi.mocked(backend.refreshMigrationState).mockResolvedValue({
         retrodeck: { pending: true },
-        save_sort: { pending: false },
       });
       const { queryByTestId } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
@@ -580,17 +528,14 @@ describe("RomMGameInfoPanel", () => {
   // ------------------------------------------------------------------
 
   describe("refreshMigrationState on mount", () => {
-    it("calls setMigrationStatus + setSaveSortMigrationStatus on success", async () => {
+    it("calls setMigrationStatus on success", async () => {
       const { setMigrationStatus } = await import("../utils/migrationStore");
-      const { setSaveSortMigrationStatus } = await import("../utils/saveSortMigrationStore");
       vi.mocked(backend.refreshMigrationState).mockResolvedValue({
         retrodeck: { pending: false },
-        save_sort: { pending: true } as SaveSortMigrationStatus,
       });
       render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       expect(setMigrationStatus).toHaveBeenCalledWith(expect.objectContaining({ pending: false }));
-      expect(setSaveSortMigrationStatus).toHaveBeenCalledWith(expect.objectContaining({ pending: true }));
     });
 
     it("calls logError when refreshMigrationState rejects", async () => {
@@ -1823,15 +1768,6 @@ describe("RomMGameInfoPanel", () => {
       expect(migrationListeners.length).toBe(before);
     });
 
-    it("subscribes to saveSortMigrationStore on mount and unsubscribes on unmount", async () => {
-      const before = saveSortListeners.length;
-      const { unmount } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      expect(saveSortListeners.length).toBe(before + 1);
-      unmount();
-      expect(saveSortListeners.length).toBe(before);
-    });
-
     it("listener fired after migrationStore changes to pending=true → switches to MigrationBlockedCard", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
@@ -1847,23 +1783,6 @@ describe("RomMGameInfoPanel", () => {
         migrationListeners.forEach((fn) => fn());
       });
       expect(queryByTestId("migration-blocked-card")).not.toBeNull();
-    });
-
-    it("listener fired after saveSortMigrationStore changes to pending=true → renders save-sort warning", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 1,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      expect(container.textContent).not.toContain("RetroArch save sorting changed");
-      await act(async () => {
-        currentSaveSortState = { pending: true };
-        saveSortListeners.forEach((fn) => fn());
-      });
-      expect(container.textContent).toContain("RetroArch save sorting changed");
     });
   });
 
@@ -5237,43 +5156,6 @@ describe("RomMGameInfoPanel", () => {
         expect(queryByTestId("slot-setup-wizard")).not.toBeNull();
         expect(queryByTestId("saves-tab")).toBeNull();
       });
-    });
-  });
-
-  // ------------------------------------------------------------------
-  // J. Save-sort warning rendering
-  // ------------------------------------------------------------------
-
-  describe("save-sort warning banner", () => {
-    it("does NOT render when saveSortPending=false", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 1,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      expect(container.textContent).not.toContain("RetroArch save sorting changed");
-    });
-
-    it("renders when saveSortPending=true at mount", async () => {
-      currentSaveSortState = { pending: true };
-      // refreshMigrationState() on mount overwrites the store — return
-      // pending=true so the gate survives the useEffect resolution.
-      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
-        retrodeck: { pending: false },
-        save_sort: { pending: true },
-      });
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 1,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      expect(container.textContent).toContain("RetroArch save sorting changed");
     });
   });
 

@@ -80,17 +80,19 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 017_add_last_sync_server_hash + 018_rename_rom_save_states
 # + 019_add_collection_sync_state + 020_add_fetch_generation
 # + 021_add_rom_fs_size + 022_rename_collection_kind_user_to_standard
-# + 023_add_rom_install_launchable).
-_SHIPPED_VERSION = 23
+# + 023_add_rom_install_launchable + 024_add_answered_save_directories).
+_SHIPPED_VERSION = 24
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
-# 012's per-platform completion stamp, and 019's per-collection completion stamp,
-# with 018 renaming the save-sync scalar table rom_save_states -> rom_save_sync_states.
+# 012's per-platform completion stamp, 019's per-collection completion stamp and
+# 024's answered save directories, with 018 renaming the save-sync scalar table
+# rom_save_states -> rom_save_sync_states.
 _SHIPPED_TABLES = (_V1_TABLES - {"rom_save_states"}) | {
     "rom_save_sync_states",
     "rom_playtime_sessions",
     "platform_sync_state",
     "collection_sync_state",
+    "answered_save_directories",
 }
 
 
@@ -1547,6 +1549,89 @@ class Test023AddRomInstallLaunchable:
         finally:
             conn.close()
         assert count == 0
+
+
+class Test024AddAnsweredSaveDirectories:
+    """024 — adds the answered_save_directories table and drops the save-sort markers (#1660)."""
+
+    def test_the_table_exists_and_the_save_sync_state_is_untouched(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert _user_version(db_path) == _SHIPPED_VERSION
+        assert _columns(db_path, "answered_save_directories") == {"rom_id", "directory"}
+        assert "answered_save_dir" not in _columns(db_path, "rom_save_sync_states")
+
+    def test_it_starts_empty_over_an_existing_library(self, tmp_path: Path):
+        # No answer can be derived in DDL — it is a live reading of the machine.
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 23)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, None)
+            conn.execute("INSERT INTO rom_save_sync_states (rom_id, active_slot) VALUES (1, 'default')")
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            recorded = conn.execute("SELECT COUNT(*) FROM answered_save_directories").fetchone()
+        finally:
+            conn.close()
+        assert recorded == (0,)
+
+    def test_a_record_goes_with_its_rom(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            _insert_rom(conn, 1, None)
+            conn.execute("INSERT INTO answered_save_directories (rom_id, directory) VALUES (1, '/saves/snes')")
+            conn.execute("DELETE FROM roms WHERE rom_id = 1")
+            recorded = conn.execute("SELECT COUNT(*) FROM answered_save_directories").fetchone()
+        finally:
+            conn.close()
+        assert recorded == (0,)
+
+    def test_a_directory_is_required(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, None)
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute("INSERT INTO answered_save_directories (rom_id, directory) VALUES (1, NULL)")
+        finally:
+            conn.close()
+
+    def test_the_save_sort_markers_are_deleted_and_nothing_else(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 23)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.executemany(
+                "INSERT INTO kv_config (key, value) VALUES (?, ?)",
+                [
+                    ("save_sort_settings", '{"sort_by_content": true, "sort_by_core": false}'),
+                    ("save_sort_settings_previous", '{"sort_by_content": false, "sort_by_core": false}'),
+                    ("device_id", "dev-1"),
+                ],
+            )
+        finally:
+            conn.close()
+
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path)
+        try:
+            keys = [row[0] for row in conn.execute("SELECT key FROM kv_config ORDER BY key")]
+        finally:
+            conn.close()
+        assert keys == ["device_id"]
 
 
 def test_shipped_migrations_dir_resolves_to_real_schema():

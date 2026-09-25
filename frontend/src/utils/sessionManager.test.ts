@@ -23,7 +23,6 @@ vi.mock("../api/backend", () => ({
 }));
 
 vi.mock("./migrationStore", () => ({ setMigrationStatus: vi.fn() }));
-vi.mock("./saveSortMigrationStore", () => ({ setSaveSortMigrationStatus: vi.fn() }));
 vi.mock("./metadataPatches", () => ({ updatePlaytimeDisplay: vi.fn() }));
 
 type LifetimeUpdate = { bRunning: boolean; unAppID: number };

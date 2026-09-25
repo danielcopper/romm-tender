@@ -12,6 +12,7 @@ single-sub-service logic does not.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any
 
 from domain.identity import VERSION
@@ -34,11 +35,14 @@ from services.saves.sync_engine import SyncEngine, SyncEngineConfig
 from services.saves.sync_engine.devices import DeviceRegistry
 from services.saves.versions import VersionsService, VersionsServiceConfig
 
+# kv_config marker for the one-time pass that records the installed ROMs'
+# answered save directories: present once the pass finished.
+_KV_SAVE_DIRECTORIES_RECORDED = "save_directories_recorded"
+
 if TYPE_CHECKING:
     from models.sync import ClientSaveState
 
     from domain.save_answer import SaveAnswer
-    from domain.save_layout import InSaveDir
     from services.protocols import UnitOfWorkFactory
 
 
@@ -96,7 +100,6 @@ class SaveService:
                 active_core=config.active_core,
                 save_locations=config.save_locations,
                 resolve_system=config.resolve_system,
-                get_core_name=config.get_core_name,
                 logger=config.logger,
             ),
         )
@@ -119,7 +122,6 @@ class SaveService:
                 active_core=config.active_core,
                 hostname_provider=config.hostname_provider,
                 machine_id_provider=config.machine_id_provider,
-                detect_sort_change=config.detect_sort_change,
                 is_retrodeck_migration_pending=config.is_retrodeck_migration_pending,
                 build_inventory=self.build_save_inventory,
             ),
@@ -139,7 +141,6 @@ class SaveService:
                 log_debug=config.log_debug,
                 active_core=config.active_core,
                 emit=config.emit,
-                get_save_layout=config.get_save_layout,
             ),
         )
 
@@ -275,16 +276,6 @@ class SaveService:
         """
         return self._sync_engine.quarantine_local_file(saves_dir, filename)
 
-    def current_save_sorting(self) -> InSaveDir:
-        """Return the subdirectory sorting savefile paths are resolved with right now.
-
-        Delegates to the shared ``RomInfoService.current_save_sorting`` — the
-        same decision the sync's own path resolution runs on — so a consumer that
-        has to address a save on disk can never disagree with where the sync
-        looks for it. Satisfies the ``SaveSortingProvider`` seam.
-        """
-        return self._rom_info.current_save_sorting()
-
     def last_sync_hashes(self, rom_id: int) -> dict[str, str | None]:
         """Return the per-file ``last_sync_hash`` baselines for a ROM.
 
@@ -319,6 +310,57 @@ class SaveService:
     async def sync_all_saves(self) -> dict[str, Any]:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
         return await self._sync_engine.sync_all_saves()
+
+    async def record_save_directories_once(self) -> None:
+        """Record the installed ROMs' answered save directories, once per database.
+
+        The first start after the record existed has no record for any game, so
+        a directory that moved before the plugin next touched that game's saves
+        would be taken for a first sight and its files left behind. This pass
+        closes that: it asks the resolver about each installed ROM, serially,
+        and records the answer where nothing is recorded yet and the follow
+        would act on it. The ``kv_config`` marker is written only once the pass
+        finished over a detected emulator installation with no ROM failing, so
+        a pass cut short by a shutdown, one with nothing to ask yet, or one in
+        which a ROM failed runs again; recording where nothing is recorded is
+        safe to repeat.
+        """
+        if await self._loop.run_in_executor(None, self._kv_marker_set, _KV_SAVE_DIRECTORIES_RECORDED):
+            return
+        if not await self._loop.run_in_executor(None, self._config.save_locations.installation_detected):
+            # Every answer would refuse, so the pass would record nothing and
+            # its marker would stop it running once there is something to ask.
+            self._config.logger.info("No emulator installation detected; recording the save directories next start")
+            return
+        try:
+            all_recorded = await self._sync_engine.record_save_directories()
+        except Exception:
+            # A background task nobody awaits: an exception left on it is never
+            # reported. The next start runs the pass again.
+            self._config.logger.exception("Recording the answered save directories failed; retrying next start")
+            return
+        if not all_recorded:
+            self._config.logger.warning("Recording some save directories failed; retrying next start")
+            return
+        await self._loop.run_in_executor(None, self._set_kv_marker, _KV_SAVE_DIRECTORIES_RECORDED)
+
+    async def rerecord_save_directories(self) -> None:
+        """Record each installed ROM's answered save directory afresh.
+
+        Satisfies ``SaveDirectoriesRecorderFn``: the RetroDECK home migration
+        calls it once it has moved the files, so no record is left naming the
+        old home — each is replaced by today's answer, or dropped where the
+        follow would not act on that answer.
+        """
+        await self._sync_engine.rerecord_save_directories()
+
+    def _kv_marker_set(self, key: str) -> bool:
+        with self._uow_factory() as uow:
+            return uow.kv_config.get(key) is not None
+
+    def _set_kv_marker(self, key: str) -> None:
+        with self._uow_factory() as uow:
+            uow.kv_config.set(key, "1")
 
     async def resolve_sync_conflict(
         self,
@@ -537,48 +579,69 @@ class SaveService:
     # Bulk local-save deletion
     # ------------------------------------------------------------------
 
-    def _delete_saves_for_roms(self, rom_ids: list[int]) -> tuple[int, list[str]]:
+    async def _read_and_follow(self, rom_id: int) -> SaveAnswer | None:
+        """This ROM's live reading, after a moved save directory has been followed with it.
+
+        The caller holds ``rom_lock``; the same reading is then handed on, so the
+        files a delete or a count sees are where the emulator now looks.
+        """
+        answer = await self._sync_engine.read_save_answer(rom_id)
+        await self._sync_engine.follow_save_directory(rom_id, answer)
+        return answer
+
+    async def _delete_saves_for_roms(self, rom_ids: list[int]) -> tuple[int, list[str]]:
         """Delete local save files for the given ROM IDs and clear file tracking state.
 
-        For each ROM ID, enumerates files via ``RomInfoService.find_save_files``,
-        removes them on disk (counting successes and collecting per-file error
-        strings), and clears the ROM's per-file tracking dict via the aggregate's
-        ``clear_baselines`` verb. Slot config (``active_slot``, ``slot_confirmed``,
-        ``emulator``, ``last_synced_core``, ``own_upload_ids``, ``slots``,
-        ``system``) is preserved. Each ROM's state is persisted in its own short
-        write UoW.
+        For each ROM ID, under its ``rom_lock``, follows a moved save directory
+        first and then removes the files the answer names on disk (counting
+        successes and collecting per-file error strings), and clears the ROM's
+        per-file tracking dict via the aggregate's ``clear_baselines`` verb.
+        Slot config (``active_slot``, ``slot_confirmed``, ``emulator``,
+        ``last_synced_core``, ``own_upload_ids``, ``slots``, ``system``) is
+        preserved. Each ROM's state is persisted in its own short write UoW.
 
         Returns a ``(total_deleted, errors)`` tuple.
         """
         total_deleted = 0
         errors: list[str] = []
         for rom_id in rom_ids:
-            files = self._rom_info.find_save_files(rom_id)
-            for f in files:
-                try:
-                    self._save_file_store.remove_file(f["path"])
-                    total_deleted += 1
-                except Exception as e:
-                    errors.append(f"{f['filename']}: {e}")
-            with self._uow_factory() as uow:
-                save_state = uow.rom_save_sync_states.get(rom_id)
-                # Nothing to clear when the ROM has neither tracked save state
-                # nor any local save files (e.g. a non-installed ROM with no
-                # roms row — persisting an empty aggregate would violate the FK).
-                if save_state is None and not files:
-                    continue
-                if save_state is None:
-                    save_state = RomSaveSyncState()
-                save_state.clear_baselines()
-                uow.rom_save_sync_states.save(rom_id, save_state)
-
+            async with self._sync_engine.rom_lock(rom_id):
+                answer = await self._read_and_follow(rom_id)
+                deleted, rom_errors = await self._loop.run_in_executor(
+                    None, self._delete_saves_for_rom_io, rom_id, answer
+                )
+            total_deleted += deleted
+            errors.extend(rom_errors)
         return total_deleted, errors
 
-    def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
+    def _delete_saves_for_rom_io(self, rom_id: int, answer: SaveAnswer | None) -> tuple[int, list[str]]:
+        deleted = 0
+        errors: list[str] = []
+        files = self._rom_info.find_save_files(rom_id, save_answer=answer)
+        for f in files:
+            try:
+                self._save_file_store.remove_file(f["path"])
+                deleted += 1
+            except Exception as e:
+                errors.append(f"{f['filename']}: {e}")
+        with self._uow_factory() as uow:
+            save_state = uow.rom_save_sync_states.get(rom_id)
+            # Nothing to clear when the ROM has neither tracked save state
+            # nor any local save files (e.g. a non-installed ROM with no
+            # roms row — persisting an empty aggregate would violate the FK).
+            if save_state is None and not files:
+                return deleted, errors
+            if save_state is None:
+                save_state = RomSaveSyncState()
+            save_state.clear_baselines()
+            uow.rom_save_sync_states.save(rom_id, save_state)
+        return deleted, errors
+
+    async def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
         """Delete local save files (.srm, .rtc) for a ROM."""
         rom_id = int(rom_id)
 
-        deleted, errors = self._delete_saves_for_roms([rom_id])
+        deleted, errors = await self._delete_saves_for_roms([rom_id])
 
         if deleted == 0 and not errors:
             return {"success": True, "deleted_count": 0, "message": "No local save files found"}
@@ -607,7 +670,9 @@ class SaveService:
         The read half of :meth:`delete_platform_saves`, over the same two steps
         in the same order — the platform's installed ROM ids, then each one's
         save files — so the number a button offers is the number the delete would
-        remove. It only looks: nothing here unlinks a file or writes a row.
+        remove. It deletes nothing, but it is not a pure read: like the delete, it
+        follows each ROM's moved save directory first, which can move files,
+        back up a collision and write the ROM's answered-directory record.
 
         The Library page's platform detail asks it once per selected platform,
         beside the core read, and puts the count on Delete _N_ save files. That
@@ -623,20 +688,26 @@ class SaveService:
         caching one side of that pair breaks the guarantee the sentence above
         makes. A cached answer on a destructive path is worse than a slow one.
         """
-        return await self._loop.run_in_executor(None, self._count_platform_saves_io, platform_slug)
-
-    def _count_platform_saves_io(self, platform_slug: str) -> dict[str, Any]:
-        rom_ids = self._installed_rom_ids_on_platform(platform_slug)
+        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
         # The file walk runs after the id read's UoW has closed, for the reason
-        # the delete does the same: a Unit of Work never spans file I/O.
-        return {"count": sum(len(self._rom_info.find_save_files(rom_id)) for rom_id in rom_ids)}
+        # the delete does the same: a Unit of Work never spans file I/O. Each ROM
+        # follows a moved directory first, as the delete does, so the two agree.
+        count = 0
+        for rom_id in rom_ids:
+            async with self._sync_engine.rom_lock(rom_id):
+                answer = await self._read_and_follow(rom_id)
+                files = await self._loop.run_in_executor(
+                    None, functools.partial(self._rom_info.find_save_files, rom_id, save_answer=answer)
+                )
+            count += len(files)
+        return {"count": count}
 
-    def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
+    async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
         """Delete local save files for all installed ROMs on a platform."""
-        rom_ids = self._installed_rom_ids_on_platform(platform_slug)
+        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
 
         rom_count = len(rom_ids)
-        total_deleted, total_errors = self._delete_saves_for_roms(rom_ids)
+        total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
 
         if total_errors:
             return {

@@ -40,7 +40,6 @@ import {
   getSaveSyncSettings,
   getAllPlaytime,
   getMigrationStatus,
-  getSaveSortMigrationStatus,
   getInstalledRelaunchOptions,
   testConnection,
   invalidateCachedGameDetail,
@@ -60,7 +59,6 @@ import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
 import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
-import { setSaveSortMigrationStatus } from "./utils/saveSortMigrationStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager, destroySessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
@@ -540,21 +538,6 @@ const tender = definePlugin(() => {
     })(),
   );
 
-  // Check for pending save sort migration on startup
-  detach(
-    (async () => {
-      try {
-        const status = await getSaveSortMigrationStatus();
-        if (status.pending) {
-          setSaveSortMigrationStatus(status);
-          showToast("RetroArch save sorting changed. Go to Settings to migrate save files.");
-        }
-      } catch (e) {
-        logError(`Failed to check save sort migration status: ${e}`);
-      }
-    })(),
-  );
-
   // Surface a corrupt-settings reset that happened at boot. The backend backs
   // up an unparseable settings.json to settings.json.corrupt-<ts>, resets to
   // defaults, and persists a marker that survives reloads. The QAM banner and
@@ -986,13 +969,6 @@ const tender = definePlugin(() => {
     },
   );
 
-  const saveSortChangedListener = addEventListener<{
-    old_settings: { sort_by_content: boolean; sort_by_core: boolean };
-    new_settings: { sort_by_content: boolean; sort_by_core: boolean };
-  }>("save_sort_changed", () => {
-    showToast("RetroArch save sorting changed. Go to Settings to migrate save files.");
-  });
-
   const saveStatusListener = addEventListener<SaveStatus>("save_status_updated", (data: SaveStatus) => {
     const hasConflict = hasAnySaveConflict(data);
     globalThis.dispatchEvent(
@@ -1142,7 +1118,6 @@ const tender = definePlugin(() => {
       removeEventListener("download_complete", downloadCompleteListener);
       removeEventListener("download_failed", downloadFailedListener);
       removeEventListener("retrodeck_path_changed", pathChangedListener);
-      removeEventListener("save_sort_changed", saveSortChangedListener);
       removeEventListener("save_status_updated", saveStatusListener);
       removeEventListener("migration_relaunch_options", migrationRelaunchListener);
       removeEventListener("server_retry_progress", serverRetryListener);

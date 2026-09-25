@@ -17,8 +17,8 @@ Two things still matter when you read a row:
   you change a core option — the rows below say which. Turning that on is not yet something the plugin does for you, but
   it does now **notice**: change the option and the next sync reads the new answer.
 - **Rows are stated for each platform's _default_ core.** You can override the core per system and per game, and a
-  different core can behave differently — which is exactly why the plugin asks per game. RetroArch's
-  `savefiles_in_content_dir` still moves saves out of where the plugin looks, and that is reported separately.
+  different core can behave differently — which is exactly why the plugin asks per game. A save written beside the game
+  file (usually RetroArch's `savefiles_in_content_dir`) keeps save sync off, and that is reported separately.
 
 Most of this table is derived from libretro's documentation and from reading core source, not from watching each core
 write a save. Where the [emu-atlas](https://github.com/danielcopper/emu-atlas) audit has corrected an earlier
@@ -61,8 +61,17 @@ same story with different answers: a `.chd` CD32 image saves per game, while an 
 itself, a `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` hard-disk image cannot
 be established at all.
 
-3DO and Neo Geo are named right and still not found: those emulators keep saves in a per-emulator subfolder that the
-plugin does not yet look in.
+3DO and Neo Geo keep their saves in a subfolder of the emulator's own — `saves/3do/opera/per_game` and
+`saves/neogeo/fbneo` — and the plugin now looks there, because it takes each game's save folder from the emulator rather
+than working it out itself. That has not yet been observed on a device.
+
+!!! warning "3DO saves were not backed up by earlier versions"
+
+    3DO once showed as ✅ on the assumption that the Opera core writes a plain `<game>.srm` into the save folder. It
+    does not: Opera writes its NVRAM to `opera/per_game/` with a version number in the filename, and earlier versions
+    of the plugin never looked there. **If you played 3DO games with an earlier version, those saves were never uploaded
+    to RomM.** This version looks where Opera writes them, which has not yet been observed on a device — check that
+    your 3DO saves reach RomM before relying on it.
 
 The systems whose default core has been **watched writing a save on a stock RetroDECK install** are Game Boy / Color /
 Advance, N64, Saturn, Neo Geo Pocket (Color) and Pokémon Mini. The rest of the ✅ rows follow the same standard `.srm`
@@ -72,19 +81,9 @@ convention and are expected to behave identically, but haven't been observed one
 
 Per-game saves for these systems fit the sync model and are planned for a future release:
 
-| System      | Notes                                                                                                       |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet.            |
-| 3DO         | The Opera core writes per-game NVRAM into its own `opera/per_game/` subfolder, under a versioned name.      |
-| Neo Geo     | FinalBurn Neo writes a per-game save into its own `fbneo/` subfolder, which the plugin doesn't look in yet. |
-
-!!! warning "3DO was listed as syncing here before — it wasn't"
-
-    Until this revision, 3DO showed as ✅ on the assumption that the Opera core writes a plain `<game>.srm` into the
-    save folder. The core audit disproved that: Opera writes its NVRAM to `opera/per_game/` with a version number in
-    the filename, and exposes no save RAM to RetroArch at all — so there was never a `.srm` for the plugin to find.
-    **If you have 3DO games, your saves have not been backed up to RomM.** Copy them off the device yourself until
-    this is supported.
+| System      | Notes                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet. |
 
 A few less-common systems (some DOS, PICO-8, ST-V) may also gain support pending confirmation.
 
@@ -164,14 +163,12 @@ states still work locally). See the full table for specifics.
     | `vsmile` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `wii` | ❌ | Dolphin core's own save subtree — not confirmed on-device |
     | `x68000` | ❌ | Not synced |
-    | `3do` | 🔜 | Per-game NVRAM, but in the Opera core's own `opera/per_game/` subfolder with a versioned name |
     | `amiga1200` | 🔜 | Planned |
     | `amiga600` | 🔜 | Planned |
     | `atarijaguar` | 🔜 | Planned |
     | `cdimono1` | 🔜 | Under review |
     | `cdtv` | 🔜 | Planned — pending platform mapping (#907) |
     | `dos` | 🔜 | Planned |
-    | `neogeo` | 🔜 | Per-game saves, but in the FinalBurn Neo core's own `fbneo/` subfolder |
     | `pc` | 🔜 | Planned |
     | `pico8` | 🔜 | Planned |
     | `psx` | 🔜 | Planned |
@@ -181,6 +178,7 @@ states still work locally). See the full table for specifics.
     | `wasm4` | 🔜 | Under review |
     | `windows3x` | 🔜 | Planned |
     | `windows9x` | 🔜 | Planned |
+    | `3do` | ✅ | Per-game NVRAM in the Opera core's own `opera/per_game/` subfolder — not yet observed on a device |
     | `amigacd32` | ✅ | A `.chd` disc image saves per game; a raw `.bin` is not answered |
     | `atari2600` | ✅ | Synced |
     | `c64` | ✅ | Synced |
@@ -203,6 +201,7 @@ states still work locally). See the full table for specifics.
     | `n64` | ✅ | Synced |
     | `n64dd` | ✅ | Synced |
     | `nds` | ✅ | Synced |
+    | `neogeo` | ✅ | Per-game saves in the FinalBurn Neo core's own `fbneo/` subfolder — not yet observed on a device |
     | `nes` | ✅ | Synced |
     | `ngp` | ✅ | Synced |
     | `ngpc` | ✅ | Synced |

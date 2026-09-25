@@ -8,36 +8,34 @@ Tender plugin, and pick **Settings** from the menu at the bottom of the panel.
 Settings is a wide page split in two: a list of five sections on the left, and the focused section's controls on the
 right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
 
-| Section           | What is in it                                                                                                                                                                                                  |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connections**   | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                                                                   |
-| **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now), the list of registered devices, and the save-sorting migration when one is waiting |
-| **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                                                                 |
-| **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                                                                         |
-| **Advanced**      | log level                                                                                                                                                                                                      |
+| Section           | What is in it                                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connections**   | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                  |
+| **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
+| **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
+| **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
+| **Advanced**      | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
-those five. Registered Devices and the save-sorting migration are now inside **Save Sync**, the SteamGridDB key is
-inside **Connections**, and the section that used to be called **Library** is now **Steam Library**: the Library _page_
-is about what gets synced out of RomM, this section is about how it looks once it is in Steam.
+those five. Registered Devices is now inside **Save Sync**, the SteamGridDB key is inside **Connections**, and the
+section that used to be called **Library** is now **Steam Library**: the Library _page_ is about what gets synced out of
+RomM, this section is about how it looks once it is in Steam.
 
 **Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
 accounts.
 
 ### Getting there from a notice
 
-Three of the notices on the plugin's main panel are doors into a section, and the action they are about lives only
-behind that door:
+Two of the notices on the plugin's main panel are doors into a section, and the action they are about lives only behind
+that door:
 
-| The notice says                | Its button           | Where it takes you     |
-| ------------------------------ | -------------------- | ---------------------- |
-| RetroArch: input_driver issue  | **Open Controller**  | Settings › Controller  |
-| RetroArch save sorting changed | **Open Save Sync**   | Settings › Save Sync   |
-| Cross-device playtime          | **Open Connections** | Settings › Connections |
+| The notice says               | Its button           | Where it takes you     |
+| ----------------------------- | -------------------- | ---------------------- |
+| RetroArch: input_driver issue | **Open Controller**  | Settings › Controller  |
+| Cross-device playtime         | **Open Connections** | Settings › Connections |
 
-The main panel only names the condition — it no longer carries a Fix button or the migration's own buttons, so there is
-one place to do each of these and no chance of two of them disagreeing. **B** takes you back to the main panel from
-anywhere on the page.
+The main panel only names the condition — it no longer carries a Fix button, so there is one place to do each of these
+and no chance of two of them disagreeing. **B** takes you back to the main panel from anywhere on the page.
 
 Where the sections below say "in Connection Settings", read it as **Settings › Connections**.
 

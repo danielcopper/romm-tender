@@ -8,7 +8,6 @@ from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 from domain.save_attribution import compute_uploaded_by_us
-from domain.save_layout import ContentDir
 from domain.save_slot import filter_saves_to_slot
 from domain.save_status import compute_multi_file_slot, compute_save_sync_display
 from domain.save_status_builders import (
@@ -29,7 +28,6 @@ if TYPE_CHECKING:
         ActiveCoreReader,
         DebugLogger,
         EventEmitter,
-        RetroArchSaveLayoutProvider,
         RetryStrategy,
         RommSaveApi,
         UnitOfWorkFactory,
@@ -49,10 +47,8 @@ class StatusServiceConfig:
     the shared :class:`DeviceRegistry` that owns the server device id),
     the Protocol-typed RomM adapter and retry strategy, the plugin event
     loop, the standard-library logger, the ``DebugLogger`` seam, the
-    per-ROM active-core resolver, the event emitter used to push background
-    status updates to the frontend, and the ``RetroArchSaveLayoutProvider``
-    seam that reports whether RetroArch writes saves to the content dir
-    (the unsupported case surfaced as ``savefiles_in_content_dir`` — #239).
+    per-ROM active-core resolver, and the event emitter used to push background
+    status updates to the frontend.
     """
 
     settings: dict[str, Any]
@@ -67,7 +63,6 @@ class StatusServiceConfig:
     log_debug: DebugLogger
     active_core: ActiveCoreReader
     emit: EventEmitter
-    get_save_layout: RetroArchSaveLayoutProvider
 
 
 class StatusService:
@@ -87,7 +82,6 @@ class StatusService:
         self._log_debug = config.log_debug
         self._active_core = config.active_core
         self._emit = config.emit
-        self._get_save_layout = config.get_save_layout
 
     def _status_entry_from_outcome(
         self,
@@ -180,6 +174,7 @@ class StatusService:
         *,
         server_query_failed: bool = False,
         server_query_reason: str | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> dict[str, Any]:
         """Sync helper for get_save_status — runs in executor.
 
@@ -217,27 +212,23 @@ class StatusService:
         misleading "ready to upload" indicator on what is in fact a
         connectivity blip.
         """
-        # RetroArch ``savefiles_in_content_dir=true``: saves live next to the
-        # ROM, outside the saves tree we scan, so save sync is unsupported.
-        # Skip all local save-file probing (the files are not where we look)
-        # but keep playtime / device_id / last_sync_check_at intact (#239).
-        savefiles_in_content_dir = isinstance(self._get_save_layout(), ContentDir)
-
         # What this ROM's emulator actually writes, read live. Four of the five
-        # states refuse the sync, and the refusal is the same one the content-dir
-        # gate performs: no ``info`` means no local probe and no baseline-adopt
-        # write, so nothing is looked for and nothing is recorded.
-        save_answer = (
-            unestablished_answer(
-                shape=UNESTABLISHED_NOT_ASKED,
-                content_installed=self._rom_info.is_content_installed(rom_id),
+        # states refuse the sync, and so does a save written beside the ROM's
+        # content, which the sync leaves alone: no ``info`` means no local probe
+        # and no baseline-adopt write, so nothing is looked for and nothing is
+        # recorded. Playtime / device_id / last_sync_check_at stay intact.
+        if save_answer is None:
+            save_answer = self._rom_info.save_answer(rom_id)
+        savefiles_in_content_dir = save_answer.in_content_directory
+        if savefiles_in_content_dir:
+            # The wire says the question was not put, as it always has for this
+            # case: sync never runs here, whatever the files beside the ROM are.
+            save_answer = unestablished_answer(
+                shape=UNESTABLISHED_NOT_ASKED, content_installed=save_answer.content_installed
             )
-            if savefiles_in_content_dir
-            else self._rom_info.save_answer(rom_id)
-        )
 
         skip_probe = savefiles_in_content_dir or not save_answer.syncable
-        info = None if skip_probe else self._rom_info.get_rom_save_info(rom_id)
+        info = None if skip_probe else self._rom_info.get_rom_save_info(rom_id, save_answer=save_answer)
 
         with self._uow_factory() as uow:
             save_state = uow.rom_save_sync_states.get(rom_id)
@@ -329,7 +320,6 @@ class StatusService:
             "device_id": device_id or "",
             "last_sync_check_at": last_sync_check_at,
             "conflicts": conflicts,
-            "save_sort_changed": self._rom_info.is_save_sort_changed(),
             "savefiles_in_content_dir": savefiles_in_content_dir,
             "save_resolution": _save_resolution_payload(save_answer),
             "save_sync_display": save_sync_display,
@@ -351,10 +341,10 @@ class StatusService:
             # until grouped save-states land (#908).
             "multi_file": multi_file.is_multi_file,
             "component_files": multi_file.component_files,
-            # Rollback writes to ``saves_dir``, which RetroArch ignores in
-            # content-dir mode — so rollback is unsupported there regardless of
-            # the (empty) file list. Make it explicit rather than relying on
-            # ``files == []`` to suppress the rollback UI (#239).
+            # Rollback writes into the save directory, which the sync leaves
+            # alone where the emulator saves beside the content — so rollback is
+            # unsupported there regardless of the (empty) file list. Explicit
+            # rather than relying on ``files == []`` to suppress the rollback UI.
             "rollback_supported": not multi_file.is_multi_file and not savefiles_in_content_dir,
         }
 
@@ -379,16 +369,17 @@ class StatusService:
         explicit ``server_unreachable`` drives the UI's offline state (#1570).
 
         The additive ``savefiles_in_content_dir: bool`` flag is ``True``
-        when RetroArch writes saves next to the ROM (the unsupported case):
-        local probing is skipped and the display reads "Save sync off",
-        while playtime / device_id stay intact (#239).
+        where a save the plugin could otherwise sync sits beside the ROM
+        (``SaveAnswer.in_content_directory``): local probing is skipped and
+        the display reads "Save sync off", while playtime / device_id stay
+        intact.
 
-        The ``rom_save_sync_states`` read-modify-write (the baseline-adopt
-        write in ``_get_save_status_io``) runs under the per-ROM sync lock
-        (``SyncEngine.rom_lock(rom_id)``), so it cannot interleave with a
-        concurrent ``do_sync_rom_saves`` and lose that sync's update. The
-        server-saves network fetch stays outside the lock — only the local
-        RMW is the critical section.
+        The save-answer reading, the directory follow it feeds (for an installed
+        ROM) and the ``rom_save_sync_states`` read-modify-write (the
+        baseline-adopt write in ``_get_save_status_io``) run under the per-ROM
+        sync lock (``SyncEngine.rom_lock(rom_id)``), so they cannot interleave
+        with a concurrent ``do_sync_rom_saves`` and lose that sync's update. The
+        server-saves network fetch stays outside the lock.
         """
         rom_id = int(rom_id)
 
@@ -407,6 +398,12 @@ class StatusService:
             server_query_reason, _message = classify_error(e)
 
         async with self._sync_engine.rom_lock(rom_id):
+            save_answer = await self._loop.run_in_executor(None, self._rom_info.save_answer, rom_id)
+            # A moved directory is followed before the status probes for files,
+            # or the status would report the old folder's saves as missing. An
+            # uninstalled ROM's answer is a prediction, never followed.
+            if save_answer.content_installed:
+                await self._sync_engine.follow_save_directory(rom_id, save_answer)
             return await self._loop.run_in_executor(
                 None,
                 lambda: self._get_save_status_io(
@@ -414,6 +411,7 @@ class StatusService:
                     server_saves,
                     server_query_failed=server_query_failed,
                     server_query_reason=server_query_reason,
+                    save_answer=save_answer,
                 ),
             )
 

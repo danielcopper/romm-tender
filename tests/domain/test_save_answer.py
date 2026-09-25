@@ -250,6 +250,71 @@ class TestPickDownloadName:
         assert pick_download_name(("Game.srm",), "Game") == "Game"
 
 
+class TestWhereASyncMayReadAndWrite:
+    """``sync_directory`` is the one directory a sync path acts on, and it is ``None`` wherever it may not."""
+
+    def test_a_syncable_answer_under_the_save_root_syncs_its_directory(self):
+        answer = _answer(root_kind="savefile_directory")
+
+        assert answer.in_content_directory is False
+        assert answer.sync_directory == _DIR
+
+    def test_a_save_beside_the_content_is_not_synced_although_its_files_are_named(self):
+        answer = _answer(root_kind="content_directory")
+
+        assert answer.syncable is True
+        assert answer.in_content_directory is True
+        assert answer.sync_directory is None
+
+    @pytest.mark.parametrize("caveat", ["save-inside-content", "save-inside-image"])
+    def test_a_save_inside_the_content_is_not_one_beside_it(self, caveat):
+        # Anchored in the content's directory and refused for being inside the
+        # content or an image, never for sitting beside it.
+        answer = _answer(caveats=(caveat,), files=(), root_kind="content_directory")
+
+        assert answer.state == SAVE_STATE_INSIDE_CONTENT
+        assert answer.in_content_directory is False
+        assert answer.sync_directory is None
+
+    def test_discarded_writes_beside_the_content_are_not_the_content_directory_case(self):
+        # PUAE on an .adz, Hatari with write protection on: nothing is kept, so
+        # the refusal is the answer's own and never "saves beside the game".
+        answer = _answer(
+            caveats=("save-writes-discarded",), files=(), granularity="none", root_kind="content_directory"
+        )
+
+        assert answer.syncable is False
+        assert answer.in_content_directory is False
+        assert answer.sync_directory is None
+
+    def test_only_a_syncable_answer_beside_the_content_is_the_content_directory_case(self):
+        # Derived from the syncable rule, not from a caveat list: any refusing
+        # state anchored there is not this case.
+        for overrides in ({"needs": ("save_id",)}, {"granularity": "shared-card"}, {"files": ()}):
+            answer = _answer(root_kind="content_directory", **overrides)
+            assert answer.syncable is False
+            assert answer.in_content_directory is False
+
+    def test_a_refusing_answer_keeps_its_directory_and_syncs_none(self):
+        answer = _answer(granularity="shared-card", files=("Mcd001.ps2",), root_kind="savefile_directory")
+
+        assert answer.directory == _DIR
+        assert answer.sync_directory is None
+
+    def test_an_answer_nothing_resolved_names_no_root_and_no_directory(self):
+        answer = unestablished_answer()
+
+        assert (answer.directory, answer.root_kind, answer.fallback_directory) == (None, None, None)
+        assert answer.in_content_directory is False
+        assert answer.sync_directory is None
+
+    def test_the_fallback_root_rides_along_unread(self):
+        answer = _answer(caveats=("sorted-dir-missing",), fallback_directory="/saves")
+
+        assert answer.fallback_directory == "/saves"
+        assert answer.sync_directory == _DIR
+
+
 class TestTheRefusalIsReportedNeutrally:
     def test_the_slug_says_nothing_about_the_server(self):
         assert SAVE_SHAPE_UNSUPPORTED_REASON == "save_shape_unsupported"

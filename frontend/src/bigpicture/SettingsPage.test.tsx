@@ -7,18 +7,13 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
-import { createElement, useSyncExternalStore, type ComponentProps, type ReactElement } from "react";
+import { createElement, type ComponentProps, type ReactElement } from "react";
 import { SettingsPage } from "./SettingsPage";
 import * as backend from "../api/backend";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
-import type { SaveSortMigrationStatus, RegisteredDevice, SettingsSection } from "../types";
+import type { RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
-import {
-  setSaveSortMigrationStatus,
-  clearSaveSortMigration,
-  onSaveSortMigrationChange,
-} from "../utils/saveSortMigrationStore";
 import { pendingEdits } from "./settings/TextInputModal";
 
 // Type-only imports — vi.mock(...) below replaces the runtime implementations,
@@ -32,7 +27,6 @@ import type { ControllerSection } from "./settings/ControllerSection";
 import type { AdvancedSection } from "./settings/AdvancedSection";
 import type { LibrarySection } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
-import type { SaveSortMigrationSection } from "./settings/SaveSortMigrationSection";
 
 type ConnectionProps = ComponentProps<typeof ConnectionSection>;
 type SteamGridDBProps = ComponentProps<typeof SteamGridDBSection>;
@@ -41,7 +35,6 @@ type RegisteredDevicesProps = ComponentProps<typeof RegisteredDevicesSection>;
 type ControllerProps = ComponentProps<typeof ControllerSection>;
 type AdvancedProps = ComponentProps<typeof AdvancedSection>;
 type LibraryProps = ComponentProps<typeof LibrarySection>;
-type SaveSortMigrationProps = ComponentProps<typeof SaveSortMigrationSection>;
 
 // Captured props arrays — reset in beforeEach. Each child mock pushes the
 // props it was called with so tests can inspect handler wiring + state
@@ -53,7 +46,6 @@ const capturedDevices: RegisteredDevicesProps[] = [];
 const capturedController: ControllerProps[] = [];
 const capturedAdvanced: AdvancedProps[] = [];
 const capturedLibrary: LibraryProps[] = [];
-const capturedMigration: SaveSortMigrationProps[] = [];
 
 vi.mock("./settings/ConnectionSection", () => ({
   ConnectionSection: (p: ConnectionProps) => {
@@ -108,12 +100,6 @@ vi.mock("./settings/LibrarySection", async (importOriginal) => {
 vi.mock("./settings/PreferredRegionModal", () => ({
   showPreferredRegionModal: vi.fn(() => Promise.resolve(true)),
 }));
-vi.mock("./settings/SaveSortMigrationSection", () => ({
-  SaveSortMigrationSection: (p: SaveSortMigrationProps) => {
-    capturedMigration.push(p);
-    return createElement("div", { "data-testid": "migration-section" });
-  },
-}));
 
 // pendingEdits is a mutable module-level object — tests may pre-populate it
 // before render to verify the mount-time override path.
@@ -167,39 +153,6 @@ vi.mock("../utils/scrollHelpers", () => ({
   scrollElementToTop: vi.fn(),
   offsetWithinScroller: () => 0,
 }));
-
-// Mock the saveSortMigrationStore — own listener list + state so tests can
-// drive the subscribe/unsubscribe + state-change flow deterministically.
-const saveSortListeners: Array<() => void> = [];
-let currentSortState: SaveSortMigrationStatus = { pending: false };
-// useSaveSortMigrationState routes through the mocked seams rather than being
-// stubbed with a constant, so the listener assertions still measure the page's
-// real subscribe/unsubscribe. subscribe/snapshot are built once — a fresh
-// subscribe reference per render makes React re-subscribe on every render.
-vi.mock("../utils/saveSortMigrationStore", () => {
-  const subscribe = (cb: () => void) => mod.onSaveSortMigrationChange(cb);
-  const snapshot = () => mod.getSaveSortMigrationState();
-  const mod = {
-    getSaveSortMigrationState: vi.fn(() => currentSortState),
-    setSaveSortMigrationStatus: vi.fn((s: SaveSortMigrationStatus) => {
-      currentSortState = s;
-      saveSortListeners.forEach((fn) => fn());
-    }),
-    clearSaveSortMigration: vi.fn(() => {
-      currentSortState = { pending: false };
-      saveSortListeners.forEach((fn) => fn());
-    }),
-    onSaveSortMigrationChange: vi.fn((cb: () => void) => {
-      saveSortListeners.push(cb);
-      return () => {
-        const i = saveSortListeners.indexOf(cb);
-        if (i >= 0) saveSortListeners.splice(i, 1);
-      };
-    }),
-    useSaveSortMigrationState: () => useSyncExternalStore(subscribe, snapshot),
-  };
-  return mod;
-});
 
 // Wait one microtask for the mount-time useEffect promises to resolve.
 const flushAsync = () =>
@@ -262,9 +215,6 @@ describe("SettingsPage", () => {
     capturedController.length = 0;
     capturedAdvanced.length = 0;
     capturedLibrary.length = 0;
-    capturedMigration.length = 0;
-    saveSortListeners.length = 0;
-    currentSortState = { pending: false };
     for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
       delete pendingEdits[k];
     }
@@ -273,7 +223,6 @@ describe("SettingsPage", () => {
     vi.mocked(backend.getKnownRegions).mockResolvedValue([]);
     vi.mocked(showPreferredRegionModal).mockResolvedValue(true);
     vi.mocked(backend.getSaveSyncSettings).mockResolvedValue(defaultSaveSyncSettings());
-    vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({ pending: false });
     vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices: [] });
     vi.mocked(backend.ensureDeviceRegistered).mockResolvedValue({
       success: true,
@@ -438,44 +387,6 @@ describe("SettingsPage", () => {
       renderPage();
       await flushAsync();
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load save sync settings"));
-      logSpy.mockRestore();
-    });
-  });
-
-  describe("initial mount — getSaveSortMigrationStatus", () => {
-    beforeEach(() => {
-      openOn = "save-sync";
-    });
-
-    it("forwards a pending status into the store and into local state", async () => {
-      const pending: SaveSortMigrationStatus = {
-        pending: true,
-        old_settings: { sort_by_content: true, sort_by_core: false },
-        new_settings: { sort_by_content: false, sort_by_core: false },
-        saves_count: 5,
-      };
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue(pending);
-      renderPage();
-      await flushAsync();
-      expect(vi.mocked(setSaveSortMigrationStatus)).toHaveBeenCalledWith(pending);
-      expect(capturedMigration[capturedMigration.length - 1]?.migration).toEqual(pending);
-    });
-
-    it("does nothing when the status is not pending", async () => {
-      // defaults — pending=false
-      renderPage();
-      await flushAsync();
-      expect(vi.mocked(setSaveSortMigrationStatus)).not.toHaveBeenCalled();
-    });
-
-    it("silently swallows a getSaveSortMigrationStatus rejection", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockRejectedValue(new Error("oops"));
-      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      renderPage();
-      await flushAsync();
-      // No logError for this branch — it's a fire-and-forget probe.
-      const calls = logSpy.mock.calls.map((c) => c[0]);
-      expect(calls.some((m) => m.includes("save_sort_migration"))).toBe(false);
       logSpy.mockRestore();
     });
   });
@@ -1348,6 +1259,13 @@ describe("SettingsPage", () => {
       // #1189: the copy must not claim only .srm files sync, and points at the support matrix instead.
       expect(props?.strDescription).not.toContain("(.srm)");
       expect(props?.strDescription).toContain("support matrix");
+      // No save-sorting setting is required any more: the copy says the plugin
+      // follows RetroArch's sorting and no longer asks for a particular one.
+      expect(props?.strDescription).toContain("follows RetroArch's own save sorting");
+      expect(props?.strDescription).toContain("the next time the plugin touches that game's saves");
+      expect(props?.strDescription).not.toContain("the next time that game syncs");
+      expect(props?.strDescription).not.toContain("Sort Saves into Folders");
+      expect(props?.strDescription).not.toContain("will not find your save files");
       expect(props?.strOKButtonText).toBe("I am sure");
       expect(props?.strCancelButtonText).toBe("Cancel");
     });
@@ -1819,139 +1737,6 @@ describe("SettingsPage", () => {
     });
   });
 
-  describe("save-sort migration handlers", () => {
-    beforeEach(() => {
-      openOn = "save-sync";
-    });
-
-    it("handleMigrateSaveSort success clears the store, toasts, and forwards result.message", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-        old_settings: { sort_by_content: true, sort_by_core: false },
-        new_settings: { sort_by_content: false, sort_by_core: false },
-        saves_count: 2,
-      });
-      vi.mocked(backend.migrateSaveSortFiles).mockResolvedValue({
-        success: true,
-        message: "Moved 2 files",
-      });
-      renderPage();
-      await flushAsync();
-
-      await act(async () => {
-        capturedMigration[capturedMigration.length - 1]?.onMigrate();
-        await Promise.resolve();
-      });
-
-      expect(vi.mocked(clearSaveSortMigration)).toHaveBeenCalled();
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Tender",
-          body: "Moved 2 files",
-        }),
-      );
-    });
-
-    it("handleMigrateSaveSort success with empty message falls back to 'Migration complete.'", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-      });
-      vi.mocked(backend.migrateSaveSortFiles).mockResolvedValue({
-        success: true,
-        message: "",
-      });
-      renderPage();
-      await flushAsync();
-
-      await act(async () => {
-        capturedMigration[capturedMigration.length - 1]?.onMigrate();
-        await Promise.resolve();
-      });
-
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: "Migration complete.",
-        }),
-      );
-    });
-
-    it("handleMigrateSaveSort throw → onMigrate result='Migration failed'", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-      });
-      vi.mocked(backend.migrateSaveSortFiles).mockRejectedValue(new Error("io"));
-      renderPage();
-      await flushAsync();
-      await act(async () => {
-        capturedMigration[capturedMigration.length - 1]?.onMigrate();
-        await Promise.resolve();
-      });
-      expect(capturedMigration[capturedMigration.length - 1]?.result).toBe("Migration failed");
-    });
-
-    it("handleDismissSaveSort calls dismissSaveSortMigration + clearSaveSortMigration", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-      });
-      vi.mocked(backend.dismissSaveSortMigration).mockResolvedValue({ success: true });
-      renderPage();
-      await flushAsync();
-      await act(async () => {
-        capturedMigration[capturedMigration.length - 1]?.onDismiss();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.dismissSaveSortMigration)).toHaveBeenCalled();
-      expect(vi.mocked(clearSaveSortMigration)).toHaveBeenCalled();
-    });
-
-    it("handleDismissSaveSort silently swallows a rejection", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-      });
-      vi.mocked(backend.dismissSaveSortMigration).mockRejectedValue(new Error("net"));
-      renderPage();
-      await flushAsync();
-      await act(async () => {
-        capturedMigration[capturedMigration.length - 1]?.onDismiss();
-        await Promise.resolve();
-      });
-      // No assertion beyond "did not throw" — the catch block is `/* ignore */`.
-    });
-  });
-
-  describe("saveSortMigrationStore subscribe / unsubscribe", () => {
-    beforeEach(() => {
-      openOn = "save-sync";
-    });
-
-    it("subscribes on mount and unsubscribes on unmount", async () => {
-      const { unmount } = renderPage();
-      await flushAsync();
-      expect(vi.mocked(onSaveSortMigrationChange)).toHaveBeenCalledTimes(1);
-      expect(saveSortListeners.length).toBe(1);
-      unmount();
-      expect(saveSortListeners.length).toBe(0);
-    });
-
-    it("re-renders the migration section when the store flips to pending", async () => {
-      renderPage();
-      await flushAsync();
-      // Initially: no migration section because pending=false.
-      expect(capturedMigration.length).toBe(0);
-
-      // Drive a store flip — simulates a different surface (e.g. launch
-      // interceptor) setting the pending state while SettingsPage is mounted.
-      await act(async () => {
-        vi.mocked(setSaveSortMigrationStatus)({
-          pending: true,
-          saves_count: 1,
-        });
-      });
-      expect(capturedMigration.length).toBeGreaterThan(0);
-      expect(capturedMigration[capturedMigration.length - 1]?.migration.pending).toBe(true);
-    });
-  });
-
   describe("conditional renders", () => {
     beforeEach(() => {
       openOn = "save-sync";
@@ -1971,22 +1756,6 @@ describe("SettingsPage", () => {
       const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("devices-section")).not.toBeNull();
-    });
-
-    it("hides SaveSortMigrationSection when pending=false", async () => {
-      const { queryByTestId } = renderPage();
-      await flushAsync();
-      expect(queryByTestId("migration-section")).toBeNull();
-    });
-
-    it("shows SaveSortMigrationSection when pending=true", async () => {
-      vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
-        pending: true,
-        saves_count: 3,
-      });
-      const { queryByTestId } = renderPage();
-      await flushAsync();
-      expect(queryByTestId("migration-section")).not.toBeNull();
     });
   });
 

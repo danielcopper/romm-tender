@@ -58,7 +58,11 @@ appears with three choices:
 
 - **Overwrite** — Replace the existing files at the destination with the ones being migrated
 - **Skip** — Keep the existing files at the destination and just update the plugin's internal path references to point
-  to them
+  to them. The copy left at the old location stays there, and later save syncs leave it alone rather than carry it over
+  the one you kept. Two exceptions: if no emulator installation was found when the migration finished, or if the plugin
+  could not note a game's new save folder after it (the failure is written to the plugin's log), the old copy can still
+  be moved across the next time the plugin touches that game's saves. Neither copy is lost: where both exist, the older
+  one is moved into a `.romm-backup` folder beside it.
 - **Cancel** — Abort the migration entirely; no files are moved and no paths are updated
 
 ## What Gets Migrated

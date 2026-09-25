@@ -2,11 +2,13 @@
 
 import asyncio
 import threading
+from typing import cast
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_layout import ContentDir, InSaveDir
+from domain.save_answer import SaveAnswer
 from lib.errors import RommConnectionError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
@@ -179,7 +181,7 @@ class TestSaveStatusContentDir:
 
     @pytest.mark.asyncio
     async def test_content_dir_sets_flag_and_skips_local_probing(self, tmp_path):
-        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
         # A local save file exists, but content-dir mode must NOT probe for it.
         _create_save(tmp_path)
@@ -205,7 +207,7 @@ class TestSaveStatusContentDir:
         its default an installed game reads as not installed, and the next cut
         would word every row as a prediction about a game the user is playing.
         """
-        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
 
         result = await svc.get_save_status(42)
@@ -215,7 +217,7 @@ class TestSaveStatusContentDir:
     @pytest.mark.asyncio
     async def test_the_refusal_says_an_uninstalled_game_is_not(self, tmp_path):
         # The other direction, so the field is not just hardcoded true.
-        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _seed_rom(svc, 42)
 
         result = await svc.get_save_status(42)
@@ -223,9 +225,39 @@ class TestSaveStatusContentDir:
         assert result["save_resolution"]["content_installed"] is False
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "caveat", ["save-inside-content", "save-inside-image"], ids=["inside-the-game-file", "inside-the-disk-image"]
+    )
+    async def test_a_save_inside_the_game_file_keeps_its_own_explanation(self, tmp_path, caveat):
+        # Anchored in the content's directory, but inside the file rather than
+        # beside it: the answer stays the resolver's, not a fabricated not_asked.
+        svc, _ = make_service(tmp_path)
+        answer = SaveAnswer(
+            state="inside_content",
+            unestablished=None,
+            emulator="PUAE",
+            directory=str(tmp_path / "retrodeck" / "roms" / "gba"),
+            backing_directory=None,
+            granularity=None,
+            needs=(),
+            components=(),
+            caveats=(caveat,),
+            content_installed=True,
+            root_kind="content_directory",
+        )
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", answer)
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_status(42)
+
+        assert result["savefiles_in_content_dir"] is False
+        assert result["save_resolution"]["state"] == "inside_content"
+        assert result["save_resolution"]["caveats"] == [caveat]
+
+    @pytest.mark.asyncio
     async def test_in_save_dir_rollback_supported_true(self, tmp_path):
         """Control: a supported single-file layout keeps ``rollback_supported`` True."""
-        svc, _ = make_service(tmp_path, get_save_layout=lambda: InSaveDir(sort_by_content=True, sort_by_core=False))
+        svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
 
         result = await svc.get_save_status(42)
@@ -235,7 +267,7 @@ class TestSaveStatusContentDir:
 
     @pytest.mark.asyncio
     async def test_content_dir_keeps_playtime_and_device_id(self, tmp_path):
-        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
         _set_device_id(svc, "server-dev-1")
 
@@ -249,10 +281,7 @@ class TestSaveStatusContentDir:
 
     @pytest.mark.asyncio
     async def test_in_save_dir_sets_flag_false_and_behaves_normally(self, tmp_path):
-        svc, fake = make_service(
-            tmp_path,
-            get_save_layout=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-        )
+        svc, fake = make_service(tmp_path)
         _install_rom(svc, tmp_path)
         _create_save(tmp_path)
         fake.saves[100] = _server_save()

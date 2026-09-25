@@ -5,8 +5,8 @@ uninstall. References its Rom by ``rom_id``. Always carries the specific launch
 ``file_path``; ``rom_dir`` names the dedicated per-ROM directory and is set only
 for folder-backed (multi-file) ROMs — it is ``None`` for single-file ROMs, which
 live as a bare file in the shared system directory and own no folder. The
-denormalized ``platform_slug``/``system`` let migration and save-sort read this
-record without joining the registry. ``launchable`` records whether the system
+denormalized ``platform_slug``/``system`` let the home migration and the save
+answer read this record without joining the registry. ``launchable`` records whether the system
 can act on that launch file at all — a download whose content the emulator
 cannot boot (a PS3 ``.pkg`` installer) is still a real install with real files
 on disk, it just has no launch target to bake.

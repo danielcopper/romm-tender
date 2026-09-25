@@ -3,12 +3,11 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _factories import _make_testable_plugin
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
@@ -18,7 +17,6 @@ from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
-from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
@@ -29,7 +27,6 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.persistence import PersistenceAdapter
 from adapters.steam_config import SteamConfigAdapter
-from domain.save_layout import InSaveDir, SaveLayout
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -53,6 +50,31 @@ class RecordingEmitter:
         self.calls.append((event, payload))
 
 
+class RecordingSaveDirectories:
+    """Stands in for ``SaveService.rerecord_save_directories`` and counts its calls.
+
+    Called through ``provide`` the way the composition root's ``LateBinding``
+    hands the live recorder over. *error* makes the call raise. *gate*, when
+    given, is asked at call time — what a sync arriving mid-re-record would ask.
+    """
+
+    def __init__(self, error: Exception | None = None, gate: Any = None) -> None:
+        self.calls = 0
+        self._error = error
+        self._gate = gate
+        self.pending_while_recording: list[bool] = []
+
+    def provide(self) -> Self:
+        return self
+
+    async def __call__(self) -> None:
+        self.calls += 1
+        if self._gate is not None:
+            self.pending_while_recording.append(self._gate())
+        if self._error is not None:
+            raise self._error
+
+
 @pytest.fixture
 def plugin(tmp_path, fake_romm_api, emit, logger, home):
     p = _make_testable_plugin()
@@ -67,8 +89,8 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
     p._settings_persister = FakeSettingsPersister()
 
     # ONE shared FakeUnitOfWork the migration service reads/writes and tests
-    # seed/assert against. Markers (retrodeck_home_path*, save_sort_settings*)
-    # and install records both live in this unit now.
+    # seed/assert against. Markers (retrodeck_home_path*) and install records
+    # both live in this unit now.
     uow = FakeUnitOfWork()
     p._uow = uow
     # Shared core-info fake so a relaunch test can seed ``available_cores`` and
@@ -126,12 +148,6 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
         ),
     )
 
-    def _no_core_name(core_so: str) -> str | None:
-        return None
-
-    def _default_save_layout() -> SaveLayout:
-        return InSaveDir(sort_by_content=True, sort_by_core=False)
-
     # Real RelaunchOptionsResolver over the shared fake UoW + p._active_core so
     # the migration relaunch-emit integration tests still bake real launch
     # commands from the relocated rom_installs.file_path.
@@ -144,6 +160,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
     )
 
     firmware_resolver = FakeFirmwareResolver()
+    p._save_directories = RecordingSaveDirectories()
     p._migration_service = MigrationService(
         config=MigrationServiceConfig(
             migration_file_store=MigrationFileAdapter(),
@@ -154,11 +171,8 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             emit=RecordingEmitter(),
             firmware_resolver=firmware_resolver,
             retrodeck_paths=FakeRetroDeckPaths(),
-            get_save_layout=_default_save_layout,
-            save_locations=FakeSaveLocationReader(),
-            active_core=p._active_core,
             relaunch_options=relaunch_options,
-            get_core_name=_no_core_name,
+            save_directories=p._save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
     )
@@ -226,9 +240,6 @@ async def _set_event_loop(plugin):
     loop = asyncio.get_running_loop()
     plugin.loop = loop
     plugin._migration_service._loop = loop
-    # The save-sort half took its own copy of the loop at construction, so
-    # setting the service's alone would leave it scheduling on the wrong one.
-    plugin._migration_service._save_sort._loop = loop
 
 
 class _RecordingLoop:
@@ -934,6 +945,157 @@ class TestMigrateRetroDeckFiles:
         with plugin._uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
+    @staticmethod
+    def _conflicting_rom(plugin, tmp_path) -> None:
+        """A pending home move whose one ROM exists at both ends."""
+        old_home = str(tmp_path / "old")
+        new_home = str(tmp_path / "new")
+        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
+        new_rom = os.path.join(new_home, "roms", "n64", "zelda.z64")
+        for path, data in ((old_rom, "old data"), (new_rom, "new data")):
+            os.makedirs(os.path.dirname(path))
+            with open(path, "w") as f:
+                f.write(data)
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+
+    @pytest.mark.asyncio
+    async def test_the_save_directories_are_recorded_again_once_the_files_moved(self, plugin, tmp_path):
+        self._conflicting_rom(plugin, tmp_path)
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert plugin._save_directories.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_a_sync_during_the_re_record_still_finds_the_migration_pending(self, plugin, tmp_path):
+        # The markers clear with the relocations, before the re-record: without
+        # holding the gate, a sync in that window meets the old home's record.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+        watching = RecordingSaveDirectories(gate=service.is_retrodeck_migration_pending)
+        service._save_directories = watching.provide
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert watching.pending_while_recording == [True]
+        assert service.is_retrodeck_migration_pending() is False
+
+    @pytest.mark.asyncio
+    async def test_the_status_stays_pending_during_the_re_record(self, plugin, tmp_path):
+        # The panel reads this status; answering "not pending" while syncs are
+        # still held off would let it drop the migration mid-run.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+        seen: list[dict[str, Any]] = []
+
+        class _Watching(RecordingSaveDirectories):
+            async def __call__(self) -> None:
+                seen.append(await service.get_migration_status())
+
+        service._save_directories = _Watching().provide
+
+        await plugin.migrate_retrodeck_files("skip")
+
+        assert seen[0]["pending"] is True
+        assert seen[0]["old_path"] == str(tmp_path / "old")
+        assert seen[0]["new_path"] == str(tmp_path / "new")
+        assert await service.get_migration_status() == {"pending": False}
+
+    @pytest.mark.asyncio
+    async def test_the_status_keeps_the_counts_the_run_started_with_for_the_whole_run(self, plugin, tmp_path):
+        # Counted again once a file has moved, the blocked page would read fewer
+        # files, and after the run has cleared the markers "0 ROM(s), 0 BIOS,
+        # 0 save(s) to migrate". Asked twice: after the files moved while the
+        # markers still stand, and during the re-record once they are gone.
+        old_home = str(tmp_path / "old")
+        new_home = str(tmp_path / "new")
+        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
+        old_save = os.path.join(old_home, "saves", "n64", "zelda.srm")
+        for path in (old_rom, old_save):
+            os.makedirs(os.path.dirname(path))
+            with open(path, "w") as f:
+                f.write("data")
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        service = plugin._migration_service
+        service._retrodeck_paths = FakeRetroDeckPaths(
+            home=new_home,
+            saves=os.path.join(new_home, "saves"),
+            roms=os.path.join(new_home, "roms"),
+            bios=os.path.join(new_home, "bios"),
+        )
+        before = await service.get_migration_status()
+        loop = asyncio.get_running_loop()
+        seen: list[dict[str, Any]] = []
+        apply_relocations = service._apply_relocations
+
+        def _asking_after_the_moves(*args: Any, **kwargs: Any) -> None:
+            status = asyncio.run_coroutine_threadsafe(service.get_migration_status(), loop)
+            seen.append(status.result(timeout=5))
+            apply_relocations(*args, **kwargs)
+
+        class _Watching(RecordingSaveDirectories):
+            async def __call__(self) -> None:
+                seen.append(await service.get_migration_status())
+
+        service._apply_relocations = _asking_after_the_moves
+        service._save_directories = _Watching().provide
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert os.path.exists(os.path.join(new_home, "saves", "n64", "zelda.srm"))
+        assert not os.path.exists(old_save)
+        assert (before["roms_count"], before["saves_count"]) == (1, 1)
+        assert seen == [before, before]
+
+    @pytest.mark.asyncio
+    async def test_a_run_that_raises_leaves_nothing_in_flight(self, plugin, tmp_path):
+        # Left behind, the counter would hold every sync off and the status would
+        # report a migration nobody is running, until the process restarts.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+
+        async def _failing_run(*_args: Any) -> dict[str, Any]:
+            assert service.is_retrodeck_migration_pending() is True
+            raise RuntimeError("boom")
+
+        service._run_migration = _failing_run
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await plugin.migrate_retrodeck_files("skip")
+
+        assert service._migrations_in_flight == 0
+        assert service._status_in_flight is None
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
+        self._conflicting_rom(plugin, tmp_path)
+
+        result = await plugin.migrate_retrodeck_files(None)
+
+        assert result["reason"] == "needs_confirmation"
+        assert plugin._save_directories.calls == 0
+
+    @pytest.mark.asyncio
+    async def test_a_failed_recording_leaves_the_finished_migration_standing(self, plugin, tmp_path, caplog):
+        self._conflicting_rom(plugin, tmp_path)
+        failing = RecordingSaveDirectories(error=RuntimeError("database gone"))
+        plugin._migration_service._save_directories = failing.provide
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert failing.calls == 1
+        assert any("save directories after the home migration failed" in r.message for r in caplog.records)
+
     @pytest.mark.asyncio
     async def test_migrate_source_missing(self, plugin, tmp_path, logger):
         """Source file gone — skip silently."""
@@ -1518,127 +1680,11 @@ class TestMigrationRelaunchOptions:
         assert payload["items"][0]["launch_options"] == expected_cmd
 
 
-class TestResolveSaveSortConflict:
-    """Regression lock for _resolve_save_sort_conflict's mtime-naive behavior.
-
-    This test documents current mtime-naive behavior. It is deliberately NOT a
-    semantic "correctness" test — #238 works around this limitation
-    structurally at the save-sync layer (SaveService reads the previous
-    layout when a migration is pending and skips server_only downloads so
-    the mtime-naive resolver never sees a freshly-downloaded stale file).
-    If you improve the resolver to be hash-aware, delete or rewrite this
-    test rather than bypass it.
-    """
-
-    def test_resolve_save_sort_conflict_newest_mtime_wins_regression(self, plugin, tmp_path):
-        """Newer mtime wins; older file is removed. Freezes current behavior (#238)."""
-        # Stale file at the "old" path (older mtime).
-        old_path = str(tmp_path / "old_saves" / "game.srm")
-        new_path = str(tmp_path / "new_saves" / "game.srm")
-        os.makedirs(os.path.dirname(old_path))
-        os.makedirs(os.path.dirname(new_path))
-        with open(old_path, "wb") as f:
-            f.write(b"stale content")
-        with open(new_path, "wb") as f:
-            f.write(b"fresh content")
-
-        # Force deterministic mtimes: old is older, new is newer.
-        old_mtime = 1_700_000_000.0
-        new_mtime = 1_700_000_500.0
-        os.utime(old_path, (old_mtime, old_mtime))
-        os.utime(new_path, (new_mtime, new_mtime))
-
-        counts: dict[str, int] = {}
-        errors: list[str] = []
-        state_updates: list[str] = []
-
-        plugin._migration_service._save_sort._resolve_save_sort_conflict(
-            label="gba/game.srm",
-            old_path=old_path,
-            new_path=new_path,
-            state_updater=lambda: state_updates.append("called"),
-            counts=counts,
-            count_key="save",
-            errors=errors,
-        )
-
-        # New (newer mtime) is kept; old (stale) is removed.
-        assert os.path.exists(new_path)
-        assert not os.path.exists(old_path)
-        with open(new_path, "rb") as f:
-            assert f.read() == b"fresh content"
-        assert counts["save"] == 1
-        assert state_updates == ["called"]
-        assert errors == []
-
-
-class TestDetectSaveSortChangeThreadSafety:
-    """Regression tests for #238 review finding 1: ``detect_save_sort_change``
-    is called from a worker thread (via ``SaveService._refresh_save_sort_state``
-    → ``run_in_executor``) and must schedule the emit coroutine in a
-    thread-safe manner. ``loop.create_task`` is NOT thread-safe — it must
-    be ``asyncio.run_coroutine_threadsafe``.
-    """
-
-    async def test_detect_save_sort_change_is_thread_safe_when_called_from_executor(self, plugin):
-        """detect_save_sort_change must be safe to call from a worker thread (#238).
-
-        Drive the call via ``loop.run_in_executor`` and verify the emit
-        coroutine is scheduled on the loop and runs without exception.
-        Before the fix, this would call ``loop.create_task`` from a
-        worker thread, which is undefined behavior.
-        """
-        loop = asyncio.get_running_loop()
-        plugin._migration_service._loop = loop
-
-        # Initial state: a populated OLD layout. Detect should observe a
-        # change and emit ``save_sort_changed``.
-        import json
-
-        with plugin._uow as uow:
-            uow.kv_config.set("save_sort_settings", json.dumps({"sort_by_content": True, "sort_by_core": False}))
-        plugin._migration_service._save_sort._get_save_layout = lambda: InSaveDir(
-            sort_by_content=True, sort_by_core=True
-        )
-
-        # Use an ``asyncio.Queue``-backed emitter so the test can await the
-        # emission from the loop thread regardless of which thread scheduled
-        # it. We swap in a queue-aware ``EventEmitter`` rather than reading
-        # the recorder fixture because we need an awaitable barrier.
-        emit_queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
-
-        async def fake_emit(event_name: str, payload: dict[str, Any]) -> None:
-            await emit_queue.put((event_name, payload))
-
-        plugin._migration_service._save_sort._emit = fake_emit
-
-        # Run detect_save_sort_change on a worker thread.
-        await loop.run_in_executor(None, plugin._migration_service.detect_save_sort_change)
-
-        # Wait (with a generous timeout) for the emit coroutine that was
-        # scheduled via run_coroutine_threadsafe to actually run.
-        event = await asyncio.wait_for(emit_queue.get(), timeout=2.0)
-        assert event[0] == "save_sort_changed"
-        assert event[1]["old_settings"] == {"sort_by_content": True, "sort_by_core": False}
-        assert event[1]["new_settings"] == {"sort_by_content": True, "sort_by_core": True}
-
-        # State is persisted to kv_config — visible to any later reader.
-        with plugin._uow as uow:
-            assert json.loads(uow.kv_config.get("save_sort_settings_previous")) == {
-                "sort_by_content": True,
-                "sort_by_core": False,
-            }
-            assert json.loads(uow.kv_config.get("save_sort_settings")) == {
-                "sort_by_content": True,
-                "sort_by_core": True,
-            }
-
-
 class TestMigrationFailureInjection:
     """Adapter-level failure injection tests using FakeMigrationFileStore.
 
     These tests exercise paths the tmp_path-based integration tests cannot
-    reach: simulated ``OSError`` during ``move`` / ``rename`` / ``remove``
+    reach: simulated ``OSError`` during ``move`` / ``remove``
     must be caught by the service, appended to the ``errors`` list, and
     must not abort the rest of the migration loop. The previous path
     marker is also retained on partial failure so the user can retry.
@@ -1654,12 +1700,9 @@ class TestMigrationFailureInjection:
             "emit": RecordingEmitter(),
             "firmware_resolver": FakeFirmwareResolver(),
             "retrodeck_paths": FakeRetroDeckPaths(),
-            "get_save_layout": lambda: InSaveDir(sort_by_content=False, sort_by_core=False),
-            "active_core": FakeActiveCoreResolver(default=(None, None)),
             "relaunch_options": FakeRelaunchOptionsResolver(),
-            "get_core_name": lambda core_so: None,
+            "save_directories": RecordingSaveDirectories().provide,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
-            "save_locations": FakeSaveLocationReader(),
         }
         defaults.update(overrides)
         return MigrationService(
@@ -1697,149 +1740,40 @@ class TestMigrationFailureInjection:
         with uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
 
-    def test_rename_failure_records_save_sort_error(self):
-        """``OSError`` from ``rename`` during save-sort overwrite path is captured."""
-        fake = FakeMigrationFileStore()
-        old_path = "/saves/old/game.srm"
-        new_path = "/saves/new/game.srm"
-        fake.files[old_path] = b"new content"
-        fake.files[new_path] = b"old content"
-        # Source is newer => triggers rename path.
-        fake.mtimes[old_path] = 2000.0
-        fake.mtimes[new_path] = 1000.0
-        fake.rename_failures.add(old_path)
-
-        service = self._make_service(fake)
-
-        counts: dict[str, int] = {}
-        errors: list[str] = []
-        state_updates: list[str] = []
-        service._save_sort._resolve_save_sort_conflict(
-            label="gba/game.srm",
-            old_path=old_path,
-            new_path=new_path,
-            state_updater=lambda: state_updates.append("called"),
-            counts=counts,
-            count_key="save",
-            errors=errors,
-        )
-
-        assert len(errors) == 1
-        assert "gba/game.srm" in errors[0]
-        assert counts.get("save", 0) == 0
-        # Failure path must not invoke the state updater.
-        assert state_updates == []
-
-    def test_remove_failure_records_save_sort_orphan_cleanup_error(self):
-        """``OSError`` from ``remove`` during save-sort newest-wins cleanup is captured."""
-        fake = FakeMigrationFileStore()
-        old_path = "/saves/old/game.srm"
-        new_path = "/saves/new/game.srm"
-        fake.files[old_path] = b"stale"
-        fake.files[new_path] = b"fresh"
-        # Destination is newer => triggers orphan-removal path.
-        fake.mtimes[old_path] = 1000.0
-        fake.mtimes[new_path] = 2000.0
-        fake.remove_failures.add(old_path)
-
-        service = self._make_service(fake)
-
-        counts: dict[str, int] = {}
-        errors: list[str] = []
-        state_updates: list[str] = []
-        service._save_sort._resolve_save_sort_conflict(
-            label="gba/game.srm",
-            old_path=old_path,
-            new_path=new_path,
-            state_updater=lambda: state_updates.append("called"),
-            counts=counts,
-            count_key="save",
-            errors=errors,
-        )
-
-        assert len(errors) == 1
-        assert "gba/game.srm" in errors[0]
-        assert counts.get("save", 0) == 0
-        # Failure path must not invoke the state updater.
-        assert state_updates == []
-
 
 class TestRefreshState:
     """Tests for ``MigrationService.refresh_state``.
 
     These tests exercise the orchestration contract: ``refresh_state``
-    drives ``detect_retrodeck_path_change`` then ``detect_save_sort_change``
-    then composes their status outputs. The detect/status methods are
-    patched directly because the test is about *how* refresh_state wires
-    them together, not what they observe — this is the small carve-out
-    called out in the issue scope.
+    drives ``detect_retrodeck_path_change`` and then reports the home
+    migration's status. The detect/status methods are patched directly
+    because the test is about *how* refresh_state wires them together, not
+    what they observe.
     """
 
     @pytest.mark.asyncio
-    async def test_calls_both_detect_methods_and_returns_combined_status(self, plugin):
+    async def test_detects_and_returns_the_home_migration_status(self, plugin):
         mig = plugin._migration_service
         mig.detect_retrodeck_path_change = MagicMock()
-        mig.detect_save_sort_change = MagicMock()
 
         retrodeck_status = {"pending": True, "old_path": "/a", "new_path": "/b"}
-        save_sort_status = {"pending": True, "saves_count": 3}
         mig.get_migration_status = AsyncMock(return_value=retrodeck_status)
-        mig.get_save_sort_migration_status = AsyncMock(return_value=save_sort_status)
 
         result = await mig.refresh_state()
 
         mig.detect_retrodeck_path_change.assert_called_once_with()
-        mig.detect_save_sort_change.assert_called_once_with()
-        assert result == {"retrodeck": retrodeck_status, "save_sort": save_sort_status}
-
-    @pytest.mark.asyncio
-    async def test_detect_order_preserved(self, plugin):
-        mig = plugin._migration_service
-        manager = MagicMock()
-        mig.detect_retrodeck_path_change = manager.detect_retrodeck_path_change
-        mig.detect_save_sort_change = manager.detect_save_sort_change
-        mig.get_migration_status = AsyncMock(return_value={"pending": False})
-        mig.get_save_sort_migration_status = AsyncMock(return_value={"pending": False})
-
-        await mig.refresh_state()
-
-        ordered = [name for name, _args, _kwargs in manager.mock_calls]
-        assert ordered == ["detect_retrodeck_path_change", "detect_save_sort_change"]
+        assert result == {"retrodeck": retrodeck_status}
 
     @pytest.mark.asyncio
     async def test_short_circuits_when_first_detect_raises(self, plugin):
         mig = plugin._migration_service
         mig.detect_retrodeck_path_change = MagicMock(side_effect=RuntimeError("boom"))
-        mig.detect_save_sort_change = MagicMock()
         mig.get_migration_status = AsyncMock()
-        mig.get_save_sort_migration_status = AsyncMock()
 
         with pytest.raises(RuntimeError, match="boom"):
             await mig.refresh_state()
 
-        mig.detect_save_sort_change.assert_not_called()
         mig.get_migration_status.assert_not_called()
-        mig.get_save_sort_migration_status.assert_not_called()
-
-
-class TestBadPathDismissSaveSortMigration:
-    """Coverage for the previously-untested ``dismiss_save_sort_migration`` callable."""
-
-    def test_dismiss_save_sort_migration_clears_state_and_persists(self, plugin):
-        """User dismissing the warning deletes the marker from kv_config and commits."""
-        import json
-
-        with plugin._uow as uow:
-            uow.kv_config.set(
-                "save_sort_settings_previous", json.dumps({"sort_by_content": True, "sort_by_core": False})
-            )
-
-        result = plugin._migration_service.dismiss_save_sort_migration()
-
-        assert result == {"success": True}
-        assert plugin._uow.committed is True
-        with plugin._uow as uow:
-            assert uow.kv_config.get("save_sort_settings_previous") is None
 
 
 class TestBackgroundTaskTracking:

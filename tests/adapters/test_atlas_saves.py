@@ -35,6 +35,7 @@ from _vendor.atlas import (
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
+    CAVEAT_SORTED_DIR_MISSING,
     GRANULARITY_PER_GAME_FILE,
     GRANULARITY_PER_GAME_FILES,
     GRANULARITY_SHARED_CARD,
@@ -44,10 +45,15 @@ from _vendor.atlas import (
     ROLE_SETTINGS,
     ROLE_UNKNOWN,
     ROLES,
+    ROOT_CONTENT_DIRECTORY,
+    STATE_ROOT_CONTENT_DIRECTORY,
+    SavestateAbsence,
+    SavestatePlacement,
     Unresolved,
 )
 from _vendor.atlas.placement import (
     FILE_SET_DECLARED,
+    FILE_SET_OBSERVED,
     FILE_SET_UNKNOWN,
     Caveat,
     FileGroup,
@@ -69,6 +75,7 @@ from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
 )
+from domain.savestate_location import NoSavestates, SavestateLocation
 
 _SAVES = "/saves/gba"
 _CONTENT = "/roms/gba/Game Title.gba"
@@ -91,11 +98,13 @@ def _placement(
     granularity: str | None = GRANULARITY_PER_GAME_FILE,
     caveats: tuple[str, ...] = (),
     physical_dir: str | None = None,
+    root_kind: str = "savefile_directory",
+    fallback_dir: str | None = None,
 ) -> SavefilePlacement:
     """One resolved savefile placement, as the resolver hands it over."""
     return SavefilePlacement(
         dir=_SAVES,
-        root_kind="savefile_directory",
+        root_kind=cast("Any", root_kind),
         needs=needs,
         file_set=FileSet(
             state=cast("Any", state),
@@ -108,22 +117,44 @@ def _placement(
         caveats=tuple(_caveat(code) for code in caveats),
         granularity=None if granularity is None else _granularity(granularity),
         physical_dir=physical_dir,
+        fallback_dir=fallback_dir,
+    )
+
+
+def _states_placement(*, root_kind: str = "savestate_directory", fallback_dir: str | None = None) -> Any:
+    """One resolved savestate placement, as the resolver hands it over."""
+    return SavestatePlacement(
+        dir="/states/gba",
+        root_kind=cast("Any", root_kind),
+        needs=(),
+        file_set=FileSet(state=FILE_SET_OBSERVED, files=(), provenance="test", complete=False, groups=()),
+        sources=(),
+        caveats=(),
+        fallback_dir=fallback_dir,
     )
 
 
 class _Entry:
     """A catalogue entry that answers with whatever the test handed it."""
 
-    def __init__(self, label: str, answer: Any) -> None:
+    def __init__(self, label: str, answer: Any, *, states: Any = None) -> None:
         self.label = label
         self._answer = answer
+        self._states = states
         self.asked: list[str | None] = []
+        self.states_asked: list[str | None] = []
 
     def savefile_location(self, *, content_path: str | None = None) -> Any:
         self.asked.append(content_path)
         if isinstance(self._answer, Exception):
             raise self._answer
         return self._answer
+
+    def savestate_location(self, *, content_path: str | None = None) -> Any:
+        self.states_asked.append(content_path)
+        if isinstance(self._states, Exception):
+            raise self._states
+        return self._states
 
 
 class _Catalogue:
@@ -379,6 +410,10 @@ class TestEveryWayTheQuestionCannotBePut:
         )
         assert any("no emulator installation detected" in line for line in traces)
 
+    def test_detection_is_reported_both_ways(self, traces):
+        assert _adapter(None, traces).installation_detected() is False
+        assert _adapter(_Installation(()), traces).installation_detected() is True
+
     def test_the_catalogue_offers_no_entry_under_that_label(self, traces):
         answer = _ask(_placement(), traces, label="Beetle Saturn", emulator="mGBA")
 
@@ -563,6 +598,87 @@ class TestWhatTheAnswerCarries:
         assert [component.name for component in answer.components] == ["Game Title.srm", "Game Title.rtc"]
         assert all(component.role is None for component in answer.components)
 
+    def test_the_root_the_directory_hangs_off_is_carried(self, traces):
+        answer = _ask(_placement(), traces)
+
+        assert answer.root_kind == "savefile_directory"
+        assert answer.in_content_directory is False
+        assert answer.sync_directory == _SAVES
+
+    def test_a_save_beside_the_content_is_read_off_the_root_kind(self, traces):
+        # RetroArch's savefiles_in_content_dir: a per-game file set the plugin
+        # still does not sync, because the directory is the ROM's own.
+        answer = _ask(_placement(root_kind=ROOT_CONTENT_DIRECTORY), traces)
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+        assert answer.in_content_directory is True
+        assert answer.sync_directory is None
+
+    def test_a_conditional_placement_carries_its_fallback_root(self, traces):
+        answer = _ask(_placement(caveats=(CAVEAT_SORTED_DIR_MISSING,), fallback_dir="/saves"), traces)
+
+        assert answer.directory == _SAVES
+        assert answer.fallback_directory == "/saves"
+        assert CAVEAT_SORTED_DIR_MISSING in answer.caveats
+
+    def test_an_unconditional_placement_has_no_fallback(self, traces):
+        assert _ask(_placement(), traces).fallback_directory is None
+
+
+class TestTheSavestateQuestion:
+    """Where the same entry keeps the game's savestates — three outcomes, kept apart."""
+
+    def _ask_states(self, states: Any, traces: list[str], *, emulator: str | None = "mGBA") -> Any:
+        entry = _Entry("mGBA", _placement(), states=states)
+        adapter = _adapter(_Installation((entry,)), traces)
+        answer = adapter.resolve_savestate_location(system="gba", content_path=_CONTENT, emulator_label=emulator)
+        return answer, entry
+
+    def test_a_placement_names_its_directory_root_and_fallback(self, traces):
+        answer, entry = self._ask_states(_states_placement(fallback_dir="/states"), traces)
+
+        assert answer == SavestateLocation(
+            directory="/states/gba", root_kind="savestate_directory", fallback_directory="/states"
+        )
+        assert entry.states_asked == [_CONTENT]
+
+    def test_states_beside_the_content_say_so(self, traces):
+        answer, _entry = self._ask_states(_states_placement(root_kind=STATE_ROOT_CONTENT_DIRECTORY), traces)
+
+        assert answer.root_kind == ROOT_CONTENT_DIRECTORY
+
+    def test_an_emulator_with_no_savestates_is_an_answer(self, traces):
+        absence = SavestateAbsence(token="cemu", citation="no serializer ships", sources=())
+
+        answer, _entry = self._ask_states(absence, traces)
+
+        assert answer == NoSavestates()
+
+    def test_a_refusal_establishes_nothing(self, traces):
+        answer, _entry = self._ask_states(Unresolved(code="standalone-unsupported", message="no", data={}), traces)
+
+        assert answer is None
+        assert any("standalone-unsupported" in line for line in traces)
+
+    def test_a_raising_resolver_establishes_nothing(self, traces):
+        answer, _entry = self._ask_states(AssertionError("an invariant of its own"), traces)
+
+        assert answer is None
+        assert any("resolver failed" in line for line in traces)
+
+    def test_no_emulator_resolved_asks_nobody(self, traces):
+        answer, entry = self._ask_states(_states_placement(), traces, emulator=None)
+
+        assert answer is None
+        assert entry.states_asked == []
+
+    def test_no_entry_under_that_label_establishes_nothing(self, traces):
+        entry = _Entry("Beetle Saturn", _placement(), states=_states_placement())
+        adapter = _adapter(_Installation((entry,)), traces)
+
+        assert adapter.resolve_savestate_location(system="gba", content_path=_CONTENT, emulator_label="mGBA") is None
+        assert entry.states_asked == []
+
 
 class TestTheCoreProbeLine:
     """The one place the cause of every core answering unknown is named.
@@ -634,6 +750,16 @@ class TestTheVocabularyIsTheResolversOwn:
         from domain.save_answer import _FILE_SET_UNKNOWN
 
         assert _FILE_SET_UNKNOWN == FILE_SET_UNKNOWN
+
+    def test_the_missing_sorted_directory_caveat(self):
+        from domain.save_answer import SORTED_DIR_MISSING
+
+        assert SORTED_DIR_MISSING == CAVEAT_SORTED_DIR_MISSING
+
+    def test_the_content_directory_root_is_one_word_on_both_questions(self):
+        from domain.save_answer import ROOT_CONTENT_DIRECTORY as OURS
+
+        assert OURS == ROOT_CONTENT_DIRECTORY == STATE_ROOT_CONTENT_DIRECTORY
 
 
 # --- The real resolver, over whatever this machine has ------------------------

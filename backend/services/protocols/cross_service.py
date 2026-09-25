@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from domain.emulator_commands import LaunchingEmulator
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
-    from domain.save_layout import InSaveDir, SaveLayout
     from domain.shortcut_data import EmulatorInvocation
 
 
@@ -386,6 +385,32 @@ class RomRemoverProvider(Protocol):
     def __call__(self) -> InstalledRomRemoverFn: ...
 
 
+class SaveDirectoriesRecorderFn(Protocol):
+    """Recording the installed ROMs' answered save directories afresh, consumed by MigrationService.
+
+    The composition root satisfies this with ``SaveService.rerecord_save_directories``.
+    The RetroDECK home migration calls it once the files are moved: it owns the new
+    location, and a record left naming the old home would have the next path that
+    touches that game's saves follow a copy the user chose to leave there back over
+    the one they kept. Each record is
+    replaced by today's answer, or dropped where that answer is one the follow does
+    not act on.
+    """
+
+    async def __call__(self) -> None: ...
+
+
+class SaveDirectoriesRecorderProvider(Protocol):
+    """Deferred access to :class:`SaveDirectoriesRecorderFn`, consumed by MigrationService.
+
+    MigrationService is built before SaveService, which is handed its migration
+    gate, so the composition root binds the recorder once both exist and hands
+    MigrationService this getter (a ``LateBinding``).
+    """
+
+    def __call__(self) -> SaveDirectoriesRecorderFn: ...
+
+
 class ActiveDownloadRomIdsFn(Protocol):
     """Active-download rom-id snapshot consumed by VersionSwitchService (#1298 F1).
 
@@ -587,21 +612,6 @@ class SessionMigrationReader(Protocol):
     def is_retrodeck_migration_pending(self) -> bool: ...
 
 
-class SaveSortChangeFn(Protocol):
-    """Save-sort-change refresh consumed by SaveService.
-
-    The composition root satisfies this with
-    ``MigrationService.detect_save_sort_change``. SaveService invokes
-    this at the entry point of ``pre_launch_sync`` and
-    ``post_exit_sync`` to refresh save-sort state from the live
-    RetroArch config before computing ``saves_dir`` (#238). It returns
-    the live ``SaveLayout`` it just observed: the SyncEngine reads this
-    to hard-gate save sync when the layout is ``ContentDir`` (#239).
-    """
-
-    def __call__(self) -> SaveLayout: ...
-
-
 class SaveQuarantineFn(Protocol):
     """The sanctioned save-file backup funnel, consumed by AdoptionRenamer.
 
@@ -621,27 +631,6 @@ class SaveQuarantineFn(Protocol):
     """
 
     def __call__(self, saves_dir: str, filename: str) -> bool: ...
-
-
-class SaveSortingProvider(Protocol):
-    """Current savefile subdirectory sorting, consumed by RomAdoptionService.
-
-    The composition root satisfies this with ``SaveService.current_save_sorting``.
-    Adoption renames a ROM to the server's name and has to carry that ROM's saves
-    with it, so it must address the directory the sync itself addresses — which
-    is the one MigrationService recorded, honouring a pending save-sort
-    migration, and **not** the live ``retroarch.cfg``. The two differ exactly
-    while a migration is pending, and that is the case where a rename reading the
-    live config would move the files out from under the sync.
-
-    Distinct from :class:`RetroArchSaveLayoutProvider`, which reads the live
-    config: that one answers whether saves are written next to the ROM at all
-    (``savefiles_in_content_dir``), a state MigrationService records no marker
-    for. A UoW-opening seam — the caller resolves it outside any open Unit of
-    Work.
-    """
-
-    def __call__(self) -> InSaveDir: ...
 
 
 class MigrationPendingFn(Protocol):

@@ -47,7 +47,7 @@ def _saves_dir(harness) -> Path:
 
 def _states_dir(harness) -> Path:
     # savestates: not sorted at all, so they sit directly under the states root.
-    path = Path(harness.retrodeck_paths.states_path())
+    path = Path(harness.retrodeck_paths.retrodeck_home()) / "states"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -311,30 +311,6 @@ async def test_the_rename_carries_a_save_and_a_savestate(harness):
     assert (_states_dir(harness) / "rom-41 (USA).state.auto").read_bytes() == b"snapshot"
     assert not save.exists()
     assert not state.exists()
-
-
-async def test_a_pending_save_sort_migration_keeps_the_rename_where_the_sync_looks(harness):
-    # End to end through the real RomInfoService: with a migration pending, the
-    # sync deliberately resolves saves against the PREVIOUS layout (#238) because
-    # that is where the files still are. A rename reading the live retroarch.cfg
-    # — which this harness's absent config renders as content-sorted — would move
-    # them into <saves>/gba/ and strand both the sync and the pending migration.
-    seed_rom(harness, _ROM_ID, platform_slug="gba")
-    _stage(harness)
-    candidate = _place_candidate(harness)
-    with harness.uow_factory() as uow:
-        uow.kv_config.set("save_sort_settings_previous", '{"sort_by_content": false, "sort_by_core": false}')
-    unsorted_root = Path(harness.retrodeck_paths.saves_path())
-    unsorted_root.mkdir(parents=True, exist_ok=True)
-    save = unsorted_root / "rom-41 (U).srm"
-    save.write_bytes(b"battery")
-
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
-
-    assert result["success"] is True
-    assert (unsorted_root / "rom-41 (USA).srm").read_bytes() == b"battery"
-    assert not save.exists()
-    assert not (_saves_dir(harness) / "rom-41 (USA).srm").exists()
 
 
 async def test_another_game_s_save_stays_where_it_is(harness):

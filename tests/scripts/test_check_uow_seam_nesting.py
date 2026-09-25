@@ -274,7 +274,7 @@ class TestIoSeamsViolations:
         assert len(findings) == 1
         assert "enumerate_discs" in findings[0]
 
-    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "states_path", "retrodeck_home"])
+    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "retrodeck_home"])
     def test_every_retrodeck_root_getter_inside_uow_is_flagged(self, getter: str):
         # Each getter resolves its answer, so a call walks the path even on a
         # config-cache hit — the reason they stopped being an exclusion.
@@ -305,13 +305,15 @@ class TestIoSeamsViolations:
         assert "realpath" in findings[0]
         assert "file-I/O seam" in findings[0]
 
-    @pytest.mark.parametrize("method", ["resolve_save_answer", "save_answer"])
+    @pytest.mark.parametrize(
+        "method", ["resolve_save_answer", "resolve_savestate_location", "installation_detected", "save_answer"]
+    )
     def test_the_save_answer_inside_uow_is_flagged(self, method: str):
-        # The seam and the saves package's own wrapper around it. Both are
-        # listed: the seam is reached directly from two modules (rom_info and
-        # migration) and the wrapper is what every peer in services/saves/
-        # calls, so listing only the seam would leave the rule green everywhere
-        # it is actually reached from.
+        # The seam's two questions and the saves package's own wrapper around
+        # the first. All are listed: the seam is reached directly from two
+        # modules (rom_info and the adoption renamer) and the wrapper is what
+        # every peer in services/saves/ calls, so listing only the seam would
+        # leave the rule green everywhere it is actually reached from.
         findings = check.scan_source(
             "class S:\n"
             "    def go(self, rom_id):\n"

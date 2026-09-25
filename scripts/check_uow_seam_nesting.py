@@ -71,9 +71,9 @@ One blind spot is **shared by both families, and only one of them closes it**.
 A seam injected as a call-shaped Protocol (``__call__``, no method name of its
 own) has no method name to match: the consumer writes
 ``self._candidate_probe(...)``, never the seam's own name. Rule 1 leaves it
-open — the ``current_save_sorting`` / ``has_adoption_candidate`` entries guard
-only call sites that name the method, which is the owning service's own and any
-peer holding the object rather than the bound method. Rule 2's call-shaped
+open — the ``has_adoption_candidate`` entry guards only call sites that name
+the method, which is the owning service's own and any peer holding the object
+rather than the bound method. Rule 2's call-shaped
 seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. **The
 leading underscore is what marks such an entry**, which makes the count
@@ -156,7 +156,6 @@ SEAM_METHODS: frozenset[str] = frozenset(
     {
         "active_core_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
         "active_emulator_for_rom",  # ActiveCoreResolver (services/active_core_resolver.py)
-        "current_save_sorting",  # RomInfoService / SaveService — via a SaveSortingProvider
         "has_adoption_candidate",  # RomAdoptionService — via an AdoptionCandidateProbeFn
         "installed_relaunch_items",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         "launch_path_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
@@ -205,12 +204,19 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # Protocol, so the method name is what a consumer writes and there is no
         # attribute to list beside it.
         "resolve_save_answer",
+        # SaveLocationReader's savestate question — the same catalogue entry,
+        # asked where it keeps one game's savestates. The same live reading of
+        # the machine as the save answer, taken twice per adoption rename.
+        "resolve_savestate_location",
+        # SaveLocationReader's detection question — whether any installation
+        # was found. A found installation is memoised; until one is, every call
+        # runs the resolver's detection again.
+        "installation_detected",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the
-        # peers in services/saves/ actually call. The seam itself is reached
-        # directly from two modules only (rom_info.py and migration/save_sort.py), so
-        # without this entry the rule would be enforced in those two files and
-        # green everywhere else it is reached from.
+        # peers in services/saves/ actually call. Without this entry the rule
+        # would be enforced only where the seam itself is named, and green
+        # everywhere the wrapper reaches it from.
         "save_answer",
         # SandboxLauncherFn (services/protocols/paths.py) — reads ES-DE's
         # es_find_rules.xml (re-probing the flatpak roots for it and re-statting
@@ -284,7 +290,6 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "bios_path",
         "roms_path",
         "saves_path",
-        "states_path",
         "retrodeck_home",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk

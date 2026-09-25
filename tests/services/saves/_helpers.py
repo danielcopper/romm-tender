@@ -22,7 +22,6 @@ from adapters.save_file import SaveFileAdapter
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_layout import InSaveDir
 from services.saves import SaveService, SaveServiceConfig
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
@@ -64,7 +63,8 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
             roms=str(tmp_path / "retrodeck" / "roms"),
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
-        "save_locations": FakeSaveLocationReader(),
+        # The stock RetroDECK layout: content-sorted under the saves root.
+        "save_locations": FakeSaveLocationReader(saves_root=str(tmp_path / "saves")),
         # A slug that DIFFERS from its system for the two the tests use, so a
         # site that leaks the raw RomM slug is caught rather than hidden behind
         # an identity map. The real mapping is the RomM adapter's own.
@@ -73,17 +73,19 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,
         "emit": emit if emit is not None else _noop_emit,
-        "get_core_name": lambda core_so: None,
-        # Supported layout by default; tests that exercise the content-dir
-        # gate override both seams with a ``ContentDir``-returning callable.
-        "get_save_layout": lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-        "detect_sort_change": lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
         "is_retrodeck_migration_pending": lambda: False,
         "uow_factory": FakeUnitOfWorkFactory(),
     }
     config_kwargs.update(overrides)
     svc = SaveService(config=SaveServiceConfig(**config_kwargs))
     return svc, fake
+
+
+def _no_save_directory(svc, system: str = "gba") -> None:
+    """Make *system*'s emulator answer with no resolved placement — no save directory at all."""
+    save_locations = svc._rom_info._save_locations
+    assert isinstance(save_locations, FakeSaveLocationReader)
+    save_locations.refuse(system)
 
 
 def _uow(svc) -> FakeUnitOfWork:
@@ -347,22 +349,6 @@ def _get_device_id(svc) -> str | None:
     """Read the persisted server device id from ``kv_config``."""
     with _uow(svc) as uow:
         return uow.kv_config.get("device_id")
-
-
-def _set_sort_settings(svc, settings: dict[str, Any]) -> None:
-    """Seed the last-seen save-sort observation marker in ``kv_config``."""
-    import json
-
-    with _uow(svc) as uow:
-        uow.kv_config.set("save_sort_settings", json.dumps(settings))
-
-
-def _set_sort_settings_previous(svc, settings: dict[str, Any]) -> None:
-    """Seed the pending pre-change save-sort marker in ``kv_config``."""
-    import json
-
-    with _uow(svc) as uow:
-        uow.kv_config.set("save_sort_settings_previous", json.dumps(settings))
 
 
 def _server_save_with_syncs(

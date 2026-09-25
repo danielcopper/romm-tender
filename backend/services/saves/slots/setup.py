@@ -11,12 +11,13 @@ operation's own narrow Unit of Work (ADR-0006).
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON, save_shape_message
 from domain.save_slot import save_in_slot
 from lib.errors import RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
@@ -287,11 +288,12 @@ class SetupWizard:
         content into the slot and leaves the sources in the read-only legacy
         bucket (#1478).
 
-        When a migration is requested but RetroArch writes saves to the content
-        dir (#239), the migration is refused before any download; the slot
-        confirmation itself — a non-destructive metadata flip — is still
-        persisted (``reason="savefiles_in_content_dir"``). The non-migration path
-        is never gated (no file write).
+        When a migration is requested but the save is written beside the game
+        file (#239, ``reason="savefiles_in_content_dir"``), or is any other
+        answer a sync would not carry (``reason="save_shape_unsupported"``),
+        the migration is refused before any download; the slot confirmation
+        itself — a non-destructive metadata flip — is still persisted. The
+        non-migration path is never gated (no file write).
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
@@ -317,7 +319,7 @@ class SetupWizard:
 
         # The read→confirm→(migrate)→write of the RomSaveSyncState aggregate must
         # serialise against every other path that touches this ROM's state.
-        # content_dir_blocked and _migrate_slot_saves_io do NOT acquire rom_lock,
+        # read_save_answer and _migrate_slot_saves_io do NOT acquire rom_lock,
         # so calling them inside the held lock is safe (no re-entry).
         async with self._sync_engine.rom_lock(rom_id):
             save_state = await self._loop.run_in_executor(None, self._read_save_state, rom_id) or RomSaveSyncState()
@@ -328,12 +330,14 @@ class SetupWizard:
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
                 return {"success": True, "needs_conflict_resolution": False, "message": "Slot confirmed"}
 
-            # #239: RetroArch writes saves to the content dir — the migration
-            # would write into ``saves_dir``, which RetroArch ignores in that
-            # layout. Refuse before any download; the slot itself is still
-            # confirmed (a non-destructive metadata flip).
-            if await self._sync_engine.content_dir_blocked("confirm_slot_choice"):
-                self._log_debug(f"confirm_slot_choice: content-dir layout for rom {rom_id}; skipping migration")
+            # The emulator writes this game's save beside its content, which the
+            # sync leaves alone, so the migration's writes could not take effect.
+            # Refuse before any download; the slot itself is still confirmed (a
+            # non-destructive metadata flip).
+            save_answer = await self._sync_engine.read_save_answer(rom_id)
+            await self._sync_engine.follow_save_directory(rom_id, save_answer)
+            if self._sync_engine.content_dir_blocked(rom_id, save_answer, "confirm_slot_choice"):
+                self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
                 return {
@@ -356,13 +360,27 @@ class SetupWizard:
                     "needs_conflict_resolution": False,
                     "message": MIGRATION_DEVICE_NOT_REGISTERED,
                 }
-            info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
+            info = await self._loop.run_in_executor(
+                None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
+            )
             if not info:
                 return {
                     "success": False,
                     "reason": "not_installed",
                     "needs_conflict_resolution": False,
                     "message": "ROM is not installed",
+                }
+            # Any other answer a sync would not carry is refused for what it is,
+            # and the slot is confirmed all the same.
+            if info["save_answer"].sync_directory is None:
+                self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
+                save_state.confirm_slot(normalized_slot)
+                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                return {
+                    "success": False,
+                    "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
+                    "needs_conflict_resolution": False,
+                    "message": save_shape_message(info["save_answer"]),
                 }
 
             # Confirm in memory so the migration uploads resolve to the chosen
@@ -474,9 +492,7 @@ class SetupWizard:
         if not legacy_saves:
             return {"status": "no_op"}
 
-        targets = newest_server_saves_by_target(
-            legacy_saves, rom_name, known_names=self._rom_info.save_answer(rom_id).synced_names
-        )
+        targets = newest_server_saves_by_target(legacy_saves, rom_name, known_names=info["save_answer"].synced_names)
         core_so = self._resolve_core(rom_id)
         default_slot = resolve_default_slot(self._settings)
         cleanup_limit = autocleanup_limit(self._settings)

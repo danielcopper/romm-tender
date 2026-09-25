@@ -114,6 +114,9 @@ class FakeSaveFileStore:
         else:
             self._ensure_mtime(dst)
 
+    def move(self, src: str, dst: str) -> None:
+        self.rename(src, dst)
+
     def claim_source(self, path: str, safe_root: str) -> SourceClaim:
         exists = path in self.files
         return {

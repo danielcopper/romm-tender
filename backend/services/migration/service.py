@@ -4,10 +4,6 @@ Owns the runtime decisions for relocating ROMs, BIOS and save files when the
 RetroDECK home path changes. All raw filesystem I/O is delegated to the
 ``MigrationFileStore`` Protocol; conflict resolution, state mutations and event
 emission remain the service's responsibility.
-
-The save-sort migration is a separate trigger with its own source of truth and
-its own conflict rule, so it lives in :mod:`services.migration.save_sort` and is
-re-exposed here — callers reach one service, not two.
 """
 
 from __future__ import annotations
@@ -26,23 +22,18 @@ from domain.migration_paths import (
     stranded_source_candidates,
 )
 from services.migration._moves import FileMover
-from services.migration.save_sort import SaveSortMigrator
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator, Sequence
 
-    from domain.save_layout import SaveLayout
     from services.protocols import (
-        ActiveCoreReader,
-        CoreNameProviderFn,
         EventEmitter,
         FirmwareResolver,
         MigrationFileStore,
         RelaunchOptionsReader,
-        RetroArchSaveLayoutProvider,
         RetroDeckPaths,
-        SaveLocationReader,
+        SaveDirectoriesRecorderProvider,
         SettingsPersister,
         UnitOfWorkFactory,
     )
@@ -53,8 +44,7 @@ if TYPE_CHECKING:
 # ``_HOPS`` holds the JSON array of *additional* pending homes (oldest→newest)
 # accumulated when the user changes the RetroDECK home again before migrating
 # (#1042); it is absent in the common single-hop case and deleted wherever
-# ``_PREVIOUS`` is. The save-sort keys live with the half that reads them,
-# in ``save_sort.py`` — one key, one definition.
+# ``_PREVIOUS`` is.
 _KV_RETRODECK_HOME = "retrodeck_home_path"
 _KV_RETRODECK_HOME_PREVIOUS = "retrodeck_home_path_previous"
 _KV_RETRODECK_HOME_HOPS = "retrodeck_home_path_hops"
@@ -67,16 +57,14 @@ class MigrationServiceConfig:
     Holds the Protocol-typed migration-file adapter, the live settings
     dict, runtime infrastructure, persistence callbacks, event emitter,
     and the provider callables MigrationService needs at construction
-    time. The shared ``active_core`` resolver answers which RetroArch core a
-    ROM launches with when re-deriving the save-sort subdirectory name, and
-    ``save_locations`` answers which files that ROM's save actually consists of,
-    so a sort-change move carries the emulator's own file set rather than a
-    guessed list of extensions. The ``relaunch_options`` seam re-bakes every
-    relocated ROM's full Steam ``launch_options`` (active core + selected disc)
-    from its moved path so the pick survives the home migration. ``firmware_resolver`` names which files in
-    a pending home are firmware at all, so the untracked-BIOS sweep moves those
-    and leaves everything else alone. Relational migration state (ROM installs,
-    BIOS records, change markers) is read through the injected ``uow_factory``.
+    time. The ``relaunch_options`` seam re-bakes every relocated ROM's full
+    Steam ``launch_options`` (active core + selected disc) from its moved path
+    so the pick survives the home migration. ``firmware_resolver`` names which
+    files in a pending home are firmware at all, so the untracked-BIOS sweep
+    moves those and leaves everything else alone. ``save_directories`` records
+    the installed ROMs' answered save directories afresh once the files are moved.
+    Relational migration state (ROM installs, BIOS records, change markers) is
+    read through the injected ``uow_factory``.
     """
 
     migration_file_store: MigrationFileStore
@@ -87,11 +75,8 @@ class MigrationServiceConfig:
     emit: EventEmitter
     firmware_resolver: FirmwareResolver
     retrodeck_paths: RetroDeckPaths
-    get_save_layout: RetroArchSaveLayoutProvider
-    active_core: ActiveCoreReader
-    save_locations: SaveLocationReader
     relaunch_options: RelaunchOptionsReader
-    get_core_name: CoreNameProviderFn
+    save_directories: SaveDirectoriesRecorderProvider
     uow_factory: UnitOfWorkFactory
 
 
@@ -107,31 +92,23 @@ class MigrationService:
         self._emit = config.emit
         self._firmware_resolver = config.firmware_resolver
         self._retrodeck_paths = config.retrodeck_paths
-        self._get_save_layout = config.get_save_layout
-        self._active_core = config.active_core
-        self._save_locations = config.save_locations
         self._relaunch_options = config.relaunch_options
-        self._get_core_name = config.get_core_name
+        self._save_directories = config.save_directories
         self._uow_factory = config.uow_factory
         self._mover = FileMover(file_store=config.migration_file_store, logger=config.logger)
-        self._save_sort = SaveSortMigrator(
-            uow_factory=config.uow_factory,
-            migration_file_store=config.migration_file_store,
-            retrodeck_paths=config.retrodeck_paths,
-            get_save_layout=config.get_save_layout,
-            active_core=config.active_core,
-            save_locations=config.save_locations,
-            get_core_name=config.get_core_name,
-            mover=self._mover,
-            emit=config.emit,
-            loop=config.loop,
-            logger=config.logger,
-        )
         # Strong refs to in-flight background tasks. ``loop.create_task``
         # alone is not enough — without a strong ref, the loop is free to
         # garbage-collect the task before it completes. ``add_done_callback``
         # prunes finished entries to keep the set bounded.
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        # Migration runs in flight. A run clears the pending markers in the same
+        # write as the relocations, before it re-records the save directories;
+        # the gate has to hold until that has finished.
+        self._migrations_in_flight = 0
+        # The status the latest run in flight started from — its move and its
+        # counts — so the status can still answer with it once the markers are
+        # gone and the files have moved.
+        self._status_in_flight: dict[str, Any] | None = None
 
     def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
         """Schedule ``coro`` on the plugin loop and track the task for shutdown.
@@ -298,7 +275,14 @@ class MigrationService:
             uow.kv_config.delete(_KV_RETRODECK_HOME_HOPS)
 
     def is_retrodeck_migration_pending(self) -> bool:
-        """Return True if a RetroDECK home path migration is pending."""
+        """Return True while a RetroDECK home path migration is pending or still running.
+
+        A run in flight counts as pending until it has re-recorded the save
+        directories: a sync let through between the markers clearing and that
+        re-record would meet a record still naming the old home.
+        """
+        if self._migrations_in_flight:
+            return True
         with self._uow_factory() as uow:
             return bool(uow.kv_config.get(_KV_RETRODECK_HOME_PREVIOUS))
 
@@ -689,6 +673,19 @@ class MigrationService:
         if not pending or not new_home:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
 
+        self._migrations_in_flight += 1
+        try:
+            self._status_in_flight = await self._loop.run_in_executor(
+                None, self._get_migration_status_io, pending, new_home
+            )
+            return await self._run_migration(pending, new_home, conflict_strategy)
+        finally:
+            self._migrations_in_flight -= 1
+            if not self._migrations_in_flight:
+                self._status_in_flight = None
+
+    async def _run_migration(self, pending, new_home, conflict_strategy):
+        """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
         result = await self._loop.run_in_executor(
             None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy
         )
@@ -705,7 +702,24 @@ class MigrationService:
             # next sync skips the now-correct shortcut instead of re-touching it
             # (delta apply, #1383). Fifth of the six recorded-state writer sites.
             await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
+            await self._rerecord_save_directories()
         return result
+
+    async def _rerecord_save_directories(self) -> None:
+        """Record the installed ROMs' save directories afresh, as the new home answers them.
+
+        A save the ``skip`` strategy kept at the destination leaves the old copy
+        in the old home, and a record still naming that home would have the next
+        sync carry the old copy over the kept one. Runs whether or not every
+        file moved: the moves that happened are the new home's either way.
+        """
+        try:
+            await self._save_directories()()
+        except Exception:
+            # The files are already moved. A failed re-record leaves the old
+            # records standing, which is what it exists to prevent, but it must
+            # not turn a finished migration into a failed callable.
+            self._logger.exception("Recording the save directories after the home migration failed")
 
     def _record_migration_applied_io(self, items: list[dict[str, Any]]) -> None:
         """Record each relaunch item's ``launch_options`` as its ROM's applied state.
@@ -747,7 +761,19 @@ class MigrationService:
         }
 
     async def get_migration_status(self):
-        """Return whether a RetroDECK path migration is pending and file counts."""
+        """Return whether a RetroDECK path migration is pending and file counts.
+
+        While a run is in flight it answers with the status that run started
+        from, counts included, for the whole run: counted again while files
+        are moving, or after the run has cleared the markers, the migration
+        would read as having less, or nothing, left to move. It stays pending
+        until the run has re-recorded the save directories — the same answer
+        :meth:`is_retrodeck_migration_pending` gives — so the panel does not let
+        go of the migration while syncs are still held off.
+        """
+        if self._status_in_flight is not None:
+            return dict(self._status_in_flight)
+
         with self._uow_factory() as uow:
             stored_pending = self._read_pending_homes(uow)
             stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
@@ -759,40 +785,7 @@ class MigrationService:
 
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)
 
-    # ---------------------------------------------------------------------------
-    # Both migrations at once
-    # ---------------------------------------------------------------------------
-
     async def refresh_state(self) -> dict[str, Any]:
-        """Run both detection passes and return combined migration state.
-
-        Detects any RetroDECK home-path change and any RetroArch save-sort
-        change, then returns the current status of both migrations.
-        """
+        """Run the home-change detection and return the home migration's state."""
         self.detect_retrodeck_path_change()
-        self.detect_save_sort_change()
-        return {
-            "retrodeck": await self.get_migration_status(),
-            "save_sort": await self.get_save_sort_migration_status(),
-        }
-
-    # ------------------------------------------------------------------
-    # Save-sort migration — delegated to SaveSortMigrator
-    #
-    # The save-sort half is a separate trigger with its own conflict rule, but
-    # one service is the surface every caller already reaches, so it is exposed
-    # here rather than wired in a second place. Each method is the migrator's
-    # own contract; the docstring that states it lives with the implementation.
-    # ------------------------------------------------------------------
-
-    def detect_save_sort_change(self) -> SaveLayout:
-        return self._save_sort.detect_save_sort_change()
-
-    def dismiss_save_sort_migration(self) -> dict[str, Any]:
-        return self._save_sort.dismiss_save_sort_migration()
-
-    async def get_save_sort_migration_status(self) -> dict[str, Any]:
-        return await self._save_sort.get_save_sort_migration_status()
-
-    async def migrate_save_sort_files(self, conflict_strategy: str | None = None) -> dict[str, Any]:
-        return await self._save_sort.migrate_save_sort_files(conflict_strategy)
+        return {"retrodeck": await self.get_migration_status()}

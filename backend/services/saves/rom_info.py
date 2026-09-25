@@ -1,42 +1,26 @@
-"""Per-ROM save path resolution and local save-file discovery.
+"""Per-ROM save answers and local save-file discovery.
 
-Resolves the on-disk save directory for an installed ROM (honouring
-RetroArch's ``sort_savefiles_*`` settings and the optional per-core
-subdirectory) and enumerates the matching local save files. Pure
-filesystem + path-algebra responsibility — no RomM I/O, no state
-mutation. Shared by SlotsService, SyncEngine, and StatusService; reads
-about whether a save-sort migration is pending live here too because
-they share ``_get_rom_save_info``'s decision to honour the previous
-layout while a migration is in flight.
+The one place the saves package asks the resolver where a ROM's emulator keeps
+its save and what the save consists of, and probes for the files it names. The
+directory is the resolver's answer and nothing else: this module holds no
+knowledge of how any emulator lays its saves out. No RomM I/O, no state
+mutation.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
-from domain.save_layout import InSaveDir
-from domain.save_path import resolve_save_dir
-
-# kv_config keys for the cross-run save-sort markers MigrationService writes
-# (ADR-0003 Bucket 2): the last-seen observation and the pending pre-change
-# snapshot. RomInfoService reads them to honour the previous save layout while
-# a save-sort migration is in flight (#238).
-_KV_SAVE_SORT = "save_sort_settings"
-_KV_SAVE_SORT_PREVIOUS = "save_sort_settings_previous"
 
 if TYPE_CHECKING:
     import logging
 
-    from models.state import SaveSortSettings
-
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
-        CoreNameProviderFn,
         RetroDeckPaths,
         SaveFileStore,
         SaveLocationReader,
@@ -50,15 +34,14 @@ class RomInfoServiceConfig:
     """Frozen wiring bundle handed to ``RomInfoService.__init__``.
 
     Holds the Unit-of-Work factory (the ``rom_installs`` aggregate is the
-    source of truth for installed-ROM file records — WS3 — and ``kv_config``
-    holds the save-sort markers), the Protocol-typed filesystem adapter, the
-    RetroDECK runtime-path accessor, the per-ROM active-core resolver, the
+    source of truth for installed-ROM file records — WS3), the Protocol-typed
+    filesystem adapter, the RetroDECK runtime-path accessor, the per-ROM
+    active-core resolver, the
     save-location reader that answers what a game's save consists of, the
     platform-slug-to-system resolver (which, with ``roms.fs_name``, builds the
     path a ROM the library knows but has not installed WOULD occupy — a save
     answer turns on the content file's extension, so omitting the path asks a
-    different question), the RetroArch core-name provider, and the
-    standard-library logger.
+    different question), and the standard-library logger.
     """
 
     uow_factory: UnitOfWorkFactory
@@ -67,7 +50,6 @@ class RomInfoServiceConfig:
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
     resolve_system: SystemResolver
-    get_core_name: CoreNameProviderFn
     logger: logging.Logger
 
 
@@ -82,144 +64,56 @@ class RomInfoService:
         self._active_core = config.active_core
         self._save_locations = config.save_locations
         self._resolve_system = config.resolve_system
-        self._get_core_name = config.get_core_name
         self._logger = config.logger
 
-    def get_rom_save_info(self, rom_id: int) -> dict[str, Any] | None:
-        """Get save-related info for an installed ROM.
+    def get_rom_save_info(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> dict[str, Any] | None:
+        """Save-related info for an installed ROM, or ``None`` when it is not installed.
 
-        Returns dict with keys: system, rom_name, saves_dir, platform_slug, file_path
-        or None if not installed.
+        Returns a dict with keys ``system``, ``rom_name``, ``saves_dir``,
+        ``platform_slug``, ``file_path`` and ``save_answer``. ``saves_dir`` is
+        the resolver's answer for where this ROM's emulator keeps the save, and
+        is ``None`` wherever no placement could be resolved — never replaced by
+        a guess. A reader that writes or syncs keys its refusal on
+        ``save_answer.sync_directory`` rather than on ``saves_dir``: an answer
+        can name a directory and still be one a sync would not carry.
+
+        *save_answer* is this ROM's reading where the caller already took one
+        in the same operation; absent it, one is taken here.
         """
-        with self._uow_factory() as uow:
-            installed = uow.rom_installs.get(int(rom_id))
-        if not installed:
+        installed = self._install_row(rom_id)
+        if installed is None:
             return None
-        system = installed.system
-        file_path = installed.file_path
-        platform_slug = installed.platform_slug
-        if not system or not file_path:
-            return None
-        rom_name = os.path.splitext(os.path.basename(file_path))[0]
-
-        saves_base = self._retrodeck_paths.saves_path()
-        roms_base = self._retrodeck_paths.roms_path()
-        sorting = self.current_save_sorting()
-        sort_by_content = sorting.sort_by_content
-        sort_by_core = sorting.sort_by_core
-
-        # When sort-by-core is active, RetroArch writes per-core subdirs named
-        # by the .info ``corename`` field. Resolve it via the dedicated parser.
-        # See docs: Config-Source-Parsers wiki page ("one parser per source").
-        # Decision: warn-and-fallback (not fail-loud like MigrationService).
-        # SaveService is the critical-path sync flow — every game launch
-        # depends on it. Fail-loud would take down save sync entirely on any
-        # .info hiccup. MigrationService can afford strictness (one-shot),
-        # SaveService cannot (continuous). See issue #232 for history.
-        core_name: str | None = None
-        if sort_by_core:
-            rom_filename = os.path.basename(file_path)
-            core_name, core_so = self.resolve_retroarch_corename(int(rom_id))
-            if core_name is None:
-                self._logger.warning(
-                    "SaveService: unable to resolve RetroArch corename for "
-                    "%s/%s (core_so=%s) while sort_by_core is enabled. "
-                    "Falling back to the parent save directory, which will "
-                    "not match what RetroArch reads at runtime. Check that "
-                    "the core's .info file is readable under the RetroDECK "
-                    "Flatpak cores directory.",
-                    system,
-                    rom_filename,
-                    core_so if core_so else "unresolved",
-                )
-
-        saves_dir = resolve_save_dir(
-            file_path,
-            saves_base,
-            system,
-            roms_base=roms_base,
-            sort_by_content=sort_by_content,
-            sort_by_core=sort_by_core,
-            core_name=core_name,
-        )
-
+        system, file_path, platform_slug = installed
+        answer = save_answer if save_answer is not None else self._installed_answer(rom_id, system, file_path)
         return {
             "system": system,
-            "rom_name": rom_name,
-            "saves_dir": saves_dir,
+            "rom_name": os.path.splitext(os.path.basename(file_path))[0],
+            "saves_dir": answer.directory,
             "platform_slug": platform_slug,
             "file_path": file_path,
+            "save_answer": answer,
         }
 
-    def is_content_installed(self, rom_id: int) -> bool:
-        """Whether this ROM's content is on disk, without resolving where its saves go.
-
-        The same install-row question :meth:`get_rom_save_info` asks first, minus
-        the save-directory math behind it — which under ``sort_by_core`` parses a
-        core's ``.info`` file. Callers that need only ``content_installed`` for a
-        :class:`~domain.save_answer.SaveAnswer` they fabricate themselves ask
-        here, so stating an honest install state costs one row read.
-        """
+    def _install_row(self, rom_id: int) -> tuple[str, str, str] | None:
+        """``(system, file_path, platform_slug)`` off the install record, or ``None``."""
         with self._uow_factory() as uow:
             installed = uow.rom_installs.get(int(rom_id))
-        return bool(installed and installed.system and installed.file_path)
+        if not installed or not installed.system or not installed.file_path:
+            return None
+        return (installed.system, installed.file_path, installed.platform_slug)
 
-    def current_save_sorting(self) -> InSaveDir:
-        """The subdirectory sorting savefile paths are resolved with right now.
+    def is_content_installed(self, rom_id: int) -> bool:
+        """Whether this ROM's content is on disk, without asking where its saves go.
 
-        The single answer to "which savefile layout is current", so every caller
-        that has to address a save on disk addresses the same directory. It comes
-        from the markers MigrationService records, never from the live
-        ``retroarch.cfg``: while a save-sort migration is pending the *previous*
-        layout wins, because RetroArch caches its runtime save-path at game-load
-        time and the session that just ended still wrote to the old directory.
-        Reading the live config here would point every caller at a directory the
-        files have not reached yet (#238).
-
-        Falls back to the RetroDECK defaults when nothing has been observed yet.
-        Answers only the **sorting**: whether savefiles live under the saves root
-        at all is ``savefiles_in_content_dir``, which is a live-config fact with
-        no recorded counterpart — MigrationService never writes these markers for
-        a ``ContentDir`` machine.
+        The install-row question :meth:`get_rom_save_info` asks first, minus the
+        live reading of the machine behind it. Callers that need only to know
+        whether the ROM is installed ask here, so that costs one row read.
         """
-        recorded = self.pending_sort_settings() or self._read_current_sort_settings()
-        if not recorded:
-            return InSaveDir(sort_by_content=True, sort_by_core=False)
-        return InSaveDir(
-            sort_by_content=recorded.get("sort_by_content", True),
-            sort_by_core=recorded.get("sort_by_core", False),
-        )
+        return self._install_row(rom_id) is not None
 
-    def resolve_retroarch_corename(self, rom_id: int) -> tuple[str | None, str | None]:
-        """Resolve the RetroArch ``corename`` for a ROM by ``rom_id``.
-
-        Asks the per-ROM ``ActiveCoreReader`` **which** core is active for
-        this ROM (the per-game ``emulator_override`` pin folded over the
-        system default), then asks the RetroArch ``.info`` parser (via
-        ``get_core_name``) **what** RetroArch calls that core in its own
-        subsystem — which is the authoritative name used for per-core save
-        subdirectories when ``sort_savefiles_enable`` is active.
-
-        One parser per source: the ES-DE label (second element of the
-        resolver tuple) is NOT a valid substitute for the RetroArch
-        corename. See the Config-Source-Parsers wiki page and the reference
-        implementation in ``MigrationService``.
-
-        Returns ``(corename, core_so)``. Either element may be ``None``
-        when resolution fails at that step: ``core_so`` is ``None`` when
-        the resolver cannot determine the active core, ``corename`` is
-        ``None`` when ``.info`` parsing returns nothing. Returning the tuple —
-        rather than just ``corename`` — lets callers include ``core_so``
-        in diagnostic logs so users can identify which ``.info`` file
-        is at fault. Callers choose their own fallback strategy (e.g.
-        warn and fall back for critical-path SaveService flows; skip
-        and warn for one-shot migrations).
-        """
-        core_so, _label = self._active_core.active_core_for_rom(rom_id)
-        if not core_so:
-            return (None, None)
-        corename = self._get_core_name(core_so)
-        return (corename or None, core_so)
+    def installation_detected(self) -> bool:
+        """Whether an emulator installation was found for the save answers to come from."""
+        return self._save_locations.installation_detected()
 
     def save_answer(self, rom_id: int) -> SaveAnswer:
         """What this ROM's save consists of and whether it may be synced at all.
@@ -240,9 +134,9 @@ class RomInfoService:
         row, no name, no platform — the answer is ``unestablished``, which is a
         refusal and never a guess.
         """
-        info = self.get_rom_save_info(rom_id)
-        if info:
-            return self._installed_answer(rom_id, info)
+        installed = self._install_row(rom_id)
+        if installed is not None:
+            return self._installed_answer(rom_id, installed[0], installed[1])
         return self._uninstalled_answer(rom_id)
 
     def _uninstalled_answer(self, rom_id: int) -> SaveAnswer:
@@ -264,7 +158,7 @@ class RomInfoService:
         content_path = os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name)
         return self._ask_resolver(rom_id, system, content_path, installed=False)
 
-    def _installed_answer(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
+    def _installed_answer(self, rom_id: int, system: str, file_path: str) -> SaveAnswer:
         """The answer for an installed ROM, asked about the file on disk.
 
         The system is the NORMALIZED one the install record carries, never the
@@ -272,10 +166,9 @@ class RomInfoService:
         system any emulator declares, so asking with it answers about nothing.
         One of the two places in THIS service that decide a system and a path —
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
-        guard here rather than one per caller. ``services/migration/save_sort.py`` decides
-        its own, off the install record, and is the third site the rule holds at.
+        guard here rather than one per caller.
         """
-        return self._ask_resolver(rom_id, info["system"], info["file_path"], installed=True)
+        return self._ask_resolver(rom_id, system, file_path, installed=True)
 
     def _ask_resolver(self, rom_id: int, system: str, content_path: str, *, installed: bool) -> SaveAnswer:
         """Put the question to the emulator this ROM would launch with.
@@ -296,25 +189,22 @@ class RomInfoService:
         """The basenames a sync may carry for this ROM, and the directory they sit in.
 
         Empty names with a ``None`` directory whenever the ROM's save may not be
-        synced — every refusing state, and an uninstalled ROM. That pairing is
-        what makes a refusal cost no probe: there is nothing to look for and
-        nowhere to look.
+        synced — every refusing state, a save written beside the content, and an
+        uninstalled ROM. That pairing is what makes a refusal cost no probe:
+        there is nothing to look for and nowhere to look.
 
         *save_answer* is this ROM's reading where the caller already took one in
         the same operation, and it is used instead of taking a second. Live is a
         property of operations rather than of layers, and a reading costs real
         machine I/O on a path that runs at every launch and every exit.
-
-        The directory is still the plugin's own ``resolve_save_dir`` answer
-        rather than the resolver's, because retiring that path math is its own
-        change; what has moved here is the NAMES, which used to come from a
-        hand-maintained per-system extension table.
         """
-        info = self.get_rom_save_info(rom_id)
+        info = self.get_rom_save_info(rom_id, save_answer=save_answer)
         if not info:
             return ([], None)
-        answer = save_answer if save_answer is not None else self._installed_answer(rom_id, info)
-        return (list(answer.synced_names), info["saves_dir"] if answer.syncable else None)
+        answer: SaveAnswer = info["save_answer"]
+        if answer.sync_directory is None:
+            return ([], None)
+        return (list(answer.synced_names), answer.sync_directory)
 
     def find_save_files(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> list[dict[str, str]]:
         """Find local save files for a ROM.
@@ -357,27 +247,3 @@ class RomInfoService:
             }
             for name in names
         ]
-
-    def pending_sort_settings(self) -> SaveSortSettings | None:
-        """Return previous save-sort settings if a migration is pending, else None.
-
-        Rejects empty dicts to avoid the half-state where ``get_rom_save_info``'s
-        ``or`` fallback would treat ``{}`` as "no pending migration" (and read
-        current settings) while ``is_save_sort_changed`` would treat the same
-        ``{}`` as "pending" (and gate sync). Both call sites must agree on
-        what counts as pending — see #238 review finding 3.
-        """
-        with self._uow_factory() as uow:
-            raw = uow.kv_config.get(_KV_SAVE_SORT_PREVIOUS)
-        prev: SaveSortSettings | None = json.loads(raw) if raw is not None else None
-        return prev if prev else None
-
-    def _read_current_sort_settings(self) -> SaveSortSettings | None:
-        """Return the last-seen RetroArch save-sort observation, ``None`` when unobserved."""
-        with self._uow_factory() as uow:
-            raw = uow.kv_config.get(_KV_SAVE_SORT)
-        return json.loads(raw) if raw is not None else None
-
-    def is_save_sort_changed(self) -> bool:
-        """Check if a save sort migration is pending (detected by MigrationService)."""
-        return self.pending_sort_settings() is not None

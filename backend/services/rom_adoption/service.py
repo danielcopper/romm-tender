@@ -66,17 +66,14 @@ if TYPE_CHECKING:
         ActiveCoreReader,
         AdoptionMoveStore,
         Clock,
-        CoreNameProviderFn,
         DebugLogger,
         DownloadFileStore,
         EventEmitter,
-        RetroArchSaveLayoutProvider,
-        RetroArchSavestateLayoutProvider,
         RetroDeckPaths,
         RomInstallRecorder,
         RommRomReader,
+        SaveLocationReader,
         SaveQuarantineFn,
-        SaveSortingProvider,
         SiblingSupersedeProvider,
         SystemKnownFn,
         SystemM3uSupportFn,
@@ -148,7 +145,7 @@ class RomAdoptionServiceConfig:
     does for an extracted one. ``system_extensions`` and ``system_known`` are the
     two questions the candidate search puts to ``es_systems.xml``: what a system
     accepts, and whether the directory it is about to search is a system at all.
-    The layout and core seams below are the renamer's, and the search seams the
+    The save-location and core seams below are the renamer's, and the search seams the
     search's — they are taken here and handed straight on, so the service has one
     constructor rather than three the composition root has to keep in step.
     """
@@ -163,11 +160,8 @@ class RomAdoptionServiceConfig:
     m3u_support: SystemM3uSupportFn
     system_extensions: SystemSupportedExtensionsFn
     system_known: SystemKnownFn
-    save_layout: RetroArchSaveLayoutProvider
-    save_sorting: SaveSortingProvider
-    savestate_layout: RetroArchSavestateLayoutProvider
+    save_locations: SaveLocationReader
     active_core: ActiveCoreReader
-    get_core_name: CoreNameProviderFn
     # Deferred: the supersede lives on DownloadService, which is built after
     # this service (it consumes the occupancy gate below).
     sibling_supersede: SiblingSupersedeProvider
@@ -195,13 +189,9 @@ class RomAdoptionService:
                 adoption_move=config.adoption_move,
                 quarantine_save=config.quarantine_save,
                 download_file_store=config.download_file_store,
-                retrodeck_paths=config.retrodeck_paths,
                 m3u_support=config.m3u_support,
-                save_layout=config.save_layout,
-                save_sorting=config.save_sorting,
-                savestate_layout=config.savestate_layout,
+                save_locations=config.save_locations,
                 active_core=config.active_core,
-                get_core_name=config.get_core_name,
                 logger=config.logger,
             )
         )

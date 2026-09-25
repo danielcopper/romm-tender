@@ -77,6 +77,7 @@ def _make_testable_plugin():
         _install_recorder: Any
         _renderer_rss: Any
         _renderer_gc: Any
+        _save_directories: Any
 
     instance = TestablePlugin()
     instance._migration_service = MagicMock()

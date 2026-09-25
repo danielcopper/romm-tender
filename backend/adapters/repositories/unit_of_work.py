@@ -1,7 +1,7 @@
 """The synchronous SQLite Unit of Work — the transactional boundary for one operation.
 
 Opens one ``sqlite3`` connection per operation, applies the runtime
-per-connection PRAGMAs, issues an explicit ``BEGIN IMMEDIATE``, exposes the eleven
+per-connection PRAGMAs, issues an explicit ``BEGIN IMMEDIATE``, exposes the twelve
 repositories over that shared connection, and commits / rolls back on exit. Used
 as a synchronous context manager from a service's ``run_in_executor`` worker so
 the connection never escapes its worker thread (ADR-0004 — sync ``sqlite3`` over
@@ -26,6 +26,7 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING
 
+from adapters.repositories.answered_save_directory import SqliteAnsweredSaveDirectoryRepository
 from adapters.repositories.bios_file import SqliteBiosFileRepository
 from adapters.repositories.collection_sync_state import SqliteCollectionSyncStateRepository
 from adapters.repositories.firmware_cache import SqliteFirmwareCacheRepository
@@ -43,13 +44,13 @@ if TYPE_CHECKING:
 
 
 class SqliteUnitOfWork:
-    """Atomic transaction boundary over one SQLite connection and the eleven repositories.
+    """Atomic transaction boundary over one SQLite connection and the twelve repositories.
 
     A clean ``__exit__`` commits; an exceptional one rolls back and re-raises.
     The connection is opened in ``__enter__`` and closed in ``__exit__`` so it
     lives entirely on the executor thread that drives the ``with`` block.
 
-    The eleven repositories are bound in ``__enter__`` (they need the open
+    The twelve repositories are bound in ``__enter__`` (they need the open
     connection). Declaring them here as instance attributes makes the structural
     match against the ``UnitOfWork`` Protocol explicit: the concrete repository
     types each satisfy their repository Protocol, so this class satisfies
@@ -61,6 +62,7 @@ class SqliteUnitOfWork:
     rom_metadata: SqliteRomMetadataRepository
     playtime: SqlitePlaytimeRepository
     rom_save_sync_states: SqliteRomSaveSyncStateRepository
+    answered_save_directories: SqliteAnsweredSaveDirectoryRepository
     bios_files: SqliteBiosFileRepository
     firmware_cache: SqliteFirmwareCacheRepository
     sync_runs: SqliteSyncRunRepository
@@ -96,6 +98,7 @@ class SqliteUnitOfWork:
         self.rom_metadata = SqliteRomMetadataRepository(conn)
         self.playtime = SqlitePlaytimeRepository(conn)
         self.rom_save_sync_states = SqliteRomSaveSyncStateRepository(conn)
+        self.answered_save_directories = SqliteAnsweredSaveDirectoryRepository(conn)
         self.bios_files = SqliteBiosFileRepository(conn)
         self.firmware_cache = SqliteFirmwareCacheRepository(conn)
         self.sync_runs = SqliteSyncRunRepository(conn)

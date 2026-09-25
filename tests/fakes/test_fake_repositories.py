@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.bios_file import BiosFile
 from domain.collection_sync_state import CollectionSyncState
 from domain.firmware_cache import FirmwareCacheEntry
@@ -22,6 +23,7 @@ from domain.rom_install import RomInstall
 from domain.rom_metadata import RomMetadata
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.sync_run import SyncRun
+from fakes.fake_answered_save_directory_repository import FakeAnsweredSaveDirectoryRepository
 from fakes.fake_bios_file_repository import FakeBiosFileRepository
 from fakes.fake_collection_sync_state_repository import FakeCollectionSyncStateRepository
 from fakes.fake_firmware_cache_repository import FakeFirmwareCacheRepository
@@ -37,6 +39,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 if TYPE_CHECKING:
     from services.protocols import (
+        AnsweredSaveDirectoryRepository,
         BiosFileRepository,
         FirmwareCacheRepository,
         KvConfigRepository,
@@ -72,6 +75,7 @@ class TestProtocolSatisfaction:
         metadata: RomMetadataRepository = FakeRomMetadataRepository()
         playtime: PlaytimeRepository = FakePlaytimeRepository()
         save_states: RomSaveSyncStateRepository = FakeRomSaveSyncStateRepository()
+        answered: AnsweredSaveDirectoryRepository = FakeAnsweredSaveDirectoryRepository()
         bios: BiosFileRepository = FakeBiosFileRepository()
         firmware: FirmwareCacheRepository = FakeFirmwareCacheRepository()
         runs: SyncRunRepository = FakeSyncRunRepository()
@@ -79,7 +83,19 @@ class TestProtocolSatisfaction:
         kv: KvConfigRepository = FakeKvConfigRepository()
         assert all(
             obj is not None
-            for obj in (roms, installs, metadata, playtime, save_states, bios, firmware, runs, platform_state, kv)
+            for obj in (
+                roms,
+                installs,
+                metadata,
+                playtime,
+                save_states,
+                answered,
+                bios,
+                firmware,
+                runs,
+                platform_state,
+                kv,
+            )
         )
 
     def test_fake_uow_and_factory_satisfy_protocols(self):
@@ -257,6 +273,17 @@ class TestFakeRomSaveSyncStateRepository:
         reloaded = repo.get(1)
         assert reloaded is not None
         assert reloaded.own_upload_ids == [7]  # stored copy's list untouched
+
+
+class TestFakeAnsweredSaveDirectoryRepository:
+    def test_round_trip_upsert(self):
+        repo = FakeAnsweredSaveDirectoryRepository()
+        repo.save(AnsweredSaveDirectory.record(rom_id=1, directory="/saves/gba"))
+        repo.save(AnsweredSaveDirectory.record(rom_id=1, directory="/saves/gba/mGBA"))
+        assert repo.get(1) == AnsweredSaveDirectory(rom_id=1, directory="/saves/gba/mGBA")
+        assert repo.get(2) is None
+        repo.delete(1)
+        assert repo.get(1) is None
 
 
 class TestFakeBiosFileRepository:
@@ -546,12 +573,17 @@ def _save_save_state(uow: FakeUnitOfWork, rom_id: int) -> None:
     )
 
 
+def _save_answered_save_directory(uow: FakeUnitOfWork, rom_id: int) -> None:
+    uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=rom_id, directory="/saves/snes"))
+
+
 # (repo attr name, child-save helper) for every per-rom-FK child aggregate.
 _PER_ROM_FK_SAVERS = [
     ("rom_installs", _save_rom_install),
     ("rom_metadata", _save_rom_metadata),
     ("playtime", _save_playtime),
     ("rom_save_sync_states", _save_save_state),
+    ("answered_save_directories", _save_answered_save_directory),
 ]
 
 

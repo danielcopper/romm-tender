@@ -116,28 +116,6 @@ class TestMove:
             adapter.move(str(tmp_path / "missing"), str(tmp_path / "dst"))
 
 
-class TestRename:
-    def test_renames(self, adapter, tmp_path):
-        src = tmp_path / "src.rom"
-        dst = tmp_path / "dst.rom"
-        src.write_bytes(b"data")
-        adapter.rename(str(src), str(dst))
-        assert not src.exists()
-        assert dst.read_bytes() == b"data"
-
-    def test_replaces_existing(self, adapter, tmp_path):
-        src = tmp_path / "src.rom"
-        dst = tmp_path / "dst.rom"
-        src.write_bytes(b"new")
-        dst.write_bytes(b"old")
-        adapter.rename(str(src), str(dst))
-        assert dst.read_bytes() == b"new"
-
-    def test_missing_source_raises(self, adapter, tmp_path):
-        with pytest.raises(OSError):
-            adapter.rename(str(tmp_path / "missing"), str(tmp_path / "dst"))
-
-
 class TestGetmtime:
     def test_returns_mtime_float(self, adapter, tmp_path):
         f = tmp_path / "a.rom"
@@ -210,7 +188,6 @@ class TestProtocolMethodCount:
             "remove_file",
             "remove_tree",
             "move",
-            "rename",
             "get_mtime",
             "walk_files",
         }

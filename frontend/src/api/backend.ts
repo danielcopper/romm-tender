@@ -46,7 +46,6 @@ import type {
   MigrationStatus,
   MigrationResult,
   RetroDeckStatus,
-  SaveSortMigrationStatus,
   RollbackStatus,
   ListFileVersionsResult,
   CopySaveToSlotStatus,
@@ -1116,12 +1115,7 @@ export const getMigrationStatus = callable<[], MigrationStatus>("get_migration_s
 export const migrateRetroDeckFiles = callable<[string | null], MigrationResult>("migrate_retrodeck_files");
 export const dismissRetrodeckMigration = callable<[], { success: boolean }>("dismiss_retrodeck_migration");
 
-export const getSaveSortMigrationStatus = callable<[], SaveSortMigrationStatus>("get_save_sort_migration_status");
-export const migrateSaveSortFiles = callable<[string | null], MigrationResult>("migrate_save_sort_files");
-export const dismissSaveSortMigration = callable<[], { success: boolean }>("dismiss_save_sort_migration");
-export const refreshMigrationState = callable<[], { retrodeck: MigrationStatus; save_sort: SaveSortMigrationStatus }>(
-  "refresh_migration_state",
-);
+export const refreshMigrationState = callable<[], { retrodeck: MigrationStatus }>("refresh_migration_state");
 
 // Persistent corrupt-settings-reset notice. When settings.json was unparseable
 // at boot it is backed up to settings.json.corrupt-<ts> and reset to defaults,
@@ -1207,16 +1201,14 @@ interface SessionFinalizeSyncResult {
 
 interface SessionFinalizeMigration {
   retrodeck: MigrationStatus;
-  save_sort: SaveSortMigrationStatus;
 }
 
 export interface SessionFinalizeResult {
   total_seconds: number | null;
   sync: SessionFinalizeSyncResult;
   // ``null`` when the backend's migration-state refresh raised — the
-  // frontend then leaves the migration stores untouched (any stale
-  // ``pending`` badge keeps showing), matching the pre-PR behavior
-  // where ``refreshMigrationState().catch`` logged without clearing.
+  // frontend then leaves the migration store untouched: a failed refresh
+  // must not clear a stale ``pending`` badge it could not re-check.
   migration: SessionFinalizeMigration | null;
 }
 

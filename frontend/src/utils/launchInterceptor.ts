@@ -33,7 +33,6 @@ import {
 } from "../api/backend";
 import { getMigrationState, setMigrationStatus } from "./migrationStore";
 import { reportServerReachable } from "./connectionState";
-import { setSaveSortMigrationStatus } from "./saveSortMigrationStore";
 import { getAppIdRomIdMapSnapshot, isSessionActive } from "./sessionManager";
 import { isAppRunning } from "./runningApps";
 import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip } from "./launchGate";
@@ -362,12 +361,11 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       detach(
         (async () => {
           try {
-            // Fire-and-forget migration refresh — picks up RetroArch sort
-            // changes made via the in-game Quick Menu before the prior session.
+            // Fire-and-forget migration refresh — picks up a RetroDECK home
+            // change made since the prior session.
             refreshMigrationState()
-              .then(({ retrodeck, save_sort }) => {
+              .then(({ retrodeck }) => {
                 setMigrationStatus(retrodeck);
-                setSaveSortMigrationStatus(save_sort);
               })
               .catch((e) => logError(`Pre-launch migration refresh failed: ${e}`));
 

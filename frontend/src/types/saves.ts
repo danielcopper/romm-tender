@@ -15,8 +15,9 @@ export interface SaveSyncSettings {
 }
 
 /** The `reason` slug the sync callables return when save sync is blocked because
- *  RetroArch writes saves to the content directory (#239). A BENIGN SKIP — the
- *  game still launches and no error is surfaced. Mirrors the backend
+ *  a save the plugin could otherwise sync is written beside the game file —
+ *  RetroArch's "Write Saves to Content Directory" is the usual cause (#239).
+ *  A BENIGN SKIP — the game still launches and no error is surfaced. Mirrors the backend
  *  `SAVE_SYNC_IN_CONTENT_DIR_REASON`. */
 export const SAVEFILES_IN_CONTENT_DIR_REASON = "savefiles_in_content_dir";
 
@@ -128,12 +129,13 @@ export interface SaveStatus {
   /** False when per-version rollback is unavailable for the slot — currently
    *  only for multi-file saves (mirrors `!multi_file`). */
   rollback_supported?: boolean;
-  /** True when RetroArch's `savefiles_in_content_dir=true` — saves are written
-   *  next to the ROM, outside the saves tree the plugin syncs, so save sync is
-   *  unsupported. Derived from a LOCAL retroarch.cfg read, so it is correct even
-   *  when the server is unreachable (independent of `server_query_failed`). In
-   *  this case `files` is `[]` and `save_sync_display` reports the "off" state
-   *  (#239). */
+  /** True when the emulator's answer puts a save the plugin could otherwise
+   *  sync beside the game file, outside what the plugin syncs, so save sync is
+   *  unsupported. Any other refusal — a save inside the game file, writes
+   *  discarded — is not this case. Read off the local machine, so it is correct
+   *  even when the server is unreachable (independent of `server_query_failed`).
+   *  In this case `files` is `[]` and `save_sync_display` reports the "off"
+   *  state. */
   savefiles_in_content_dir?: boolean;
 }
 
@@ -174,7 +176,14 @@ export interface SlotSavesResponse {
 
 export interface SwitchSlotResponse {
   success: boolean;
-  reason?: "pending_uploads" | "server_unreachable" | "sync_disabled" | "not_installed" | "switch_incomplete";
+  reason?:
+    | "pending_uploads"
+    | "server_unreachable"
+    | "sync_disabled"
+    | "not_installed"
+    | "switch_incomplete"
+    | "savefiles_in_content_dir"
+    | "save_shape_unsupported";
   message?: string;
   files?: string[];
   save_status?: SaveStatus;
@@ -262,7 +271,10 @@ export type RollbackStatus =
   | { status: "ok" }
   | { status: "rom_not_installed" }
   | { status: "version_deleted" }
-  | { status: "unsupported" }
+  // ``reason`` names why where the save is not one a sync carries — beside the
+  // game file, or refused for its shape with that answer's own ``message``; a
+  // multi-file slot carries neither.
+  | { status: "unsupported"; reason?: string; message?: string }
   | { status: "server_unreachable"; message: string }
   // The server ANSWERED 404 — no such ROM or device id. Distinct from
   // `server_unreachable` (retryable) and `version_deleted` (one save missing
@@ -289,7 +301,7 @@ export type CopySaveToSlotStatus =
   | { status: "invalid_slot_name" }
   | { status: "rom_not_installed" }
   | { status: "version_deleted" }
-  | { status: "unsupported"; reason?: string }
+  | { status: "unsupported"; reason?: string; message?: string }
   | { status: "server_unreachable"; message: string }
   // See RollbackStatus — the server answered, it just has no such entry.
   | { status: "not_found"; message: string }

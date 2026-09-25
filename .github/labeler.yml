@@ -18,7 +18,6 @@ area:saves:
           - 'backend/domain/save_attribution.py'
           - 'backend/domain/save_backup.py'
           - 'backend/domain/save_hash.py'
-          - 'backend/domain/save_layout.py'
           - 'backend/domain/save_path.py'
           - 'backend/domain/save_slot.py'
           - 'backend/domain/save_status.py'

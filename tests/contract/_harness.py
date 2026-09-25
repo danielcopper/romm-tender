@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
@@ -209,8 +210,10 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # .so to ask what it writes, so a fabricated tree answers ``core-unqueryable``
     # and every save in this tier would classify as "nothing established" — a
     # refusal, which is exactly what these tests are not about. What the fake
-    # states is the plain per-game file set; that the real adapter refuses on a
-    # machine it cannot read is pinned in ``tests/adapters/test_atlas_saves.py``.
+    # states is the plain per-game file set under the content-sorted saves root,
+    # and the unsorted states root for savestates;
+    # that the real adapter refuses on a machine it cannot read is pinned in
+    # ``tests/adapters/test_atlas_saves.py``.
     patched_adapters = dataclasses.replace(
         result.adapters,
         romm_api=fake_romm,
@@ -218,7 +221,10 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         renderer_rss=FakeRendererRss(),
         renderer_gc=FakeRendererGc(),
         game_process=fake_game_process,
-        save_locations=FakeSaveLocationReader(),
+        save_locations=FakeSaveLocationReader(
+            saves_root=result.callbacks.retrodeck_paths.saves_path(),
+            states_root=os.path.join(result.callbacks.retrodeck_paths.retrodeck_home(), "states"),
+        ),
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.

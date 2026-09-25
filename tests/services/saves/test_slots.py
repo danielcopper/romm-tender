@@ -5,9 +5,9 @@ import hashlib
 from typing import cast
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_layout import ContentDir
 from lib.errors import RommApiError, RommConnectionError, RommNotFoundError
 from lib.list_result import ErrorCode
 from tests.services.saves._helpers import (
@@ -15,6 +15,7 @@ from tests.services.saves._helpers import (
     _file_md5,
     _get_save_state,
     _install_rom,
+    _no_save_directory,
     _require_save_state,
     _seed_rom,
     _seed_save_state,
@@ -821,6 +822,22 @@ class TestConfirmSlotChoice:
         assert not any(c[0] == "delete_server_saves" for c in fake.call_log)
         assert 1 in fake.saves
         assert _require_save_state(svc, 42).slot_confirmed is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_migration_reads_the_answer_once(self, tmp_path):
+        # The content-directory gate's reading is the one the migration uses.
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon.srm", slot=None)
+        fake.set_server_save_content(1, b"S" * 1024)
+        save_locations = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+        result = await svc.confirm_slot_choice(42, "default", True, None)
+
+        assert result["success"] is True
+        assert len(save_locations.calls) == 1
 
     @pytest.mark.asyncio
     async def test_confirm_migration_no_local_file_writes_content(self, tmp_path):
@@ -1925,7 +1942,7 @@ class TestSlotsContentDirGate:
 
     @pytest.mark.asyncio
     async def test_switch_slot_refuses_and_writes_nothing_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -1959,9 +1976,26 @@ class TestSlotsContentDirGate:
         assert save_path.exists()
 
     @pytest.mark.asyncio
+    async def test_switch_slot_refuses_with_no_save_directory(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _install_rom(svc, tmp_path)
+        _no_save_directory(svc)
+        _seed_save_state(svc, 42, RomSaveSyncState(active_slot="default", slot_confirmed=True))
+        fake.saves[200] = _server_save(save_id=200, slot="desktop")
+
+        result = await svc.switch_slot(42, "desktop")
+
+        assert result["success"] is False
+        assert result["reason"] == "save_shape_unsupported"
+        assert "could not be established" in result["message"]
+        assert _require_save_state(svc, 42).active_slot == "default"
+        assert not any(c[0] in ("download_save_content", "list_saves") for c in fake.call_log), fake.call_log
+
+    @pytest.mark.asyncio
     async def test_switch_slot_in_save_dir_still_switches(self, tmp_path):
         """Control: a supported layout switches normally (no gate)."""
-        svc, fake = make_service(tmp_path)  # default layout is InSaveDir
+        svc, fake = make_service(tmp_path)  # saves under the save root by default
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)
@@ -1992,7 +2026,7 @@ class TestSlotsContentDirGate:
     @pytest.mark.asyncio
     async def test_confirm_slot_choice_migration_refused_on_content_dir(self, tmp_path):
         """Migration path is refused (no upload/delete) but the slot still confirms."""
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)
@@ -2012,9 +2046,29 @@ class TestSlotsContentDirGate:
         assert _require_save_state(svc, 42).slot_confirmed is True
 
     @pytest.mark.asyncio
+    async def test_confirm_slot_choice_migration_refused_with_no_save_directory(self, tmp_path):
+        """The same refusal as the content-directory one: no migration I/O, slot still confirmed."""
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        _no_save_directory(svc)
+        fake.saves[1] = _server_save(save_id=1, slot="desktop")
+
+        result = await svc.confirm_slot_choice(42, "default", True, "desktop")
+
+        assert result["success"] is False
+        assert result["reason"] == "save_shape_unsupported"
+        assert result["needs_conflict_resolution"] is False
+        assert not any(c[0] in ("upload_save", "delete_server_saves", "list_saves") for c in fake.call_log), (
+            fake.call_log
+        )
+        assert _require_save_state(svc, 42).slot_confirmed is True
+
+    @pytest.mark.asyncio
     async def test_confirm_slot_choice_no_migration_not_gated_on_content_dir(self, tmp_path):
         """The non-migration path writes no files, so it is never gated."""
-        svc, _ = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
         _install_rom(svc, tmp_path)

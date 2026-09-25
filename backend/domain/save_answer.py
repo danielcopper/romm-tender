@@ -31,8 +31,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -56,8 +54,9 @@ SaveState = Literal[
 # doubt lands, so collapsing them would make one message stand for all of them.
 #
 # ``not_asked`` is the one that is easy to lose: the question was never put, so
-# the emulator is not implicated at all. RetroArch writing saves to the content
-# directory reaches it, and so does a ROM with no resolvable emulator. Without
+# the emulator is not implicated at all. A save the plugin could otherwise sync
+# sitting beside the content reaches it (the status read reports that case as
+# not asked), and so does a ROM with no resolvable emulator. Without
 # it those payloads are byte-identical to an unaudited core's, and a page would
 # tell a user their emulator is a mystery when the truth is that the plugin
 # never asked.
@@ -95,12 +94,31 @@ _INSIDE_CONTENT_CAVEATS = frozenset({"save-inside-content", "save-inside-image"}
 # The caveat for a directory that is known while the names inside it are not.
 _FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 
-# Canonical ``reason`` slug for the benign-skip outcome the four refusing states
-# produce. Lives here beside the states that cause it, for the same reason
-# ``SAVE_SYNC_CONTENT_DIR_REASON`` lives beside the layout that causes that one:
-# every service routes on the SAME value without a service-to-service import.
-# It says the SHAPE of this game's save is not one the plugin can carry per
-# game, which is a statement about the emulator and never about the server.
+# The caveat for a sorted directory RetroArch has not created yet. RetroArch
+# creates it on the game's first save and silently reverts to the unsorted root
+# when creation fails (``runloop.c:8844``, as the vendored resolver's
+# ``placement.py`` cites it); that root is the answer's ``fallback_directory``.
+# A caller about to move files into ``directory`` creates it first.
+SORTED_DIR_MISSING = "sorted-dir-missing"
+
+# The root kind of a placement anchored in the directory the game's content file
+# sits in. A save written beside that file is one reading of it; a save written
+# INSIDE the file (``inside_content``) is anchored there too.
+ROOT_CONTENT_DIRECTORY = "content_directory"
+
+# Canonical ``reason`` slugs for the two benign-skip outcomes a save answer
+# produces. Both live here, beside the answer that causes them, so every service
+# routes on the SAME value without a service-to-service import.
+#
+# ``SAVE_SYNC_CONTENT_DIR_REASON`` says the emulator writes this game's save
+# next to its content, outside what the plugin syncs; the saves sync-engine gate
+# stamps it on its skip result and the session-lifecycle post-exit branch reads
+# it to suppress the false-failure toast.
+#
+# ``SAVE_SHAPE_UNSUPPORTED_REASON`` says the SHAPE of this game's save is not one
+# the plugin can carry per game, which is a statement about the emulator and
+# never about the server.
+SAVE_SYNC_CONTENT_DIR_REASON = "savefiles_in_content_dir"
 SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported"
 
 # Every ``reason`` slug that means "the sync did not run, and that is fine".
@@ -180,6 +198,13 @@ class SaveAnswer:
     emulator groups save data, and ``caveats`` carries the resolver's stable
     codes verbatim for the log and for a later rendering.
 
+    ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
+    vocabulary; :attr:`in_content_directory` reads it together with
+    :attr:`syncable`, and the directory follow reads it alone.
+    ``fallback_directory`` is the unsorted root of the :data:`SORTED_DIR_MISSING`
+    note (the resolver's ``fallback_dir``). Both are ``None`` wherever no
+    placement was resolved.
+
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question
     was then about the path the ROM WOULD occupy, so every name in the answer is
@@ -201,11 +226,35 @@ class SaveAnswer:
     components: tuple[SaveComponent, ...]
     caveats: tuple[str, ...]
     content_installed: bool
+    root_kind: str | None = None
+    fallback_directory: str | None = None
 
     @property
     def syncable(self) -> bool:
-        """Whether save sync may run at all for this ROM."""
+        """Whether this emulator's save is a per-game file set the plugin can carry."""
         return self.state == SAVE_STATE_PER_GAME_FILES
+
+    @property
+    def in_content_directory(self) -> bool:
+        """Whether sitting beside the content is the one reason this save may not be synced.
+
+        The answer names a per-game file set a sync could carry, but anchored in
+        the content's own directory — outside what the plugin syncs, and syncing
+        there is a decision this answer does not make. Any answer that would not
+        be syncable anyway (inside the content file, writes discarded, nothing
+        named) is answered by its own refusal instead, wherever it is anchored:
+        that is what reading :attr:`syncable` here guarantees.
+        """
+        return self.root_kind == ROOT_CONTENT_DIRECTORY and self.syncable
+
+    @property
+    def sync_directory(self) -> str | None:
+        """The directory a sync reads and writes, or ``None`` where it may not sync at all.
+
+        ``None`` for every refusing state and for a save written next to the
+        content — the pairing that makes a refusal probe nothing.
+        """
+        return self.directory if self.syncable and not self.in_content_directory else None
 
     @property
     def owned_files(self) -> tuple[SaveComponent, ...]:
@@ -329,6 +378,8 @@ def build_save_answer(
     groups: tuple[SaveGroup, ...],
     caveats: tuple[str, ...],
     content_installed: bool,
+    root_kind: str | None = None,
+    fallback_directory: str | None = None,
 ) -> SaveAnswer:
     """Classify one resolved savefile placement into a :class:`SaveAnswer`.
 
@@ -357,6 +408,8 @@ def build_save_answer(
         components=components,
         caveats=caveats,
         content_installed=content_installed,
+        root_kind=root_kind,
+        fallback_directory=fallback_directory,
     )
 
 

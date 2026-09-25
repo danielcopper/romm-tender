@@ -1,7 +1,6 @@
 /**
- * RetroDECK file migration types — the pending-migration status, the result
- * shape returned after running a migration, and the save-sort-flag flavor
- * used when RetroArch save sorting changes. Anything that describes a
+ * RetroDECK file migration types — the pending-migration status and the result
+ * shape returned after running a migration. Anything that describes a
  * migration handshake between the plugin and the user lives here.
  */
 
@@ -35,11 +34,4 @@ export interface MigrationResult {
   saves_moved?: number;
   missing_count?: number;
   errors?: string[];
-}
-
-export interface SaveSortMigrationStatus {
-  pending: boolean;
-  old_settings?: { sort_by_content: boolean; sort_by_core: boolean };
-  new_settings?: { sort_by_content: boolean; sort_by_core: boolean };
-  saves_count?: number;
 }

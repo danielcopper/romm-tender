@@ -92,6 +92,8 @@ class Plugin:
     # Lazily created on first schedule so a bare ``Plugin()`` (test/harness that
     # skips ``_main``) still tracks tasks.
     _playtime_flush_tasks: set[asyncio.Task[None]]
+    # The one-time save-directory backfill, held so the loop cannot collect it.
+    _save_directory_backfill: asyncio.Task[None]
 
     _MIN_REQUIRED_VERSION = (5, 3, 0)
 
@@ -244,7 +246,7 @@ class Plugin:
         steps.run("cleanup_leftover_tmp_files", self._download_service.cleanup_leftover_tmp_files)
 
         # ── 6. Background tasks ─────────────────────────────────────────────
-        steps.run("detect_save_sort_change", self._migration_service.detect_save_sort_change)
+        steps.run("record_save_directories", self._start_save_directory_backfill)
         logger.info("Tender backend loaded")
         return result.user_agent
 
@@ -259,7 +261,20 @@ class Plugin:
         """
         await self._connection_service.migrate_legacy_credentials()
 
+    def _start_save_directory_backfill(self):
+        """Start the one-time save-directory backfill without holding up start-up.
+
+        It asks the resolver once per installed ROM, which on a large library
+        takes a while; the task is kept here so the loop cannot collect it
+        mid-run and ``_unload`` can cancel it.
+        """
+        self._save_directory_backfill = self.loop.create_task(self._save_sync_service.record_save_directories_once())
+
     async def _unload(self):
+        backfill = getattr(self, "_save_directory_backfill", None)
+        if backfill is not None:
+            backfill.cancel()
+            await asyncio.gather(backfill, return_exceptions=True)
         self._sync_service.shutdown()
         await self._prune_service.shutdown()
         await self._download_service.shutdown()
@@ -887,7 +902,7 @@ class Plugin:
     @migration_blocked
     @prune_active_blocked
     async def delete_local_saves(self, rom_id):
-        return self._save_sync_service.delete_local_saves(rom_id)
+        return await self._save_sync_service.delete_local_saves(rom_id)
 
     async def count_platform_saves(self, platform_slug):
         return await self._save_sync_service.count_platform_saves(platform_slug)
@@ -895,7 +910,7 @@ class Plugin:
     @migration_blocked
     @prune_active_blocked
     async def delete_platform_saves(self, platform_slug):
-        return self._save_sync_service.delete_platform_saves(platform_slug)
+        return await self._save_sync_service.delete_platform_saves(platform_slug)
 
     async def saves_list_file_versions(self, rom_id, slot, filename):
         return await self._save_sync_service.list_file_versions(rom_id, slot, filename)
@@ -1024,16 +1039,6 @@ class Plugin:
 
     async def get_migration_status(self):
         return await self._migration_service.get_migration_status()
-
-    async def get_save_sort_migration_status(self):
-        return await self._migration_service.get_save_sort_migration_status()
-
-    @prune_active_blocked
-    async def migrate_save_sort_files(self, conflict_strategy=None):
-        return await self._migration_service.migrate_save_sort_files(conflict_strategy)
-
-    async def dismiss_save_sort_migration(self):
-        return self._migration_service.dismiss_save_sort_migration()
 
     async def dismiss_retrodeck_migration(self):
         return self._migration_service.dismiss_retrodeck_migration()
