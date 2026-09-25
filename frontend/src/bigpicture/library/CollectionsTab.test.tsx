@@ -423,6 +423,27 @@ describe("Library › Collections", () => {
       expect(row.style.padding).toBe("2px 16px");
     });
 
+    it("fills the whole row and marks its left edge while its toggle holds focus, and drops both on blur", async () => {
+      const { container } = await openCollections();
+      const row = tableRow(container, "Kids");
+      expect(row.style.background).toBe("transparent");
+
+      fireEvent.focusIn(checkbox(row));
+      expect(row.style.background).toBe("#3d4450");
+      expect(row.style.boxShadow).toBe("inset 3px 0 0 #1a9fff");
+      expect(tableRow(container, "Finished").style.background).toBe("transparent");
+
+      fireEvent.focusOut(checkbox(row));
+      expect(row.style.background).toBe("transparent");
+      expect(row.style.boxShadow).toBe("none");
+    });
+
+    it("keeps the Sync cell's own Field from painting a focus fill of its own", async () => {
+      const { container } = await openCollections();
+      const toggle = tableRow(container, "Kids").querySelector('[data-testid="toggle"]');
+      expect(toggle?.getAttribute("data-no-focus-highlight")).toBe("true");
+    });
+
     it("keeps the order it opened with while rows are switched", async () => {
       const { container } = await openCollections();
       await click(checkbox(tableRow(container, "Handheld picks")));

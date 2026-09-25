@@ -4,7 +4,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import { useRef, type CSSProperties, type FC } from "react";
+import { useRef, useState, type CSSProperties, type FC } from "react";
 import { ConfirmModal, DialogButton, TextField, ToggleField, showModal } from "@decky/ui";
 import { LoadingRow } from "../LoadingRow";
 import {
@@ -15,6 +15,9 @@ import {
   PANE_GUTTER,
   PaneTableHeader,
   PaneTableRow,
+  FOCUSED_ROW_FILL,
+  ROW_MARKER_WIDTH,
+  SELECTION_ACCENT,
   SECONDARY_FONT,
 } from "../layout/pane";
 import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
@@ -47,6 +50,15 @@ const OWNED_COLUMNS = "minmax(0, 1fr) 72px 40px 52px 56px";
 const OWNERLESS_COLUMNS = "minmax(0, 1fr) 40px 52px 56px";
 
 const NUMBER: CSSProperties = { textAlign: "right" };
+
+// A marker as wide as a list row's, drawn as an inset shadow so it takes no
+// width from the row's first cell. The unfocused row keeps an empty fill so the
+// two states differ only in colour.
+const FOCUSED_ROW: CSSProperties = {
+  background: FOCUSED_ROW_FILL,
+  boxShadow: `inset ${ROW_MARKER_WIDTH}px 0 0 ${SELECTION_ACCENT}`,
+};
+const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "none" };
 
 /**
  * The Sync cell's toggle without the row padding its Field brings. Steam's
@@ -148,32 +160,43 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
   state,
 }) => {
   const number = { ...NUMBER, fontSize: SECONDARY_FONT };
+  // The whole row shows that its toggle holds focus, as the layout study draws
+  // it: a fill across the row and a marker on its left edge. React delivers
+  // these through focusin/focusout, so they follow focus landing on the toggle
+  // inside the row.
+  const [focused, setFocused] = useState(false);
   return (
-    <PaneTableRow
-      columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
-      register={SYNC_TABLE_REGISTER}
-      testId="collection-row"
-      // The Sync cell's toggle is the row's stop already.
-      focusStop={false}
-      cells={[
-        { content: collection.name, title: collection.name },
-        ...(owned ? [{ content: ownerLabel(collection), style: { fontSize: SECONDARY_FONT, color: MUTED } }] : []),
-        { content: `${collection.rom_count}`, style: number },
-        { content: inSteamLabel(collection), style: number },
-        {
-          content: (
-            <ToggleField
-              checked={collection.sync_enabled}
-              bottomSeparator="none"
-              {...TOGGLE_WITHOUT_PADDING}
-              onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
-            />
-          ),
-          // A control draws its focus ring outside its own box.
-          clip: false,
-        },
-      ]}
-    />
+    <div onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+      <PaneTableRow
+        columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
+        register={SYNC_TABLE_REGISTER}
+        testId="collection-row"
+        // The Sync cell's toggle is the row's stop already.
+        focusStop={false}
+        style={focused ? FOCUSED_ROW : UNFOCUSED_ROW}
+        cells={[
+          { content: collection.name, title: collection.name },
+          ...(owned ? [{ content: ownerLabel(collection), style: { fontSize: SECONDARY_FONT, color: MUTED } }] : []),
+          { content: `${collection.rom_count}`, style: number },
+          { content: inSteamLabel(collection), style: number },
+          {
+            content: (
+              <ToggleField
+                checked={collection.sync_enabled}
+                bottomSeparator="none"
+                // The row draws the focus; the cell's own Field box would paint
+                // Steam's focus fill across the cell beside the toggle.
+                highlightOnFocus={false}
+                {...TOGGLE_WITHOUT_PADDING}
+                onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
+              />
+            ),
+            // A control draws its focus ring outside its own box.
+            clip: false,
+          },
+        ]}
+      />
+    </div>
   );
 };
 

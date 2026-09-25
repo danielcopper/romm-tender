@@ -55,6 +55,12 @@ export const ROW_CONTENT_INSET = ROW_MARKER_WIDTH + ROW_MARKER_GAP;
  *  verdict palette above: it reports where the reader is, not how anything is. */
 export const SELECTION_ACCENT = "#1a9fff";
 
+/** The fill behind a row that holds focus — the colour Steam paints a focused
+ *  Field with (`.Field.HighlightOnFocus.gpfocus`, `.gpfocuswithin` in
+ *  `steamui/css/chunk~2dcc5aaf7.css`), so a row that draws its own focus looks
+ *  like every row Steam draws. */
+export const FOCUSED_ROW_FILL = "#3d4450";
+
 /** The horizontal gutter a pane's content sits in — what `SectionTitle` and
  *  `Muted` are padded by, so a table lines up with the section it sits under. */
 export const PANE_GUTTER = "16px";
