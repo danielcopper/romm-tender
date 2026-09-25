@@ -5,7 +5,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/danielcopper/romm-tender/main/install.sh | bash
 #
 # No sudo, nothing outside this user's home, and no daemon but one systemd user
-# unit. Run it again to update; `--uninstall` takes it back out.
+# unit. Run it again to update — an update the new version does not start from
+# is rolled back, and `--rollback` goes back by hand; `--uninstall` takes it
+# back out.
 #
 # TEST SEAMS. Each is read once, at the top of this script, and each has a
 # working default, so a test — or a hand install into another tree — can move
@@ -25,6 +27,8 @@
 #                         — the five above and this one are written into the
 #                         unit verbatim.
 #   TENDER_ACK_UNTIL      the acknowledgement's expiry date
+#   TENDER_UPDATE_WAIT    how many seconds an update waits for the new version
+#                         to answer before it rolls back. Default 60.
 #   TENDER_RELEASE_API    where the newest release is looked up
 #   TENDER_DOWNLOAD_BASE  where a release's assets are downloaded from
 #
@@ -38,6 +42,8 @@ set -euo pipefail
 # from this date on, and this constant is the only thing to touch when it has
 # outlived its reason.
 ACK_UNTIL="${TENDER_ACK_UNTIL:-2027-03-31}"
+
+UPDATE_WAIT="${TENDER_UPDATE_WAIT:-60}"
 
 RELEASE_API="${TENDER_RELEASE_API:-https://api.github.com/repos/danielcopper/romm-tender/releases/latest}"
 DOWNLOAD_BASE="${TENDER_DOWNLOAD_BASE:-https://github.com/danielcopper/romm-tender/releases/download}"
@@ -60,6 +66,39 @@ CODE="${TENDER_CODE_DIR:-$HOME/.local/lib/romm-tender}"
 UNIT_DIR="$CONFIG_HOME/systemd/user"
 UNIT="$UNIT_DIR/romm-tender.service"
 UNIT_NAME="romm-tender"
+
+# Where the backend notes the port it bound: its runtime directory, which is the
+# state directory where the session names none (resolve_directories in
+# backend/domain/app_directories.py, PORT_FILENAME in
+# backend/host/single_instance.py).
+PORT_NOTE="port"
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    PORT_FILE="$XDG_RUNTIME_DIR/romm-tender/$PORT_NOTE"
+else
+    PORT_FILE="$STATE/$PORT_NOTE"
+fi
+
+# What an update backs up before it swaps the tree, and what a rollback puts
+# back: the database and its two WAL sidecars — WAL mode is recorded in the
+# database file itself (backend/adapters/sqlite_migrations.py) — the settings,
+# and the unit. The names are the backend's (DB_FILENAME in
+# backend/bootstrap/adapters.py, SETTINGS_FILENAME in
+# backend/adapters/persistence.py), and tests/scripts/test_install_sh.py holds
+# the spellings equal.
+DATABASE="romm_sync.db"
+DATABASE_FILES=("$DATABASE" "$DATABASE-wal" "$DATABASE-shm")
+SETTINGS="settings.json"
+BACKUP="$DATA/update-backup"
+
+# The note an update that was rolled back leaves in the state directory: the
+# version it tried, the version it went back to, and when.
+UPDATE_FAILURE="update-failure.json"
+
+# The name every answer from the backend's server carries in its `Server` field,
+# before the version: `<PACKAGE_NAME>/<VERSION>` (backend/domain/identity.py,
+# composed in backend/bootstrap/adapters.py). tests/scripts/test_install_sh.py
+# holds the spelling equal.
+SERVER_NAME="romm-tender"
 
 # The note recording that Steam's debugger marker is ours. Its FIRST LINE is the
 # absolute path of the marker that was created, which is what `--uninstall`
@@ -118,9 +157,22 @@ UNVERIFIED=""
 # cannot load over it. The panel holds the old backend's token, so it talks to
 # nobody, and the new backend finds the injection marker already set; the new
 # backend replaces it only by having Steam reload its JS context, and only once
-# no app is running, so a run that replaced an install still cannot promise the
-# entry appears on its own.
+# no app is running (docs/architecture/loading-the-panel.md).
 REPLACED_AN_INSTALL="no"
+
+# Whether this run is an update: a tree was already at $CODE. An update stops
+# the unit before it touches anything, keeps the tree it replaces and a backup
+# of the data, and rolls back where the new version does not answer.
+UPDATING="no"
+
+# Whether the backend now running was seen to answer as the version at $CODE,
+# which only an update or a rollback waits for. Only then does the run know
+# which backend is up to replace a panel an earlier one left in Steam.
+ANSWERED="no"
+
+# Whether an update was rolled back, which ends the run non-zero once the rest
+# of it has been said.
+ROLLED_BACK="no"
 
 # What the EXIT trap has to clean up: a download directory, a spinner that is
 # still drawing, and a row whose outcome was never written.
@@ -148,6 +200,7 @@ main() {
     case "$MODE" in
         disable) do_disable ;;
         uninstall) do_uninstall ;;
+        rollback) do_rollback ;;
         install) do_install ;;
     esac
 }
@@ -159,6 +212,7 @@ Usage: install.sh [options]
   (no options)     install or update to the newest release
   --version X      install or update to release X
   --from FILE      install from a tarball already on disk
+  --rollback       go back to the version the last update replaced
   --disable        stop Tender and leave it installed
   --uninstall      remove Tender
   --yes            skip the acknowledgement (required when there is no terminal)
@@ -406,7 +460,14 @@ greeting_lines() {
     printf '\n'
     greeting_key "Install to" "$(tilde "$CODE")"
     greeting_key "Runs as" "a systemd user service, starts with your session"
-    greeting_key "Needs" "one Steam restart, no sudo"
+    # Steam reads the debugger marker only at its own start, so a first install
+    # needs that restart once; an update's backend replaces the panel the
+    # earlier one left, and the closing line says when that did not happen.
+    if [ -d "$CODE" ]; then
+        greeting_key "Needs" "no sudo"
+    else
+        greeting_key "Needs" "one Steam restart, no sudo"
+    fi
     greeting_key "Keeps" "your settings, library and shortcuts"
 }
 
@@ -922,6 +983,10 @@ parse_arguments() {
                 MODE="uninstall"
                 shift
                 ;;
+            --rollback)
+                MODE="rollback"
+                shift
+                ;;
             --disable)
                 MODE="disable"
                 shift
@@ -1329,11 +1394,10 @@ verify_local() {
 
 # ---------------------------------------------------------- stage and swap
 
-# Unpack beside the install and rename into place. That is TWO renames where an
-# install already exists, not one: the window it leaves is a missing directory,
-# which the unit's Restart= covers, and the tree already there is not deleted
-# until the new one is in place.
-install_tree() {
+# Unpack beside the install and look at what came out, before anything that is
+# running is touched. `version.txt` is required because an update is judged by
+# it: the backend has to answer as the version the tree says it is.
+stage_tree() {
     local tarball="$1"
 
     rm -rf "$CODE.new"
@@ -1344,17 +1408,153 @@ install_tree() {
     fi
 
     local required
-    for required in backend/main.py dist/index.js bin/tender-rom-launcher; do
+    for required in backend/main.py dist/index.js bin/tender-rom-launcher version.txt; do
         if [ ! -f "$CODE.new/$required" ]; then
             rm -rf "$CODE.new"
             abort "the tarball has no $required" "nothing was changed"
         fi
     done
+}
 
+# Rename the staged tree into place, keeping the one already there as $CODE.old
+# — exactly one, so the tree an earlier update kept goes now. That is TWO
+# renames, not one: the window between them is a missing directory, which only
+# a running unit could see, and an update has stopped it.
+swap_tree() {
     rm -rf "$CODE.old"
     [ ! -d "$CODE" ] || mv "$CODE" "$CODE.old"
     mv "$CODE.new" "$CODE"
-    rm -rf "$CODE.old"
+}
+
+# ---------------------------------------------------- update and rollback
+
+# The version a tree says it is, or non-zero where it says none.
+tree_version() {
+    local file="$1/version.txt"
+    [ -f "$file" ] || return 1
+    tr -d '[:space:]' < "$file"
+}
+
+# The version the backend behind the port note says it is, or nothing where
+# nothing answered.
+#
+# It knocks without the token. The backend refuses that, and every answer it
+# gives — a refusal included — carries `Server: <name>/<version>` (_refuse in
+# backend/host/server.py), which is the whole question; the price is one
+# WARNING line in its log per knock. curl's default Host is the one the
+# backend's access check admits (allowed_hosts in backend/host/access.py).
+answering_version() {
+    local port="" response
+    [ -f "$PORT_FILE" ] || return 0
+    port="$(head -n 1 "$PORT_FILE" 2> /dev/null || true)"
+    case "$port" in
+        '' | *[!0-9]*) return 0 ;;
+    esac
+    response="$(curl -s --max-time 2 -o /dev/null -D - "http://127.0.0.1:$port/")" || return 0
+    printf '%s\n' "$response" | tr -d '\r' | sed -n "s|^[Ss]erver: $SERVER_NAME/\\([^[:space:]]*\\)\$|\\1|p" | head -n 1
+}
+
+# Knocks until the backend answers as *1*, or until UPDATE_WAIT seconds have
+# passed. A port note that is missing or stale and a knock nobody answers are
+# one answer — not yet: a backend writes its note only once it has migrated the
+# database and bound its port (run_backend in backend/host/runtime.py).
+wait_for_version() {
+    local want="$1" deadline=$((SECONDS + UPDATE_WAIT)) got
+    [ -n "$want" ] || return 1
+    while :; do
+        got="$(answering_version)" || got=""
+        [ "$got" != "$want" ] || return 0
+        [ "$SECONDS" -lt "$deadline" ] || return 1
+        sleep 1
+    done
+}
+
+# Answers non-zero where the unit is still up once asked to stop.
+stop_unit() {
+    systemctl --user stop "$UNIT_NAME" || true
+    ! unit_is_active
+}
+
+# Plain copies, whole only because the unit has been stopped first. Exactly what
+# exists is copied, because a rollback reproduces exactly this set.
+back_up() {
+    local name staged="$BACKUP.new"
+    rm -rf "$staged"
+    mkdir -p "$staged" || return 1
+    for name in "${DATABASE_FILES[@]}"; do
+        [ ! -e "$DATA/$name" ] || cp -p "$DATA/$name" "$staged/$name" || return 1
+    done
+    [ ! -e "$CONFIG/$SETTINGS" ] || cp -p "$CONFIG/$SETTINGS" "$staged/$SETTINGS" || return 1
+    [ ! -e "$UNIT" ] || cp -p "$UNIT" "$staged/$UNIT_NAME.service" || return 1
+    rm -rf "$BACKUP"
+    mv "$staged" "$BACKUP"
+}
+
+# Every file the backup holds is put back, and every one of the database's and
+# the settings' files it does NOT hold is taken away: a WAL the failed version
+# wrote, replayed onto the database from before it, corrupts it. The unit is put
+# back where the backup has one and otherwise left as this run wrote it — it
+# names paths, not a version, so it starts either tree.
+restore_backup() {
+    local name status=0
+    for name in "${DATABASE_FILES[@]}"; do
+        restore_file "$BACKUP/$name" "$DATA/$name" || status=1
+    done
+    restore_file "$BACKUP/$SETTINGS" "$CONFIG/$SETTINGS" || status=1
+    if [ -e "$BACKUP/$UNIT_NAME.service" ]; then
+        cp -p "$BACKUP/$UNIT_NAME.service" "$UNIT" || status=1
+    fi
+    return "$status"
+}
+
+restore_file() {
+    if [ -e "$1" ]; then
+        mkdir -p "$(dirname "$2")" && cp -p "$1" "$2"
+    else
+        rm -f "$2"
+    fi
+}
+
+# The failed tree goes and the one it replaced comes back, with the data it had,
+# and the unit is started on it. Waiting for it to answer is the caller's.
+revert_to_previous() {
+    if ! stop_unit; then
+        abort "$UNIT_NAME would not stop, so the earlier version was not put back" \
+            "stop it with systemctl --user stop $UNIT_NAME, then run $(tilde "$CODE")/install.sh --rollback"
+    fi
+    rm -rf "$CODE.new"
+    [ ! -d "$CODE" ] || mv "$CODE" "$CODE.new"
+    mv "$CODE.old" "$CODE"
+    rm -rf "$CODE.new"
+    if ! restore_backup; then
+        abort "could not put your data back from $(tilde "$BACKUP")" \
+            "the earlier version is at $(tilde "$CODE") and the backup is untouched; copy its files back before starting $UNIT_NAME"
+    fi
+    systemctl --user daemon-reload || true
+    systemctl --user start "$UNIT_NAME" || true
+}
+
+# Written through a temporary file and renamed, so a reader never sees half of
+# it. The versions come off version.txt, so the one escape JSON needs from them
+# is the quote and the backslash.
+record_update_failure() {
+    local record="$STATE/$UPDATE_FAILURE"
+    mkdir -p "$STATE"
+    printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
+        "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$record.tmp"
+    mv "$record.tmp" "$record"
+}
+
+json_text() {
+    local escaped="${1//\\/\\\\}"
+    printf '%s\n' "${escaped//\"/\\\"}"
+}
+
+# Whether the tree at $CODE replaces a panel an earlier backend left in Steam
+# (backend/host/inject/recovery.py). A release from before that has no such
+# file, and after going back to one only a Steam restart brings the panel back.
+replaces_a_stranded_panel() {
+    [ -f "$CODE/backend/host/inject/recovery.py" ]
 }
 
 # ------------------------------------------------------------ covers once
@@ -1490,8 +1690,9 @@ start_unit() {
     # one line of third-party noise in an otherwise plain run. Nothing here
     # swallows stderr — a systemctl that fails is exactly what the user needs.
     systemctl --user enable --now --quiet "$UNIT_NAME"
-    # An update over a running unit: `enable --now` starts a stopped one and
-    # leaves a running one on the tree that has just been replaced under it.
+    # `enable --now` starts a stopped unit and leaves a running one on the tree
+    # it started from. An update has stopped it first; a unit that is up with
+    # no tree at $CODE behind it has not been.
     systemctl --user restart "$UNIT_NAME"
 }
 
@@ -1535,9 +1736,19 @@ do_install() {
     row_start "$INSTALLING"
     WORK_DIR="$(mktemp -d)"
     obtain_tarball "$WORK_DIR"
-    [ ! -d "$CODE" ] || REPLACED_AN_INSTALL="yes"
+    if [ -d "$CODE" ]; then
+        UPDATING="yes"
+        REPLACED_AN_INSTALL="yes"
+    fi
     row_detail "$INSTALLING" "unpacking $(basename "$TARBALL")"
-    install_tree "$TARBALL"
+    stage_tree "$TARBALL"
+    local previous="" new=""
+    if [ "$UPDATING" = "yes" ]; then
+        previous="$(tree_version "$CODE")" || previous=""
+        new="$(tree_version "$CODE.new")" || new=""
+        set_the_install_aside
+    fi
+    swap_tree
     move_covers
     row_detail "$INSTALLING" "$(basename "$TARBALL")$UNVERIFIED $ARROW $(tilde "$CODE")"
     row_end "$INSTALLING" ok
@@ -1547,10 +1758,105 @@ do_install() {
     row_detail "$SERVICE" "writing $UNIT_NAME.service"
     write_unit
     row_detail "$SERVICE" "starting $UNIT_NAME"
-    start_unit
+    if [ "$UPDATING" = "no" ]; then
+        start_unit
+    else
+        start_unit || true
+        row_detail "$SERVICE" "waiting for $new to answer"
+        if wait_for_version "$new"; then
+            ANSWERED="yes"
+            rm -f "$STATE/$UPDATE_FAILURE"
+        else
+            roll_back_the_update "$new" "$previous"
+        fi
+    fi
+    if [ "$ROLLED_BACK" = "no" ]; then
+        row_detail "$SERVICE" "$(service_state)"
+        row_end "$SERVICE" ok
+    fi
+
+    report_steam
+    closing_block
+
+    if [ "$ROLLED_BACK" = "yes" ]; then
+        echo "install.sh: update to $new failed; back on $previous" >&2
+        echo "  $new did not answer within ${UPDATE_WAIT}s; what it logged is in $(tilde "$STATE/backend.log")" >&2
+        exit 1
+    fi
+}
+
+# Stops the unit and backs the data up, before the tree is swapped. Either one
+# failing leaves the install as it was, the staged tree gone and a unit that
+# was running running again.
+set_the_install_aside() {
+    local was_running="no"
+    ! unit_is_active || was_running="yes"
+    row_detail "$INSTALLING" "stopping $UNIT_NAME"
+    if ! stop_unit; then
+        rm -rf "$CODE.new"
+        abort "$UNIT_NAME would not stop" "nothing was changed; stop it with systemctl --user stop $UNIT_NAME and run this again"
+    fi
+    row_detail "$INSTALLING" "backing up your data"
+    if ! back_up; then
+        rm -rf "$CODE.new" "$BACKUP.new"
+        [ "$was_running" = "no" ] || systemctl --user start "$UNIT_NAME" || true
+        abort "could not back up your data to $(tilde "$BACKUP")" "nothing was changed"
+    fi
+}
+
+# Never retried: an update that did not start once is not one to start again
+# without the user deciding to.
+roll_back_the_update() {
+    local new="$1" previous="$2"
+    row_detail "$SERVICE" "$new did not answer, going back to $previous"
+    revert_to_previous
+    record_update_failure "$new" "$previous"
+    if ! wait_for_version "$previous"; then
+        abort "update to $new failed, and $previous has not answered since the rollback either" \
+            "what both logged is in $(tilde "$STATE/backend.log")"
+    fi
+    ANSWERED="yes"
+    ROLLED_BACK="yes"
+    row_detail "$SERVICE" "update to $new failed; back on $previous"
+    row_end "$SERVICE" fail
+}
+
+# Puts back the tree and the data the last update replaced, by hand. Nothing is
+# asked or changed before both are known to be there.
+do_rollback() {
+    greeter mode_lines "Putting back the version the last update replaced, with the data it had."
+    [ -d "$CODE.old" ] ||
+        abort "there is no earlier version to go back to" "an update keeps the one it replaced at $(tilde "$CODE.old"), and there is none"
+    [ -d "$BACKUP" ] ||
+        abort "there is no backup to go back to" "an update backs your data up to $(tilde "$BACKUP") first, and there is none"
+    rows_begin
+
+    row_start "$CHECKING"
+    preflight
+    row_end "$CHECKING" ok
+
+    local previous
+    previous="$(tree_version "$CODE.old")" || previous=""
+    REPLACED_AN_INSTALL="yes"
+    row_start "$INSTALLING"
+    row_detail "$INSTALLING" "stopping $UNIT_NAME"
+    revert_to_previous
+    row_detail "$INSTALLING" "$previous $ARROW $(tilde "$CODE")"
+    row_end "$INSTALLING" ok
+
+    row_start "$SERVICE"
+    row_detail "$SERVICE" "waiting for $previous to answer"
+    wait_for_version "$previous" ||
+        abort "$previous has not answered since the rollback" "what it logged is in $(tilde "$STATE/backend.log")"
+    ANSWERED="yes"
     row_detail "$SERVICE" "$(service_state)"
     row_end "$SERVICE" ok
 
+    report_steam
+    closing_block
+}
+
+report_steam() {
     row_start "$STEAM"
     ensure_marker
     probe_debugger
@@ -1567,8 +1873,6 @@ do_install() {
         row_detail "$STEAM" "not running"
         row_end "$STEAM" warn
     fi
-
-    closing_block
 }
 
 # Whether Steam is up. `pgrep -x` matches the executable's own name exactly, so
@@ -1577,8 +1881,8 @@ steam_is_running() {
     pgrep -x steam > /dev/null 2>&1
 }
 
-# Whether the service was already running before this run touched it. Asked
-# BEFORE this run starts the unit, because afterwards every answer is yes.
+# Whether the unit is up. The Service row asks it BEFORE this run starts the
+# unit, because afterwards every answer is yes.
 unit_is_active() {
     systemctl --user is-active --quiet "$UNIT_NAME" 2> /dev/null
 }
@@ -1588,9 +1892,9 @@ unit_is_active() {
 # this run has asked systemd to start it, so it is usually not there yet. Its
 # absence is not a fault and is not reported as one.
 service_state() {
-    local port_file="${XDG_RUNTIME_DIR:-}/romm-tender/port" port=""
-    if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -f "$port_file" ]; then
-        port="$(head -n 1 "$port_file" 2> /dev/null || true)"
+    local port=""
+    if [ -f "$PORT_FILE" ]; then
+        port="$(head -n 1 "$PORT_FILE" 2> /dev/null || true)"
     fi
     case "$port" in
         [0-9]*) printf '%s.service running on 127.0.0.1:%s\n' "$UNIT_NAME" "$port" ;;
@@ -1602,25 +1906,34 @@ service_state() {
 # look afterwards. The bold is on the action, because that is the only line here
 # the reader has to act on.
 closing_block() {
-    # Three answers because there are three machines, and telling a user to
-    # restart a Steam that is not running sends them looking for a window that
-    # is not there. What separates the last two is the process, not the probe:
-    # the probe cannot tell a Steam that is not running from one running without
-    # the marker Steam only reads at start-up.
+    # Telling a user to restart a Steam that is not running sends them looking
+    # for a window that is not there, so what separates the last two answers is
+    # the process, not the probe: the probe cannot tell a Steam that is not
+    # running from one running without the marker Steam only reads at start-up.
+    #
+    # A panel an earlier backend left is replaced by the one now running where
+    # that one was seen to answer and knows how; otherwise only a Steam restart
+    # takes it out.
     local next
     if [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" != "yes" ]; then
         next="open the Quick Access menu — Tender's entry appears once the backend has loaded it"
+    elif [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$ANSWERED" = "yes" ] && replaces_a_stranded_panel; then
+        next="Tender's panel comes back by itself once no game is running — if it hasn't after a few minutes, restart Steam"
     elif [ "$DEBUGGER_ANSWERED" = "yes" ] || steam_is_running; then
         next="restart Steam, then open the Quick Access menu"
     else
         next="start Steam, then open the Quick Access menu"
     fi
     echo
-    # The one line that says the run worked, in the disc's own blue — the two
-    # under it are where to look afterwards and stay dim. The bold is on the
+    # The one line that says how the run ended, in the disc's own blue — the
+    # two under it are where to look afterwards and stay dim. The bold is on the
     # action, because that is the only part of it a reader has to act on.
     style "$LOGO_DISC_STYLE"
-    printf 'Done in %ss.  ' "$SECONDS"
+    if [ "$ROLLED_BACK" = "yes" ]; then
+        printf 'Rolled back in %ss.  ' "$SECONDS"
+    else
+        printf 'Done in %ss.  ' "$SECONDS"
+    fi
     style 1
     printf 'Next: %s.' "$next"
     reset_style

@@ -16,7 +16,7 @@ set -euo pipefail
 
 # Every path the tarball may carry, relative to the source. A release is these
 # and nothing else — an entry that is not here does not ship.
-SHIPPED=(backend dist bin defaults version.txt LICENSE THIRD-PARTY-NOTICES.md)
+SHIPPED=(backend dist bin defaults install.sh version.txt LICENSE THIRD-PARTY-NOTICES.md)
 
 # Pruned out of the staged copy after the fact rather than filtered during it:
 # the shipped list is by path and this one is by shape, so a compiled module or

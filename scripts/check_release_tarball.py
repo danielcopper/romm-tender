@@ -16,8 +16,8 @@ It asserts:
     ``--strip-components=1`` relies on, and that the entry is the directory
     ``romm-tender/`` — the name the packager stages the tree under, so an
     archive rooted in anything else did not come from it;
-  * :data:`REQUIRED_FILES` are files inside it, and the launcher among them is
-    executable;
+  * :data:`REQUIRED_FILES` are files inside it, and the launcher and the
+    installer among them are executable;
   * nothing the packager prunes is in it, and no member is anything but a plain
     file or directory under a plain relative path;
   * ``version.txt`` agrees with the archive's own name and, where a tag is
@@ -30,7 +30,8 @@ says what goes into the archive — whole directories — and this one names the
 single paths that have to come out of it: the module the unit executes, the
 bundles the panel is loaded from, the executable every Steam shortcut names as
 its ``exe``, the catalogue and the compiled core the backend reads, the version
-file the archive's own name is taken from, and the licence texts a distributed
+file the archive's own name is taken from and an update is judged by, the
+installer an installed copy rolls back with, and the licence texts a distributed
 copy carries. The two are allowed to differ in length, and folding either into
 the other would make this gate agree with the packager by construction instead
 of holding it to the installer.
@@ -70,9 +71,9 @@ SIDECAR_LINE_RE = re.compile(r"^([0-9a-f]{64}) [ *](.+)$")
 
 VERSION_FILE = "version.txt"
 
-# Paths relative to the top-level directory. Each is something a start depends
-# on rather than something the packager happens to copy; see the module
-# docstring for why this is its own list.
+# Paths relative to the top-level directory. Each is something a start or a
+# rollback depends on rather than something the packager happens to copy; see
+# the module docstring for why this is its own list.
 REQUIRED_FILES = (
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
@@ -83,6 +84,7 @@ REQUIRED_FILES = (
     "dist/globals.js",
     "dist/index-coexistence.js",
     "dist/index.js",
+    "install.sh",
     VERSION_FILE,
 )
 
@@ -92,8 +94,10 @@ REQUIRED_FILES = (
 # that path. It decides on the other one — where that install fails,
 # ``bootstrap/adapters.py`` points the shortcut at this copy in the unpacked
 # tree instead, and it is then run as it arrived. That is the case with no other
-# defence, which is why the mode is asserted here.
-EXECUTABLE_FILES = frozenset({"bin/tender-rom-launcher"})
+# defence, which is why the mode is asserted here. The installer is run from the
+# installed tree as ``install.sh --rollback``, which is the one copy of it a user
+# who has no tarball at hand still has.
+EXECUTABLE_FILES = frozenset({"bin/tender-rom-launcher", "install.sh"})
 
 # A path segment that may not appear anywhere in the archive, and a name that
 # may not stand as a member's last segment — both read from the other side of

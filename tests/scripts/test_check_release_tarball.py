@@ -255,6 +255,13 @@ class TestTheFilesAnInstallStartsFrom:
 
         assert _one(_findings(archive), "not executable") == f"{launcher}: mode 0644, not executable"
 
+    def test_the_installer_without_its_mode_is_a_finding(self, good, tmp_path):
+        """An installed tree is rolled back with its own copy, run as ``install.sh --rollback``."""
+        installer = f"{_ROOT}/install.sh"
+        archive = _repack(good, tmp_path / "out", modes={installer: 0o644})
+
+        assert _one(_findings(archive), "not executable") == f"{installer}: mode 0644, not executable"
+
     def test_the_launcher_with_its_mode_is_not(self, good, tmp_path):
         launcher = f"{_ROOT}/bin/tender-rom-launcher"
         archive = _repack(good, tmp_path / "out", modes={launcher: 0o755})

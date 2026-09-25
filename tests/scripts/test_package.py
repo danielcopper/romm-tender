@@ -38,6 +38,7 @@ _REQUIRED = (
     "dist/index-coexistence.js",
     "bin/tender-rom-launcher",
     "defaults/config.json",
+    "install.sh",
     "version.txt",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
@@ -68,6 +69,7 @@ def _checkout(tmp_path: Path, *, version: str = "1.2.3") -> Path:
         target.write_text(f"{relative}\n", encoding="utf-8")
     (source / "version.txt").write_text(f"{version}\n", encoding="utf-8")
     (source / "bin" / "tender-rom-launcher").chmod(0o755)
+    (source / "install.sh").chmod(0o755)
     return source
 
 
@@ -135,6 +137,14 @@ class TestWhatItProduces:
 
         with tarfile.open(tmp_path / "out" / "romm-tender-1.2.3.tar.gz") as tar:
             member = tar.getmember("romm-tender/bin/tender-rom-launcher")
+        assert member.mode & 0o111
+
+    def test_the_installer_is_executable_inside_the_archive(self, tmp_path):
+        """An installed tree rolls back with its own copy, run as ``install.sh --rollback``."""
+        _package(_checkout(tmp_path), tmp_path / "out")
+
+        with tarfile.open(tmp_path / "out" / "romm-tender-1.2.3.tar.gz") as tar:
+            member = tar.getmember("romm-tender/install.sh")
         assert member.mode & 0o111
 
     def test_the_sidecar_matches_the_archive_and_names_it_barely(self, tmp_path):

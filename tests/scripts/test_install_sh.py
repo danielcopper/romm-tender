@@ -10,6 +10,12 @@ stubs record what they were asked for, which is what lets a test assert the URL
 that was built and the unit that was enabled rather than only the files left
 behind.
 
+**Nothing starts a backend unless a test asks** (``STUB_BACKEND``). Then the
+``systemctl`` stand-in starts one on the tree the unit names, leaving the port
+note and the version a real one leaves, and the ``curl`` stand-in answers a
+knock on that port the way the backend does — which is all an update is judged
+by. Without it a first install sees no port note, which is the ordinary case.
+
 The tarball under test is built by ``scripts/package.sh`` from a synthetic
 checkout, so what ``--from`` installs is the layout the packager actually
 produces rather than one this file invented.
@@ -26,6 +32,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import hashlib
+import json
 import os
 import re
 import selectors
@@ -57,6 +64,14 @@ _RELEASE_API = "https://example.invalid/repos/releases/latest"
 _DEBUGGER_PROBE = "http://127.0.0.1:8080/json/version"
 _MIGRATION_NOTES = "https://danielcopper.github.io/romm-tender/user-guide/getting-started/#coming-from-the-decky-plugin"
 
+# The module whose presence in a tree says its backend replaces a panel an
+# earlier backend left in Steam — which is what the closing line asks.
+_RECOVERY = "backend/host/inject/recovery.py"
+
+# The port the stubbed backend binds, told apart from any port a test writes a
+# note for by hand.
+_BACKEND_PORT = "27740"
+
 # What the packager is handed. Only the three entries install.sh requires need
 # real content; the rest have to exist because the packager refuses a tree that
 # is missing any shipped entry.
@@ -69,10 +84,61 @@ _CHECKOUT_FILES = (
     "defaults/config.json",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
+    "install.sh",
+    _RECOVERY,
 )
 
 _SYSTEMCTL_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
+# The unit's backend, where a test asks for one with STUB_BACKEND: started on
+# the tree the unit file names, the way the user manager starts it, and once up
+# it leaves what a real one leaves — the port note where the backend's own
+# directory ladder puts it, and the version the stubbed curl answers a knock
+# with. A version named in STUB_BROKEN_VERSIONS starts and never comes up.
+# Every start and stop is logged with the version of the tree it found.
+unit_value() {
+    sed -n "s/^Environment=$1=//p" "$HOME/.config/systemd/user/romm-tender.service" 2> /dev/null
+}
+port_note() {
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+        printf '%s\\n' "$XDG_RUNTIME_DIR/romm-tender/port"
+    else
+        printf '%s\\n' "$(unit_value TENDER_STATE_DIR)/port"
+    fi
+}
+tree_version() {
+    tr -d '[:space:]' < "$(unit_value TENDER_CODE_DIR)/version.txt" 2> /dev/null
+}
+backend_stop() {
+    [ -n "${STUB_BACKEND:-}" ] || return 0
+    printf 'stop %s\\n' "$(tree_version)" >> "$STUB_BACKEND_LOG"
+    rm -f "$STUB_BACKEND_SERVING" "$(port_note)"
+}
+backend_start() {
+    [ -n "${STUB_BACKEND:-}" ] || return 0
+    local version
+    version="$(tree_version)"
+    printf 'start %s\\n' "$version" >> "$STUB_BACKEND_LOG"
+    case " ${STUB_BROKEN_VERSIONS:-} " in
+        *" $version "*)
+            # As far as the data and no further: the database written to, a WAL
+            # and its index beside it, the settings rewritten — what a version
+            # that migrated and then died leaves behind.
+            local data config
+            data="$(unit_value TENDER_DATA_DIR)"
+            config="$(unit_value TENDER_CONFIG_DIR)"
+            mkdir -p "$data" "$config"
+            printf 'migrated by %s\\n' "$version" >> "$data/romm_sync.db"
+            printf 'wal of %s\\n' "$version" > "$data/romm_sync.db-wal"
+            printf 'shm of %s\\n' "$version" > "$data/romm_sync.db-shm"
+            printf '{"written_by": "%s"}\\n' "$version" > "$config/settings.json"
+            return 0
+            ;;
+    esac
+    mkdir -p "$(dirname "$(port_note)")"
+    printf '%s' "$STUB_BACKEND_PORT" > "$(port_note)"
+    printf '%s\\n' "$version" > "$STUB_BACKEND_SERVING"
+}
 case "$*" in
     *"show-environment"*) exit "${STUB_USER_MANAGER_EXIT:-0}" ;;
     *"list-unit-files plugin_loader.service"*)
@@ -81,7 +147,17 @@ case "$*" in
         ;;
     *"is-active"*) exit "${STUB_UNIT_ACTIVE:-3}" ;;
     *"MainPID"*) printf '%s\\n' "${STUB_UNIT_MAIN_PID:-0}" ;;
-    *"enable"*) [ -z "${STUB_ENABLE_DELAY:-}" ] || sleep "$STUB_ENABLE_DELAY" ;;
+    *"disable --now"*) backend_stop ;;
+    *"enable"*)
+        [ -z "${STUB_ENABLE_DELAY:-}" ] || sleep "$STUB_ENABLE_DELAY"
+        case "$*" in *"--now"*) backend_start ;; esac
+        ;;
+    *" restart "*)
+        backend_stop
+        backend_start
+        ;;
+    *" stop "*) backend_stop ;;
+    *" start "*) backend_start ;;
 esac
 exit 0
 """
@@ -92,10 +168,12 @@ out=""
 url=""
 bar="no"
 write_out=""
+dump=""
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
         -w) write_out="$2"; shift 2 ;;
+        -D) dump="$2"; shift 2 ;;
         --max-time) shift 2 ;;
         --progress-bar) bar="yes"; shift ;;
         -*) shift ;;
@@ -117,6 +195,19 @@ write_status() {
     fi
     printf '%s' "$1"
 }
+if [ "$url" = "http://127.0.0.1:$STUB_BACKEND_PORT/" ]; then
+    # A knock with no token, answered the way the backend answers one: 401, and
+    # who is answering in the Server field. Nothing listening is what curl says
+    # about a refused connection, silently under -s.
+    [ -s "$STUB_BACKEND_SERVING" ] || exit 7
+    if [ "$dump" != "-" ]; then
+        printf 'stub curl: no answer for -D %s\\n' "$dump" >&2
+        exit 2
+    fi
+    printf 'HTTP/1.1 401 Unauthorized\\r\\nServer: romm-tender/%s\\r\\nContent-Length: 0\\r\\n\\r\\n' \\
+        "$(cat "$STUB_BACKEND_SERVING")"
+    exit 0
+fi
 if [ "$url" = "$STUB_DEBUGGER_URL" ]; then
     [ "${STUB_DEBUGGER:-silent}" = "answer" ] || exit 22
     echo '{"Browser":"stub"}'
@@ -216,6 +307,8 @@ class Install:
         self.curl_log = tmp_path / "curl.log"
         self.curl_argv_log = tmp_path / "curl-argv.log"
         self.curl_stdin_log = tmp_path / "curl-stdin.log"
+        self.backend_log = tmp_path / "backend-stub.log"
+        self.backend_serving = tmp_path / "backend-serving"
         self.python = self.stubs / "stub-python3"
 
         for directory in (self.home, self.stubs, self.serve, self.runtime):
@@ -224,6 +317,7 @@ class Install:
         self.curl_log.touch()
         self.curl_argv_log.touch()
         self.curl_stdin_log.touch()
+        self.backend_log.touch()
         _write_executable(self.stubs / "systemctl", _SYSTEMCTL_STUB)
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
@@ -247,6 +341,19 @@ class Install:
     @property
     def note(self) -> Path:
         return self.state / "debugger-marker"
+
+    @property
+    def old(self) -> Path:
+        """The tree an update kept."""
+        return Path(f"{self.code}.old")
+
+    @property
+    def backup(self) -> Path:
+        return self.data / "update-backup"
+
+    @property
+    def failure_record(self) -> Path:
+        return self.state / "update-failure.json"
 
     def env(self, **extra: str) -> dict[str, str]:
         base = {
@@ -277,6 +384,13 @@ class Install:
             "STUB_CURL_STDIN_LOG": str(self.curl_stdin_log),
             "STUB_SERVE": str(self.serve),
             "STUB_DEBUGGER_URL": _DEBUGGER_PROBE,
+            "STUB_BACKEND_PORT": _BACKEND_PORT,
+            "STUB_BACKEND_SERVING": str(self.backend_serving),
+            "STUB_BACKEND_LOG": str(self.backend_log),
+            # An update waits this long for a version that does not answer, so
+            # a case that reaches the wait unprepared fails in a second rather
+            # than in a minute.
+            "TENDER_UPDATE_WAIT": "1",
         }
         base.update(extra)
         return base
@@ -374,6 +488,10 @@ class Install:
     def curl_argv(self) -> list[str]:
         """Every curl invocation's whole argument line, for the flags the URL does not show."""
         return self.curl_argv_log.read_text(encoding="utf-8").split("\n")[:-1]
+
+    def backend_events(self) -> list[str]:
+        """Every start and stop of the stubbed backend, with the version of the tree it found."""
+        return self.backend_log.read_text(encoding="utf-8").split("\n")[:-1]
 
     def curl_stdin(self) -> list[str]:
         """Every curl invocation's URL, and whether its stdin was a terminal."""
@@ -544,23 +662,33 @@ def _write_executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _build_tarball(tmp_path: Path) -> Path:
-    """A real release tarball, produced by the real packager from a synthetic checkout."""
-    source = tmp_path / "checkout"
+def _build_tarball(tmp_path: Path, version: str = _VERSION, *, replaces_a_stranded_panel: bool = True) -> Path:
+    """A real release tarball, produced by the real packager from a synthetic checkout.
+
+    *replaces_a_stranded_panel* False builds a release from before the backend
+    replaced a panel an earlier one left, which is a tree without that module.
+    Each distinct build has a checkout and an output directory of its own.
+    """
+    label = version if replaces_a_stranded_panel else f"{version}-before-recovery"
+    source = tmp_path / f"checkout-{label}"
+    out = tmp_path / f"built-{label}"
     if not source.exists():
         for relative in _CHECKOUT_FILES:
+            if relative == _RECOVERY and not replaces_a_stranded_panel:
+                continue
             target = source / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(f"{relative}\n", encoding="utf-8")
-        (source / "version.txt").write_text(f"{_VERSION}\n", encoding="utf-8")
+        (source / "version.txt").write_text(f"{version}\n", encoding="utf-8")
         (source / "bin" / "tender-rom-launcher").chmod(0o755)
+        (source / "install.sh").chmod(0o755)
         subprocess.run(
-            ["bash", str(_PACKAGE), "--source", str(source), "--out", str(tmp_path / "built")],
+            ["bash", str(_PACKAGE), "--source", str(source), "--out", str(out)],
             capture_output=True,
             text=True,
             check=True,
         )
-    return tmp_path / "built" / _ARCHIVE
+    return out / f"romm-tender-{version}.tar.gz"
 
 
 @pytest.fixture
@@ -1112,37 +1240,373 @@ class TestTheCoversMoveOnce:
 
 
 class TestAnUpdateOverAnExistingInstall:
-    def test_the_previous_tree_is_gone_and_nothing_is_staged_beside_it(self, machine):
+    """Every install over a tree already at the code root is an update.
+
+    The stubbed backend (``STUB_BACKEND``) comes up on whatever tree the unit
+    names, so an update is judged here the way it is on a machine: by the
+    version that answers.
+    """
+
+    def test_the_previous_tree_is_kept_and_nothing_is_staged_beside_it(self, machine):
         tarball = _build_tarball(machine.tmp_path)
-        machine.run("--from", str(tarball), "--yes")
+        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
         (machine.code / "backend" / "leftover.py").write_text("from the old install\n", encoding="utf-8")
 
-        result = machine.run("--from", str(tarball), "--yes")
+        result = machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
 
         assert result.returncode == 0, result.stderr
         assert not (machine.code / "backend" / "leftover.py").exists()
         assert not Path(f"{machine.code}.new").exists()
-        assert not Path(f"{machine.code}.old").exists()
+        assert (machine.old / "backend" / "leftover.py").is_file()
 
     def test_it_restarts_the_unit_that_was_already_running(self, machine):
-        """`enable --now` leaves a running unit on the tree that was just replaced under it."""
+        """An update ends with the unit started again, on the tree it put in place."""
         tarball = _build_tarball(machine.tmp_path)
-        machine.run("--from", str(tarball), "--yes")
+        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
         machine.systemctl_log.write_text("", encoding="utf-8")
 
-        machine.run("--from", str(tarball), "--yes")
+        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
 
         assert "--user restart romm-tender" in machine.systemctl_calls()
 
     def test_the_users_own_directories_survive_it(self, machine):
         tarball = _build_tarball(machine.tmp_path)
-        machine.run("--from", str(tarball), "--yes")
+        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
         machine.config.mkdir(parents=True, exist_ok=True)
         (machine.config / "settings.json").write_text("{}", encoding="utf-8")
 
-        machine.run("--from", str(tarball), "--yes")
+        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
 
         assert (machine.config / "settings.json").read_text(encoding="utf-8") == "{}"
+
+
+_NEW = "1.3.0"
+
+_COMES_BACK = (
+    "Tender's panel comes back by itself once no game is running — if it hasn't after a few minutes, restart Steam"
+)
+
+
+def _seed_data(machine: Install) -> dict[Path, bytes]:
+    """The user's data as an update finds it, and the unit with a line of the user's own.
+
+    A WAL and no index beside it, so that what a rollback has to put back and
+    what it has to take away are both in play.
+    """
+    machine.data.mkdir(parents=True, exist_ok=True)
+    machine.config.mkdir(parents=True, exist_ok=True)
+    (machine.data / "romm_sync.db").write_bytes(b"the database before the update\n")
+    (machine.data / "romm_sync.db-wal").write_bytes(b"its write-ahead log\n")
+    (machine.config / "settings.json").write_text('{"version": 13}\n', encoding="utf-8")
+    machine.unit.write_text(machine.unit.read_text(encoding="utf-8") + "# a line of the user's own\n", encoding="utf-8")
+    return {
+        path: path.read_bytes()
+        for path in (
+            machine.data / "romm_sync.db",
+            machine.data / "romm_sync.db-wal",
+            machine.config / "settings.json",
+            machine.unit,
+        )
+    }
+
+
+def _installed(machine: Install, version: str = _VERSION, *, replaces_a_stranded_panel: bool = True) -> None:
+    """A first install of *version*, with the stubbed backend up on it."""
+    tarball = _build_tarball(machine.tmp_path, version, replaces_a_stranded_panel=replaces_a_stranded_panel)
+    result = machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
+    assert result.returncode == 0, result.stderr
+
+
+def _tree_version(tree: Path) -> str:
+    return (tree / "version.txt").read_text(encoding="utf-8").strip()
+
+
+class TestAnUpdateThatStarts:
+    def test_it_ends_on_the_new_version_with_the_old_one_kept(self, machine):
+        _installed(machine)
+        before = _seed_data(machine)
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert machine.backend_events()[-1] == f"start {_NEW}"
+        assert (machine.data / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
+        assert not machine.failure_record.exists()
+        assert "Done in" in result.stdout
+
+    def test_the_backup_holds_exactly_what_was_there(self, machine):
+        """Byte for byte, and nothing that was not: the database had no index beside it."""
+        _installed(machine)
+        before = _seed_data(machine)
+
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert sorted(entry.name for entry in machine.backup.iterdir()) == [
+            "romm-tender.service",
+            "romm_sync.db",
+            "romm_sync.db-wal",
+            "settings.json",
+        ]
+        assert (machine.backup / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
+        assert (machine.backup / "romm_sync.db-wal").read_bytes() == before[machine.data / "romm_sync.db-wal"]
+        assert (machine.backup / "settings.json").read_bytes() == before[machine.config / "settings.json"]
+        assert (machine.backup / "romm-tender.service").read_bytes() == before[machine.unit]
+
+    def test_the_unit_is_stopped_before_the_tree_is_swapped(self, machine):
+        """The stop finds the OLD tree still in place, and comes before anything is started."""
+        _installed(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert machine.backend_events()[0] == f"stop {_VERSION}"
+        calls = machine.systemctl_calls()
+        assert calls.index("--user stop romm-tender") < calls.index("--user daemon-reload")
+
+    def test_it_waits_for_the_new_version_by_knocking_on_the_noted_port(self, machine):
+        _installed(machine)
+
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert f"http://127.0.0.1:{_BACKEND_PORT}/" in machine.curl_calls()
+
+    def test_the_port_note_is_read_from_the_state_root_where_the_session_has_no_runtime_root(self, machine):
+        """The backend's own ladder: no XDG_RUNTIME_DIR, and the note is in the state directory."""
+        first = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up", XDG_RUNTIME_DIR=""
+        )
+        assert first.returncode == 0, first.stderr
+
+        result = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up", XDG_RUNTIME_DIR=""
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert (machine.state / "port").is_file()
+        assert _tree_version(machine.code) == _NEW
+
+    def test_a_later_update_that_starts_removes_the_record_of_one_that_did_not(self, machine):
+        _installed(machine)
+        machine.run(
+            "--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up", STUB_BROKEN_VERSIONS=_NEW
+        )
+        assert machine.failure_record.is_file()
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert not machine.failure_record.exists()
+
+    def test_a_unit_that_will_not_stop_leaves_the_install_alone(self, machine):
+        _installed(machine)
+
+        result = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up", STUB_UNIT_ACTIVE="0"
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: romm-tender would not stop"]
+        assert _tree_version(machine.code) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
+        assert not machine.backup.exists()
+
+    def test_a_backup_that_cannot_be_written_leaves_the_install_alone(self, machine):
+        _installed(machine)
+        machine.data.mkdir(parents=True, exist_ok=True)
+        machine.data.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        finally:
+            machine.data.chmod(0o700)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not back up your data to {machine.backup}"]
+        assert _tree_version(machine.code) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
+
+    def test_a_first_install_keeps_nothing_and_waits_for_nothing(self, machine):
+        """A first install behaves as it did: no tree kept, no backup, no knock."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert not machine.old.exists()
+        assert not machine.backup.exists()
+        assert f"http://127.0.0.1:{_BACKEND_PORT}/" not in machine.curl_calls()
+        assert "--user stop romm-tender" not in machine.systemctl_calls()
+
+
+class TestAnUpdateThatDoesNotStart:
+    def _failed(self, machine, broken: str = _NEW) -> tuple[dict[Path, bytes], subprocess.CompletedProcess[str]]:
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=broken,
+        )
+        return before, result
+
+    def test_it_ends_on_the_previous_version(self, machine):
+        _before, result = self._failed(machine)
+
+        assert result.returncode == 1
+        assert _tree_version(machine.code) == _VERSION
+        assert not machine.old.exists(), "the kept tree is the installed one again"
+        assert not Path(f"{machine.code}.new").exists(), "the failed tree is gone"
+
+    def test_the_data_is_the_data_it_had(self, machine):
+        """Byte for byte — and the index the failed version wrote is gone, not kept beside the old database."""
+        before, _result = self._failed(machine)
+
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert not (machine.data / "romm_sync.db-shm").exists()
+
+    def test_a_file_that_was_not_there_before_is_not_there_after(self, machine):
+        """A WAL the failed version wrote, replayed onto the database from before it, corrupts it."""
+        _installed(machine)
+        before = _seed_data(machine)
+        (machine.data / "romm_sync.db-wal").unlink()
+
+        machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+        )
+
+        assert not (machine.data / "romm_sync.db-wal").exists()
+        assert (machine.data / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
+
+    def test_it_says_so_plainly_and_exits_non_zero(self, machine):
+        _before, result = self._failed(machine)
+
+        assert _refusals(result.stderr) == [f"install.sh: update to {_NEW} failed; back on {_VERSION}"]
+        assert f"  {_NEW} did not answer within 1s; what it logged is in {machine.state}/backend.log" in result.stderr
+        assert f"[!!] Service      update to {_NEW} failed; back on {_VERSION}" in result.stdout
+        assert "Rolled back in" in result.stdout
+        assert "Done in" not in result.stdout
+
+    def test_it_records_the_failure(self, machine):
+        _before, _result = self._failed(machine)
+
+        record = json.loads(machine.failure_record.read_text(encoding="utf-8"))
+        assert set(record) == {"attempted_version", "restored_version", "rolled_back_at"}
+        assert record["attempted_version"] == _NEW
+        assert record["restored_version"] == _VERSION
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["rolled_back_at"])
+
+    def test_it_never_tries_again_on_its_own(self, machine):
+        """One start of the new tree's unit, then the old one — the order a single attempt makes."""
+        _before, _result = self._failed(machine)
+
+        assert machine.backend_events() == [
+            f"stop {_VERSION}",
+            f"start {_NEW}",
+            f"stop {_NEW}",
+            f"start {_NEW}",
+            f"stop {_NEW}",
+            f"start {_VERSION}",
+        ]
+
+    def test_a_previous_version_that_does_not_answer_either_is_said(self, machine):
+        _before, result = self._failed(machine, broken=f"{_VERSION} {_NEW}")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: update to {_NEW} failed, and {_VERSION} has not answered since the rollback either"
+        ]
+        assert _tree_version(machine.code) == _VERSION
+        assert machine.failure_record.is_file()
+
+
+class TestRollingBackByHand:
+    def test_it_puts_back_the_previous_version_and_its_data(self, machine):
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        (machine.data / "romm_sync.db-shm").write_bytes(b"its index\n")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert _tree_version(machine.code) == _VERSION
+        assert not machine.old.exists()
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert not (machine.data / "romm_sync.db-shm").exists()
+        assert machine.backend_events()[-1] == f"start {_VERSION}"
+        assert "[ok] Service      romm-tender.service running on" in result.stdout
+
+    def test_it_records_no_failure(self, machine):
+        """Going back by hand is a choice, not an update that failed."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        machine.run("--rollback", STUB_BACKEND="up")
+
+        assert not machine.failure_record.exists()
+
+    def test_with_no_previous_version_it_refuses_and_changes_nothing(self, machine):
+        _installed(machine)
+        before = {path: path.read_bytes() for path in machine.code.rglob("*") if path.is_file()}
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: there is no earlier version to go back to"]
+        assert machine.systemctl_calls() == []
+        assert {path: path.read_bytes() for path in machine.code.rglob("*") if path.is_file()} == before
+
+    def test_with_no_backup_it_refuses_and_changes_nothing(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        shutil.rmtree(machine.backup)
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: there is no backup to go back to"]
+        assert machine.systemctl_calls() == []
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+
+    def test_the_installed_tree_carries_the_installer_that_does_it(self, machine):
+        _installed(machine)
+
+        assert os.access(machine.code / "install.sh", os.X_OK)
+
+
+class TestAnUpdateThatSkipsARelease:
+    """One-time steps stay in, so an update straight from an older release still gets them."""
+
+    def test_the_covers_move_still_runs_over_data_left_in_the_older_layout(self, machine):
+        _installed(machine, "1.0.0")
+        before = _seed_data(machine)
+        for name, filename in (("covers", "a.png"), ("artwork", "b.png")):
+            (machine.data / name).mkdir(parents=True)
+            (machine.data / name / filename).write_text(name, encoding="utf-8")
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.2.0")), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert _tree_version(machine.code) == "1.2.0"
+        assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "covers"
+        assert (machine.cache / "artwork" / "b.png").read_text(encoding="utf-8") == "artwork"
+        assert not (machine.data / "covers").exists()
+        assert "1 cover and 1 artwork file moved to the cache" in result.stdout
+        for path in (machine.data / "romm_sync.db", machine.config / "settings.json"):
+            assert path.read_bytes() == before[path], path
 
 
 class TestWhatItDownloads:
@@ -1319,6 +1783,20 @@ class TestWhatItDownloads:
         assert not machine.code.exists()
         assert not Path(f"{machine.code}.new").exists()
 
+    def test_a_tarball_with_no_version_file_is_refused(self, machine):
+        """An update is judged by the version the tree says it is, so a tree that says none is refused."""
+        stripped = machine.tmp_path / "stripped.tar.gz"
+        with tarfile.open(_build_tarball(machine.tmp_path)) as source, tarfile.open(stripped, "w:gz") as target:
+            for member in source.getmembers():
+                if member.name != "romm-tender/version.txt":
+                    target.addfile(member, source.extractfile(member) if member.isfile() else None)
+
+        result = machine.run("--from", str(stripped), "--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the tarball has no version.txt"]
+        assert not machine.code.exists()
+
     def test_a_tarball_that_cannot_be_unpacked_leaves_nothing_staged(self, machine):
         """The staging directory is this run's, so a run that failed takes it with it."""
         corrupt = machine.tmp_path / "corrupt.tar.gz"
@@ -1356,6 +1834,18 @@ class TestUninstall:
         assert not machine.state.exists()
         assert not (machine.runtime / "romm-tender").exists()
         assert "--user disable --now romm-tender" in machine.systemctl_calls()
+
+    def test_it_removes_the_tree_an_update_kept_and_keeps_the_backup(self, machine):
+        """The backup is the user's data, and the data root is left whole."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        assert machine.old.is_dir()
+
+        result = machine.run("--uninstall")
+
+        assert result.returncode == 0, result.stderr
+        assert not machine.old.exists()
+        assert (machine.backup / "romm-tender.service").is_file()
 
     def test_it_leaves_the_library_the_settings_and_the_launcher(self, machine):
         self._installed(machine)
@@ -1647,6 +2137,30 @@ class TestTheLockIsSpelledOnceOnEachSide:
         assert f'BACKEND_LOCK="{LOCK_FILENAME}"' in script
 
 
+class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
+    """Each name an update backs up, reads or compares, held to the backend's own."""
+
+    def test_the_database_and_the_settings_match_the_backend(self):
+        from bootstrap.adapters import DB_FILENAME
+
+        from adapters.persistence import SETTINGS_FILENAME
+
+        script = _INSTALL.read_text(encoding="utf-8")
+
+        assert f'DATABASE="{DB_FILENAME}"' in script
+        assert f'SETTINGS="{SETTINGS_FILENAME}"' in script
+
+    def test_the_port_note_matches_the_backend(self):
+        from host.single_instance import PORT_FILENAME
+
+        assert f'PORT_NOTE="{PORT_FILENAME}"' in _INSTALL.read_text(encoding="utf-8")
+
+    def test_the_server_name_matches_the_backend(self):
+        from domain.identity import PACKAGE_NAME
+
+        assert f'SERVER_NAME="{PACKAGE_NAME}"' in _INSTALL.read_text(encoding="utf-8")
+
+
 class TestHowTheRunLooks:
     """The greeter and the four rows, which only a terminal ever sees whole."""
 
@@ -1809,6 +2323,23 @@ class TestHowTheRunLooks:
         assert "Runs as      a systemd user service, starts with your session" in screen
         assert "Needs        one Steam restart, no sudo" in screen
         assert "Keeps        your settings, library and shortcuts" in screen
+
+    def test_an_update_does_not_promise_a_steam_restart(self, machine):
+        """The new backend replaces the panel the earlier one left; the closing line says if it did not."""
+        _installed(machine)
+
+        _code, output = machine.on_a_terminal(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            answer="y",
+            COLUMNS="160",
+            COLORTERM="truecolor",
+            STUB_BACKEND="up",
+        )
+
+        screen = _screen(output)
+        assert "Needs        no sudo" in screen
+        assert "Steam restart" not in screen.split("Checking", 1)[0]
 
     def test_the_four_rows_end_in_one_mark_each(self, machine):
         _code, output = machine.on_a_terminal(
@@ -2073,23 +2604,69 @@ class TestWhatTheRunSaysAboutSteam:
             "Next: open the Quick Access menu — Tender's entry appears once the backend has loaded it." in result.stdout
         )
 
-    def test_a_reinstall_into_a_running_steam_asks_for_a_restart(self, machine):
+    def test_an_update_into_a_running_steam_says_the_panel_comes_back_by_itself(self, machine):
         """The panel the previous backend loaded is still in Steam, holding its token.
 
         A backend that starts under it cannot load over it: the injection
         marker is already set, and the panel that IS there talks to a backend
-        that has gone. The new backend replaces it only by having Steam reload
-        its JS context, and only once no app is running, so a run that replaced
-        an install still cannot promise the entry appears on its own — which is
-        what it did.
+        that has gone. The new backend replaces it by having Steam reload its JS
+        context, once no app is running — so the run says when that is, and
+        what to do if it has not happened.
         """
-        tarball = str(_build_tarball(machine.tmp_path))
-        machine.run("--from", tarball, "--yes")
+        _installed(machine)
 
-        result = machine.run("--from", tarball, "--yes", STUB_DEBUGGER="answer")
+        result = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up", STUB_DEBUGGER="answer"
+        )
 
+        assert result.returncode == 0, result.stderr
         assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        assert f"Next: {_COMES_BACK}." in result.stdout
+
+    def test_an_update_to_a_release_that_cannot_replace_the_panel_asks_for_a_restart(self, machine):
+        """A release from before the backend replaced a stranded panel leaves it where it is."""
+        _installed(machine)
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, "1.1.0", replaces_a_stranded_panel=False)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_DEBUGGER="answer",
+        )
+
+        assert result.returncode == 0, result.stderr
         assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
+
+    @pytest.mark.parametrize(
+        ("replaces", "next_step"),
+        [(True, _COMES_BACK), (False, "restart Steam, then open the Quick Access menu")],
+        ids=["back-on-a-release-that-replaces-it", "back-on-a-release-from-before"],
+    )
+    def test_after_a_rollback_it_is_the_restored_release_that_decides(self, machine, replaces, next_step):
+        _installed(machine, replaces_a_stranded_panel=replaces)
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+            STUB_DEBUGGER="answer",
+        )
+
+        assert result.returncode == 1
+        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        assert f"Next: {next_step}." in result.stdout
+
+    def test_a_rollback_by_hand_into_a_running_steam_says_the_same(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        result = machine.run("--rollback", STUB_BACKEND="up", STUB_DEBUGGER="answer")
+
+        assert result.returncode == 0, result.stderr
+        assert f"Next: {_COMES_BACK}." in result.stdout
 
     def test_a_running_unit_counts_as_something_to_replace(self, machine):
         """The other way an install is already here: no tree yet, but a unit up.
