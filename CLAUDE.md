@@ -301,10 +301,10 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   or the desktop client and remember that choice for `dev`; `mise run dev:bpm-reset [display]` /
   `mise run dev:desktop-reset [display]` only restart Steam (no build, the running backend loads the panel) and remember
   too. `mise run dev:backend` and `mise run dev:frontend [display]` are `dev` split in two: the first runs a backend
-  against the Steam already there and restarts nothing itself (beside a panel an earlier backend loaded, that backend
-  has Steam reload its JS context once no app is running, which closes what is open), the second restarts Steam and
-  leaves the running backend alone, so a rebuilt panel reaches a fresh context without a sync in flight being killed to
-  get it there. `mise run dev:ui-scale` forces the Deck's metrics onto the window that is open. **Those five building
+  against the Steam already there and restarts nothing itself (beside a panel an earlier backend loaded, the backend it
+  starts has Steam reload its JS context once no app is running, which closes what is open), the second restarts Steam
+  and leaves the running backend alone, so a rebuilt panel reaches a fresh context without a sync in flight being killed
+  to get it there. `mise run dev:ui-scale` forces the Deck's metrics onto the window that is open. **Those five building
   tasks first ask who holds the single-instance lock**, and refuse before Steam is touched on the wrong answer: a
   backend already running for the four that start one (the restart would otherwise go ahead and the second backend exit
   one line later, leaving a fresh Steam with no panel), and no backend at all for `dev:frontend`, which starts none and
@@ -445,9 +445,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   counting it whenever nothing was established (the debugger stopped answering, the backend is shutting down, only the
   renderer was open, a second injection began first, or this process took the interface down itself since arming)
 - **This machine takes Steam's interface down to replace a stranded panel at most twice in ten minutes, across backend
-  starts; the reload and the fallback's SIGTERM both count** — test + prompt-only —
+  starts; a reload Steam does not refuse and the fallback's SIGTERM both count** — test + prompt-only —
   `tests/host/inject/test_reload_limit.py` and `tests/host/inject/test_injector.py::TestAcrossBackendStarts`;
-  prompt-only: a new path that takes the interface down asks `ReloadLimit` first
+  prompt-only: a new path that takes the interface down goes through `recovery.py`'s `_may_take_the_interface_down`
+  first and calls `ReloadLimit.record` once it is under way
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker

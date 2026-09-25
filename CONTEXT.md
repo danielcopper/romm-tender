@@ -213,10 +213,12 @@ _Avoid_: **deploy** and **install** for this, which name what #1902 will do with
 about one Steam session and leaves nothing behind. Avoid **hot reload**: nothing here watches a file, and a rebuilt
 bundle reaches Steam only when the context is rebuilt.
 
-The marker names the backend process that wrote it by its **instance**, a random value each process makes at start-up. A
-**stranded panel** is one whose marker names another instance: an earlier backend loaded it, and it holds that backend's
-token, so it can reach no running backend. The backend **replaces** a stranded panel by having Steam rebuild its JS
-context.
+### Stranded panel
+
+A panel whose marker names a backend process other than the one running. The marker names the process that wrote it by
+its **instance**, a random value each process makes at start-up. A stranded panel was loaded by an earlier backend and
+holds that backend's token, so it can reach no running backend. The backend **replaces** a stranded panel by having
+Steam rebuild its JS context.
 
 ### Load-failure card
 

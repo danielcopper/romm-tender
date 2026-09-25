@@ -1018,7 +1018,7 @@ class TestAcrossBackendStarts:
         assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
 
     async def test_at_the_limit_it_reloads_nothing_and_says_so_once(self, injecting, tmp_path, caplog):
-        self.planted(tmp_path, 300, 60)
+        record = self.planted(tmp_path, 300, 60)
         with caplog.at_level(logging.INFO, logger="test_injector"):
             running = await injecting(page=stranded_page())
             await wait_until(lambda: logged(caplog, "Restart Steam to load this backend's panel"))
@@ -1031,6 +1031,7 @@ class TestAcrossBackendStarts:
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
         assert "2 times in the last 10 minutes" in warnings[0].message
+        assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
 
     async def test_the_fallback_counts_towards_it_too(self, injecting, tmp_path, caplog):
         self.planted(tmp_path, 60)
@@ -1040,6 +1041,32 @@ class TestAcrossBackendStarts:
 
         assert running.page.reloads == 1
         assert running.webhelper.terminations == 0
+
+    async def test_a_reload_steam_refused_took_nothing_down_and_does_not_count(self, injecting, tmp_path, caplog):
+        record = self.planted(tmp_path, 60)
+        page = stranded_page()
+        page.reload_answer = False
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(
+                lambda: running.webhelper.terminations == 1 or logged(caplog, "already taken Steam's interface down")
+            )
+
+        assert running.webhelper.terminations == 1
+        assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
+
+    async def test_a_reload_that_got_no_answer_may_have_happened_and_counts(self, injecting, tmp_path, caplog):
+        record = self.planted(tmp_path, 60)
+        page = stranded_page()
+        page.reload_answer = None
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(
+                lambda: running.webhelper.terminations == 1 or logged(caplog, "already taken Steam's interface down")
+            )
+
+        assert running.webhelper.terminations == 0
+        assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
 
     async def test_takedowns_the_window_has_passed_do_not_count(self, injecting, tmp_path):
         self.planted(tmp_path, 3600, 1800)

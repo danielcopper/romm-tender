@@ -43,19 +43,21 @@ after 60 seconds, so generate a fresh one for the retry.
 This message is specific to Tender's backend being unreachable. A RomM server that is merely down or misconfigured
 answers with its own message instead — "Server unreachable", "Sign-in rejected", or the RomM version notice.
 
-## Steam's screen reloads by itself after the backend restarts
+## Steam's Screen Reloads by Itself After a Backend Restart
 
 **Symptom**: Shortly after Tender's backend restarts — after `systemctl --user restart romm-tender`, a reinstall, or the
 backend starting again by itself — Steam's interface disappears for a moment and comes back, and Tender's panel returns
 a few seconds later. If a game was running, this happens after you exit it.
 
-**What happened**: Nothing is wrong. The panel still in Steam belonged to the backend that just stopped, and it cannot
+**Explanation**: Nothing is wrong. The panel still in Steam belonged to the backend that just stopped, and it cannot
 talk to the new one, so the new backend asks Steam to reload its interface once to put a fresh panel in. It waits while
 a game is running. If the reload does not bring the panel back, it restarts part of Steam once, which takes the
 interface away for a few more seconds.
 
-If Steam does not reload, or Tender's section on a game page still says "Loading..." afterwards, restart Steam. The log
-says what was tried:
+**Fix**: If no game is running and Steam's screen does not reload, or Tender's section on a game page still says
+"Loading..." a few minutes after it did, the backend has stopped trying — after one reload and one restart of part of
+Steam, or because it has already done this twice in the last ten minutes. Restart Steam to load the new panel. The log
+says what was tried, and a WARNING line that says "Restart Steam to load" marks this case:
 
 ```bash
 grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20

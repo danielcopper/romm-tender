@@ -207,6 +207,7 @@ class StrandedPanelRecovery:
         self._logger.info(f"inject: no app is running; {_RELOADING} to replace the earlier backend's panel")
         self._before_takedown()
         if await self._request_reload():
+            self._limit.record()
             if await self._panel_back(PANEL_BACK_AFTER_RELOAD_SECONDS, _RELOADING):
                 return
             if not self._still_stranded(marker):
@@ -231,6 +232,7 @@ class StrandedPanelRecovery:
 
         if not self._may_take_the_interface_down():
             return
+        self._limit.record()
         self._before_takedown()
         loop = asyncio.get_running_loop()
         signalled = await loop.run_in_executor(None, self._terminate_webhelper)
@@ -249,7 +251,11 @@ class StrandedPanelRecovery:
         )
 
     def _may_take_the_interface_down(self) -> bool:
-        """Ask the limit, and record the takedown it allows; say so, once, when it refuses."""
+        """Ask the limit whether one more takedown is allowed; say so, once, when it refuses.
+
+        It records nothing: the caller records the takedown once it is under
+        way, so a reload Steam refuses leaves the limit where it was.
+        """
         if not self._limit.allows():
             self._said_not_again = True
             self._logger.warning(
@@ -258,7 +264,6 @@ class StrandedPanelRecovery:
                 f"Steam to load this backend's panel."
             )
             return False
-        self._limit.record()
         return True
 
     def _still_stranded(self, marker: PanelMarker) -> bool:
@@ -320,7 +325,10 @@ class StrandedPanelRecovery:
         return _AppsReading(tuple(str(name) for name in value))
 
     async def _request_reload(self) -> bool:
-        """Ask Steam to rebuild its JS context; ``False`` where it said it cannot."""
+        """Ask Steam to rebuild its JS context; ``False`` only where it said it cannot.
+
+        No answer is ``True``: the reload may have happened all the same.
+        """
         try:
             accepted = await self._evaluate(RELOAD_EXPRESSION)
         except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:

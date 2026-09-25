@@ -147,11 +147,13 @@ in Steam.
    back, it says so and gives up. A later backend restart is a new stranded panel and starts over.
 6. **And never more than twice in ten minutes on this machine**, counted across backend starts. The once-rule above
    cannot stop a crash loop: a backend that crashes after loading its panel, started again by its service manager,
-   leaves a new stranded panel behind every time. So every reload and every fallback SIGTERM is written, with its time,
-   to `<state_dir>/reload-guard.json` (`backend/host/inject/reload_limit.py`) before it happens, and a third one inside
-   the window is refused with one WARNING line that says to restart Steam. Two leaves room for a deliberate restart or a
-   reinstall and one more right after it. A record it cannot read or write lets the reload through, which is the crash
-   watchdog's lenient direction for the watchdog's reason.
+   leaves a new stranded panel behind every time. So every takedown is written, with its time, to
+   `<state_dir>/reload-guard.json` (`backend/host/inject/reload_limit.py`): a fallback SIGTERM before it is sent, a
+   reload once Steam has taken the request — or given no answer to it, since the reload may have happened all the same.
+   A reload Steam answers it cannot do took nothing down and is not counted. A third takedown inside the window is
+   refused with one WARNING line that says to restart Steam. Two leaves room for a deliberate restart or a reinstall and
+   one more right after it. A record it cannot read or write lets the reload through, which is the crash watchdog's
+   lenient direction for the watchdog's reason.
 
 Every step is one log line — stranded panel seen, waiting for an app to exit (naming it), reload issued, panel back and
 after how long, fallback taken, all at INFO; giving up and a Steam without `RestartJSContext` at WARNING; an unexpected

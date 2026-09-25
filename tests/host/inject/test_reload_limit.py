@@ -49,6 +49,14 @@ class TestTheLimit:
         path.write_text(json.dumps({"takedowns": ["soon", True, None]}), encoding="utf-8")
         assert limit_at(path).allows()
 
+    def test_a_time_no_float_can_hold_is_skipped_like_any_unreadable_entry(self, tmp_path):
+        path = tmp_path / "reload-guard.json"
+        path.write_text(f'{{"takedowns": [{10**400}, {NOW - 60}]}}', encoding="utf-8")
+
+        assert limit_at(path).allows()
+        limit_at(path).record()
+        assert json.loads(path.read_text(encoding="utf-8")) == {"takedowns": [NOW - 60, NOW]}
+
 
 class TestRecording:
     def test_it_adds_now_and_drops_what_the_window_has_passed(self, tmp_path):

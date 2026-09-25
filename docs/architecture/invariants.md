@@ -307,18 +307,19 @@ Format: **invariant** — tier — enforced by.
   gone): the fingerprint — Tender's version, the bundle bytes, Steam's client build — drops the count on its own, and
   `TENDER_INJECT=force` is the switch the refusal line names
 - **This machine takes Steam's interface down to replace a stranded panel at most twice in ten minutes, across backend
-  starts; the reload and the fallback's SIGTERM both count** — test + prompt-only —
+  starts; a reload Steam does not refuse and the fallback's SIGTERM both count** — test + prompt-only —
   `tests/host/inject/test_reload_limit.py` pins the record (under the limit, at it, the window passing, a clock set
-  back, a record it cannot read or write), and `tests/host/inject/test_injector.py::TestAcrossBackendStarts` pins it
-  over the real loop from a record written before the backend starts: a reload under the limit, nothing at it, the
-  fallback refused because the reload before it counted, and takedowns the window has passed forgotten. Why a record on
-  disk: the recovery's once-rule is per stranded panel, and a backend that crashes after loading its panel and is
-  started again leaves a new stranded panel every time, so each new process would reload Steam's interface once with
-  nothing in memory to say it is the third. **The join is prompt-only**: `recovery.py` asks
-  `_may_take_the_interface_down` in front of both takedowns it performs, and nothing checks that a third one asks too;
-  it would pass every test above and reload in a loop again. The record is lenient in the watchdog's direction: one it
-  cannot read counts nothing and one it cannot write records nothing, because a read-only state directory is no reason
-  to leave a panel stranded
+  back, a record it cannot read or write, an entry no float can hold), and
+  `tests/host/inject/test_injector.py::TestAcrossBackendStarts` pins it over the real loop from a record written before
+  the backend starts: a reload under the limit, nothing at it and nothing recorded for the refusal, the fallback refused
+  because the reload before it counted, a reload Steam refused left uncounted and one that got no answer counted, and
+  takedowns the window has passed forgotten. Why the record outlives the process, and why two:
+  [a panel an earlier backend left behind](loading-the-panel.md#a-panel-an-earlier-backend-left-behind). **The join is
+  prompt-only**: `recovery.py` goes through `_may_take_the_interface_down` in front of both takedowns it performs and
+  calls `ReloadLimit.record` once each is under way — the SIGTERM before it is sent, the reload once Steam has not
+  refused it — and nothing checks that a third takedown does the same; it would pass every test above and reload in a
+  loop again. The record is lenient in the watchdog's direction: one it cannot read counts nothing and one it cannot
+  write records nothing, because a read-only state directory is no reason to leave a panel stranded
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to

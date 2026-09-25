@@ -2,18 +2,10 @@
 
 Contract: the one piece of state that outlives a backend process in replacing a
 stranded panel — when this machine last had Steam reload its JS context or
-terminated its web helper for that — and the answer whether one more is allowed.
-It takes nothing down itself.
-
-**Why it has to outlive the process.** The once-rule in ``recovery.py`` holds
-per stranded panel, and every backend start makes a new one: a backend that
-crashes after loading its panel, under a service manager that starts it again,
-leaves a fresh stranded panel behind each time, and each new process would
-reload Steam's interface once for it. Only a record the next process reads can
-see that it is the third in a row.
-
-**Two in ten minutes.** That lets a deliberate restart or a reinstall through,
-with one more right after it, and stops a loop by its third turn.
+terminated its web helper for that — and the answer whether one more is allowed:
+fewer than ``RELOAD_LIMIT`` inside the last ``RELOAD_WINDOW_SECONDS``. It takes
+nothing down itself. Why the record outlives the process, and why those numbers:
+docs/architecture/loading-the-panel.md, "A panel an earlier backend left behind".
 """
 
 from __future__ import annotations
@@ -86,7 +78,7 @@ class ReloadLimit:
         times = stored.get("takedowns") if isinstance(stored, dict) else None
         if not isinstance(times, list):
             return []
-        return [float(at) for at in times if isinstance(at, int | float) and not isinstance(at, bool)]
+        return [at for at in map(_time_of, times) if at is not None]
 
     def _write(self, times: list[float]) -> None:
         """Replace the record. Written through a temporary file, like the watchdog's."""
@@ -102,3 +94,13 @@ class ReloadLimit:
             # reason: a read-only state directory is no reason to leave a panel
             # stranded.
             return
+
+
+def _time_of(entry: object) -> float | None:
+    """*entry* as a time, or ``None`` when it is not a number a float can hold."""
+    if isinstance(entry, bool) or not isinstance(entry, int | float):
+        return None
+    try:
+        return float(entry)
+    except OverflowError:
+        return None

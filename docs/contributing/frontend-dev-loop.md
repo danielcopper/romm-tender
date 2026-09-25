@@ -96,9 +96,10 @@ Loader it names a file the injector did not load. Read it for the port and the t
   (`new_token` in `backend/host/access.py`), and the panel reads its address and token off the URL it was loaded from
   ([the token](../architecture/loading-the-panel.md#the-token)), so a restarted backend leaves the running panel holding
   a token nobody accepts. The backend replaces such a panel itself by having Steam reload its JS context — only when no
-  app is running, and one time per stranded panel
+  app is running, one time per stranded panel, and no more than twice in ten minutes on the machine
   ([a panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind)).
-  The tasks do not wait for that; they restart Steam.
+  Every task but `dev:backend` restarts Steam rather than wait for that; `dev:backend` restarts nothing and leaves it to
+  the backend it starts.
 - **Both windows are one load.** The desktop client and Big Picture render from one shared JS context, and the backend
   loads the panel into it once. There is no loading into one window and not the other; the tasks differ only in which
   window you end up looking at.
