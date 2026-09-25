@@ -280,7 +280,7 @@ def _print_violations(findings: list[Finding]) -> None:
     print(
         "ERROR: failure-shaped returns in backend/services/ must carry "
         "'reason' + 'message' and must not carry 'error' / 'error_code' "
-        "(CLAUDE.md → Callable response shapes; lib/list_result.py)."
+        "(.claude/rules/callables.md → Callable response shapes; lib/list_result.py)."
     )
 
 

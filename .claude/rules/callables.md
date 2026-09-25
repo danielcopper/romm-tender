@@ -24,7 +24,7 @@ Full convention paragraph: the `lib/list_result.py` module docstring.
 
 Two adjacent rules that bite when adding or changing a callable:
 
-- **An endpoint is a public method on `Plugin` whose topmost decorator is `@route`** — `def` or `async def` alike. An
+- **An endpoint is a public method on `Plugin` marked `@route`**, placed topmost — `def` or `async def` alike. An
   endpoint whose body never awaits is a `def`, unless it sits under a gate, which awaits what it wraps and refuses a
   `def`; nothing mechanical checks that such an endpoint is a `def`. `host.dispatch.reachable_methods` resolves the set
   off the loaded class, `scripts/check_callable_manifest.py` derives the same set from the source (and fails on a

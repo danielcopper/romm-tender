@@ -250,7 +250,7 @@ The word names two different things:
 - **Tender endpoint** — a public method marked `@route`, which the panel reaches over the host's socket; nothing else is
   reachable that way. Its name is the name the panel calls it by, through its `callable()` function.
 - **Server endpoint** — an HTTP route of a server Tender talks to: RomM's (`/api/roms`, …), in RomM's own sense of the
-  word, and likewise SteamGridDB's and the CEF debugger's.
+  word, and likewise SteamGridDB's.
 
 _Avoid_: **callable** for a Tender endpoint — that is the panel's function that reaches one, not the method it reaches.
 

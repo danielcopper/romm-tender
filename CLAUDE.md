@@ -82,7 +82,7 @@ new code in it.
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
   each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
 - `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
-  method an endpoint, where which endpoints are `def` is **not checked**.
+  method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
   fix the upstream artifact instead of the copy is not. `defaults/` holds no vendored artifact since the BIOS registry
@@ -188,9 +188,9 @@ locally with `mise run docs`.
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
   `Plugin` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any gate — the one placement
-  `scripts/check_callable_manifest.py` accepts. Neither a missing nor a stray `@route` is caught by itself: the gate
-  sees one only as a name the frontend's `callable("name")` declarations disagree with, so those declarations are the
-  one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
+  `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public method as such:
+  the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so those
+  declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
   `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
