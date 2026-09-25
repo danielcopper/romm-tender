@@ -20,15 +20,18 @@ What it guarantees (and what it deliberately does not):
   * Every frontend ``callable("name")`` has a matching backend endpoint ``name``
     and vice versa — no orphan on either side.
   * ``@route`` is where this gate can see it: a ``route`` below another
-    decorator, or on a name with a leading underscore, is a finding of its own.
-    Beneath a gate the marker still reaches the wrapper and so the dispatcher,
-    which would make a name reachable that nothing here checks.
+    decorator, or on a name with a leading underscore, is a finding of its own
+    (why the placement matters: ``backend/host/route.py``).
   * Where a name exists on both sides, the **arity** (positional parameter count,
     ``self`` dropped on the backend) matches. Python method signatures carry no
     type hints, so arity is the only mechanically checkable shape — arg TYPES are
     out of scope (the contract tier exercises those by driving real values).
   * A backend method that takes ``*args`` has a variable arity; its name is still
     checked, but the arity comparison is skipped for it.
+  * It recognises the marker only as the bare name ``route``. An aliased import
+    or the attribute form (``@host.route``) is invisible here while the
+    dispatcher still honours it; ``tests/host/test_dispatch.py``'s equality test
+    between the two surfaces is what fails on one.
 
 ``EXEMPT`` holds wire names deliberately kept out of the parity check. It is
 empty today; an entry here is a conscious "this name is intentionally declared on
@@ -340,12 +343,12 @@ def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
 
     Uses ``ast`` (never imports ``main.py``). Returns ``{method_name: arity}``
     for every ``def`` or ``async def`` on ``Plugin`` whose FIRST decorator is
-    ``route`` and whose name does not start with ``_``. Arity counts positional parameters only — ``posonlyargs`` + ``args`` minus
-    ``self``; a method with ``*args`` has variable arity, recorded as ``None``
-    (name still checked). Keyword-only args (``*, c``) and ``**kwargs`` are NOT
-    part of positional arity: the frontend's positional ``[Args]`` tuple can't
-    fill them, so they're excluded by design (a non-occurring corner on this
-    endpoint surface).
+    ``route`` and whose name does not start with ``_``. Arity counts positional
+    parameters only — ``posonlyargs`` + ``args`` minus ``self``; a method with
+    ``*args`` has variable arity, recorded as ``None`` (name still checked).
+    Keyword-only args (``*, c``) and ``**kwargs`` are NOT part of positional
+    arity: the frontend's positional ``[Args]`` tuple can't fill them, so they're
+    excluded by design (a non-occurring corner on this endpoint surface).
     """
     result: dict[str, int | None] = {}
     for node in _plugin_methods(main_py):
