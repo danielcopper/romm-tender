@@ -438,20 +438,16 @@ Format: **invariant** — tier — enforced by.
   `domain.disc_selection.enumerate_discs` shares a name with the seam and does no I/O — it is safe because its call site
   imports it bare, not because of the name. The call-shaped blind spot is shared with the deadlock rule and only this
   family closes it: for each `__call__`-only seam the list carries the attribute it is bound to — by convention rather
-  than by construction, and only while such a name means one thing, which is exactly what keeps `_list_files` out.
-  **Count them by their leading underscore**, which is what marks an entry as a holding attribute rather than a method
-  name: six today (`_resolve_system`, `_sandbox_launcher`, `_system_extensions`, `_system_known`,
-  `_firmware_folder_verdicts`, `_resolve_path`), and the number is re-derivable from `IO_SEAM_METHODS` rather than
-  remembered. Two of those six are listed a second time under their implementation's own method name, for a peer holding
-  the object rather than the bound method — `RommHttpAdapter.resolve_system` beside `_resolve_system`, and
-  `EsFindRulesAdapter.resolve_sandbox_launcher` beside `_sandbox_launcher`. The first pair happens to be the attribute
-  minus its underscore and the second plainly is not, which is the point: a twin exists where the implementation has a
-  method name a peer could write, and it is read off the implementation rather than derived from the attribute. The
-  other four have no such twin. The deadlock rule's own call-shaped seams stay open. `SystemResolver` is the odd one out
-  for a second reason: the adapter memoises its map for the life of the process, so exactly one call ever opens the
-  file, and the entry earns its place because that one call can land inside a UoW. One `# pragma: no uow-check` covers
-  both families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences
-  both
+  than by construction, and only while such a name means one thing, which is exactly what keeps `_list_files` out. A
+  leading underscore is what marks an entry as a holding attribute rather than a method name, so which entries are
+  call-shaped is read off `IO_SEAM_METHODS` rather than remembered. The script's module docstring names them, and names
+  those also listed a second time under their implementation's own method name, for a peer holding the object rather
+  than the bound method: such a twin exists where the implementation has a method name a peer could write, and it is
+  read off the implementation rather than derived from the attribute. The deadlock rule's own call-shaped seams stay
+  open. `SystemResolver` is the odd one out for a second reason: the adapter memoises its map for the life of the
+  process, so exactly one call ever opens the file, and the entry earns its place because that one call can land inside
+  a UoW. One `# pragma: no uow-check` covers both families — it suppresses the line, and no seam is in both lists, so
+  where a line does name two seams it silences both
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
   check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
   and every `*.sh` under `scripts/` and `bin/` (the launcher is named because it carries no extension for the glob to
