@@ -275,6 +275,8 @@ async def _until_entered(entered: asyncio.Event, running: asyncio.Task[Any]) -> 
     if running.done():
         pytest.fail(f"the endpoint answered before it reached the held call: {running.result()!r}")
     running.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await running
     pytest.fail("the endpoint neither reached the held call nor answered within 10 s")
 
 

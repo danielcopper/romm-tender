@@ -378,7 +378,7 @@ export const probeReachability = callable<[], { online: boolean }>("probe_reacha
 export const refreshSaveStatus = callable<[number], { success: boolean }>("refresh_save_status");
 export const removeRom = callable<[number], BackendResult>("remove_rom");
 export const getPlatforms = callable<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
-// `reason` and `message` only come with a refusal: both answer a bare
+// `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads
 // `undefined`.
 export const savePlatformSync = callable<[number, boolean], { success: boolean; reason?: string; message?: string }>(

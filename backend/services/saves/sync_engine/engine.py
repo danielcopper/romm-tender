@@ -841,9 +841,10 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=POST_EXIT_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # Defense in depth: same rationale as pre_launch_sync — internal
-                # do_sync_rom_saves callers are protected by @migration_blocked on
-                # their public callables; this guard covers post_exit_sync only.
+                # Defense in depth: post_exit_sync has no endpoint;
+                # SessionLifecycleService checks the migration before calling it,
+                # and this guard answers a caller that reaches the engine without
+                # that check.
                 if self._is_retrodeck_migration_pending():
                     self._logger.info("post_exit_sync skipped: retrodeck migration pending")
                     return {

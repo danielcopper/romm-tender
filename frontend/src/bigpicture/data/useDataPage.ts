@@ -400,8 +400,9 @@ export function useDataPage(): DataPageState {
       try {
         const result = await removeAllShortcuts();
         if (!result.success) {
-          // A gate refusal (@sync_active_blocked / @migration_blocked) carries
-          // no app_ids/rom_ids — surface its message and remove nothing.
+          // A gate refusal (@migration_blocked / @sync_active_blocked /
+          // @prune_active_blocked) carries no app_ids/rom_ids — surface its
+          // message and remove nothing.
           setShortcutStatus(result.message ?? "Failed to remove shortcuts");
         } else {
           // The backend list is the DB binding map (roms.shortcut_app_id). A
@@ -479,8 +480,9 @@ export function useDataPage(): DataPageState {
         const admission = capturePruneLeaseAdmission(DATA_PAGE_LEASE_OWNER);
         const result = await uninstallAllRoms();
         if (!result.success && result.app_ids === undefined) {
-          // A gate refusal (@sync_active_blocked / @migration_blocked) carries no
-          // removal payload — surface its message before touching app_ids. A
+          // A gate refusal (@migration_blocked / @sync_active_blocked /
+          // @prune_active_blocked) carries no removal payload — surface its
+          // message before touching app_ids. A
           // PARTIAL failure (success false WITH payload) still falls through to
           // the launch-options reset + count display below.
           setUninstallStatus(result.message ?? "Failed to uninstall ROMs");
