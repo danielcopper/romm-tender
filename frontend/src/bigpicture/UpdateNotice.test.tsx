@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, fireEvent, act } from "@testing-library/react";
+import { render, fireEvent, waitFor } from "@testing-library/react";
 import { UpdateNotice } from "./UpdateNotice";
 import * as backend from "../api/backend";
 import { dismissUpdateNotice } from "../api/backend";
@@ -70,12 +70,10 @@ describe("UpdateNotice", () => {
     setUpdateNoticeState(AVAILABLE);
     const { getByText, queryByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
 
-    await act(async () => {
-      fireEvent.click(getByText("Dismiss"));
-    });
+    fireEvent.click(getByText("Dismiss"));
 
+    await waitFor(() => expect(queryByTestId("update-notice")).toBeNull());
     expect(dismissUpdateNotice).toHaveBeenCalledWith("0.34.0");
-    expect(queryByTestId("update-notice")).toBeNull();
   });
 
   it("a Dismiss that failed to persist is logged and leaves the card up", async () => {
@@ -84,11 +82,11 @@ describe("UpdateNotice", () => {
     const logError = vi.spyOn(backend, "logError").mockImplementation(() => undefined);
     const { getByText, getByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
 
-    await act(async () => {
-      fireEvent.click(getByText("Dismiss"));
-    });
+    fireEvent.click(getByText("Dismiss"));
 
-    expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to dismiss the update notice"));
+    await waitFor(() =>
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to dismiss the update notice")),
+    );
     expect(getByTestId("update-notice")).toBeInTheDocument();
     expect(getUpdateNoticeState().available).toBe(true);
     logError.mockRestore();

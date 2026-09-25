@@ -29,12 +29,13 @@ DEFAULT_RELEASE_API = "https://api.github.com/repos/danielcopper/romm-tender/rel
 
 # release-please's configured tag shape. ``install.sh``'s ``resolve_tag`` accepts
 # exactly ``tender-v[0-9]*`` and refuses any other as "not a Tender release", and
-# so does this module.
-_TAG_RE = re.compile(r"tender-v([0-9].*)")
+# so does this module; ``re.ASCII`` keeps ``\d`` to the ten digits that glob
+# means, where Python's default would take any Unicode digit.
+_TAG_RE = re.compile(r"tender-v(\d.*)", re.ASCII)
 
 # GitHub reports an asset digest as ``<algorithm>:<hex>``.
 _SHA256_PREFIX = "sha256:"
-_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+_SHA256_HEX_RE = re.compile(r"[\da-f]{64}", re.ASCII)
 
 
 @dataclass(frozen=True)
