@@ -51,8 +51,8 @@ a few seconds later. If a game was running, this happens after you exit it.
 
 **Explanation**: Nothing is wrong. The panel still in Steam belonged to the backend that just stopped, and it cannot
 talk to the new one, so the new backend asks Steam to reload its interface once to put a fresh panel in. It waits while
-a game is running. If the reload does not bring the panel back, it restarts part of Steam once, which takes the
-interface away for a few more seconds.
+a game is running. If Steam cannot reload, or the old panel is still there after the reload, it restarts part of Steam
+once, which takes the interface away for a few more seconds.
 
 **Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page
 still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend restart,
