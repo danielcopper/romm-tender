@@ -45,7 +45,7 @@ is invisible at the citation site), so reach it through the page that owns the t
 - Save-file sync — slots, conflict resolution, negotiate transport, version history —
   [save-file-sync-architecture.md](docs/architecture/save-file-sync-architecture.md)
 - Save-sync coverage matrix — [save-sync-coverage.md](docs/architecture/save-sync-coverage.md)
-- Removed-game cleanup — deletion authority, admission/leases, claims, recovery bundles —
+- Removed-game cleanup — deletion authority, prune conflicts and leases, claims, recovery bundles —
   [removed-game-cleanup.md](docs/architecture/removed-game-cleanup.md)
 - Services, adapters, wiring; connection/token and settings-persistence internals —
   [backend-architecture.md](docs/architecture/backend-architecture.md)

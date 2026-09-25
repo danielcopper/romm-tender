@@ -865,20 +865,21 @@ non-authoritative and cannot mutate Steam.
 
 ### Prune conflicts: operation / lease / reservation / run claim
 
-The one record of every claim that conflicts with a removed-game cleanup (`PruneConflicts`, `lib/prune_gate.py`). The
-composition root builds one and hands it to everything that holds a claim or is refused by one. Four kinds of claim:
+The one record of every claim that conflicts with a removed-game cleanup (`PruneConflicts`, `lib/prune_gate.py`). Four
+kinds of claim:
 
 - **Operation** — a conflicting endpoint's claim, held for the one call, or **retained** for the detached work that call
   started (a download, a background save-status check) until that work ends.
 - **Lease** — a token the frontend holds for Steam writes that outlive the backend call. It carries a deadline, and the
-  frontend renews and releases it.
+  frontend renews and releases it. Not an **action token**, which a running cleanup hands the frontend for one Steam
+  action of its own.
 - **Reservation** — the exclusive start of a cleanup, taken before the start validates its preview.
 - **Run claim** — the cleanup's own claim. The prune service registers it when a run starts and releases it when the run
   ends.
 
 A cleanup is **running** while a reservation or a run claim is held, and every conflicting endpoint is refused for that
-long. A start is refused while any operation or lease is held. _Avoid_: **admission** for this gate — that word is the
-host's own check of a connection's Host, Origin and token.
+long. A start is refused while any operation or lease is held. _Avoid_: **admission** for this gate — that word already
+names the host's check of a connection's Host, Origin and token, and several other start guards.
 
 ### Game-detail store
 

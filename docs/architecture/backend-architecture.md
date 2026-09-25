@@ -294,9 +294,9 @@ non-empty `sync_stale` event carries its own lease through the paced removal tai
 overlaps and joins that same promise, so success composes both leases while a post-stale backend failure still leaves
 the tail covered. A terminal prune result that needs repoint publication likewise acquires its lease before event
 delivery while the old run is active; the frontend holds it across release acknowledgement and cover publication. Event
-delivery failure releases a token that never reached the frontend. This closes the reciprocal admission race, and each
-path refuses while a prune claim is active. Migration and active-library-sync decorators additionally guard preview and
-start.
+delivery failure releases a token that never reached the frontend. This closes the reciprocal start/refusal race, and
+each path refuses while a prune claim is active. Migration and active-library-sync decorators additionally guard preview
+and start.
 
 The executor processes sibling groups serially and catches ordinary exceptions per group. It rejects multiple shortcut
 bindings and active downloads, pins the preview's canonical RomM origin/token-origin/user namespace, probes every local
