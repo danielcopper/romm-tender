@@ -1972,32 +1972,6 @@ optional Settings cleanup action can be added later. A backfill of the historica
 
 ## Known Limitations
 
-### Standalone emulators not supported
-
-Phase 5 only covers RetroArch `.srm` saves. Standalone emulators store saves under
-`<saves_path>/<platform>/<emulator_name>/` with emulator-specific formats:
-
-| Platform | Emulator    | Save Path                   | Format                          |
-| -------- | ----------- | --------------------------- | ------------------------------- |
-| psx      | DuckStation | `psx/duckstation/memcards/` | `.mcd` shared memory cards      |
-| ps2      | PCSX2       | `ps2/pcsx2/memcards/`       | `.ps2` shared memory cards      |
-| gc       | Dolphin     | `gc/dolphin/{US,EU,JP}/`    | Per-region memory card files    |
-| wii      | Dolphin     | `wii/dolphin/`              | Wii save data + virtual SD card |
-| nds      | melonDS     | `nds/melonds/`              | Per-game `.sav` files           |
-| n3ds     | Azahar      | `n3ds/azahar/`              | NAND/SDMC title ID structure    |
-| PSP      | PPSSPP      | `PSP/PPSSPP-SA/`            | Title ID directories            |
-| wiiu     | Cemu        | `wiiu/cemu/`                | mlc01 title ID structure        |
-| switch   | Ryubing     | `switch/ryubing/`           | User profile-based save data    |
-| xbox     | Xemu        | `xbox/xemu/`                | Xbox HDD image saves            |
-
-Key challenges:
-
-- PCSX2 and DuckStation use shared memory cards (multiple games on one file) requiring system-level sync
-- Dolphin, PPSSPP, Azahar, Cemu, and Ryubing organize saves by title ID, requiring title ID mapping databases
-- Each emulator needs a dedicated save handler
-
-Standalone emulator support is tracked on the [GitHub Projects board](https://github.com/users/danielcopper/projects/2).
-
 ### Shared memory cards are refused, not deferred
 
 An emulator that writes a card many games share cannot be synced per game — a download would carry another game's
@@ -2017,9 +1991,8 @@ until it re-accumulates — `max()` protects the local display; a synthetic-sess
 
 ### Emulator save states not synced
 
-RetroArch save states (`<states_path>/{system}/`, where `<states_path>` comes from `retrodeck.json` →
-`paths.states_path`) are not synced. Only SRAM saves (`.srm`) are handled. Save states are large,
-emulator-version-specific, and not portable between different RetroArch core versions.
+Save states are not synced — only the save files the save answer names are. Save states are large,
+emulator-version-specific, and not portable between different core versions.
 
 ### Copying a save into another slot
 
@@ -2035,13 +2008,3 @@ semantics): users copy individual saves, then delete the source slot from the se
 While `device_syncs` per save shows which devices have synced, the plugin cannot filter or browse saves by a specific
 other device. This is an API limitation — `GET /api/saves?device_id=X` only populates `device_syncs` for device X, not
 for arbitrary devices.
-
-### Clock skew decides a first contact
-
-When this device has never touched the save at the head of the slot and cannot show that its local file diverged from a
-baseline, nothing but time orders the two sides: rows 6a and 6b compare the local file's mtime, stamped by this device's
-clock, with the server save's `updated_at`, stamped by RomM's. A clock that is off by more than the gap between the two
-writes sends that sync the wrong way. Neither direction loses data: 6a posts the local file as a new save and leaves the
-server's save in place, and 6b moves the local file into `.romm-backup` before the download overwrites it (its naming
-and retention are under [Switching slots](#switching-slots)). A byte-identical pair never reaches the comparison — row
-6d adopts it first.
