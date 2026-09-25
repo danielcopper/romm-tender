@@ -586,3 +586,21 @@ class TestOverlappingChecks:
 
         assert seam.calls == 1
         assert answer["enabled"] is False
+
+    async def test_a_dismiss_pressed_while_a_check_now_waited_is_not_erased(self):
+        """Check now forgets the dismissal standing at its press, not a newer one."""
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=_release("0.34.0"), later=_release("0.34.0"))
+        service, settings = self._make_gated_with_settings(seam, uow_factory, {})
+
+        panel_load = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        check_now = asyncio.ensure_future(service.check_for_update_now())
+        await asyncio.sleep(0)
+        assert service.dismiss_update_notice("0.34.0") == {"success": True}
+        seam.release_first.set()
+        _, answer = await asyncio.gather(panel_load, check_now)
+
+        assert settings[DISMISSED_KEY] == "0.34.0"
+        assert answer["available"] is False
+        assert answer["latest_version"] == "0.34.0"

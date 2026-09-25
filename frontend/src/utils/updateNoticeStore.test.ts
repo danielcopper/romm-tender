@@ -117,6 +117,20 @@ describe("updateNoticeStore", () => {
       expect(getUpdateNoticeState().available).toBe(true);
     });
 
+    it("a refused Dismiss still rejects when a later press overtook it, and the later press stands", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      const refused = deferred<UpdateSettingWrite>();
+      vi.mocked(dismissUpdateNotice).mockReturnValueOnce(refused.promise);
+
+      const dismissing = dismissUpdateForVersion("0.34.0");
+      await setUpdateCheckSwitch(false);
+      refused.resolve({ success: false, reason: "invalid_value", message: "Invalid version" });
+
+      await expect(dismissing).rejects.toThrow("invalid_value: Invalid version");
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, available: false, latestVersion: null });
+    });
+
     it("leaves the card up when the write fails", async () => {
       vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
       await fetchUpdateNotice();

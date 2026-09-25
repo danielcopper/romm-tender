@@ -721,10 +721,10 @@ standing and **Dismiss** remains the way to put it away for this view.
 The update notice is the other one with two buttons, side by side for the same reason. Its Dismiss is **per version**:
 it records the version the card names (`update_notice_dismissed_version`), so the next release raises the card again,
 and **Check now** in its home forgets it. The home states the versions and holds the check's switch and Check now; it
-installs nothing, and a run from a checkout says there that updates install only into the installed program. The card's
-condition is `available` on the backend's answer and nothing else — a newer release with its tarball attached, not the
-dismissed version, the check switched on. The answer is fetched at panel load by a detached call nothing awaits (the
-store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
+installs nothing, and to a run from a checkout it says "Development build — install updates with the installer." The
+card's condition is `available` on the backend's answer and nothing else — a newer release with its tarball attached,
+not the dismissed version, the check switched on. The answer is fetched at panel load by a detached call nothing awaits
+(the store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
 
 Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
 `input_driver` fix and the session budget — so the absence is ordinary.
@@ -1626,7 +1626,7 @@ its own save directory the next time the plugin touches its saves — and Update
 | Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                     |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Updates       | installed and available version, a line saying updates install only into the installed program where this is a run from a checkout, the daily-check switch, Check now and what it found. Home of the update notice.                                                                                     |
+| Updates       | installed and available version, "Development build — install updates with the installer." where this is a run from a checkout, the daily-check switch, Check now and what it found. Home of the update notice.                                                                                         |
 | Advanced      | log level                                                                                                                                                                                                                                                                                               |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,

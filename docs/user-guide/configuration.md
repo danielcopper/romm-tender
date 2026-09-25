@@ -14,7 +14,7 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
 | **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
 | **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
-| **Updates**       | the version you have and the newest one out, the daily update check, and **Check now**                                                                        |
+| **Updates**       | the version you have and the release the last successful check found, the daily update check, and **Check now**                                               |
 | **Advanced**      | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
@@ -302,8 +302,7 @@ request. Nothing about your library, your RomM server or your accounts is sent. 
 are offline, GitHub is down, or it refuses the request — nothing changes: whatever the last successful check found stays
 as it was, and Tender tries again the next time it loads, once a day has passed.
 
-**Settings › Updates** tells you a newer release is out; it does not install it. If you run Tender from a source
-checkout rather than from the installer, the section says that updates install only into the installed program.
+**Settings › Updates** tells you a newer release is out; it does not install it.
 
 ## RetroArch Input Driver Fix
 

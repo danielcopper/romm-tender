@@ -54,8 +54,9 @@ describe("UpdatesSection", () => {
     expect(getByTestId("updates-available").textContent).toContain("the daily check is off");
   });
 
-  it("a run from a checkout says updates install only into the installed program", () => {
+  it("a run from a checkout says it is a development build and points at the installer", () => {
     const { getByTestId } = renderSection({ installedProgram: false });
+    expect(NOT_INSTALLED_PROGRAM).toBe("Development build — install updates with the installer.");
     expect(getByTestId("updates-not-installed").textContent).toBe(NOT_INSTALLED_PROGRAM);
   });
 

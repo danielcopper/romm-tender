@@ -137,12 +137,15 @@ class UpdateCheckService:
         """
         if not self._enabled():
             return {**self._notice(None, enabled=False), "reached": False}
+        # The dismissal this press is undoing is the one standing when it was
+        # made; a Dismiss pressed while it waited for the lock is newer intent.
+        dismissed_at_press = self._settings.get(DISMISSED_KEY)
         async with self._check_lock:
             # Asked again: the switch may have gone off while this waited, and
             # then nothing is read and nothing is forgotten.
             if not self._enabled():
                 return {**self._notice(None, enabled=False), "reached": False}
-            self._forget_dismissal()
+            self._forget_dismissal(dismissed_at_press)
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
         return {**self._notice(check, enabled=True), "reached": reached}
@@ -221,16 +224,18 @@ class UpdateCheckService:
         dismissed = self._settings.get(DISMISSED_KEY)
         return dismissed if isinstance(dismissed, str) else None
 
-    def _forget_dismissal(self) -> None:
-        """Drop the dismissed version, and persist that only where one was held.
+    def _forget_dismissal(self, dismissed_at_press: object) -> None:
+        """Drop the dismissed version if it is still the one *dismissed_at_press*, and persist that.
 
-        The key is removed rather than emptied, because absent is what an install
-        that never dismissed anything carries. The press this serves may be
-        repeated, and a settings write per press would be a file write per
-        press.
+        Nothing is written where nothing was held, or where the held value has
+        changed since the press. The key is removed rather than emptied,
+        because absent is what an install that never dismissed anything
+        carries. The press this serves may be repeated, and a settings write
+        per press would be a file write per press.
         """
-        if self._settings.pop(DISMISSED_KEY, None) is None:
+        if dismissed_at_press is None or self._settings.get(DISMISSED_KEY) != dismissed_at_press:
             return
+        del self._settings[DISMISSED_KEY]
         self._settings_persister.save_settings()
 
     def _read_latest_release_io(self) -> LatestRelease | None:

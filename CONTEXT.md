@@ -1021,5 +1021,4 @@ release that is strictly newer than the running version and not the version the 
 program** is the process the installed service runs, the one an update can replace; a run from a checkout checks and
 shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which process is
 the installed program; `services/update_check.py` decides which release is available and whether the notice shows.
-_Avoid_: "new version" for a release that is merely published, and "installed version" for the installed program — a
-checkout has a version too.
+_Avoid_: "new version" for a release that is merely published.

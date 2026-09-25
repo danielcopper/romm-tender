@@ -9,7 +9,7 @@ import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 
 /** Shown only to a run from a checkout, which is never offered an install. */
-export const NOT_INSTALLED_PROGRAM = "Updates install only into the installed program.";
+export const NOT_INSTALLED_PROGRAM = "Development build — install updates with the installer.";
 
 interface UpdatesSectionProps {
   update: UpdateNoticeState;

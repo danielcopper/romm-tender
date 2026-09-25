@@ -1612,7 +1612,7 @@ test seam, read under the same name with the same default, so a unit drop-in poi
 **`installed_program`** is True only where `TENDER_CODE_DIR` names the directory the running code actually sits in: only
 the installed unit sets that variable, and requiring it to name this process's own directory keeps a checkout from
 claiming to be the install because a shell exported the variable for an installer test. A run from a checkout checks and
-shows the card like any other, and the Settings section says that updates install only into the installed program.
+shows the card like any other, and the Settings section says: "Development build — install updates with the installer."
 
 ### Adapters (`backend/adapters/`)
 

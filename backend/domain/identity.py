@@ -11,11 +11,11 @@ this program.
   into.
 - :data:`VERSION` is which RELEASE this is. Five consumers today, and the list
   is meant as one: the other half of that User-Agent, the ``plugin_version``
-  recorded in a recovery bundle's manifest, the running version the update check
-  compares the newest release against, the ``client_version`` a registered
-  device carries on the user's own RomM server (``services/saves/service.py``
-  hands it to ``DeviceRegistry``), and the injection's crash-record fingerprint
-  (``main.py``). The first three are reached from ``bootstrap/``; the last two
+  recorded in a recovery bundle's manifest, the running version the update
+  check compares the last available release a check saw against, the
+  ``client_version`` a registered device carries on the user's own RomM server
+  (``services/saves/service.py`` hands it to ``DeviceRegistry``), and the
+  injection's crash-record fingerprint (``main.py``). The first three are reached from ``bootstrap/``; the last two
   are not, which is why they are easy to miss when reading the composition root
   alone.
 
