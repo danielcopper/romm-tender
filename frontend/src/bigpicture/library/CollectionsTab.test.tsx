@@ -160,7 +160,7 @@ function lastModal(): Record<string, unknown> | null {
   return el?.props ?? null;
 }
 
-type WriteAnswer = { success: boolean; message?: string };
+type WriteAnswer = { success: boolean; reason?: string; message?: string };
 
 /** A write held open until the test answers it. */
 function held(): { promise: Promise<WriteAnswer>; answer: (value: WriteAnswer) => Promise<void> } {
@@ -506,7 +506,11 @@ describe("Library › Collections", () => {
     });
 
     it("puts a refused row back and says why in the pane, not the list column", async () => {
-      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({
+        success: false,
+        reason: "blocked_by_migration",
+        message: "Migration pending",
+      });
       const { container } = await openCollections();
       await click(checkbox(tableRow(container, "Finished")));
 
@@ -546,7 +550,11 @@ describe("Library › Collections", () => {
     });
 
     it("says a refused Favorites switch under the owner switch, not in the pane", async () => {
-      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({
+        success: false,
+        reason: "blocked_by_migration",
+        message: "Migration pending",
+      });
       const { container } = await openCollections();
       await click(checkbox(kindRow(container, "favorites")));
 
@@ -750,7 +758,11 @@ describe("Library › Collections", () => {
     });
 
     it("puts every row back and says why in the pane when the write is refused", async () => {
-      vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({
+        success: false,
+        reason: "blocked_by_migration",
+        message: "Migration pending",
+      });
       const { container } = await openCollections();
       typeSearch(container, "i");
       await click(button(container, "Enable all"));
@@ -969,7 +981,7 @@ describe("Library › Collections", () => {
   });
 
   describe("a control whose writes answer late", () => {
-    const REFUSED = { success: false, message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
 
     it("shows what is stored after a row is switched twice and both writes are refused", async () => {
       const on = held();
@@ -1115,7 +1127,7 @@ describe("Library › Collections", () => {
   });
 
   describe("a refused write after one that was stored", () => {
-    const REFUSED = { success: false, message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
 
     it("leaves a row at the value a later Enable all gave it when an earlier single switch is refused", async () => {
       const single = held();
@@ -1128,7 +1140,7 @@ describe("Library › Collections", () => {
       typeSearch(container, "i");
       await click(button(container, "Enable all"));
 
-      await single.answer({ success: false, message: "Migration pending" });
+      await single.answer({ success: false, reason: "blocked_by_migration", message: "Migration pending" });
       expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
       expect(paneStatus(container)).toBeNull();
 

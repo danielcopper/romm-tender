@@ -897,8 +897,9 @@ export function usePlatformsPage(): PlatformsPageState {
         (async () => {
           try {
             const result = await removePlatformShortcuts(row.slug);
-            // The @migration_blocked / @sync_active_blocked gates short-circuit
-            // to { success: false, message, ... } with no app_ids/rom_ids —
+            // The @migration_blocked / @sync_active_blocked / @prune_active_blocked
+            // gates short-circuit to { success: false, reason, message } with no
+            // app_ids/rom_ids —
             // surface that message instead of cosmetically reporting a removal.
             if (!result.success) {
               setStatus({ slug: row.slug, scope: "remove", text: result.message ?? "Failed to remove shortcuts" });

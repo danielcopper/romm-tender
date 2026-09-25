@@ -383,8 +383,8 @@ export interface SyncPreview {
   new_names: string[];
   changed_names: string[];
   preview_id: string;
+  reason?: string;
   message?: string;
-  blocked_by_migration?: boolean;
   /**
    * Post-preview session-budget prognosis (#1383): ``true`` when the backend
    * predicts that applying every planned touch would push Steam's renderer past

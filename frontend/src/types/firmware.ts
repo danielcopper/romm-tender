@@ -449,5 +449,5 @@ export interface FirmwareDownloadResult {
   file_path?: string;
   md5_match?: boolean | null;
   downloaded?: number;
-  blocked_by_migration?: boolean;
+  reason?: string;
 }

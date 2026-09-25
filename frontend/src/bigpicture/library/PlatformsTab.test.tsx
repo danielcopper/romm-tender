@@ -626,6 +626,7 @@ describe("Library › Platforms", () => {
       // like.
       vi.mocked(backend.savePlatformSync).mockResolvedValue({
         success: false,
+        reason: "blocked_by_migration",
         message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -644,7 +645,11 @@ describe("Library › Platforms", () => {
     });
 
     it("takes the line back on the next write that succeeds", async () => {
-      vi.mocked(backend.savePlatformSync).mockResolvedValueOnce({ success: false, message: "RomM is unreachable" });
+      vi.mocked(backend.savePlatformSync).mockResolvedValueOnce({
+        success: false,
+        reason: "blocked_by_migration",
+        message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+      });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -653,7 +658,9 @@ describe("Library › Platforms", () => {
         fireEvent.click(toggle);
         for (let i = 0; i < 4; i++) await Promise.resolve();
       });
-      expect(within(container).getByTestId("status-list").textContent).toBe("RomM is unreachable");
+      expect(within(container).getByTestId("status-list").textContent).toBe(
+        "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+      );
 
       await act(async () => {
         fireEvent.click(toggle);

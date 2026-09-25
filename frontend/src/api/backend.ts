@@ -66,8 +66,6 @@ export interface BackendResult {
   message: string;
   reason?: RommErrorCode;
   romm_version?: string;
-  /** Set when a callable was rejected because a RetroDECK migration is pending. */
-  blocked_by_migration?: boolean;
   prune_lease_token?: string;
 }
 
@@ -380,21 +378,23 @@ export const probeReachability = callable<[], { online: boolean }>("probe_reacha
 export const refreshSaveStatus = callable<[number], { success: boolean }>("refresh_save_status");
 export const removeRom = callable<[number], BackendResult>("remove_rom");
 export const getPlatforms = callable<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
-// `message` only comes with a refusal: both answer a bare `{success: true}`,
-// so a caller reading it on the success shape reads `undefined`.
-export const savePlatformSync = callable<[number, boolean], { success: boolean; message?: string }>(
+// `reason` and `message` only come with a failure: both answer a bare
+// `{success: true}`, so a caller reading either on the success shape reads
+// `undefined`.
+export const savePlatformSync = callable<[number, boolean], { success: boolean; reason?: string; message?: string }>(
   "save_platform_sync",
 );
-export const setAllPlatformsSync = callable<[boolean], { success: boolean; message?: string }>(
+export const setAllPlatformsSync = callable<[boolean], { success: boolean; reason?: string; message?: string }>(
   "set_all_platforms_sync",
 );
 export const getCollections = callable<
   [],
   { success: boolean; collections: CollectionSyncSetting[]; message?: string; reason?: RommErrorCode }
 >("get_collections");
-export const saveCollectionSync = callable<[string, CollectionKind, boolean], { success: boolean; message?: string }>(
-  "save_collection_sync",
-);
+export const saveCollectionSync = callable<
+  [string, CollectionKind, boolean],
+  { success: boolean; reason?: string; message?: string }
+>("save_collection_sync");
 // One settings write stamping these ids into one kind's bucket — the
 // Collections tab's Enable all / Disable all, over the ids its table lists.
 export const saveCollectionsSync = callable<
@@ -422,10 +422,10 @@ export const removePlatformShortcuts = callable<
   [string],
   {
     success: boolean;
-    // The success path returns success/app_ids/rom_ids/platform_name; the
-    // @migration_blocked gate short-circuits to success/message/
-    // blocked_by_migration and the @sync_active_blocked gate to success/
-    // reason/message, both omitting app_ids/rom_ids. Every field below the
+    // The success path returns success/app_ids/rom_ids/platform_name, plus
+    // prune_lease_token when app_ids is non-empty; the @migration_blocked,
+    // @sync_active_blocked and @prune_active_blocked gates short-circuit to
+    // success/reason/message, omitting app_ids/rom_ids. Every field below the
     // discriminant is therefore path-dependent (mirrors removeAllShortcuts).
     app_ids?: number[];
     rom_ids?: (string | number)[];
@@ -433,24 +433,22 @@ export const removePlatformShortcuts = callable<
     prune_lease_token?: string;
     reason?: string;
     message?: string;
-    blocked_by_migration?: boolean;
   }
 >("remove_platform_shortcuts");
 export const removeAllShortcuts = callable<
   [],
   {
     success: boolean;
-    // The success path returns only success/app_ids/rom_ids; the
-    // @migration_blocked gate short-circuits to success/message/
-    // blocked_by_migration and the @sync_active_blocked gate to success/
-    // reason/message, both omitting app_ids/rom_ids. Every field below the
+    // The success path returns only success/app_ids/rom_ids, plus
+    // prune_lease_token when app_ids is non-empty; the @migration_blocked,
+    // @sync_active_blocked and @prune_active_blocked gates short-circuit to
+    // success/reason/message, omitting app_ids/rom_ids. Every field below the
     // discriminant is therefore path-dependent.
     reason?: string;
     message?: string;
     app_ids?: number[];
     rom_ids?: (string | number)[];
     prune_lease_token?: string;
-    blocked_by_migration?: boolean;
   }
 >("remove_all_shortcuts");
 export const getArtworkBase64 = callable<[number], { base64: string | null }>("get_artwork_base64");
@@ -470,8 +468,8 @@ export const refreshCoverArtwork = callable<
 // dry_run flag. A dry run returns candidate_count without deleting; the real
 // run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound
 // shortcut is missing from the live set, no_grid_dir) and the
-// @migration_blocked / @sync_active_blocked gates short-circuit to
-// success/reason?/message with no count.
+// @migration_blocked / @sync_active_blocked / @prune_active_blocked gates
+// short-circuit to success/reason/message with no count.
 export const cleanupOrphanedGridImages = callable<
   [number[], boolean],
   {
@@ -480,7 +478,6 @@ export const cleanupOrphanedGridImages = callable<
     removed_count?: number;
     reason?: string;
     message?: string;
-    blocked_by_migration?: boolean;
   }
 >("cleanup_orphaned_grid_images");
 export const getSgdbArtworkBase64 = callable<
@@ -540,15 +537,14 @@ export const uninstallAllRoms = callable<
     success: boolean;
     // The removal path always carries removed_count/errors/app_ids — success
     // is False on a PARTIAL failure (some deletions failed) but the payload
-    // stays. The @migration_blocked / @sync_active_blocked gates short-circuit
-    // to success/message (+reason / blocked_by_migration) with NO payload, so
-    // a missing app_ids is the gate-refusal discriminant.
+    // stays. The @migration_blocked / @sync_active_blocked /
+    // @prune_active_blocked gates short-circuit to success/reason/message with
+    // NO payload, so a missing app_ids is the gate-refusal discriminant.
     removed_count?: number;
     errors?: { rom_id: string; error: string }[];
     app_ids?: number[];
     reason?: string;
     message?: string;
-    blocked_by_migration?: boolean;
     prune_lease_token?: string;
   }
 >("uninstall_all_roms");
@@ -838,7 +834,6 @@ export interface PrunePreviewResult {
   candidate_total?: number;
   free_bytes?: number;
   recovery_root?: string | null;
-  blocked_by_migration?: boolean;
 }
 
 export interface StartPruneRequest {
@@ -864,7 +859,6 @@ export interface StartPruneResult {
   status?: "running";
   reason?: string;
   message?: string;
-  blocked_by_migration?: boolean;
 }
 
 export interface PruneSteamSnapshot {

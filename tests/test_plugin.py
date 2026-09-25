@@ -745,7 +745,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "refresh_migration_state",
     # Connection / settings (read-only or non-retrodeck).
     "test_connection",
-    "get_romm_version",
     "connect_with_credentials",
     "connect_with_token",
     "connect_with_pairing_code",
@@ -892,7 +891,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # snapshot) — it starts no run and touches no RetroDECK path, and the panel
     # asks for it on every mount, so a pending migration must not refuse it.
     "get_pending_preview",
-    "get_rom_by_steam_app_id",
     "get_download_queue",
     "get_installed_rom",
     "evaluate_launch",
@@ -904,14 +902,11 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "probe_reachability",
     "refresh_save_status",
     "get_rom_relaunch_options",
-    # End-of-session orchestration — composes record_session_end (whitelisted),
-    # post_exit_sync (decorator-gated, but SessionLifecycleService applies its
-    # own ``is_retrodeck_migration_pending`` check internally so the
-    # destructive sync stays gated), the fire-and-forget achievement refresh,
-    # and refresh_migration_state (whitelisted). Whitelisting the umbrella
-    # callable matches pre-PR behaviour: the playtime record and migration
-    # refresh ran regardless of pending migration; only the save sync was
-    # gated, and the lifecycle service preserves that gate inline.
+    # End-of-session orchestration — composes the playtime session-end record,
+    # the post-exit save sync, the fire-and-forget achievement refresh and the
+    # migration-state refresh. Only the save sync writes to a RetroDECK path,
+    # and SessionLifecycleService checks ``is_retrodeck_migration_pending``
+    # before it, so the destructive sync stays gated while the rest runs.
     "finalize_game_session",
     # Firmware / BIOS read-only checks.
     "get_firmware_status",
@@ -932,7 +927,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "saves_list_file_versions",
     # Playtime queries.
     "record_session_start",
-    "record_session_end",
     "get_all_playtime",
     "reconcile_playtime",
     "get_playtime_scope_notice",
@@ -954,7 +948,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # Achievements queries (server-side).
     "get_achievements",
     "get_achievement_progress",
-    "sync_achievements_after_session",
 }
 
 
@@ -998,21 +991,22 @@ class TestMigrationBlockedDecoratorCoverage:
             f"remove from one: {sorted(double_classified)}"
         )
 
-    def test_whitelisted_callables_are_not_decorated(self):
-        """Every name in _MIGRATION_BLOCKED_WHITELIST must NOT carry the
-        @migration_blocked marker. Symmetric to the prior check, but reads
-        from the whitelist side."""
+    def test_whitelisted_callables_are_endpoints_and_not_decorated(self):
+        """Every name in _MIGRATION_BLOCKED_WHITELIST must be an endpoint on
+        Plugin and must NOT carry the @migration_blocked marker. Reads from the
+        whitelist side, so a name left behind by a removed or renamed endpoint
+        fails here instead of classifying nothing."""
+        from host.dispatch import reachable_methods
         from main import Plugin
 
-        decorated: list[str] = []
-        for name in _MIGRATION_BLOCKED_WHITELIST:
-            method = getattr(Plugin, name, None)
-            if method is None:
-                continue
-            if getattr(method, "_migration_blocked", False) is True:
-                decorated.append(name)
+        endpoints = reachable_methods(Plugin())
+        stale = sorted(_MIGRATION_BLOCKED_WHITELIST - endpoints.keys())
+        assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
 
-        assert not decorated, f"Whitelisted callables that also carry @migration_blocked: {sorted(decorated)}"
+        decorated = sorted(
+            name for name in _MIGRATION_BLOCKED_WHITELIST if getattr(endpoints[name], "_migration_blocked", False)
+        )
+        assert not decorated, f"Whitelisted callables that also carry @migration_blocked: {decorated}"
 
 
 class TestMainStartupOrdering:
@@ -1201,7 +1195,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.cancel_sync = MagicMock(return_value={"success": True, "stopped": True})
         result = plugin.cancel_sync("run-1")
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._sync_service.cancel_sync.assert_called_once_with("run-1")
 
     @pytest.mark.asyncio
@@ -1209,7 +1203,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.sync_cancel_preview = MagicMock(return_value={"success": True})
         result = plugin.sync_cancel_preview()
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._sync_service.sync_cancel_preview.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1218,7 +1212,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._download_service = MagicMock()
         plugin._download_service.cancel_download = MagicMock(return_value={"success": True})
         result = plugin.cancel_download(42)
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._download_service.cancel_download.assert_called_once_with(42)
 
 

@@ -49,8 +49,8 @@ class TestMigrationBlockedDecorator:
         result = await owner.do_thing()
         assert result == {
             "success": False,
+            "reason": "blocked_by_migration",
             "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
-            "blocked_by_migration": True,
         }
         assert owner.calls == []  # wrapped method NOT invoked
 
@@ -88,7 +88,7 @@ class TestMigrationBlockedDecorator:
     async def test_blocked_dict_overrides_non_dict_inner_return(self):
         """Contract: when pending, the wrapper ALWAYS returns the blocked-dict
         regardless of the inner method's return type. Documented behavior so
-        callers can branch on ``blocked_by_migration`` uniformly."""
+        callers can branch on its ``reason`` uniformly."""
 
         class _OwnerWithTupleReturn:
             def __init__(self):
@@ -121,7 +121,7 @@ class TestMigrationBlockedDecorator:
         ):
             result = await getattr(owner_cls(), attr)()
             assert isinstance(result, dict)
-            assert result["blocked_by_migration"] is True
+            assert result["reason"] == "blocked_by_migration"
             assert result["success"] is False
 
     def test_preserves_function_metadata_via_wraps(self):
@@ -200,5 +200,5 @@ class TestMigrationBlockedDecorator:
         svc.is_retrodeck_migration_pending.return_value = True
         owner = _Owner(svc)
         result = cast("dict[str, Any]", await owner.do())
-        assert result["blocked_by_migration"] is True
+        assert result["reason"] == "blocked_by_migration"
         svc.is_retrodeck_migration_pending.assert_called_once_with()
