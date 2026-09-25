@@ -50,7 +50,7 @@ function ownerCount(state: CollectionsPageState): string {
   const foreign = foreignCount(state.collections);
   if (foreign === null) return "";
   if (foreign === 0) return "none";
-  return `${foreign} others, ${state.ownerScope === "all" ? "shown" : "hidden"}`;
+  return `${foreign} ${foreign === 1 ? "other" : "others"}, ${state.ownerScope === "all" ? "shown" : "hidden"}`;
 }
 
 function favoritesCount(state: CollectionsPageState, favorites: FavoritesAnswer): string {
