@@ -283,13 +283,15 @@ vi.mock("@decky/ui", () => {
       }),
     // `disabled` rides the wrapper as an attribute rather than the checkbox's own
     // `disabled`, so what a test can SEE of a greyed toggle is added without
-    // changing what a test that clicks one gets. `highlightOnFocus={false}` rides
-    // it the same way — the only trace of it a test could otherwise not see.
+    // changing what a test that clicks one gets. `highlightOnFocus={false}` and
+    // `padding` ride the wrapper the same way, since the mock renders nothing
+    // else a test could see them by.
     ToggleField: (
       p: AnyProps & {
         checked?: boolean;
         disabled?: boolean;
         highlightOnFocus?: boolean;
+        padding?: string;
         onChange?: (v: boolean) => void;
         label?: unknown;
         description?: unknown;
@@ -301,6 +303,7 @@ vi.mock("@decky/ui", () => {
           "data-testid": "toggle",
           "data-disabled": p.disabled ? "true" : undefined,
           "data-no-focus-highlight": p.highlightOnFocus === false ? "true" : undefined,
+          "data-padding": p.padding,
         },
         createElement("input", {
           type: "checkbox",

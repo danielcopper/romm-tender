@@ -1,6 +1,6 @@
 /**
  * Everything the Library page's Collections tab knows and does: the one
- * collections read, the owner switch, which kind is selected, the search over
+ * collections read, the owner switch, which row is selected, the search over
  * its table, and the four writes.
  *
  * It lives above the tab boundary for the reason `usePlatformsPage` does:
@@ -160,15 +160,18 @@ export function useCollectionsPage(): CollectionsPageState {
   const latestWrite = useRef<Record<WritePlace, number>>({ list: 0, pane: 0 });
   const entries = useRef(0);
   const shownKind = useRef<CollectionsRowId>("standard");
+  // Bumped by every change of selection, so a pane answer is about the pane it
+  // was made on even after a round trip back to the same row.
+  const selections = useRef(0);
 
   const lineFor = useCallback((place: WritePlace) => {
     latestWrite.current[place] += 1;
     const ticket = latestWrite.current[place];
     const entry = entries.current;
-    const kind = shownKind.current;
+    const selection = selections.current;
     return (text: string | null) => {
       if (latestWrite.current[place] !== ticket || entries.current !== entry) return;
-      if (place === "pane" && shownKind.current !== kind) return;
+      if (place === "pane" && selections.current !== selection) return;
       if (place === "list") setListStatus(text);
       else setPaneStatus(text);
     };
@@ -183,11 +186,12 @@ export function useCollectionsPage(): CollectionsPageState {
     if (collectionsRead.current === "idle" || collectionsRead.current === "failed") readCollections();
   }, [readCollections, readOwnerScope]);
 
-  // A search and a pane refusal are both about the kind they were made on, so
-  // another kind is entered without either.
+  // A search and a pane refusal are both about the row they were made on, so
+  // another row is entered without either.
   const select = useCallback((id: string) => {
     if (!isRowId(id) || id === shownKind.current) return;
     shownKind.current = id;
+    selections.current += 1;
     setSelectedKind(id);
     setSearch("");
     setPaneStatus(null);

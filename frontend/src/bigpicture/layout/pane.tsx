@@ -58,7 +58,7 @@ export const SELECTION_ACCENT = "#1a9fff";
 /** The fill behind a row that holds focus — the colour Steam paints a focused
  *  Field with (`.Field.HighlightOnFocus.gpfocus`, `.gpfocuswithin` in
  *  `steamui/css/chunk~2dcc5aaf7.css`), so a row that draws its own focus looks
- *  like every row Steam draws. */
+ *  like a focused Field Steam draws. */
 export const FOCUSED_ROW_FILL = "#3d4450";
 
 /** The horizontal gutter a pane's content sits in — what `SectionTitle` and
@@ -70,14 +70,11 @@ export const PANE_GUTTER = "16px";
 export const TABLE_LINE = "1px solid rgba(255, 255, 255, 0.12)";
 
 /**
- * How tightly a page sets its table — the one thing the three tables genuinely
+ * How tightly a page sets its table — the one thing the tables here genuinely
  * differ in, and therefore a value a page passes rather than a reason to write
- * a second table.
- *
- * The Sync page is the one that needs its own: a plan of seventeen units has to
- * fit the column under the whole-run bar, so its rows are flatter and smaller
- * than a pane's default type, and both of its tables take the same one so the
- * preview and the run read as one family.
+ * a second table. There are two: {@link PANE_TABLE_REGISTER}, the default, and
+ * {@link COMPACT_TABLE_REGISTER}, for a table that has to be flatter than a
+ * pane's default type.
  */
 export interface TableRegister {
   /** Padding on the row wrapper, gutter included. */
@@ -97,6 +94,24 @@ export interface TableRegister {
 export const PANE_TABLE_REGISTER: TableRegister = {
   rowPadding: `4px ${PANE_GUTTER}`,
   headerPadding: `0 ${PANE_GUTTER} 4px`,
+};
+
+/**
+ * The flat, small register: the Sync page's two tables, where a plan of
+ * seventeen units has to fit the column under the whole-run bar and the preview
+ * and the run read as one family, and Library › Collections' table. The type
+ * size and leading are the Sync layout study's `.tbl.compact`
+ * (`docs/assets/sync-layouts.html`); the horizontal padding is the pane's own
+ * gutter rather than the study's 6 px, so a row lines up with the section title
+ * over it. The rule under the column names makes the header read as a heading
+ * rather than as a first row.
+ */
+export const COMPACT_TABLE_REGISTER: TableRegister = {
+  rowPadding: `2px ${PANE_GUTTER}`,
+  headerPadding: `0 ${PANE_GUTTER} 3px`,
+  rowFont: "12px",
+  rowLineHeight: 1.25,
+  rule: true,
 };
 
 /**

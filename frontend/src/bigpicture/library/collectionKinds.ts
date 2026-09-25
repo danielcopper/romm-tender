@@ -1,8 +1,9 @@
 /**
  * What the Library page's Collections tab shows, worked out from the one
  * `get_collections` answer: which kind a collection is listed under, which one
- * is the Favorites row, what a kind row counts, and what its pane says turning
- * a collection on does.
+ * is the Favorites row, what a kind row counts, what its pane says turning
+ * a collection on does, how many collections are other users', and how many a
+ * batch write may switch without asking.
  *
  * Pure, because every one of those answers is a rule a reader can be wrong
  * about in silence — a collection counted under a kind whose table does not
@@ -16,9 +17,10 @@
 import type { CollectionKind, CollectionOwnerScope, CollectionSyncSetting } from "../../types";
 import { fuzzyMatch } from "../../utils/fuzzyMatch";
 
-/** The rows of the list column, in the order they are drawn. The wire keys
- *  stay `standard` / `smart` / `virtual` + `virtual_type`; these name the
- *  page's rows, two of which are halves of the one virtual kind. */
+/** The kinds — the list column's rows that list collections; `KIND_ORDER` is
+ *  the order they are drawn in. The wire keys stay `standard` / `smart` /
+ *  `virtual` + `virtual_type`; these name the page's rows, two of which are
+ *  halves of the one virtual kind. */
 export type CollectionsKindId = "favorites" | "standard" | "smart" | "franchise" | "igdb";
 
 export const KIND_ORDER: readonly CollectionsKindId[] = ["standard", "smart", "franchise", "igdb", "favorites"];
@@ -42,9 +44,10 @@ export function isTableKind(id: CollectionsRowId): id is TableKindId {
 }
 
 /**
- * How many collections Enable all / Disable all may switch without asking. More
- * than this and the write is asked about first; this many or fewer is written
- * at once, search or no search.
+ * How many collections Enable all / Disable all may switch without asking. They
+ * ask first when the table lists more than this — with a search, when the
+ * search leaves more than this — and write at once otherwise. It counts the
+ * collections listed, not those whose switch would change.
  */
 export const CONFIRM_ABOVE = 20;
 

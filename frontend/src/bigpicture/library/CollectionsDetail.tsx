@@ -1,14 +1,16 @@
 /**
- * One kind's pane on the Library page's Collections tab.
+ * The detail pane of the Library page's Collections tab: a kind's, Favorites',
+ * or the owner switch's.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
 import { useRef, useState, type CSSProperties, type FC } from "react";
-import { ConfirmModal, DialogButton, TextField, ToggleField, showModal } from "@decky/ui";
+import { ConfirmModal, DialogButton, TextField, ToggleField, showModal, type FieldProps } from "@decky/ui";
 import { LoadingRow } from "../LoadingRow";
 import {
   ButtonRow,
+  COMPACT_TABLE_REGISTER,
   FLAT_BUTTON,
   MUTED,
   Muted,
@@ -31,11 +33,9 @@ import {
   kindSentence,
   ownerLabel,
   romCountLabel,
-  type CollectionsKindId,
   type TableKindId,
   type FavoritesAnswer,
 } from "./collectionKinds";
-import { SYNC_TABLE_REGISTER } from "../sync/paneTable";
 import { shownCollections, type CollectionsPageState } from "./useCollectionsPage";
 import type { CollectionSyncSetting } from "../../types";
 
@@ -53,7 +53,7 @@ const NUMBER: CSSProperties = { textAlign: "right" };
 
 // A marker as wide as a list row's, drawn as an inset shadow so it takes no
 // width from the row's first cell. The unfocused row keeps an empty fill so the
-// two states differ only in colour.
+// two states differ only in paint, never in layout.
 const FOCUSED_ROW: CSSProperties = {
   background: FOCUSED_ROW_FILL,
   boxShadow: `inset ${ROW_MARKER_WIDTH}px 0 0 ${SELECTION_ACCENT}`,
@@ -61,28 +61,29 @@ const FOCUSED_ROW: CSSProperties = {
 const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "none" };
 
 /**
- * The Sync cell's toggle without the row padding its Field brings. Steam's
- * gamepad `ToggleField` forwards `padding` to the Field it renders, and the
- * Field adds its 10 px top and bottom only for `"standard"`, the default —
- * `"none"` adds neither (read from `chunk~2dcc5aaf7.js`: the gamepad
- * `ToggleField` passes `padding:e.padding` on, and the Field's class list
- * holds `"standard"==K&&StandardPadding`). `ToggleFieldProps` does not declare
- * the prop, so it arrives through a spread.
+ * The Sync cell's toggle without the row padding and the focus fill its Field
+ * brings, both read from Steam's bundle (`steamui/chunk~2dcc5aaf7.js` and its
+ * `css/` twin). The gamepad `ToggleField` passes `padding` and
+ * `highlightOnFocus` on to the Field it renders. The Field adds its 10 px top
+ * and bottom only for `padding: "standard"`, the default (`"standard"==K&&
+ * StandardPadding`), and its `HighlightOnFocus` class — the one that paints
+ * `#3d4450` under `.gpfocus` / `.gpfocuswithin` — unless `highlightOnFocus` is
+ * `false` (`J=R??!0`). `ToggleFieldProps` declares `highlightOnFocus` but not
+ * `padding`, so this one arrives through a spread.
  */
-const TOGGLE_WITHOUT_PADDING: { padding: "none" } = { padding: "none" };
+const TOGGLE_WITHOUT_PADDING: Pick<FieldProps, "padding"> = { padding: "none" };
 
 /**
  * A button in the search line, as wide as its label. Steam's `DialogButton` is
- * full width by default, and a flex basis alone does not undo that — on the
- * device Enable all took the whole line and pushed Disable all out of it — so
- * width and min-width are set as the Settings sections set them.
+ * full width by default and a flex basis alone does not undo that, so width
+ * and min-width are set as the Settings sections set them.
  */
 const SEARCH_LINE_BUTTON: CSSProperties = { ...FLAT_BUTTON, flex: "0 0 auto", width: "auto", minWidth: "auto" };
 
-const Title: FC<{ kind: CollectionsKindId }> = ({ kind }) => (
+const Title: FC<{ name: string; about: string }> = ({ name, about }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: `8px ${PANE_GUTTER} 2px` }}>
-    <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{KIND_TEXT[kind].name}</span>
-    <span style={{ fontSize: SECONDARY_FONT, color: MUTED }}>{KIND_TEXT[kind].about}</span>
+    <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{name}</span>
+    <span style={{ fontSize: SECONDARY_FONT, color: MUTED }}>{about}</span>
   </div>
 );
 
@@ -124,7 +125,7 @@ const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswe
   else body = <Muted>Your RomM account has no favorites collection.</Muted>;
   return (
     <>
-      <Title kind="favorites" />
+      <Title name={KIND_TEXT.favorites.name} about={KIND_TEXT.favorites.about} />
       {favorites.state === "one" && <Sentence text={kindSentence("favorites")} />}
       {body}
     </>
@@ -140,14 +141,11 @@ const OwnerPane: FC<{ state: CollectionsPageState }> = ({ state }) => {
   else if (foreign === 0) count = <Muted>No collections from other users right now.</Muted>;
   else
     count = (
-      <Muted>{`${foreign} from other users right now — ${state.ownerScope === "all" ? "shown and synced" : "hidden and left out of the sync"}.`}</Muted>
+      <Muted>{`${foreign} from other users right now — ${state.ownerScope === "all" ? "shown, and synced where switched on" : "hidden and left out of the sync"}.`}</Muted>
     );
   return (
     <>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: `8px ${PANE_GUTTER} 2px` }}>
-        <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{OWNER_ROW_NAME}</span>
-        <span style={{ fontSize: SECONDARY_FONT, color: MUTED }}>their public ones, on a shared RomM server</span>
-      </div>
+      <Title name={OWNER_ROW_NAME} about="their public ones, on a shared RomM server" />
       <Sentence text="Turned off, other users' collections are hidden here and left out of the sync, even ones you switched on; turning it back on brings those choices back. Tender can tell whose a collection is only once it knows your RomM account, and until then nothing is hidden." />
       {count}
     </>
@@ -166,10 +164,17 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
   // inside the row.
   const [focused, setFocused] = useState(false);
   return (
-    <div onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+    <div
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        // Focus moving between controls inside the row keeps it focused.
+        // `contains` is asked of the row's own node, so no global is involved.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
       <PaneTableRow
         columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
-        register={SYNC_TABLE_REGISTER}
+        register={COMPACT_TABLE_REGISTER}
         testId="collection-row"
         // The Sync cell's toggle is the row's stop already.
         focusStop={false}
@@ -184,8 +189,7 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
               <ToggleField
                 checked={collection.sync_enabled}
                 bottomSeparator="none"
-                // The row draws the focus; the cell's own Field box would paint
-                // Steam's focus fill across the cell beside the toggle.
+                // The row draws the focus instead (`TOGGLE_WITHOUT_PADDING`).
                 highlightOnFocus={false}
                 {...TOGGLE_WITHOUT_PADDING}
                 onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
@@ -202,14 +206,14 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
 
 /**
  * Put focus back on the button that opened the dialog, once it has closed.
- * Steam's dialog does not hand focus back to it — the pane was seen scrolled to
- * its end after Cancel and after OK alike, the region having followed focus
- * wherever it landed — so the button is refocused the way entry focus is
- * placed, after Steam has settled its own pointer.
+ * Steam's dialog does not hand focus back to it, and the pane's region follows
+ * focus wherever it lands, so the button is refocused the way entry focus is
+ * placed, after Steam has settled its own pointer. `wrapper` holds that one
+ * button and nothing else.
  */
-function refocusAfterDialog(line: HTMLElement | null, buttonIndex: number): void {
+function refocusAfterDialog(wrapper: HTMLElement | null): void {
   setTimeout(() => {
-    if (line) placeEntryFocus(line, (root) => root.querySelectorAll<HTMLElement>("button")[buttonIndex] ?? null);
+    if (wrapper) placeEntryFocus(wrapper, (root) => root.querySelector<HTMLElement>("button"));
   }, ENTRY_FOCUS_DELAY_MS);
 }
 
@@ -222,15 +226,19 @@ function confirmSetAll(
 ) {
   const name = KIND_TEXT[kind].name;
   const verb = enabled ? "Enable" : "Disable";
+  const searched = state.search !== "";
   const past =
     count > COLLECTION_RENDER_CAP ? `, including those past the first ${COLLECTION_RENDER_CAP} the table shows` : "";
+  const which = searched
+    ? `the ${count} collections under ${name} that match the search`
+    : `all ${count} collections listed under ${name}`;
   const effect = enabled
     ? "Their games come to Steam at the next sync, including games on platforms you do not sync."
     : "It takes effect at the next sync.";
   showModal(
     <ConfirmModal
-      strTitle={`${verb} all ${count} in ${name}?`}
-      strDescription={`This turns ${enabled ? "on" : "off"} syncing for all ${count} collections listed under ${name}${past}. ${effect}`}
+      strTitle={searched ? `${verb} the ${count} matching in ${name}?` : `${verb} all ${count} in ${name}?`}
+      strDescription={`This turns ${enabled ? "on" : "off"} syncing for ${which}${past}. ${effect}`}
       strOKButtonText={`${verb} all`}
       strCancelButtonText="Cancel"
       onOK={() => {
@@ -247,7 +255,8 @@ const KindPane: FC<{
   kind: TableKindId;
   favorites: FavoritesAnswer;
 }> = ({ state, kind, favorites }) => {
-  const searchLine = useRef<HTMLDivElement>(null);
+  const enableAll = useRef<HTMLSpanElement>(null);
+  const disableAll = useRef<HTMLSpanElement>(null);
   const owned = KIND_TEXT[kind].owned;
   const loaded = state.load.state === "loaded";
   const shown = loaded ? shownCollections(state) : [];
@@ -256,7 +265,8 @@ const KindPane: FC<{
   const canWrite = shown.length > 0;
   const setAll = (enabled: boolean) => {
     if (shown.length > CONFIRM_ABOVE) {
-      confirmSetAll(state, kind, shown.length, enabled, () => refocusAfterDialog(searchLine.current, enabled ? 0 : 1));
+      const opener = enabled ? enableAll : disableAll;
+      confirmSetAll(state, kind, shown.length, enabled, () => refocusAfterDialog(opener.current));
     } else state.setAllShown(enabled);
   };
 
@@ -281,7 +291,7 @@ const KindPane: FC<{
       <>
         <PaneTableHeader
           columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
-          register={SYNC_TABLE_REGISTER}
+          register={COMPACT_TABLE_REGISTER}
           cells={[
             "Collection",
             ...(owned ? ["Owner"] : []),
@@ -305,25 +315,30 @@ const KindPane: FC<{
 
   return (
     <>
-      <Title kind={kind} />
+      <Title name={KIND_TEXT[kind].name} about={KIND_TEXT[kind].about} />
       <Sentence text={kindSentence(kind)} />
-      <div ref={searchLine}>
-        <ButtonRow padding={`0 ${PANE_GUTTER} 6px`}>
-          {/* The word beside the field rather than above it or inside it: a
+      <ButtonRow padding={`0 ${PANE_GUTTER} 6px`}>
+        {/* The word beside the field rather than above it or inside it: a
             heading costs the pane a line, and `TextFieldProps` declares no
             placeholder. */}
-          <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: SECONDARY_FONT, color: MUTED }}>Search</span>
-          <div data-testid="collections-search" style={{ flex: "1 1 0", minWidth: 0 }}>
-            <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
-          </div>
+        <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: SECONDARY_FONT, color: MUTED }}>Search</span>
+        <div data-testid="collections-search" style={{ flex: "1 1 0", minWidth: 0 }}>
+          <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
+        </div>
+        {/* Each button in a wrapper of its own, so the dialog it opens can
+              hand focus back to it; `display: contents` keeps the wrapper out
+              of the line's layout. */}
+        <span ref={enableAll} style={{ display: "contents" }}>
           <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(true)}>
             Enable all
           </DialogButton>
+        </span>
+        <span ref={disableAll} style={{ display: "contents" }}>
           <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(false)}>
             Disable all
           </DialogButton>
-        </ButtonRow>
-      </div>
+        </span>
+      </ButtonRow>
       {/* Why a table write did not take, under the controls that make the
           bigger of them and above the rows they change. Present only while
           there is something to say. */}

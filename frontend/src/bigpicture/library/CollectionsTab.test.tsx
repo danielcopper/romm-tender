@@ -438,10 +438,24 @@ describe("Library › Collections", () => {
       expect(row.style.boxShadow).toBe("none");
     });
 
-    it("keeps the Sync cell's own Field from painting a focus fill of its own", async () => {
+    it("keeps the Sync cell's own Field from painting a focus fill or padding of its own", async () => {
       const { container } = await openCollections();
       const toggle = tableRow(container, "Kids").querySelector('[data-testid="toggle"]');
       expect(toggle?.getAttribute("data-no-focus-highlight")).toBe("true");
+      expect(toggle?.getAttribute("data-padding")).toBe("none");
+    });
+
+    it("stays focused while focus moves between controls inside the row, and not once it leaves", async () => {
+      const { container } = await openCollections();
+      const row = tableRow(container, "Kids");
+      const inside = row.querySelector("span[title]") as HTMLElement;
+      fireEvent.focusIn(checkbox(row));
+
+      fireEvent.focusOut(checkbox(row), { relatedTarget: inside });
+      expect(row.style.background).toBe("#3d4450");
+
+      fireEvent.focusOut(checkbox(row), { relatedTarget: button(container, "Enable all") });
+      expect(row.style.background).toBe("transparent");
     });
 
     it("keeps the order it opened with while rows are switched", async () => {
@@ -624,6 +638,41 @@ describe("Library › Collections", () => {
       expect([kind, enabled]).toEqual(["virtual", false]);
     });
 
+    it(`asks first for Enable all above ${CONFIRM_ABOVE}, worded for the whole table`, async () => {
+      const { container } = await openCollections(franchises(CONFIRM_ABOVE + 1));
+      await selectKind(container, "franchise");
+      await click(button(container, "Enable all"));
+
+      const modal = lastModal();
+      expect(modal?.strTitle).toBe(`Enable all ${CONFIRM_ABOVE + 1} in Franchises?`);
+      expect(modal?.strOKButtonText).toBe("Enable all");
+      expect(String(modal?.strDescription)).toContain(
+        `This turns on syncing for all ${CONFIRM_ABOVE + 1} collections listed under Franchises.`,
+      );
+      expect(String(modal?.strDescription)).toContain("including games on platforms you do not sync");
+    });
+
+    it("words the dialog for the collections a search leaves, for Enable and for Disable", async () => {
+      const others = Array.from({ length: 3 }, (_, i) =>
+        coll({ id: `o${i}`, name: `Other ${i}`, kind: "virtual", virtual_type: "franchise" }),
+      );
+      const { container } = await openCollections([...franchises(34), ...others]);
+      await selectKind(container, "franchise");
+      typeSearch(container, "Franchise");
+
+      await click(button(container, "Enable all"));
+      expect(lastModal()?.strTitle).toBe("Enable the 34 matching in Franchises?");
+      expect(String(lastModal()?.strDescription)).toContain(
+        "This turns on syncing for the 34 collections under Franchises that match the search.",
+      );
+
+      await click(button(container, "Disable all"));
+      expect(lastModal()?.strTitle).toBe("Disable the 34 matching in Franchises?");
+      expect(String(lastModal()?.strDescription)).toContain(
+        "This turns off syncing for the 34 collections under Franchises that match the search.",
+      );
+    });
+
     it("asks with a search typed too, and then writes every collection it leaves, past the render cap too", async () => {
       const many = Array.from({ length: COLLECTION_RENDER_CAP + 5 }, (_, i) =>
         coll({ id: `v${i}`, name: `Series ${i}`, kind: "virtual", virtual_type: "collection" }),
@@ -745,7 +794,8 @@ describe("Library › Collections", () => {
       expect(container.textContent).toContain(
         "Turned off, other users' collections are hidden here and left out of the sync",
       );
-      expect(container.textContent).toContain("1 from other users right now — shown and synced.");
+      expect(container.textContent).toContain("1 from other users right now — shown, and synced where switched on.");
+      expect(row.textContent).toContain("1 others, shown");
       expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(0);
       expect(container.querySelector('[data-testid="collections-search"]')).toBeNull();
       // The selection marker, as every other row of the list draws it.
@@ -757,7 +807,18 @@ describe("Library › Collections", () => {
       await selectKind(container, "owner");
       await click(ownerSwitch(container));
       expect(container.textContent).toContain("1 from other users right now — hidden and left out of the sync.");
-      expect(kindRow(container, "owner").textContent).toContain("1 hidden");
+      expect(kindRow(container, "owner").textContent).toContain("1 others, hidden");
+    });
+
+    it("counts none when no collection is another user's, and a dash when the read failed", async () => {
+      const { container } = await openCollections([MINE_ON]);
+      expect(kindRow(container, "owner").textContent).toContain("none");
+
+      vi.mocked(backend.getCollections).mockResolvedValue({ success: false, collections: [], message: "Down" });
+      const failed = render(<LibraryPage onBack={vi.fn()} />);
+      await settle();
+      await showTab(failed.container, "collections");
+      expect(kindRow(failed.container, "owner").textContent).toContain("—");
     });
 
     it("says nothing is hidden while Tender does not know the account", async () => {
@@ -851,6 +912,19 @@ describe("Library › Collections", () => {
       await first.answer({ success: true });
 
       expect(paneStatus(container)).toBe("Refused");
+    });
+
+    it("says nothing in the pane after a round trip away from the kind and back", async () => {
+      const write = held();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(write.promise);
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      await selectKind(container, "owner");
+      await selectKind(container, "standard");
+
+      await write.answer({ success: false, message: "Too late" });
+
+      expect(paneStatus(container)).toBeNull();
     });
 
     it("says nothing in the pane once another kind is selected", async () => {
