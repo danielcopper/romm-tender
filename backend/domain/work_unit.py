@@ -35,9 +35,9 @@ class WorkUnit:
     collection_kind: CollectionKind | None = None
     # Virtual-collection-only: which virtual type this unit is (``"franchise"``
     # or ``"collection"``), stamped from the query type at fetch time. Threaded
-    # so the reporter can build the fine display label for the ``by_label``
-    # Steam-collection naming mode (a ``kind == "virtual"`` unit needs the
-    # sub-type to distinguish Franchise from IGDB Collection). ``None`` for a
+    # so the reporter can build the type label for the ``by_label`` naming mode
+    # (a ``kind == "virtual"`` unit needs the sub-type to distinguish Franchise
+    # from IGDB Collection). ``None`` for a
     # platform or a standard/smart collection (their kind alone names them).
     virtual_type: str | None = None
     # Collection-only: the collection's server ``updated_at`` from the listing,

@@ -1605,6 +1605,27 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     plugin.onDismount();
   });
 
+  it("removes a RomM collection whose key lost its label and keeps the bare-named one", async () => {
+    // Steam still holds a standard collection under a "(Standard)"-labelled
+    // name, and the active set keys it by its bare name "Kids".
+    const oldName = { id: "old-id", displayName: "RomM: [Kids (Standard)] (steamdeck)", Delete: vi.fn() };
+    const newName = { id: "new-id", displayName: "RomM: [Kids] (steamdeck)", Delete: vi.fn() };
+    vi.stubGlobal("collectionStore", { userCollections: [oldName, newName] });
+    const plugin = pluginFactory();
+
+    emitSyncComplete({
+      platform_app_ids: {},
+      romm_collection_app_ids: { Kids: [1] },
+      total_games: 1,
+    });
+    await flush();
+
+    expect(createOrUpdateRomMCollections).toHaveBeenCalledWith({ Kids: [1] }, undefined, expect.any(AbortSignal));
+    expect(oldName.Delete).toHaveBeenCalledTimes(1);
+    expect(newName.Delete).not.toHaveBeenCalled();
+    plugin.onDismount();
+  });
+
   it("skips the stale cleanup on a cancelled sync with a partial map (regression)", async () => {
     const { snes, faves } = seedCollections();
     const plugin = pluginFactory();

@@ -72,9 +72,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "collection_owner_scope": "all",
     # Steam-collection naming mode: ``"merge"`` (default — same-named collections
     # of any kind union into one ``RomM: [<name>]`` collection) or ``"by_label"``
-    # (the fine type label is appended, ``RomM: [<name> (Franchise)]``, so
-    # same-named collections of different types stay separate). Applies on the
-    # next normal sync via the reporter key + complete-set reconcile.
+    # (every kind but standard gets a type label appended,
+    # ``RomM: [<name> (Franchise)]``). Applies on the next normal sync via the
+    # reporter key + complete-set reconcile.
     "collection_naming_mode": "merge",
     "preferred_region": "auto",
     # User intent for the sync button: apply without being asked first. Stored

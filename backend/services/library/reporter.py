@@ -157,8 +157,8 @@ class SyncReporter:
         shortcut into the Steam collection. Per-collection appIds are
         de-duplicated — several siblings of one group collapse onto the one
         shortcut — and collections sharing a resolved key UNION into the one Steam
-        collection (the key is name-only under ``merge`` (#1503) or name + fine
-        type label under ``by_label`` (#1539); see
+        collection (the key is name-only under ``merge`` (#1503) or name + type
+        label under ``by_label`` (#1539); see
         :meth:`_resolve_collection_memberships`). The platform loop still excludes
         rows whose ``shortcut_app_id`` is ``None``.
         """
@@ -232,20 +232,22 @@ class SyncReporter:
         ``collection_naming_mode`` setting (:meth:`_collection_key`): under
         ``merge`` (default) it is the bare display name, so same-named
         collections of any kind union into one ``RomM: [<name>]`` collection
-        (#1503) — byte-for-byte the pre-mode output. Under ``by_label`` the fine
-        type label is appended (``"<name> (Franchise)"``) so collections that
-        share a name but differ in type land in separate Steam collections; two
-        collections of the SAME name AND label still union. Injecting the label
-        here (not in the frontend) keeps the create-name and the reconcile
-        ``activeNames`` derived from this one key.
+        (#1503) — byte-for-byte the pre-mode output. Under ``by_label`` every
+        kind but standard gets its type label appended (``"<name> (Franchise)"``)
+        and collections union exactly where those keys match: a franchise and an
+        IGDB collection sharing a name stay apart, while a standard collection,
+        keyed by its bare name, unions with a smart one named ``"Foo"`` when it
+        is itself named ``"Foo (Smart)"``. Injecting the label here (not in the
+        frontend) keeps the create-name and the reconcile ``activeNames``
+        derived from this one key.
 
         Grouping is **case-insensitive** (keyed by ``key.casefold()``, first-seen
         original casing kept for display): Steam collapses collection names by a
         case-insensitive identity, so two keys differing only in case ("7 up" vs
         "7 Up") must union or the second Steam create overwrites the first and its
-        games are lost (#1569). Under ``by_label`` this merges same-type case
-        variants (label matches) while different-type variants stay separate (the
-        label differs, so the folded keys differ).
+        games are lost (#1569). Under ``by_label`` this merges case variants of
+        one key, and keeps apart variants whose labels differ (the folded keys
+        differ).
         """
         naming_mode = self._settings.get("collection_naming_mode", "merge")
         display_key_by_fold: dict[str, str] = {}
@@ -269,14 +271,16 @@ class SyncReporter:
         """The Steam-collection name-part for a membership under *naming_mode*.
 
         ``merge`` (default / unknown) → the bare display name. ``by_label`` →
-        ``"<name> (<FineLabel>)"`` where the label comes from
-        :func:`domain.collection_label.collection_label`, so distinct collection
-        types that share a name stay separate. The label is bracket-free, so the
-        frontend's ``RomM: [<key>]`` name-parse (``/^RomM: \\[([^\\]]+)\\]/``)
-        stays intact.
+        ``"<name> (<Label>)"`` where the label comes from
+        :func:`domain.collection_label.collection_label`, or the bare name where
+        that gives none (a standard collection). The label is bracket-free, so
+        the frontend's ``RomM: [<key>]`` name-parse
+        (``/^RomM: \\[([^\\]]+)\\]/``) stays intact.
         """
         if naming_mode == "by_label":
-            return f"{membership.name} ({collection_label(membership.kind, membership.virtual_type)})"
+            label = collection_label(membership.kind, membership.virtual_type)
+            if label is not None:
+                return f"{membership.name} ({label})"
         return membership.name
 
     @staticmethod

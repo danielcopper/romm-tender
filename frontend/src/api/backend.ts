@@ -411,7 +411,7 @@ export const setCollectionOwnerScope = callable<
   { success: boolean; reason?: string; message?: string }
 >("set_collection_owner_scope");
 // Steam-collection naming mode (#1539). "merge" (default) unions same-named
-// collections; "by_label" appends the fine type label so they stay separate.
+// collections; "by_label" appends a type label to every kind but standard.
 // Read via getSettings().collection_naming_mode; applies on the next sync.
 export const setCollectionNamingMode = callable<
   [CollectionNamingMode],

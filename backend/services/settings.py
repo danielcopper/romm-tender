@@ -380,11 +380,11 @@ class SettingsService:
         """Validate and persist the Steam-collection naming mode (``"merge"`` / ``"by_label"``).
 
         ``"merge"`` (the default) unions same-named collections of any kind into
-        one ``RomM: [<name>]`` Steam collection; ``"by_label"`` appends the fine
-        type label (``RomM: [<name> (Franchise)]``) so same-named collections of
-        different types stay separate. The change takes effect on the next normal
-        sync — the reporter rebuilds the complete collection set under the new
-        key and the frontend reconcile renames accordingly (no Force Full Sync).
+        one ``RomM: [<name>]`` Steam collection; ``"by_label"`` appends a type
+        label to every kind but standard (``RomM: [<name> (Franchise)]``). The
+        change takes effect on the next normal sync — the reporter rebuilds the
+        complete collection set under the new key and the frontend reconcile
+        renames accordingly (no Force Full Sync).
         An unrecognised value from the untrusted frontend wire is rejected with
         the canonical failure shape so a bad call cannot corrupt the setting.
         """

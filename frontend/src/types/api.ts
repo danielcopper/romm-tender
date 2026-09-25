@@ -76,8 +76,8 @@ export interface PluginSettings {
   // treated as "all". Mirrors the CollectionOwnerScope type in sync.ts.
   collection_owner_scope?: "own" | "all";
   // Steam-collection naming mode (#1539): "merge" (default) unions same-named
-  // collections into one; "by_label" appends the fine type label so they stay
-  // separate. Optional: older payloads may omit it, treated as "merge". Mirrors
+  // collections into one; "by_label" appends a type label to every kind but
+  // standard. Optional: older payloads may omit it, treated as "merge". Mirrors
   // the CollectionNamingMode type in sync.ts.
   collection_naming_mode?: "merge" | "by_label";
   // Preferred sibling-group region (ADR-0021 §3). "auto" = the fixed build-time

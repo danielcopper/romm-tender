@@ -73,7 +73,7 @@ class CollectionMembership:
 
     ``kind`` (``"standard"`` / ``"smart"`` / ``"virtual"``) and — for the virtual
     kind — ``virtual_type`` (``"franchise"`` / ``"collection"``) ride here too so
-    the reporter can build the fine display label under the ``by_label`` naming
+    the reporter can build the type label under the ``by_label`` naming
     mode (``domain.collection_label``); in the default ``merge`` mode they are
     unused and same-named collections still union by name.
     """

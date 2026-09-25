@@ -902,14 +902,16 @@ is presented is `docs/architecture/qam-panel.md` § Library. _Avoid_ calling it 
 
 How the Steam-collection **name** is formed when RomM collections share a display name across kinds — the
 `collection_naming_mode` setting valued `merge` (default) or `by_label`. Under **`merge`**, same-named collections union
-into one `RomM: [<name>] (<host>)` Steam collection (#1503). Under **`by_label`**, same-named collections of different
-types stay separate Steam collections, told apart by a **type label** appended to the name; the labels a known type gets
-are listed in `docs/architecture/steam-non-steam-shortcuts.md` § Collection naming mode. For a virtual collection the
-type label names its virtual type rather than the kind — franchise and IGDB-collection are both `kind="virtual"`,
-distinguished by `virtual_type` (see the **Collection kind** entry above) — except one of no known type, which gets the
-kind's label. Computed backend-side at the reporter's union key (`domain/collection_label.py`), so the wire payload
-stays name→appIds and the frontend needs no change; the mode flip is applied by the ordinary complete-set reconcile on
-the next normal sync (no Force Full Sync). Same-named collections that share a type label still union.
+into one `RomM: [<name>] (<host>)` Steam collection (#1503). Under **`by_label`**, every kind but Standard gets a **type
+label** appended to the name, so collections that share a name but not a type land in Steam collections of their own, a
+Standard one under its bare name; the rule and the labels are in `docs/architecture/steam-non-steam-shortcuts.md` §
+Collection naming mode. For a virtual collection the type label names its virtual type rather than the kind — franchise
+and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind** entry above)
+— except one of no known type, which gets a fallback label. Computed backend-side at the reporter's union key
+(`domain/collection_label.py`), so the wire payload stays name→appIds and the frontend needs no change; the mode flip is
+applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose names
+come out the same still union — two of one name and type, or a Standard collection named "Foo (Smart)" and a Smart one
+named "Foo".
 
 ### Surface (bigpicture / desktop)
 

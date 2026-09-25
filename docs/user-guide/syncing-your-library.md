@@ -411,14 +411,21 @@ called the same thing, or (on a shared server) another account's public collecti
   games. RomM allows collections to share a name, but Steam identifies a collection by its name, so the plugin unions
   their members rather than dropping one. Names that differ only in **capitalisation** ("7 up" vs "7 Up") count as the
   same name and merge too — Steam itself treats collection names case-insensitively.
-- **On** — the plugin appends the collection **type** to the Steam name, so same-named collections of different types
-  stay **separate**. A franchise and an IGDB collection that share a name become `RomM: [<name> (Franchise)] (<device>)`
-  and `RomM: [<name> (IGDB Collection)] (<device>)`. The types are `(Standard)` for Collections and Favorites,
-  `(Smart)`, `(Franchise)` and `(IGDB Collection)`. Collections that share both a name **and** a type still merge.
+- **On** — collections picked by hand (**Collections** and **Favorites**) keep their plain name, and every other kind
+  gets its **type** added to the Steam name: `(Smart)`, `(Franchise)` or `(IGDB Collection)`. A personal collection, a
+  franchise and an IGDB collection all called "Mario" become `RomM: [Mario] (<device>)`,
+  `RomM: [Mario (Franchise)] (<device>)` and `RomM: [Mario (IGDB Collection)] (<device>)` — three Steam collections.
+  Collections that end up with the same Steam name still merge: two of the same name **and** type, and also a personal
+  collection you named, say, "Mario (Smart)" with a smart collection called "Mario".
 
 The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync and the
 plugin renames the affected Steam collections (and removes the old-named ones) as part of its normal end-of-sync
 housekeeping.
+
+If you had the setting on with an earlier version, your hand-picked collections were named with `(Standard)` in Steam,
+such as `RomM: [Kids (Standard)] (<device>)`. The next sync that you do not cancel creates them without it —
+`RomM: [Kids] (<device>)` — and removes the `(Standard)` ones. Each is a new Steam collection holding the games the sync
+puts in it.
 
 ## Artwork
 
