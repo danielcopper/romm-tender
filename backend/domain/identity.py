@@ -15,9 +15,9 @@ this program.
   check compares the last available release a check saw against, the
   ``client_version`` a registered device carries on the user's own RomM server
   (``services/saves/service.py`` hands it to ``DeviceRegistry``), and the
-  injection's crash-record fingerprint (``main.py``). The first three are reached from ``bootstrap/``; the last two
-  are not, which is why they are easy to miss when reading the composition root
-  alone.
+  injection's crash-record fingerprint (``main.py``). The first three are
+  reached from ``bootstrap/``; the last two are not, which is why they are easy
+  to miss when reading the composition root alone.
 
 The identifier — ``romm-tender`` — is kept in three separate places rather than
 one, because it answers three questions that have to stay free to disagree:

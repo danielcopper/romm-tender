@@ -639,3 +639,20 @@ class TestOverlappingChecks:
         assert settings[DISMISSED_KEY] == "0.34.0"
         assert answer["available"] is False
         assert answer["latest_version"] == "0.34.0"
+
+    async def test_a_newer_dismiss_pressed_while_a_check_now_waited_replaces_the_one_it_was_undoing(self):
+        """Check now forgets the value standing at its press — never a different one that took its place."""
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=_release("0.35.0"), later=_release("0.35.0"))
+        service, settings = self._make_gated_with_settings(seam, uow_factory, {DISMISSED_KEY: "0.34.0"})
+
+        panel_load = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        check_now = asyncio.ensure_future(service.check_for_update_now())
+        await asyncio.sleep(0)
+        assert service.dismiss_update_notice("0.35.0") == {"success": True}
+        seam.release_first.set()
+        _, answer = await asyncio.gather(panel_load, check_now)
+
+        assert settings[DISMISSED_KEY] == "0.35.0"
+        assert answer["available"] is False
