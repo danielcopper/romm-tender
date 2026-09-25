@@ -628,10 +628,12 @@ class TestCheckSaveStatusBackground:
 
 
 class TestMigrationPendingGuards:
-    """The defense-in-depth migration-pending guards in pre_launch_sync and
-    post_exit_sync. The decorator on the public callable is the primary gate;
-    this in-engine guard catches a future caller that bypasses it (engine.py
-    lines 286-292 / 340-347)."""
+    """The engine's own migration-pending refusals in pre_launch_sync and
+    post_exit_sync. Neither is the first check a pending migration meets: the
+    pre_launch_sync endpoint carries @migration_blocked, and post_exit_sync has
+    no endpoint — SessionLifecycleService asks about the migration before it
+    calls it. These guards answer a caller that reaches the engine without
+    either."""
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_returns_blocked_when_migration_pending(self, tmp_path):
@@ -853,8 +855,7 @@ class TestPreLaunchServerOfflineGuard:
 
 
 class TestSyncRomSavesDisabledGuard:
-    """Public sync_rom_saves returns failure when save sync is disabled
-    (engine.py line 396)."""
+    """Public sync_rom_saves returns failure when save sync is disabled."""
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_disabled_returns_failure(self, tmp_path):
@@ -1130,7 +1131,7 @@ class TestSummarizeSyncResult:
 
 class TestSyncEngineDelegates:
     """Cover the thin delegate methods on SyncEngine that forward to MatrixExecutor
-    or DeviceRegistry (engine.py lines 204 / 220 / 239)."""
+    or DeviceRegistry."""
 
     def test_adopt_baseline_hash_delegates_to_matrix(self, tmp_path):
         """SyncEngine.adopt_baseline_hash records the hash on the passed aggregate."""
