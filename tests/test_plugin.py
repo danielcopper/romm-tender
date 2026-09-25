@@ -745,7 +745,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "refresh_migration_state",
     # Connection / settings (read-only or non-retrodeck).
     "test_connection",
-    "get_romm_version",
     "connect_with_credentials",
     "connect_with_token",
     "connect_with_pairing_code",
@@ -892,7 +891,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # snapshot) — it starts no run and touches no RetroDECK path, and the panel
     # asks for it on every mount, so a pending migration must not refuse it.
     "get_pending_preview",
-    "get_rom_by_steam_app_id",
     "get_download_queue",
     "get_installed_rom",
     "evaluate_launch",
@@ -904,14 +902,11 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "probe_reachability",
     "refresh_save_status",
     "get_rom_relaunch_options",
-    # End-of-session orchestration — composes record_session_end (whitelisted),
-    # post_exit_sync (decorator-gated, but SessionLifecycleService applies its
-    # own ``is_retrodeck_migration_pending`` check internally so the
-    # destructive sync stays gated), the fire-and-forget achievement refresh,
-    # and refresh_migration_state (whitelisted). Whitelisting the umbrella
-    # callable matches pre-PR behaviour: the playtime record and migration
-    # refresh ran regardless of pending migration; only the save sync was
-    # gated, and the lifecycle service preserves that gate inline.
+    # End-of-session orchestration — composes the playtime session-end record,
+    # the post-exit save sync, the fire-and-forget achievement refresh and the
+    # migration-state refresh. Only the save sync writes to a RetroDECK path,
+    # and SessionLifecycleService checks ``is_retrodeck_migration_pending``
+    # before it, so the destructive sync stays gated while the rest runs.
     "finalize_game_session",
     # Firmware / BIOS read-only checks.
     "get_firmware_status",
@@ -932,7 +927,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "saves_list_file_versions",
     # Playtime queries.
     "record_session_start",
-    "record_session_end",
     "get_all_playtime",
     "reconcile_playtime",
     "get_playtime_scope_notice",
@@ -954,7 +948,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # Achievements queries (server-side).
     "get_achievements",
     "get_achievement_progress",
-    "sync_achievements_after_session",
 }
 
 
