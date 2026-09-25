@@ -25,9 +25,9 @@ interface LibrarySectionProps {
   // than on the per-sync Collections tab.
   platformGroups: boolean;
   onPlatformGroupsChange: (enabled: boolean) => void;
-  // Steam-collection naming mode (#1539). "by_label" appends a type label to
-  // the Steam collection name of every kind but standard; "merge" (default)
-  // uses the bare name. Rendered as a boolean toggle (checked === "by_label").
+  // Steam-collection naming mode (#1539), rendered as a boolean toggle
+  // (checked === "by_label"). What the modes do is
+  // docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode.
   namingMode: CollectionNamingMode;
   onNamingModeChange: (mode: CollectionNamingMode) => void;
 }
@@ -100,7 +100,7 @@ export const LibrarySection: FC<LibrarySectionProps> = ({
       <PanelSectionRow>
         <ToggleField
           label="Distinguish collection types in Steam names"
-          description="Hand-picked collections keep their plain name in Steam; the other kinds get their type added to it, such as (Smart) or (Franchise). Applies on the next sync."
+          description="Keeps collections that share a name apart in Steam instead of merging them: hand-picked collections keep their plain name, and the other kinds get their type added, such as (Smart) or (Franchise). Applies on the next sync."
           checked={namingMode === "by_label"}
           onChange={(v) => onNamingModeChange(v ? "by_label" : "merge")}
         />

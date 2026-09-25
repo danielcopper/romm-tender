@@ -1950,9 +1950,9 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_by_label_same_name_same_label_still_unions(self, plugin, emit):
-        """Two collections of the SAME name AND same label still UNION under by_label.
+        """Two collections of the SAME name AND same kind still UNION under by_label.
 
-        Same-name-within-one-label is accepted as merged (two standard "Faves"),
+        Same-name-within-one-kind is accepted as merged (two standard "Faves"),
         so the bare key ``"Faves"`` unions both member sets.
         """
 
@@ -1975,8 +1975,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_by_label_gives_a_smart_collection_its_label_and_a_standard_one_none(self, plugin, emit):
-        """A standard and a smart collection named alike: the standard key is the
-        bare name, the smart key carries ``(Smart)``."""
+        """A same-named standard and smart collection: the standard key is bare, the smart one ``(Smart)``."""
 
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow

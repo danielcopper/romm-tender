@@ -158,7 +158,7 @@ class SyncReporter:
         de-duplicated — several siblings of one group collapse onto the one
         shortcut — and collections sharing a resolved key UNION into the one Steam
         collection (the key is name-only under ``merge`` (#1503) or name + type
-        label under ``by_label`` (#1539); see
+        label under ``by_label`` (#1539), a standard collection's name alone; see
         :meth:`_resolve_collection_memberships`). The platform loop still excludes
         rows whose ``shortcut_app_id`` is ``None``.
         """
@@ -233,13 +233,11 @@ class SyncReporter:
         ``merge`` (default) it is the bare display name, so same-named
         collections of any kind union into one ``RomM: [<name>]`` collection
         (#1503) — byte-for-byte the pre-mode output. Under ``by_label`` every
-        kind but standard gets its type label appended (``"<name> (Franchise)"``)
-        and collections union exactly where those keys match: a franchise and an
-        IGDB collection sharing a name stay apart, while a standard collection,
-        keyed by its bare name, unions with a smart one named ``"Foo"`` when it
-        is itself named ``"Foo (Smart)"``. Injecting the label here (not in the
-        frontend) keeps the create-name and the reconcile ``activeNames``
-        derived from this one key.
+        kind but standard gets its type label appended (``"<name> (Franchise)"``),
+        and collections union exactly where those keys match
+        (``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming
+        mode). Injecting the label here (not in the frontend) keeps the
+        create-name and the reconcile ``activeNames`` derived from this one key.
 
         Grouping is **case-insensitive** (keyed by ``key.casefold()``, first-seen
         original casing kept for display): Steam collapses collection names by a

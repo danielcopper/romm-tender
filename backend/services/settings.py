@@ -379,12 +379,12 @@ class SettingsService:
     def set_collection_naming_mode(self, mode: object) -> dict[str, Any]:
         """Validate and persist the Steam-collection naming mode (``"merge"`` / ``"by_label"``).
 
-        ``"merge"`` (the default) unions same-named collections of any kind into
-        one ``RomM: [<name>]`` Steam collection; ``"by_label"`` appends a type
-        label to every kind but standard (``RomM: [<name> (Franchise)]``). The
-        change takes effect on the next normal sync — the reporter rebuilds the
-        complete collection set under the new key and the frontend reconcile
-        renames accordingly (no Force Full Sync).
+        How each mode names a Steam collection is described in
+        ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming
+        mode. The change takes effect on the next normal sync — the reporter
+        rebuilds the complete collection set under the new key, and the frontend
+        creates the new-named collections and deletes the old-named ones (no
+        Force Full Sync).
         An unrecognised value from the untrusted frontend wire is rejected with
         the canonical failure shape so a bad call cannot corrupt the setting.
         """

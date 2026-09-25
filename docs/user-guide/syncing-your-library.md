@@ -411,21 +411,22 @@ called the same thing, or (on a shared server) another account's public collecti
   games. RomM allows collections to share a name, but Steam identifies a collection by its name, so the plugin unions
   their members rather than dropping one. Names that differ only in **capitalisation** ("7 up" vs "7 Up") count as the
   same name and merge too — Steam itself treats collection names case-insensitively.
-- **On** — collections picked by hand (**Collections** and **Favorites**) keep their plain name, and every other kind
-  gets its **type** added to the Steam name: `(Smart)`, `(Franchise)` or `(IGDB Collection)`. A personal collection, a
+- **On** — hand-picked collections (**Collections** and **Favorites**) keep their plain name, and every other kind gets
+  its **type** added to the Steam name: `(Smart)`, `(Franchise)` or `(IGDB Collection)`. A hand-picked collection, a
   franchise and an IGDB collection all called "Mario" become `RomM: [Mario] (<device>)`,
   `RomM: [Mario (Franchise)] (<device>)` and `RomM: [Mario (IGDB Collection)] (<device>)` — three Steam collections.
-  Collections that end up with the same Steam name still merge: two of the same name **and** type, and also a personal
-  collection you named, say, "Mario (Smart)" with a smart collection called "Mario".
+  Collections that end up with the same Steam name still merge: two of the same name **and** type, and also a
+  hand-picked collection named, say, "Mario (Smart)" with a smart collection called "Mario".
 
-The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync and the
-plugin renames the affected Steam collections (and removes the old-named ones) as part of its normal end-of-sync
-housekeeping.
+The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync: the
+plugin creates the Steam collections under their new names and, at the end of a sync you do not cancel, removes the
+old-named ones.
 
 If you had the setting on with an earlier version, your hand-picked collections were named with `(Standard)` in Steam,
-such as `RomM: [Kids (Standard)] (<device>)`. The next sync that you do not cancel creates them without it —
-`RomM: [Kids] (<device>)` — and removes the `(Standard)` ones. Each is a new Steam collection holding the games the sync
-puts in it.
+such as `RomM: [Kids (Standard)] (<device>)`. They are now named without it, as `RomM: [Kids] (<device>)`: the first
+sync you do not cancel creates the new ones and removes the `(Standard)` ones. A sync you cancel can create new ones
+without removing the old ones, so you may see both for a while. Each new one is a new Steam collection holding the games
+the sync puts in it.
 
 ## Artwork
 

@@ -37,8 +37,8 @@ class WorkUnit:
     # or ``"collection"``), stamped from the query type at fetch time. Threaded
     # so the reporter can build the type label for the ``by_label`` naming mode
     # (a ``kind == "virtual"`` unit needs the sub-type to distinguish Franchise
-    # from IGDB Collection). ``None`` for a
-    # platform or a standard/smart collection (their kind alone names them).
+    # from IGDB Collection). ``None`` for a platform or a standard/smart
+    # collection (their kind alone names them).
     virtual_type: str | None = None
     # Collection-only: the collection's server ``updated_at`` from the listing,
     # threaded so the incremental-skip gate can compare it against the stored

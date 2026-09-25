@@ -70,11 +70,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # server lists) or ``"own"`` (only the signed-in user's own collections;
     # virtual collections have no owner and always survive).
     "collection_owner_scope": "all",
-    # Steam-collection naming mode: ``"merge"`` (default — same-named collections
-    # of any kind union into one ``RomM: [<name>]`` collection) or ``"by_label"``
-    # (every kind but standard gets a type label appended,
-    # ``RomM: [<name> (Franchise)]``). Applies on the next normal sync via the
-    # reporter key + complete-set reconcile.
+    # Steam-collection naming mode: ``"merge"`` (default) or ``"by_label"``, as
+    # docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode
+    # describes. Applies on the next normal sync via the reporter key +
+    # complete-set reconcile.
     "collection_naming_mode": "merge",
     "preferred_region": "auto",
     # User intent for the sync button: apply without being asked first. Stored
