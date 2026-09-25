@@ -436,8 +436,8 @@ same `romm_collection_app_ids` keys, flipping the mode is applied by the ordinar
 normal sync: the reporter re-emits the complete set of enabled collections under the new keys, `onSyncComplete` creates
 the new-named collections and deletes any old-named collection absent from the new complete set. No skip-state
 invalidation is involved (same mechanism owner-scope reshaping uses). A change to a label reaches Steam the same way: a
-sync that reaches the collection creates it under its new name, and the first sync not cancelled deletes the old one — a
-new Steam collection, not the old one renamed.
+sync that reaches the collection creates it under its new name, and the first sync that finishes in full (its
+`sync_complete` carries no `cancelled`) deletes the old one — a new Steam collection, not the old one renamed.
 
 **Name identity is case-insensitive (#1569).** Steam collapses collection names by a **case-insensitive** identity — two
 collections whose display names differ only in case (`RomM: [7 up]` vs `RomM: [7 Up]`) are the same Steam collection, so

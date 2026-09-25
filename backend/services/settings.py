@@ -381,10 +381,8 @@ class SettingsService:
 
         How each mode names a Steam collection is described in
         ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming
-        mode. The change takes effect on the next normal sync — the reporter
-        rebuilds the complete collection set under the new key, and the frontend
-        creates the new-named collections and deletes the old-named ones (no
-        Force Full Sync).
+        mode. The change takes effect on the next normal sync, with no Force Full
+        Sync; how it reaches Steam is described in the same section.
         An unrecognised value from the untrusted frontend wire is rejected with
         the canonical failure shape so a bad call cannot corrupt the setting.
         """

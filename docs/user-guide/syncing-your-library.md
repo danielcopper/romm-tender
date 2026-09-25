@@ -403,7 +403,7 @@ own switch under **Collections**. If your account has no favorites collection, t
 
 #### Collections that share a name
 
-If two enabled collections share the same name — for example a personal collection and a smart or virtual collection
+If two enabled collections share the same name — for example a hand-picked collection and a smart or virtual collection
 called the same thing, or (on a shared server) another account's public collection — what happens depends on the
 **Distinguish collection types in Steam names** setting on the **Settings** page under **Steam Library**:
 
@@ -419,14 +419,14 @@ called the same thing, or (on a shared server) another account's public collecti
   hand-picked collection named, say, "Mario (Smart)" with a smart collection called "Mario".
 
 The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync: the
-plugin creates the Steam collections under their new names and, at the end of a sync you do not cancel, removes the
+plugin creates the Steam collections under their new names and, at the end of a sync that finishes in full, removes the
 old-named ones.
 
 If you had the setting on with an earlier version, your hand-picked collections were named with `(Standard)` in Steam,
 such as `RomM: [Kids (Standard)] (<device>)`. They are now named without it, as `RomM: [Kids] (<device>)`: the first
-sync you do not cancel creates the new ones and removes the `(Standard)` ones. A sync you cancel can create new ones
-without removing the old ones, so you may see both for a while. Each new one is a new Steam collection holding the games
-the sync puts in it.
+sync that finishes in full creates the new ones and removes the `(Standard)` ones. A sync that stops early (cancelled,
+paused or interrupted) can create new ones without removing the old ones, so you may see both for a while. They are new
+Steam collections, holding the games the sync puts in them.
 
 ## Artwork
 
