@@ -27,6 +27,7 @@ import {
   type CollectionsKindId,
   type FavoritesAnswer,
 } from "./collectionKinds";
+import { SYNC_TABLE_REGISTER } from "../sync/paneTable";
 import { shownCollections, type CollectionsPageState } from "./useCollectionsPage";
 import type { CollectionSyncSetting } from "../../types";
 
@@ -41,6 +42,25 @@ const OWNED_COLUMNS = "minmax(0, 1fr) 72px 40px 52px 56px";
 const OWNERLESS_COLUMNS = "minmax(0, 1fr) 40px 52px 56px";
 
 const NUMBER: CSSProperties = { textAlign: "right" };
+
+/**
+ * The Sync cell's toggle without the row padding its Field brings. Steam's
+ * gamepad `ToggleField` forwards `padding` to the Field it renders, and the
+ * Field adds its 10 px top and bottom only for `"standard"`, the default —
+ * `"none"` adds neither (read from `chunk~2dcc5aaf7.js`: the gamepad
+ * `ToggleField` passes `padding:e.padding` on, and the Field's class list
+ * holds `"standard"==K&&StandardPadding`). `ToggleFieldProps` does not declare
+ * the prop, so it arrives through a spread.
+ */
+const TOGGLE_WITHOUT_PADDING: { padding: "none" } = { padding: "none" };
+
+/**
+ * A button in the search line, as wide as its label. Steam's `DialogButton` is
+ * full width by default, and a flex basis alone does not undo that — on the
+ * device Enable all took the whole line and pushed Disable all out of it — so
+ * width and min-width are set as the Settings sections set them.
+ */
+const SEARCH_LINE_BUTTON: CSSProperties = { ...FLAT_BUTTON, flex: "0 0 auto", width: "auto", minWidth: "auto" };
 
 const Title: FC<{ kind: CollectionsKindId }> = ({ kind }) => (
   <div style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: `8px ${PANE_GUTTER} 2px` }}>
@@ -103,6 +123,7 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
   return (
     <PaneTableRow
       columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
+      register={SYNC_TABLE_REGISTER}
       testId="collection-row"
       // The Sync cell's toggle is the row's stop already.
       focusStop={false}
@@ -116,6 +137,7 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
             <ToggleField
               checked={collection.sync_enabled}
               bottomSeparator="none"
+              {...TOGGLE_WITHOUT_PADDING}
               onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
             />
           ),
@@ -188,6 +210,7 @@ const KindPane: FC<{
       <>
         <PaneTableHeader
           columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
+          register={SYNC_TABLE_REGISTER}
           cells={[
             "Collection",
             ...(owned ? ["Owner"] : []),
@@ -218,13 +241,13 @@ const KindPane: FC<{
             heading costs the pane a line, and `TextFieldProps` declares no
             placeholder. */}
         <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: SECONDARY_FONT, color: MUTED }}>Search</span>
-        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+        <div data-testid="collections-search" style={{ flex: "1 1 0", minWidth: 0 }}>
           <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
         </div>
-        <DialogButton style={{ ...FLAT_BUTTON, flex: "0 0 auto" }} disabled={!canWrite} onClick={() => setAll(true)}>
+        <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(true)}>
           Enable all
         </DialogButton>
-        <DialogButton style={{ ...FLAT_BUTTON, flex: "0 0 auto" }} disabled={!canWrite} onClick={() => setAll(false)}>
+        <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(false)}>
           Disable all
         </DialogButton>
       </ButtonRow>

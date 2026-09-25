@@ -40,6 +40,9 @@ export { TABLE_LINE } from "../layout/pane";
  * up with the section title over it. The rule under the column names is this
  * page's too — its tables carry totals, and the header reads as their heading
  * rather than as a first row.
+ *
+ * Library › Collections sets its table in this register as well, so a change
+ * here changes that table too.
  */
 export const SYNC_TABLE_REGISTER: TableRegister = {
   rowPadding: `2px ${PANE_GUTTER}`,

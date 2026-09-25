@@ -21,7 +21,7 @@ import { fuzzyMatch } from "../../utils/fuzzyMatch";
  *  page's rows, two of which are halves of the one virtual kind. */
 export type CollectionsKindId = "favorites" | "standard" | "smart" | "franchise" | "igdb";
 
-export const KIND_ORDER: readonly CollectionsKindId[] = ["favorites", "standard", "smart", "franchise", "igdb"];
+export const KIND_ORDER: readonly CollectionsKindId[] = ["standard", "smart", "franchise", "igdb", "favorites"];
 
 export function isKindId(id: string): id is CollectionsKindId {
   return (KIND_ORDER as readonly string[]).includes(id);
