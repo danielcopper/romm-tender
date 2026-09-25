@@ -330,8 +330,9 @@ collections as a table on the right. From the top, the list holds:
   no owner.
 - Under a thin line, **Favorites** — your own RomM favorites collection. Its row carries its sync switch and the number
   of games in it.
-- Last, **Other users' collections** — a row with its switch in it, saying how many of the listed collections are other
-  users' and whether they are shown or hidden. Selecting it shows what the switch does (see below).
+- Last, **Other users' collections** — a row with its switch in it, saying how many collections on the server are other
+  users' and whether they are shown or hidden (for example `3 others, shown`, or `none`). Selecting it shows what the
+  switch does (see below).
 
 Each kind row other than Favorites says how many of its collections are on, for example `4 of 12 on`. The page opens on
 **Collections**.
@@ -362,12 +363,13 @@ type in the search to bring them into view. If a kind lists nothing with the sea
 collections** is off and hiding some of it, a line says how many of other users' collections it is hiding.
 
 **Enable all** and **Disable all** switch every collection the table lists — with a search typed, exactly the
-collections the search leaves — including any past the first 50. When that would switch more than 20 collections they
-ask for confirmation first; 20 or fewer are switched straight away. After the confirmation closes, whichever way you
-answered, you are back on the button you pressed. On **Franchises** or **IGDB collections** they only ever switch that
-one type. While **Other users' collections** is off they never switch someone else's. The collection the **Favorites**
-row switches is not in the Collections table, so they leave it alone — but when that row is greyed because more than one
-favorites collection counts as yours, those are ordinary rows of the Collections table and they switch them too.
+collections the search leaves — including any past the first 50. When the table lists more than 20 — with a search, when
+the search leaves more than 20 — they ask for confirmation first; 20 or fewer are switched straight away. After the
+confirmation closes, whichever way you answered, you are back on the button you pressed. On **Franchises** or **IGDB
+collections** they only ever switch that one type. While **Other users' collections** is off they never switch someone
+else's. The collection the **Favorites** row switches is not in the Collections table, so they leave it alone — but when
+that row is greyed because more than one favorites collection counts as yours, those are ordinary rows of the
+Collections table and they switch them too.
 
 If a collection's switch does not take — for example while a RetroDECK path migration is pending — it flips back and a
 line says why: in the pane for a table switch or Enable all / Disable all, and under **Other users' collections** for

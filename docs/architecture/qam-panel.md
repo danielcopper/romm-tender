@@ -508,9 +508,9 @@ row was declared each of those jumps mounted the right section and then had it o
 Controller landed on Connections. A list opened with no section named loses nothing: it either selects its own first
 row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
 platforms, which additionally are tabbed, so Steam places that focus and the frame places none). Library › Collections
-is the third case: it opens on a default row of its own, Collections, below the Favorites row, and declares it — but it
-is tabbed: wherever the panel mounts, Steam's tabbed page places the focus and the mark goes unread. The frame reads it
-only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the panel).
+opens on its first row, Collections, and declares it anyway — but it is tabbed: wherever the panel mounts, Steam's
+tabbed page places the focus and the mark goes unread. The frame reads it only on its missed-`Tabs` branch, which the
+start-up check does not let a panel reach (`Tabs` costs the panel).
 
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
@@ -628,7 +628,7 @@ A list whose rows carry no control of their own — a label and nothing else, wh
 have — asks for `selectOnActivate`, and every row wrapper takes an activate handler that selects it. That handler is
 what makes the wrapper a focus stop rather than a container, so without it those rows are unreachable and the list
 cannot be scrolled. It is off by default, because a row that does carry a control must leave A to it. **A row may name
-its own answer, overriding the list's**, for a list whose rows differ — Library › Collections, where one row carries a
+its own answer, overriding the list's**, for a list whose rows differ — Library › Collections, where two rows carry a
 switch among rows that carry nothing. A row that names none follows the list.
 
 A list that is grouped or sorted by state computes its order when the page mounts and keeps it while the page is open,
@@ -913,9 +913,8 @@ list is a scrolling region of its own**, taking what is left of the column under
 seventeen units is taller than the Deck's column, and without it the running unit walks out of sight below the fold.
 Nothing moves focus during a run, so the page scrolls that region itself and puts the running row in the middle of it,
 clamped to the list's own ends. Both tables are the pane's own table (§ Tables) set in one flat, small register —
-`SYNC_TABLE_REGISTER` in `paneTable.tsx`, which is also where the numeric-column split and the pieces that are not
-tables at all live. Holding the register in one place is still what keeps it a decision rather than a drift; what
-changed is that it is now a value this page passes rather than a second table it owns.
+`COMPACT_TABLE_REGISTER` in `layout/pane.tsx`, which Library › Collections' table uses too. The numeric-column split and
+the pieces that are not tables at all live in `sync/paneTable.tsx`.
 
 **Focus lands on Cancel Sync when this body takes the column**, by the swap rule above: what it picks is the first stop
 holding no stop of its own, and every unit row below is a stop too, so what puts it on the button is the button being
@@ -1447,13 +1446,15 @@ chosen from is [collections-layouts.html](../assets/collections-layouts.html). F
 - **Favorites**, a row with its sync switch in it, as a platform row has. Its count is the favorites collection's ROM
   count.
 - **Other users' collections**, a row with its switch in it, as Favorites has, and the list column's refusal line under
-  it. Its count is how many of the listed collections are other users', and whether they are shown or hidden. It is the
-  owner scope (CONTEXT.md → Collection owner-scope): on is `all`, off is `own`. It is a switch in the list column rather
-  than a segmented control beside the search because it is a sync setting that applies to two of the kinds, and a
-  control shaped like a filter would say otherwise. Its pane has no table: what turning it off does (other users'
-  collections are hidden here and left out of the sync, even ones switched on, and turning it back on brings those
-  choices back), that Tender can tell whose a collection is only once it knows the user's RomM account and until then
-  nothing is hidden, and how many other users' collections are listed right now and whether they are shown or hidden.
+  it. Its count is how many of the collections RomM lists are other users' and whether they are shown or hidden — "3
+  others, shown", "none" where there are none, a dash where the read failed, and nothing while the read is out or while
+  Tender cannot yet tell whose a collection is. It is the owner scope (CONTEXT.md → Collection owner-scope): on is
+  `all`, off is `own`. It is a switch in the list column rather than a segmented control beside the search because it is
+  a sync setting that applies to two of the kinds, and a control shaped like a filter would say otherwise. Its pane has
+  no table: what turning it off does (other users' collections are hidden here and left out of the sync, even ones
+  switched on, and turning it back on brings those choices back), that Tender can tell whose a collection is only once
+  it knows the user's RomM account and until then nothing is hidden, and how many of the collections RomM lists are
+  other users' and whether they are shown or hidden.
 
 Collections, Smart collections and Autogenerated follow RomM's own headings — "Collections", "Smart Collections" and
 "Autogenerated collections"; Favorites, Franchises and IGDB collections are this page's.
@@ -1474,11 +1475,12 @@ public favorites collection is a candidate too. With none at all the row stays, 
 greyed row's switch is disabled, so the row itself becomes the focus stop and A selects it: its pane, which says why,
 has to stay reachable.
 
-**Two kinds of row share the list**, each naming its own `selectOnActivate` (§ List and detail): the four kind rows
-carry nothing, so each is a focus stop and A selects it, while the Favorites row and the owner switch's row carry their
-switch and leave A to it. Selecting the owner switch's row enters its pane as selecting a kind does: the search is
-cleared and the pane's refusal line goes. The Autogenerated heading and the rule over Favorites are slots of their own
-in the list that hold no stop, so focus never lands on them and they select nothing.
+**Two kinds of row share the list** (§ List and detail, a row's own `selectOnActivate`): the four kind rows carry
+nothing and name `true`, so each is a focus stop and A selects it; the Favorites row names `true` only while it is
+greyed, and otherwise leaves A to its switch; the owner switch's row names nothing, follows the list, and leaves A to
+its switch. Selecting the owner switch's row enters its pane as selecting a kind does: the search is cleared and the
+pane's refusal line goes. The Autogenerated heading and the rule over Favorites are slots of their own in the list that
+hold no stop, so focus never lands on them and they select nothing.
 
 A kind row states "N of M on": how many of its collections are switched on, **counted over what that kind's table lists
 under the owner toggle, before any search** — with the toggle off, another user's collection that is stored as on is
@@ -1499,25 +1501,21 @@ A kind's pane holds, in order:
    Steam collection named after it. The pane does not spell out that name; what it is exactly, and the suffix the Steam
    Library setting adds, is the user guide's to state;
 3. one line with the fuzzy search and Enable all / Disable all: the field takes the rest of the line, and the two flat
-   buttons are as wide as their labels. Steam's `DialogButton` is full width by default and a flex basis alone did not
-   undo it — on the device Enable all took the line and pushed Disable all out of it — so the buttons set `width` and
-   `min-width` to `auto`, as the Settings sections do;
-4. a table drawn with § Tables' shared one, in the Sync page's compact register — Collection, Owner, ROMs, In Steam,
-   Sync on Collections and Smart collections, and Collection, ROMs, In Steam, Sync on Franchises and IGDB collections,
-   which have no owner. The Sync cell carries a label-less toggle, so the row is reachable through it and is no focus
-   stop of its own, the case § Tables names for a cell that carries a control. The toggle is asked for
-   `padding: "none"`: Steam's gamepad `ToggleField` hands that to the Field it renders, which otherwise adds 10 px above
-   and below, so the row is as tall as the toggle itself. While the toggle holds focus the whole row shows it, as the
-   layout study draws it: a fill across the row in the colour Steam gives a focused Field, and a marker on its left edge
-   in the list's selection colour. The toggle's own Field is asked for `highlightOnFocus: false`, which Steam's gamepad
-   `ToggleField` hands on to the Field, so the cell paints no focus fill of its own beside the toggle. Owner reads _you_
-   where `is_own` is `true`, and the owner's RomM user name otherwise, a dash where the listing carried none. In Steam
-   reads the count, and a dash where it is absent, which is unknown rather than zero. Collections that are on sit above
-   those that are off, and the order is frozen while the page is open, as on Platforms. The 50-row render cap stays,
-   with a line under the last row saying how many more there are; in practice only the autogenerated kinds reach it. A
-   kind that lists nothing says so. With the search empty and the owner toggle hiding some of the kind's collections, a
-   second line says how many: "N from other users are hidden while Other users' collections is off"; with a search, or
-   with nothing hidden, there is no such line.
+   buttons are as wide as their labels;
+4. a table drawn with § Tables' shared one, in the compact register the Sync page's tables use too
+   (`COMPACT_TABLE_REGISTER`) — Collection, Owner, ROMs, In Steam, Sync on Collections and Smart collections, and
+   Collection, ROMs, In Steam, Sync on Franchises and IGDB collections, which have no owner. The Sync cell carries a
+   label-less toggle, so the row is reachable through it and is no focus stop of its own, the case § Tables names for a
+   cell that carries a control. The Sync cell's toggle carries no padding and no focus fill of its own (why, as read
+   from Steam's bundle, is at `TOGGLE_WITHOUT_PADDING` in `CollectionsDetail.tsx`); while it holds focus the whole row
+   shows it: a fill across the row in the colour Steam gives a focused Field, and a marker on its left edge in the
+   list's selection colour. Owner reads _you_ where `is_own` is `true`, and the owner's RomM user name otherwise, a dash
+   where the listing carried none. In Steam reads the count, and a dash where it is absent, which is unknown rather than
+   zero. Collections that are on sit above those that are off, and the order is frozen while the page is open, as on
+   Platforms. The 50-row render cap stays, with a line under the last row saying how many more there are; in practice
+   only the autogenerated kinds reach it. A kind that lists nothing says so. With the search empty and the owner toggle
+   hiding some of the kind's collections, a second line says how many: "N from other users are hidden while Other users'
+   collections is off"; with a search, or with nothing hidden, there is no such line.
 
 The Favorites pane has no table. While the read is out it shows the spinner, and where it failed the failure, as every
 pane does; once it has answered, the sentence and the game count where the row stands for a collection, and otherwise
@@ -1541,17 +1539,19 @@ syncs — and one read of Tender's own database after them.
 how many of its ROMs are already in Steam, and both fit as a column of the kind's table, so such a pane spends the whole
 detail on what one row already says.
 
-**Enable all / Disable all ask first only when the write would switch more than 20 collections** (`CONFIRM_ABOVE` in
-`collectionKinds.ts`), with or without a search, on both buttons and on every kind; 20 or fewer are written at once,
-with no dialog. When the dialog closes, on OK and on Cancel alike, focus goes back to the button that opened it: Steam's
-dialog does not hand it back, and the pane's region would otherwise follow focus to wherever it landed. **They write
-exactly the collections the table lists, in one batch** (`save_collections_sync` over their ids): with a search, every
-collection the search leaves, those past the 50-row render cap included; with none, the whole table. So on Franchises
-and on IGDB collections they write that type alone, and with Other users' collections off no write reaches a collection
-known to be another user's — until Tender knows the user's RomM id it cannot tell, and it writes what it lists, as the
-sync syncs it. Where the Favorites row stands for a collection, the Collections write leaves that one out, since it is
-not in the table; where the row is greyed because more than one favorites collection is a candidate, those are ordinary
-rows of the Collections table and the write includes them.
+**Enable all / Disable all ask first only when the table lists more than 20 — with a search, when the search leaves more
+than 20** (`CONFIRM_ABOVE` in `collectionKinds.ts`), on both buttons and on every kind; 20 or fewer are written at once,
+with no dialog. It counts the collections listed, not those whose switch would change. With a search typed the dialog
+names the collections that match rather than the whole table. When the dialog closes, on OK and on Cancel alike, focus
+goes back to the button that opened it: Steam's dialog does not hand it back, and the pane's region would otherwise
+follow focus to wherever it landed. **They write exactly the collections the table lists, in one batch**
+(`save_collections_sync` over their ids): with a search, every collection the search leaves, those past the 50-row
+render cap included; with none, the whole table. So on Franchises and on IGDB collections they write that type alone,
+and with Other users' collections off no write reaches a collection known to be another user's — until Tender knows the
+user's RomM id it cannot tell, and it writes what it lists, as the sync syncs it. Where the Favorites row stands for a
+collection, the Collections write leaves that one out, since it is not in the table; where the row is greyed because
+more than one favorites collection is a candidate, those are ordinary rows of the Collections table and the write
+includes them.
 
 **The kinds' names are meant to reach the Steam names the `by_label` naming mode builds** (CONTEXT.md → Collection
 naming mode), the description of the Steam Library setting that turns that mode on, and the user guide — **but that
@@ -1838,10 +1838,10 @@ store screenshots (#830) are taken after.
   [collections-layouts.html](../assets/collections-layouts.html) — today's tab drawn at the new width, then three
   layouts at the Deck's real size: one wide table under a strip of filters, a collection per pane (the Platforms shape),
   and the kinds as the list with each kind's collections as a table in its pane. The third is what this page describes,
-  and the section above says why the second lost. Its closing list settles what that section states: the owner toggle's
-  wording, the kind names, the In Steam and Owner columns, when Enable all asks first, the order and #1020's fix. It
-  draws In Steam as _all_ where every ROM is already in Steam; the page prints the count. Like the studies below it is a
-  record of a choice, not a description of the page.
+  and the section above says why the second lost. Its closing list settled the owner toggle's wording, the kind names,
+  the In Steam and Owner columns, the order and #1020's fix; the owner switch's row and the above-20 dialog came from
+  later device tests. It draws In Steam as _all_ where every ROM is already in Steam; the page prints the count. Like
+  the studies below it is a record of a choice, not a description of the page.
 - The layout study Main's navigation was chosen from: [main-layouts.html](../assets/main-layouts.html) — four layouts at
   the panel's real 348 px (status as the card, the menu as the card, menu first, and the chosen one), each drawn quiet
   and with a preview waiting; a closing **Heute** section shows Main as it stood when the study was drawn, and its own
