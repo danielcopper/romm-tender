@@ -68,8 +68,8 @@ panel went with it but the new one did not arrive — so the missing panel, not 
 
 ## An Update Was Rolled Back
 
-**Symptom**: Updating Tender ends with `install.sh: update to <new> failed; back on <previous>`, the **Service** row is
-marked failed, and the run says **Rolled back** instead of **Done**.
+**Symptom**: An update marks the **Service** row failed, says **Rolled back** instead of **Done**, and ends with
+`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log.
 
 **Explanation**: The new version did not start within about a minute, so the installer put the version you had back,
 together with the library database and settings it had before the update, and started it again. Tender is running as it
@@ -94,8 +94,13 @@ If an update did start but you want the version before it back, the installed co
 ~/.local/lib/romm-tender/install.sh --rollback
 ```
 
-It puts back the previous version and the database and settings as they were **before the update** — so anything Tender
-recorded since, such as a download or a sync, is forgotten. It works once per update, and refuses without changing
+It puts back the previous version and the database and settings as they were **before the update**, and says the date
+that was. Anything Tender recorded since, such as a download or a sync, is forgotten: ROM files downloaded since stay on
+disk and shortcuts created since stay in Steam, but the restored database no longer knows them. Before it puts anything
+back, it copies the database and settings it replaces to `~/.local/share/romm-tender/rollback-backup/`, and it says so.
+That copy stays until the next time you go back by hand.
+
+It works once per update — afterwards there is no previous version left to go back to — and refuses without changing
 anything when there is nothing to go back to.
 
 ## Games Won't Launch

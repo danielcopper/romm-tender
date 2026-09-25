@@ -234,38 +234,48 @@ tree rolls back with and the licence texts a distributed copy carries, nothing t
 own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md)
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
-**An install over an existing one is an update, and an update the new version does not start from is rolled back.**
-Whether `install.sh` is run again by hand or run for you as `install.sh --from <tarball> --yes`, a tree already at
-`~/.local/lib/romm-tender/` makes the run go in this order:
+**An install over an existing one is an update, and an update whose new version does not answer is rolled back.**
+Whenever `install.sh` runs and a tree is already at `~/.local/lib/romm-tender/`, the run goes in this order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The unit is stopped.
 3. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
-   `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup. Plain
-   copies are whole only because the unit is stopped.
+   `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup — beside a
+   `backed-up-at` file holding when, as one line of ISO-8601 UTC. Plain copies are whole only because the unit is
+   stopped.
 4. The new tree is renamed into place and the old one is kept as `~/.local/lib/romm-tender.old` — one kept tree, so the
-   one an earlier update kept goes now. The covers' move runs and the unit is written as on a first install.
+   one an earlier update kept goes now, whether or not this update then answers. The covers' move runs and the unit is
+   written as on a first install.
 5. The unit is started, and the installer waits up to 60 seconds for the backend to answer as the version in the new
    tree's `version.txt`. It asks without the token: it reads the port note, requests `http://127.0.0.1:<port>/`, and
    takes the version off the `Server: romm-tender/<version>` field the refusal carries. A missing or stale note and a
    port nobody answers on mean "not yet". The answer costs one `refused GET /: no token` WARNING in `backend.log`.
 
 When the answer does not come, the installer stops the unit, puts the kept tree back and deletes the failed one, and
-restores the backup — deleting any of those database and settings files the backup does not hold, because a WAL the
-failed version wrote, replayed onto the older database, corrupts it. It then starts the previous version, waits for it
-the same way, says `update to <new> failed; back on <previous>` and exits non-zero. It never tries again on its own. It
-leaves `~/.local/state/romm-tender/update-failure.json`, written through a temporary file and renamed, with three keys:
+restores the backup — deleting any of those database and settings files the backup does not hold. It then starts the
+previous version, waits for it the same way, says `update to <new> failed; back on <previous>` and exits non-zero. It
+never tries again on its own. It leaves `~/.local/state/romm-tender/update-failure.json`, written through a temporary
+file and renamed, with three keys:
 
 ```json
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
 
-`rolled_back_at` is ISO-8601 UTC. The next update that starts removes the file.
+`rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file.
 
 `~/.local/lib/romm-tender/install.sh --rollback` does the same restore by hand — the release tarball ships the
-installer, so every installed tree carries one — and writes no record, because going back by choice is not an update
-that failed. It refuses, changing nothing, when there is no kept tree or no backup. `--uninstall` removes the kept tree
-and leaves the backup with the rest of the data root. `TENDER_UPDATE_WAIT` shortens the wait; it exists for the tests.
+installer, so every tree installed from this release on carries one — and writes no record, because going back by choice
+is not an update that failed. It refuses, changing nothing, when there is no kept tree or no backup. Before it restores
+anything it stops the unit and copies the database files and `settings.json` it is about to replace into
+`~/.local/share/romm-tender/rollback-backup/`, staged and renamed over the copy the previous rollback by hand made; a
+copy that cannot be made refuses the rollback, changes nothing and starts the unit again where it was running. No update
+touches that directory. The run names the date the data goes back to — the backup's `backed-up-at` — and where the copy
+is. The automatic rollback above makes no such copy: what it discards was written by a version that was never seen to
+answer.
+
+Going back, by itself or by hand, puts the kept tree in place of the current one, so there is none left afterwards and
+`--rollback` refuses until the next update keeps one. `--uninstall` removes the kept tree and leaves both backups with
+the rest of the data root. `TENDER_UPDATE_WAIT` sets the wait; it exists for the tests.
 
 Where Steam's debugger is answering, an update or a rollback that ends on a backend which replaces a panel an earlier
 one left
@@ -274,8 +284,9 @@ closes by saying the panel comes back by itself once no game is running, and to 
 few minutes. Going back to a release from before that replacement asks for the restart instead.
 
 Every step that runs once per machine — the covers' move above, a backend backfill behind a `kv_config` marker, a rung
-of either version ladder — stays safe to run again and stays in the next release, because an update jumps from whatever
-release a machine is on straight to the newest. The rule and its reasons are in the
+of either version ladder — stays safe to run again and stays in every later release, because an update jumps from
+whatever release a machine is on straight to the newest; one leaves only deliberately, with that release's notes naming
+the oldest version it can be updated from directly. The rule and its reasons are in the
 [invariant register](../architecture/invariants.md).
 
 **The install refuses while a backend of your own is up.** `mise run dev` and `mise run dev:backend` start one outside
