@@ -178,7 +178,11 @@ def apply_mask(payload: bytes, mask: bytes) -> bytes:
         return payload
     if len(mask) != _MASK_LENGTH:
         raise WebSocketProtocolError(f"a mask is {_MASK_LENGTH} bytes, got {len(mask)}")
-    return bytes(byte ^ mask[index % _MASK_LENGTH] for index, byte in enumerate(payload))
+    # One XOR over two integers rather than a Python loop per byte, because the
+    # host accepts payloads of many megabytes (MAX_FRAME_BYTES, host/connection.py).
+    length = len(payload)
+    keystream = (mask * (length // _MASK_LENGTH + 1))[:length]
+    return (int.from_bytes(payload, "big") ^ int.from_bytes(keystream, "big")).to_bytes(length, "big")
 
 
 def build_frame(opcode: int, payload: bytes, *, fin: bool = True, mask: bytes = b"") -> bytes:
