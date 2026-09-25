@@ -378,21 +378,23 @@ export const probeReachability = callable<[], { online: boolean }>("probe_reacha
 export const refreshSaveStatus = callable<[number], { success: boolean }>("refresh_save_status");
 export const removeRom = callable<[number], BackendResult>("remove_rom");
 export const getPlatforms = callable<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
-// `message` only comes with a refusal: both answer a bare `{success: true}`,
-// so a caller reading it on the success shape reads `undefined`.
-export const savePlatformSync = callable<[number, boolean], { success: boolean; message?: string }>(
+// `reason` and `message` only come with a refusal: both answer a bare
+// `{success: true}`, so a caller reading either on the success shape reads
+// `undefined`.
+export const savePlatformSync = callable<[number, boolean], { success: boolean; reason?: string; message?: string }>(
   "save_platform_sync",
 );
-export const setAllPlatformsSync = callable<[boolean], { success: boolean; message?: string }>(
+export const setAllPlatformsSync = callable<[boolean], { success: boolean; reason?: string; message?: string }>(
   "set_all_platforms_sync",
 );
 export const getCollections = callable<
   [],
   { success: boolean; collections: CollectionSyncSetting[]; message?: string; reason?: RommErrorCode }
 >("get_collections");
-export const saveCollectionSync = callable<[string, CollectionKind, boolean], { success: boolean; message?: string }>(
-  "save_collection_sync",
-);
+export const saveCollectionSync = callable<
+  [string, CollectionKind, boolean],
+  { success: boolean; reason?: string; message?: string }
+>("save_collection_sync");
 // One settings write stamping these ids into one kind's bucket — the
 // Collections tab's Enable all / Disable all, over the ids its table lists.
 export const saveCollectionsSync = callable<

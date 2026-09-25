@@ -626,6 +626,7 @@ describe("Library › Platforms", () => {
       // like.
       vi.mocked(backend.savePlatformSync).mockResolvedValue({
         success: false,
+        reason: "blocked_by_migration",
         message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
