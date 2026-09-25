@@ -8,15 +8,22 @@ operation still running or holding a lease (``operation_active``). Where more
 than one applies, they are asked in the order exclusive start, migration, sync,
 prune active.
 
-Every test here drives ``harness.plugin.<endpoint>`` with frontend-shaped
-arguments and reads the answer, so it holds wherever the rules are enforced. The
-four ``test_*_names_every_endpoint_*`` tests are the exception: they read the
-gate decorators, and are the tests to rewrite when a rule moves.
+Every test here but the five at the bottom drives ``harness.plugin.<endpoint>``
+with frontend-shaped arguments and reads the answer, so it holds wherever the
+rules are enforced. Four of those five, the ``test_*_names_every_endpoint_*``
+tests, read the gate decorators instead, to keep each list from falling behind
+an endpoint that gains or loses its gate: when a rule moves off its decorator,
+its test is rewritten to read the rule where it went, and the lists and the
+tests driving them do not change. The fifth,
+``test_every_gated_endpoint_has_its_arguments``, reads only the lists. Outside
+this module, ``tests/test_plugin.py``'s ``TestMigrationBlockedDecoratorCoverage``
+reads ``@migration_blocked`` as well.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 from typing import Any
 
@@ -24,7 +31,7 @@ import pytest
 
 from domain.sync_state import SyncState
 
-from ._harness import hold_migration_pending, hold_prune_active, hold_sync_in_flight
+from ._harness import hold_migration_pending, hold_prune_active, hold_sync_in_flight, release_prune_active
 from ._seed import seed_rom
 
 _MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss."
@@ -256,6 +263,21 @@ def _assert_migration_refusal(result: dict[str, Any]) -> None:
     assert "blocked_by_migration" not in result
 
 
+async def _until_entered(entered: asyncio.Event, running: asyncio.Task[Any]) -> None:
+    """Wait for ``entered``, failing fast when ``running`` ends or stalls before it is set."""
+    waiting = asyncio.create_task(entered.wait())
+    await asyncio.wait({waiting, running}, timeout=10, return_when=asyncio.FIRST_COMPLETED)
+    waiting.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await waiting
+    if entered.is_set():
+        return
+    if running.done():
+        pytest.fail(f"the endpoint answered before it reached the held call: {running.result()!r}")
+    running.cancel()
+    pytest.fail("the endpoint neither reached the held call nor answered within 10 s")
+
+
 def _endpoints_marked(marker: str) -> set[str]:
     from host.dispatch import reachable_methods
     from main import Plugin
@@ -271,6 +293,11 @@ async def test_a_held_cleanup_refuses_the_endpoint(harness, endpoint):
     hold_prune_active(harness)
 
     _assert_refused(await _call(harness, endpoint), "prune_active")
+
+    # The refusal registered nothing: once the cleanup lets go, the exclusive
+    # start finds no conflicting operation.
+    release_prune_active(harness)
+    assert (await harness.plugin.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
 
 
 @pytest.mark.parametrize("endpoint", MIGRATION)
@@ -298,7 +325,7 @@ async def test_the_migration_refusal_is_the_canonical_failure_shape(harness):
     }
 
 
-async def test_start_prune_is_refused_while_a_lease_is_held_and_admitted_once_it_is_released(harness):
+async def test_start_prune_is_refused_while_a_lease_is_held_and_gets_past_the_gate_once_it_is_released(harness):
     seed_rom(harness, 41)
     removed = await harness.plugin.remove_all_shortcuts()
     token = removed["prune_lease_token"]
@@ -324,7 +351,7 @@ async def test_start_prune_is_refused_while_a_conflicting_endpoint_is_running(ha
 
     monkeypatch.setattr(harness.romm, "heartbeat", held_heartbeat)
     running = asyncio.create_task(harness.plugin.test_connection())
-    await entered.wait()
+    await _until_entered(entered, running)
 
     try:
         _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
@@ -344,8 +371,10 @@ async def test_a_pending_migration_answers_before_a_held_cleanup(harness, endpoi
     hold_prune_active(harness)
 
     _assert_migration_refusal(await _call(harness, endpoint))
-    # Nothing the refused call registered stays behind: the exclusive start,
-    # asked first, still finds nothing running.
+    # Nothing the refused call registered stays behind: once the cleanup lets
+    # go, the exclusive start, asked first, finds no conflicting operation and
+    # the migration answers.
+    release_prune_active(harness)
     _assert_migration_refusal(await harness.plugin.start_prune(_START_PRUNE_REQUEST))
 
 
@@ -382,6 +411,14 @@ async def test_a_held_lease_answers_start_prune_before_a_pending_migration(harne
     _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
 
 
+async def test_a_held_lease_answers_start_prune_before_a_sync_in_flight(harness):
+    seed_rom(harness, 41)
+    assert (await harness.plugin.remove_all_shortcuts())["prune_lease_token"]
+    hold_sync_in_flight(harness)
+
+    _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
+
+
 async def test_start_prune_refused_for_a_pending_migration_leaves_no_cleanup_claim_behind(harness):
     hold_migration_pending(harness)
 
@@ -404,10 +441,7 @@ async def test_start_prune_refused_for_a_sync_in_flight_leaves_no_cleanup_claim_
 def test_the_prune_active_matrix_names_every_endpoint_the_gate_covers():
     """Holds ``PRUNE_ACTIVE`` equal to the endpoints ``@prune_active_blocked`` marks.
 
-    One of the four tests here that read the decorators rather than behaviour:
-    it keeps the list from falling behind an endpoint that gains or loses the
-    gate. When the rule moves off the decorator, this test is rewritten to read
-    it where it went; the matrix itself does not change.
+    Reads the decorator, not behaviour.
     """
     assert set(PRUNE_ACTIVE) == _endpoints_marked("_prune_active_blocked")
 
@@ -415,10 +449,7 @@ def test_the_prune_active_matrix_names_every_endpoint_the_gate_covers():
 def test_the_migration_matrix_names_every_endpoint_the_gate_covers():
     """Holds ``MIGRATION`` equal to the endpoints ``@migration_blocked`` marks.
 
-    One of the four tests here that read the decorators rather than behaviour:
-    it keeps the list from falling behind an endpoint that gains or loses the
-    gate. When the rule moves off the decorator, this test is rewritten to read
-    it where it went; the matrix itself does not change.
+    Reads the decorator, not behaviour.
     """
     assert set(MIGRATION) == _endpoints_marked("_migration_blocked")
 
@@ -426,10 +457,7 @@ def test_the_migration_matrix_names_every_endpoint_the_gate_covers():
 def test_the_sync_active_matrix_names_every_endpoint_the_gate_covers():
     """Holds ``SYNC_ACTIVE`` equal to the endpoints ``@sync_active_blocked`` marks.
 
-    One of the four tests here that read the decorators rather than behaviour:
-    it keeps the list from falling behind an endpoint that gains or loses the
-    gate. When the rule moves off the decorator, this test is rewritten to read
-    it where it went; the matrix itself does not change.
+    Reads the decorator, not behaviour.
     """
     assert set(SYNC_ACTIVE) == _endpoints_marked("_sync_active_blocked")
 
@@ -437,10 +465,7 @@ def test_the_sync_active_matrix_names_every_endpoint_the_gate_covers():
 def test_the_exclusive_start_names_every_endpoint_the_gate_covers():
     """Holds ``EXCLUSIVE_START`` equal to the endpoints ``@prune_exclusive_start`` marks.
 
-    One of the four tests here that read the decorators rather than behaviour:
-    it keeps the list from falling behind an endpoint that gains or loses the
-    gate. When the rule moves off the decorator, this test is rewritten to read
-    it where it went; the tests driving ``start_prune`` do not change.
+    Reads the decorator, not behaviour.
     """
     assert set(EXCLUSIVE_START) == _endpoints_marked("_prune_exclusive_start")
 

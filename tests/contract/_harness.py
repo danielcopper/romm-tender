@@ -314,10 +314,12 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     )
 
 
-# The conditions a gated endpoint refuses on. Each is reached here and nowhere
-# else, so moving where a condition lives changes one helper rather than every
-# test that needs the condition. None of them is released: each test gets a
-# fresh harness.
+# The conditions a gated endpoint refuses on. A test that needs one to meet a
+# gate reaches it through the helper here, so moving where a condition lives
+# changes one helper rather than every test that needs the condition. Only the
+# cleanup's claim has a release, for a test that probes what a refusal left
+# behind once the claim is gone; the other two hold until the test ends, and
+# each test gets a fresh harness.
 
 
 def hold_migration_pending(harness: ContractHarness) -> None:
@@ -352,3 +354,8 @@ def hold_prune_active(harness: ContractHarness) -> None:
     Steam action it waits for the frontend to claim.
     """
     harness.plugin._prune_service._starting = True
+
+
+def release_prune_active(harness: ContractHarness) -> None:
+    """Let go of the claim ``hold_prune_active`` left, through the same poke."""
+    harness.plugin._prune_service._starting = False
