@@ -94,9 +94,9 @@ REQUIRED_FILES = (
 # that path. It decides on the other one — where that install fails,
 # ``bootstrap/adapters.py`` points the shortcut at this copy in the unpacked
 # tree instead, and it is then run as it arrived. That is the case with no other
-# defence, which is why the mode is asserted here. The installer is run from the
-# installed tree as ``install.sh --rollback``, which is the one copy of it a user
-# who has no tarball at hand still has.
+# defence, which is why the mode is asserted here. The installer is run by path
+# from the installed tree — ``~/.local/lib/romm-tender/install.sh --rollback``,
+# the command the user guide gives — which needs the bit.
 EXECUTABLE_FILES = frozenset({"bin/tender-rom-launcher", "install.sh"})
 
 # A path segment that may not appear anywhere in the archive, and a name that

@@ -5,9 +5,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/danielcopper/romm-tender/main/install.sh | bash
 #
 # No sudo, nothing outside this user's home, and no daemon but one systemd user
-# unit. Run it again to update — an update the new version does not start from
-# is rolled back, and `--rollback` goes back by hand; `--uninstall` takes it
-# back out.
+# unit. Run it again to update — an update whose new version does not answer is
+# rolled back, and `--rollback` goes back by hand; `--uninstall` takes it back
+# out.
 #
 # TEST SEAMS. Each is read once, at the top of this script, and each has a
 # working default, so a test — or a hand install into another tree — can move
@@ -27,8 +27,8 @@
 #                         — the five above and this one are written into the
 #                         unit verbatim.
 #   TENDER_ACK_UNTIL      the acknowledgement's expiry date
-#   TENDER_UPDATE_WAIT    how many seconds an update waits for the new version
-#                         to answer before it rolls back. Default 60.
+#   TENDER_UPDATE_WAIT    how many seconds the installer waits for a version to
+#                         answer after an update or a rollback
 #   TENDER_RELEASE_API    where the newest release is looked up
 #   TENDER_DOWNLOAD_BASE  where a release's assets are downloaded from
 #
@@ -89,6 +89,16 @@ DATABASE="romm_sync.db"
 DATABASE_FILES=("$DATABASE" "$DATABASE-wal" "$DATABASE-shm")
 SETTINGS="settings.json"
 BACKUP="$DATA/update-backup"
+
+# When the backup was made, one line of ISO-8601 UTC inside it, which is the
+# date a rollback by hand names.
+BACKUP_STAMP="backed-up-at"
+
+# What a rollback by hand replaces, kept before it does: the database files and
+# the settings as the version being left wrote them. A directory of its own
+# rather than one inside $BACKUP, which every update replaces whole: this copy
+# lasts until the next rollback by hand.
+ROLLBACK_BACKUP="$DATA/rollback-backup"
 
 # The note an update that was rolled back leaves in the state directory: the
 # version it tried, the version it went back to, and when.
@@ -173,6 +183,11 @@ ANSWERED="no"
 # Whether an update was rolled back, which ends the run non-zero once the rest
 # of it has been said.
 ROLLED_BACK="no"
+
+# How far an update got between stopping the unit and starting it again:
+# `stopped` before the new tree is in place, `swapped` after. The EXIT trap
+# reads it, so a run that ends in that window says the service is stopped.
+UPDATE_STAGE=""
 
 # What the EXIT trap has to clean up: a download directory, a spinner that is
 # still drawing, and a row whose outcome was never written.
@@ -462,7 +477,8 @@ greeting_lines() {
     greeting_key "Runs as" "a systemd user service, starts with your session"
     # Steam reads the debugger marker only at its own start, so a first install
     # needs that restart once; an update's backend replaces the panel the
-    # earlier one left, and the closing line says when that did not happen.
+    # earlier one left, and the closing line asks for the restart where it
+    # cannot.
     if [ -d "$CODE" ]; then
         greeting_key "Needs" "no sudo"
     else
@@ -925,8 +941,27 @@ fail_open_row() {
 # row rather than above it; this is the backstop for every other way out.
 cleanup() {
     fail_open_row
+    say_the_service_is_stopped
     [ -z "$WORK_DIR" ] || rm -rf "$WORK_DIR"
     [ -z "$ROW_FILE" ] || rm -f "$ROW_FILE" "$ROW_FILE.tmp" "$ROW_FILE.height" "$ROW_FILE.stop"
+}
+
+# Not a refusal — the run's own has already been said, or there was none — so
+# it carries no `install.sh:` prefix. `--rollback` is named only once the new
+# tree is in place: before that the kept tree is an earlier update's, and the
+# backup may already hold the data of the version still installed.
+say_the_service_is_stopped() {
+    case "$UPDATE_STAGE" in
+        stopped)
+            echo "$UNIT_NAME is stopped: the update ended before it replaced anything." >&2
+            echo "  start it again with systemctl --user start $UNIT_NAME" >&2
+            ;;
+        swapped)
+            echo "$UNIT_NAME is stopped: the update ended after putting the new version in place and before starting it." >&2
+            echo "  start it with systemctl --user start $UNIT_NAME, or go back with $(tilde "$CODE")/install.sh --rollback" >&2
+            ;;
+        *) ;;
+    esac
 }
 
 # Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
@@ -1428,11 +1463,12 @@ swap_tree() {
 
 # ---------------------------------------------------- update and rollback
 
-# The version a tree says it is, or non-zero where it says none.
+# The version a tree says it is, or non-zero where it says none. Whitespace and
+# control characters are dropped, which record_update_failure relies on.
 tree_version() {
     local file="$1/version.txt"
     [ -f "$file" ] || return 1
-    tr -d '[:space:]' < "$file"
+    tr -d '[:space:][:cntrl:]' < "$file"
 }
 
 # The version the backend behind the port note says it is, or nothing where
@@ -1478,22 +1514,55 @@ stop_unit() {
 # Plain copies, whole only because the unit has been stopped first. Exactly what
 # exists is copied, because a rollback reproduces exactly this set.
 back_up() {
-    local name staged="$BACKUP.new"
-    rm -rf "$staged"
-    mkdir -p "$staged" || return 1
-    for name in "${DATABASE_FILES[@]}"; do
-        [ ! -e "$DATA/$name" ] || cp -p "$DATA/$name" "$staged/$name" || return 1
-    done
-    [ ! -e "$CONFIG/$SETTINGS" ] || cp -p "$CONFIG/$SETTINGS" "$staged/$SETTINGS" || return 1
+    local staged="$BACKUP.new"
+    stage_directory "$staged" || return 1
+    copy_data_into "$staged" || return 1
     [ ! -e "$UNIT" ] || cp -p "$UNIT" "$staged/$UNIT_NAME.service" || return 1
-    rm -rf "$BACKUP"
-    mv "$staged" "$BACKUP"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "$staged/$BACKUP_STAMP" || return 1
+    put_in_place "$staged" "$BACKUP"
+}
+
+# The same copy for a rollback by hand, of the data it is about to replace.
+back_up_before_rollback() {
+    local staged="$ROLLBACK_BACKUP.new"
+    stage_directory "$staged" || return 1
+    copy_data_into "$staged" || return 1
+    put_in_place "$staged" "$ROLLBACK_BACKUP"
+}
+
+# An empty directory, or non-zero: a stale one left by an interrupted run would
+# otherwise carry files this copy did not find into it.
+stage_directory() {
+    rm -rf "$1" || return 1
+    mkdir -p "$1"
+}
+
+copy_data_into() {
+    local name
+    for name in "${DATABASE_FILES[@]}"; do
+        [ ! -e "$DATA/$name" ] || cp -p "$DATA/$name" "$1/$name" || return 1
+    done
+    [ ! -e "$CONFIG/$SETTINGS" ] || cp -p "$CONFIG/$SETTINGS" "$1/$SETTINGS" || return 1
+}
+
+# The earlier copy goes before the staged one is renamed over its name. `-T`,
+# because `mv` onto a directory that is still there moves INTO it.
+put_in_place() {
+    rm -rf "$2" || return 1
+    mv -T "$1" "$2"
+}
+
+# When the backup was made, as its stamp says.
+backup_date() {
+    head -n 1 "$BACKUP/$BACKUP_STAMP" 2> /dev/null
 }
 
 # Every file the backup holds is put back, and every one of the database's and
-# the settings' files it does NOT hold is taken away: a WAL the failed version
-# wrote, replayed onto the database from before it, corrupts it. The unit is put
-# back where the backup has one and otherwise left as this run wrote it — it
+# the settings' files it does NOT hold is taken away: a WAL left beside a
+# database it does not belong to corrupts it ("Overwriting a database file with
+# another without also deleting any hot journal associated with the original
+# database", https://www.sqlite.org/howtocorrupt.html, section 1.4). The unit is
+# put back where the backup has one and otherwise left as this run wrote it — it
 # names paths, not a version, so it starts either tree.
 restore_backup() {
     local name status=0
@@ -1516,12 +1585,9 @@ restore_file() {
 }
 
 # The failed tree goes and the one it replaced comes back, with the data it had,
-# and the unit is started on it. Waiting for it to answer is the caller's.
+# and the unit is started on it. The caller has stopped the unit; waiting for it
+# to answer is the caller's too.
 revert_to_previous() {
-    if ! stop_unit; then
-        abort "$UNIT_NAME would not stop, so the earlier version was not put back" \
-            "stop it with systemctl --user stop $UNIT_NAME, then run $(tilde "$CODE")/install.sh --rollback"
-    fi
     rm -rf "$CODE.new"
     [ ! -d "$CODE" ] || mv "$CODE" "$CODE.new"
     mv "$CODE.old" "$CODE"
@@ -1535,8 +1601,8 @@ revert_to_previous() {
 }
 
 # Written through a temporary file and renamed, so a reader never sees half of
-# it. The versions come off version.txt, so the one escape JSON needs from them
-# is the quote and the backslash.
+# it. The versions come off tree_version, so the only characters JSON needs
+# escaped in them are the quote and the backslash.
 record_update_failure() {
     local record="$STATE/$UPDATE_FAILURE"
     mkdir -p "$STATE"
@@ -1693,7 +1759,7 @@ start_unit() {
     # `enable --now` starts a stopped unit and leaves a running one on the tree
     # it started from. An update has stopped it first; a unit that is up with
     # no tree at $CODE behind it has not been.
-    systemctl --user restart "$UNIT_NAME"
+    [ "$UPDATING" = "yes" ] || systemctl --user restart "$UNIT_NAME"
 }
 
 # ----------------------------------------------------------------- marker
@@ -1749,6 +1815,7 @@ do_install() {
         set_the_install_aside
     fi
     swap_tree
+    [ "$UPDATE_STAGE" != "stopped" ] || UPDATE_STAGE="swapped"
     move_covers
     row_detail "$INSTALLING" "$(basename "$TARBALL")$UNVERIFIED $ARROW $(tilde "$CODE")"
     row_end "$INSTALLING" ok
@@ -1761,6 +1828,7 @@ do_install() {
     if [ "$UPDATING" = "no" ]; then
         start_unit
     else
+        UPDATE_STAGE=""
         start_unit || true
         row_detail "$SERVICE" "waiting for $new to answer"
         if wait_for_version "$new"; then
@@ -1796,12 +1864,20 @@ set_the_install_aside() {
         rm -rf "$CODE.new"
         abort "$UNIT_NAME would not stop" "nothing was changed; stop it with systemctl --user stop $UNIT_NAME and run this again"
     fi
+    UPDATE_STAGE="stopped"
     row_detail "$INSTALLING" "backing up your data"
     if ! back_up; then
         rm -rf "$CODE.new" "$BACKUP.new"
-        [ "$was_running" = "no" ] || systemctl --user start "$UNIT_NAME" || true
+        start_again_if "$was_running"
         abort "could not back up your data to $(tilde "$BACKUP")" "nothing was changed"
     fi
+}
+
+# Puts the unit back the way it was found, before a refusal that changed
+# nothing: running again where it had been running.
+start_again_if() {
+    UPDATE_STAGE=""
+    [ "$1" = "no" ] || systemctl --user start "$UNIT_NAME" || true
 }
 
 # Never retried: an update that did not start once is not one to start again
@@ -1809,6 +1885,10 @@ set_the_install_aside() {
 roll_back_the_update() {
     local new="$1" previous="$2"
     row_detail "$SERVICE" "$new did not answer, going back to $previous"
+    if ! stop_unit; then
+        abort "$UNIT_NAME would not stop, so the earlier version was not put back" \
+            "stop it with systemctl --user stop $UNIT_NAME, then run $(tilde "$CODE")/install.sh --rollback"
+    fi
     revert_to_previous
     record_update_failure "$new" "$previous"
     if ! wait_for_version "$previous"; then
@@ -1822,26 +1902,40 @@ roll_back_the_update() {
 }
 
 # Puts back the tree and the data the last update replaced, by hand. Nothing is
-# asked or changed before both are known to be there.
+# asked or changed before both are known to be there, and the data it replaces
+# is copied aside first — without a prompt, because the copy is what makes the
+# question unnecessary. A copy that cannot be made refuses the rollback.
 do_rollback() {
-    greeter mode_lines "Putting back the version the last update replaced, with the data it had."
     [ -d "$CODE.old" ] ||
         abort "there is no earlier version to go back to" "an update keeps the one it replaced at $(tilde "$CODE.old"), and there is none"
     [ -d "$BACKUP" ] ||
         abort "there is no backup to go back to" "an update backs your data up to $(tilde "$BACKUP") first, and there is none"
+    local made
+    made="$(backup_date)" || made=""
+    greeter mode_lines "Putting back the version the last update replaced, and your data as it was on ${made:-an unrecorded date}."
     rows_begin
 
     row_start "$CHECKING"
     preflight
     row_end "$CHECKING" ok
 
-    local previous
+    local previous was_running="no"
     previous="$(tree_version "$CODE.old")" || previous=""
     REPLACED_AN_INSTALL="yes"
     row_start "$INSTALLING"
+    ! unit_is_active || was_running="yes"
     row_detail "$INSTALLING" "stopping $UNIT_NAME"
+    stop_unit ||
+        abort "$UNIT_NAME would not stop" "nothing was changed; stop it with systemctl --user stop $UNIT_NAME and run this again"
+    row_detail "$INSTALLING" "keeping a copy of your data"
+    if ! back_up_before_rollback; then
+        rm -rf "$ROLLBACK_BACKUP.new"
+        start_again_if "$was_running"
+        abort "could not copy your data to $(tilde "$ROLLBACK_BACKUP")" "nothing was changed"
+    fi
     revert_to_previous
     row_detail "$INSTALLING" "$previous $ARROW $(tilde "$CODE")"
+    row_sub "$INSTALLING" "your data from before the rollback is in $(tilde "$ROLLBACK_BACKUP")"
     row_end "$INSTALLING" ok
 
     row_start "$SERVICE"

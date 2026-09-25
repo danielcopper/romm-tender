@@ -72,9 +72,11 @@ _RECOVERY = "backend/host/inject/recovery.py"
 # note for by hand.
 _BACKEND_PORT = "27740"
 
-# What the packager is handed. Only the three entries install.sh requires need
-# real content; the rest have to exist because the packager refuses a tree that
-# is missing any shipped entry.
+# What the packager is handed, beside the `version.txt` _build_tarball writes.
+# install.sh requires four files — `backend/main.py`, `dist/index.js`,
+# `bin/tender-rom-launcher` and that `version.txt`. _RECOVERY is here because
+# the closing line asks for it, and the rest have to exist because the packager
+# refuses a tree that is missing any shipped entry.
 _CHECKOUT_FILES = (
     "backend/main.py",
     "dist/index.js",
@@ -94,8 +96,11 @@ printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
 # the tree the unit file names, the way the user manager starts it, and once up
 # it leaves what a real one leaves — the port note where the backend's own
 # directory ladder puts it, and the version the stubbed curl answers a knock
-# with. A version named in STUB_BROKEN_VERSIONS starts and never comes up.
-# Every start and stop is logged with the version of the tree it found.
+# with. A version named in STUB_BROKEN_VERSIONS starts and never comes up, and
+# STUB_ANSWERS_AS=<tree>=<answer> has a tree's backend answer as another
+# version. While the backend is up the unit is active, unless STUB_UNIT_ACTIVE
+# says otherwise. Every start and stop is logged with the version of the tree
+# it found.
 unit_value() {
     sed -n "s/^Environment=$1=//p" "$HOME/.config/systemd/user/romm-tender.service" 2> /dev/null
 }
@@ -137,7 +142,16 @@ backend_start() {
     esac
     mkdir -p "$(dirname "$(port_note)")"
     printf '%s' "$STUB_BACKEND_PORT" > "$(port_note)"
-    printf '%s\\n' "$version" > "$STUB_BACKEND_SERVING"
+    local answer="$version"
+    case "${STUB_ANSWERS_AS:-}" in
+        "$version="*) answer="${STUB_ANSWERS_AS#*=}" ;;
+    esac
+    printf '%s\\n' "$answer" > "$STUB_BACKEND_SERVING"
+}
+unit_active() {
+    [ -z "${STUB_UNIT_ACTIVE:-}" ] || exit "$STUB_UNIT_ACTIVE"
+    [ -n "${STUB_BACKEND:-}" ] && [ -s "$STUB_BACKEND_SERVING" ] && exit 0
+    exit 3
 }
 case "$*" in
     *"show-environment"*) exit "${STUB_USER_MANAGER_EXIT:-0}" ;;
@@ -145,7 +159,7 @@ case "$*" in
         [ -z "${STUB_DECKY_UNIT:-}" ] || printf '%s\\n' "$STUB_DECKY_UNIT"
         exit 0
         ;;
-    *"is-active"*) exit "${STUB_UNIT_ACTIVE:-3}" ;;
+    *"is-active"*) unit_active ;;
     *"MainPID"*) printf '%s\\n' "${STUB_UNIT_MAIN_PID:-0}" ;;
     *"disable --now"*) backend_stop ;;
     *"enable"*)
@@ -1259,15 +1273,18 @@ class TestAnUpdateOverAnExistingInstall:
         assert not Path(f"{machine.code}.new").exists()
         assert (machine.old / "backend" / "leftover.py").is_file()
 
-    def test_it_restarts_the_unit_that_was_already_running(self, machine):
-        """An update ends with the unit started again, on the tree it put in place."""
-        tarball = _build_tarball(machine.tmp_path)
-        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
+    def test_it_starts_the_unit_again_once_on_the_tree_it_put_in_place(self, machine):
+        """The unit it stopped is started by ``enable --now``, and not restarted after that."""
+        _installed(machine)
         machine.systemctl_log.write_text("", encoding="utf-8")
+        machine.backend_log.write_text("", encoding="utf-8")
 
-        machine.run("--from", str(tarball), "--yes", STUB_BACKEND="up")
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
 
-        assert "--user restart romm-tender" in machine.systemctl_calls()
+        assert result.returncode == 0, result.stderr
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}"]
+        assert "--user enable --now --quiet romm-tender" in machine.systemctl_calls()
+        assert "--user restart romm-tender" not in machine.systemctl_calls()
 
     def test_the_users_own_directories_survive_it(self, machine):
         tarball = _build_tarball(machine.tmp_path)
@@ -1344,6 +1361,7 @@ class TestAnUpdateThatStarts:
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
 
         assert sorted(entry.name for entry in machine.backup.iterdir()) == [
+            "backed-up-at",
             "romm-tender.service",
             "romm_sync.db",
             "romm_sync.db-wal",
@@ -1353,6 +1371,14 @@ class TestAnUpdateThatStarts:
         assert (machine.backup / "romm_sync.db-wal").read_bytes() == before[machine.data / "romm_sync.db-wal"]
         assert (machine.backup / "settings.json").read_bytes() == before[machine.config / "settings.json"]
         assert (machine.backup / "romm-tender.service").read_bytes() == before[machine.unit]
+
+    def test_the_backup_records_when_it_was_made(self, machine):
+        _installed(machine)
+
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        stamp = (machine.backup / "backed-up-at").read_text(encoding="utf-8")
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\n", stamp)
 
     def test_the_unit_is_stopped_before_the_tree_is_swapped(self, machine):
         """The stop finds the OLD tree still in place, and comes before anything is started."""
@@ -1427,8 +1453,61 @@ class TestAnUpdateThatStarts:
         assert _tree_version(machine.code) == _VERSION
         assert not Path(f"{machine.code}.new").exists()
 
+    def test_a_unit_that_was_running_is_started_again_when_the_backup_fails(self, machine):
+        _installed(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+        machine.data.mkdir(parents=True, exist_ok=True)
+        machine.data.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        finally:
+            machine.data.chmod(0o700)
+
+        assert result.returncode == 1
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_VERSION}"]
+        assert "is stopped" not in result.stderr
+
+    def test_a_backup_that_cannot_replace_the_earlier_one_is_refused(self, machine):
+        """An earlier backup that cannot be removed stops the update; the new one never lands inside it."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        stuck = machine.backup / "stuck"
+        stuck.mkdir()
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
+            inside = sorted(entry.name for entry in machine.backup.iterdir())
+        finally:
+            stuck.chmod(0o700)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not back up your data to {machine.backup}"]
+        assert "update-backup.new" not in inside
+        assert _tree_version(machine.code) == _NEW
+
+    def test_an_update_that_ends_with_the_unit_stopped_says_so(self, machine):
+        """The new tree is in place and the unit file cannot be written: the run ends before the start."""
+        _installed(machine)
+        machine.unit.chmod(0o444)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        finally:
+            machine.unit.chmod(0o644)
+
+        assert result.returncode != 0
+        assert _tree_version(machine.code) == _NEW
+        assert (
+            "romm-tender is stopped: the update ended after putting the new version in place and before starting it."
+            in result.stderr.splitlines()
+        )
+        assert (
+            f"  start it with systemctl --user start romm-tender, or go back with {machine.code}/install.sh --rollback"
+            in result.stderr.splitlines()
+        )
+
     def test_a_first_install_keeps_nothing_and_waits_for_nothing(self, machine):
-        """A first install behaves as it did: no tree kept, no backup, no knock."""
+        """A first install keeps no tree, makes no backup and knocks on nothing."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up")
 
         assert result.returncode == 0, result.stderr
@@ -1469,7 +1548,7 @@ class TestAnUpdateThatDoesNotStart:
         assert not (machine.data / "romm_sync.db-shm").exists()
 
     def test_a_file_that_was_not_there_before_is_not_there_after(self, machine):
-        """A WAL the failed version wrote, replayed onto the database from before it, corrupts it."""
+        """A WAL the backup does not hold is taken away, and the database is the one it held."""
         _installed(machine)
         before = _seed_data(machine)
         (machine.data / "romm_sync.db-wal").unlink()
@@ -1504,17 +1583,53 @@ class TestAnUpdateThatDoesNotStart:
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["rolled_back_at"])
 
     def test_it_never_tries_again_on_its_own(self, machine):
-        """One start of the new tree's unit, then the old one — the order a single attempt makes."""
+        """One start of the new tree, then the old one — the order a single attempt makes."""
         _before, _result = self._failed(machine)
 
         assert machine.backend_events() == [
             f"stop {_VERSION}",
             f"start {_NEW}",
             f"stop {_NEW}",
-            f"start {_NEW}",
-            f"stop {_NEW}",
             f"start {_VERSION}",
         ]
+
+    def test_settings_and_a_database_the_backup_did_not_hold_are_taken_away(self, machine):
+        """Neither existed before the update, so neither exists after going back."""
+        _installed(machine)
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+        )
+
+        assert result.returncode == 1
+        assert not (machine.data / "romm_sync.db").exists()
+        assert not (machine.config / "settings.json").exists()
+
+    def test_a_backend_that_answers_as_another_version_is_rolled_back(self, machine):
+        """Up and answering is not enough: the ``Server`` field has to name the new version."""
+        _installed(machine)
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_ANSWERS_AS=f"{_NEW}=9.9.9",
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: update to {_NEW} failed; back on {_VERSION}"]
+        assert _tree_version(machine.code) == _VERSION
+
+    def test_it_keeps_no_copy_of_what_the_failed_version_wrote(self, machine):
+        """The copy a rollback by hand makes is not made here: that data is from a version that never answered."""
+        _before, _result = self._failed(machine)
+
+        assert not (machine.data / "rollback-backup").exists()
 
     def test_a_previous_version_that_does_not_answer_either_is_said(self, machine):
         _before, result = self._failed(machine, broken=f"{_VERSION} {_NEW}")
@@ -1545,6 +1660,76 @@ class TestRollingBackByHand:
         assert not (machine.data / "romm_sync.db-shm").exists()
         assert machine.backend_events()[-1] == f"start {_VERSION}"
         assert "[ok] Service      romm-tender.service running on" in result.stdout
+
+    def test_it_keeps_a_copy_of_the_data_it_replaces(self, machine):
+        """The database files and the settings as the version being left wrote them, and nothing else."""
+        _installed(machine)
+        _seed_data(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        replaced = {
+            "romm_sync.db": b"what the new version made of it\n",
+            "romm_sync.db-shm": b"its index\n",
+            "settings.json": b'{"version": 14}\n',
+        }
+        (machine.data / "romm_sync.db").write_bytes(replaced["romm_sync.db"])
+        (machine.data / "romm_sync.db-wal").unlink()
+        (machine.data / "romm_sync.db-shm").write_bytes(replaced["romm_sync.db-shm"])
+        (machine.config / "settings.json").write_bytes(replaced["settings.json"])
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        copy = machine.data / "rollback-backup"
+        assert {entry.name: entry.read_bytes() for entry in copy.iterdir()} == replaced
+
+    def test_it_names_the_date_it_goes_back_to_and_where_the_copy_is(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.backup / "backed-up-at").write_text("2026-09-25T10:15:00Z\n", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert (
+            "Putting back the version the last update replaced, and your data as it was on 2026-09-25T10:15:00Z."
+            in result.stdout
+        )
+        assert f"    your data from before the rollback is in {machine.data}/rollback-backup" in result.stdout
+
+    def test_a_copy_that_cannot_be_made_refuses_and_changes_nothing(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        machine.config.mkdir(parents=True, exist_ok=True)
+        (machine.config / "settings.json").write_text('{"version": 14}\n', encoding="utf-8")
+        before = {path: path.read_bytes() for path in machine.data.iterdir() if path.is_file()}
+        machine.backend_log.write_text("", encoding="utf-8")
+        machine.data.chmod(0o500)
+        try:
+            result = machine.run("--rollback", STUB_BACKEND="up")
+        finally:
+            machine.data.chmod(0o700)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not copy your data to {machine.data}/rollback-backup"]
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert {path: path.read_bytes() for path in machine.data.iterdir() if path.is_file()} == before
+        assert (machine.config / "settings.json").read_text(encoding="utf-8") == '{"version": 14}\n'
+        assert machine.backend_events() == [f"stop {_NEW}", f"start {_NEW}"]
+
+    def test_an_update_leaves_the_copy_alone(self, machine):
+        """It lasts until the next rollback by hand, however many updates come between."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        machine.run("--rollback", STUB_BACKEND="up")
+        copy = machine.data / "rollback-backup"
+        kept = {entry.name: entry.read_bytes() for entry in copy.iterdir()}
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert {entry.name: entry.read_bytes() for entry in copy.iterdir()} == kept
 
     def test_it_records_no_failure(self, machine):
         """Going back by hand is a choice, not an update that failed."""
