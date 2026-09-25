@@ -795,7 +795,7 @@ describe("Library › Collections", () => {
         "Turned off, other users' collections are hidden here and left out of the sync",
       );
       expect(container.textContent).toContain("1 from other users right now — shown, and synced where switched on.");
-      expect(row.textContent).toContain("1 other, shown");
+      expect(row.textContent).toContain("1 shown");
       expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(0);
       expect(container.querySelector('[data-testid="collections-search"]')).toBeNull();
       // The selection marker, as every other row of the list draws it.
@@ -807,13 +807,13 @@ describe("Library › Collections", () => {
       await selectKind(container, "owner");
       await click(ownerSwitch(container));
       expect(container.textContent).toContain("1 from other users right now — hidden and left out of the sync.");
-      expect(kindRow(container, "owner").textContent).toContain("1 other, hidden");
+      expect(kindRow(container, "owner").textContent).toContain("1 hidden");
     });
 
-    it("counts other users' collections in the plural", async () => {
+    it("counts every other user's collection", async () => {
       const second = coll({ id: "13", name: "Road trip", is_own: false, owner_username: "mara" });
       const { container } = await openCollections([...LIBRARY, second]);
-      expect(kindRow(container, "owner").textContent).toContain("2 others, shown");
+      expect(kindRow(container, "owner").textContent).toContain("2 shown");
     });
 
     it("counts none when no collection is another user's, and a dash when the read failed", async () => {

@@ -1447,8 +1447,8 @@ chosen from is [collections-layouts.html](../assets/collections-layouts.html). F
   count.
 - **Other users' collections**, a row with its switch in it, as Favorites has, and the list column's refusal line under
   it. Its count is how many of the collections RomM lists are other users' and whether they are shown or hidden — "3
-  others, shown", "none" where there are none, a dash where the read failed, and nothing while the read is out or while
-  Tender cannot yet tell whose a collection is. It is the owner scope (CONTEXT.md → Collection owner-scope): on is
+  shown" or "3 hidden", "none" where there are none, a dash where the read failed, and nothing while the read is out or
+  while Tender cannot yet tell whose a collection is. It is the owner scope (CONTEXT.md → Collection owner-scope): on is
   `all`, off is `own`. It is a switch in the list column rather than a segmented control beside the search because it is
   a sync setting that applies to two of the kinds, and a control shaped like a filter would say otherwise. Its pane has
   no table: what turning it off does (other users' collections are hidden here and left out of the sync, even ones
