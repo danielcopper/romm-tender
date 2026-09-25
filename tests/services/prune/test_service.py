@@ -24,6 +24,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from lib.errors import OperationAbortedError, RommConnectionError, RommNotFoundError
+from lib.prune_gate import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import cancellation_state
 from services.prune.results import GroupOutcome
@@ -240,6 +241,7 @@ class Harness:
     installed_remover: FakeInstalledFilesRemover
     clock: FakeClock
     switch_calls: list[dict[str, Any]]
+    conflicts: PruneConflicts
 
 
 def _rom(
@@ -329,6 +331,7 @@ async def harness() -> Harness:
         }
 
     clock = FakeClock()
+    conflicts = PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
     service = PruneService(
         config=PruneServiceConfig(
             loop=loop,
@@ -356,6 +359,7 @@ async def harness() -> Harness:
             remove_installed_files=installed_remover,
             switch_version=switch_version,
             settings={"preferred_region": "USA"},
+            run_claim=conflicts,
         )
     )
     return Harness(
@@ -372,6 +376,7 @@ async def harness() -> Harness:
         installed_remover,
         clock,
         switch_calls,
+        conflicts,
     )
 
 
@@ -689,6 +694,7 @@ async def test_cancel_stops_the_named_run_and_reports_it_as_cancelled(harness):
     assert harness.uow.roms.get(1) is not None
     # The claim is released, so the next scan is not locked out by a stopped run.
     assert harness.service.is_active() is False
+    assert harness.conflicts.cleanup_running is False
 
 
 @pytest.mark.asyncio
@@ -813,7 +819,61 @@ async def test_cancel_before_the_run_task_starts_still_releases_the_claim(harnes
     # A claim left set here would refuse Play, downloads and saves for the rest
     # of the plugin's life, with no run to release it.
     assert harness.service.is_active() is False
+    assert harness.conflicts.cleanup_running is False
     assert harness.uow.roms.get(1) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_started_run_holds_its_claim_on_the_gate_until_it_ends(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    preview = await _preview(harness)
+
+    started = await _start(harness, preview["preview_id"])
+
+    assert started["success"] is True
+    assert harness.conflicts.cleanup_running is True
+    await _finish(harness)
+    assert harness.conflicts.cleanup_running is False
+
+
+@pytest.mark.asyncio
+async def test_the_run_is_registered_once_validation_passes_and_not_before(harness, monkeypatch):
+    """What covers the validation phase is the start's reservation, taken outside this service."""
+    _seed(harness.uow, _rom(1, fetch="old"))
+    preview = await _preview(harness)
+    entered = threading.Event()
+    release = threading.Event()
+    original = harness.service._preview_builder.build
+
+    def blocked_refresh(*args):
+        entered.set()
+        if not release.wait(timeout=5):
+            raise TimeoutError("test did not release preview refresh")
+        return original(*args)
+
+    monkeypatch.setattr(harness.service._preview_builder, "build", blocked_refresh)
+    start = asyncio.create_task(_start(harness, preview["preview_id"]))
+    assert await asyncio.get_running_loop().run_in_executor(None, entered.wait, 5)
+
+    assert harness.service.is_active() is True
+    assert harness.conflicts.cleanup_running is False
+
+    release.set()
+    assert (await start)["success"] is True
+    assert harness.conflicts.cleanup_running is True
+    await _finish(harness)
+
+
+@pytest.mark.asyncio
+async def test_a_start_refused_as_stale_registers_no_run(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    preview = await _preview(harness)
+    _seed(harness.uow, _rom(2, fetch="old"))
+
+    started = await _start(harness, preview["preview_id"])
+
+    assert started["reason"] == "stale_preview"
+    assert harness.conflicts.cleanup_running is False
 
 
 @pytest.mark.asyncio
@@ -1386,6 +1446,7 @@ async def test_preview_and_start_io_failures_use_canonical_shape(harness, monkey
     started = await _start(harness, valid["preview_id"])
     assert started == {"success": False, "reason": "unknown", "message": "db"}
     assert harness.service.is_active() is False
+    assert harness.conflicts.cleanup_running is False
 
 
 @pytest.mark.asyncio
@@ -1955,6 +2016,7 @@ async def test_shutdown_cancels_admitted_preview_refresh_without_starting_run(ha
 
     await harness.service.shutdown()
     assert harness.service.is_active() is False
+    assert harness.conflicts.cleanup_running is False
     assert harness.service._task is None
     release.set()
     with pytest.raises(asyncio.CancelledError):

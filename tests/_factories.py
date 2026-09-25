@@ -12,8 +12,11 @@ Import as ``from _factories import _make_retry`` — ``tests/`` is on the path
 via the root conftest, the same way ``fakes/`` is reached.
 """
 
+import logging
 from typing import Any
 from unittest.mock import MagicMock
+
+from lib.prune_gate import PruneConflicts
 
 
 def _no_retry(fn, *a, **kw):
@@ -29,6 +32,11 @@ def _make_retry():
     retry.with_retry.side_effect = _no_retry
     retry.is_retryable.return_value = False
     return retry
+
+
+def _make_prune_conflicts() -> PruneConflicts:
+    """The real prune conflict gate, logging nowhere a test would look."""
+    return PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
 
 
 def _make_testable_plugin():
@@ -83,6 +91,6 @@ def _make_testable_plugin():
     instance._migration_service = MagicMock()
     instance._migration_service.is_retrodeck_migration_pending.return_value = False
     instance._prune_service = MagicMock()
-    instance._prune_service.is_active.return_value = False
+    instance._prune_conflicts = _make_prune_conflicts()
     instance._debug_logger = lambda msg: None
     return instance

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         EventEmitter,
         InstalledRomFilesRemoverFn,
         PruneArtifactStore,
+        PruneRunClaim,
         PruneSaveCoordinator,
         RecoveryBundleStore,
         RetroDeckPaths,
@@ -61,6 +62,7 @@ class PruneServiceConfig:
     remove_installed_files: InstalledRomFilesRemoverFn
     switch_version: VersionSwitcherFn
     settings: dict[str, Any]
+    run_claim: PruneRunClaim
 
 
 def _invalid_action_report(request: dict[str, Any], pending: PendingAction) -> tuple[str, str] | None:
@@ -101,6 +103,7 @@ class PruneService:
         self._uuid_gen = config.uuid_gen
         self._emit = config.emit
         self._settings = config.settings
+        self._run_claim = config.run_claim
         self._recovery_store = config.recovery_store
         self._preview_builder = PreviewBuilder(
             config=PreviewBuilderConfig(
@@ -276,6 +279,7 @@ class PruneService:
                 self._selection = None
                 run_id = self._uuid_gen.uuid4()
                 self._run_id = run_id
+                self._run_claim.register_run(run_id)
                 self._run_preview_id = refreshed.preview_id
                 self._release_run_id = run_id
                 self._release_event = asyncio.Event()
@@ -453,13 +457,15 @@ class PruneService:
 
         ``_run``'s ``finally`` owns the normal release, but a task cancelled
         before the loop first schedules it never gets there. Without this the
-        run id would stay set for the process's lifetime and every conflicting
-        callable — Play, downloads, saves — would keep being refused. Bound to
-        the exact task, so a later run that already replaced it is untouched.
+        run claim would stay registered for the process's lifetime and every
+        conflicting endpoint — Play, downloads, saves — would keep being
+        refused. Bound to the exact task, so a later run that already replaced
+        it is untouched.
         """
         if self._task is not task or self._run_id is None:
             return
         self._logger.info(f"Cleanup run {self._run_id} released a claim its task never started")
+        self._run_claim.release_run(self._run_id)
         self._pending_action = None
         self._run_id = None
         self._run_preview_id = None
@@ -475,6 +481,7 @@ class PruneService:
                 if not future.done():
                     future.cancel()
             self._pending_action = None
+            self._run_claim.release_run(run_id)
             self._run_id = None
             self._run_preview_id = None
             self._release_event.set()

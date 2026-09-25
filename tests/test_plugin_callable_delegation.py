@@ -22,7 +22,7 @@ import threading
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_testable_plugin
+from _factories import _make_prune_conflicts, _make_testable_plugin
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def plugin():
     p._session_lifecycle_service = MagicMock()
     p._game_process_service = MagicMock()
     p._prune_service = MagicMock()
-    p._prune_service.is_active.return_value = False
+    p._prune_conflicts = _make_prune_conflicts()
     return p
 
 
@@ -660,7 +660,7 @@ class TestSgdbCallableDelegation:
         result = await plugin.get_sgdb_artwork_base64(42, 1)
 
         assert result == {"base64": None}
-        assert plugin._prune_admission_gate.conflicting_operations == 0
+        assert plugin._prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.asyncio
     async def test_verify_sgdb_api_key_delegates(self, plugin):

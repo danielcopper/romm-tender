@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -227,8 +228,57 @@ async def test_cancel_prune_stops_the_running_run_over_the_real_wire(harness):
     assert task is not None
     with pytest.raises(asyncio.CancelledError):
         await task
-    # The claim is released, so cleanup is reachable again immediately.
+    # The claim is released, so cleanup is reachable again immediately and
+    # nothing it conflicts with is refused any longer.
     assert harness.plugin._prune_service.is_active() is False
+    assert harness.plugin._prune_conflicts.cleanup_running is False
+
+
+async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end(harness, monkeypatch):
+    """No gap: the start's reservation covers validation, and the run claim is taken before it is given back."""
+    _seed_bulk_candidate(harness)
+    preview = await harness.plugin.get_prune_preview(_preview_request())
+    entered = threading.Event()
+    release = threading.Event()
+    service = harness.plugin._prune_service
+    original = service._preview_builder.build
+
+    def held_refresh(*args):
+        entered.set()
+        if not release.wait(timeout=10):
+            raise TimeoutError("test did not release the preview refresh")
+        return original(*args)
+
+    monkeypatch.setattr(service._preview_builder, "build", held_refresh)
+    start = asyncio.create_task(
+        harness.plugin.start_prune(
+            {
+                "preview_id": preview["preview_id"],
+                "confirmed": True,
+                "repoint_shortcuts": True,
+                "remove_rows": True,
+                "remove_fully_vanished": True,
+                "create_recovery_bundle": False,
+                "include_installed_rom_ids": [],
+            }
+        )
+    )
+    try:
+        assert await asyncio.get_running_loop().run_in_executor(None, entered.wait, 10)
+
+        # Validating: only the reservation stands, since no run is registered yet.
+        assert service._run_id is None
+        assert (await harness.plugin.reconcile_shortcuts([]))["reason"] == "prune_active"
+    finally:
+        release.set()
+    assert (await start)["success"] is True
+    # Started: the reservation is given back, and the run claim refuses instead.
+    assert (await harness.plugin.reconcile_shortcuts([]))["reason"] == "prune_active"
+
+    task = service._task
+    assert task is not None
+    await task
+    assert (await harness.plugin.reconcile_shortcuts([])).get("reason") != "prune_active"
 
 
 @pytest.mark.parametrize("run_id", ["no-such-run", "", None])

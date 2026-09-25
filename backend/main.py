@@ -39,19 +39,7 @@ from host import (
     run_backend,
 )
 from lib.migration_gate import migration_blocked
-from lib.prune_gate import (
-    acquire_prune_conflict_lease,
-    prune_active_blocked,
-    prune_exclusive_start,
-    release_orphaned_frontend_leases,
-    retain_prune_conflict,
-)
-from lib.prune_gate import (
-    release_prune_conflict_lease as release_prune_gate_lease,
-)
-from lib.prune_gate import (
-    renew_prune_conflict_lease as renew_prune_gate_lease,
-)
+from lib.prune_gate import PruneConflicts, prune_active_blocked, prune_exclusive_start
 from lib.sync_gate import sync_active_blocked
 
 
@@ -82,6 +70,10 @@ class Plugin:
     # What the process hosting this backend knows about its own run. Set by the
     # entry point once the build is through, for the one callable that reads it.
     _host_status: HostStatus
+    # Every claim that conflicts with a removed-game cleanup. Wired by ``_main``
+    # from the one instance the composition root builds; the prune decorators
+    # and the event funnel read it here, and refuse to run without it.
+    _prune_conflicts: PruneConflicts
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -109,11 +101,6 @@ class Plugin:
     # consumes the callback.
     _debug_logger = staticmethod(lambda _msg: None)
 
-    # The admission gate lives in ``lib`` and resolves its logger off the owner
-    # so it stays runtime-dependency-free. ``None`` keeps a bare ``Plugin()``
-    # silent; ``_main`` wires the real logger before any callable can run.
-    _prune_gate_logger = None
-
     def _log_debug(self, msg):
         """Forward a debug message through the wired ``DebugLogger`` adapter.
 
@@ -137,17 +124,17 @@ class Plugin:
         lease_token = None
         if needs_lease and fields is not None:
             fields = dict(fields)
-            lease_token = await acquire_prune_conflict_lease(self, event)
+            lease_token = await self._prune_conflicts.acquire_lease(event)
             fields["prune_lease_token"] = lease_token
             payload = fields
         try:
             delivered = await self._event_sink.emit(event, payload)
         except BaseException:
             if lease_token is not None:
-                await release_prune_gate_lease(self, lease_token)
+                await self._prune_conflicts.release_lease(lease_token)
             raise
         if lease_token is not None and not delivered:
-            await release_prune_gate_lease(self, lease_token)
+            await self._prune_conflicts.release_lease(lease_token)
 
     async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
@@ -172,7 +159,6 @@ class Plugin:
         )
         self.settings = result.stores.settings
         self._debug_logger = result.handles.debug_logger
-        self._prune_gate_logger = logger
         # Persistence adapter — held directly for the disk-touching callable
         # paths that read/write settings without routing through a service.
         self._persistence = result.handles.persistence
@@ -203,6 +189,9 @@ class Plugin:
                 update_source=update_source,
             )
         )
+        # Bound before anything below can emit: the event funnel every service
+        # was handed reads it on the first continuation event.
+        self._prune_conflicts = services["prune_conflicts"]
         self._save_sync_service = services["save_sync_service"]
         self._playtime_service = services["playtime_service"]
         self._sync_service = services["sync_service"]
@@ -420,7 +409,7 @@ class Plugin:
     async def set_system_core(self, platform_slug, core_label):
         result = await self._core_service.set_system_core(platform_slug, core_label)
         if result.get("success") and result.get("rebake_items"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "system_core")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("system_core")
         return result
 
     @route
@@ -429,7 +418,7 @@ class Plugin:
     async def set_game_core(self, rom_id, label):
         result = await self._core_service.set_game_core(rom_id, label)
         if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "game_core")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("game_core")
         return result
 
     @route
@@ -438,7 +427,7 @@ class Plugin:
     async def clear_game_core(self, rom_id):
         result = await self._core_service.clear_game_core(rom_id)
         if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "game_core")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("game_core")
         return result
 
     @route
@@ -461,7 +450,7 @@ class Plugin:
     async def select_disc(self, rom_id, filename):
         result = await self._disc_service.select_disc(rom_id, filename)
         if result.get("success") and result.get("launch_options") is not None:
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "disc_selection")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("disc_selection")
         return result
 
     # ── Version picker delegation to VersionSwitchService ──────────────
@@ -476,7 +465,7 @@ class Plugin:
     async def switch_version(self, app_id, target_rom_id, allow_stranded):
         result = await self._version_switch_service.switch_version(app_id, target_rom_id, allow_stranded)
         if result.get("success"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "version_switch")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("version_switch")
         return result
 
     @route
@@ -501,7 +490,7 @@ class Plugin:
     # stranded lease is exactly what would otherwise refuse this call.
     @route
     async def release_orphaned_prune_leases(self):
-        released = await release_orphaned_frontend_leases(self)
+        released = await self._prune_conflicts.release_orphaned_leases()
         return {"success": True, "released": released}
 
     # Deliberately undecorated: stopping the run is the one operation that must
@@ -520,12 +509,12 @@ class Plugin:
 
     @route
     async def release_prune_conflict_lease(self, lease_token):
-        await release_prune_gate_lease(self, str(lease_token))
+        await self._prune_conflicts.release_lease(str(lease_token))
         return {"success": True, "message": "Operation lease released."}
 
     @route
     async def renew_prune_conflict_lease(self, lease_token):
-        renewed = await renew_prune_gate_lease(self, str(lease_token))
+        renewed = await self._prune_conflicts.renew_lease(str(lease_token))
         if not renewed:
             return {
                 "success": False,
@@ -687,7 +676,7 @@ class Plugin:
     async def remove_platform_shortcuts(self, platform_slug):
         result = await self._shortcut_removal_service.remove_platform_shortcuts(platform_slug)
         if result.get("success") and result.get("app_ids"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "shortcut_removal")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("shortcut_removal")
         return result
 
     @route
@@ -697,7 +686,7 @@ class Plugin:
     async def remove_all_shortcuts(self):
         result = self._shortcut_removal_service.remove_all_shortcuts()
         if result.get("success") and result.get("app_ids"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "shortcut_removal")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("shortcut_removal")
         return result
 
     @route
@@ -706,7 +695,7 @@ class Plugin:
         try:
             return await self._shortcut_removal_service.report_removal_results(removed_rom_ids)
         finally:
-            await release_prune_gate_lease(self, str(lease_token))
+            await self._prune_conflicts.release_lease(str(lease_token))
 
     @route
     @prune_active_blocked
@@ -775,7 +764,7 @@ class Plugin:
         item = await self.loop.run_in_executor(None, self._relaunch_options_resolver.relaunch_item_for_rom, int(rom_id))
         if item is not None:
             item["success"] = True
-            item["prune_lease_token"] = await acquire_prune_conflict_lease(self, "launch_reconfirm")
+            item["prune_lease_token"] = await self._prune_conflicts.acquire_lease("launch_reconfirm")
         return item
 
     @route
@@ -791,7 +780,7 @@ class Plugin:
         # create_task pattern in services/saves/slots/switching.py (same call,
         # same target); check_save_status_background owns its own error handling.
         task = self.loop.create_task(self._save_sync_service.check_save_status_background(int(rom_id)))
-        await retain_prune_conflict(self, task, "refresh_save_status")
+        await self._prune_conflicts.retain(task, "refresh_save_status")
         return {"success": True}
 
     @route
@@ -836,7 +825,7 @@ class Plugin:
         )
         task = self._download_service.task_for_rom(int(rom_id)) if result.get("success") else None
         if task is not None:
-            await retain_prune_conflict(self, task, "start_download")
+            await self._prune_conflicts.retain(task, "start_download")
         return result
 
     @route
@@ -858,7 +847,7 @@ class Plugin:
         # TTL with nothing to release it. Same guard the download-complete emit
         # applies (``_emit_with_prune_continuation``).
         if result.get("success") and result.get("app_id") is not None:
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "adopt_existing_rom")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("adopt_existing_rom")
         return result
 
     @route
@@ -885,7 +874,7 @@ class Plugin:
         result = await self._download_service.resume_download(rom_id)
         task = self._download_service.task_for_rom(int(rom_id)) if result.get("success") else None
         if task is not None:
-            await retain_prune_conflict(self, task, "resume_download")
+            await self._prune_conflicts.retain(task, "resume_download")
         return result
 
     @route
@@ -906,7 +895,7 @@ class Plugin:
     async def remove_rom(self, rom_id):
         result = await self._rom_removal_service.remove_rom(rom_id)
         if result.get("success"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "rom_uninstall")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("rom_uninstall")
         return result
 
     @route
@@ -916,7 +905,7 @@ class Plugin:
     async def uninstall_all_roms(self):
         result = await self._rom_removal_service.uninstall_all_roms()
         if result.get("app_ids"):
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "bulk_uninstall")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("bulk_uninstall")
         return result
 
     # ── Save Sync / Playtime delegation to services ──────────
@@ -1055,7 +1044,7 @@ class Plugin:
         # never blocked on the round-trip. flush_pending_sessions owns its own
         # error handling (best-effort, offline-safe).
         task = self._schedule_playtime_flush()
-        await retain_prune_conflict(self, task, "record_session_start")
+        await self._prune_conflicts.retain(task, "record_session_start")
         return result
 
     def _schedule_playtime_flush(self):
@@ -1104,7 +1093,7 @@ class Plugin:
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         result = await self._sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
         if result.get("base64") is not None:
-            result["prune_lease_token"] = await acquire_prune_conflict_lease(self, "sgdb_artwork")
+            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("sgdb_artwork")
         return result
 
     @route
@@ -1156,7 +1145,7 @@ class Plugin:
         The frontend uses them to heal Steam-shortcut drift at startup (#1043).
         """
         items = await self.loop.run_in_executor(None, self._startup_healing_service.get_installed_relaunch_options)
-        token = await acquire_prune_conflict_lease(self, "installed_reconcile") if items else None
+        token = await self._prune_conflicts.acquire_lease("installed_reconcile") if items else None
         return {"success": True, "items": items, "prune_lease_token": token}
 
     # ── Achievements delegation to AchievementsService ───────

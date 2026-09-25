@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from domain.identity import VERSION
 from domain.shortcut_data import RETRODECK_APP_ID
 from lib.late_binding import LateBinding
+from lib.prune_gate import PruneConflicts
 from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.artwork import ArtworkService, ArtworkServiceConfig
@@ -103,9 +104,10 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
 
     Returns
     -------
-    Every wired service, keyed by the attribute name ``Plugin._main()``
-    binds it to. Callers index the keys they need; the mapping is not
-    enumerated here because it grows with the service surface.
+    Every wired service, and the prune conflict gate they share, keyed by
+    the attribute name ``Plugin._main()`` binds it to. Callers index the
+    keys they need; the mapping is not enumerated here because it grows
+    with the service surface.
     """
 
     # Retry-progress surface (#1345): the RommHttpAdapter runs its retry+backoff
@@ -124,6 +126,10 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         )
 
     cfg.adapters.http_adapter.on_retry = _emit_server_retry
+
+    # The one record of every claim that conflicts with a removed-game cleanup,
+    # whoever holds it. Built before every service so any of them can be handed it.
+    prune_conflicts = PruneConflicts(logger=cfg.runtime.logger, log_debug=cfg.callbacks.log_debug)
 
     # Forward-reference bindings for producers constructed later in this
     # function. Consumers receive ``binding.get`` (a bound method); the
@@ -588,6 +594,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             remove_installed_files=rom_removal_service.delete_rom_files,
             switch_version=version_switch_service.switch_version,
             settings=cfg.stores.settings,
+            run_claim=prune_conflicts,
         )
     )
 
@@ -606,6 +613,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
     )
 
     return {
+        "prune_conflicts": prune_conflicts,
         "save_sync_service": save_sync_service,
         "playtime_service": playtime_service,
         "sync_service": sync_service,
