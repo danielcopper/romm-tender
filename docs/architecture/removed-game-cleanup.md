@@ -26,6 +26,7 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 | `services/prune/results.py`       | Shapes progress/completion frames and terminal group results            |
 | `services/prune/requests.py`      | Parses and validates the wire payloads                                  |
 | `lib/prune_gate.py`               | The conflict gate — its operations, leases, reservations and run claims |
+| `lib/conflict_rules.py`           | The conflict rules a use case checks; holds its operation on the gate   |
 | `adapters/recovery_bundle.py`     | Writes, checksums, seals and publishes a recovery bundle                |
 | `adapters/steam_recovery.py`      | Captures Steam-only state; edits the controller value in `localconfig`  |
 | `adapters/descriptor_paths.py`    | Descriptor-relative, no-follow claim capture and claimed mutation       |
@@ -134,12 +135,13 @@ for the task's lifetime.
 
 Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
 conflicts). The composition root builds it before any service and hands it on: the prune service registers its run
-there, and `Plugin` reads it for the two decorators, the event funnel, and every endpoint that takes, renews or releases
-a lease or retains an operation for detached work. The reservation lasts from the moment a start gets past the gate
-until the start returns; the run claim, from the moment the revalidated preview becomes a run until that run ends — in
-the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done callback. The run is
-registered before the reservation is given back, so the two overlap and a conflicting endpoint finds no gap between
-them.
+there; the conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
+there, and retain one for detached work it starts, such as the background save-status check; and `Plugin` reads it for
+the two decorators, the event funnel, and every endpoint that takes, renews or releases a lease or retains an operation
+for detached work. The reservation lasts from the moment a start gets past the gate until the start returns; the run
+claim, from the moment the revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a
+run task cancelled before it first ran, in the task's done callback. The run is registered before the reservation is
+given back, so the two overlap and a conflicting endpoint finds no gap between them.
 
 The start is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the

@@ -281,10 +281,10 @@ class SessionLifecycleService:
         Carries the per-direction transfer counts (from which the
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
-        Honours the ``@migration_blocked`` gate: when a RetroDECK
-        migration is pending the destructive post-exit sync is skipped
-        and surfaced as the standard "failed to sync saves after exit"
-        failure toast.
+        While a RetroDECK migration is pending the post-exit sync does not
+        run and the answer is the standard failure. ``finalize_game_session``
+        carries no ``@migration_blocked``, so this check is what keeps the
+        sync off a pending migration.
         """
         if self._migration_reader.is_retrodeck_migration_pending():
             return SessionFinalizeSyncResult(
