@@ -3,7 +3,7 @@
 Narrow callable seams that don't belong to a specific I/O surface or
 external system: frontend event emission, debug logging, generic
 filesystem existence probes, the prune conflict gate as the prune
-service sees it, and the small cross-service read/cleanup hooks
+service sees it, the conflict rules a use case checks at its entry, and the small cross-service read/cleanup hooks
 (LibraryService pending-sync map, download queue cleanup) that would
 otherwise require service-to-service concrete imports.
 """
@@ -13,6 +13,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
+    import asyncio
+    from contextlib import AbstractAsyncContextManager
+
     from domain.game_instance import GameInstance
     from domain.sync_action import SyncAction
 
@@ -258,3 +261,20 @@ class PruneRunClaim(Protocol):
     def register_run(self, run_id: str) -> None: ...
 
     def release_run(self, run_id: str) -> None: ...
+
+
+class ConflictRules(Protocol):
+    """The conflict rules a use case checks at its entry, in their pinned order.
+
+    ``hold(label, migration=…, sync=…, prune=…)`` yields the first named rule's
+    canonical refusal, or ``None`` when the block may run; with ``prune`` the
+    block runs under an operation named *label*. *label* is the endpoint's name.
+    ``retain`` holds an operation named *label* for detached work until *task*
+    ends. CONTEXT.md → Conflict rules.
+    """
+
+    def hold(
+        self, label: str, *, migration: bool = False, sync: bool = False, prune: bool = False
+    ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
+
+    async def retain(self, task: asyncio.Task[Any], label: str) -> None: ...

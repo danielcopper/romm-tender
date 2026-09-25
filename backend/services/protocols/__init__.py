@@ -85,6 +85,7 @@ from services.protocols.files import (
 )
 from services.protocols.infra import (
     ComputeSyncActionFn,
+    ConflictRules,
     DebugLogger,
     DownloadQueueCleanup,
     EventEmitter,
@@ -163,6 +164,7 @@ __all__ = [
     "Clock",
     "CollectionSyncStateRepository",
     "ComputeSyncActionFn",
+    "ConflictRules",
     "CoreInfoProvider",
     "CoreResolverFn",
     "CoverArtFileStore",

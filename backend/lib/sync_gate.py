@@ -34,6 +34,11 @@ _BLOCKED_MESSAGE = (
 )
 
 
+def sync_refusal() -> dict[str, Any]:
+    """The canonical answer of an operation refused while a library sync is in flight."""
+    return {"success": False, "reason": "sync_active", "message": _BLOCKED_MESSAGE}
+
+
 def sync_active_blocked(method):
     """Block this callable when ``is_sync_in_flight()`` is True.
 
@@ -59,11 +64,7 @@ def sync_active_blocked(method):
                 "callable without it (this is a wiring regression, not a tolerable state)."
             )
         if service.is_sync_in_flight():
-            return {
-                "success": False,
-                "reason": "sync_active",
-                "message": _BLOCKED_MESSAGE,
-            }
+            return sync_refusal()
         return await method(self, *args, **kwargs)
 
     wrapper._sync_active_blocked = True  # type: ignore[attr-defined]

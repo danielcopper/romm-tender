@@ -28,6 +28,15 @@ import inspect
 from typing import Any
 
 
+def migration_refusal() -> dict[str, Any]:
+    """The canonical answer of an operation refused while a RetroDECK migration is pending."""
+    return {
+        "success": False,
+        "reason": "blocked_by_migration",
+        "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+    }
+
+
 def migration_blocked(method):
     """Block this callable when ``is_retrodeck_migration_pending()`` is True.
 
@@ -52,11 +61,7 @@ def migration_blocked(method):
                 "callable without it (this is a wiring regression, not a tolerable state)."
             )
         if service.is_retrodeck_migration_pending():
-            return {
-                "success": False,
-                "reason": "blocked_by_migration",
-                "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
-            }
+            return migration_refusal()
         return await method(self, *args, **kwargs)
 
     wrapper._migration_blocked = True  # type: ignore[attr-defined]

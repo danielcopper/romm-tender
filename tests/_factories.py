@@ -16,6 +16,7 @@ import logging
 from typing import Any
 from unittest.mock import MagicMock
 
+from lib.conflict_rules import ConflictRuleSet
 from lib.prune_gate import PruneConflicts
 
 
@@ -37,6 +38,20 @@ def _make_retry():
 def _make_prune_conflicts() -> PruneConflicts:
     """The real prune conflict gate, logging nowhere a test would look."""
     return PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+
+
+def _make_conflict_rules(
+    *,
+    prune_conflicts: PruneConflicts | None = None,
+    migration_pending: bool = False,
+    sync_in_flight: bool = False,
+) -> ConflictRuleSet:
+    """The real conflict rules over fixed conditions; by default none of them refuses."""
+    return ConflictRuleSet(
+        prune_conflicts=prune_conflicts if prune_conflicts is not None else _make_prune_conflicts(),
+        migration_pending=lambda: migration_pending,
+        sync_in_flight=lambda: sync_in_flight,
+    )
 
 
 def _make_testable_plugin():

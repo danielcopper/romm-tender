@@ -286,6 +286,11 @@ class PruneConflicts:
         return _OPERATION_BLOCKED_MESSAGE
 
 
+def prune_active_refusal() -> dict[str, Any]:
+    """The canonical answer of an operation refused while a removed-game cleanup is running."""
+    return {"success": False, "reason": "prune_active", "message": _BLOCKED_MESSAGE}
+
+
 def _wired_conflicts(owner: object, decorator: str, method_name: str) -> PruneConflicts:
     conflicts = getattr(owner, "_prune_conflicts", None)
     if conflicts is None:
@@ -307,7 +312,7 @@ def prune_active_blocked(method):
         conflicts = _wired_conflicts(self, "prune_active_blocked", method.__name__)
         registration = await conflicts.hold_operation(method.__name__)
         if registration is None:
-            return {"success": False, "reason": "prune_active", "message": _BLOCKED_MESSAGE}
+            return prune_active_refusal()
         try:
             return await method(self, *args, **kwargs)
         finally:
