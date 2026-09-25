@@ -73,7 +73,7 @@ class TestTheReachableSurface:
         assert "synchronous" not in dispatcher.method_names
 
     def test_an_unmarked_coroutine_method_is_not(self, dispatcher):
-        """Being ``async`` is no longer what publishes a method."""
+        """Being ``async`` does not publish a method."""
         assert "unmarked_coroutine" not in dispatcher.method_names
 
     def test_an_instance_attribute_holding_a_marked_function_is_not(self):
@@ -95,6 +95,15 @@ class TestTheReachableSurface:
 
         assert "extra" in CallDispatcher(Extended(), LOGGER).method_names
         assert "echo" in CallDispatcher(Extended(), LOGGER).method_names
+
+    def test_an_unmarked_override_of_a_marked_method_is_not(self):
+        """The most-derived definition decides, as it does for the call itself."""
+
+        class Overriding(FakePlugin):
+            async def echo(self, value: str) -> dict[str, str]:
+                return {"echo": value}
+
+        assert "echo" not in CallDispatcher(Overriding(), LOGGER).method_names
 
     def test_nothing_from_object_is_reachable(self, dispatcher):
         assert not any(name.startswith("__") for name in dispatcher.method_names)

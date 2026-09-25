@@ -58,15 +58,20 @@ def reachable_methods(target: object) -> dict[str, Any]:
     classes in its own hierarchy above ``object``: an instance attribute that
     happens to hold a marked function is state, not surface, and exposing it
     would mean a name became reachable because of something a test poked in.
+    The most-derived definition of a name decides, so an unmarked override of a
+    marked method is not reachable.
     """
     names: dict[str, Any] = {}
     for klass in reversed(type(target).__mro__):
         if klass is object:
             continue
         for name, value in vars(klass).items():
-            if name.startswith("_") or not is_route(value):
+            if name.startswith("_"):
                 continue
-            names[name] = getattr(target, name)
+            if is_route(value):
+                names[name] = getattr(target, name)
+            else:
+                names.pop(name, None)
     return names
 
 
