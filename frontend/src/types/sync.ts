@@ -30,11 +30,9 @@ export type VirtualCollectionType = "franchise" | "collection";
 export type CollectionOwnerScope = "own" | "all";
 
 /**
- * Steam-collection naming mode. `"merge"` (default) unions same-named
- * collections of any kind into one `RomM: [<name>]` Steam collection;
- * `"by_label"` appends the fine collection-type label (`RomM: [<name>
- * (Franchise)]`) so same-named collections of different types stay separate.
- * The label is computed backend-side at the reporter key — the wire payload is
+ * Steam-collection naming mode, described in
+ * docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode. The
+ * label is computed backend-side at the reporter key — the wire payload is
  * name→appIds only.
  */
 export type CollectionNamingMode = "merge" | "by_label";

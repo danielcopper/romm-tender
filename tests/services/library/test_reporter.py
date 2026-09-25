@@ -1865,8 +1865,8 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Alpha": [1001], "Beta": [1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keys_a_single_collection_with_its_fine_label(self, plugin, emit):
-        """``by_label`` mode appends the fine type label to the reporter key.
+    async def test_by_label_keys_a_single_collection_with_its_type_label(self, plugin, emit):
+        """``by_label`` mode appends the type label to the reporter key.
 
         The key becomes ``"<name> (<Label>)"`` so the frontend builds
         ``RomM: [<name> (Label)]``. Default ``merge`` would key by the bare name.
@@ -1893,8 +1893,9 @@ class TestFinalizePerUnitRun:
     async def test_by_label_keeps_same_name_different_label_separate(self, plugin, emit):
         """A standard and a virtual collection sharing a name stay SEPARATE under by_label.
 
-        The load-bearing behavior: same name + different type → two distinct Steam
-        collections, not a union (which is what ``merge`` does).
+        The load-bearing behavior: the standard collection keeps its bare name and
+        the IGDB collection gets its label, so the two keys differ → two distinct
+        Steam collections, not a union (which is what ``merge`` does).
         """
 
         plugin.settings["collection_naming_mode"] = "by_label"
@@ -1915,7 +1916,7 @@ class TestFinalizePerUnitRun:
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {
-            "shared-name (Standard)": [1001],
+            "shared-name": [1001],
             "shared-name (IGDB Collection)": [1002],
         }
 
@@ -1949,10 +1950,10 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_by_label_same_name_same_label_still_unions(self, plugin, emit):
-        """Two collections of the SAME name AND same label still UNION under by_label.
+        """Two collections of the SAME name AND same kind still UNION under by_label.
 
-        Same-name-within-one-label is accepted as merged (two standard "Faves"),
-        so the key ``"Faves (Standard)"`` unions both member sets.
+        Same-name-within-one-kind is accepted as merged (two standard "Faves"),
+        so the bare key ``"Faves"`` unions both member sets.
         """
 
         plugin.settings["collection_naming_mode"] = "by_label"
@@ -1970,7 +1971,55 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        assert payload["romm_collection_app_ids"] == {"Faves (Standard)": [1001, 1002]}
+        assert payload["romm_collection_app_ids"] == {"Faves": [1001, 1002]}
+
+    @pytest.mark.asyncio
+    async def test_by_label_gives_a_smart_collection_its_label_and_a_standard_one_none(self, plugin, emit):
+        """A same-named standard and smart collection: the standard key is bare, the smart one ``(Smart)``."""
+
+        plugin.settings["collection_naming_mode"] = "by_label"
+        uow = plugin._uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
+
+        await plugin._sync_service._reporter.finalize_per_unit_run(
+            pending_collection_memberships={
+                ("standard", "7"): CollectionMembership(name="Kids", rom_ids=[1], kind="standard"),
+                ("smart", "9"): CollectionMembership(name="Kids", rom_ids=[2], kind="smart"),
+            },
+            pending_platform_rom_ids={1, 2},
+            platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["romm_collection_app_ids"] == {"Kids": [1001], "Kids (Smart)": [1002]}
+
+    @pytest.mark.asyncio
+    async def test_by_label_unions_a_standard_named_like_another_kinds_key(self, plugin, emit):
+        """A standard collection whose name spells another kind's key unions with it.
+
+        Deliberate: a standard collection carries no label, so one named
+        ``"Foo (Smart)"`` has the same key as a smart collection named ``"Foo"``,
+        and the two land in one Steam collection. It takes a name that spells out
+        another kind's label to get there.
+        """
+
+        plugin.settings["collection_naming_mode"] = "by_label"
+        uow = plugin._uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
+
+        await plugin._sync_service._reporter.finalize_per_unit_run(
+            pending_collection_memberships={
+                ("standard", "7"): CollectionMembership(name="Foo (Smart)", rom_ids=[1], kind="standard"),
+                ("smart", "9"): CollectionMembership(name="Foo", rom_ids=[2], kind="smart"),
+            },
+            pending_platform_rom_ids={1, 2},
+            platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["romm_collection_app_ids"] == {"Foo (Smart)": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_merge_mode_unions_same_name_across_kinds(self, plugin, emit):
@@ -2032,7 +2081,7 @@ class TestFinalizePerUnitRun:
 
     @pytest.mark.asyncio
     async def test_by_label_merges_same_type_case_variants(self, plugin, emit):
-        """Under by_label, same-TYPE case variants merge (labels match → folded keys match)."""
+        """Under by_label, same-TYPE case variants merge (both bare standard names → folded keys match)."""
 
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
@@ -2049,12 +2098,12 @@ class TestFinalizePerUnitRun:
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
-        # One key ("abc (Standard)", first-seen casing), both apps unioned.
-        assert payload["romm_collection_app_ids"] == {"abc (Standard)": [1001, 1002]}
+        # One key ("abc", first-seen casing), both apps unioned.
+        assert payload["romm_collection_app_ids"] == {"abc": [1001, 1002]}
 
     @pytest.mark.asyncio
     async def test_by_label_keeps_different_type_case_variants_separate(self, plugin, emit):
-        """Under by_label, DIFFERENT-type case variants stay separate (labels differ)."""
+        """Under by_label, a standard and an IGDB-collection case variant stay separate (only one is labelled)."""
 
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
@@ -2074,7 +2123,7 @@ class TestFinalizePerUnitRun:
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {
-            "abc (Standard)": [1001],
+            "abc": [1001],
             "ABC (IGDB Collection)": [1002],
         }
 
