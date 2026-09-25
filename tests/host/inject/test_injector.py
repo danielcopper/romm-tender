@@ -7,6 +7,8 @@ import contextlib
 import json
 import logging
 import re
+import time
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,6 +18,7 @@ import host.inject.recovery as recovery_module
 from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
+from host.inject.reload_limit import RELOAD_LIMIT_FILENAME
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from tests.host.conftest import close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
@@ -989,6 +992,59 @@ class TestWhatThisBackendDoesToSteamIsNeverACrash:
         assert running.watchdog_record().get("open") is False
         assert running.watchdog_record()["failures"] == 0
         assert not logged(caplog, "Steam's interface is gone")
+
+
+def reload_record(running_or_state_dir) -> Path:
+    return Path(running_or_state_dir) / RELOAD_LIMIT_FILENAME
+
+
+class TestAcrossBackendStarts:
+    """The once-rule is per stranded panel; what stops a crash loop is the record on disk."""
+
+    @staticmethod
+    def planted(tmp_path, *ago: float) -> Path:
+        state = tmp_path / "state"
+        state.mkdir(exist_ok=True)
+        record = reload_record(state)
+        now = time.time()
+        record.write_text(json.dumps({"takedowns": [now - seconds for seconds in ago]}), encoding="utf-8")
+        return record
+
+    async def test_under_the_limit_it_reloads_and_records_it(self, injecting, tmp_path):
+        record = self.planted(tmp_path, 60)
+        running = await injecting(page=stranded_page())
+        await wait_until(lambda: running.page.reloads == 1)
+
+        assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
+
+    async def test_at_the_limit_it_reloads_nothing_and_says_so_once(self, injecting, tmp_path, caplog):
+        self.planted(tmp_path, 300, 60)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: logged(caplog, "Restart Steam to load this backend's panel"))
+            await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+            await wait_until(lambda: running.page.evaluated.count(running.page.owner_expression) >= 3)
+            await asyncio.sleep(0.2)
+
+        assert running.page.reloads == 0
+        assert running.webhelper.terminations == 0
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "2 times in the last 10 minutes" in warnings[0].message
+
+    async def test_the_fallback_counts_towards_it_too(self, injecting, tmp_path, caplog):
+        self.planted(tmp_path, 60)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: logged(caplog, "Restart Steam to load this backend's panel"))
+
+        assert running.page.reloads == 1
+        assert running.webhelper.terminations == 0
+
+    async def test_takedowns_the_window_has_passed_do_not_count(self, injecting, tmp_path):
+        self.planted(tmp_path, 3600, 1800)
+        running = await injecting(page=stranded_page())
+        await wait_until(lambda: running.page.reloads == 1)
 
 
 def _fingerprint_of(running: Running) -> Fingerprint:

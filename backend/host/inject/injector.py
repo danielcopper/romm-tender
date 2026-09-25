@@ -54,6 +54,7 @@ from host.inject.cdp import (
 )
 from host.inject.machine import DECKY_LOADER_PORT, decky_loader_is_serving, read_steam_build
 from host.inject.recovery import PanelPresence, StrandedPanelRecovery
+from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, ReloadLimit
 from host.inject.watchdog import (
     INJECT_ENV,
     INJECT_FORCE,
@@ -215,6 +216,7 @@ class PanelInjector:
             panel=panel,
             terminate_webhelper=terminate_webhelper,
             before_takedown=self._count_a_takedown,
+            limit=ReloadLimit(os.path.join(setup.state_dir, RELOAD_LIMIT_FILENAME)),
             logger=logger,
         )
 

@@ -444,6 +444,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   injection answers for this process's record before `judge` reads one, and the alive check closes a record without
   counting it whenever nothing was established (the debugger stopped answering, the backend is shutting down, only the
   renderer was open, a second injection began first, or this process took the interface down itself since arming)
+- **This machine takes Steam's interface down to replace a stranded panel at most twice in ten minutes, across backend
+  starts; the reload and the fallback's SIGTERM both count** — test + prompt-only —
+  `tests/host/inject/test_reload_limit.py` and `tests/host/inject/test_injector.py::TestAcrossBackendStarts`;
+  prompt-only: a new path that takes the interface down asks `ReloadLimit` first
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker

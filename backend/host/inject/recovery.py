@@ -14,9 +14,11 @@ could not be taken is a reason to wait rather than an answer. The
 same gate stands in front of the fallback.
 
 **At most once per stranded panel.** One reload, and one fallback if the
-earlier panel is still there after the reload; after that it says it is giving up and does nothing more for
-that panel. Everything that takes the interface down is announced to the injector
-first, so the crash watchdog never reads it as a crash of its own making.
+earlier panel is still there after the reload; after that it says it is giving
+up and does nothing more for that panel. Across backend starts, ``ReloadLimit``
+caps how often this machine does either at all. Everything that takes the
+interface down is announced to the injector first, so the crash watchdog never
+reads it as a crash of its own making.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from host.inject.bootstrap import PanelMarker
+    from host.inject.reload_limit import ReloadLimit
 
 # How often Steam is asked whether an app is still running. The wait is for a
 # person to finish a game, so there is nothing to gain from asking more often.
@@ -129,12 +132,14 @@ class StrandedPanelRecovery:
         panel: PanelPresence,
         terminate_webhelper: Callable[[], int],
         before_takedown: Callable[[], None],
+        limit: ReloadLimit,
         logger: logging.Logger,
     ) -> None:
         self._evaluate = evaluate
         self._panel = panel
         self._terminate_webhelper = terminate_webhelper
         self._before_takedown = before_takedown
+        self._limit = limit
         self._logger = logger
         self._stranded: PanelMarker | None = None
         self._reloaded_for: str | None = None
@@ -197,6 +202,8 @@ class StrandedPanelRecovery:
             return
 
         self._reloaded_for = marker.instance
+        if not self._may_take_the_interface_down():
+            return
         self._logger.info(f"inject: no app is running; {_RELOADING} to replace the earlier backend's panel")
         self._before_takedown()
         if await self._request_reload():
@@ -222,6 +229,8 @@ class StrandedPanelRecovery:
             self._logger.info(f"inject: the earlier backend's panel is gone; not {_RESTARTING}")
             return
 
+        if not self._may_take_the_interface_down():
+            return
         self._before_takedown()
         loop = asyncio.get_running_loop()
         signalled = await loop.run_in_executor(None, self._terminate_webhelper)
@@ -238,6 +247,19 @@ class StrandedPanelRecovery:
             f"inject: no panel of this backend connected within {PANEL_BACK_AFTER_RESTART_SECONDS:.0f}s of "
             f"{_RESTARTING} either; giving up. Restart Steam to load it."
         )
+
+    def _may_take_the_interface_down(self) -> bool:
+        """Ask the limit, and record the takedown it allows; say so, once, when it refuses."""
+        if not self._limit.allows():
+            self._said_not_again = True
+            self._logger.warning(
+                f"inject: Tender has already taken Steam's interface down {self._limit.limit} times in the last "
+                f"{self._limit.window / 60:.0f} minutes; not doing it again for the earlier backend's panel. Restart "
+                f"Steam to load this backend's panel."
+            )
+            return False
+        self._limit.record()
+        return True
 
     def _still_stranded(self, marker: PanelMarker) -> bool:
         """Is *marker* still what the attached context carries, with no panel of ours connected?"""
