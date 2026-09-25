@@ -502,7 +502,7 @@ class TestGetAllPlaytime:
         _seed_playtime(plugin, 42, Playtime(total_seconds=3000, session_count=5))
         _seed_playtime(plugin, 99, Playtime(total_seconds=600, session_count=1))
 
-        result = await plugin.get_all_playtime()
+        result = plugin.get_all_playtime()
 
         assert result["playtime"]["42"]["total_seconds"] == 3000
         assert result["playtime"]["42"]["session_count"] == 5
@@ -511,7 +511,7 @@ class TestGetAllPlaytime:
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_playtime(self, plugin):
         """Returns empty dict when no playtime data exists."""
-        result = await plugin.get_all_playtime()
+        result = plugin.get_all_playtime()
         assert result["playtime"] == {}
 
 
@@ -526,7 +526,7 @@ class TestSaveSyncSettings:
     @pytest.mark.asyncio
     async def test_get_returns_current(self, plugin):
         """Returns current settings."""
-        result = await plugin.get_save_sync_settings()
+        result = plugin.get_save_sync_settings()
 
         assert result["save_sync_enabled"] is True
         assert result["sync_before_launch"] is True
@@ -712,7 +712,7 @@ class TestSaveSyncFeatureFlag:
     @pytest.mark.asyncio
     async def test_get_settings_includes_flag(self, plugin):
         """get_save_sync_settings returns save_sync_enabled field."""
-        result = await plugin.get_save_sync_settings()
+        result = plugin.get_save_sync_settings()
         assert "save_sync_enabled" in result
 
     @pytest.mark.asyncio

@@ -247,7 +247,7 @@ class TestSettings:
     @pytest.mark.asyncio
     async def test_get_settings_reports_token_present(self, plugin):
         plugin.settings["romm_api_token"] = "rmm_abc"
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["has_token"] is True
         # The token itself is never sent to the frontend.
         assert "rmm_abc" not in str(result)
@@ -255,7 +255,7 @@ class TestSettings:
     @pytest.mark.asyncio
     async def test_get_settings_reports_token_absent(self, plugin):
         plugin.settings["romm_api_token"] = None
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["has_token"] is False
 
     @pytest.mark.asyncio
@@ -350,7 +350,7 @@ class TestLogLevel:
     async def test_save_log_level_valid(self, plugin, tmp_path, logger, data_dir):
         plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         for level in ("debug", "info", "warn", "error"):
-            result = await plugin.save_log_level(level)
+            result = plugin.save_log_level(level)
             assert result["success"] is True
             assert plugin.settings["log_level"] == level
 
@@ -358,30 +358,30 @@ class TestLogLevel:
     async def test_save_log_level_invalid(self, plugin, tmp_path, logger, data_dir):
         plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         plugin.settings["log_level"] = "warn"
-        result = await plugin.save_log_level("verbose")
+        result = plugin.save_log_level("verbose")
         assert result["success"] is False
         assert plugin.settings["log_level"] == "warn"  # unchanged
 
     @pytest.mark.asyncio
     async def test_get_settings_includes_log_level(self, plugin):
         plugin.settings["log_level"] = "info"
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["log_level"] == "info"
 
     @pytest.mark.asyncio
     async def test_get_settings_defaults_log_level_warn(self, plugin):
         plugin.settings.pop("log_level", None)
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["log_level"] == "warn"
 
     @pytest.mark.asyncio
     async def test_frontend_log_respects_level(self, plugin, caplog):
         """frontend_log only logs when message level >= configured level."""
         plugin.settings["log_level"] = "warn"
-        await plugin.frontend_log("debug", "debug msg")
-        await plugin.frontend_log("info", "info msg")
-        await plugin.frontend_log("warn", "warn msg")
-        await plugin.frontend_log("error", "error msg")
+        plugin.frontend_log("debug", "debug msg")
+        plugin.frontend_log("info", "info msg")
+        plugin.frontend_log("warn", "warn msg")
+        plugin.frontend_log("error", "error msg")
 
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("WARNING", "[FE] warn msg"),
@@ -392,10 +392,10 @@ class TestLogLevel:
     async def test_frontend_log_debug_level_logs_all(self, plugin, caplog):
         """With log_level=debug, all levels are logged — each at its own."""
         plugin.settings["log_level"] = "debug"
-        await plugin.frontend_log("debug", "d")
-        await plugin.frontend_log("info", "i")
-        await plugin.frontend_log("warn", "w")
-        await plugin.frontend_log("error", "e")
+        plugin.frontend_log("debug", "d")
+        plugin.frontend_log("info", "i")
+        plugin.frontend_log("warn", "w")
+        plugin.frontend_log("error", "e")
 
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] d"),
@@ -408,7 +408,7 @@ class TestLogLevel:
     async def test_debug_log_backward_compat(self, plugin, caplog):
         """debug_log reaches the log as a debug line of its own."""
         plugin.settings["log_level"] = "debug"
-        await plugin.debug_log("test backward compat")
+        plugin.debug_log("test backward compat")
 
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] test backward compat"),
@@ -489,13 +489,13 @@ class TestInsecureSslSetting:
     @pytest.mark.asyncio
     async def test_get_settings_includes_field(self, plugin):
         plugin.settings["romm_allow_insecure_ssl"] = True
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["romm_allow_insecure_ssl"] is True
 
     @pytest.mark.asyncio
     async def test_get_settings_defaults_false(self, plugin):
         plugin.settings.pop("romm_allow_insecure_ssl", None)
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         assert result["romm_allow_insecure_ssl"] is False
 
     @pytest.mark.asyncio
@@ -527,13 +527,13 @@ class TestGetSettingsResetNotice:
     @pytest.mark.asyncio
     async def test_no_marker_returns_not_pending(self, plugin):
         plugin.settings = {"romm_url": "http://romm.local"}
-        result = await plugin.get_settings_reset_notice()
+        result = plugin.get_settings_reset_notice()
         assert result == {"pending": False, "backed_up_to": None}
 
     @pytest.mark.asyncio
     async def test_marker_present_returns_pending_with_backup(self, plugin):
         plugin.settings = {"_settings_reset_notice": {"backed_up_to": "settings.json.corrupt-1781697600"}}
-        result = await plugin.get_settings_reset_notice()
+        result = plugin.get_settings_reset_notice()
         assert result == {"pending": True, "backed_up_to": "settings.json.corrupt-1781697600"}
 
     @pytest.mark.asyncio
@@ -541,8 +541,8 @@ class TestGetSettingsResetNotice:
         """Unlike the old one-shot drain, repeated reads keep reporting pending —
         the marker is cleared only by an explicit ack, not by reading."""
         plugin.settings = {"_settings_reset_notice": {"backed_up_to": "settings.json.corrupt-42"}}
-        first = await plugin.get_settings_reset_notice()
-        second = await plugin.get_settings_reset_notice()
+        first = plugin.get_settings_reset_notice()
+        second = plugin.get_settings_reset_notice()
         assert first == {"pending": True, "backed_up_to": "settings.json.corrupt-42"}
         assert second == first
 
@@ -551,7 +551,7 @@ class TestGetSettingsResetNotice:
         """A malformed marker (missing backed_up_to) still reports pending with a
         None backup rather than raising."""
         plugin.settings = {"_settings_reset_notice": {}}
-        result = await plugin.get_settings_reset_notice()
+        result = plugin.get_settings_reset_notice()
         assert result == {"pending": True, "backed_up_to": None}
 
 
@@ -565,12 +565,12 @@ class TestDismissSettingsResetNotice:
         plugin.settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
         before = plugin._settings_persister.save_count
 
-        result = await plugin.dismiss_settings_reset_notice()
+        result = plugin.dismiss_settings_reset_notice()
 
         assert result == {"success": True}
         assert "_settings_reset_notice" not in plugin.settings
         # Read-side now reports not-pending.
-        assert await plugin.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+        assert plugin.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
         # The dismissal was persisted.
         assert plugin._settings_persister.save_count == before + 1
 
@@ -580,7 +580,7 @@ class TestDismissSettingsResetNotice:
         assert "_settings_reset_notice" not in plugin.settings
         before = plugin._settings_persister.save_count
 
-        result = await plugin.dismiss_settings_reset_notice()
+        result = plugin.dismiss_settings_reset_notice()
 
         assert result == {"success": True}
         assert "_settings_reset_notice" not in plugin.settings
@@ -663,7 +663,7 @@ class TestWhitelistSettings:
         """Returns empty lists when no whitelist keys exist in settings."""
         plugin.settings.pop("whitelist_disabled_defaults", None)
         plugin.settings.pop("whitelist_custom_names", None)
-        result = await plugin.get_whitelist_settings()
+        result = plugin.get_whitelist_settings()
         assert result == {"disabled_defaults": [], "custom_names": []}
 
     @pytest.mark.asyncio
@@ -671,33 +671,33 @@ class TestWhitelistSettings:
         """Round-trip: update then get returns the stored values."""
 
         plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        await plugin.update_whitelist_settings(["chrome"], ["My App"])
-        result = await plugin.get_whitelist_settings()
+        plugin.update_whitelist_settings(["chrome"], ["My App"])
+        result = plugin.get_whitelist_settings()
         assert result["disabled_defaults"] == ["chrome"]
         assert result["custom_names"] == ["My App"]
 
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_disabled_defaults(self, plugin):
         """Rejects non-list disabled_defaults."""
-        result = await plugin.update_whitelist_settings("not-a-list", [])
+        result = plugin.update_whitelist_settings("not-a-list", [])
         assert result["success"] is False
         assert "disabled_defaults" in result["message"]
 
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_custom_names(self, plugin):
         """Rejects non-list custom_names."""
-        result = await plugin.update_whitelist_settings([], "not-a-list")
+        result = plugin.update_whitelist_settings([], "not-a-list")
         assert result["success"] is False
         assert "custom_names" in result["message"]
 
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_inner_types(self, plugin):
         """Rejects lists containing non-string items."""
-        result_dd = await plugin.update_whitelist_settings([1, 2], [])
+        result_dd = plugin.update_whitelist_settings([1, 2], [])
         assert result_dd["success"] is False
         assert "disabled_defaults" in result_dd["message"]
 
-        result_cn = await plugin.update_whitelist_settings([], ["valid", 42])
+        result_cn = plugin.update_whitelist_settings([], ["valid", 42])
         assert result_cn["success"] is False
         assert "custom_names" in result_cn["message"]
 
@@ -706,7 +706,7 @@ class TestWhitelistSettings:
         """Verifies values are stored in plugin.settings dict after update."""
 
         plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        result = await plugin.update_whitelist_settings(["moonlight"], ["Custom Game"])
+        result = plugin.update_whitelist_settings(["moonlight"], ["Custom Game"])
         assert result["success"] is True
         assert plugin.settings["whitelist_disabled_defaults"] == ["moonlight"]
         assert plugin.settings["whitelist_custom_names"] == ["Custom Game"]
@@ -956,14 +956,11 @@ class TestMigrationBlockedDecoratorCoverage:
     unguarded against pending migration corruption (#251)."""
 
     def test_all_callables_either_whitelisted_or_decorated(self):
-        import inspect
-
+        from host.dispatch import reachable_methods
         from main import Plugin
 
         unclassified: list[str] = []
-        for name, value in inspect.getmembers(Plugin, predicate=inspect.iscoroutinefunction):
-            if name.startswith("_"):
-                continue  # lifecycle hooks (_main, _unload) are not callables
+        for name, value in reachable_methods(Plugin()).items():
             if name in _MIGRATION_BLOCKED_WHITELIST:
                 continue
             if getattr(value, "_migration_blocked", False):
@@ -971,7 +968,7 @@ class TestMigrationBlockedDecoratorCoverage:
             unclassified.append(name)
 
         assert not unclassified, (
-            "Unclassified async callables on Plugin — every one must be in "
+            "Unclassified endpoints on Plugin — every one must be in "
             "_MIGRATION_BLOCKED_WHITELIST or carry @migration_blocked: "
             f"{sorted(unclassified)}"
         )
@@ -979,14 +976,11 @@ class TestMigrationBlockedDecoratorCoverage:
     def test_no_callable_is_both_decorated_and_whitelisted(self):
         """A callable that is both decorated AND whitelisted is silently
         passing the coverage check — likely a misclassification. Catch it."""
-        import inspect
-
+        from host.dispatch import reachable_methods
         from main import Plugin
 
         double_classified: list[str] = []
-        for name, value in inspect.getmembers(Plugin, predicate=inspect.iscoroutinefunction):
-            if name.startswith("_"):
-                continue
+        for name, value in reachable_methods(Plugin()).items():
             if name in _MIGRATION_BLOCKED_WHITELIST and getattr(value, "_migration_blocked", False):
                 double_classified.append(name)
 
@@ -1193,7 +1187,7 @@ class TestCancelCallablesNotBlockedByMigration:
     async def test_cancel_sync_callable_when_migration_pending(self, plugin):
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.cancel_sync = MagicMock(return_value={"success": True, "stopped": True})
-        result = await plugin.cancel_sync("run-1")
+        result = plugin.cancel_sync("run-1")
         assert result.get("blocked_by_migration") is not True
         plugin._sync_service.cancel_sync.assert_called_once_with("run-1")
 
@@ -1201,7 +1195,7 @@ class TestCancelCallablesNotBlockedByMigration:
     async def test_sync_cancel_preview_callable_when_migration_pending(self, plugin):
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.sync_cancel_preview = MagicMock(return_value={"success": True})
-        result = await plugin.sync_cancel_preview()
+        result = plugin.sync_cancel_preview()
         assert result.get("blocked_by_migration") is not True
         plugin._sync_service.sync_cancel_preview.assert_called_once()
 
@@ -1210,7 +1204,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._download_service = MagicMock()
         plugin._download_service.cancel_download = MagicMock(return_value={"success": True})
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         assert result.get("blocked_by_migration") is not True
         plugin._download_service.cancel_download.assert_called_once_with(42)
 
@@ -1223,7 +1217,7 @@ class TestRetroDeckStatus:
             config_path="/cfg/retrodeck.json",
             health=RetroDeckConfigHealth.OK,
         )
-        result = await plugin.get_retrodeck_status()
+        result = plugin.get_retrodeck_status()
         assert result == {
             "status": "ok",
             "config_path": "/cfg/retrodeck.json",
@@ -1234,7 +1228,7 @@ class TestRetroDeckStatus:
     async def test_status_is_plain_string_not_enum(self, plugin):
         """The discriminant must serialize as a plain str for the WebSocket bridge."""
         plugin._retrodeck_paths = FakeRetroDeckPaths(health=RetroDeckConfigHealth.UNREADABLE)
-        result = await plugin.get_retrodeck_status()
+        result = plugin.get_retrodeck_status()
         assert result["status"] == "unreadable"
         assert type(result["status"]) is str
 
@@ -1244,14 +1238,14 @@ class TestRetroDeckStatus:
             home="/missing",
             health=RetroDeckConfigHealth.ROOT_MISSING,
         )
-        result = await plugin.get_retrodeck_status()
+        result = plugin.get_retrodeck_status()
         assert result["status"] == "root_missing"
         assert result["resolved_home"] == "/missing"
 
     @pytest.mark.asyncio
     async def test_absent_status(self, plugin):
         plugin._retrodeck_paths = FakeRetroDeckPaths(health=RetroDeckConfigHealth.ABSENT)
-        result = await plugin.get_retrodeck_status()
+        result = plugin.get_retrodeck_status()
         assert result["status"] == "absent"
 
 

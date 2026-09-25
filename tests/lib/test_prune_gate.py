@@ -35,6 +35,15 @@ class _Owner:
         return {"success": True}
 
 
+@pytest.mark.parametrize("gate", [prune_active_blocked, prune_exclusive_start])
+def test_a_gate_refuses_a_synchronous_method_when_it_decorates_it(gate) -> None:
+    def synchronous(self):
+        return {"success": True}
+
+    with pytest.raises(TypeError, match="must be async def"):
+        gate(synchronous)
+
+
 @pytest.mark.asyncio
 async def test_blocks_conflicting_operation_with_canonical_shape() -> None:
     owner = _Owner(True)

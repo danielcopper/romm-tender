@@ -71,6 +71,13 @@ class TestSyncActiveBlockedDecorator:
     def test_marks_wrapper_with_sync_active_blocked_attribute(self):
         assert getattr(_FakeOwner.do_thing, "_sync_active_blocked", False) is True
 
+    def test_refuses_a_synchronous_method_when_it_decorates_it(self):
+        def synchronous(self):
+            return {"success": True}
+
+        with pytest.raises(TypeError, match="must be async def"):
+            sync_active_blocked(synchronous)
+
     def test_preserves_function_metadata_via_wraps(self):
         """@functools.wraps copies __name__ and __doc__ onto the wrapper so
         introspection (and test reporters) see the original method."""

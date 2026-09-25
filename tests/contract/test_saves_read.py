@@ -412,13 +412,13 @@ async def test_get_slot_delete_info_server_failure_shape(harness):
 
 
 async def test_is_save_tracking_configured_unconfigured_shape(harness):
-    result = await harness.plugin.is_save_tracking_configured(42)
+    result = harness.plugin.is_save_tracking_configured(42)
     assert result == {"configured": False, "active_slot": None}
 
 
 async def test_is_save_tracking_configured_configured_shape(harness):
     seed_confirmed_slot(harness, 42, slot="main")
-    result = await harness.plugin.is_save_tracking_configured(42)
+    result = harness.plugin.is_save_tracking_configured(42)
     assert result["configured"] is True
     assert result["active_slot"] == "main"
 
@@ -463,7 +463,7 @@ async def test_get_save_setup_info_server_failure_carve_out(harness):
 
 
 async def test_get_save_sync_settings_shape(harness):
-    result = await harness.plugin.get_save_sync_settings()
+    result = harness.plugin.get_save_sync_settings()
     assert set(result.keys()) == {
         "save_sync_enabled",
         "sync_before_launch",

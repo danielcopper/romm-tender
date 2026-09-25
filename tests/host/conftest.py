@@ -22,6 +22,7 @@ import pytest
 
 from host.dispatch import CallDispatcher
 from host.events import EventSink
+from host.route import route
 from host.server import HostServer
 
 if TYPE_CHECKING:
@@ -38,23 +39,29 @@ class FakePlugin:
         self.entered = asyncio.Event()
         self.cancelled = asyncio.Event()
 
+    @route
     async def echo(self, value: Any) -> dict[str, Any]:
         self.calls.append(("echo", (value,)))
         return {"echo": value}
 
+    @route
     async def no_arguments(self) -> str:
         self.calls.append(("no_arguments", ()))
         return "answered"
 
+    @route
     async def boom(self) -> None:
         raise ValueError("the backend broke")
 
+    @route
     async def blob(self, size: int) -> dict[str, str]:
         return {"blob": "x" * size}
 
+    @route
     async def unserialisable(self) -> object:
         return object()
 
+    @route
     async def never_returns(self) -> None:
         """Blocks until cancelled — how a call is caught in flight."""
         self.entered.set()
@@ -64,11 +71,21 @@ class FakePlugin:
             self.cancelled.set()
             raise
 
+    @route
+    def answers_synchronously(self, value: Any) -> dict[str, Any]:
+        """A ``def`` endpoint — nothing about it is awaited."""
+        self.calls.append(("answers_synchronously", (value,)))
+        return {"synchronously": value}
+
+    @route
     async def _private(self) -> None:
-        """Underscored, so no caller may reach it."""
+        """Marked but underscored, so no caller may reach it."""
 
     def synchronous(self) -> None:
-        """Not a coroutine function, so no caller may reach it."""
+        """Not marked, so no caller may reach it."""
+
+    async def unmarked_coroutine(self) -> None:
+        """Public and ``async``, but not marked, so no caller may reach it."""
 
 
 def free_port() -> int:

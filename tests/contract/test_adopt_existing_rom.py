@@ -99,7 +99,7 @@ async def test_adopt_records_an_install_the_read_surface_reports(harness):
     assert result["success"] is True
     assert result["file_path"] == str(path)
     assert result["rom_dir"] is None
-    installed = await harness.plugin.get_installed_rom(_ROM_ID)
+    installed = harness.plugin.get_installed_rom(_ROM_ID)
     assert installed is not None
     assert installed["file_path"] == str(path)
     assert installed["system"] == "gba"
@@ -162,8 +162,8 @@ async def test_adopting_supersedes_the_group_s_other_installed_version(harness):
     result = await harness.plugin.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is not None
-    assert await harness.plugin.get_installed_rom(42) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is not None
+    assert harness.plugin.get_installed_rom(42) is None
     assert not Path(sibling_path).exists()
 
 
@@ -184,7 +184,7 @@ async def test_adopting_leaves_a_sibling_bound_to_a_different_shortcut_alone(har
     result = await harness.plugin.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
-    assert await harness.plugin.get_installed_rom(42) is not None
+    assert harness.plugin.get_installed_rom(42) is not None
     assert Path(sibling_path).read_bytes() == b"its own shortcut"
 
 
@@ -198,7 +198,7 @@ async def test_adopt_refuses_when_nothing_is_there(harness):
     assert result["reason"] == "nothing_to_adopt"
     assert isinstance(result["message"], str)
     assert result["message"]
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
 
 
 async def test_adopt_surfaces_a_server_failure_in_the_canonical_shape(harness):

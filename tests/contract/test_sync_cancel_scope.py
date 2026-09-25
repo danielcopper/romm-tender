@@ -42,7 +42,7 @@ def _sync_complete_payloads(harness):
 
 async def test_cancel_sync_shape_when_idle(harness):
     """Idle: the callable returns the success-shaped no-op (not a failure shape)."""
-    result = await harness.plugin.cancel_sync("any-run")
+    result = harness.plugin.cancel_sync("any-run")
     assert result == {"success": True, "message": "No sync in progress"}
 
 
@@ -88,7 +88,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     harness.plugin._sync_service._box.current_sync_id = run_b_id
 
     # Run A's Cancel click lands now — it must be ignored as stale.
-    cancel = await harness.plugin.cancel_sync(run_a_id)
+    cancel = harness.plugin.cancel_sync(run_a_id)
     assert cancel == {"success": True, "message": "Cancel ignored (stale run)"}
     assert harness.plugin._sync_service._sync_state == SyncState.RUNNING
 
@@ -107,7 +107,7 @@ async def test_cancel_sync_matching_run_aborts_it(harness):
     harness.plugin._sync_service._box.sync_state = SyncState.RUNNING
     harness.plugin._sync_service._box.current_sync_id = "run-B"
 
-    cancel = await harness.plugin.cancel_sync("run-B")
+    cancel = harness.plugin.cancel_sync("run-B")
     assert cancel == {"success": True, "message": "Sync cancelling..."}
     assert harness.plugin._sync_service._sync_state == SyncState.CANCELLING
 
@@ -117,7 +117,7 @@ async def test_cancel_sync_empty_run_id_cancels_unconditionally(harness):
     harness.plugin._sync_service._box.sync_state = SyncState.RUNNING
     harness.plugin._sync_service._box.current_sync_id = "run-B"
 
-    cancel = await harness.plugin.cancel_sync("")
+    cancel = harness.plugin.cancel_sync("")
     assert cancel == {"success": True, "message": "Sync cancelling..."}
     assert harness.plugin._sync_service._sync_state == SyncState.CANCELLING
 

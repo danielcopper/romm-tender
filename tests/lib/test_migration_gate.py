@@ -70,6 +70,13 @@ class TestMigrationBlockedDecorator:
     def test_marks_wrapper_with_migration_blocked_attribute(self):
         assert getattr(_FakeOwner.do_thing, "_migration_blocked", False) is True
 
+    def test_refuses_a_synchronous_method_when_it_decorates_it(self):
+        def synchronous(self):
+            return {"success": True}
+
+        with pytest.raises(TypeError, match="must be async def"):
+            migration_blocked(synchronous)
+
     @pytest.mark.asyncio
     async def test_works_on_async_def_method(self):
         """Ensures the wrapper awaits correctly — would TypeError otherwise."""

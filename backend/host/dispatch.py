@@ -5,13 +5,17 @@ called. Owns the name resolution, the exception boundary and the payload cap.
 It holds the plugin object and nothing else about the connection, so a call can
 be dispatched and judged without a socket in sight.
 
-**Reachable is exactly the public async surface of the plugin object** — an
-``async def`` on the class with no leading underscore, which is the same set
-``scripts/check_callable_manifest.py`` derives from the source. The two are
-asserted equal by a test rather than kept equal by care: the gate reads the
-file and this reads the loaded class, and a method whose reachability the two
-disagree about is either a callable the panel cannot reach or a method nobody
-meant to expose.
+**Reachable is exactly the endpoints of the plugin object** — a method on the
+class with no leading underscore that carries ``@route``, ``def`` or
+``async def`` alike, which is the same set ``scripts/check_callable_manifest.py``
+derives from the source. The two are asserted equal by a test rather than kept
+equal by care: the gate reads the file and this reads the loaded class, and a
+method whose reachability the two disagree about is either an endpoint the
+panel cannot reach or a method nobody meant to expose.
+
+An endpoint's answer is awaited only when it is awaitable. Nothing is handed to
+an executor: a ``def`` endpoint runs on the loop, exactly as an ``async def``
+that never awaits does.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from host.protocol import (
     encode_error,
     encode_reply,
 )
+from host.route import is_route
 
 if TYPE_CHECKING:
     import logging
@@ -51,17 +56,22 @@ def reachable_methods(target: object) -> dict[str, Any]:
 
     Reachability is read off the **class**, not the instance, and only off the
     classes in its own hierarchy above ``object``: an instance attribute that
-    happens to hold a coroutine function is state, not surface, and exposing it
+    happens to hold a marked function is state, not surface, and exposing it
     would mean a name became reachable because of something a test poked in.
+    The most-derived definition of a name decides, so an unmarked override of a
+    marked method is not reachable.
     """
     names: dict[str, Any] = {}
     for klass in reversed(type(target).__mro__):
         if klass is object:
             continue
         for name, value in vars(klass).items():
-            if name.startswith("_") or not inspect.iscoroutinefunction(value):
+            if name.startswith("_"):
                 continue
-            names[name] = getattr(target, name)
+            if is_route(value):
+                names[name] = getattr(target, name)
+            else:
+                names.pop(name, None)
     return names
 
 
@@ -94,7 +104,9 @@ class CallDispatcher:
             return encode_error(call_id, REASON_METHOD_UNKNOWN, f"no such method: {method}")
 
         try:
-            result = await bound(*args)
+            result = bound(*args)
+            if inspect.isawaitable(result):
+                result = await result
         except Exception as exc:
             stack = traceback.format_exc()
             self._logger.error(f"host: call {call_id} to {method} raised {type(exc).__name__}: {exc}\n{stack}")

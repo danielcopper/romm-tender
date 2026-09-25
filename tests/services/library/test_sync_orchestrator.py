@@ -740,13 +740,13 @@ class TestSyncCancelPreview:
             created_at=plugin._sync_service._orchestrator._clock.time(),
             answer={"success": True, "preview_id": "some-id"},
         )
-        result = await plugin.sync_cancel_preview()
+        result = plugin.sync_cancel_preview()
         assert plugin._sync_service._pending_delta is None
         assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_returns_success(self, plugin):
-        result = await plugin.sync_cancel_preview()
+        result = plugin.sync_cancel_preview()
         assert result == {"success": True}
 
 
@@ -775,7 +775,7 @@ class TestGetPendingPreview:
     @pytest.mark.asyncio
     async def test_returns_none_when_nothing_pending(self, plugin):
         assert plugin._sync_service._pending_delta is None
-        assert await plugin.get_pending_preview() == {"success": True, "preview": None}
+        assert plugin.get_pending_preview() == {"success": True, "preview": None}
 
     @pytest.mark.asyncio
     async def test_withholds_the_snapshot_while_a_run_is_in_flight(self, plugin, fake_romm_api):
@@ -791,7 +791,7 @@ class TestGetPendingPreview:
         box = plugin._sync_service._box
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
 
-        assert await plugin.get_pending_preview() == {"success": True, "preview": None}
+        assert plugin.get_pending_preview() == {"success": True, "preview": None}
         assert box.pending_delta is not None
 
     @pytest.mark.asyncio
@@ -800,11 +800,11 @@ class TestGetPendingPreview:
         fresh = await plugin.sync_preview()
         box = plugin._sync_service._box
         box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
-        assert await plugin.get_pending_preview() == {"success": True, "preview": None}
+        assert plugin.get_pending_preview() == {"success": True, "preview": None}
 
         box.finish_run("run-1")
 
-        assert await plugin.get_pending_preview() == {"success": True, "preview": fresh}
+        assert plugin.get_pending_preview() == {"success": True, "preview": fresh}
 
     @pytest.mark.asyncio
     async def test_hands_back_the_exact_answer_sync_preview_returned(self, plugin, fake_romm_api):
@@ -813,7 +813,7 @@ class TestGetPendingPreview:
         self._preview_setup(plugin, fake_romm_api)
 
         fresh = await plugin.sync_preview()
-        restored = await plugin.get_pending_preview()
+        restored = plugin.get_pending_preview()
 
         assert fresh["success"] is True
         assert restored == {"success": True, "preview": fresh}
@@ -837,7 +837,7 @@ class TestGetPendingPreview:
         assert plugin._sync_service._pending_delta is not None
         plugin._sync_service._orchestrator._clock.advance(1801)
 
-        assert await plugin.get_pending_preview() == {"success": True, "preview": None}
+        assert plugin.get_pending_preview() == {"success": True, "preview": None}
         assert plugin._sync_service._pending_delta is None
 
     @pytest.mark.asyncio
@@ -846,7 +846,7 @@ class TestGetPendingPreview:
         fresh = await plugin.sync_preview()
         plugin._sync_service._orchestrator._clock.advance(1799)
 
-        assert await plugin.get_pending_preview() == {"success": True, "preview": fresh}
+        assert plugin.get_pending_preview() == {"success": True, "preview": fresh}
 
     @pytest.mark.asyncio
     async def test_cancelled_preview_leaves_nothing_to_hand_back(self, plugin, fake_romm_api):
@@ -866,7 +866,7 @@ class TestGetPendingPreview:
         result = await plugin.sync_preview()
 
         assert result["success"] is False
-        assert await plugin.get_pending_preview() == {"success": True, "preview": None}
+        assert plugin.get_pending_preview() == {"success": True, "preview": None}
 
 
 # ── Tests for uncovered helper methods in library_sync.py ──────────
@@ -1917,7 +1917,7 @@ class TestDoSyncPerUnit:
             assert {r.rom_id for r in uow.roms.iter_all()} == {10, 99}
 
         # get_sync_stats reflects the bound count, not the pre-sync inflated count.
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["total_shortcuts"] == 1
 

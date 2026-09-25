@@ -100,7 +100,7 @@ async def test_unstamped_platform_rerun_restamps_and_heals_run_status(harness):
     # Pre-state: no stamp, and the lingering interrupted attempt.
     with harness.uow_factory() as uow:
         assert uow.platform_sync_state.get("n64") is None
-    stats = await harness.plugin.get_sync_stats()
+    stats = harness.plugin.get_sync_stats()
     assert stats["last_attempt"]["status"] == "interrupted"
 
     # The next preview surfaces the re-stamp need with an otherwise-empty delta,
@@ -131,5 +131,5 @@ async def test_unstamped_platform_rerun_restamps_and_heals_run_status(harness):
         assert completed.id not in ("run-seed", "run-timeout")
 
     # The interrupted attempt no longer lingers — the fresh completed run heals it.
-    healed = await harness.plugin.get_sync_stats()
+    healed = harness.plugin.get_sync_stats()
     assert healed["last_attempt"] is None

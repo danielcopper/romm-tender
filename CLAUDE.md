@@ -81,7 +81,8 @@ new code in it.
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
   each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
-- `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs. Checked.
+- `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
+  method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
   fix the upstream artifact instead of the copy is not. `defaults/` holds no vendored artifact since the BIOS registry
@@ -185,12 +186,12 @@ locally with `mise run docs`.
   `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
-- **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
-  public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
-  `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
-  the two are equal. Two consequences, both silent: dropping `async` makes a callable unreachable, and giving `Plugin` a
-  public `async def` that was never meant as wire surface publishes it. `Plugin.run`, the process entry point, is
-  synchronous for exactly that reason.
+- **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
+  `Plugin` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any gate — the one placement
+  `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public method as such:
+  the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so those
+  declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
+  `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.

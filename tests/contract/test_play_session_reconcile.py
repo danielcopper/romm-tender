@@ -162,10 +162,10 @@ async def test_forbidden_reconcile_raises_scope_notice_then_clears(harness):
     result = await harness.plugin.reconcile_playtime(1)
 
     assert result["server_query_failed"] is True
-    assert await harness.plugin.get_playtime_scope_notice() == {"pending": True}
+    assert harness.plugin.get_playtime_scope_notice() == {"pending": True}
 
     # The next sign-in (or scope grant) lets the GET succeed — the notice clears.
     harness.romm.list_play_sessions_side_effect = None
     await harness.plugin.reconcile_playtime(1)
 
-    assert await harness.plugin.get_playtime_scope_notice() == {"pending": False}
+    assert harness.plugin.get_playtime_scope_notice() == {"pending": False}

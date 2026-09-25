@@ -24,12 +24,12 @@ def _keep(name: str) -> dict[str, str]:
 
 
 async def test_save_custom_headers_persists_and_reads_back_names_only(harness):
-    assert (await harness.plugin.get_settings())["romm_custom_header_names"] == []
+    assert harness.plugin.get_settings()["romm_custom_header_names"] == []
 
     entries = [_set("P-Access-Token", "s3cret"), _set("P-Access-Token-Id", "7")]
     assert await harness.plugin.save_custom_headers(entries) == {"success": True}
 
-    settings = await harness.plugin.get_settings()
+    settings = harness.plugin.get_settings()
     assert settings["romm_custom_header_names"] == ["P-Access-Token", "P-Access-Token-Id"]
     assert "s3cret" not in json.dumps(settings)
 

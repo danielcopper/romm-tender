@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Failure-shape dialect gate — canonical-response enforcement.
 
-Decky callables that return a plain ``dict`` and can fail use the canonical
+Endpoints that return a plain ``dict`` and can fail use the canonical
 failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
-(plus per-callable payload extras). The convention — documented in
-``backend/lib/list_result.py`` and ``CLAUDE.md`` → "Callable response shapes"
-— forbids a second ``error`` field and the legacy ``error_code`` key.
+(plus per-endpoint payload extras). The convention — documented in
+``backend/lib/list_result.py`` and ``.claude/rules/callables.md`` → "Callable
+response shapes" — forbids a second ``error`` field and the legacy
+``error_code`` key.
 
 This check walks ``backend/services/`` and classifies every failure-shaped
 ``return`` against a **required-key rule**: a failure shape must carry both
@@ -279,7 +280,7 @@ def _print_violations(findings: list[Finding]) -> None:
     print(
         "ERROR: failure-shaped returns in backend/services/ must carry "
         "'reason' + 'message' and must not carry 'error' / 'error_code' "
-        "(CLAUDE.md → Callable response shapes; lib/list_result.py)."
+        "(.claude/rules/callables.md → Callable response shapes; lib/list_result.py)."
     )
 
 

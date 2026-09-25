@@ -260,11 +260,11 @@ without `--check` for a report-mode inventory.
 
 `mise run lint` (and CI) also runs `scripts/check_callable_manifest.py`, which pins the frontend↔backend callable
 surface to one source of truth: it derives the frontend names + arities from every `callable<[Args], Return>("name")` in
-`frontend/src/**/*.ts` and the backend surface from the public `async def` methods on the `Plugin` class in `main.py`,
-then fails if they diverge — a callable declared on only one side (either direction) or a matching name whose arity
-(positional param count) differs. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
-mechanically checkable shape. The same parity assertion is surfaced inside the pytest run by
-`tests/contract/test_callable_manifest.py`.
+`frontend/src/**/*.ts` and the backend surface from the endpoints on the `Plugin` class in `main.py` (the public methods
+whose first decorator is `@route`), then fails if they diverge: an endpoint declared on only one side (either direction)
+or a matching name whose arity (positional param count) differs. A `@route` below another decorator or on an underscored
+name fails on its own. Arg types stay out of scope (Python signatures carry no hints), so arity is the only mechanically
+checkable shape. The same checks are surfaced inside the pytest run by `tests/contract/test_callable_manifest.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_event_parity.py`, which fails if a backend `emit("name", ...)` event
 has no matching frontend `addEventListener("name", ...)` (or vice versa). The event names are bare string literals, so
@@ -390,7 +390,7 @@ tracked.
 
 ```text
 backend/
-  main.py                            # Plugin entry — Decky lifecycle + callable surface
+  main.py                            # Plugin entry — lifecycle + endpoints
   bootstrap/                         # Composition root — re-exported through __init__.py
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles

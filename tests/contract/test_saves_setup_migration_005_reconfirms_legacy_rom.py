@@ -99,7 +99,7 @@ async def test_migration_005_reconfirms_legacy_rom(harness):
     seed_save_state(harness, 42, legacy_state)
 
     # Precondition: the ROM reads as configured before the migration runs.
-    before = await harness.plugin.is_save_tracking_configured(42)
+    before = harness.plugin.is_save_tracking_configured(42)
     assert before["configured"] is True
 
     # Bootstrap already stamped the DB at the latest version, so rewind to just
@@ -118,6 +118,6 @@ async def test_migration_005_reconfirms_legacy_rom(harness):
     assert state.files["pokemon.srm"].last_sync_hash == "abc123"
 
     # And the wizard reappears — the callable now reports it unconfigured.
-    after = await harness.plugin.is_save_tracking_configured(42)
+    after = harness.plugin.is_save_tracking_configured(42)
     assert after["configured"] is False
     assert after["active_slot"] is None

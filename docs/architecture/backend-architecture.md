@@ -64,8 +64,9 @@ event  {type, name, payload}
 `error.reason` is the **transport** layer — `method_unknown`, `payload_too_large`, `backend_exception`,
 `malformed_message`, `connection_lost`. A callable's own failure is a successful transport and arrives inside `result`
 in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so
-keeping the two apart is prose and review. Reachable methods are exactly the public `async def` on `Plugin` — the same
-set `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
+keeping the two apart is prose and review. Reachable methods are exactly the endpoints on `Plugin`: the public methods
+marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set is the
+one `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
@@ -2169,12 +2170,12 @@ nothing from the other layers.
 
 ### Other
 
-| File                 | Role                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `main.py`            | Plugin class — Decky lifecycle (`_main`/`_unload`) and the callable surface (one `async def` per `@callable`) |
-| `bootstrap/`         | Composition root — `adapters.bootstrap()` builds adapters, `services.wire_services()` builds services         |
-| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                        |
-| `lib/list_result.py` | `ErrorCode` and the canonical callable failure shape                                                          |
+| File                 | Role                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `main.py`            | Plugin class — lifecycle (`_main`/`_unload`) and the endpoints (one method marked `@route` per endpoint) |
+| `bootstrap/`         | Composition root — `adapters.bootstrap()` builds adapters, `services.wire_services()` builds services    |
+| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                   |
+| `lib/list_result.py` | `ErrorCode` and the canonical callable failure shape                                                     |
 
 ## Where user data lives
 
@@ -2443,8 +2444,8 @@ enum) plus bespoke plain-string reasons for non-server-reachability guards.
 ### 5. Enforced: underscore prefix
 
 All internal methods use a `_` prefix; public callables (exposed to the frontend via `callable()`) have none. `main.py`
-callable methods delegate directly to the corresponding service method. Even synchronous callable bodies are `async def`
-— Decky's callable framework requires it.
+callable methods delegate directly to the corresponding service method. An endpoint is reachable because it is marked
+`@route`, not because it is `async def`; `.claude/rules/callables.md` owns when one is a `def`.
 
 This is no longer just a convention — basedpyright enforces it with `reportPrivateUsage = "error"`, so accessing a
 `_`-prefixed name from outside its owning class is a hard type error. Tests are exempt via an `executionEnvironments`

@@ -1,14 +1,14 @@
 """Frontend↔backend callable-manifest parity, surfaced inside the pytest run.
 
-This pins the exact contract the CI gate (``scripts/check_callable_manifest.py``)
-enforces: every ``callable<[Args], Return>("name")`` declared on the frontend
-(``frontend/src/**/*.ts``) has a matching public ``async def name`` on the
-``Plugin`` class in ``main.py``, in both directions, with matching arity. It is
-the static-parity sibling of the rest of ``tests/contract/`` — those tests
-*drive* the real callables frontend-shaped; this one asserts the two
-*declarations* agree before any callable is driven, so a renamed/added/removed
-callable or an arity drift breaks the pytest run, not just the standalone lint
-gate.
+This runs the checks the CI gate (``scripts/check_callable_manifest.py``) runs:
+every ``callable<[Args], Return>("name")`` declared on the frontend
+(``frontend/src/**/*.ts``) has a matching endpoint ``name`` on the ``Plugin``
+class in ``main.py``, in both directions, with matching arity, and no ``@route``
+sits where the gate cannot count it. It is the static-parity sibling of the rest
+of ``tests/contract/`` — those tests *drive* the real endpoints frontend-shaped;
+this one asserts the two *declarations* agree before any endpoint is driven, so a
+renamed/added/removed endpoint, an arity drift or a misplaced ``@route`` breaks
+the pytest run, not just the standalone lint gate.
 
 The parser functions are imported from the gate script (loaded via ``importlib``
 because ``scripts/`` is not on ``sys.path``), so the test and the CI gate share
@@ -43,5 +43,5 @@ _gate = _load_gate()
 def test_frontend_backend_callable_manifest_matches():
     frontend = _gate.parse_frontend_callables(_SRC_DIR)
     backend = _gate.parse_backend_callables(_MAIN_PY)
-    discrepancies = _gate.find_discrepancies(frontend, backend, _gate.EXEMPT)
-    assert discrepancies == []
+    findings = _gate.find_misplaced_routes(_MAIN_PY) + _gate.find_discrepancies(frontend, backend, _gate.EXEMPT)
+    assert findings == []

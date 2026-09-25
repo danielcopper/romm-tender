@@ -1,9 +1,10 @@
 """Decorator that blocks callables while a RetroDECK migration is pending.
 
-The decorated method must be ``async def`` (every callable is). The wrapped
-method's owner class **must** expose a ``_migration_service`` attribute with an
-``is_retrodeck_migration_pending() -> bool`` method — this gate is a data-safety
-guard and refuses to run without it.
+The decorated method must be ``async def``, because the wrapper awaits it;
+decorating a ``def`` raises ``TypeError`` when the class is defined, not when the
+method is first called. The wrapped method's owner class **must** expose a
+``_migration_service`` attribute with an ``is_retrodeck_migration_pending() ->
+bool`` method — this gate is a data-safety guard and refuses to run without it.
 
 A missing ``_migration_service`` is a wiring regression, not a tolerable state:
 the wrapper raises ``RuntimeError`` rather than silently skipping the gate. In
@@ -23,6 +24,7 @@ graph (per import-linter contracts).
 from __future__ import annotations
 
 import functools
+import inspect
 from typing import Any
 
 
@@ -33,6 +35,10 @@ def migration_blocked(method):
     if it is missing (a wiring regression) so the safety gate fails loud rather
     than silently disabling itself for the gated callable.
     """
+    if not inspect.iscoroutinefunction(method):
+        raise TypeError(
+            f"@migration_blocked on {method.__name__!r}: the gate awaits what it wraps, so it must be async def."
+        )
 
     @functools.wraps(method)
     async def wrapper(self, *args: Any, **kwargs: Any):

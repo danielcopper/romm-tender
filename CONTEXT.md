@@ -243,6 +243,17 @@ run — in each of those there was no collapse to observe.
 _Avoid_: **crash counter**, which is what this replaced — the crash leaves the marker standing, so within one Steam
 session it can happen at most once and counting inside a session counts to one for ever.
 
+### Endpoint (Tender) vs endpoint (server)
+
+The word names two different things:
+
+- **Tender endpoint** — a public method marked `@route`, which the panel reaches over the host's socket; nothing else is
+  reachable that way. Its name is the name the panel calls it by, through its `callable()` function.
+- **Server endpoint** — an HTTP route of a server Tender talks to: RomM's (`/api/roms`, …), in RomM's own sense of the
+  word, and likewise SteamGridDB's.
+
+_Avoid_: **callable** for a Tender endpoint — that is the panel's function that reaches one, not the method it reaches.
+
 ### Persistence boundary (settings.json / SQLite)
 
 Where a piece of persisted state lives is a deliberate decision driven by what the data _is_, not which file it

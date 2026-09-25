@@ -81,20 +81,20 @@ class TestSettingsCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_frontend_log_delegates(self, plugin):
-        await plugin.frontend_log("warn", "msg")
+        plugin.frontend_log("warn", "msg")
         plugin._settings_service.frontend_log.assert_called_once_with("warn", "msg")
 
     @pytest.mark.asyncio
     async def test_save_log_level_delegates(self, plugin):
         plugin._settings_service.save_log_level.return_value = {"success": True}
-        result = await plugin.save_log_level("debug")
+        result = plugin.save_log_level("debug")
         plugin._settings_service.save_log_level.assert_called_once_with("debug")
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_save_steam_input_setting_delegates(self, plugin):
         plugin._settings_service.save_steam_input_setting.return_value = {"ok": True}
-        result = await plugin.save_steam_input_setting("default")
+        result = plugin.save_steam_input_setting("default")
         plugin._settings_service.save_steam_input_setting.assert_called_once_with("default")
         assert result == {"ok": True}
 
@@ -108,48 +108,48 @@ class TestSettingsCallableDelegation:
     @pytest.mark.asyncio
     async def test_fix_retroarch_input_driver_delegates(self, plugin):
         plugin._settings_service.fix_retroarch_input_driver.return_value = {"ok": True}
-        result = await plugin.fix_retroarch_input_driver()
+        result = plugin.fix_retroarch_input_driver()
         plugin._settings_service.fix_retroarch_input_driver.assert_called_once_with()
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
     async def test_get_settings_delegates(self, plugin):
         plugin._settings_service.get_settings.return_value = {"romm_url": "x"}
-        result = await plugin.get_settings()
+        result = plugin.get_settings()
         plugin._settings_service.get_settings.assert_called_once_with()
         assert result == {"romm_url": "x"}
 
     @pytest.mark.asyncio
     async def test_get_whitelist_settings_delegates(self, plugin):
         plugin._settings_service.get_whitelist_settings.return_value = {"disabled_defaults": []}
-        result = await plugin.get_whitelist_settings()
+        result = plugin.get_whitelist_settings()
         plugin._settings_service.get_whitelist_settings.assert_called_once_with()
         assert result == {"disabled_defaults": []}
 
     @pytest.mark.asyncio
     async def test_update_whitelist_settings_delegates(self, plugin):
         plugin._settings_service.update_whitelist_settings.return_value = {"success": True}
-        result = await plugin.update_whitelist_settings(["a"], ["b"])
+        result = plugin.update_whitelist_settings(["a"], ["b"])
         plugin._settings_service.update_whitelist_settings.assert_called_once_with(["a"], ["b"])
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_save_collection_platform_groups_delegates(self, plugin):
         plugin._settings_service.save_collection_platform_groups.return_value = {"ok": True}
-        result = await plugin.save_collection_platform_groups(True)
+        result = plugin.save_collection_platform_groups(True)
         plugin._settings_service.save_collection_platform_groups.assert_called_once_with(True)
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
     async def test_set_collection_owner_scope_delegates(self, plugin):
         plugin._settings_service.set_collection_owner_scope.return_value = {"success": True}
-        result = await plugin.set_collection_owner_scope("own")
+        result = plugin.set_collection_owner_scope("own")
         plugin._settings_service.set_collection_owner_scope.assert_called_once_with("own")
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_debug_log_routes_through_frontend_log(self, plugin):
-        await plugin.debug_log("hello")
+        plugin.debug_log("hello")
         plugin._settings_service.frontend_log.assert_called_once_with("debug", "hello")
 
 
@@ -183,7 +183,7 @@ class TestMigrationCallableDelegation:
     @pytest.mark.asyncio
     async def test_dismiss_retrodeck_migration_delegates(self, plugin):
         plugin._migration_service.dismiss_retrodeck_migration.return_value = {"ok": True}
-        result = await plugin.dismiss_retrodeck_migration()
+        result = plugin.dismiss_retrodeck_migration()
         plugin._migration_service.dismiss_retrodeck_migration.assert_called_once_with()
         assert result == {"ok": True}
 
@@ -346,7 +346,7 @@ class TestLibrarySyncCallableDelegation:
     @pytest.mark.asyncio
     async def test_sync_heartbeat_delegates(self, plugin):
         plugin._sync_service.sync_heartbeat.return_value = {"alive": True}
-        result = await plugin.sync_heartbeat()
+        result = plugin.sync_heartbeat()
         plugin._sync_service.sync_heartbeat.assert_called_once_with()
         assert result == {"alive": True}
 
@@ -367,7 +367,7 @@ class TestLibrarySyncCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_sync_status_delegates(self, plugin):
         plugin._sync_service.get_sync_status.return_value = {"running": True, "stage": "applying"}
-        result = await plugin.get_sync_status()
+        result = plugin.get_sync_status()
         plugin._sync_service.get_sync_status.assert_called_once_with()
         assert result == {"running": True, "stage": "applying"}
 
@@ -381,7 +381,7 @@ class TestLibrarySyncCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_registry_platforms_delegates(self, plugin):
         plugin._sync_service.get_registry_platforms.return_value = [{"slug": "snes"}]
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         plugin._sync_service.get_registry_platforms.assert_called_once_with()
         assert result == [{"slug": "snes"}]
 
@@ -395,7 +395,7 @@ class TestLibrarySyncCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_sync_stats_delegates(self, plugin):
         plugin._sync_service.get_sync_stats.return_value = {"roms": 5}
-        result = await plugin.get_sync_stats()
+        result = plugin.get_sync_stats()
         plugin._sync_service.get_sync_stats.assert_called_once_with()
         assert result == {"roms": 5}
 
@@ -451,7 +451,7 @@ class TestArtworkCallableDelegation:
     @pytest.mark.asyncio
     async def test_refresh_cover_artwork_coerces_string_rom_id(self, plugin):
         plugin._artwork_service.refresh_cover = AsyncMock(return_value={"success": True, "message": "ok"})
-        # Decky callables receive args as JSON — defensive int() coercion guards
+        # Endpoints receive args as JSON — defensive int() coercion guards
         # against the frontend accidentally sending a string.
         await plugin.refresh_cover_artwork("42")
         plugin._artwork_service.refresh_cover.assert_awaited_once_with(42)
@@ -514,21 +514,21 @@ class TestDownloadCallableDelegation:
     @pytest.mark.asyncio
     async def test_cancel_download_delegates(self, plugin):
         plugin._download_service.cancel_download.return_value = {"cancelled": True}
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         plugin._download_service.cancel_download.assert_called_once_with(42)
         assert result == {"cancelled": True}
 
     @pytest.mark.asyncio
     async def test_get_download_queue_delegates(self, plugin):
         plugin._download_service.get_download_queue.return_value = []
-        result = await plugin.get_download_queue()
+        result = plugin.get_download_queue()
         plugin._download_service.get_download_queue.assert_called_once_with()
         assert result == []
 
     @pytest.mark.asyncio
     async def test_get_installed_rom_delegates(self, plugin):
         plugin._download_service.get_installed_rom.return_value = {"installed": True}
-        result = await plugin.get_installed_rom(42)
+        result = plugin.get_installed_rom(42)
         plugin._download_service.get_installed_rom.assert_called_once_with(42)
         assert result == {"installed": True}
 
@@ -566,7 +566,7 @@ class TestSavesCallableDelegation:
     @pytest.mark.asyncio
     async def test_check_core_change_delegates(self, plugin):
         plugin._save_sync_service.check_core_change.return_value = {"changed": False}
-        result = await plugin.check_core_change(42)
+        result = plugin.check_core_change(42)
         plugin._save_sync_service.check_core_change.assert_called_once_with(42)
         assert result == {"changed": False}
 
@@ -608,7 +608,7 @@ class TestSavesCallableDelegation:
     @pytest.mark.asyncio
     async def test_is_save_tracking_configured_delegates(self, plugin):
         plugin._save_sync_service.is_save_tracking_configured.return_value = True
-        result = await plugin.is_save_tracking_configured(42)
+        result = plugin.is_save_tracking_configured(42)
         plugin._save_sync_service.is_save_tracking_configured.assert_called_once_with(42)
         assert result is True
 
@@ -672,7 +672,7 @@ class TestSgdbCallableDelegation:
     @pytest.mark.asyncio
     async def test_save_sgdb_api_key_delegates(self, plugin):
         plugin._sgdb_service.save_sgdb_api_key.return_value = {"ok": True}
-        result = await plugin.save_sgdb_api_key("abc")
+        result = plugin.save_sgdb_api_key("abc")
         plugin._sgdb_service.save_sgdb_api_key.assert_called_once_with("abc")
         assert result == {"ok": True}
 
@@ -691,21 +691,21 @@ class TestMetadataCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_rom_metadata_delegates(self, plugin):
         plugin._metadata_service.get_rom_metadata.return_value = {"name": "x"}
-        result = await plugin.get_rom_metadata(42)
+        result = plugin.get_rom_metadata(42)
         plugin._metadata_service.get_rom_metadata.assert_called_once_with(42)
         assert result == {"name": "x"}
 
     @pytest.mark.asyncio
     async def test_get_metadata_cache_page_delegates(self, plugin):
         plugin._metadata_service.get_metadata_cache_page.return_value = {"items": {}, "total": 0}
-        result = await plugin.get_metadata_cache_page(0, 500)
+        result = plugin.get_metadata_cache_page(0, 500)
         plugin._metadata_service.get_metadata_cache_page.assert_called_once_with(0, 500)
         assert result == {"items": {}, "total": 0}
 
     @pytest.mark.asyncio
     async def test_get_app_id_rom_id_map_delegates(self, plugin):
         plugin._metadata_service.get_app_id_rom_id_map.return_value = {"100": 42}
-        result = await plugin.get_app_id_rom_id_map()
+        result = plugin.get_app_id_rom_id_map()
         plugin._metadata_service.get_app_id_rom_id_map.assert_called_once_with()
         assert result == {"100": 42}
 
