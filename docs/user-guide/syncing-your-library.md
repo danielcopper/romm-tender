@@ -331,10 +331,9 @@ collections as a table on the right. From the top, the list holds:
 - Under a thin line, **Favorites** — your own RomM favorites collection. Its row carries its sync switch and the number
   of games in it.
 - Last, **Other users' collections** — a row with its switch in it, saying how many of the listed collections are other
-  users' and whether they are shown or hidden (for example `3 shown`, `3 hidden` or `none`). Selecting it shows what the
-  switch does (see below).
+  users' (for example `3`); its pane says whether they are shown. Selecting it shows what the switch does (see below).
 
-Each kind row other than Favorites says how many of its collections are on, for example `4 of 12 on`. The page opens on
+Each kind row other than Favorites says how many of its collections are on, for example `4 of 12`. The page opens on
 **Collections**.
 
 **Turning a collection on adds all of its games to Steam at the next sync — including games on platforms you have not
@@ -391,7 +390,7 @@ On a **shared RomM server** the collection list includes every other user's _pub
   their user name.
 - **Off** — only the collections you own. Other users' collections are hidden from the tables and left out of the sync,
   even one you switched on earlier — turning the switch back on brings your earlier choices back, since it does not
-  change which collections are switched on. The `N of M on` counts follow it too.
+  change which collections are switched on. The `N of M` counts follow it too.
 
 **Franchises and IGDB collections always appear** either way: they are auto-generated groupings that have no owner. The
 switch only takes effect once the plugin knows your account, which it learns the first time you sign in (existing

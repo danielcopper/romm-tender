@@ -191,10 +191,10 @@ export function hiddenForeignCount(
   );
 }
 
-/** The kind row's "N of M on", over what that kind's table lists under the
+/** The kind row's "N of M", N switched on, over what that kind's table lists under the
  *  owner switch, before any search. */
 export function onCount(members: readonly CollectionSyncSetting[]): string {
-  return `${members.filter((c) => c.sync_enabled).length} of ${members.length} on`;
+  return `${members.filter((c) => c.sync_enabled).length} of ${members.length}`;
 }
 
 export function searchMembers(members: readonly CollectionSyncSetting[], search: string): CollectionSyncSetting[] {

@@ -105,6 +105,11 @@ function kindRow(container: HTMLElement, kind: string): HTMLElement {
   return inner.closest('[data-testid="focusable"]') as HTMLElement;
 }
 
+/** The count a list row states beside its name, exactly as drawn. */
+function rowCount(container: HTMLElement, kind: string): string | null {
+  return kindRow(container, kind).querySelector('[data-testid="row-count"]')?.textContent ?? null;
+}
+
 async function selectKind(container: HTMLElement, kind: string) {
   fireEvent.focusIn(kindRow(container, kind));
   await settle();
@@ -277,17 +282,17 @@ describe("Library › Collections", () => {
         expect(follows).toBeTruthy();
       }
 
-      expect(kindRow(container, "standard").textContent).toContain("1 of 3 on");
-      expect(kindRow(container, "smart").textContent).toContain("0 of 1 on");
-      expect(kindRow(container, "franchise").textContent).toContain("0 of 1 on");
-      expect(kindRow(container, "igdb").textContent).toContain("0 of 1 on");
+      expect(rowCount(container, "standard")).toBe("1 of 3");
+      expect(rowCount(container, "smart")).toBe("0 of 1");
+      expect(rowCount(container, "franchise")).toBe("0 of 1");
+      expect(rowCount(container, "igdb")).toBe("0 of 1");
       expect(kindRow(container, "favorites").textContent).toContain("14 ROMs");
     });
 
     it("leaves a hidden foreign collection stored as on out of its kind's count", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
       const { container } = await openCollections([MINE_ON, MINE_OFF, { ...THEIRS, sync_enabled: true }]);
-      expect(kindRow(container, "standard").textContent).toContain("1 of 2 on");
+      expect(rowCount(container, "standard")).toBe("1 of 2");
     });
 
     it("makes the four kind rows focus stops that A selects, and leaves A to the Favorites switch", async () => {
@@ -564,7 +569,7 @@ describe("Library › Collections", () => {
 
       expect(vi.mocked(backend.setCollectionOwnerScope)).toHaveBeenCalledWith("own");
       expect(tableNames(container)).toEqual(["Kids", "Finished"]);
-      expect(kindRow(container, "standard").textContent).toContain("1 of 2 on");
+      expect(rowCount(container, "standard")).toBe("1 of 2");
     });
 
     it("goes back and says why in the list column when the write is refused", async () => {
@@ -795,7 +800,7 @@ describe("Library › Collections", () => {
         "Turned off, other users' collections are hidden here and left out of the sync",
       );
       expect(container.textContent).toContain("1 from other users right now — shown, and synced where switched on.");
-      expect(row.textContent).toContain("1 shown");
+      expect(rowCount(container, "owner")).toBe("1");
       expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(0);
       expect(container.querySelector('[data-testid="collections-search"]')).toBeNull();
       // The selection marker, as every other row of the list draws it.
@@ -807,24 +812,24 @@ describe("Library › Collections", () => {
       await selectKind(container, "owner");
       await click(ownerSwitch(container));
       expect(container.textContent).toContain("1 from other users right now — hidden and left out of the sync.");
-      expect(kindRow(container, "owner").textContent).toContain("1 hidden");
+      expect(rowCount(container, "owner")).toBe("1");
     });
 
     it("counts every other user's collection", async () => {
       const second = coll({ id: "13", name: "Road trip", is_own: false, owner_username: "mara" });
       const { container } = await openCollections([...LIBRARY, second]);
-      expect(kindRow(container, "owner").textContent).toContain("2 shown");
+      expect(rowCount(container, "owner")).toBe("2");
     });
 
-    it("counts none when no collection is another user's, and a dash when the read failed", async () => {
+    it("counts 0 when no collection is another user's, and a dash when the read failed", async () => {
       const { container } = await openCollections([MINE_ON]);
-      expect(kindRow(container, "owner").textContent).toContain("none");
+      expect(rowCount(container, "owner")).toBe("0");
 
       vi.mocked(backend.getCollections).mockResolvedValue({ success: false, collections: [], message: "Down" });
       const failed = render(<LibraryPage onBack={vi.fn()} />);
       await settle();
       await showTab(failed.container, "collections");
-      expect(kindRow(failed.container, "owner").textContent).toContain("—");
+      expect(rowCount(failed.container, "owner")).toBe("—");
     });
 
     it("says nothing is hidden while Tender does not know the account", async () => {

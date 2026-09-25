@@ -132,8 +132,8 @@ describe("onCount", () => {
       coll({ id: "2", sync_enabled: true, is_own: false }),
       coll({ id: "3", sync_enabled: false }),
     ];
-    expect(onCount(kindMembers(list, "standard", "own", { state: "none" }))).toBe("1 of 2 on");
-    expect(onCount(kindMembers(list, "standard", "all", { state: "none" }))).toBe("2 of 3 on");
+    expect(onCount(kindMembers(list, "standard", "own", { state: "none" }))).toBe("1 of 2");
+    expect(onCount(kindMembers(list, "standard", "all", { state: "none" }))).toBe("2 of 3");
   });
 });
 
