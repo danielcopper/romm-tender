@@ -251,6 +251,28 @@ async def test_detached_task_retains_conflict_claim_for_its_full_lifetime() -> N
 
 
 @pytest.mark.asyncio
+async def test_a_retained_claims_release_is_held_by_the_gate_until_it_finishes() -> None:
+    """The loop holds a task only weakly, so an unowned release could be collected before it runs."""
+    conflicts, _logger, _debug = _conflicts()
+    release = asyncio.Event()
+    task = asyncio.create_task(release.wait())
+    await conflicts.retain(task, "start_download")
+
+    release.set()
+    # The retain's done callback was added before this await's, so it has
+    # already created the release task by the time the await returns.
+    await task
+    pending = set(conflicts._release_tasks)
+    assert len(pending) == 1
+    assert not next(iter(pending)).done()
+
+    await asyncio.gather(*pending)
+    await asyncio.sleep(0)
+    assert conflicts._release_tasks == set()
+    assert conflicts.conflicting_operations == 0
+
+
+@pytest.mark.asyncio
 async def test_refusal_logs_the_holder_that_is_actually_blocking() -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
     await conflicts.acquire_lease("launch_reconfirm")

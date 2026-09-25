@@ -91,6 +91,9 @@ class PruneConflicts:
         # round-trips, so operation registrations must not shift the ids it sees.
         self._next_lease_id = 1
         self._next_operation_id = 1
+        # A retained claim's release runs as its own task after the detached work
+        # ends, and the loop keeps only a weak reference to a task.
+        self._release_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def conflicting_operations(self) -> int:
@@ -173,7 +176,9 @@ class PruneConflicts:
             self._log_debug(f"[prune-gate] released {label} (#{registration})")
 
         def done(_task: asyncio.Task[Any]) -> None:
-            asyncio.get_running_loop().create_task(release())
+            release_task = asyncio.get_running_loop().create_task(release())
+            self._release_tasks.add(release_task)
+            release_task.add_done_callback(self._release_tasks.discard)
 
         task.add_done_callback(done)
 
