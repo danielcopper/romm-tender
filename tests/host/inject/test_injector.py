@@ -921,7 +921,7 @@ class TestWhenTheReloadChangesNothing:
             running = await injecting(page=page)
             await wait_until(lambda: running.webhelper.terminations == 1)
 
-        assert not logged(caplog, "no panel of this backend connected within 30s")
+        assert not logged(caplog, "no panel of this backend connected within 30s of asking")
 
     async def test_a_context_rebuilt_without_word_is_looked_at_again_before_the_fallback(self, injecting, caplog):
         """The fallback asks the page itself, not the last reading it remembers."""
@@ -957,7 +957,7 @@ class TestWhenTheReloadChangesNothing:
             await wait_until(lambda: running.page.reloads == 1)
             await rebuild(running)
             await wait_until(lambda: running.page.bootstraps)
-            await wait_until(lambda: logged(caplog, "loading it is left to the lines above"))
+            await wait_until(lambda: logged(caplog, "the ordinary load takes it from here"))
             await asyncio.sleep(0.2)
 
         assert running.webhelper.terminations == 0

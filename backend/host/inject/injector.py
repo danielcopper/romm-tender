@@ -355,7 +355,8 @@ class PanelInjector:
 
         A marker whose owner cannot be read is answered as this process's own:
         the other reading would reload Steam's interface on the strength of a
-        question that went unanswered.
+        question that went unanswered; a question that times out ends the
+        attachment like any other.
         """
         async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
             answer = await connection.call(
@@ -579,8 +580,8 @@ class PanelInjector:
         await asyncio.sleep(ALIVE_AFTER_SECONDS)
         if self._takedowns != takedowns:
             self._logger.info(
-                "inject: this backend took Steam's interface down itself after loading the panel; this injection is "
-                "not judged"
+                "inject: this backend took Steam's interface down itself after loading the panel; this load is not "
+                "counted as a crash"
             )
             self._watchdog.inconclusive()
             return

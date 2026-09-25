@@ -209,14 +209,14 @@ The **marker** is the global that expression leaves behind (`window.__tender_pan
 context says it already carries the panel. It is wiped by a **JS-context rebuild** — Steam building its renderer's
 JavaScript world again, which is also what `Page.domContentEventFired` announces — and survives everything short of one.
 
-The marker names the backend process that wrote it by its **instance**, a random value each process makes at start-up. A
-**stranded panel** is one whose marker names another instance: an earlier backend loaded it, it holds that backend's
-token, and nothing can reach it. The backend **replaces** a stranded panel by having Steam rebuild its JS context, once,
-when no app is running.
-
 _Avoid_: **deploy** and **install** for this, which name what #1902 will do with a service and a unit; injection is
 about one Steam session and leaves nothing behind. Avoid **hot reload**: nothing here watches a file, and a rebuilt
 bundle reaches Steam only when the context is rebuilt.
+
+The marker names the backend process that wrote it by its **instance**, a random value each process makes at start-up. A
+**stranded panel** is one whose marker names another instance: an earlier backend loaded it, and it holds that backend's
+token, so it can reach no running backend. The backend **replaces** a stranded panel by having Steam rebuild its JS
+context.
 
 ### Load-failure card
 

@@ -5,7 +5,7 @@ a panel another backend process loaded. That panel holds the other process's
 token, so this server refuses every connection it makes, and the injector loads
 nothing over its marker — the context has to be rebuilt before this backend's
 panel can go in. This module decides when to ask Steam for that, asks, and falls
-back once if asking did not work. It evaluates nothing itself: the injector hands
+back once if asking did not work. It holds no connection of its own: the injector hands
 it a way to evaluate into whichever context is attached right now.
 
 **Only a definite "nothing is running" lets it act.** A reload takes Steam's
@@ -152,8 +152,8 @@ class StrandedPanelRecovery:
             if not self._said_not_again:
                 self._said_not_again = True
                 self._logger.warning(
-                    "inject: Steam still carries the earlier backend's panel after it was replaced once; not trying "
-                    "again. Restart Steam to load this backend's panel."
+                    "inject: Steam still carries the earlier backend's panel after one attempt to replace it; not "
+                    "trying again. Restart Steam to load this backend's panel."
                 )
             return
         self._task = asyncio.create_task(self._recover_reporting(marker))
@@ -208,12 +208,13 @@ class StrandedPanelRecovery:
                 # only take the interface away again from a load already under way.
                 self._logger.info(
                     f"inject: the earlier backend's panel is gone, but no panel of this backend connected within "
-                    f"{PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of {_RELOADING}; loading it is left to the lines above"
+                    f"{PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of asking Steam to reload its JS context; the context was "
+                    f"rebuilt, so the ordinary load takes it from here — its inject: lines say how it went"
                 )
                 return
             self._logger.info(
-                f"inject: no panel of this backend connected within {PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of "
-                f"{_RELOADING}; falling back to {_RESTARTING}, which Steam starts again"
+                f"inject: no panel of this backend connected within {PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of asking "
+                f"Steam to reload its JS context; falling back to {_RESTARTING}, which Steam starts again"
             )
         else:
             self._logger.info(f"inject: falling back to {_RESTARTING}, which Steam starts again")

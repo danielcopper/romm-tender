@@ -147,7 +147,8 @@ in Steam.
    back, it says so and gives up. A later backend restart is a new stranded panel and starts over.
 
 Every step is one log line — stranded panel seen, waiting for an app to exit (naming it), reload issued, panel back and
-after how long, fallback taken, all at INFO, and giving up at WARNING — so a run can be judged from the log alone.
+after how long, fallback taken, all at INFO; giving up and a Steam without `RestartJSContext` at WARNING; an unexpected
+failure at ERROR with its traceback — so a run can be judged from the log alone.
 
 **Why `RestartJSContext`**, measured on a device in windowed Big Picture beside Decky Loader:
 
@@ -155,7 +156,7 @@ after how long, fallback taken, all at INFO, and giving up at WARNING — so a r
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `RestartJSContext()`        | the window closed and reopened within about a second; a fresh renderer process, and total web-helper memory went from 1310 to 1109 MB. The debugger connection to `SharedJSContext` survived, Tender's panel was back after 3–6 s and Decky Loader's after about 6 s |
 | CDP `Page.reload`           | the same renderer process, about 170 MB larger after 90 s. Decky Loader replaced its own `location.reload()` with a scheduled `RestartJSContext()` in 2024 over leaks and broken toasts                                                                              |
-| SIGTERM to `steamwebhelper` | the interface was gone for about 8 s, and Decky Loader counts it as a web-helper crash towards its own fallback — so it is only the fallback here                                                                                                                    |
+| SIGTERM to `steamwebhelper` | the interface was gone for about 8 s, and Decky Loader counts it as a web-helper crash towards its own fallback (when it comes within a minute of another web-helper exit) — so it is only the fallback here                                                         |
 | Restarting Steam            | about 16 s                                                                                                                                                                                                                                                           |
 
 **Not a crash.** Both the reload and the fallback take the interface away, which is exactly what
@@ -184,9 +185,10 @@ What is watched instead is the other side of it:
    would record a crash as a survival.
 3. **An attempt nothing could be established about is not counted.** If the debugger stopped answering, if the backend
    is shutting down, if there was no other page target when the panel was loaded, or if this backend itself took the
-   interface away since ([a panel an earlier backend left behind](#a-panel-an-earlier-backend-left-behind)), there was
-   no collapse of the panel's making to observe — and an unobserved attempt recorded as a failure would stop the
-   injection over a user closing Steam.
+   interface away since the panel was loaded
+   ([a panel an earlier backend left behind](#a-panel-an-earlier-backend-left-behind)), there was no collapse of the
+   panel's making to observe — and an unobserved attempt recorded as a failure would stop the injection over a user
+   closing Steam.
 4. **Two consecutive failures stop it**, not three. One can be anything; two is evidence; three dead Steam starts is too
    much to ask of someone who has no reason to suspect this program.
 5. **It starts trying again by itself.** The record carries a fingerprint of the three things that could have repaired
@@ -281,7 +283,7 @@ frames through `lib/websocket_frames.py` in both directions. What is faked there
 JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the expressions the injector sends.
 
 So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice,
-what the evaluated source carries, and every branch of replacing a stranded panel — including what the fallback's kill
+what the evaluated source carries, and the branches of replacing a stranded panel — including what the fallback's kill
 would signal, which goes to a recorder and never to a process. It also RUNS that source: node parses it, and a harness
 evaluates it against a stub `window` with just enough of a document for the card, and with the bundle addresses as
 `data:` modules that record having been imported and that leave the installer on the window where the real bundle leaves
