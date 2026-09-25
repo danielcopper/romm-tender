@@ -78,6 +78,7 @@ class FakePage:
     bootstrap_answer: dict[str, Any] = field(default_factory=lambda: {"ok": True})
     bootstrap_raises: bool = False
     running_apps: list[str] | None = field(default_factory=list)
+    apps_script: list[list[str] | None] = field(default_factory=list)
     apps_raise: bool = False
     reload_answer: bool | None = True
     evaluated: list[str] = field(default_factory=list)
@@ -93,7 +94,10 @@ class FakePage:
         if expression == self.ready_expression:
             return {"result": {"type": "boolean", "value": self.ready}}
         if expression == self.apps_expression:
-            return _THREW if self.apps_raise else {"result": {"type": "object", "value": self.running_apps}}
+            if self.apps_raise:
+                return _THREW
+            listed = self.apps_script.pop(0) if self.apps_script else self.running_apps
+            return {"result": {"type": "object", "value": listed}}
         if expression == self.reload_expression:
             return (
                 _THREW if self.reload_answer is None else {"result": {"type": "boolean", "value": self.reload_answer}}

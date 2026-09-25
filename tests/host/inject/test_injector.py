@@ -738,28 +738,33 @@ class TestAPanelAnEarlierBackendLeftBehind:
         assert running.page.app_checks == 0
         assert len(running.page.bootstraps) == 1
 
-    async def test_a_connected_panel_of_this_backend_means_nothing_is_reloaded(self, injecting):
+    async def test_a_connected_panel_of_this_backend_means_nothing_is_reloaded(self, injecting, caplog):
         """The marker is the signal, never a refused knock on the port; and even
         a foreign marker is no reason to reload over a panel that is connected."""
         panel = FakePanel()
         panel.connect()
-        running = await injecting(page=stranded_page(), panel=panel)
-        await wait_until(lambda: running.page.owner_expression in running.page.evaluated)
-        await asyncio.sleep(0.2)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page(), panel=panel)
+            await wait_until(lambda: running.page.owner_expression in running.page.evaluated)
+            await asyncio.sleep(0.2)
 
         assert running.page.reloads == 0
         assert running.page.app_checks == 0
+        assert not logged(caplog, "earlier backend")
 
     async def test_a_marker_whose_owner_cannot_be_read_is_left_alone(self, injecting, caplog):
         page = stranded_page()
         page.owner_raises = True
-        with caplog.at_level(logging.INFO, logger="test_injector"):
+        with caplog.at_level(logging.WARNING, logger="test_injector"):
             running = await injecting(page=page)
-            await wait_until(lambda: logged(caplog, "would not say whose"))
+            await wait_until(lambda: logged(caplog, "would not say which backend loaded it"))
             await asyncio.sleep(0.2)
 
         assert running.page.reloads == 0
         assert running.page.bootstraps == []
+        line = logged(caplog, "would not say which backend loaded it")[0]
+        assert "restart Steam" in line
+        assert next(r for r in caplog.records if r.message == line).levelno == logging.WARNING
 
 
 class TestWhileAnAppIsRunning:
@@ -814,6 +819,27 @@ class TestWhileAnAppIsRunning:
 
         assert page.reloads == 0
         assert logged(caplog, "cannot tell whether an app is running")
+
+    async def test_one_empty_reading_is_not_enough(self, injecting):
+        """A freshly rebuilt context can list no app for a few seconds while a
+        game is still up, so it takes two empty readings a poll apart."""
+        page = stranded_page()
+        page.apps_script = [[], ["Celeste"], []]
+        page.running_apps = ["Celeste"]
+        await injecting(page=page)
+        await wait_until(lambda: page.app_checks >= 6)
+
+        assert page.reloads == 0
+
+    async def test_two_empty_readings_in_a_row_and_a_live_look_at_the_marker_let_it_reload(self, injecting):
+        page = stranded_page()
+        page.apps_script = [[], ["Celeste"]]
+        await injecting(page=page)
+        await wait_until(lambda: page.reloads == 1)
+
+        before = page.evaluated[: page.evaluated.index(page.reload_expression)]
+        assert before.count(page.apps_expression) == 4
+        assert before[-1] == page.owner_expression
 
     async def test_nothing_is_reloaded_when_the_earlier_panel_goes_by_itself(self, injecting, caplog):
         page = stranded_page()
@@ -886,6 +912,26 @@ class TestWhenTheReloadChangesNothing:
             await wait_until(lambda: running.webhelper.terminations == 1)
 
         assert logged(caplog, said)
+
+    async def test_a_steam_that_says_it_cannot_reload_is_not_waited_on(self, injecting, monkeypatch, caplog):
+        monkeypatch.setattr(recovery_module, "PANEL_BACK_AFTER_RELOAD_SECONDS", 30.0)
+        page = stranded_page()
+        page.reload_answer = False
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: running.webhelper.terminations == 1)
+
+        assert not logged(caplog, "no panel of this backend connected within 30s")
+
+    async def test_a_context_rebuilt_without_word_is_looked_at_again_before_the_fallback(self, injecting, caplog):
+        """The fallback asks the page itself, not the last reading it remembers."""
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: running.page.reloads == 1)
+            running.page.marker = False
+            await wait_until(lambda: logged(caplog, "the earlier backend's panel is gone; not terminating"))
+
+        assert running.webhelper.terminations == 0
 
     async def test_no_web_helper_to_terminate_is_said_and_given_up_on(self, injecting, caplog):
         with caplog.at_level(logging.INFO, logger="test_injector"):

@@ -26,6 +26,7 @@ import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
+from host.inject.bootstrap import marker_owner_expression, read_panel_marker
 from host.inject.cdp import CdpConnectionLost, CdpUnavailableError
 
 if TYPE_CHECKING:
@@ -101,6 +102,15 @@ class PanelPresence(Protocol):
 
 
 @dataclass(frozen=True)
+class _OwnerReading:
+    """Whose panel the context carries (``marker`` ``None``: none), or why it could not be asked."""
+
+    answered: bool
+    marker: PanelMarker | None = None
+    why: str = ""
+
+
+@dataclass(frozen=True)
 class _AppsReading:
     """Steam's running apps by name, or why they could not be read (``names`` is ``None``)."""
 
@@ -134,6 +144,8 @@ class StrandedPanelRecovery:
         """The attached context carries *marker*, which is not this backend's."""
         self._stranded = marker
         if self._task is not None and not self._task.done():
+            return
+        if self._panel.connected:
             return
         if marker.instance == self._reloaded_for:
             if not self._said_not_again:
@@ -179,32 +191,32 @@ class StrandedPanelRecovery:
             f"inject: Steam still carries a panel an earlier backend loaded ({earlier}); it cannot reach this "
             f"backend, so Steam's JS context will be reloaded to replace it once no app is running"
         )
-        if not await self._wait_until_nothing_runs(lambda: self._still_stranded(marker), _RELOADING):
+        if not await self._clear_to_act(marker, _RELOADING):
             self._logger.info("inject: the earlier backend's panel is gone without a reload; nothing to replace")
             return
 
         self._reloaded_for = marker.instance
         self._logger.info(f"inject: no app is running; {_RELOADING} to replace the earlier backend's panel")
         self._before_takedown()
-        await self._request_reload()
-        if await self._panel_back(PANEL_BACK_AFTER_RELOAD_SECONDS, _RELOADING):
-            return
-
-        if not self._still_stranded(marker):
-            # The context was rebuilt and the earlier panel went with it, so the
-            # reload did what it could; restarting the web helper would only
-            # take the interface away again from a load already under way.
+        if await self._request_reload():
+            if await self._panel_back(PANEL_BACK_AFTER_RELOAD_SECONDS, _RELOADING):
+                return
+            if not self._still_stranded(marker):
+                # The context was rebuilt and the earlier panel went with it, so
+                # the reload did what it could; restarting the web helper would
+                # only take the interface away again from a load already under way.
+                self._logger.info(
+                    f"inject: the earlier backend's panel is gone, but no panel of this backend connected within "
+                    f"{PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of {_RELOADING}; loading it is left to the lines above"
+                )
+                return
             self._logger.info(
-                f"inject: the earlier backend's panel is gone, but no panel of this backend connected within "
-                f"{PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of {_RELOADING}; loading it is left to the lines above"
+                f"inject: no panel of this backend connected within {PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s of "
+                f"{_RELOADING}; falling back to {_RESTARTING}, which Steam starts again"
             )
-            return
-
-        self._logger.info(
-            f"inject: the earlier backend's panel is still there {PANEL_BACK_AFTER_RELOAD_SECONDS:.0f}s after "
-            f"{_RELOADING}; falling back to {_RESTARTING}, which Steam starts again"
-        )
-        if not await self._wait_until_nothing_runs(lambda: self._still_stranded(marker), _RESTARTING):
+        else:
+            self._logger.info(f"inject: falling back to {_RESTARTING}, which Steam starts again")
+        if not await self._clear_to_act(marker, _RESTARTING):
             self._logger.info(f"inject: the earlier backend's panel is gone; not {_RESTARTING}")
             return
 
@@ -229,24 +241,49 @@ class StrandedPanelRecovery:
         """Is *marker* still what the attached context carries, with no panel of ours connected?"""
         return self._stranded is not None and self._stranded.instance == marker.instance and not self._panel.connected
 
-    async def _wait_until_nothing_runs(self, still_needed: Callable[[], bool], before: str) -> bool:
-        """Wait for a definite "no app is running"; ``False`` once *still_needed* stops holding."""
+    async def _clear_to_act(self, marker: PanelMarker, before: str) -> bool:
+        """Wait until it is safe to take the interface down over *marker*.
+
+        Safe is two readings one poll apart that say no app is running — a
+        freshly rebuilt context can list none for a few seconds while a game is
+        still up (``frontend/src/utils/runningApps.ts``) — and then the context,
+        asked there and then rather than remembered, still carrying *marker*.
+        ``False`` once it no longer does, or a panel of this backend connected.
+        """
         said = ""
-        while still_needed():
+        empty_before = False
+        while self._still_stranded(marker):
             reading = await self._running_apps()
-            if not still_needed():
+            if not self._still_stranded(marker):
                 return False
-            if reading.names == ():
-                return True
-            if reading.names is None:
+            if reading.names == () and empty_before:
+                owner = await self._owner_now()
+                if owner.answered:
+                    self._stranded = owner.marker
+                    return self._still_stranded(marker)
+                line = f"inject: cannot tell whose panel Steam carries ({owner.why}); waiting before {before}"
+            elif reading.names == ():
+                empty_before = True
+                line = f"inject: no app is running; asking once more before {before}"
+            elif reading.names is None:
+                empty_before = False
                 line = f"inject: cannot tell whether an app is running ({reading.why}); waiting before {before}"
             else:
+                empty_before = False
                 line = f"inject: waiting for {', '.join(reading.names)} to exit before {before}"
             if line != said:
                 said = line
                 self._logger.info(line)
             await asyncio.sleep(APP_POLL_SECONDS)
         return False
+
+    async def _owner_now(self) -> _OwnerReading:
+        """Ask the attached context whose panel it carries."""
+        try:
+            value = await self._evaluate(marker_owner_expression())
+        except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
+            return _OwnerReading(answered=False, why=f"{type(exc).__name__}: {exc}")
+        return _OwnerReading(answered=True, marker=read_panel_marker(value))
 
     async def _running_apps(self) -> _AppsReading:
         """Ask Steam which apps are running."""
@@ -258,8 +295,8 @@ class StrandedPanelRecovery:
             return _AppsReading(None, "Steam's list of running apps could not be read")
         return _AppsReading(tuple(str(name) for name in value))
 
-    async def _request_reload(self) -> None:
-        """Ask Steam to rebuild its JS context, and say so when it could not be asked."""
+    async def _request_reload(self) -> bool:
+        """Ask Steam to rebuild its JS context; ``False`` where it said it cannot."""
         try:
             accepted = await self._evaluate(RELOAD_EXPRESSION)
         except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
@@ -267,9 +304,11 @@ class StrandedPanelRecovery:
                 f"inject: the request to reload got no answer ({type(exc).__name__}: {exc}); waiting to see whether "
                 f"it happened anyway"
             )
-            return
+            return True
         if accepted is not True:
             self._logger.warning("inject: Steam offers no SteamClient.Browser.RestartJSContext here; nothing reloaded")
+            return False
+        return True
 
     async def _panel_back(self, window: float, after: str) -> bool:
         """Watch for this backend's panel connecting within *window* seconds."""

@@ -371,7 +371,10 @@ class PanelInjector:
             )
         marker = None if "exceptionDetails" in answer else read_panel_marker(_value_of(answer))
         if marker is None:
-            self._logger.info("inject: this context carries a panel and would not say whose; leaving it alone")
+            self._logger.warning(
+                "inject: Steam carries a panel and would not say which backend loaded it, so it is left alone; if "
+                "Tender's panel does not respond, restart Steam"
+            )
             return PanelMarker(instance=self._instance, version=self._setup.version)
         return marker
 
