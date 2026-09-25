@@ -562,7 +562,7 @@ describe("index.tsx — persistent prune listeners", () => {
     });
 
     // Without this the lease pins the prune conflict gate for its full 300s TTL
-    // and every conflicting callable — including the next cleanup — is refused.
+    // and the next cleanup's start is refused.
     await waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("orphan-lease"));
     plugin.onDismount();
   });

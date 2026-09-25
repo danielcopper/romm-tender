@@ -879,7 +879,7 @@ kinds of claim:
 
 A cleanup is **running** while a reservation or a run claim is held, and every conflicting endpoint is refused for that
 long. A start is refused while any operation or lease is held. _Avoid_: **admission** for this gate — that word already
-names the host's check of a connection's Host, Origin and token, and several other start guards.
+names the host's check of a connection's Host, Origin and token, and other guards in this program.
 
 ### Game-detail store
 

@@ -1098,7 +1098,7 @@ const tender = definePlugin(() => {
       // The terminal frame carried a continuation lease but committed no repoint
       // to publish, so nothing downstream will ever release it. Handing it back
       // now keeps it from pinning the prune conflict gate until its TTL and
-      // refusing every conflicting callable in the meantime (#1570 F13).
+      // refusing the next cleanup's start in the meantime.
       detach(releasePruneLease(completed.prune_lease_token, "Cleanup completion with nothing to publish"));
     }
     const { body, subtext } = buildPruneCompleteToast(completed);

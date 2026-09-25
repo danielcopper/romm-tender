@@ -89,7 +89,10 @@ class PruneConflicts:
 
     @property
     def conflicting_operations(self) -> int:
-        """How many operations and leases are held — the two kinds of claim the exclusive start is refused on."""
+        """How many operations and leases are held — the two kinds of claim the exclusive start is refused on.
+
+        A lease past its deadline counts until the next call that sweeps expired leases.
+        """
         return len(self._operations) + len(self._leases)
 
     @property
