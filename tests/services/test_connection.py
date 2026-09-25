@@ -1694,10 +1694,11 @@ class TestSignOut:
 class TestUserIdentityStamping:
     """romm_user_id lifecycle: stamped at sign-in, backfilled lazily, cleared on sign-out.
 
-    The signed-in user's own id drives the collection owner-scope filter (#1532).
-    It is bound to the token — re-derived on every sign-in, restored on a failed
-    one, and forgotten on sign-out — so "Own" is never computed against a stale
-    server's or a different user's identity, and degrades to "All" when unknown.
+    The signed-in user's own id drives the collection owner scope (#1532). It is
+    bound to the token — re-derived on every sign-in, restored on a failed one,
+    and forgotten on sign-out — so the ``own`` scope is never computed against a
+    stale server's or a different user's identity, and drops nothing when the id
+    is unknown.
     """
 
     # ── Fresh sign-in stamps identity (AC1) ──────────────────────────────────
@@ -1723,7 +1724,7 @@ class TestUserIdentityStamping:
     def test_mint_sign_in_identity_probe_failure_leaves_id_none_but_succeeds(
         self, event_loop, romm_api, logger, settings_persister
     ):
-        """A failed /api/users/me probe never fails the sign-in — id stays None (→ "Own" acts as "All")."""
+        """A failed /api/users/me probe never fails the sign-in — id stays None (→ the own scope drops nothing)."""
         romm_api.get_current_user.side_effect = RommConnectionError("offline")
         settings: dict[str, Any] = {}
         service = _make_service(

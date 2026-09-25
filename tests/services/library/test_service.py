@@ -13,7 +13,6 @@ from services.library._state import CollectionMembership
 from tests.services.library._helpers import (
     _make_collections_loop,
     _make_loop_raising,
-    _make_loop_with_executor,
     _make_registry_entry,
     _seed_rom_row,
     rebind_loop,
@@ -445,7 +444,7 @@ class TestGetCollections:
 
 
 class TestGetCollectionsOwnerScope:
-    """get_collections tags each collection with is_own for the owner-scope filter (#1532)."""
+    """get_collections tags each collection with is_own for the owner scope (#1532)."""
 
     @pytest.mark.asyncio
     async def test_own_and_foreign_standard_collections_tagged(self, plugin):
@@ -490,15 +489,20 @@ class TestGetCollectionsOwnerScope:
         assert result["collections"][0]["is_own"] is True
 
     @pytest.mark.asyncio
-    async def test_unknown_identity_tags_every_collection_own(self, plugin):
-        """No stored romm_user_id → all collections is_own=True (degrade to "All")."""
+    async def test_unknown_identity_leaves_owned_kinds_unestablished(self, plugin):
+        """No stored romm_user_id → standard and smart rows say None, not own; virtual stays own."""
         user = [{"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        smart = [{"id": 5, "name": "TheirSmart", "rom_count": 1, "user_id": 8}]
+        franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
+        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart, virtual=franchise))
         plugin._sync_service._settings.pop("romm_user_id", None)
 
         result = await plugin._sync_service.get_collections()
 
-        assert result["collections"][0]["is_own"] is True
+        by_name = {c["name"]: c for c in result["collections"]}
+        assert by_name["Theirs"]["is_own"] is None
+        assert by_name["TheirSmart"]["is_own"] is None
+        assert by_name["Mario"]["is_own"] is True
 
 
 class TestGetCollectionsInSteamCount:
@@ -701,262 +705,6 @@ class TestSaveCollectionSync:
         plugin._sync_service.save_collection_sync("1", "bogus", True)
 
         assert recorder.save_count == 0
-
-
-# ---------------------------------------------------------------------------
-# TestSetAllCollectionsSync
-# ---------------------------------------------------------------------------
-
-
-class TestSetAllCollectionsSync:
-    """Tests for LibraryService.set_all_collections_sync()."""
-
-    @pytest.mark.asyncio
-    async def test_enable_all(self, plugin):
-        """Calling with enabled=True scope=None marks every collection enabled in its bucket."""
-        user = [
-            {"id": 1, "name": "RPGs", "is_favorite": False},
-            {"id": 2, "name": "Action", "is_favorite": False},
-        ]
-        smart = [{"id": 5, "name": "Filter A"}]
-        franchise = [{"id": 101, "name": "Mario"}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
-
-        result = await plugin._sync_service.set_all_collections_sync(True)
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is True
-        assert ec["standard"]["2"] is True
-        assert ec["smart"]["5"] is True
-        assert ec["virtual"]["101"] is True
-
-    @pytest.mark.asyncio
-    async def test_disable_all(self, plugin):
-        """Calling with enabled=False scope=None marks every collection disabled."""
-        user = [{"id": 1, "name": "RPGs", "is_favorite": False}]
-        smart = [{"id": 5, "name": "Filter"}]
-        franchise = [{"id": 101, "name": "Mario"}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
-        plugin._sync_service._settings["enabled_collections"] = {
-            "standard": {"1": True},
-            "smart": {"5": True},
-            "virtual": {"101": True},
-        }
-
-        result = await plugin._sync_service.set_all_collections_sync(False)
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is False
-        assert ec["smart"]["5"] is False
-        assert ec["virtual"]["101"] is False
-
-    @pytest.mark.asyncio
-    async def test_filter_by_virtual_scope(self, plugin):
-        """Passing scope='virtual' only touches virtual collections (every supported type)."""
-        virtual = [{"id": 101, "name": "Mario"}]
-        # Only the virtual types are fetched when scope='virtual'; the single-value
-        # mock returns this list for each supported-type call.
-        rebind_loop(plugin._sync_service, _make_loop_with_executor(virtual))
-
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="virtual")
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["virtual"]["101"] is True
-        assert ec["standard"] == {}
-        assert ec["smart"] == {}
-
-    @pytest.mark.asyncio
-    async def test_filter_by_smart_scope(self, plugin):
-        """Passing scope='smart' only touches smart collections."""
-        smart = [{"id": 7, "name": "Filter A"}, {"id": 8, "name": "Filter B"}]
-        rebind_loop(plugin._sync_service, _make_loop_with_executor(smart))
-
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="smart")
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["smart"]["7"] is True
-        assert ec["smart"]["8"] is True
-        assert ec["standard"] == {}
-        assert ec["virtual"] == {}
-
-    @pytest.mark.asyncio
-    async def test_filter_by_standard_scope(self, plugin):
-        """Passing scope='standard' only touches non-favorite standard collections."""
-        user = [
-            {"id": 1, "name": "RPGs", "is_favorite": False},
-            {"id": 2, "name": "Faves", "is_favorite": True},
-        ]
-        rebind_loop(plugin._sync_service, _make_loop_with_executor(user))
-
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="standard")
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is True
-        assert "2" not in ec["standard"]
-        assert ec["smart"] == {}
-        assert ec["virtual"] == {}
-
-    @pytest.mark.asyncio
-    async def test_rejects_invalid_scope(self, plugin):
-        """Unknown scope short-circuits with success=False, no API call."""
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="bogus")
-        assert result["success"] is False
-        assert result["reason"] == "invalid_scope"
-        assert "Invalid scope" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_rejects_favorites_scope(self, plugin):
-        """scope='favorites' is no longer a valid sub-scope — favorites is a top-level toggle."""
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="favorites")
-        assert result["success"] is False
-        assert result["reason"] == "invalid_scope"
-        assert "Invalid scope" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_api_error_returns_error_response(self, plugin):
-        """When list_collections raises, the response has success=False."""
-        rebind_loop(plugin._sync_service, _make_loop_raising(Exception("timeout")))
-
-        result = await plugin._sync_service.set_all_collections_sync(True)
-
-        assert result["success"] is False
-        assert "reason" in result
-
-    @pytest.mark.asyncio
-    async def test_smart_scope_api_error_returns_error_response(self, plugin):
-        """When scope='smart' and list_smart_collections raises, surface the failure."""
-        rebind_loop(plugin._sync_service, _make_loop_raising(Exception("smart endpoint down")))
-
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="smart")
-
-        assert result["success"] is False
-        assert "reason" in result
-        assert "message" in result
-        # Settings must not be mutated when the single-scope fetch fails.
-        assert plugin._sync_service._settings["enabled_collections"]["smart"] == {}
-
-    @pytest.mark.asyncio
-    async def test_virtual_scope_api_error_returns_error_response(self, plugin):
-        """When scope='virtual' and list_virtual_collections raises, surface the failure."""
-        rebind_loop(plugin._sync_service, _make_loop_raising(Exception("virtual endpoint down")))
-
-        result = await plugin._sync_service.set_all_collections_sync(True, scope="virtual")
-
-        assert result["success"] is False
-        assert "reason" in result
-        assert "message" in result
-        # Settings must not be mutated when the single-scope fetch fails.
-        assert plugin._sync_service._settings["enabled_collections"]["virtual"] == {}
-
-    @pytest.mark.asyncio
-    async def test_virtual_failure_still_processes_standard_and_smart(self, plugin):
-        """If every virtual-type fetch fails (scope=None), standard + smart are still processed."""
-        user = [{"id": 1, "name": "RPGs", "is_favorite": False}]
-        smart = [{"id": 5, "name": "Filter"}]
-
-        mock_loop = MagicMock()
-        call_count = 0
-
-        async def _executor(_executor_arg, fn, *args):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return user
-            if call_count == 2:
-                return smart
-            raise Exception("Virtual endpoint unavailable")  # every virtual type
-
-        mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(plugin._sync_service, mock_loop)
-
-        result = await plugin._sync_service.set_all_collections_sync(True)
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is True
-        assert ec["smart"]["5"] is True
-
-    @pytest.mark.asyncio
-    async def test_smart_failure_still_processes_standard_and_virtual(self, plugin):
-        """If smart fetch fails, standard + virtual still go through."""
-        user = [{"id": 1, "name": "RPGs", "is_favorite": False}]
-        franchise = [{"id": 101, "name": "Mario"}]
-
-        mock_loop = MagicMock()
-        call_count = 0
-
-        async def _executor(_executor_arg, fn, *args):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return user
-            if call_count == 2:
-                raise Exception("Smart endpoint unavailable")
-            if call_count == 3:
-                return franchise  # first virtual type
-            return []  # remaining virtual type(s)
-
-        mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(plugin._sync_service, mock_loop)
-
-        result = await plugin._sync_service.set_all_collections_sync(True)
-
-        assert result["success"] is True
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is True
-        assert ec["virtual"]["101"] is True
-
-    @pytest.mark.asyncio
-    async def test_calls_save_settings(self, plugin):
-        """settings_persister is triggered after updating collections."""
-        user = [{"id": 1, "name": "RPGs", "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
-
-        recorder = FakeSettingsPersister()
-        plugin._sync_service._fetcher._settings_persister = recorder
-
-        await plugin._sync_service.set_all_collections_sync(True)
-
-        assert recorder.save_count == 1
-
-    @pytest.mark.asyncio
-    async def test_enabled_param_coerced_to_bool(self, plugin):
-        """Truthy/falsy values are coerced to bool."""
-        user = [{"id": 1, "name": "RPGs", "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
-
-        await plugin._sync_service.set_all_collections_sync(1)  # truthy int
-
-        assert plugin._sync_service._settings["enabled_collections"]["standard"]["1"] is True
-
-    @pytest.mark.asyncio
-    async def test_scope_none_processes_all_buckets(self, plugin):
-        """When scope is None (default), all three buckets are processed."""
-        user = [
-            {"id": 1, "name": "Faves", "is_favorite": True},
-            {"id": 2, "name": "RPGs", "is_favorite": False},
-        ]
-        smart = [{"id": 5, "name": "Filter"}]
-        franchise = [{"id": 101, "name": "Mario"}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
-
-        await plugin._sync_service.set_all_collections_sync(True, scope=None)
-
-        ec = plugin._sync_service._settings["enabled_collections"]
-        assert ec["standard"]["1"] is True
-        assert ec["standard"]["2"] is True
-        assert ec["smart"]["5"] is True
-        assert ec["virtual"]["101"] is True
-
-
-# ---------------------------------------------------------------------------
-# TestGetCollectionsUnsupported / TestSetAllCollectionsSyncUnsupported
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

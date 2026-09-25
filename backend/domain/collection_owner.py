@@ -1,33 +1,30 @@
 """Owner-scope classification for RomM collections.
 
-The pure predicate behind the QAM "Mine / All" collection filter. RomM's
-collection listings return the signed-in user's own collections plus every
-other user's PUBLIC collection; "Mine" hides the foreign ones. This module owns
-the single rule that decides whether a collection counts as the user's own —
-used both to tag the frontend list (``is_own``) and to drop foreign units from
-the sync work queue. No I/O, no state: identity and the collection's owner id
-come in as arguments.
+RomM's collection listings return the signed-in user's own collections plus
+every other user's PUBLIC collection. This module owns the rule that decides
+whether a collection is the user's own — once to drop foreign units from the
+sync work queue under the ``own`` owner scope (:func:`is_own_collection`), and
+once to tag the rows ``get_collections`` answers with (:func:`listing_is_own`).
+No I/O, no state: identity and the collection's owner id come in as arguments.
 
-The scope value carried in settings is ``"own"``/``"all"``; only the QAM label
-changed to "Mine"/"All" (#1539), so ``is_own`` and the ``collection_owner_scope``
-value are unchanged.
-
-Two invariants make the filter safe and non-breaking:
+Two invariants make the scope safe and non-breaking:
 
 * **Virtual collections have no owner.** They are global/derived — RomM's
   ``VirtualCollection`` model carries no ``user_id`` column and returns them
-  identically to every user — so they are always own and always survive a
-  "Mine" filter.
-* **Unknown identity degrades to "All".** When the plugin does not yet know its
-  own user id (never fetched / offline), every collection is treated as own, so
-  "Mine" filters nothing rather than filtering against the wrong identity.
+  identically to every user — so they are always own and always survive the
+  ``own`` scope.
+* **Unknown identity hides nothing.** When the plugin does not yet know its own
+  user id (never fetched / offline), the sync treats every collection as own,
+  so the ``own`` scope drops nothing rather than dropping against the wrong
+  identity. The listing says the same thing differently: it answers ``None``
+  for a standard or smart collection, because "not known" is not "yours".
 """
 
 from __future__ import annotations
 
 
 def is_own_collection(collection_user_id: object, own_user_id: int | None, *, kind: str) -> bool:
-    """Whether a collection is the signed-in user's own (survives a "Mine" filter).
+    """Whether a collection is the signed-in user's own (survives the ``own`` scope).
 
     Parameters
     ----------
@@ -51,3 +48,17 @@ def is_own_collection(collection_user_id: object, own_user_id: int | None, *, ki
     if own_user_id is None:
         return True
     return collection_user_id == own_user_id
+
+
+def listing_is_own(collection_user_id: object, own_user_id: int | None, *, kind: str) -> bool | None:
+    """The ``is_own`` a ``get_collections`` row carries.
+
+    ``True`` or ``False`` where ownership is established, as
+    :func:`is_own_collection` answers it; ``None`` for a standard or smart
+    collection while the signed-in user's id is unknown, where the sync's own
+    rule treats the collection as own but nothing established that it is. A
+    virtual collection has no owner and is always ``True``.
+    """
+    if kind != "virtual" and own_user_id is None:
+        return None
+    return is_own_collection(collection_user_id, own_user_id, kind=kind)

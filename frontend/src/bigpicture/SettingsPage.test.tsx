@@ -150,7 +150,6 @@ vi.mock("../utils/deckyUiInternals", () => ({
 // offsetWithinScroller when it measures its body.
 vi.mock("../utils/scrollHelpers", () => ({
   scrollToTop: vi.fn(),
-  scrollElementToTop: vi.fn(),
   offsetWithinScroller: () => 0,
 }));
 

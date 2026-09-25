@@ -384,9 +384,6 @@ class LibraryService:
     def save_collections_sync(self, collection_ids, kind, enabled):
         return self._fetcher.save_collections_sync(collection_ids, kind, enabled)
 
-    async def set_all_collections_sync(self, enabled, scope=None):
-        return await self._fetcher.set_all_collections_sync(enabled, scope)
-
     # Sync control
     def start_sync(self):
         return self._orchestrator.start_sync()

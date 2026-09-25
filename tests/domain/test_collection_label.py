@@ -1,8 +1,8 @@
 """Tests for domain.collection_label.collection_label.
 
 The fine display label appended to a Steam collection name under the ``by_label``
-naming mode. The strings MUST match the frontend vocabulary (``SUB_TAB_LABELS`` /
-``VIRTUAL_TYPE_LABELS`` in ``frontend/src/bigpicture/LibraryPage.tsx``), and no
+naming mode; where else the strings are spelled is
+``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming mode. No
 label may contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]`` bracket
 pair the frontend reconcile parses).
 """

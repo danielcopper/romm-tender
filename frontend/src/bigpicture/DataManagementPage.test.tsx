@@ -33,7 +33,6 @@ import type { DataInventory, SyncStats } from "../types";
 
 vi.mock("../utils/scrollHelpers", () => ({
   scrollToTop: vi.fn(),
-  scrollElementToTop: vi.fn(),
   scrollFocusedToCenter: vi.fn(),
 }));
 // setLaunchOptionsConfirmed is exercised through the real batchConfirmLaunchOptions

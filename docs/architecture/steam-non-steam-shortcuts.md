@@ -404,9 +404,19 @@ setting:
   `RomM: [<name> (Franchise)]` and `RomM: [<name> (IGDB Collection)]` — separate Steam collections. Two collections that
   share **both** name and label still union.
 
-The label strings **must** match the frontend collection-type vocabulary (`SUB_TAB_LABELS` / `VIRTUAL_TYPE_LABELS` in
-`frontend/src/bigpicture/LibraryPage.tsx`) so the type a user sees on the Collections page is the type baked into the
-Steam name. The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
+The Collections page does not quote the label strings. Besides the kernel, its test and this section's own examples,
+they are spelled in these places, and a label change is a change in each:
+
+- the user guide's "Collections that share a name" (`docs/user-guide/syncing-your-library.md`);
+- the description of the Steam Library setting that turns the mode on
+  (`frontend/src/bigpicture/settings/LibrarySection.tsx`), which gives two as examples;
+- the `CollectionNamingMode` doc comment in `frontend/src/types/sync.ts`;
+- [qam-panel.md](qam-panel.md) § Library, which quotes all four;
+- format examples in comments and docstrings: `backend/services/library/reporter.py`, `backend/services/settings.py`,
+  `backend/adapters/persistence.py`, and the `virtual_type` comment in `backend/domain/work_unit.py`.
+
+`tests/services/library/test_reporter.py` asserts the union keys the reporter builds, so a label change fails there on
+its own. The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
 `CollectionMembership.kind` + `CollectionMembership.virtual_type` thread that identity through the fetcher →
 orchestrator → reporter.
 

@@ -2,52 +2,28 @@
  * What the Sync page's two tables — the preview's change counts and the run's
  * units — add to the pane's own table.
  *
- * The table itself is `layout/pane.tsx`'s, shared with the BIOS files and the
- * registered devices. What stays here is what is this page's alone: the
- * REGISTER both of its tables are set in, the numeric-column split they both
- * take, and the pieces that are not tables at all.
- *
- * **The register is the reason this module exists, and it is now a value it
- * passes rather than a second table.** Only this page has two tables that have
- * to read as one family, and both need to be flat enough that a plan of
- * seventeen units fits the Deck's column under the whole-run bar. One place
- * holding that is still what keeps it a decision rather than a drift — that
- * place is {@link SYNC_TABLE_REGISTER}, and a third table on this page takes it
- * by naming it rather than by being written again.
+ * The table itself is `layout/pane.tsx`'s, and so is the compact register both
+ * of this page's tables are set in ({@link COMPACT_TABLE_REGISTER}). What stays
+ * here is what is this page's alone: the numeric-column split both tables take,
+ * and the pieces that are not tables at all.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Sync.
  */
 
 import type { CSSProperties, FC, ReactNode } from "react";
 import {
+  COMPACT_TABLE_REGISTER,
   MUTED,
   PANE_GUTTER,
   PaneTableHeader,
   PaneTableRow,
   SECONDARY_FONT,
   type TableCell,
-  type TableRegister,
 } from "../layout/pane";
 
 /** The rule this page draws over a total row, which is the pane's own — passed
  *  straight through so a caller reaches it beside the table it belongs to. */
 export { TABLE_LINE } from "../layout/pane";
-
-/**
- * The register both tables are set in. The type size and leading are the layout
- * study's `.tbl.compact` (`docs/assets/sync-layouts.html`); the horizontal
- * padding is the pane's own gutter rather than the study's 6 px, so a row lines
- * up with the section title over it. The rule under the column names is this
- * page's too — its tables carry totals, and the header reads as their heading
- * rather than as a first row.
- */
-export const SYNC_TABLE_REGISTER: TableRegister = {
-  rowPadding: `2px ${PANE_GUTTER}`,
-  headerPadding: `0 ${PANE_GUTTER} 3px`,
-  rowFont: "12px",
-  rowLineHeight: 1.25,
-  rule: true,
-};
 
 /** The columns from `numericFrom` rightwards hold numbers, which are read down
  *  the column rather than across the row: right-aligned so their digits line up,
@@ -62,7 +38,7 @@ export const TableHeader: FC<{ columns: string; cells: string[]; numericFrom: nu
   columns,
   cells,
   numericFrom,
-}) => <PaneTableHeader columns={columns} cells={splitNumeric(cells, numericFrom)} register={SYNC_TABLE_REGISTER} />;
+}) => <PaneTableHeader columns={columns} cells={splitNumeric(cells, numericFrom)} register={COMPACT_TABLE_REGISTER} />;
 
 /**
  * One row of one of this page's tables.
@@ -81,7 +57,7 @@ export const TableRow: FC<{
   <PaneTableRow
     columns={columns}
     cells={splitNumeric(cells, numericFrom)}
-    register={SYNC_TABLE_REGISTER}
+    register={COMPACT_TABLE_REGISTER}
     {...(style === undefined ? {} : { style })}
     {...(testId === undefined ? {} : { testId })}
   >

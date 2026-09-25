@@ -584,8 +584,8 @@ class ConnectionService:
 
         Tolerant of an untrusted server shape: a non-dict payload, a missing
         ``id``, a non-int, or a bool (``isinstance(True, int)`` is ``True`` in
-        Python) all yield ``None`` so a malformed identity never becomes a wrong
-        owner-scope filter.
+        Python) all yield ``None`` so a malformed identity never scopes
+        collections against the wrong owner.
         """
         user_id = user_data.get("id") if isinstance(user_data, dict) else None
         if isinstance(user_id, bool) or not isinstance(user_id, int):
@@ -597,8 +597,8 @@ class ConnectionService:
 
         The value rides the sign-in's single atomic token-persist save, so
         identity lands on disk together with the token (never a second write). A
-        malformed payload yields ``None`` — "Own" then degrades to "All" until
-        the lazy backfill re-derives it.
+        malformed payload yields ``None`` — the ``own`` owner scope then hides
+        nothing until the lazy backfill re-derives it.
         """
         self._settings["romm_user_id"] = self._extract_user_id(user_data)
 
@@ -623,11 +623,11 @@ class ConnectionService:
 
         Existing installs carry a valid token but no stored identity (the setting
         postdates them). This backfills it on the next connection check so the
-        collection owner-scope filter can activate without a re-login. Fires only
+        collection owner scope takes effect without a re-login. Fires only
         when the id is missing (a known id needs no network) and a token exists;
         persists in its own save (no token write is in flight here). Best-effort
-        — a failure or malformed payload leaves the id unknown, so "Own" keeps
-        behaving like "All".
+        — a failure or malformed payload leaves the id unknown, so the ``own``
+        owner scope keeps hiding nothing.
         """
         if self._settings.get("romm_user_id") is not None:
             return
@@ -709,7 +709,7 @@ class ConnectionService:
         self._settings["romm_api_token_id"] = None
         self._settings["romm_api_token_origin"] = None
         self._settings["romm_api_token_source"] = None
-        # Identity is forgotten alongside the token — "Own" collection scope has
+        # Identity is forgotten alongside the token — the ``own`` owner scope has
         # no basis without a signed-in user, and the next sign-in re-derives it.
         self._settings["romm_user_id"] = None
         try:

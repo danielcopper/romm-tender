@@ -110,7 +110,7 @@ def collection_units(
 ) -> list[WorkUnit]:
     """Build WorkUnits for collections whose id is in *enabled_ids*, tagged with *kind*.
 
-    When *filter_to_own* is set (the "Mine" owner-scope), a foreign collection —
+    When *filter_to_own* is set (the ``own`` owner scope), a foreign collection —
     one owned by a known user id other than *own_user_id* — is dropped from the
     queue even if it is enabled, so a scope selected over an earlier enable never
     syncs someone else's collection. Virtual collections have no owner and

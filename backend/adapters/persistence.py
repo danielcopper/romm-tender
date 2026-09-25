@@ -54,8 +54,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # The signed-in RomM user's own id (``/api/users/me`` ``id``), or ``None``
     # when identity is not yet known. Bound to the token like the device id —
     # stamped at sign-in, backfilled lazily on a connection check, cleared on
-    # sign-out. Drives the collection owner-scope filter; ``None`` makes "Own"
-    # behave like "All" (the non-breaking fallback).
+    # sign-out. Drives the collection owner scope; ``None`` makes the ``own``
+    # scope hide nothing (the non-breaking fallback).
     "romm_user_id": None,
     # Extra HTTP headers every request to the configured RomM origin carries, for
     # a server behind an authenticating reverse proxy. A LIST of

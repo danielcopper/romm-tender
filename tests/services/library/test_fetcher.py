@@ -450,7 +450,7 @@ class TestSaveCollectionsSync:
 
 
 class TestBuildWorkQueueOwnerScope:
-    """build_work_queue applies the collection owner-scope filter (#1532)."""
+    """build_work_queue applies the collection owner scope (#1532)."""
 
     @staticmethod
     def _seed(fake_romm_api):
@@ -504,7 +504,7 @@ class TestBuildWorkQueueOwnerScope:
 
     @pytest.mark.asyncio
     async def test_own_scope_unknown_identity_keeps_every_collection(self, plugin, fake_romm_api):
-        """AC4 (load-bearing): "own" with no known identity must NOT filter — degrade to "All"."""
+        """AC4 (load-bearing): "own" with no known identity must drop nothing."""
         _wire_fake(plugin, fake_romm_api)
         self._enable_all(plugin)
         self._seed(fake_romm_api)
@@ -517,7 +517,7 @@ class TestBuildWorkQueueOwnerScope:
 
     @pytest.mark.asyncio
     async def test_own_scope_is_default_all_when_setting_absent(self, plugin, fake_romm_api):
-        """No collection_owner_scope setting → treated as "all" (no filtering)."""
+        """No collection_owner_scope setting → treated as "all" (nothing dropped)."""
         _wire_fake(plugin, fake_romm_api)
         self._enable_all(plugin)
         self._seed(fake_romm_api)

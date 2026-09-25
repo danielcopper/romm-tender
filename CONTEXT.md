@@ -877,22 +877,21 @@ setting valued `all` (every collection RomM lists to the signed-in user: their o
 from the list **and** left out of the sync, even one switched on earlier — once the signed-in user's id is known, since
 until then no collection counts as foreign. Orthogonal to the collection kind axis: it decides by owner (`is_own` /
 `user_id` vs `romm_user_id`), not by kind, and virtual collections have no owner so it never touches them. The stored
-values are `own` / `all` whatever the QAM calls them. How the QAM presents it is decided in
-`docs/architecture/qam-panel.md` § Library. _Avoid_ calling it a filter.
+values are `own` / `all` whatever the QAM calls them. In the QAM it is the **Other users' collections** toggle; how it
+is presented is `docs/architecture/qam-panel.md` § Library. _Avoid_ calling it a filter.
 
 ### Collection naming mode (merge / by_label)
 
 How the Steam-collection **name** is formed when RomM collections share a display name across kinds — the
 `collection_naming_mode` setting valued `merge` (default) or `by_label`. Under **`merge`**, same-named collections union
 into one `RomM: [<name>] (<host>)` Steam collection (#1503). Under **`by_label`**, same-named collections of different
-types stay separate Steam collections, told apart by a **type label** appended to the name, and the type label follows
-what the QAM calls the kind; the labels a known type gets are listed in `docs/architecture/steam-non-steam-shortcuts.md`
-§ Collection naming mode. For a virtual collection the type label names its virtual type rather than the kind —
-franchise and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind**
-entry above) — except one of no known type, which gets the kind's label. Computed backend-side at the reporter's union
-key (`domain/collection_label.py`), so the wire payload stays name→appIds and the frontend needs no change; the mode
-flip is applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync). Same-named
-collections that share a type label still union.
+types stay separate Steam collections, told apart by a **type label** appended to the name; the labels a known type gets
+are listed in `docs/architecture/steam-non-steam-shortcuts.md` § Collection naming mode. For a virtual collection the
+type label names its virtual type rather than the kind — franchise and IGDB-collection are both `kind="virtual"`,
+distinguished by `virtual_type` (see the **Collection kind** entry above) — except one of no known type, which gets the
+kind's label. Computed backend-side at the reporter's union key (`domain/collection_label.py`), so the wire payload
+stays name→appIds and the frontend needs no change; the mode flip is applied by the ordinary complete-set reconcile on
+the next normal sync (no Force Full Sync). Same-named collections that share a type label still union.
 
 ### Surface (bigpicture / desktop)
 
