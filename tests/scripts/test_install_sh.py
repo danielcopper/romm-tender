@@ -2032,6 +2032,17 @@ class TestUninstall:
         assert not machine.old.exists()
         assert (machine.backup / "romm-tender.service").is_file()
 
+    def test_it_keeps_the_copy_a_rollback_by_hand_made(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        machine.run("--rollback", STUB_BACKEND="up")
+
+        result = machine.run("--uninstall")
+
+        assert result.returncode == 0, result.stderr
+        assert (machine.data / "rollback-backup" / "romm_sync.db").read_bytes() == b"what the new version made of it\n"
+
     def test_it_leaves_the_library_the_settings_and_the_launcher(self, machine):
         self._installed(machine)
         machine.config.mkdir(parents=True, exist_ok=True)
