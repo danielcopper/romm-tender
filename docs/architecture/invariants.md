@@ -1062,8 +1062,9 @@ Format: **invariant** — tier — enforced by.
   no reservation in front of it, open to every conflicting endpoint that could change the local state the refreshed
   preview is checked against. The service test checks that the run is registered by the time `start_prune` returns,
   which is what keeps the order; the contract test holds a real start inside its preview rebuild and checks the refusal
-  during validation, after the start returns and once the run ends — it does not see a registration moved into the run
-  task's first step, because that step runs before the start's caller resumes. Neither sees a second caller
+  during validation and after the start returns, and its lifting once the run ends — it does not see a registration
+  moved into the run task's first step, because that step runs before the start's caller resumes. Neither sees a second
+  caller
 - **A prune frontend action mutates Steam only after atomically claiming its exact run/token/discriminant/binding;
   repeats are idempotent and an outcome lost in transit is ambiguous, never success** — test + prompt-only — prune
   service claim tests + `frontend/src/utils/pruneActions.test.ts`; new action kinds are prompt-only

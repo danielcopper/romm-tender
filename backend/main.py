@@ -492,8 +492,8 @@ class Plugin:
         released = await self._prune_conflicts.release_orphaned_leases()
         return {"success": True, "released": released}
 
-    # Deliberately undecorated: stopping the run is the one operation that must
-    # stay reachable while the prune claim is held.
+    # Deliberately undecorated: the endpoints that stop, answer or wait on a run
+    # must stay reachable while its run claim is held.
     @route
     async def cancel_prune(self, run_id):
         return await self._prune_service.cancel_prune(run_id)

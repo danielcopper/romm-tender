@@ -383,10 +383,10 @@ yet. Terminal results distinguish exact success, skipped work, known partial mut
 removed ids and affected appIds stay truthful even after cancellation or a failed event delivery.
 
 `cancel_prune(run_id)` is the wire entry point, reachable from the confirmation dialog and from the Gone from RomM pane
-while a run is live. It is deliberately **not** gated by the run claim — stopping the run is the one operation that must
-stay available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat requests,
-and answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the group
-already executing runs to its own verdict and reports what it committed.
+while a run is live. It is deliberately **not** gated by the run claim, like the run's other endpoints: stopping the run
+must stay available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat
+requests, and answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the
+group already executing runs to its own verdict and reports what it committed.
 
 ### Where a cancellation lands
 
