@@ -214,12 +214,13 @@ exec python backend/main.py
 '''
 
 [tasks."dev:backend"]
-description = "Build the panel and run the backend against the Steam already running — dev without the restart. The task after a dev:*-reset, or beside a Steam carrying no panel; beside one that already carries a panel it loads nothing, and that panel cannot reach it either"
+description = "Build the panel and run the backend against the Steam already running — dev without the restart. The task after a dev:*-reset, or beside a Steam carrying no panel; beside a panel an earlier backend loaded, the backend has Steam reload its JS context once no app is running, which closes what is open"
 raw = true
 # Starts a backend without restarting Steam. What it cannot do — load into a
 # context that already carries the panel's marker, or be reached by a panel a
 # previous backend loaded — is the same pair of facts behind the restart the
-# tasks above do: docs/contributing/frontend-dev-loop.md.
+# tasks above do; the backend answers it by having Steam reload its JS context
+# once no app is running: docs/contributing/frontend-dev-loop.md.
 run = '''
 python scripts/dev_backend_lock.py
 mise run build

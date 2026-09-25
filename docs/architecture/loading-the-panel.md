@@ -113,7 +113,7 @@ one reads as an empty instance, which no running process has.
 When the backend restarts while Steam keeps running — a reinstall, `systemctl --user restart romm-tender`, or the unit's
 `Restart=always` after a crash — the panel the previous process loaded stays in Steam. It carries the previous process's
 token, so the new server refuses its socket on every retry (`refused GET /ws: wrong token` in the log), and the new
-injector finds the marker and loads nothing over it. The game page's Tender section stays at "Loading…", and a game
+injector finds the marker and loads nothing over it. The game page's Tender section stays at "Loading...", and a game
 launched from Steam starts without Tender: no save sync around it and no playtime.
 
 **How the backend knows.** Whenever the injector finds a marker, it asks whose it is. Its own instance means a panel it
@@ -126,20 +126,23 @@ in Steam.
 **What it does about it** (`backend/host/inject/recovery.py`):
 
 1. **Waits until no app is running.** It reads `SteamUIStore.RunningApps` — the source the panel itself reads running
-   apps from — every five seconds, and only an empty list lets it act. A store it cannot read, a shape it does not know,
-   or no renderer attached is no answer, and it keeps waiting.
+   apps from — every five seconds, and only two empty lists in a row let it act: a freshly rebuilt context can list none
+   for a few seconds while a game is still up. A store it cannot read, a shape it does not know, or no renderer attached
+   is no answer, and it keeps waiting. Then it asks the page whose panel it carries, rather than trusting the last
+   reading, and acts only if it is still the earlier backend's. The same gate stands in front of the fallback.
 2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
-   `SharedJSContext` and scheduled with `setTimeout(…, 200)`. Called directly inside the evaluation, it takes the
-   context away before the evaluation can return, and the debugger answers "Cannot find default execution context"
-   ([ADR-0024](../adr/0024-session-budget-rss-gate.md)). The rebuild wipes the marker and fires
-   `Page.domContentEventFired`, so the panel is loaded again through [the ordinary sequence](#the-sequence) — nothing
-   here loads it.
-3. **Watches for its own panel to connect** for 20 seconds.
-4. **Falls back once.** If the earlier panel's marker is still there after that window, it waits again for no app to be
-   running, then sends SIGTERM to every `steamwebhelper` process this user owns, and Steam starts the web helper again.
-   It then watches 60 seconds for the panel. If the reload did rebuild the context and only the panel is slow — Decky
-   Loader alone takes about ten seconds to be ready — it does not fall back, because that would take the interface away
-   from a load already under way.
+   `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
+   [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader
+   schedules the same call (`backend/decky_loader/helpers.py`, since 2024), the evaluation returns first and the rebuild
+   follows. The rebuild wipes the marker and fires `Page.domContentEventFired`, so the panel is loaded again through
+   [the ordinary sequence](#the-sequence) — nothing here loads it.
+3. **Watches for its own panel to connect** for 20 seconds. Where Steam answers that it has no `RestartJSContext`, there
+   is nothing to wait for, and it goes straight to the fallback.
+4. **Falls back once.** If the earlier panel's marker is still there after that window, it passes the same gate again,
+   then sends SIGTERM to every `steamwebhelper` process this user owns, and Steam starts the web helper again. It then
+   watches 60 seconds for the panel. If the reload did rebuild the context and only the panel is slow — beside Decky
+   Loader it came back about 6 s after a reload — it does not fall back, because that would take the interface away from
+   a load already under way.
 5. **Then stops.** One reload and one fallback per stranded panel; if the same panel is still there, or no panel came
    back, it says so and gives up. A later backend restart is a new stranded panel and starts over.
 
@@ -151,7 +154,7 @@ after how long, fallback taken, all at INFO, and giving up at WARNING — so a r
 | Route                       | What happened                                                                                                                                                                                                                                                        |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `RestartJSContext()`        | the window closed and reopened within about a second; a fresh renderer process, and total web-helper memory went from 1310 to 1109 MB. The debugger connection to `SharedJSContext` survived, Tender's panel was back after 3–6 s and Decky Loader's after about 6 s |
-| CDP `Page.reload`           | the same renderer process, about 170 MB larger after 90 s. Decky Loader moved off this route in 2024 over leaks and broken toasts                                                                                                                                    |
+| CDP `Page.reload`           | the same renderer process, about 170 MB larger after 90 s. Decky Loader replaced its own `location.reload()` with a scheduled `RestartJSContext()` in 2024 over leaks and broken toasts                                                                              |
 | SIGTERM to `steamwebhelper` | the interface was gone for about 8 s, and Decky Loader counts it as a web-helper crash towards its own fallback — so it is only the fallback here                                                                                                                    |
 | Restarting Steam            | about 16 s                                                                                                                                                                                                                                                           |
 
@@ -275,7 +278,7 @@ the task's own restart is what picks up a marker that has just been created. See
 
 `tests/host/inject/` drives the real client against a fake debugger on a real loopback port: real HTTP, real RFC 6455
 frames through `lib/websocket_frames.py` in both directions. What is faked there is the page — that tier runs no
-JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the three expressions the injector sends.
+JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the expressions the injector sends.
 
 So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice,
 what the evaluated source carries, and every branch of replacing a stranded panel — including what the fallback's kill

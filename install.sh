@@ -115,10 +115,11 @@ UNVERIFIED=""
 # Whether this run replaced something that was already here — a tree at $CODE,
 # or a unit that was running. What it changes is the answer about Steam: a
 # backend that starts while an EARLIER one's panel is still loaded into Steam
-# cannot replace it. The panel holds the old backend's token, so it talks to
-# nobody, and the new backend finds the injection marker already set and loads
-# nothing over it. Only Steam restarting clears that, so only a FIRST install
-# into a running Steam can promise the entry appears on its own.
+# cannot load over it. The panel holds the old backend's token, so it talks to
+# nobody, and the new backend finds the injection marker already set; the new
+# backend replaces it only by having Steam reload its JS context, and only once
+# no app is running, so a run that replaced an install still cannot promise the
+# entry appears on its own.
 REPLACED_AN_INSTALL="no"
 
 # What the EXIT trap has to clean up: a download directory, a spinner that is

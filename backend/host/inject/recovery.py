@@ -13,8 +13,8 @@ interface away, so it waits for every app to exit first, and a reading that
 could not be taken is a reason to wait rather than an answer. The
 same gate stands in front of the fallback.
 
-**At most once per stranded panel.** One reload, and one fallback if the reload
-produced no panel; after that it says it is giving up and does nothing more for
+**At most once per stranded panel.** One reload, and one fallback if the
+earlier panel is still there after the reload; after that it says it is giving up and does nothing more for
 that panel. Everything that takes the interface down is announced to the injector
 first, so the crash watchdog never reads it as a crash of its own making.
 """
@@ -44,10 +44,11 @@ APP_POLL_SECONDS = 5.0
 PANEL_BACK_AFTER_RELOAD_SECONDS = 20.0
 PANEL_BACK_AFTER_RESTART_SECONDS = 60.0
 
-# The reload is scheduled rather than called: called directly inside
-# ``Runtime.evaluate``, it takes the context away while the evaluation is still
-# running, and the debugger answers "Cannot find default execution context"
-# (ADR-0024). Scheduled, the evaluation returns first.
+# Evaluated directly, the call answers "Cannot find default execution context"
+# — the answer that led ADR-0024 to rule the call out. Scheduled with
+# ``setTimeout``, as Decky Loader schedules the same call
+# (backend/decky_loader/helpers.py), the evaluation returns first and the
+# rebuild follows.
 RELOAD_DELAY_MS = 200
 
 # ``SteamUIStore.RunningApps`` is the source ``frontend/src/utils/runningApps.ts``
