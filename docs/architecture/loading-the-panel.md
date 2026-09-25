@@ -152,8 +152,9 @@ in Steam.
    reload once Steam has taken the request — or given no answer to it, since the reload may have happened all the same.
    A reload Steam answers it cannot do took nothing down and is not counted. A third takedown inside the window is
    refused with one WARNING line that says to restart Steam. Two leaves room for a deliberate restart or a reinstall and
-   one more right after it. A record it cannot read or write lets the reload through, which is the crash watchdog's
-   lenient direction for the watchdog's reason.
+   one more right after it. A record it cannot read counts nothing and one it cannot write records nothing, so neither
+   blocks a takedown: that is [the crash watchdog](#the-crash-watchdog)'s lenient direction, for the same reason — a
+   read-only state directory is no reason to leave a panel stranded.
 
 Every step is one log line — stranded panel seen, waiting for an app to exit (naming it), reload issued, panel back and
 after how long, fallback taken, all at INFO; giving up and a Steam without `RestartJSContext` at WARNING; an unexpected

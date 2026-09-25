@@ -4,7 +4,8 @@ Contract: the one piece of state that outlives a backend process in replacing a
 stranded panel — when this machine last had Steam reload its JS context or
 terminated its web helper for that — and the answer whether one more is allowed:
 fewer than ``RELOAD_LIMIT`` inside the last ``RELOAD_WINDOW_SECONDS``. It takes
-nothing down itself. Why the record outlives the process, and why those numbers:
+nothing down itself. Why the record outlives the process, why those numbers,
+and why a record it cannot read or write blocks nothing:
 docs/architecture/loading-the-panel.md, "A panel an earlier backend left behind".
 """
 
@@ -89,10 +90,6 @@ class ReloadLimit:
                 json.dump({"takedowns": times}, handle)
             os.replace(temporary, self._path)
         except OSError:
-            # A record that cannot be written leaves the limit unable to count,
-            # which is the watchdog's lenient direction for the watchdog's
-            # reason: a read-only state directory is no reason to leave a panel
-            # stranded.
             return
 
 

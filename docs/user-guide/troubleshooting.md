@@ -54,14 +54,17 @@ talk to the new one, so the new backend asks Steam to reload its interface once 
 a game is running. If the reload does not bring the panel back, it restarts part of Steam once, which takes the
 interface away for a few more seconds.
 
-**Fix**: If no game is running and Steam's screen does not reload, or Tender's section on a game page still says
-"Loading..." a few minutes after it did, the backend has stopped trying — after one reload and one restart of part of
-Steam, or because it has already done this twice in the last ten minutes. Restart Steam to load the new panel. The log
-says what was tried, and a WARNING line that says "Restart Steam to load" marks this case:
+**Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page
+still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend restart,
+and it takes Steam's interface away no more than twice in ten minutes. The log says what was tried:
 
 ```bash
 grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20
 ```
+
+A WARNING line that says "Restart Steam to load" means the backend has stopped trying. Not every case leaves one — the
+backend may still be waiting because it cannot tell whether a game is running, or Steam's interface reloaded and the old
+panel went with it but the new one did not arrive — so the missing panel, not that line, is the reason to restart Steam.
 
 ## Games Won't Launch
 
