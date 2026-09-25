@@ -23,7 +23,7 @@ def _release(version: str) -> LatestRelease:
     url = (
         f"https://github.com/danielcopper/romm-tender/releases/download/tender-v{version}/romm-tender-{version}.tar.gz"
     )
-    return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest="ab99cd"))
+    return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest="ab99" * 16))
 
 
 def _settings_on_disk(harness) -> dict[str, Any]:

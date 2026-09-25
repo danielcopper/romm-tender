@@ -80,6 +80,9 @@ class GithubReleaseAdapter:
     def _find_tarball(self, payload: dict[str, Any], version: str) -> ReleaseTarball | None:
         """Return the release's tarball asset, or ``None`` when it carries none yet.
 
+        A tarball with no sha256 digest counts as none: it could not be
+        verified before an install, so the release is not available.
+
         The address and the digest come off the SAME asset of the SAME answer:
         ``browser_download_url`` names the release it belongs to rather than
         whatever is newest, which is what makes it safe to pair with a digest.
@@ -97,6 +100,7 @@ class GithubReleaseAdapter:
                 digest = sha256_hex(asset.get("digest"))
                 if digest is None:
                     self._log_debug(f"[update] {name} carries no sha256 digest")
+                    return None
                 return ReleaseTarball(url=url, digest=digest)
         self._log_debug(f"[update] release {version} carries no {name} yet")
         return None

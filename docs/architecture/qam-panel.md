@@ -722,9 +722,9 @@ The update notice is the other one with two buttons, side by side for the same r
 it records the version the card names (`update_notice_dismissed_version`), so the next release raises the card again,
 and **Check now** in its home forgets it. The home states the versions and holds the check's switch and Check now; it
 installs nothing, and to a run from a checkout it says "Development build — install updates with the installer." The
-card's condition is `available` on the backend's answer and nothing else — a newer release with its tarball attached,
-not the dismissed version, the check switched on. The answer is fetched at panel load by a detached call nothing awaits
-(the store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
+card's condition is `available` on the backend's answer and nothing else — a newer release with its tarball and a valid
+digest attached, not the dismissed version, the check switched on. The answer is fetched at panel load by a detached
+call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
 
 Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
 `input_driver` fix and the session budget — so the absence is ordinary.

@@ -27,7 +27,10 @@ _A_DAY = 24 * 60 * 60
 _NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program"}
 
 
-def _release(version: str, digest: str | None = "ab34cd") -> LatestRelease:
+_HEX = "ab34" * 16
+
+
+def _release(version: str, digest: str = _HEX) -> LatestRelease:
     url = f"https://x.test/releases/download/tender-v{version}/romm-tender-{version}.tar.gz"
     return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest=digest))
 
@@ -106,11 +109,6 @@ class TestWhetherAnUpdateIsAvailable:
 
         assert (await service.get_update_notice())["available"] is False
 
-    async def test_a_release_without_a_digest_is_still_announced(self):
-        service, _, _, _ = _make(latest=_release("0.34.0", digest=None))
-
-        assert (await service.get_update_notice())["available"] is True
-
     async def test_the_answer_says_whether_this_is_the_installed_program(self):
         service, _, _, _ = _make(latest=_release("0.34.0"), installed_program=False)
 
@@ -128,7 +126,7 @@ class TestWhetherAnUpdateIsAvailable:
         assert set(notice) == _NOTICE_KEYS
         stored = _stored(uow_factory)
         assert stored["tarball_url"] == "https://x.test/releases/download/tender-v0.34.0/romm-tender-0.34.0.tar.gz"
-        assert stored["digest"] == "ab34cd"
+        assert stored["digest"] == _HEX
 
 
 class TestAReleaseWithoutItsTarball:
@@ -173,6 +171,43 @@ class TestAReleaseWithoutItsTarball:
         assert notice["available"] is False
 
 
+class TestTheDigest:
+    async def test_a_stored_release_with_a_valid_digest_is_available(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        clock = FakeClock()
+        with uow_factory() as uow:
+            uow.kv_config.set(
+                LAST_CHECK_KEY,
+                json.dumps(
+                    {"checked_at": clock.time(), "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX}
+                ),
+            )
+        service, releases, _, _ = _make(latest=None, clock=clock, uow_factory=uow_factory)
+
+        notice = await service.get_update_notice()
+
+        assert releases.calls == 0
+        assert notice["available"] is True
+
+    async def test_a_stored_release_without_a_valid_digest_raises_no_card(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        clock = FakeClock()
+        with uow_factory() as uow:
+            uow.kv_config.set(
+                LAST_CHECK_KEY,
+                json.dumps(
+                    {"checked_at": clock.time(), "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": None}
+                ),
+            )
+        service, releases, _, _ = _make(latest=None, clock=clock, uow_factory=uow_factory)
+
+        notice = await service.get_update_notice()
+
+        assert releases.calls == 0
+        assert notice["available"] is False
+        assert notice["latest_version"] is None
+
+
 class TestEveryFailureIsSilent:
     async def test_a_check_that_reached_nothing_says_nothing(self):
         service, releases, _, _ = _make(latest=None)
@@ -205,7 +240,7 @@ class TestEveryFailureIsSilent:
         assert notice["available"] is True
         assert notice["latest_version"] == "0.34.0"
         stored = _stored(uow_factory)
-        assert stored["digest"] == "ab34cd"
+        assert stored["digest"] == _HEX
         assert stored["tarball_url"].endswith("romm-tender-0.34.0.tar.gz")
 
     async def test_a_failed_check_still_holds_the_next_one_off(self):

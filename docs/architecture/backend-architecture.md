@@ -1588,14 +1588,16 @@ identity survive. This heals drift from every cause at the next plugin load.
 The service answers one question — is a newer Tender release out — and stays silent whenever it cannot say. It asks
 through `LatestReleaseFn`, whose adapter reads GitHub's "latest release" route: drafts and pre-releases are excluded by
 that route, a tag other than `tender-v<version>` is not a Tender release, and the release counts as **available** only
-once its `romm-tender-<V>.tar.gz` asset is attached. The assets job uploads the tarball minutes after the release is
-published, so for that window the release is read, answered and passed over: the last available release the checks found
-stays standing, and a check that reached nothing at all does the same.
+once its `romm-tender-<V>.tar.gz` asset is attached AND GitHub states a valid sha256 `digest` for it (64 hex digits
+after `sha256:`): a tarball that cannot be verified before an install makes the release not available, and a stored
+answer without a valid digest is dropped when it is read back. The assets job uploads the tarball minutes after the
+release is published, so for that window the release is read, answered and passed over: the last available release the
+checks found stays standing, and a check that reached nothing at all does the same.
 
 - **At most once a day, when the panel loads.** The last answer lives in `kv_config` under `update_check_last_seen` —
-  its version, the tarball's `browser_download_url` and the bare sha256 hex of its `digest`, which name one release and
-  stay paired, plus the time of the last attempt. The stamp records the ATTEMPT, so an offline start does not pay the
-  ten-second timeout at every panel load; a stamp dated in the future is due at once.
+  its version, the tarball's `browser_download_url` and the lowercase sha256 hex of its `digest`, which name one release
+  and stay paired, plus the time of the last attempt. The stamp records the ATTEMPT, so an offline start does not pay
+  the ten-second timeout at every panel load; a stamp dated in the future is due at once.
 - **The user's two keys** are in `settings.json` and are written only through the `SettingsPersister`:
   `update_check_enabled` (absent means on) and `update_notice_dismissed_version`, which holds a version rather than a
   flag so the next release raises the card again. With the switch off nothing is requested — not by the daily check and

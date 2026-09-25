@@ -125,7 +125,7 @@ class TestSha256Hex:
 
 _RELEASE = LatestRelease(
     version="0.34.0",
-    tarball=ReleaseTarball(url="https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz", digest="ab34cd"),
+    tarball=ReleaseTarball(url="https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz", digest=_HEX),
 )
 
 
@@ -134,10 +134,13 @@ class TestStoredCheck:
         check = UpdateCheck(checked_at=1757500000.0, release=_RELEASE)
         assert decode_update_check(encode_update_check(check)) == check
 
-    def test_round_trips_a_release_whose_digest_is_unknown(self):
-        release = LatestRelease(version="0.34.0", tarball=ReleaseTarball(url="https://x.test/t.tar.gz", digest=None))
-        check = UpdateCheck(checked_at=1757500000.0, release=release)
-        assert decode_update_check(encode_update_check(check)) == check
+    def test_a_stored_release_with_a_valid_digest_reads_back_available(self):
+        raw = json.dumps({"checked_at": 1.0, "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX})
+        decoded = decode_update_check(raw)
+        assert decoded is not None
+        assert decoded.release == LatestRelease(
+            version="0.34.0", tarball=ReleaseTarball(url="https://x.test/t", digest=_HEX)
+        )
 
     def test_round_trips_a_check_that_never_found_one(self):
         check = UpdateCheck(checked_at=1757500000.0, release=None)
@@ -167,22 +170,18 @@ class TestStoredCheck:
     @pytest.mark.parametrize(
         "stored",
         [
-            {"version": "0.34.0"},
-            {"version": "0.34.0", "tarball_url": ""},
-            {"version": "", "tarball_url": "https://x.test/t.tar.gz"},
-            {"version": 34, "tarball_url": "https://x.test/t.tar.gz"},
-            {"version": "0.34.0", "tarball_url": ["https://x.test/t.tar.gz"]},
+            {"version": "0.34.0", "digest": _HEX},
+            {"version": "0.34.0", "tarball_url": "", "digest": _HEX},
+            {"version": "", "tarball_url": "https://x.test/t.tar.gz", "digest": _HEX},
+            {"version": 34, "tarball_url": "https://x.test/t.tar.gz", "digest": _HEX},
+            {"version": "0.34.0", "tarball_url": ["https://x.test/t.tar.gz"], "digest": _HEX},
         ],
     )
     def test_a_release_with_nothing_to_download_is_dropped_but_the_timestamp_stands(self, stored):
         decoded = decode_update_check(json.dumps({"checked_at": 1757500000.0, **stored}))
         assert decoded == UpdateCheck(checked_at=1757500000.0, release=None)
 
-    @pytest.mark.parametrize("digest", ["", 7, None])
-    def test_an_unusable_digest_reads_as_unknown(self, digest):
+    @pytest.mark.parametrize("digest", ["", 7, None, "ab34cd", _HEX.upper(), f"sha256:{_HEX}", _HEX + "0"])
+    def test_a_stored_release_without_a_valid_digest_is_dropped_but_the_timestamp_stands(self, digest):
         raw = json.dumps({"checked_at": 1.0, "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": digest})
-        decoded = decode_update_check(raw)
-        assert decoded is not None
-        assert decoded.release == LatestRelease(
-            version="0.34.0", tarball=ReleaseTarball(url="https://x.test/t", digest=None)
-        )
+        assert decode_update_check(raw) == UpdateCheck(checked_at=1.0, release=None)

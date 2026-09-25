@@ -105,12 +105,18 @@ class TestGetLatestRelease:
             assert adapter.get_latest_release() == LatestRelease(version="0.34.0", tarball=None)
 
     @pytest.mark.parametrize("digest", [None, "", _HEX, f"sha512:{_HEX}", "sha256:", "sha256:ab34cd"])
-    def test_a_digest_that_is_not_a_sha256_is_carried_as_none(self, adapter, digest):
-        """An address with no established sha256 is still an address; the verdict on it is the installer's."""
+    def test_a_tarball_without_a_valid_sha256_digest_is_no_tarball(self, adapter, log, digest):
+        """It could not be verified before an install, so the release is not available."""
         assets = [{**_TARBALL, "digest": digest}]
         with _answering(_payload(assets=assets)):
+            assert adapter.get_latest_release() == LatestRelease(version="0.34.0", tarball=None)
+        assert any("no sha256 digest" in line for line in log)
+
+    def test_a_tarball_with_a_valid_sha256_digest_is_the_release_s(self, adapter):
+        assets = [{**_TARBALL, "digest": f"sha256:{_HEX.upper()}"}]
+        with _answering(_payload(assets=assets)):
             assert adapter.get_latest_release() == LatestRelease(
-                version="0.34.0", tarball=ReleaseTarball(url=_PINNED_URL, digest=None)
+                version="0.34.0", tarball=ReleaseTarball(url=_PINNED_URL, digest=_HEX)
             )
 
 

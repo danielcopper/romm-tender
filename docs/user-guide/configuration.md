@@ -292,8 +292,9 @@ notice on the main panel says **Tender X is available** and names the version yo
   The line under the button says what it found: a newer release, that you have the newest one, or that GitHub gave no
   usable answer.
 
-A release counts as out only once its download is attached, which happens a few minutes after the release is published;
-until then Tender says nothing about it.
+A release counts as out only once its download is attached together with GitHub's checksum for it, which happens a few
+minutes after the release is published; until then Tender says nothing about it. A release whose download comes without
+a valid checksum never counts as out, because it could not be verified.
 
 **What the check sends where.** When Steam loads Tender and a day has passed since the last check, and whenever you
 press **Check now**, Tender asks GitHub's public API for the newest release of `danielcopper/romm-tender`. The request
