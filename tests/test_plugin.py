@@ -855,7 +855,7 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "wait_for_prune_release",
     # Ack for an already-started cleanup run must remain available while the
     # run waits on its exact Steam action token; gating it would deadlock the
-    # recovery-backed operation if migration state changed mid-run.
+    # cleanup run if migration state changed mid-run.
     "report_prune_action",
     # Stopping a run destroys nothing and touches no RetroDECK path — it only
     # cancels the run's own task. Gating it on a migration that appeared
