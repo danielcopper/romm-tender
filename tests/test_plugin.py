@@ -991,21 +991,22 @@ class TestMigrationBlockedDecoratorCoverage:
             f"remove from one: {sorted(double_classified)}"
         )
 
-    def test_whitelisted_callables_are_not_decorated(self):
-        """Every name in _MIGRATION_BLOCKED_WHITELIST must NOT carry the
-        @migration_blocked marker. Symmetric to the prior check, but reads
-        from the whitelist side."""
+    def test_whitelisted_callables_are_endpoints_and_not_decorated(self):
+        """Every name in _MIGRATION_BLOCKED_WHITELIST must be an endpoint on
+        Plugin and must NOT carry the @migration_blocked marker. Reads from the
+        whitelist side, so a name left behind by a removed or renamed endpoint
+        fails here instead of classifying nothing."""
+        from host.dispatch import reachable_methods
         from main import Plugin
 
-        decorated: list[str] = []
-        for name in _MIGRATION_BLOCKED_WHITELIST:
-            method = getattr(Plugin, name, None)
-            if method is None:
-                continue
-            if getattr(method, "_migration_blocked", False) is True:
-                decorated.append(name)
+        endpoints = reachable_methods(Plugin())
+        stale = sorted(_MIGRATION_BLOCKED_WHITELIST - endpoints.keys())
+        assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
 
-        assert not decorated, f"Whitelisted callables that also carry @migration_blocked: {sorted(decorated)}"
+        decorated = sorted(
+            name for name in _MIGRATION_BLOCKED_WHITELIST if getattr(endpoints[name], "_migration_blocked", False)
+        )
+        assert not decorated, f"Whitelisted callables that also carry @migration_blocked: {decorated}"
 
 
 class TestMainStartupOrdering:
