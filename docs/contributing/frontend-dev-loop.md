@@ -33,14 +33,19 @@ and leaves the backend you already have running alone, so the rebuilt panel reac
 flight being killed to get it there.
 
 `dev:backend` is the wrong task beside a panel that is already loaded: the injector refuses a context that carries its
-marker, so nothing is loaded, and the panel already in that context cannot reach the new backend either, because every
-backend process mints its own admission token. Those are the same two facts that make the other tasks restart Steam —
-and what makes `dev:frontend` worth having, because the restart is exactly what they call for.
+marker, and the panel already in that context cannot reach the new backend, because every backend process mints its own
+admission token. The new backend replaces that panel itself by having Steam reload its JS context
+([a panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind)),
+but only once no app is running, and the reload closes whatever is open in Steam just as a restart would. Those are the
+same two facts that make the other tasks restart Steam — and what makes `dev:frontend` worth having, because the restart
+is exactly what they call for.
 
 The display argument is optional, and leaving it out means one thing on a task that names a window and another on
 `dev:frontend`, which repeats one — see [Choosing the display](#choosing-the-display). Every one of these tasks but
 `dev:backend` shuts the running Steam down first, so anything open in it closes; a Steam that is not running is simply
-started. A build that fails, or a display that matches nothing, stops the task before Steam is touched.
+started. `dev:backend` restarts nothing itself, but beside a panel an earlier backend loaded, the backend it starts has
+Steam reload its JS context once no app is running, which closes what is open too. A build that fails, or a display that
+matches nothing, stops the task before Steam is touched.
 
 **The five tasks that build ask who holds the single-instance lock before anything else they do** — `backend.lock`,
 beside the database — and refuse on the wrong answer, before the build as well as before Steam: no refusal here is one
@@ -85,12 +90,16 @@ Loader it names a file the injector did not load. Read it for the port and the t
 
 - **A rebuilt bundle needs a fresh JS context.** The injector refuses a context that already carries the panel — it
   knows one by [its marker](../architecture/loading-the-panel.md#the-marker) — and only a rebuild of the context wipes
-  the marker. A Steam restart is the one way to ask for that. `TENDER_INJECT=force` does not get round it: that switch
+  the marker. The tasks ask for that by restarting Steam. `TENDER_INJECT=force` does not get round it: that switch
   belongs to the crash watchdog, and the marker check does not read it.
 - **A new backend strands the panel the old one loaded.** Every backend process makes its own admission token
   (`new_token` in `backend/host/access.py`), and the panel reads its address and token off the URL it was loaded from
   ([the token](../architecture/loading-the-panel.md#the-token)), so a restarted backend leaves the running panel holding
-  a token nobody accepts.
+  a token nobody accepts. The backend replaces such a panel itself by having Steam reload its JS context — only when no
+  app is running, one time per stranded panel, and no more than twice in ten minutes on the machine
+  ([a panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind)).
+  Every task but `dev:backend` restarts Steam rather than wait for that; `dev:backend` restarts nothing and leaves it to
+  the backend it starts.
 - **Both windows are one load.** The desktop client and Big Picture render from one shared JS context, and the backend
   loads the panel into it once. There is no loading into one window and not the other; the tasks differ only in which
   window you end up looking at.

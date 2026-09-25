@@ -7,7 +7,7 @@ transport: every test opens a real loopback port, and the frames travel through
 framing assertions mean anything.
 
 What IS faked is the page. There is no JavaScript engine here, so
-``Runtime.evaluate`` is answered by :class:`FakePage`, which recognises the three
+``Runtime.evaluate`` is answered by :class:`FakePage`, which recognises the
 expressions the injector sends and keeps the state they would have changed.
 """
 
@@ -16,9 +16,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from host.inject.bootstrap import marker_owner_expression
+from host.inject.recovery import RELOAD_EXPRESSION, RUNNING_APPS_EXPRESSION
 from lib.http_messages import HEAD_TERMINATOR, build_response_head, parse_request_head
 from lib.websocket_frames import (
     OPCODE_CONTINUATION,
@@ -43,23 +46,41 @@ class FakeTarget:
     type: str = "page"
 
 
+_THREW = {"result": {"type": "undefined"}, "exceptionDetails": {"text": "Uncaught TypeError"}}
+
+
 @dataclass
 class FakePage:
-    """The state the injector's three expressions read and write.
+    """The state the injector's expressions read and write.
 
     It answers by recognising the expression it is given, because there is no
     engine here to run one. ``bootstrap`` is every other expression: the only
     other thing the injector evaluates is the bootstrap, and it is recognised by
     exclusion rather than by a substring so a change to its text does not quietly
     stop it being seen.
+
+    ``marker_instance`` is who the marker says loaded the panel. A bootstrap
+    writes the instance its facts carry, as the real one does; a test that plants
+    a marker by hand says whose it is, and ``None`` there is left for the fixture
+    to fill in.
     """
 
     marker_expression: str
     ready_expression: str
+    owner_expression: str = field(default_factory=marker_owner_expression)
+    apps_expression: str = RUNNING_APPS_EXPRESSION
+    reload_expression: str = RELOAD_EXPRESSION
     marker: bool = False
+    marker_instance: str | None = None
+    marker_version: str = ""
+    owner_raises: bool = False
     ready: bool = True
     bootstrap_answer: dict[str, Any] = field(default_factory=lambda: {"ok": True})
     bootstrap_raises: bool = False
+    running_apps: list[str] | None = field(default_factory=list)
+    apps_script: list[list[str] | None] = field(default_factory=list)
+    apps_raise: bool = False
+    reload_answer: bool | None = True
     evaluated: list[str] = field(default_factory=list)
 
     def evaluate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -68,21 +89,68 @@ class FakePage:
         self.evaluated.append(expression)
         if expression == self.marker_expression:
             return {"result": {"type": "boolean", "value": self.marker}}
+        if expression == self.owner_expression:
+            return self._owner()
         if expression == self.ready_expression:
             return {"result": {"type": "boolean", "value": self.ready}}
+        if expression == self.apps_expression:
+            if self.apps_raise:
+                return _THREW
+            listed = self.apps_script.pop(0) if self.apps_script else self.running_apps
+            return {"result": {"type": "object", "value": listed}}
+        if expression == self.reload_expression:
+            return (
+                _THREW if self.reload_answer is None else {"result": {"type": "boolean", "value": self.reload_answer}}
+            )
         if self.bootstrap_raises:
             return {"result": {"type": "undefined"}, "exceptionDetails": {"text": "Uncaught SyntaxError"}}
         self.marker = True
+        facts = _facts_of(expression)
+        self.marker_instance = str(facts.get("instance", ""))
+        self.marker_version = str(facts.get("version", ""))
         return {"result": {"type": "object", "value": dict(self.bootstrap_answer)}}
+
+    def _owner(self) -> dict[str, Any]:
+        if self.owner_raises:
+            return _THREW
+        if not self.marker:
+            return {"result": {"type": "object", "subtype": "null", "value": None}}
+        value = {"instance": self.marker_instance or "", "version": self.marker_version}
+        return {"result": {"type": "object", "value": value}}
+
+    @property
+    def reloads(self) -> int:
+        """How many times Steam was asked to rebuild its JS context."""
+        return self.evaluated.count(self.reload_expression)
+
+    @property
+    def app_checks(self) -> int:
+        """How many times Steam was asked which apps are running."""
+        return self.evaluated.count(self.apps_expression)
 
     @property
     def bootstraps(self) -> list[str]:
         """Every bootstrap expression this page was given, in order."""
-        return [
-            expression
-            for expression in self.evaluated
-            if expression not in (self.marker_expression, self.ready_expression)
-        ]
+        known = (
+            self.marker_expression,
+            self.owner_expression,
+            self.ready_expression,
+            self.apps_expression,
+            self.reload_expression,
+        )
+        return [expression for expression in self.evaluated if expression not in known]
+
+
+def _facts_of(bootstrap: str) -> dict[str, Any]:
+    """The facts object a bootstrap was built around, or an empty one."""
+    found = re.search(r"const T = (\{.*?\});", bootstrap, re.DOTALL)
+    if found is None:
+        return {}
+    try:
+        facts = json.loads(found.group(1))
+    except ValueError:
+        return {}
+    return facts if isinstance(facts, dict) else {}
 
 
 class FakeDebugger:

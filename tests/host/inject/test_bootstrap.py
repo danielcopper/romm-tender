@@ -25,9 +25,12 @@ from host.inject.bootstrap import (
     STOP_NOTE,
     STOP_PAYLOAD,
     TITLE,
+    PanelMarker,
     build_bootstrap,
     build_facts,
+    marker_owner_expression,
     marker_present_expression,
+    read_panel_marker,
 )
 
 TOKEN = "a-secret-admission-token"
@@ -38,6 +41,7 @@ _STEAM_GLOBALS_TS = Path(__file__).resolve().parents[3] / "frontend" / "src" / "
 
 def facts(**overrides):
     values = {
+        "instance": "this-backend",
         "kind": "standalone",
         "version": "1.2.3",
         "steam_build": "1788652215",
@@ -347,6 +351,7 @@ console.log(
     ran: globalThis.__ran,
     installs: globalThis.__installs.length,
     cards: globalThis.window.document.body.appended.length,
+    owner: __TENDER_OWNER__,
   })
 );
 """
@@ -400,7 +405,8 @@ def installer_report(*, steam_ready: bool = True, **installed: bool) -> dict[str
 def run_under_node(tmp_path, built: str) -> dict[str, Any]:
     """Evaluate *built* against the stub page; answer what came back and what ran."""
     harness = tmp_path / "run-bootstrap.mjs"
-    harness.write_text(_STUB_PAGE.replace("__TENDER_EXPRESSION__", built), encoding="utf-8")
+    page = _STUB_PAGE.replace("__TENDER_OWNER__", marker_owner_expression())
+    harness.write_text(page.replace("__TENDER_EXPRESSION__", built), encoding="utf-8")
     finished = subprocess.run([node_or_skip(), str(harness)], capture_output=True, text=True, check=False)
     assert finished.returncode == 0, finished.stderr
     return json.loads(finished.stdout)
@@ -460,3 +466,47 @@ class TestItRunsUnderNode:
         assert answered["answer"] == {"ok": True}
         assert answered["ran"] == ["panel"]
         assert answered["installs"] == 0
+
+
+class TestWhoseMarkerItIs:
+    """The marker names the backend process that loaded the panel, so a later one can tell."""
+
+    def test_the_panel_it_loads_is_marked_as_this_backends(self, tmp_path):
+        report = installer_report(SP_REACT=True, SP_REACTDOM=True, SP_JSX=True)
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_globals_bundle(report), _PANEL))))
+        assert answered["owner"] == {"instance": "this-backend", "version": "1.2.3"}
+
+    def test_it_is_written_with_the_marker_before_anything_is_loaded(self):
+        source = build_bootstrap(facts())
+        assert "T.instance" in source[source.index("win[T.marker] =") : source.index("const redact")]
+
+    @pytest.mark.parametrize(
+        ("planted", "owner"),
+        [
+            ("", None),
+            (
+                '{ instance: "earlier", version: "0.33.0", kind: "standalone" }',
+                {"instance": "earlier", "version": "0.33.0"},
+            ),
+            ('{ version: "0.33.0", kind: "standalone" }', {"instance": "", "version": "0.33.0"}),
+            ("true", {"instance": "", "version": ""}),
+            ("{ instance: 7 }", {"instance": "", "version": ""}),
+        ],
+        ids=["none", "named", "before-instances", "not-an-object", "not-a-string"],
+    )
+    def test_whose_marker_it_is_is_read_off_the_page(self, tmp_path, planted, owner):
+        plant = f"globalThis.window.{MARKER} = {planted};" if planted else ""
+        script = tmp_path / "owner.mjs"
+        script.write_text(
+            f"globalThis.window = {{}};\n{plant}\n"
+            f"console.log(JSON.stringify({{ owner: {marker_owner_expression()} }}));",
+            encoding="utf-8",
+        )
+        finished = subprocess.run([node_or_skip(), str(script)], capture_output=True, text=True, check=False)
+        assert finished.returncode == 0, finished.stderr
+        assert json.loads(finished.stdout)["owner"] == owner
+
+    def test_an_answer_that_is_not_a_marker_reads_as_none(self):
+        assert read_panel_marker(None) is None
+        assert read_panel_marker("earlier") is None
+        assert read_panel_marker({"instance": "earlier", "version": 3}) == PanelMarker(instance="earlier", version="")

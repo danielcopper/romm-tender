@@ -10,7 +10,8 @@ places a question has no event: finding the target while Steam is still naming i
 and waiting for the module registry the panel needs. After that the only thing
 that brings us back is ``Page.domContentEventFired``, which a device run measured
 as arriving 0.19-0.6 s after a JS-context rebuild — and a rebuild is the one
-thing that wipes our marker.
+thing that wipes our marker. (Replacing a panel an earlier backend left behind
+polls too, for questions that have no event either; that is ``recovery.py``'s.)
 
 **Nothing here writes to Decky's objects or reads its presence from the window.**
 Which bundles to load is ``bundles.choose_bundles``, answered from the machine
@@ -24,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import secrets
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -31,9 +33,12 @@ from host.inject.bootstrap import (
     MARKER,
     STOP_BINDING,
     STOP_PAYLOAD,
+    PanelMarker,
     build_bootstrap,
     build_facts,
+    marker_owner_expression,
     marker_present_expression,
+    read_panel_marker,
 )
 from host.inject.bundles import bundle_digest, choose_bundles
 from host.inject.cdp import (
@@ -48,6 +53,8 @@ from host.inject.cdp import (
     unnamed_targets,
 )
 from host.inject.machine import DECKY_LOADER_PORT, decky_loader_is_serving, read_steam_build
+from host.inject.recovery import PanelPresence, StrandedPanelRecovery
+from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, ReloadLimit
 from host.inject.watchdog import (
     INJECT_ENV,
     INJECT_FORCE,
@@ -189,6 +196,8 @@ class PanelInjector:
         setup: InjectionSetup,
         asset_url: Callable[[str], str],
         token: str,
+        panel: PanelPresence,
+        terminate_webhelper: Callable[[], int],
         logger: logging.Logger,
     ) -> None:
         self._setup = setup
@@ -199,6 +208,22 @@ class PanelInjector:
         self._log_path = os.path.join(setup.state_dir, LOG_FILENAME)
         self._alive_check: asyncio.Task[None] | None = None
         self._stopped = False
+        self._instance = secrets.token_hex(8)
+        self._connection: CdpConnection | None = None
+        self._takedowns = 0
+        self._recovery = StrandedPanelRecovery(
+            evaluate=self._evaluate_attached,
+            panel=panel,
+            terminate_webhelper=terminate_webhelper,
+            before_takedown=self._count_a_takedown,
+            limit=ReloadLimit(os.path.join(setup.state_dir, RELOAD_LIMIT_FILENAME)),
+            logger=logger,
+        )
+
+    @property
+    def instance(self) -> str:
+        """What the marker of a panel this process loaded says about who loaded it."""
+        return self._instance
 
     async def run(self) -> None:
         """Attach, inject, and stay attached until cancelled or stopped for cause."""
@@ -221,6 +246,7 @@ class PanelInjector:
                     return
                 await asyncio.sleep(RECONNECT_SECONDS)
         finally:
+            await self._recovery.close()
             await self._abandon_alive_check()
 
     # -- one attachment --------------------------------------------------------
@@ -241,19 +267,39 @@ class PanelInjector:
         # Subscribed before the domains are enabled, so nothing that happens
         # while we are still setting up is missed.
         waits = _Waits(connection.subscribe("Page.domContentEventFired"), connection.subscribe("Runtime.bindingCalled"))
+        self._connection = connection
         try:
             async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
                 await connection.call("Page.enable")
             while not self._stopped:
-                if not await self._already_carries_the_panel(connection) and not await self._inject(connection, target):
+                if not await self._serve_the_context(connection, target):
                     return
                 if not await self._wait_for_something_to_do(waits):
                     return
         except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
             self._logger.info(f"inject: the renderer connection failed ({type(exc).__name__}: {exc})")
         finally:
+            self._connection = None
             await waits.cancel()
             await connection.close()
+
+    async def _serve_the_context(self, connection: CdpConnection, target: Target) -> bool:
+        """Load the panel where there is none; answer whether to stay attached.
+
+        A marker this process did not write is a panel an earlier backend
+        loaded, holding a token this server refuses. Loading over it is not
+        possible — the marker is what keeps a second panel out — so it is handed
+        to the recovery, which replaces it by having Steam rebuild the context.
+        """
+        marker = await self._marker_on(connection)
+        if marker is None:
+            self._recovery.cleared()
+            return await self._inject(connection, target)
+        if marker.instance == self._instance:
+            self._recovery.cleared()
+        else:
+            self._recovery.seen(marker)
+        return True
 
     async def _wait_for_something_to_do(self, waits: _Waits) -> bool:
         """Wait until there is a reason to act; ``False`` ends this attachment.
@@ -306,14 +352,51 @@ class PanelInjector:
             )
             return None
 
-    async def _already_carries_the_panel(self, connection: CdpConnection) -> bool:
-        """Is the marker on this context? An injected panel leaves one behind."""
+    async def _marker_on(self, connection: CdpConnection) -> PanelMarker | None:
+        """The marker on this context, or ``None`` where it carries no panel.
+
+        A marker whose owner cannot be read is answered as this process's own:
+        the other reading would reload Steam's interface on the strength of a
+        question that went unanswered; a question that times out ends the
+        attachment like any other.
+        """
         async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
             answer = await connection.call(
                 _EVALUATE,
                 {"expression": marker_present_expression(MARKER), "returnByValue": True},
             )
-        return bool(_value_of(answer))
+        if not _value_of(answer):
+            return None
+        async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
+            answer = await connection.call(
+                _EVALUATE,
+                {"expression": marker_owner_expression(MARKER), "returnByValue": True},
+            )
+        marker = None if "exceptionDetails" in answer else read_panel_marker(_value_of(answer))
+        if marker is None:
+            self._logger.warning(
+                "inject: Steam carries a panel and would not say which backend loaded it, so it is left alone; if "
+                "Tender's panel does not respond, restart Steam"
+            )
+            return PanelMarker(instance=self._instance, version=self._setup.version)
+        return marker
+
+    async def _evaluate_attached(self, expression: str) -> Any:
+        """Evaluate *expression* in the context attached right now; answer its value."""
+        connection = self._connection
+        if connection is None:
+            raise CdpConnectionLost("no renderer is attached")
+        async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
+            answer = await connection.call(_EVALUATE, {"expression": expression, "returnByValue": True})
+        if "exceptionDetails" in answer:
+            details = answer["exceptionDetails"]
+            text = details.get("text") if isinstance(details, dict) else details
+            raise CdpUnavailableError(f"the page threw: {text}")
+        return _value_of(answer)
+
+    def _count_a_takedown(self) -> None:
+        """Note that this process is about to take Steam's interface away itself."""
+        self._takedowns += 1
 
     # -- one injection ---------------------------------------------------------
 
@@ -360,6 +443,7 @@ class PanelInjector:
             self._logger.warning(f"inject: {verdict.line}")
 
         witness = len(pages_besides(await self._targets_now(), target.id))
+        takedowns = self._takedowns
         self._watchdog.arm(fingerprint)
 
         binding = await self._install_the_cards_callback(connection)
@@ -370,6 +454,7 @@ class PanelInjector:
                 {
                     "expression": build_bootstrap(
                         build_facts(
+                            instance=self._instance,
                             kind=choice.kind,
                             version=self._setup.version,
                             steam_build=fingerprint.steam,
@@ -386,7 +471,7 @@ class PanelInjector:
             )
         if self._report(answer):
             await self._listen_for_a_press(connection)
-        self._alive_check = asyncio.create_task(self._check_still_alive(target.id, witness))
+        self._alive_check = asyncio.create_task(self._check_still_alive(target.id, witness, takedowns))
         return True
 
     async def _install_the_cards_callback(self, connection: CdpConnection) -> str:
@@ -482,18 +567,26 @@ class PanelInjector:
 
     # -- did the interface survive it? ----------------------------------------
 
-    async def _check_still_alive(self, target_id: str, witness: int) -> None:
+    async def _check_still_alive(self, target_id: str, witness: int, takedowns: int) -> None:
         """After a pause, decide whether the interface survived this injection.
 
         Three answers, and two of them close the record. The interface is there:
-        clear it. The debugger cannot be asked any more, or there was nothing to
-        lose in the first place: close it without counting, because the crash
+        clear it. The debugger cannot be asked any more, there was nothing to
+        lose in the first place, or this process took the interface down itself
+        since *takedowns* was read: close it without counting, because the crash
         this guards against is specific — every other page target goes at once
         while the debugger keeps answering — and a run in which that could not be
         observed says nothing. Otherwise the record stays open, and the next
         attempt reads it as the crash it is.
         """
         await asyncio.sleep(ALIVE_AFTER_SECONDS)
+        if self._takedowns != takedowns:
+            self._logger.info(
+                "inject: this backend took Steam's interface down itself after loading the panel; this load is not "
+                "counted as a crash"
+            )
+            self._watchdog.inconclusive()
+            return
         try:
             targets = await self._targets_now()
         except CdpUnavailableError:

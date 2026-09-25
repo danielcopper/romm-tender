@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 
 import pytest
@@ -462,6 +463,26 @@ class TestConnectionLoss:
 
         await asyncio.wait_for(running_host.plugin.cancelled.wait(), 5)
         assert running_host.plugin.cancelled.is_set()
+
+    async def test_a_panel_connecting_is_something_to_wait_for(self, running_host):
+        waiting = asyncio.ensure_future(running_host.server.wait_connected())
+        await asyncio.sleep(0.05)
+        assert not waiting.done()
+
+        client = await WsTestClient.connect(running_host.port, running_host.token)
+        try:
+            await asyncio.wait_for(waiting, 5)
+            await client.call(1, "echo", ["settle"])
+        finally:
+            await client.close()
+
+        await asyncio.sleep(0.05)
+        again = asyncio.ensure_future(running_host.server.wait_connected())
+        await asyncio.sleep(0.05)
+        assert not again.done()
+        again.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await again
 
     async def test_the_host_reports_no_panel_once_the_socket_is_gone(self, running_host):
         client = await WsTestClient.connect(running_host.port, running_host.token)

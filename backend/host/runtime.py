@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from host.inject import PanelInjector
-from host.inject.machine import ensure_debugger_marker
+from host.inject.machine import ensure_debugger_marker, terminate_steam_webhelper
 from host.inject.watchdog import INJECT_OFF
 from host.server import DEFAULT_PORT, HostServer
 from host.single_instance import PortFile, SingleInstanceLock, someone_listening
@@ -164,7 +164,14 @@ async def run_backend(
                 # directory.
                 ensure_debugger_marker(injection.user_home, injection.state_dir, logger)
             injector = asyncio.create_task(
-                PanelInjector(setup=injection, asset_url=server.asset_url, token=token, logger=logger).run()
+                PanelInjector(
+                    setup=injection,
+                    asset_url=server.asset_url,
+                    token=token,
+                    panel=server,
+                    terminate_webhelper=terminate_steam_webhelper,
+                    logger=logger,
+                ).run()
             )
 
         await after_bind()

@@ -1,16 +1,17 @@
-"""What this module asks the machine rather than the page, and the one thing it puts back."""
+"""What this module asks the machine rather than the page, and the two things it does to it."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import signal
 import time
 
 import pytest
 
 from host.inject import machine
-from host.inject.machine import decky_loader_is_serving, read_steam_build
+from host.inject.machine import decky_loader_is_serving, read_steam_build, terminate_steam_webhelper
 from tests.host.conftest import close_listener, free_port
 
 MANIFEST = '"ubuntu12"\n{\n\t"version"\t\t"1788652215"\n\t"tenfoot_images_all"\n\t{\n\t}\n}\n'
@@ -238,3 +239,53 @@ class TestEnsuringSteamsDebuggerMarker:
 
         assert answer is False
         assert "could not create Steam's remote-debugging marker" in caplog.text
+
+
+def proc_tree(tmp_path, processes: dict[str, str | None]) -> str:
+    """A ``/proc`` stand-in: one directory per pid, with its ``comm`` where given."""
+    root = tmp_path / "proc"
+    root.mkdir()
+    for pid, comm in processes.items():
+        (root / pid).mkdir()
+        if comm is not None:
+            (root / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
+    return str(root)
+
+
+class TestTerminatingSteamsWebHelper:
+    """Nothing here signals a real process: every kill goes to a recorder."""
+
+    def test_it_signals_every_web_helper_this_user_owns_and_nothing_else(self, tmp_path):
+        root = proc_tree(
+            tmp_path,
+            {"100": "steamwebhelper", "101": "steam", "102": "steamwebhelper", "self": None, "103": None},
+        )
+        sent: list[tuple[int, int]] = []
+
+        signalled = terminate_steam_webhelper(proc_root=root, kill=lambda pid, sig: sent.append((pid, sig)))
+
+        assert signalled == 2
+        assert sorted(sent) == [(100, signal.SIGTERM), (102, signal.SIGTERM)]
+
+    def test_another_users_web_helper_is_left_alone(self, tmp_path):
+        root = proc_tree(tmp_path, {"100": "steamwebhelper"})
+        sent: list[tuple[int, int]] = []
+
+        signalled = terminate_steam_webhelper(
+            proc_root=root, uid=os.getuid() + 1, kill=lambda pid, sig: sent.append((pid, sig))
+        )
+
+        assert signalled == 0
+        assert sent == []
+
+    def test_a_process_gone_before_the_signal_is_not_counted(self, tmp_path):
+        root = proc_tree(tmp_path, {"100": "steamwebhelper", "101": "steamwebhelper"})
+
+        def kill(pid: int, _sig: int) -> None:
+            if pid == 100:
+                raise ProcessLookupError(pid)
+
+        assert terminate_steam_webhelper(proc_root=root, kill=kill) == 1
+
+    def test_no_process_table_at_all_signals_nothing(self, tmp_path):
+        assert terminate_steam_webhelper(proc_root=str(tmp_path / "absent"), kill=lambda _pid, _sig: None) == 0

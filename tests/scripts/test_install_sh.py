@@ -2056,11 +2056,12 @@ class TestWhatTheRunSaysAboutSteam:
     def test_a_reinstall_into_a_running_steam_asks_for_a_restart(self, machine):
         """The panel the previous backend loaded is still in Steam, holding its token.
 
-        A backend that starts under it cannot replace it: the injection marker
-        is already set, so the new one loads nothing, and the panel that IS
-        there talks to a backend that has gone. Only Steam restarting clears
-        that, so a run which replaced an install may not promise the entry
-        appears on its own — which is what it did.
+        A backend that starts under it cannot load over it: the injection
+        marker is already set, and the panel that IS there talks to a backend
+        that has gone. The new backend replaces it only by having Steam reload
+        its JS context, and only once no app is running, so a run that replaced
+        an install still cannot promise the entry appears on its own — which is
+        what it did.
         """
         tarball = str(_build_tarball(machine.tmp_path))
         machine.run("--from", tarball, "--yes")

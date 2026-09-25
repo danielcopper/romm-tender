@@ -36,7 +36,7 @@ From the debugger port answering to the panel being there:
 | List the targets   | `GET /json` on `127.0.0.1:8080`, retried until Steam has named its renderer                                                                                                      |
 | Attach             | one WebSocket to the `SharedJSContext` target's `webSocketDebuggerUrl`                                                                                                           |
 | `Page.enable`      | so `Page.domContentEventFired` arrives; subscribed to before it is enabled, so none is missed                                                                                    |
-| Ask for the marker | `typeof window["__tender_panel__"] !== "undefined"` — a context that already carries the panel is left alone                                                                     |
+| Ask for the marker | `typeof window["__tender_panel__"] !== "undefined"`, and if it is there, whose it is — see [a panel an earlier backend left behind](#a-panel-an-earlier-backend-left-behind)     |
 | Wait until ready   | Steam's module registry, and beside Decky its copy of `@decky/ui` as well                                                                                                        |
 | Evaluate           | one expression that claims the marker, imports the chosen bundles in order, and calls the globals installer between importing the bundle that defines it and importing the panel |
 | Ask again, later   | is Steam's interface still there? — see [the crash watchdog](#the-crash-watchdog)                                                                                                |
@@ -103,6 +103,79 @@ The expression claims the marker BEFORE it imports anything, so a second evaluat
 holds the marker even when the import fails, which is what stops a broken bundle being retried into the same context —
 the [load-failure card](#the-load-failure-card) explains that state instead.
 
+The marker is an object: the version of Tender that wrote it, which panel bundle it loaded, and an **instance** — a
+random value each backend process makes for itself at start-up. The instance is what lets a process tell its own panel
+from one an earlier process loaded. It is not the token and authorises nothing; a marker written before markers carried
+one reads as an empty instance, which no running process has.
+
+## A panel an earlier backend left behind
+
+When the backend restarts while Steam keeps running — a reinstall, `systemctl --user restart romm-tender`, or the unit's
+`Restart=always` after a crash — the panel the previous process loaded stays in Steam. It carries the previous process's
+token, so the new server refuses its socket on every retry (`refused GET /ws: wrong token` in the log), and the new
+injector finds the marker and loads nothing over it. The game page's Tender section stays at "Loading...", and a game
+launched from Steam starts without Tender: no save sync around it and no playtime.
+
+**How the backend knows.** Whenever the injector finds a marker, it asks whose it is. Its own instance means a panel it
+loaded — the ordinary case after the debugger connection was lost and re-attached — and is left alone. Any other
+instance is a panel no running backend can reach, because the single-instance lock allows one backend at a time. A
+marker whose owner cannot be read is treated as the process's own, so an unanswered question never reloads anything. A
+refused knock on the port is deliberately not a signal: any page can send one, and it says nothing about what is loaded
+in Steam.
+
+**What it does about it** (`backend/host/inject/recovery.py`):
+
+1. **Waits until no app is running.** It reads `SteamUIStore.RunningApps` — the source the panel itself reads running
+   apps from — every five seconds, and only two empty lists in a row let it act: a freshly rebuilt context can list none
+   for a few seconds while a game is still up. A store it cannot read, a shape it does not know, or no renderer attached
+   is no answer, and it keeps waiting. Then it asks the page whose panel it carries, rather than trusting the last
+   reading, and acts only if it is still the earlier backend's. The same gate stands in front of the fallback.
+2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
+   `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
+   [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader
+   schedules the same call (`backend/decky_loader/helpers.py`, since 2024), the evaluation returns first and the rebuild
+   follows. The rebuild wipes the marker and fires `Page.domContentEventFired`, so the panel is loaded again through
+   [the ordinary sequence](#the-sequence) — nothing here loads it.
+3. **Watches for its own panel to connect** for 20 seconds. Where Steam answers that it has no `RestartJSContext`, there
+   is nothing to wait for, and it goes straight to the fallback.
+4. **Falls back once.** If the earlier panel's marker is still there after that window, it passes the same gate again,
+   then sends SIGTERM to every `steamwebhelper` process this user owns, and Steam starts the web helper again. It then
+   watches 60 seconds for the panel. If the reload did rebuild the context and only the panel is slow — beside Decky
+   Loader it came back about 6 s after a reload — it does not fall back, because that would take the interface away from
+   a load already under way.
+5. **Then stops.** One reload and one fallback per stranded panel; if the same panel is still there, or no panel came
+   back, it says so and gives up. A later backend restart is a new stranded panel and starts over.
+6. **And never more than twice in ten minutes on this machine**, counted across backend starts. The once-rule above
+   cannot stop a crash loop: a backend that crashes after loading its panel, started again by its service manager,
+   leaves a new stranded panel behind every time. So every takedown is written, with its time, to
+   `<state_dir>/reload-guard.json` (`backend/host/inject/reload_limit.py`): a fallback SIGTERM before it is sent, a
+   reload once Steam has taken the request — or given no answer to it, since the reload may have happened all the same.
+   A reload Steam answers it cannot do took nothing down and is not counted. A third takedown inside the window is
+   refused with one WARNING line that says to restart Steam. Two leaves room for a deliberate restart or a reinstall and
+   one more right after it. A record it cannot read counts nothing and one it cannot write records nothing, so neither
+   blocks a takedown: that is [the crash watchdog](#the-crash-watchdog)'s lenient direction, for the same reason — a
+   read-only state directory is no reason to leave a panel stranded.
+
+Every step is one log line — stranded panel seen, waiting for an app to exit (naming it), reload issued, panel back and
+after how long, fallback taken, all at INFO; giving up (the limit's refusal included), a Steam without
+`RestartJSContext`, and a panel whose owner cannot be read, which is left alone, at WARNING; an unexpected failure at
+ERROR with its traceback — so a run can be judged from the log alone.
+
+**Why `RestartJSContext`**, measured on a device in windowed Big Picture beside Decky Loader:
+
+| Route                       | What happened                                                                                                                                                                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RestartJSContext()`        | the window closed and reopened within about a second; a fresh renderer process, and total web-helper memory went from 1310 to 1109 MB. The debugger connection to `SharedJSContext` survived, Tender's panel was back after 3–6 s and Decky Loader's after about 6 s |
+| CDP `Page.reload`           | the same renderer process, about 170 MB larger after 90 s. Decky Loader replaced its own `location.reload()` with a scheduled `RestartJSContext()` in 2024 over leaks and broken toasts                                                                              |
+| SIGTERM to `steamwebhelper` | the interface was gone for about 8 s, and Decky Loader counts it as a web-helper crash towards its own fallback (when it comes within a minute of another web-helper exit) — so it is only the fallback here                                                         |
+| Restarting Steam            | about 16 s                                                                                                                                                                                                                                                           |
+
+**Not a crash.** Both the reload and the fallback take the interface away, which is exactly what
+[the crash watchdog](#the-crash-watchdog) watches for. Each is counted by the injector before it happens, and an alive
+check that finds such a count moved since its injection closes the record without judging it.
+
+Not measured: SteamOS Game Mode, which is why every step is logged.
+
 ## The crash watchdog
 
 The one way this feature can go catastrophically wrong is taking the Steam interface down, so it is watched.
@@ -122,8 +195,11 @@ What is watched instead is the other side of it:
    returning and the targets going. Waiting longer costs only a record staying open a few seconds more; waiting less
    would record a crash as a survival.
 3. **An attempt nothing could be established about is not counted.** If the debugger stopped answering, if the backend
-   is shutting down, or if there was no other page target when the panel was loaded, there was no collapse to observe —
-   and an unobserved attempt recorded as a failure would stop the injection over a user closing Steam.
+   is shutting down, if there was no other page target when the panel was loaded, or if this backend itself took the
+   interface away since the panel was loaded
+   ([a panel an earlier backend left behind](#a-panel-an-earlier-backend-left-behind)), there was no collapse of the
+   panel's making to observe — and an unobserved attempt recorded as a failure would stop the injection over a user
+   closing Steam.
 4. **Two consecutive failures stop it**, not three. One can be anything; two is evidence; three dead Steam starts is too
    much to ask of someone who has no reason to suspect this program.
 5. **It starts trying again by itself.** The record carries a fingerprint of the three things that could have repaired
@@ -199,8 +275,9 @@ The panel reads its port and its token off the URL it was imported from (`fronte
 for it to be. The same facts object carries it once more, as a field, because the expression's redaction matches on the
 token itself rather than on a pattern — and both die with the expression that holds them.
 
-What it is kept out of is everything that outlives that: the marker left on the window, the card on screen, and what
-comes back to the backend — any error text has the token replaced with `<token>` before the injector ever logs it.
+What it is kept out of is everything that outlives that: the marker left on the window (which carries the process's
+instance instead — a value that authorises nothing), the card on screen, and what comes back to the backend — any error
+text has the token replaced with `<token>` before the injector ever logs it.
 
 ## Running it
 
@@ -214,19 +291,21 @@ the task's own restart is what picks up a marker that has just been created. See
 
 `tests/host/inject/` drives the real client against a fake debugger on a real loopback port: real HTTP, real RFC 6455
 frames through `lib/websocket_frames.py` in both directions. What is faked there is the page — that tier runs no
-JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the three expressions the injector sends.
+JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the expressions the injector sends.
 
-So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice
-and what the evaluated source carries. It also RUNS that source: node parses it, and a harness evaluates it against a
-stub `window` with just enough of a document for the card, and with the bundle addresses as `data:` modules that record
-having been imported and that leave the installer on the window where the real bundle leaves one. So the order (import,
-install, import), the refusals that keep the panel out, and the sentence each refusal carries are exercised rather than
-read off the text.
+So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice,
+what the evaluated source carries, and the branches of replacing a stranded panel — including what the fallback's kill
+would signal, which goes to a recorder and never to a process. It also RUNS that source: node parses it, and a harness
+evaluates it against a stub `window` with just enough of a document for the card, and with the bundle addresses as
+`data:` modules that record having been imported and that leave the installer on the window where the real bundle leaves
+one. So the order (import, install, import), the refusals that keep the panel out, and the sentence each refusal carries
+are exercised rather than read off the text.
 
 What that harness cannot see is Steam. It stands in for the page, so nothing in it says whether `@decky/ui`'s searches
 find anything, what the real installer answers against a real module registry, or whether the card is legible on a
-handheld. Those stay device tests: whether the panel appears, whether a forced context rebuild brings it back, and
-whether the card draws where a broken bundle is served.
+handheld. Those stay device tests: whether the panel appears, whether a forced context rebuild brings it back, whether
+the card draws where a broken bundle is served, and whether a backend restart with Steam open brings the panel back — in
+Game Mode above all, where none of it has been measured.
 
 ## Related
 
