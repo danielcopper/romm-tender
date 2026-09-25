@@ -17,8 +17,8 @@
 import type { CollectionKind, CollectionOwnerScope, CollectionSyncSetting } from "../../types";
 import { fuzzyMatch } from "../../utils/fuzzyMatch";
 
-/** The kinds — the list column's rows that list collections; `KIND_ORDER` is
- *  the order they are drawn in. The wire keys stay `standard` / `smart` /
+/** The kinds — every row of the list column but the owner switch;
+ *  `KIND_ORDER` is the order they are drawn in. The wire keys stay `standard` / `smart` /
  *  `virtual` + `virtual_type`; these name the page's rows, two of which are
  *  halves of the one virtual kind. */
 export type CollectionsKindId = "favorites" | "standard" | "smart" | "franchise" | "igdb";

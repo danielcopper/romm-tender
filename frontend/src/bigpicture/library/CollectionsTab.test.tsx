@@ -810,6 +810,12 @@ describe("Library › Collections", () => {
       expect(kindRow(container, "owner").textContent).toContain("1 other, hidden");
     });
 
+    it("counts other users' collections in the plural", async () => {
+      const second = coll({ id: "13", name: "Road trip", is_own: false, owner_username: "mara" });
+      const { container } = await openCollections([...LIBRARY, second]);
+      expect(kindRow(container, "owner").textContent).toContain("2 others, shown");
+    });
+
     it("counts none when no collection is another user's, and a dash when the read failed", async () => {
       const { container } = await openCollections([MINE_ON]);
       expect(kindRow(container, "owner").textContent).toContain("none");

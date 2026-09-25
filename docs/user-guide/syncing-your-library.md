@@ -330,7 +330,7 @@ collections as a table on the right. From the top, the list holds:
   no owner.
 - Under a thin line, **Favorites** — your own RomM favorites collection. Its row carries its sync switch and the number
   of games in it.
-- Last, **Other users' collections** — a row with its switch in it, saying how many collections on the server are other
+- Last, **Other users' collections** — a row with its switch in it, saying how many of the listed collections are other
   users' and whether they are shown or hidden (for example `3 others, shown`, or `none`). Selecting it shows what the
   switch does (see below).
 

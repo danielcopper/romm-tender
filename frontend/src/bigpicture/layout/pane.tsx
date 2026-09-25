@@ -70,11 +70,11 @@ export const PANE_GUTTER = "16px";
 export const TABLE_LINE = "1px solid rgba(255, 255, 255, 0.12)";
 
 /**
- * How tightly a page sets its table — the one thing the tables here genuinely
- * differ in, and therefore a value a page passes rather than a reason to write
- * a second table. There are two: {@link PANE_TABLE_REGISTER}, the default, and
- * {@link COMPACT_TABLE_REGISTER}, for a table that has to be flatter than a
- * pane's default type.
+ * How tightly a page sets its table — the one thing tables drawn with
+ * `PaneTableHeader` / `PaneTableRow` differ in, and therefore a value a page
+ * passes rather than a reason to write a second table. This module offers two,
+ * {@link PANE_TABLE_REGISTER}, the default, and {@link COMPACT_TABLE_REGISTER},
+ * for a table that has to be flatter; a page may set its own.
  */
 export interface TableRegister {
   /** Padding on the row wrapper, gutter included. */

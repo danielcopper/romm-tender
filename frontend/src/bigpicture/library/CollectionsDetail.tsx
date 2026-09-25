@@ -62,16 +62,19 @@ const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "no
 
 /**
  * The Sync cell's toggle without the row padding and the focus fill its Field
- * brings, both read from Steam's bundle (`steamui/chunk~2dcc5aaf7.js` and its
- * `css/` twin). The gamepad `ToggleField` passes `padding` and
- * `highlightOnFocus` on to the Field it renders. The Field adds its 10 px top
- * and bottom only for `padding: "standard"`, the default (`"standard"==K&&
- * StandardPadding`), and its `HighlightOnFocus` class — the one that paints
- * `#3d4450` under `.gpfocus` / `.gpfocuswithin` — unless `highlightOnFocus` is
- * `false` (`J=R??!0`). `ToggleFieldProps` declares `highlightOnFocus` but not
- * `padding`, so this one arrives through a spread.
+ * brings — the row draws the focus instead. Both are read from Steam's bundle
+ * (`steamui/chunk~2dcc5aaf7.js` and its `css/` twin). The gamepad `ToggleField`
+ * passes `padding` and `highlightOnFocus` on to the Field it renders. The Field
+ * adds its 10 px top and bottom only for `padding: "standard"`, the default
+ * (`"standard"==K&&StandardPadding`), and its `HighlightOnFocus` class — the one
+ * that paints `#3d4450` under `.gpfocus` / `.gpfocuswithin` — unless
+ * `highlightOnFocus` is `false` (`J=R??!0`). `ToggleFieldProps` declares
+ * `highlightOnFocus` but not `padding`, so both arrive through this spread.
  */
-const TOGGLE_WITHOUT_PADDING: Pick<FieldProps, "padding"> = { padding: "none" };
+const SYNC_CELL_TOGGLE: Pick<FieldProps, "padding" | "highlightOnFocus"> = {
+  padding: "none",
+  highlightOnFocus: false,
+};
 
 /**
  * A button in the search line, as wide as its label. Steam's `DialogButton` is
@@ -189,9 +192,7 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
               <ToggleField
                 checked={collection.sync_enabled}
                 bottomSeparator="none"
-                // The row draws the focus instead (`TOGGLE_WITHOUT_PADDING`).
-                highlightOnFocus={false}
-                {...TOGGLE_WITHOUT_PADDING}
+                {...SYNC_CELL_TOGGLE}
                 onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
               />
             ),
@@ -326,8 +327,8 @@ const KindPane: FC<{
           <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
         </div>
         {/* Each button in a wrapper of its own, so the dialog it opens can
-              hand focus back to it; `display: contents` keeps the wrapper out
-              of the line's layout. */}
+            hand focus back to it; `display: contents` keeps the wrapper out
+            of the line's layout. */}
         <span ref={enableAll} style={{ display: "contents" }}>
           <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(true)}>
             Enable all
