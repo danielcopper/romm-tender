@@ -1,11 +1,12 @@
-"""What the injector asks the MACHINE, and the one thing it puts back.
+"""What the injector asks the MACHINE, and the two things it does to it.
 
 Contract: the readings taken from this computer rather than from the page — who
 else is loading code into Steam, which Steam build is running, and whether Steam
 will open its debugger at all. The first two are questions the injector has to
 have answered before it evaluates anything, and neither can be put to the page at
 the moment it has to be answered; the third is a file under the Steam root, which
-is why it is answered here too.
+is why it is answered here too. The two actions are putting that file back and,
+as the last resort of replacing a stranded panel, terminating Steam's web helper.
 
 **Why not the window.** Measured on the device: at the earliest moment an
 injection is possible, every marker Decky Loader eventually sets — ``DFL``,
@@ -20,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import signal
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -27,6 +29,7 @@ from host.single_instance import someone_listening
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Callable
 
 # Decky Loader's own HTTP port — the address it serves its interface to Steam
 # from. Its systemd unit is ``plugin_loader.service``, running
@@ -57,6 +60,11 @@ _BRANCH_FILE = "beta"
 _MANIFEST_GLOB_PREFIX = "steam_client_"
 _MANIFEST_SUFFIX = ".manifest"
 _VERSION_FIELD = re.compile(r'"version"\s+"(\d+)"')
+
+# The process name of Steam's CEF host, as ``/proc/<pid>/comm`` spells it. The
+# kernel cuts that field at 15 characters and this name is 14, so it arrives
+# whole. Steam starts the web helper again when it goes.
+_WEBHELPER_COMM = "steamwebhelper"
 
 
 async def decky_loader_is_serving(port: int = DECKY_LOADER_PORT, *, connect_timeout: float = 0.5) -> bool:
@@ -231,3 +239,42 @@ def _write_marker_note(state_dir: str, marker: str, logger: logging.Logger) -> N
             handle.write(f"{marker}\ncreated by the backend {datetime.now(UTC).date().isoformat()}\n")
     except OSError as e:
         logger.warning(f"inject: created the marker but could not record it at {note}: {e}")
+
+
+def terminate_steam_webhelper(
+    *,
+    proc_root: str = "/proc",
+    uid: int | None = None,
+    kill: Callable[[int, int], None] = os.kill,
+) -> int:
+    """Send SIGTERM to every ``steamwebhelper`` this user owns; answer how many.
+
+    Only this user's: the backend runs as the user whose Steam it serves, and
+    another account's web helper is no business of it. A process that is gone
+    before it is signalled, or one that cannot be read, is passed over.
+    """
+    owner = os.getuid() if uid is None else uid
+    try:
+        entries = os.listdir(proc_root)
+    except OSError:
+        return 0
+    signalled = 0
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        process_dir = os.path.join(proc_root, entry)
+        try:
+            if os.stat(process_dir).st_uid != owner:
+                continue
+            with open(os.path.join(process_dir, "comm"), encoding="utf-8", errors="replace") as handle:
+                name = handle.read().strip()
+        except OSError:
+            continue
+        if name != _WEBHELPER_COMM:
+            continue
+        try:
+            kill(int(entry), signal.SIGTERM)
+        except OSError:
+            continue
+        signalled += 1
+    return signalled

@@ -295,19 +295,20 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Run it**: `mise run dev` (build the panel, restart Steam into the window and display last chosen, then run the
   backend, which serves `dist/` and loads the panel into Steam). Needs `~/.steam/steam/.cef-enable-remote-debugging`.
   **There is no hot reload, and every deploy is a full one** — a rebuilt bundle reaches Steam only in a fresh JS
-  context, and a new backend process strands the panel the old one loaded — so a rebuilt panel needs a Steam restart,
-  which is what all but the two tasks named below do. `mise run dev:bpm [display]` / `mise run dev:desktop [display]` do
-  what `dev` does into windowed Big Picture or the desktop client and remember that choice for `dev`;
-  `mise run dev:bpm-reset [display]` / `mise run dev:desktop-reset [display]` only restart Steam (no build, the running
-  backend loads the panel) and remember too. `mise run dev:backend` and `mise run dev:frontend [display]` are `dev`
-  split in two: the first runs a backend against the Steam already there and restarts nothing, the second restarts Steam
-  and leaves the running backend alone, so a rebuilt panel reaches a fresh context without a sync in flight being killed
-  to get it there. `mise run dev:ui-scale` forces the Deck's metrics onto the window that is open. **Those five building
-  tasks first ask who holds the single-instance lock**, and refuse before Steam is touched on the wrong answer: a
-  backend already running for the four that start one (the restart would otherwise go ahead and the second backend exit
-  one line later, leaving a fresh Steam with no panel), and no backend at all for `dev:frontend`, which starts none and
-  would restart Steam into nothing. The two resets ask nothing — they are the way out when a refusal is in your way.
-  Guide: `docs/contributing/frontend-dev-loop.md`
+  context, and a new backend process strands the panel the old one loaded until it has Steam reload its JS context,
+  which it does itself only once no app is running — so a rebuilt panel needs a Steam restart, which is what all but the
+  two tasks named below do. `mise run dev:bpm [display]` / `mise run dev:desktop [display]` do what `dev` does into
+  windowed Big Picture or the desktop client and remember that choice for `dev`; `mise run dev:bpm-reset [display]` /
+  `mise run dev:desktop-reset [display]` only restart Steam (no build, the running backend loads the panel) and remember
+  too. `mise run dev:backend` and `mise run dev:frontend [display]` are `dev` split in two: the first runs a backend
+  against the Steam already there and restarts nothing (though a panel an earlier backend loaded is replaced by that
+  reload), the second restarts Steam and leaves the running backend alone, so a rebuilt panel reaches a fresh context
+  without a sync in flight being killed to get it there. `mise run dev:ui-scale` forces the Deck's metrics onto the
+  window that is open. **Those five building tasks first ask who holds the single-instance lock**, and refuse before
+  Steam is touched on the wrong answer: a backend already running for the four that start one (the restart would
+  otherwise go ahead and the second backend exit one line later, leaving a fresh Steam with no panel), and no backend at
+  all for `dev:frontend`, which starts none and would restart Steam into nothing. The two resets ask nothing — they are
+  the way out when a refusal is in your way. Guide: `docs/contributing/frontend-dev-loop.md`
 - **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in two
   lock/source pairs — `requirements-dev.lock` at the root, for `backend/`, `tests/` and `scripts/`, and
   `docs/requirements.lock` beside the documentation it builds — each compiled from the `.txt` next to it by
@@ -437,10 +438,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `frontend/src/boot/steamGlobals.ts`
 - **An injection that could not be observed is never counted as a crash, and this process answers for its own record
   before it reads one** — test + prompt-only — `tests/host/inject/test_watchdog.py` and
-  `tests/host/inject/test_injector.py::TestDidTheInterfaceSurviveIt`; prompt-only: `judge` writes its resolution back
-  before it answers, an injection answers for this process's record before `judge` reads one, and the alive check closes
-  a record without counting it whenever nothing was established (the debugger stopped answering, the backend is shutting
-  down, only the renderer was open, or a second injection began first)
+  `tests/host/inject/test_injector.py::TestDidTheInterfaceSurviveIt` and
+  `::TestWhatThisBackendDoesToSteamIsNeverACrash`; prompt-only: `judge` writes its resolution back before it answers, an
+  injection answers for this process's record before `judge` reads one, and the alive check closes a record without
+  counting it whenever nothing was established (the debugger stopped answering, the backend is shutting down, only the
+  renderer was open, a second injection began first, or this process took the interface down itself since arming)
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker

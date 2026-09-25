@@ -94,6 +94,7 @@ class HostServer:
         self._server: asyncio.Server | None = None
         self._port = 0
         self._connection: HostConnection | None = None
+        self._panel_present = asyncio.Event()
         # Summed across connections rather than read off the live one. The case
         # this counter exists for is a panel and a backend that disagree about
         # the wire, and the development loop reaches it by swapping the frontend
@@ -122,6 +123,10 @@ class HostServer:
     def connected(self) -> bool:
         """Is a panel connected right now?"""
         return self._connection is not None and not self._connection.closed
+
+    async def wait_connected(self) -> None:
+        """Return once a panel is connected — at once, if one already is."""
+        await self._panel_present.wait()
 
     @property
     def dropped_messages(self) -> int:
@@ -171,6 +176,7 @@ class HostServer:
         if self._connection is not None:
             await self._connection.close(1001, "server shutting down")
             self._connection = None
+            self._panel_present.clear()
         if self._server is not None:
             # A connection accepted in the previous tick is still a pending task
             # building its transport; the yield lets it attach, so close_clients()
@@ -317,6 +323,7 @@ class HostServer:
 
         connection = HostConnection(reader, writer, self._dispatcher, self._logger, session_id=session_id)
         self._connection = connection
+        self._panel_present.set()
         sender = connection.send
         self._events.attach(sender)
         self._logger.info(f"host: panel connected (session {session_id!r})")
@@ -327,6 +334,7 @@ class HostServer:
             self._dropped_by_closed_connections += connection.dropped_messages
             if self._connection is connection:
                 self._connection = None
+                self._panel_present.clear()
             await self._shutdown(writer)
 
     async def _write_response(

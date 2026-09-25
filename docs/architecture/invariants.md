@@ -283,24 +283,27 @@ Format: **invariant** — tier — enforced by.
   `tests/host/inject/test_injector.py::TestDidTheInterfaceSurviveIt` pins every way a record is answered for over the
   real loop — the survival, the collapse that leaves it open, and each way an attempt is closed without being counted.
   Count those by their call: a test in that class that ends with the record `open: false` and `failures: 0` is one of
-  them. The crash cannot be counted inside a session — it leaves `SharedJSContext` alive with our marker on it, so the
-  injector sees "already injected" and never tries again — so what is counted is a record left open at the NEXT attempt,
-  and two in a row stop the injection. **Three things have to hold together and nothing checks that they do.** `judge`
-  writes its resolution back before it answers, or one open record counts once per attempt for ever. **The ORDER is the
-  second**: an injection answers for the record this process already holds before `judge` reads one, because a
-  JS-context rebuild inside the alive window starts the next injection while the last record is still open and
-  unanswered — ordinary during start-up settle, and what a Steam restart produces — and read the other way round it is a
-  crash that never happened, twice over on a machine where nothing was wrong. A real crash is unaffected: the check that
-  saw it marks its reading taken (`stays_open`) and the record stays open for the next `judge` to find. The third is
-  that the alive check closes the record without counting whenever nothing was established — the debugger stopped
-  answering, the backend is shutting down, nothing but the renderer was open when the panel was loaded, or a second
-  injection began before the check that answers for the first could run — because the signature is specific (every other
-  page target goes at once while the debugger keeps answering), and a run in which that could not be observed says
-  nothing. A close that counted any of those would stop the panel loading over a user closing Steam, and the failure is
-  silent in both directions: too lenient and a crash loop is never stopped, too strict and the panel disappears with
-  only a log line to say why. The way back is not inside Steam (the interface is what is gone): the fingerprint —
-  Tender's version, the bundle bytes, Steam's client build — drops the count on its own, and `TENDER_INJECT=force` is
-  the switch the refusal line names
+  them. One more way lives in its own class, `::TestWhatThisBackendDoesToSteamIsNeverACrash`, because it is reached only
+  through replacing a panel an earlier backend left behind. The crash cannot be counted inside a session — it leaves
+  `SharedJSContext` alive with our marker on it, so the injector sees "already injected" and never tries again — so what
+  is counted is a record left open at the NEXT attempt, and two in a row stop the injection. **Three things have to hold
+  together and nothing checks that they do.** `judge` writes its resolution back before it answers, or one open record
+  counts once per attempt for ever. **The ORDER is the second**: an injection answers for the record this process
+  already holds before `judge` reads one, because a JS-context rebuild inside the alive window starts the next injection
+  while the last record is still open and unanswered — ordinary during start-up settle, and what a Steam restart
+  produces — and read the other way round it is a crash that never happened, twice over on a machine where nothing was
+  wrong. A real crash is unaffected: the check that saw it marks its reading taken (`stays_open`) and the record stays
+  open for the next `judge` to find. The third is that the alive check closes the record without counting whenever
+  nothing was established — the debugger stopped answering, the backend is shutting down, nothing but the renderer was
+  open when the panel was loaded, a second injection began before the check that answers for the first could run, or
+  this process took the interface down itself after the panel was loaded (the reload that replaces a stranded panel, or
+  its fallback's SIGTERM to `steamwebhelper`, each counted in `PanelInjector` before it happens and compared by the
+  check against the count at arming) — because the signature is specific (every other page target goes at once while the
+  debugger keeps answering), and a run in which that could not be observed says nothing. A close that counted any of
+  those would stop the panel loading over a user closing Steam, and the failure is silent in both directions: too
+  lenient and a crash loop is never stopped, too strict and the panel disappears with only a log line to say why. The
+  way back is not inside Steam (the interface is what is gone): the fingerprint — Tender's version, the bundle bytes,
+  Steam's client build — drops the count on its own, and `TENDER_INJECT=force` is the switch the refusal line names
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to

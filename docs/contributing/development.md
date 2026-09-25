@@ -163,8 +163,10 @@ plugin directory and no plugin loader is restarted. Ctrl-C stops it and lets it 
 
 **The restart closes whatever is open in Steam**, and the task does it rather than leaving it to you: there is no hot
 reload, so a rebuilt bundle reaches Steam only in a fresh JS context, and a new backend process strands the panel the
-old one loaded. Steam comes back into the window and display a `dev:bpm*` / `dev:desktop*` task last chose — the desktop
-client, placed nowhere, if none has. A Steam that is not running is simply started.
+old one loaded until it has Steam reload that context itself, which it waits for no app to be running to do
+([a panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind)).
+Steam comes back into the window and display a `dev:bpm*` / `dev:desktop*` task last chose — the desktop client, placed
+nowhere, if none has. A Steam that is not running is simply started.
 
 Steam's remote-debugging marker has to exist, and the backend creates it when it does not. Steam reads it at start-up,
 so the task's own restart is what picks up a marker that has just been created

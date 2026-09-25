@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 import host.inject.injector as injector_module
+import host.inject.recovery as recovery_module
 from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
@@ -33,6 +34,9 @@ def quick_timings(monkeypatch):
     monkeypatch.setattr(injector_module, "READY_POLL_SECONDS", 0.01)
     monkeypatch.setattr(injector_module, "READY_WINDOW_SECONDS", 1.0)
     monkeypatch.setattr(injector_module, "ALIVE_AFTER_SECONDS", 0.1)
+    monkeypatch.setattr(recovery_module, "APP_POLL_SECONDS", 0.02)
+    monkeypatch.setattr(recovery_module, "PANEL_BACK_AFTER_RELOAD_SECONDS", 0.3)
+    monkeypatch.setattr(recovery_module, "PANEL_BACK_AFTER_RESTART_SECONDS", 0.3)
 
 
 def a_page(*, decky_is_serving: bool = False) -> FakePage:
@@ -49,6 +53,38 @@ async def wait_until(predicate, *, timeout: float = 5.0) -> None:
             await asyncio.sleep(0.01)
 
 
+class FakePanel:
+    """This backend's panel as the server sees it: connected, or not yet."""
+
+    def __init__(self) -> None:
+        self._present = asyncio.Event()
+
+    @property
+    def connected(self) -> bool:
+        return self._present.is_set()
+
+    async def wait_connected(self) -> None:
+        await self._present.wait()
+
+    def connect(self) -> None:
+        self._present.set()
+
+
+class FakeWebhelper:
+    """The seam that would terminate Steam's web helper; it only counts."""
+
+    def __init__(self) -> None:
+        self.terminations = 0
+        self.processes = 3
+        self.breaks = False
+
+    def terminate(self) -> int:
+        self.terminations += 1
+        if self.breaks:
+            raise RuntimeError("the process table moved")
+        return self.processes
+
+
 class Running:
     """A started injector and everything a test asserts against."""
 
@@ -57,11 +93,17 @@ class Running:
         debugger: FakeDebugger,
         page: FakePage,
         setup: InjectionSetup,
+        injector: PanelInjector,
+        panel: FakePanel,
+        webhelper: FakeWebhelper,
         task: asyncio.Task[None],
     ) -> None:
         self.debugger = debugger
         self.page = page
         self.setup = setup
+        self.injector = injector
+        self.panel = panel
+        self.webhelper = webhelper
         self.task = task
 
     def watchdog_record(self) -> dict[str, object]:
@@ -86,6 +128,7 @@ async def injecting(tmp_path):
         override: str = "",
         handlers: dict[str, Any] | None = None,
         hold: str = "",
+        panel: FakePanel | None = None,
     ) -> Running:
         used_page = page if page is not None else a_page()
         debugger = FakeDebugger(used_page)
@@ -111,13 +154,23 @@ async def injecting(tmp_path):
             debugger_port=debugger.port,
             decky_port=decky_port if decky_port is not None else free_port(),
         )
+        used_panel = panel if panel is not None else FakePanel()
+        webhelper = FakeWebhelper()
         injector = PanelInjector(
             setup=setup,
             asset_url=lambda name: f"http://127.0.0.1:27737/{name}?token={TOKEN}",
             token=TOKEN,
+            panel=used_panel,
+            terminate_webhelper=webhelper.terminate,
             logger=LOGGER,
         )
-        running = Running(debugger, used_page, setup, asyncio.ensure_future(injector.run()))
+        # A marker planted without saying whose is this process's own: the
+        # tests that plant one for an earlier backend name that backend.
+        if used_page.marker_instance is None:
+            used_page.marker_instance = injector.instance
+        running = Running(
+            debugger, used_page, setup, injector, used_panel, webhelper, asyncio.ensure_future(injector.run())
+        )
         started.append(running)
         return running
 
@@ -606,6 +659,290 @@ class TestWhatItSaysAboutAFailedLoad:
         with caplog.at_level(logging.ERROR, logger="test_injector"):
             await injecting(page=page)
             await wait_until(lambda: any("could not be evaluated" in r.message for r in caplog.records))
+
+
+EARLIER = "an-earlier-backend"
+WITH_BIG_PICTURE = [FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")]
+
+
+def stranded_page(*, instance: str = EARLIER) -> FakePage:
+    """A context carrying a panel another backend process loaded."""
+    page = a_page()
+    page.marker = True
+    page.marker_instance = instance
+    page.marker_version = "0.33.0"
+    return page
+
+
+async def rebuild(running: Running) -> None:
+    """What Steam does when its JS context is rebuilt: the marker goes, the event comes."""
+    running.page.marker = False
+    await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+
+
+def logged(caplog, text: str) -> list[str]:
+    return [record.message for record in caplog.records if text in record.message]
+
+
+class TestAPanelAnEarlierBackendLeftBehind:
+    async def test_it_is_replaced_by_having_steam_rebuild_its_context(self, injecting, monkeypatch, caplog):
+        monkeypatch.setattr(recovery_module, "PANEL_BACK_AFTER_RELOAD_SECONDS", 5.0)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: running.page.reloads == 1)
+            assert running.page.bootstraps == []
+
+            await rebuild(running)
+            await wait_until(lambda: running.page.bootstraps)
+            running.panel.connect()
+            await wait_until(lambda: logged(caplog, "the panel is back"))
+
+        assert carried_facts(running.page.bootstraps[0])["instance"] == running.injector.instance
+        assert running.page.reloads == 1
+        assert running.webhelper.terminations == 0
+        assert logged(caplog, "an earlier backend loaded (Tender 0.33.0)")
+        assert logged(caplog, "no app is running; reloading Steam's JS context")
+
+    async def test_what_names_this_backend_on_the_marker_is_its_own_and_not_the_token(self, injecting):
+        first = await injecting()
+        second = await injecting()
+        await wait_until(lambda: first.page.bootstraps and second.page.bootstraps)
+
+        named = [carried_facts(running.page.bootstraps[0])["instance"] for running in (first, second)]
+        assert named == [first.injector.instance, second.injector.instance]
+        assert named[0] != named[1]
+        assert TOKEN not in named
+
+    async def test_the_reload_is_scheduled_so_the_evaluation_returns_first(self, injecting):
+        running = await injecting(page=stranded_page())
+        await wait_until(lambda: running.page.reloads == 1)
+
+        asked = next(e for e in running.page.evaluated if "RestartJSContext" in e)
+        assert "setTimeout(() => browser.RestartJSContext(), 200)" in asked
+        assert asked.count("RestartJSContext()") == 1
+
+    async def test_a_marker_from_before_markers_named_their_backend_is_replaced_too(self, injecting):
+        running = await injecting(page=stranded_page(instance=""))
+        await wait_until(lambda: running.page.reloads == 1)
+
+    async def test_its_own_panel_found_again_after_a_reattach_is_left_alone(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.bootstraps)
+
+        await running.debugger.drop_connections()
+        await wait_until(lambda: sum(1 for method, _ in running.debugger.calls if method == "Page.enable") >= 2)
+        await wait_until(lambda: running.page.evaluated.count(running.page.owner_expression) >= 1)
+        await asyncio.sleep(0.2)
+
+        assert running.page.reloads == 0
+        assert running.page.app_checks == 0
+        assert len(running.page.bootstraps) == 1
+
+    async def test_a_connected_panel_of_this_backend_means_nothing_is_reloaded(self, injecting):
+        """The marker is the signal, never a refused knock on the port; and even
+        a foreign marker is no reason to reload over a panel that is connected."""
+        panel = FakePanel()
+        panel.connect()
+        running = await injecting(page=stranded_page(), panel=panel)
+        await wait_until(lambda: running.page.owner_expression in running.page.evaluated)
+        await asyncio.sleep(0.2)
+
+        assert running.page.reloads == 0
+        assert running.page.app_checks == 0
+
+    async def test_a_marker_whose_owner_cannot_be_read_is_left_alone(self, injecting, caplog):
+        page = stranded_page()
+        page.owner_raises = True
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: logged(caplog, "would not say whose"))
+            await asyncio.sleep(0.2)
+
+        assert running.page.reloads == 0
+        assert running.page.bootstraps == []
+
+
+class TestWhileAnAppIsRunning:
+    async def test_it_waits_and_reloads_once_the_app_has_exited(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 3)
+            assert page.reloads == 0
+
+            page.running_apps = []
+            await wait_until(lambda: page.reloads == 1)
+
+        assert len(logged(caplog, "waiting for Celeste to exit before reloading Steam's JS context")) == 1
+        assert running.webhelper.terminations == 0
+
+    async def test_it_is_announced_once_however_often_the_context_is_read_again(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 1)
+            await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+            await wait_until(lambda: page.evaluated.count(page.owner_expression) >= 2)
+            await wait_until(lambda: page.app_checks >= 3)
+
+        assert len(logged(caplog, "an earlier backend loaded")) == 1
+
+    async def test_a_renderer_that_is_gone_is_no_answer_either(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 1)
+            await running.debugger.stop()
+            await wait_until(lambda: logged(caplog, "no renderer is attached"))
+
+        assert page.reloads == 0
+        assert logged(caplog, "cannot tell whether an app is running")
+
+    @pytest.mark.parametrize("unreadable", ["null", "threw"])
+    async def test_a_list_it_cannot_read_is_not_an_empty_one(self, injecting, caplog, unreadable):
+        page = stranded_page()
+        if unreadable == "null":
+            page.running_apps = None
+        else:
+            page.apps_raise = True
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 3)
+
+        assert page.reloads == 0
+        assert logged(caplog, "cannot tell whether an app is running")
+
+    async def test_nothing_is_reloaded_when_the_earlier_panel_goes_by_itself(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 2)
+            await rebuild(running)
+            await wait_until(lambda: page.bootstraps)
+            await wait_until(lambda: logged(caplog, "gone without a reload"))
+            page.running_apps = []
+            await asyncio.sleep(0.2)
+
+        assert page.reloads == 0
+
+
+class TestWhenTheReloadChangesNothing:
+    async def test_it_falls_back_to_the_web_helper_once_and_then_gives_up(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: running.webhelper.terminations == 1)
+            await wait_until(lambda: logged(caplog, "giving up"))
+
+            await running.debugger.emit("Page.domContentEventFired", {"timestamp": 2})
+            await wait_until(lambda: logged(caplog, "not trying again"))
+            await asyncio.sleep(0.2)
+
+        assert running.page.reloads == 1
+        assert running.webhelper.terminations == 1
+        assert logged(caplog, "falling back to terminating steamwebhelper")
+        assert logged(caplog, "sent SIGTERM to 3 steamwebhelper process(es)")
+
+    async def test_the_fallback_waits_for_a_running_app_as_well(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: running.page.reloads == 1)
+            running.page.running_apps = ["Celeste"]
+            await wait_until(lambda: logged(caplog, "waiting for Celeste to exit before terminating steamwebhelper"))
+            assert running.webhelper.terminations == 0
+
+            running.page.running_apps = []
+            await wait_until(lambda: running.webhelper.terminations == 1)
+
+    async def test_a_web_helper_that_brings_the_panel_back_is_not_a_crash(self, injecting, monkeypatch, caplog):
+        monkeypatch.setattr(recovery_module, "PANEL_BACK_AFTER_RESTART_SECONDS", 5.0)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page(), targets=list(WITH_BIG_PICTURE))
+            await wait_until(lambda: running.webhelper.terminations == 1)
+
+            running.debugger.targets = [
+                FakeTarget(id="renderer-2", title="SharedJSContext"),
+                FakeTarget(id="bpm-2", title="Big Picture"),
+            ]
+            running.page.marker = False
+            await running.debugger.drop_connections()
+            await wait_until(lambda: running.page.bootstraps)
+            running.panel.connect()
+            await wait_until(lambda: logged(caplog, "the panel is back"))
+            await wait_until(lambda: running.watchdog_record().get("open") is False)
+
+        assert logged(caplog, "after terminating steamwebhelper")
+        assert running.watchdog_record()["failures"] == 0
+
+    @pytest.mark.parametrize(("answer", "said"), [(False, "offers no"), (None, "got no answer")])
+    async def test_a_reload_steam_did_not_take_still_ends_in_the_fallback(self, injecting, caplog, answer, said):
+        page = stranded_page()
+        page.reload_answer = answer
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: running.webhelper.terminations == 1)
+
+        assert logged(caplog, said)
+
+    async def test_no_web_helper_to_terminate_is_said_and_given_up_on(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            running.webhelper.processes = 0
+            await wait_until(lambda: logged(caplog, "found no steamwebhelper process"))
+
+        assert running.webhelper.terminations == 1
+
+    async def test_an_unplanned_failure_is_said_rather_than_lost(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            running.webhelper.breaks = True
+            await wait_until(lambda: logged(caplog, "failed unexpectedly"))
+
+        assert running.page.reloads == 1
+
+    async def test_a_rebuilt_context_whose_panel_is_slow_is_left_to_load(self, injecting, caplog):
+        """The reload did its work; taking the interface away again would only
+        interrupt the load that is now under way."""
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: running.page.reloads == 1)
+            await rebuild(running)
+            await wait_until(lambda: running.page.bootstraps)
+            await wait_until(lambda: logged(caplog, "loading it is left to the lines above"))
+            await asyncio.sleep(0.2)
+
+        assert running.webhelper.terminations == 0
+
+
+class TestWhatThisBackendDoesToSteamIsNeverACrash:
+    async def test_a_reload_while_a_verdict_is_pending_closes_the_record_uncounted(
+        self, injecting, monkeypatch, caplog
+    ):
+        """The interface goes while this backend's own reload is under way.
+
+        Reaching a reload with a record open takes a marker changing owner under
+        a live attachment, which a second backend cannot do while this one holds
+        the lock — so the page is told to by hand. The rule it pins is general:
+        whatever this process does to take the interface down is not judged.
+        """
+        monkeypatch.setattr(injector_module, "ALIVE_AFTER_SECONDS", 1.0)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(targets=list(WITH_BIG_PICTURE))
+            await wait_until(lambda: running.page.bootstraps)
+            assert running.watchdog_record().get("open") is True
+
+            running.page.marker_instance = EARLIER
+            await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+            await wait_until(lambda: running.page.reloads == 1)
+            running.debugger.targets = [FakeTarget(id=RENDERER, title="SharedJSContext")]
+            await wait_until(lambda: logged(caplog, "took Steam's interface down itself"))
+
+        assert running.watchdog_record().get("open") is False
+        assert running.watchdog_record()["failures"] == 0
+        assert not logged(caplog, "Steam's interface is gone")
 
 
 def _fingerprint_of(running: Running) -> Fingerprint:

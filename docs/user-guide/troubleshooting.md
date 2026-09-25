@@ -30,6 +30,23 @@ is merely slow to start rather than calling it dead too early. It runs to its co
 open, so you do not have to sit and watch it — close the QAM and reopen it later, and the row shows the answer. While a
 check is running, the row keeps showing the previous result rather than resetting to **Checking…**.
 
+### Steam's window closes and reopens after the backend restarts
+
+**Symptom**: A second or so after Tender's backend restarts — after `systemctl --user restart romm-tender`, a reinstall,
+or the backend starting again by itself — Steam's window closes and reopens on the library home, and Tender's panel is
+back a few seconds later.
+
+**What happened**: Nothing is wrong. The panel still in Steam belonged to the backend that just stopped, and it cannot
+talk to the new one, so the new backend asks Steam to reload its interface once to put a fresh panel in. It never does
+this while a game is running: it waits until you have exited the game. If the reload does not bring the panel back, it
+restarts Steam's web helper once, which takes the interface away for a few more seconds.
+
+If Tender's section on a game page still says "Loading…" after that, restart Steam. The log says what was tried:
+
+```bash
+grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20
+```
+
 ### Sign-in reports "Tender's backend never answered"
 
 **Symptom**: The **Sign in to RomM** dialog sits on **Signing in…** for a minute and then shows "Tender's backend never

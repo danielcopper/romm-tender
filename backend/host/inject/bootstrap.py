@@ -81,7 +81,7 @@ _SOURCE = """
   if (win[T.marker]) {
     return Promise.resolve({ ok: true, already: true });
   }
-  win[T.marker] = { version: T.version, kind: T.kind };
+  win[T.marker] = { version: T.version, kind: T.kind, instance: T.instance };
 
   const redact = (value) => {
     const text = String(value);
@@ -216,6 +216,7 @@ class BootstrapFacts:
     """
 
     marker: str
+    instance: str
     kind: str
     version: str
     steam_build: str
@@ -277,6 +278,7 @@ NO_INSTALLER = "The panel was not loaded: the globals bundle left no installer o
 
 def build_facts(
     *,
+    instance: str,
     kind: str,
     version: str,
     steam_build: str,
@@ -287,6 +289,10 @@ def build_facts(
     binding: str = "",
 ) -> BootstrapFacts:
     """Assemble what the evaluated source is given.
+
+    *instance* names the backend process doing the loading, and is what the
+    marker carries so a later process can tell a panel it loaded from one an
+    earlier process left behind. It is not the token and authorises nothing.
 
     *globals_at* is which of *urls* leaves the globals installer on the window,
     as ``bundles.BundleChoice`` answers it, or ``None`` where the choice carries
@@ -300,6 +306,7 @@ def build_facts(
     """
     return BootstrapFacts(
         marker=MARKER,
+        instance=instance,
         kind=kind,
         version=version,
         steam_build=steam_build or "unknown",
@@ -331,3 +338,39 @@ def build_bootstrap(facts: BootstrapFacts) -> str:
 def marker_present_expression(marker: str = MARKER) -> str:
     """An expression answering whether this context already carries the panel."""
     return f'typeof window[{json.dumps(marker)}] !== "undefined"'
+
+
+@dataclass(frozen=True)
+class PanelMarker:
+    """What a context's marker says about the panel it carries.
+
+    ``instance`` is empty for a marker written before markers carried one,
+    which is a panel no running backend can have loaded either.
+    """
+
+    instance: str
+    version: str
+
+
+def marker_owner_expression(marker: str = MARKER) -> str:
+    """An expression answering who loaded the panel on this context, or ``null``."""
+    return (
+        "(() => {"
+        f" const found = window[{json.dumps(marker)}];"
+        ' if (typeof found === "undefined") { return null; }'
+        ' const text = (value) => (typeof value === "string" ? value : "");'
+        " return found ? { instance: text(found.instance), version: text(found.version) }"
+        ' : { instance: "", version: "" };'
+        " })()"
+    )
+
+
+def read_panel_marker(value: object) -> PanelMarker | None:
+    """Read what :func:`marker_owner_expression` answered; ``None`` is no marker."""
+    if not isinstance(value, dict):
+        return None
+    instance, version = value.get("instance"), value.get("version")
+    return PanelMarker(
+        instance=instance if isinstance(instance, str) else "",
+        version=version if isinstance(version, str) else "",
+    )
