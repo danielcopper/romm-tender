@@ -146,9 +146,8 @@ bootstrap/ (composition root: adapters.bootstrap() builds adapters, services.wir
 └────────────────────────┬────────────────────────────────┘
                          │ depend on
 ┌────────────────────────▼────────────────────────────────┐
-│ Protocols (services/protocols/) — grouped topically:    │
-│   transport / determinism / persistence / paths /       │
-│   infra / files / cross_service                         │
+│ Protocols (services/protocols/) — grouped topically;    │
+│   see Protocol Interfaces below                         │
 └─────────────────────────────────────────────────────────┘
 
 Domain (domain/) — pure compute, imported by services and adapters; imports nothing above it.
@@ -2374,6 +2373,10 @@ package, organised topically (consumers always deep-import `from services.protoc
   `DeviceForgetFn`, `DeviceIdProvider` (server device id, `SaveService.get_device_id` → PlaytimeService),
   `PlaytimeScopeNoticeClearFn` (PlaytimeService clears its re-sign-in notice on a fresh sign-in from ConnectionService),
   the `LaunchGate*` and `Session*` seams.
+- **`repositories`** — one repository Protocol per aggregate root, plus `KvConfigRepository` for the `kv_config`
+  key-value surface.
+- **`uow`** — `UnitOfWork`, which exposes those repositories as typed properties, and `UnitOfWorkFactory`, the
+  call-shaped seam a service holds to open one.
 
 Protocol names carry a suffix that signals shape (`…Reader`, `…Provider`/`…Fn`, `…Store`, `…Cache`, `…Persister`; bare
 names for pervasive primitives like `Clock`).
@@ -2468,8 +2471,8 @@ call site: services may not call `datetime.now()` / `asyncio.sleep()` / `time.ti
 
 `scripts/check_aggregate_field_assignment.py` (also bundled into `mise run lint`) is a small custom AST linter that
 enforces the **mutation-only-via-methods** rule for aggregates — a rule no type checker can express directly. It
-collects the class names decorated with `@cosmic_aggregate` in `domain/` (currently the 9 aggregate roots), then scans
-`services/` for `<aggregate>.<field> = ...` assignments and fails CI on any it finds. The escape hatch is a trailing
+collects the class names decorated with `@cosmic_aggregate` in `domain/` (the aggregate roots), then scans `services/`
+for `<aggregate>.<field> = ...` assignments and fails CI on any it finds. The escape hatch is a trailing
 `# pragma: no aggregate-check` on the offending line. Full detail in [Database Design](database-design.md).
 
 ### 4. Failure-shape dialect gate

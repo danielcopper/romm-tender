@@ -2035,3 +2035,13 @@ semantics): users copy individual saves, then delete the source slot from the se
 While `device_syncs` per save shows which devices have synced, the plugin cannot filter or browse saves by a specific
 other device. This is an API limitation — `GET /api/saves?device_id=X` only populates `device_syncs` for device X, not
 for arbitrary devices.
+
+### Clock skew decides a first contact
+
+When this device has never touched the save at the head of the slot and cannot show that its local file diverged from a
+baseline, nothing but time orders the two sides: rows 6a and 6b compare the local file's mtime, stamped by this device's
+clock, with the server save's `updated_at`, stamped by RomM's. A clock that is off by more than the gap between the two
+writes sends that sync the wrong way. Neither direction loses data: 6a posts the local file as a new save and leaves the
+server's save in place, and 6b moves the local file into `.romm-backup` before the download overwrites it (its naming
+and retention are under [Switching slots](#switching-slots)). A byte-identical pair never reaches the comparison — row
+6d adopts it first.
