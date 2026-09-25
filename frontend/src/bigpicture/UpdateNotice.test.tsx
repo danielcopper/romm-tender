@@ -54,6 +54,15 @@ describe("UpdateNotice", () => {
     expect(queryByText(/install/i)).toBeNull();
   });
 
+  it("stacks its two buttons, Open Updates first, each in a row of its own", () => {
+    setUpdateNoticeState(AVAILABLE);
+    const { container } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
+
+    const buttons = [...container.querySelectorAll("button")];
+    expect(buttons.map((b) => b.textContent)).toEqual(["Open Updates", "Dismiss"]);
+    expect(buttons[0]!.parentElement).not.toBe(buttons[1]!.parentElement);
+  });
+
   it("Dismiss waves this version away and takes the card down", async () => {
     setUpdateNoticeState(AVAILABLE);
     const { getByText, queryByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
