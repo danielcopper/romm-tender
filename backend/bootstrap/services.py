@@ -104,10 +104,10 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
 
     Returns
     -------
-    Every wired service, and the prune conflict gate they share, keyed by
-    the attribute name ``Plugin._main()`` binds it to. Callers index the
-    keys they need; the mapping is not enumerated here because it grows
-    with the service surface.
+    Every wired service, and the prune conflict gate, keyed by the
+    attribute name ``Plugin._main()`` binds it to. Callers index the keys
+    they need; the mapping is not enumerated here because it grows with
+    the service surface.
     """
 
     # Retry-progress surface (#1345): the RommHttpAdapter runs its retry+backoff

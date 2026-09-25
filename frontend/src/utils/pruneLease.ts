@@ -59,7 +59,7 @@ export function mountPruneLeasePlugin(): void {
   pluginMounted = true;
   // Disown anything the previous context stranded. A continuation whose JS
   // context died mid-call never released its lease and never renews it, so it
-  // would pin the admission gate for its full TTL with nobody behind it
+  // would pin the prune conflict gate for its full TTL with nobody behind it
   // (#1570 F18). This mount is the proof that no such continuation survives.
   void releaseOrphanedPruneLeases()
     .then((result) => {

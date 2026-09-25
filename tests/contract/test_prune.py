@@ -310,7 +310,7 @@ async def test_action_report_rejects_stale_token_with_canonical_shape(harness):
 
 
 @pytest.mark.parametrize("operation", ["save_status", "download"])
-async def test_detached_writer_lifetime_blocks_prune_admission(harness, monkeypatch, operation):
+async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch, operation):
     _seed_bulk_candidate(harness)
     preview = await harness.plugin.get_prune_preview(_preview_request())
     release = asyncio.Event()

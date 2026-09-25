@@ -1,21 +1,13 @@
 """The prune conflict gate: what may run beside a removed-game cleanup, and what holds it off.
 
-One ``PruneConflicts`` is built by the composition root and shared by every party
-that refuses, or is refused by, a cleanup. It holds four kinds of claim:
-
-- an **operation** — a conflicting endpoint's registration for the length of one
-  call, or retained for the detached work that call started;
-- a **lease** — a frontend-held token with a deadline, for Steam writes that
-  outlive the backend call;
-- a **reservation** — the exclusive start of a cleanup, taken before its
-  validation runs;
-- a **run** — the cleanup's own claim, registered by the run's owner for as long
-  as the run lasts.
-
-A cleanup is running while a reservation or a run is held, and an endpoint marked
-``@prune_active_blocked`` is refused for exactly that long. The exclusive start is
-refused while an operation or a lease is held; a run does not refuse it, because
-the cleanup's own owner already refuses a second start.
+``PruneConflicts`` records the four kinds of claim that conflict with a cleanup —
+operation, lease, reservation and run claim, defined in CONTEXT.md → Prune
+conflicts. An endpoint marked ``@prune_active_blocked`` is refused while a
+reservation or a run claim is held, and holds an operation for its call
+otherwise. An endpoint marked ``@prune_exclusive_start`` is refused while an
+operation or a lease is held, and holds a reservation for its call otherwise; a
+run claim does not refuse it, because the prune service refuses a second start
+itself.
 
 Both decorators must wrap an ``async def``, because each wrapper awaits it;
 decorating a ``def`` raises ``TypeError`` when the class is defined, not when the
@@ -97,11 +89,7 @@ class PruneConflicts:
 
     @property
     def conflicting_operations(self) -> int:
-        """Every live operation and lease — the count the exclusive start is refused on.
-
-        Derived from the holder registry rather than tracked beside it: a counter
-        that can drift from the registry leaves a refusal with no holder to name.
-        """
+        """How many operations and leases are held — the two kinds of claim the exclusive start is refused on."""
         return len(self._operations) + len(self._leases)
 
     @property
@@ -139,7 +127,7 @@ class PruneConflicts:
             self._expire_leases()
             if self._operations or self._leases:
                 now = asyncio.get_running_loop().time()
-                self._logger.info(f"Cleanup admission refused — gate held by: {self._describe_holders(now)}")
+                self._logger.info(f"Cleanup start refused — gate held by: {self._describe_holders(now)}")
                 return self._blocked_message()
             self._reservations += 1
             return None
@@ -183,7 +171,7 @@ class PruneConflicts:
         task.add_done_callback(done)
 
     async def acquire_lease(self, key: str) -> str:
-        """Hold a bounded, tokenized claim across a frontend-owned operation."""
+        """Hold a bounded, tokenized claim across frontend-owned Steam writes."""
         async with self._lock:
             self._expire_leases()
             now = asyncio.get_running_loop().time()

@@ -162,7 +162,10 @@ class PruneService:
         self._action_lock = asyncio.Lock()
 
     def is_active(self) -> bool:
-        """Return whether admission or execution currently owns the prune claim."""
+        """Whether a start is validating or a run is in progress — this service's own guard against a second start.
+
+        A preview, or a selection staged against one, is refused for as long too.
+        """
         return self._starting or self._run_id is not None
 
     async def get_prune_preview(self, request: object) -> dict[str, Any]:

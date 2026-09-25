@@ -70,9 +70,8 @@ class Plugin:
     # What the process hosting this backend knows about its own run. Set by the
     # entry point once the build is through, for the one callable that reads it.
     _host_status: HostStatus
-    # Every claim that conflicts with a removed-game cleanup. Wired by ``_main``
-    # from the one instance the composition root builds; the prune decorators
-    # and the event funnel read it here, and refuse to run without it.
+    # Every claim that conflicts with a removed-game cleanup; bound by ``_main``
+    # from the instance the composition root builds.
     _prune_conflicts: PruneConflicts
     _http_adapter: Any
     _romm_api: Any

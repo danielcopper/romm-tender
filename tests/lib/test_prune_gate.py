@@ -159,23 +159,23 @@ async def test_prune_start_refuses_operation_that_entered_before_it() -> None:
 
 
 @pytest.mark.asyncio
-async def test_conflicting_operation_is_refused_without_awaiting_a_slow_prune_admission() -> None:
-    admitting = asyncio.Event()
-    finish_admission = asyncio.Event()
+async def test_conflicting_operation_is_refused_without_awaiting_a_slow_prune_start() -> None:
+    starting = asyncio.Event()
+    finish_start = asyncio.Event()
     order: list[str] = []
 
     class Endpoints(_Endpoints):
         @prune_exclusive_start
         async def start_prune(self):
-            admitting.set()
-            await finish_admission.wait()
-            order.append("admission")
+            starting.set()
+            await finish_start.wait()
+            order.append("start")
             return {"success": True}
 
     conflicts, _logger, _debug = _conflicts()
     endpoints = Endpoints(conflicts)
-    admission = asyncio.create_task(endpoints.start_prune())
-    await admitting.wait()
+    start = asyncio.create_task(endpoints.start_prune())
+    await starting.wait()
 
     result = await endpoints.mutate()
     order.append("mutation")
@@ -185,9 +185,9 @@ async def test_conflicting_operation_is_refused_without_awaiting_a_slow_prune_ad
     assert endpoints.called is False
     assert order == ["mutation"]
 
-    finish_admission.set()
-    assert await admission == {"success": True}
-    assert order == ["mutation", "admission"]
+    finish_start.set()
+    assert await start == {"success": True}
+    assert order == ["mutation", "start"]
 
 
 @pytest.mark.asyncio
@@ -216,18 +216,18 @@ async def test_a_run_registered_inside_the_reservation_keeps_refusing_after_the_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("outcome", ["refused", "raised"])
-async def test_prune_claim_is_released_when_admission_does_not_start_a_run(outcome) -> None:
+async def test_reservation_is_released_when_the_start_begins_no_run(outcome) -> None:
     class Endpoints(_Endpoints):
         @prune_exclusive_start
         async def start_prune(self):
             if outcome == "raised":
-                raise RuntimeError("admission blew up")
+                raise RuntimeError("start blew up")
             return {"success": False, "reason": "stale_preview", "message": "stale"}
 
     conflicts, _logger, _debug = _conflicts()
     endpoints = Endpoints(conflicts)
     if outcome == "raised":
-        with pytest.raises(RuntimeError, match="admission blew up"):
+        with pytest.raises(RuntimeError, match="start blew up"):
             await endpoints.start_prune()
     else:
         assert (await endpoints.start_prune())["reason"] == "stale_preview"
@@ -280,7 +280,7 @@ async def test_refusal_logs_the_holder_that_is_actually_blocking() -> None:
     result = await endpoints.start_prune()
 
     assert result["reason"] == "operation_active"
-    refusal = next(line for line in logger.info_lines if "admission refused" in line)
+    refusal = next(line for line in logger.info_lines if "start refused" in line)
     assert "launch_reconfirm" in refusal
     assert "lease launch_reconfirm:1" in refusal
     assert "held 0s" in refusal
@@ -333,7 +333,7 @@ async def test_refusal_names_a_blocking_callable_registration() -> None:
 
     await endpoints.start_prune()
 
-    refusal = next(line for line in logger.info_lines if "admission refused" in line)
+    refusal = next(line for line in logger.info_lines if "start refused" in line)
     assert "set_game_core (operation" in refusal
     release.set()
     await running
@@ -380,7 +380,7 @@ async def test_detached_retention_is_labelled_by_its_originating_callable() -> N
 
     await endpoints.start_prune()
 
-    refusal = next(line for line in logger.info_lines if "admission refused" in line)
+    refusal = next(line for line in logger.info_lines if "start refused" in line)
     assert "start_download (operation" in refusal
     release.set()
     await task
@@ -457,7 +457,7 @@ async def test_concurrent_multicall_leases_are_reference_counted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_abandoned_multicall_lease_expires_before_prune_admission(monkeypatch) -> None:
+async def test_abandoned_multicall_lease_expires_before_prune_start(monkeypatch) -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
     monkeypatch.setattr("lib.prune_gate._LEASE_SECONDS", 0.0)
     await conflicts.acquire_lease("shortcut_removal")

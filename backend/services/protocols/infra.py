@@ -2,10 +2,10 @@
 
 Narrow callable seams that don't belong to a specific I/O surface or
 external system: frontend event emission, debug logging, generic
-filesystem existence probes, the prune conflict gate as the services
-holding a claim on it see it, and the small cross-service read/cleanup
-hooks (LibraryService pending-sync map, download queue cleanup) that
-would otherwise require service-to-service concrete imports.
+filesystem existence probes, the prune conflict gate as the prune
+service sees it, and the small cross-service read/cleanup hooks
+(LibraryService pending-sync map, download queue cleanup) that would
+otherwise require service-to-service concrete imports.
 """
 
 from __future__ import annotations
