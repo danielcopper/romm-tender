@@ -495,13 +495,12 @@ fallback. The fallback fetch goes through a **separate, bearer-free** adapter se
 reach a third-party origin, so only the plugin `User-Agent` is attached (the CDN behind Cloudflare Bot Fight Mode also
 403s the default `Python-urllib` UA). Because `url_cover` is untrusted server-supplied input, `download_external`
 scheme-allowlists it to `http`/`https` before any fetch — a `file:`/`data:`/`ftp:`/scheme-relative URL is rejected with
-a `RommApiError` so a `file:///etc/passwd` never reaches `urlopen` (the broader bounded-SSRF hardening — post-DNS
-private/link-local IP blocking and per-redirect-hop revalidation — is deferred to #1182). The fingerprint records the
-source **actually applied** — `url_cover` on a fallback, threaded back through the `download_artwork` `applied_sources`
-accumulator (sync path) or the direct persist (`refresh_changed_covers` / `refresh_cover`) — so the compare stays
-truthful: because the fresh RomM `path_cover` string never equals the stored `url_cover`, a later fixed RomM asset (or a
-changed `url_cover`) is always re-checked, at the cost of re-downloading the fallback ROM's cover each sync until the
-RomM asset is repaired.
+a `RommApiError` so a `file:///etc/passwd` never reaches `urlopen` (revalidating the origin on every redirect hop is
+#1889, and nothing blocks a private or link-local address after DNS). The fingerprint records the source **actually
+applied** — `url_cover` on a fallback, threaded back through the `download_artwork` `applied_sources` accumulator (sync
+path) or the direct persist (`refresh_changed_covers` / `refresh_cover`) — so the compare stays truthful: because the
+fresh RomM `path_cover` string never equals the stored `url_cover`, a later fixed RomM asset (or a changed `url_cover`)
+is always re-checked, at the cost of re-downloading the fallback ROM's cover each sync until the RomM asset is repaired.
 
 **Conditional-request revalidation on a ts-only change (#1454).** A server-side rescan re-stamps every ROM's
 `updated_at` — and thus the `?ts=` in every cover path — without touching the cover files, so the `cover_source`

@@ -167,7 +167,7 @@ states still work locally). See the full table for specifics.
     | `amiga600` | 🔜 | Planned |
     | `atarijaguar` | 🔜 | Planned |
     | `cdimono1` | 🔜 | Under review |
-    | `cdtv` | 🔜 | Planned — pending platform mapping (#907) |
+    | `cdtv` | 🔜 | Planned — pending platform mapping (#1806) |
     | `dos` | 🔜 | Planned |
     | `pc` | 🔜 | Planned |
     | `pico8` | 🔜 | Planned |
