@@ -265,6 +265,43 @@ describe("ListDetail", () => {
     expect((row as HTMLElement).dataset.activate).toBeUndefined();
   });
 
+  describe("the list footer", () => {
+    const withFooter = (onSelect: (id: string) => void) => (
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="n64"
+        onSelect={onSelect}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+        listHeader={<button>Header control</button>}
+        listFooter={<button>Footer control</button>}
+      />
+    );
+
+    it("renders under the last row, after the header and every item", () => {
+      render(withFooter(vi.fn()));
+      const order = screen.getAllByRole("button").map((b) => b.textContent);
+      expect(order).toEqual(["Header control", "Nintendo 64 (selected)", "PlayStation", "Footer control"]);
+    });
+
+    it("sits outside every item, so focusing it reports no selection", () => {
+      const onSelect = vi.fn();
+      render(withFooter(onSelect));
+      fireEvent.focusIn(screen.getByRole("button", { name: "Footer control" }));
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(screen.getByText("detail for n64")).toBeInTheDocument();
+    });
+
+    it("adds nothing under the rows of a list that passes none, as Platforms and Settings do", () => {
+      render(
+        <ListDetail items={platformItems(() => {})} selectedId="n64" onSelect={vi.fn()} renderDetail={() => <div />} />,
+      );
+      const list = screen.getByRole("button", { name: /PlayStation/ }).closest("[data-testid='focusable']")
+        ?.parentElement?.parentElement as HTMLElement;
+      const last = list.lastElementChild as HTMLElement;
+      expect(last.textContent).toBe("PlayStation");
+    });
+  });
+
   describe("a row's own selectOnActivate", () => {
     const rowOf = (label: string) => screen.getByText(label).closest("[data-testid='focusable']") as HTMLElement;
     const mixed = (flag: boolean | undefined): ListDetailItem[] => [
