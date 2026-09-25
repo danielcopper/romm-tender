@@ -18,6 +18,10 @@ The package is organised topically — consumers always deep-import via
   service subtree.
 - ``cross_service``: narrowly-typed multi-method seams one service
   exposes to another so services remain independent.
+- ``repositories``: one repository per aggregate root, plus the
+  ``kv_config`` key-value surface.
+- ``uow``: the Unit of Work over those repositories, and the factory
+  a service holds to open one.
 """
 
 from __future__ import annotations

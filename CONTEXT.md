@@ -381,6 +381,7 @@ stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-a
 `RomFile[]` model — one row per physical file, each tagged with a RomM `category` (`game` / `dlc` / `update` / `mod` /
 …) — is the planned shape for the multi-file features in
 [#1125](https://github.com/danielcopper/romm-tender/issues/1125) /
+[#2035](https://github.com/danielcopper/romm-tender/issues/2035) /
 [#129](https://github.com/danielcopper/romm-tender/issues/129); it is an additive 1:N child of `rom_installs` (deferred
 until those land), and `file_path` + `rom_dir` are its forward-compatible projection.
 
