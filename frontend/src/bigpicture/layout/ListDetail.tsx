@@ -54,12 +54,6 @@ export interface ListDetailProps {
    */
   listHeader?: ReactNode;
   /**
-   * The same kind of slot under the last row: controls and lines that belong to
-   * the list rather than to a row of it, placed at its foot. Outside every item
-   * too, so focusing one reports no selection.
-   */
-  listFooter?: ReactNode;
-  /**
    * Makes every row wrapper a focus stop by giving it an activate handler, for
    * a list whose rows carry no control of their own — a label and nothing else.
    * Without it such a row is a bare container that passes focus to children it
@@ -79,7 +73,6 @@ export const ListDetail: FC<ListDetailProps> = ({
   onSelect,
   renderDetail,
   listHeader,
-  listFooter,
   selectOnActivate,
 }) => (
   <Columns
@@ -125,7 +118,6 @@ export const ListDetail: FC<ListDetailProps> = ({
                 </Focusable>
               </div>
             ))}
-            {listFooter}
           </Focusable>
         ),
       },

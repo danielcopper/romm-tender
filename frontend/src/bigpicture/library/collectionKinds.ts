@@ -23,8 +23,37 @@ export type CollectionsKindId = "favorites" | "standard" | "smart" | "franchise"
 
 export const KIND_ORDER: readonly CollectionsKindId[] = ["standard", "smart", "franchise", "igdb", "favorites"];
 
-export function isKindId(id: string): id is CollectionsKindId {
-  return (KIND_ORDER as readonly string[]).includes(id);
+/** Every row of the list column that selects a pane: the kinds, and the owner
+ *  switch, which is a row with a pane of its own but lists no collections. */
+export type CollectionsRowId = CollectionsKindId | "owner";
+
+export function isRowId(id: string): id is CollectionsRowId {
+  return id === "owner" || (KIND_ORDER as readonly string[]).includes(id);
+}
+
+/** The owner switch's row, and its pane's title. */
+export const OWNER_ROW_NAME = "Other users' collections";
+
+/** The kinds whose pane holds a table and whose Enable all / Disable all write. */
+export type TableKindId = Exclude<CollectionsKindId, "favorites">;
+
+export function isTableKind(id: CollectionsRowId): id is TableKindId {
+  return id !== "owner" && id !== "favorites";
+}
+
+/**
+ * How many collections Enable all / Disable all may switch without asking. More
+ * than this and the write is asked about first; this many or fewer is written
+ * at once, search or no search.
+ */
+export const CONFIRM_ABOVE = 20;
+
+/** Other users' collections among the two kinds that have owners: how many
+ *  there are, or `null` while ownership is not established (`is_own: null`). */
+export function foreignCount(collections: readonly CollectionSyncSetting[]): number | null {
+  const owned = collections.filter((c) => c.kind === "standard" || c.kind === "smart");
+  if (owned.some((c) => c.is_own === null)) return null;
+  return owned.filter((c) => c.is_own === false).length;
 }
 
 export interface KindText {
@@ -76,7 +105,7 @@ export function kindSentence(kind: CollectionsKindId): string {
 }
 
 /** Which bucket a batch write for this kind goes to on the wire. */
-export function wireKind(kind: Exclude<CollectionsKindId, "favorites">): CollectionKind {
+export function wireKind(kind: TableKindId): CollectionKind {
   if (kind === "standard" || kind === "smart") return kind;
   return "virtual";
 }

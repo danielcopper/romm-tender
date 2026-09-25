@@ -22,6 +22,8 @@ import {
   KIND_TEXT,
   kindMembers,
   onCount,
+  OWNER_ROW_NAME,
+  foreignCount,
   resolveFavorites,
   romCountLabel,
   type CollectionsKindId,
@@ -156,35 +158,45 @@ export const CollectionsTab: FC<{ state: CollectionsPageState }> = ({ state }) =
     });
   }
 
-  const listFooter: ReactNode = (
-    <>
-      <div style={{ paddingLeft: `${ROW_CONTENT_INSET}px` }}>
-        <ToggleField
-          label="Other users' collections"
-          description="Their public ones, shown and synced"
-          checked={state.ownerScope === "all"}
-          bottomSeparator="none"
-          onChange={(value: boolean) => state.setOwnerScope(value ? "all" : "own")}
-        />
-      </div>
-      {/* Why the owner switch or the Favorites switch did not take — the two
-          writes this column makes. Plain text, and there only while there is
-          something to say, so it costs the column no line otherwise. */}
-      {state.listStatus && (
-        <div
-          data-testid="collections-list-status"
-          style={{ fontSize: "12px", color: "#dcdedf", padding: `0 0 8px ${ROW_CONTENT_INSET}px` }}
-        >
-          {state.listStatus}
-        </div>
-      )}
-    </>
-  );
+  const foreign = state.load.state === "loaded" ? foreignCount(state.collections) : null;
+  items.push({
+    id: "owner",
+    render: (selected: boolean) => (
+      <>
+        <Marker selected={selected}>
+          <div data-testid="kind-row-owner">
+            <ToggleField
+              label={
+                <RowLabel
+                  name={OWNER_ROW_NAME}
+                  count={foreign === null ? "" : `${foreign} ${state.ownerScope === "all" ? "shown" : "hidden"}`}
+                  selected={selected}
+                />
+              }
+              checked={state.ownerScope === "all"}
+              bottomSeparator="none"
+              onChange={(value: boolean) => state.setOwnerScope(value ? "all" : "own")}
+            />
+          </div>
+        </Marker>
+        {/* Why the owner switch or the Favorites switch did not take — the two
+            writes this column makes. Plain text under the last row, and there
+            only while there is something to say. */}
+        {state.listStatus && (
+          <div
+            data-testid="collections-list-status"
+            style={{ fontSize: "12px", color: "#dcdedf", padding: `0 0 8px ${ROW_CONTENT_INSET}px` }}
+          >
+            {state.listStatus}
+          </div>
+        )}
+      </>
+    ),
+  });
 
   return (
     <ListDetail
       items={items}
-      listFooter={listFooter}
       selectedId={state.selectedKind}
       onSelect={state.select}
       renderDetail={() => <CollectionsDetail state={state} favorites={favorites} />}

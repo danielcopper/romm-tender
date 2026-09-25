@@ -23,12 +23,13 @@ import { detach } from "../../utils/detach";
 import {
   collectionKey,
   freezeOrder,
-  isKindId,
+  isRowId,
+  isTableKind,
   kindMembers,
   resolveFavorites,
   searchMembers,
   wireKind,
-  type CollectionsKindId,
+  type CollectionsRowId,
 } from "./collectionKinds";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
@@ -50,7 +51,7 @@ export interface CollectionsPageState {
    *  place and never the order. */
   collections: CollectionSyncSetting[];
   ownerScope: CollectionOwnerScope;
-  selectedKind: CollectionsKindId;
+  selectedKind: CollectionsRowId;
   select: (id: string) => void;
   search: string;
   setSearch: (value: string) => void;
@@ -71,6 +72,7 @@ export interface CollectionsPageState {
 export function shownCollections(
   state: Pick<CollectionsPageState, "collections" | "ownerScope" | "selectedKind" | "search">,
 ): CollectionSyncSetting[] {
+  if (!isTableKind(state.selectedKind)) return [];
   const members = kindMembers(
     state.collections,
     state.selectedKind,
@@ -88,7 +90,7 @@ export function useCollectionsPage(): CollectionsPageState {
   const [collections, setCollections] = useState<CollectionSyncSetting[]>([]);
   const [load, setLoad] = useState<CollectionsLoad>({ state: "idle" });
   const [shownScope, setShownScope] = useState<CollectionOwnerScope>("all");
-  const [selectedKind, setSelectedKind] = useState<CollectionsKindId>("standard");
+  const [selectedKind, setSelectedKind] = useState<CollectionsRowId>("standard");
   const [search, setSearch] = useState("");
   const [listStatus, setListStatus] = useState<string | null>(null);
   const [paneStatus, setPaneStatus] = useState<string | null>(null);
@@ -157,7 +159,7 @@ export function useCollectionsPage(): CollectionsPageState {
   // § Library, "Only the latest write speaks".
   const latestWrite = useRef<Record<WritePlace, number>>({ list: 0, pane: 0 });
   const entries = useRef(0);
-  const shownKind = useRef<CollectionsKindId>("standard");
+  const shownKind = useRef<CollectionsRowId>("standard");
 
   const lineFor = useCallback((place: WritePlace) => {
     latestWrite.current[place] += 1;
@@ -184,7 +186,7 @@ export function useCollectionsPage(): CollectionsPageState {
   // A search and a pane refusal are both about the kind they were made on, so
   // another kind is entered without either.
   const select = useCallback((id: string) => {
-    if (!isKindId(id) || id === shownKind.current) return;
+    if (!isRowId(id) || id === shownKind.current) return;
     shownKind.current = id;
     setSelectedKind(id);
     setSearch("");
@@ -225,7 +227,7 @@ export function useCollectionsPage(): CollectionsPageState {
 
   const setAllShown = useCallback(
     (enabled: boolean) => {
-      if (selectedKind === "favorites") return;
+      if (!isTableKind(selectedKind)) return;
       const targets = shownCollections({ collections, ownerScope: shownScope, selectedKind, search });
       if (targets.length === 0) return;
       const seqs = new Map(targets.map((c) => [collectionKey(c), issueValueWrite(collectionKey(c))]));

@@ -4,7 +4,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import type { CSSProperties, FC } from "react";
+import { useRef, type CSSProperties, type FC } from "react";
 import { ConfirmModal, DialogButton, TextField, ToggleField, showModal } from "@decky/ui";
 import { LoadingRow } from "../LoadingRow";
 import {
@@ -17,14 +17,19 @@ import {
   PaneTableRow,
   SECONDARY_FONT,
 } from "../layout/pane";
+import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
 import {
+  CONFIRM_ABOVE,
   KIND_TEXT,
+  OWNER_ROW_NAME,
+  foreignCount,
   hiddenForeignCount,
   inSteamLabel,
   kindSentence,
   ownerLabel,
   romCountLabel,
   type CollectionsKindId,
+  type TableKindId,
   type FavoritesAnswer,
 } from "./collectionKinds";
 import { SYNC_TABLE_REGISTER } from "../sync/paneTable";
@@ -114,6 +119,29 @@ const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswe
   );
 };
 
+const OwnerPane: FC<{ state: CollectionsPageState }> = ({ state }) => {
+  const foreign = state.load.state === "loaded" ? foreignCount(state.collections) : undefined;
+  let count;
+  if (foreign === undefined) count = <LoadState state={state} />;
+  else if (foreign === null)
+    count = <Muted>Tender does not know your RomM account yet, so nothing is hidden for now.</Muted>;
+  else if (foreign === 0) count = <Muted>No collections from other users right now.</Muted>;
+  else
+    count = (
+      <Muted>{`${foreign} from other users right now — ${state.ownerScope === "all" ? "shown and synced" : "hidden and left out of the sync"}.`}</Muted>
+    );
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: `8px ${PANE_GUTTER} 2px` }}>
+        <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{OWNER_ROW_NAME}</span>
+        <span style={{ fontSize: SECONDARY_FONT, color: MUTED }}>their public ones, on a shared RomM server</span>
+      </div>
+      <Sentence text="Turned off, other users' collections are hidden here and left out of the sync, even ones you switched on; turning it back on brings those choices back. Tender can tell whose a collection is only once it knows your RomM account, and until then nothing is hidden." />
+      {count}
+    </>
+  );
+};
+
 const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; state: CollectionsPageState }> = ({
   collection,
   owned,
@@ -149,44 +177,64 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
   );
 };
 
-function confirmSetAll(state: CollectionsPageState, kind: CollectionsKindId, count: number, enabled: boolean) {
+/**
+ * Put focus back on the button that opened the dialog, once it has closed.
+ * Steam's dialog does not hand focus back to it — the pane was seen scrolled to
+ * its end after Cancel and after OK alike, the region having followed focus
+ * wherever it landed — so the button is refocused the way entry focus is
+ * placed, after Steam has settled its own pointer.
+ */
+function refocusAfterDialog(line: HTMLElement | null, buttonIndex: number): void {
+  setTimeout(() => {
+    if (line) placeEntryFocus(line, (root) => root.querySelectorAll<HTMLElement>("button")[buttonIndex] ?? null);
+  }, ENTRY_FOCUS_DELAY_MS);
+}
+
+function confirmSetAll(
+  state: CollectionsPageState,
+  kind: TableKindId,
+  count: number,
+  enabled: boolean,
+  onClosed: () => void,
+) {
   const name = KIND_TEXT[kind].name;
   const verb = enabled ? "Enable" : "Disable";
-  const which = count === 1 ? "the one collection" : `all ${count} collections`;
   const past =
     count > COLLECTION_RENDER_CAP ? `, including those past the first ${COLLECTION_RENDER_CAP} the table shows` : "";
-  const whose = count === 1 ? "Its" : "Their";
   const effect = enabled
-    ? `${whose} games come to Steam at the next sync, including games on platforms you do not sync.`
+    ? "Their games come to Steam at the next sync, including games on platforms you do not sync."
     : "It takes effect at the next sync.";
-  const ok = count === 1 ? verb : `${verb} all`;
   showModal(
     <ConfirmModal
-      strTitle={count === 1 ? `${verb} the one collection in ${name}?` : `${verb} all ${count} in ${name}?`}
-      strDescription={`This turns ${enabled ? "on" : "off"} syncing for ${which} listed under ${name}${past}. ${effect}`}
-      strOKButtonText={ok}
+      strTitle={`${verb} all ${count} in ${name}?`}
+      strDescription={`This turns ${enabled ? "on" : "off"} syncing for all ${count} collections listed under ${name}${past}. ${effect}`}
+      strOKButtonText={`${verb} all`}
       strCancelButtonText="Cancel"
-      onOK={() => state.setAllShown(enabled)}
+      onOK={() => {
+        state.setAllShown(enabled);
+        onClosed();
+      }}
+      onCancel={onClosed}
     />,
   );
 }
 
 const KindPane: FC<{
   state: CollectionsPageState;
-  kind: Exclude<CollectionsKindId, "favorites">;
+  kind: TableKindId;
   favorites: FavoritesAnswer;
 }> = ({ state, kind, favorites }) => {
+  const searchLine = useRef<HTMLDivElement>(null);
   const owned = KIND_TEXT[kind].owned;
   const loaded = state.load.state === "loaded";
   const shown = loaded ? shownCollections(state) : [];
   const rendered = shown.slice(0, COLLECTION_RENDER_CAP);
   const overflow = shown.length - rendered.length;
   const canWrite = shown.length > 0;
-  // A search is what makes the write a bounded subset the reader can see; with
-  // none it is the whole table, which is asked about first on every kind.
   const setAll = (enabled: boolean) => {
-    if (state.search === "") confirmSetAll(state, kind, shown.length, enabled);
-    else state.setAllShown(enabled);
+    if (shown.length > CONFIRM_ABOVE) {
+      confirmSetAll(state, kind, shown.length, enabled, () => refocusAfterDialog(searchLine.current, enabled ? 0 : 1));
+    } else state.setAllShown(enabled);
   };
 
   let body;
@@ -236,21 +284,23 @@ const KindPane: FC<{
     <>
       <Title kind={kind} />
       <Sentence text={kindSentence(kind)} />
-      <ButtonRow padding={`0 ${PANE_GUTTER} 6px`}>
-        {/* The word beside the field rather than above it or inside it: a
+      <div ref={searchLine}>
+        <ButtonRow padding={`0 ${PANE_GUTTER} 6px`}>
+          {/* The word beside the field rather than above it or inside it: a
             heading costs the pane a line, and `TextFieldProps` declares no
             placeholder. */}
-        <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: SECONDARY_FONT, color: MUTED }}>Search</span>
-        <div data-testid="collections-search" style={{ flex: "1 1 0", minWidth: 0 }}>
-          <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
-        </div>
-        <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(true)}>
-          Enable all
-        </DialogButton>
-        <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(false)}>
-          Disable all
-        </DialogButton>
-      </ButtonRow>
+          <span style={{ flex: "0 0 auto", alignSelf: "center", fontSize: SECONDARY_FONT, color: MUTED }}>Search</span>
+          <div data-testid="collections-search" style={{ flex: "1 1 0", minWidth: 0 }}>
+            <TextField value={state.search} onChange={(e) => state.setSearch(e.target.value)} />
+          </div>
+          <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(true)}>
+            Enable all
+          </DialogButton>
+          <DialogButton style={SEARCH_LINE_BUTTON} disabled={!canWrite} onClick={() => setAll(false)}>
+            Disable all
+          </DialogButton>
+        </ButtonRow>
+      </div>
       {/* Why a table write did not take, under the controls that make the
           bigger of them and above the rows they change. Present only while
           there is something to say. */}
@@ -272,6 +322,7 @@ export const CollectionsDetail: FC<{ state: CollectionsPageState; favorites: Fav
   favorites,
 }) => {
   const kind = state.selectedKind;
+  if (kind === "owner") return <OwnerPane state={state} />;
   if (kind === "favorites") return <FavoritesPane state={state} favorites={favorites} />;
   return <KindPane state={state} kind={kind} favorites={favorites} />;
 };
