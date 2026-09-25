@@ -157,8 +157,9 @@ in Steam.
    read-only state directory is no reason to leave a panel stranded.
 
 Every step is one log line — stranded panel seen, waiting for an app to exit (naming it), reload issued, panel back and
-after how long, fallback taken, all at INFO; giving up and a Steam without `RestartJSContext` at WARNING; an unexpected
-failure at ERROR with its traceback — so a run can be judged from the log alone.
+after how long, fallback taken, all at INFO; giving up (the limit's refusal included), a Steam without
+`RestartJSContext`, and a panel whose owner cannot be read, which is left alone, at WARNING; an unexpected failure at
+ERROR with its traceback — so a run can be judged from the log alone.
 
 **Why `RestartJSContext`**, measured on a device in windowed Big Picture beside Decky Loader:
 
