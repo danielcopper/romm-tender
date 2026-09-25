@@ -39,15 +39,19 @@ export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates 
             <div style={{ fontWeight: "bold", color: "#3d9df6", marginBottom: "4px" }}>
               Tender {latestVersion} is available
             </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>You have {state.currentVersion}.</div>
+            <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>Installed version: {state.currentVersion}.</div>
           </div>
         </Focusable>
       </PanelSectionRow>
       <PanelSectionRow>
-        <DialogButton onClick={onOpenUpdates}>Open Updates</DialogButton>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <DialogButton onClick={handleDismiss}>Dismiss</DialogButton>
+        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
+            Open Updates
+          </DialogButton>
+          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
+            Dismiss
+          </DialogButton>
+        </Focusable>
       </PanelSectionRow>
     </>
   );

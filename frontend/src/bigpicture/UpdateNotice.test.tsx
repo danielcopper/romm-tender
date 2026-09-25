@@ -40,27 +40,30 @@ describe("UpdateNotice", () => {
     setUpdateNoticeState(AVAILABLE);
     const { getByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
     expect(getByTestId("update-notice").textContent).toContain("Tender 0.34.0 is available");
-    expect(getByTestId("update-notice").textContent).toContain("You have 0.33.0.");
+    expect(getByTestId("update-notice").textContent).toContain("Installed version: 0.33.0.");
   });
 
   it("offers no install — the notice jumps to its home instead", () => {
     setUpdateNoticeState(AVAILABLE);
     const onOpenUpdates = vi.fn();
-    const { getByText, queryByText } = render(<UpdateNotice onOpenUpdates={onOpenUpdates} />);
+    const { getByText, container } = render(<UpdateNotice onOpenUpdates={onOpenUpdates} />);
 
     fireEvent.click(getByText("Open Updates"));
 
     expect(onOpenUpdates).toHaveBeenCalledTimes(1);
-    expect(queryByText(/install/i)).toBeNull();
+    const labels = [...container.querySelectorAll("button")].map((b) => b.textContent);
+    expect(labels.filter((label) => /install/i.test(label))).toEqual([]);
   });
 
-  it("stacks its two buttons, Open Updates first, each in a row of its own", () => {
+  it("puts its two buttons side by side in one row, Open Updates first", () => {
     setUpdateNoticeState(AVAILABLE);
     const { container } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
 
     const buttons = [...container.querySelectorAll("button")];
     expect(buttons.map((b) => b.textContent)).toEqual(["Open Updates", "Dismiss"]);
-    expect(buttons[0]!.parentElement).not.toBe(buttons[1]!.parentElement);
+    const row = buttons[0]!.parentElement!;
+    expect(buttons[1]!.parentElement).toBe(row);
+    expect(row.style.display).toBe("flex");
   });
 
   it("Dismiss waves this version away and takes the card down", async () => {
