@@ -269,10 +269,13 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
 - **Package**: `mise run package` (production frontend build, then `scripts/package.sh` → `build/romm-tender-<V>.tar.gz`
   plus its `.sha256`). `bash install.sh --from build/romm-tender-<V>.tar.gz` installs that build the way a release is
-  installed; `install.sh --uninstall` takes it back out. **Neither is ever run against your own machine from a test** —
-  every execution in `tests/scripts/` happens under a `tmp_path` HOME with a stub `PATH`. CI's build job runs the same
-  two steps on every PR and checks what they produce (`scripts/check_release_tarball.py`), so the packager is exercised
-  continuously rather than first at a tag.
+  installed — over an existing install that is an update, which rolls back by itself when the new version does not
+  answer — `install.sh --rollback` goes back by hand, and `install.sh --uninstall` takes it back out. The tarball ships
+  `install.sh`, so an installed tree carries its own copy (`~/.local/lib/romm-tender/install.sh --rollback`). What an
+  update does, in order, is `docs/contributing/development.md`, "Running an installed one". **Neither is ever run
+  against your own machine from a test** — every execution in `tests/scripts/` happens under a `tmp_path` HOME with a
+  stub `PATH`. CI's build job runs the same two steps on every PR and checks what they produce
+  (`scripts/check_release_tarball.py`), so the packager is exercised continuously rather than first at a tag.
 - **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). A second job in
   `.github/workflows/release.yml` builds the tagged tree, packs it with the same `scripts/package.sh`, checks the result
   and attaches `romm-tender-<V>.tar.gz` plus its `.sha256` to the release — it builds from the tag rather than carrying
@@ -547,9 +550,16 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   failing gate; unseen by the check: a single-module file under `_vendor/` and files below a symlinked directory.
   `backend/native/` is pinned by its own `sha256sum -c`
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
-  plus the version file and the licence texts a distributed copy carries, nothing the packager prunes, a sidecar
-  `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`, in CI's build job and in the release job; it
-  reads names, modes and digests and starts nothing (its docstring states what that misses)
+  plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
+  carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
+  in CI's build job and in the release job; it reads names, modes and digests and starts nothing (its docstring states
+  what that misses)
+- **A one-time step — an installer move such as the covers' move into the cache root, a backend backfill behind a
+  `kv_config` marker, a rung of the database's `user_version` ladder or of the settings' version ladder — stays safe to
+  run again and is not removed in the next release, so an update that skips releases still gets it; one leaves only
+  deliberately, with the release saying which version to update from directly** — test + prompt-only —
+  `tests/scripts/test_install_sh.py::TestAnUpdateThatSkipsARelease` for the covers move; every backend step and every
+  removal is prompt-only
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
 - **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem

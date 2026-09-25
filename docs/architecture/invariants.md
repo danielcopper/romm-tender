@@ -667,10 +667,26 @@ Format: **invariant** — tier — enforced by.
   one is invisible to the set comparison whatever the per-file symlink guard does; git records the link itself as mode
   120000, which is what makes it a review question rather than a silent one
 - **The release tarball is what the installer expects — one top-level `romm-tender/`, the files an install starts from
-  plus the version file and the licence texts a distributed copy carries, nothing the packager prunes, a sidecar
-  `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`, in CI's build job over a tarball packed from
-  that build and in the release job over the one uploaded. It reads names, modes and digests and starts nothing; the
-  script's docstring states what that misses
+  plus the version file, the installer an installed tree rolls back with and the licence texts a distributed copy
+  carries, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check — `scripts/check_release_tarball.py`,
+  in CI's build job over a tarball packed from that build and in the release job over the one uploaded. It reads names,
+  modes and digests and starts nothing; the script's docstring states what that misses
+- **A one-time step — an installer move such as the covers' move into the cache root, a backend backfill behind a
+  `kv_config` marker, a rung of the database's `user_version` ladder or of the settings' version ladder — stays safe to
+  run again and is not removed in the next release, so an update that skips releases still gets it; one leaves only
+  deliberately, with the release saying which version to update from directly** — test + prompt-only —
+  `tests/scripts/test_install_sh.py::TestAnUpdateThatSkipsARelease` updates from one release straight to a later one
+  over covers still under the data root and asserts they reach the cache root with the database and settings unchanged.
+  Nothing mechanical sees the backend's steps. **Why:** an update is a jump from whatever release a machine is on to the
+  newest, not a walk through every release between them — the installer downloads one tarball, and a device that was off
+  for a month skips every release of that month. A step that ran in 1.3 and was deleted in 1.4 is therefore never run on
+  a machine that goes from 1.2 to 1.5, and what that step moved or filled is simply missing there, with nothing failing.
+  **Safe to run again** is the other half: every update runs every step still present, so a step that assumes it has not
+  run yet damages the machines where it has. The installer's steps are idempotent by construction (`move_covers` in
+  `install.sh` never moves over a file the cache already holds); a backend backfill is guarded by its `kv_config`
+  marker, a database rung by `PRAGMA user_version` (`adapters/sqlite_migrations.py`), a settings rung by the stored
+  `version` (`domain/state_migrations.py`). A step retired deliberately takes its floor with it: the release notes of
+  the version that drops it say which version to update from first
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
 - **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem

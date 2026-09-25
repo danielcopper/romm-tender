@@ -2238,19 +2238,21 @@ environment passed as an argument so every rung is checkable against a table:
 Rungs 2 and 3 exist for a start by hand. A variable set to the empty string counts as unset — an empty path would
 resolve to whatever directory the process happened to be started in.
 
-| Root                            | Holds                                                                  |
-| ------------------------------- | ---------------------------------------------------------------------- |
-| `~/.config/romm-tender/`        | `settings.json`, plus its `.tmp`, `.lock` and `.corrupt-<ts>` siblings |
-| `~/.local/share/romm-tender/`   | `romm_sync.db`, the launcher, the single-instance lock                 |
-| `~/.cache/romm-tender/`         | `covers/`, `artwork/` — everything re-derivable from the server        |
-| `~/.local/state/romm-tender/`   | the log file                                                           |
-| `$XDG_RUNTIME_DIR/romm-tender/` | the port file                                                          |
+| Root                            | Holds                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`        | `settings.json`, plus its `.tmp`, `.lock` and `.corrupt-<ts>` siblings                   |
+| `~/.local/share/romm-tender/`   | `romm_sync.db`, the launcher, the single-instance lock; the installer's `update-backup/` |
+| `~/.cache/romm-tender/`         | `covers/`, `artwork/` — everything re-derivable from the server                          |
+| `~/.local/state/romm-tender/`   | the log file; the installer's `update-failure.json`                                      |
+| `$XDG_RUNTIME_DIR/romm-tender/` | the port file                                                                            |
 
 **The data/cache split is not filing tidiness.** What lies under the cache root is re-derivable — covers and artwork are
 fetched again if they are gone — and what lies under the data root is not: the database is the only copy of what the
 user has installed, synced and chosen. A system that clears caches must be able to clear one and not the other. XDG
 names no default for the runtime directory, so a start that has none falls back to the state directory; the port file is
-a hint and connecting to it is the proof, so a stale one misleads nobody who checks.
+a hint and connecting to it is the proof, so a stale one misleads nobody who checks. The two entries marked as the
+installer's are written by `install.sh` when it updates and rolls back, never by the backend; what they hold is in
+[Running an installed one](../contributing/development.md#running-an-installed-one).
 
 **One place reads them.** `WiringConfig.directories` is the only path any service reaches through, and `RuntimeBundle`
 carries no directory at all. It used to carry two — the plugin folder and the loader's runtime directory — which is how

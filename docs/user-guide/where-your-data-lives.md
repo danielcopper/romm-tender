@@ -2,23 +2,36 @@
 
 Tender keeps what it knows about your library in folders under your own home directory, each named after Tender itself:
 
-| Folder                        | What is in it                                                                     |
-| ----------------------------- | --------------------------------------------------------------------------------- |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync |
-| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state                            |
-| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                      |
-| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`                                                  |
+| Folder                        | What is in it                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                            |
+| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of them, in `update-backup/` |
+| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                 |
+| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back                 |
 
-Three more places sit outside those folders, because none of them holds anything of yours:
+Four more places sit outside those folders, because none of them holds anything of yours:
 
 | Where                              | What it is                                                                                                                                                                                                                                    |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `~/.local/bin/tender-rom-launcher` | The small program every one of your Steam shortcuts starts through. It sits in the folder your own programs go in, shared with anything else you installed for yourself, and uninstalling Tender leaves it there so your games keep launching |
-| `~/.local/lib/romm-tender/`        | Tender itself. Replaced whole when you update, removed when you uninstall                                                                                                                                                                     |
+| `~/.local/lib/romm-tender/`        | Tender itself, with the installer that updates it and puts the previous version back (`install.sh`). Replaced whole when you update, removed when you uninstall                                                                               |
+| `~/.local/lib/romm-tender.old/`    | The version your last update replaced, kept so that it can be put back. The next update replaces it, and uninstalling removes it                                                                                                              |
 | `/run/user/<id>/romm-tender/`      | One note saying which port Tender is answering on while it runs. Your session clears it when you log out                                                                                                                                      |
 
 Your **games** are not in any of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
 exactly as before, and nothing on this page moves them.
+
+## What an update keeps
+
+Before an update replaces Tender, it stops it and copies your library database and your settings to
+`~/.local/share/romm-tender/update-backup/`, replacing the copy the previous update made. Uninstalling leaves it there,
+with the rest of your data.
+
+If the new version has not started within about a minute, the installer puts the previous version and that copy back and
+starts it again — so anything the new version recorded in that minute is gone, and nothing from before it is. It then
+leaves `~/.local/state/romm-tender/update-failure.json` saying which version it tried, which one it went back to, and
+when; the next update that works removes it. [Troubleshooting](troubleshooting.md#an-update-was-rolled-back) has what to
+do next.
 
 ## The split that matters
 

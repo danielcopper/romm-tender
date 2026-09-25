@@ -66,6 +66,38 @@ A WARNING line that says "Restart Steam to load" means the backend has stopped t
 backend may still be waiting because it cannot tell whether a game is running, or Steam's interface reloaded and the old
 panel went with it but the new one did not arrive — so the missing panel, not that line, is the reason to restart Steam.
 
+## An Update Was Rolled Back
+
+**Symptom**: Updating Tender ends with `install.sh: update to <new> failed; back on <previous>`, the **Service** row is
+marked failed, and the run says **Rolled back** instead of **Done**.
+
+**Explanation**: The new version did not start within about a minute, so the installer put the version you had back,
+together with the library database and settings it had before the update, and started it again. Tender is running as it
+was. Anything the new version wrote in that minute is gone. The installer does not try again by itself, and it leaves
+`~/.local/state/romm-tender/update-failure.json` naming both versions and the time.
+
+**Fix**: Look at what the new version logged — the log is shared by both versions, so the lines just before the previous
+version's start are the new version's:
+
+```bash
+tail -n 100 ~/.local/state/romm-tender/backend.log
+journalctl --user -u romm-tender -n 100
+```
+
+Include that when you report it. Running the installer again tries the update again.
+
+### Going back to the previous version by hand
+
+If an update did start but you want the version before it back, the installed copy of the installer does that:
+
+```bash
+~/.local/lib/romm-tender/install.sh --rollback
+```
+
+It puts back the previous version and the database and settings as they were **before the update** — so anything Tender
+recorded since, such as a download or a sync, is forgotten. It works once per update, and refuses without changing
+anything when there is nothing to go back to.
+
 ## Games Won't Launch
 
 ### "RomM Sync" is still installed
