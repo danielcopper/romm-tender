@@ -770,7 +770,6 @@ class SyncEngine:
                         "reason": "blocked_by_migration",
                         "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
                         "synced": 0,
-                        "blocked_by_migration": True,
                     }
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
@@ -852,7 +851,6 @@ class SyncEngine:
                         "reason": "blocked_by_migration",
                         "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
                         "synced": 0,
-                        "blocked_by_migration": True,
                     }
 
                 if not sync_after_exit(self._settings):

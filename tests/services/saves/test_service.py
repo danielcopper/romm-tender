@@ -356,9 +356,12 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
         result = await svc.pre_launch_sync(42)
 
-        assert result["success"] is False
-        assert result["blocked_by_migration"] is True
-        assert result["synced"] == 0
+        assert result == {
+            "success": False,
+            "reason": "blocked_by_migration",
+            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "synced": 0,
+        }
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_skips_when_retrodeck_migration_pending(self, tmp_path):
@@ -370,9 +373,12 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
         result = await svc.post_exit_sync(42)
 
-        assert result["success"] is False
-        assert result["blocked_by_migration"] is True
-        assert result["synced"] == 0
+        assert result == {
+            "success": False,
+            "reason": "blocked_by_migration",
+            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "synced": 0,
+        }
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_respects_migration_block_via_decorator_chain(self, tmp_path):
@@ -398,8 +404,11 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
         result = await plugin.sync_all_saves()
 
-        assert result["blocked_by_migration"] is True
-        assert result["success"] is False
+        assert result == {
+            "success": False,
+            "reason": "blocked_by_migration",
+            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        }
         spy.assert_not_called()
 
 

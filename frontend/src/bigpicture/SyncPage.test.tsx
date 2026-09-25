@@ -2474,11 +2474,11 @@ describe("SyncPage", () => {
 
     it("says a refusal where the reader is looking, and returns to idle", async () => {
       // A `@migration_blocked` answer arrives exactly like this: success false,
-      // a message, and none of the fields the type declares.
+      // a reason, a message, and none of the fields the type requires.
       vi.mocked(backend.syncPreview).mockResolvedValue({
         success: false,
+        reason: "blocked_by_migration",
         message: "A RetroDECK migration is pending",
-        blocked_by_migration: true,
       } as unknown as SyncPreview);
       const { container } = await renderAndStartPreview();
 

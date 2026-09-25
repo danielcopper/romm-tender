@@ -635,7 +635,7 @@ class TestMigrationPendingGuards:
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_returns_blocked_when_migration_pending(self, tmp_path):
-        """pre_launch_sync must short-circuit with blocked_by_migration=True."""
+        """pre_launch_sync must short-circuit with the ``blocked_by_migration`` refusal."""
         svc, fake = make_service(
             tmp_path,
             is_retrodeck_migration_pending=lambda: True,
@@ -647,15 +647,18 @@ class TestMigrationPendingGuards:
 
         result = await svc.pre_launch_sync(42)
 
-        assert result["success"] is False
-        assert result["blocked_by_migration"] is True
-        assert result["synced"] == 0
+        assert result == {
+            "success": False,
+            "reason": "blocked_by_migration",
+            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "synced": 0,
+        }
         # No upload/download initiated — the guard fired before sync ran.
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_returns_blocked_when_migration_pending(self, tmp_path):
-        """post_exit_sync must short-circuit with blocked_by_migration=True."""
+        """post_exit_sync must short-circuit with the ``blocked_by_migration`` refusal."""
         svc, fake = make_service(
             tmp_path,
             is_retrodeck_migration_pending=lambda: True,
@@ -667,9 +670,12 @@ class TestMigrationPendingGuards:
 
         result = await svc.post_exit_sync(42)
 
-        assert result["success"] is False
-        assert result["blocked_by_migration"] is True
-        assert result["synced"] == 0
+        assert result == {
+            "success": False,
+            "reason": "blocked_by_migration",
+            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "synced": 0,
+        }
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
 

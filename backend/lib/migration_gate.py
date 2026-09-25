@@ -31,6 +31,8 @@ from typing import Any
 def migration_blocked(method):
     """Block this callable when ``is_retrodeck_migration_pending()`` is True.
 
+    Returns the canonical failure shape ``{success: False, reason:
+    "blocked_by_migration", message}`` instead of running the gated callable.
     Requires the owner to expose ``_migration_service``; raises ``RuntimeError``
     if it is missing (a wiring regression) so the safety gate fails loud rather
     than silently disabling itself for the gated callable.
@@ -52,8 +54,8 @@ def migration_blocked(method):
         if service.is_retrodeck_migration_pending():
             return {
                 "success": False,
+                "reason": "blocked_by_migration",
                 "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
-                "blocked_by_migration": True,
             }
         return await method(self, *args, **kwargs)
 

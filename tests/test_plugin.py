@@ -1201,7 +1201,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.cancel_sync = MagicMock(return_value={"success": True, "stopped": True})
         result = plugin.cancel_sync("run-1")
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._sync_service.cancel_sync.assert_called_once_with("run-1")
 
     @pytest.mark.asyncio
@@ -1209,7 +1209,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._migration_service.is_retrodeck_migration_pending.return_value = True
         plugin._sync_service.sync_cancel_preview = MagicMock(return_value={"success": True})
         result = plugin.sync_cancel_preview()
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._sync_service.sync_cancel_preview.assert_called_once()
 
     @pytest.mark.asyncio
@@ -1218,7 +1218,7 @@ class TestCancelCallablesNotBlockedByMigration:
         plugin._download_service = MagicMock()
         plugin._download_service.cancel_download = MagicMock(return_value={"success": True})
         result = plugin.cancel_download(42)
-        assert result.get("blocked_by_migration") is not True
+        assert result.get("reason") != "blocked_by_migration"
         plugin._download_service.cancel_download.assert_called_once_with(42)
 
 
