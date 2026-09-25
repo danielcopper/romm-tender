@@ -771,16 +771,8 @@ class Plugin:
         return await self._connection_service.probe_reachability()
 
     @route
-    @prune_active_blocked
     async def refresh_save_status(self, rom_id):
-        # Fire-and-forget: schedule the background status check (which re-reads
-        # the conflict state and emits ``save_status_updated``) and return
-        # immediately so the frontend never blocks on the round-trip. Mirrors the
-        # create_task pattern in services/saves/slots/switching.py (same call,
-        # same target); check_save_status_background owns its own error handling.
-        task = self.loop.create_task(self._save_sync_service.check_save_status_background(int(rom_id)))
-        await self._prune_conflicts.retain(task, "refresh_save_status")
-        return {"success": True}
+        return await self._save_sync_service.refresh_save_status(int(rom_id))
 
     @route
     async def stop_running_game(self, rom_id):
@@ -918,7 +910,6 @@ class Plugin:
         return await self._save_sync_service.list_devices()
 
     @route
-    @prune_active_blocked
     async def get_save_status(self, rom_id):
         return await self._save_sync_service.get_save_status(rom_id)
 
@@ -927,19 +918,14 @@ class Plugin:
         return self._save_sync_service.check_core_change(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def pre_launch_sync(self, rom_id):
         return await self._save_sync_service.pre_launch_sync(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def sync_rom_saves(self, rom_id):
         return await self._save_sync_service.sync_rom_saves(rom_id)
 
     @route
-    @prune_active_blocked
     async def get_save_slots(self, rom_id):
         return await self._save_sync_service.get_save_slots(rom_id)
 
@@ -948,8 +934,6 @@ class Plugin:
         return await self._save_sync_service.get_slot_saves(rom_id, slot)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def switch_slot(self, rom_id, new_slot):
         return await self._save_sync_service.switch_slot(rom_id, new_slot)
 
@@ -958,8 +942,6 @@ class Plugin:
         return await self._save_sync_service.get_slot_delete_info(rom_id, slot)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def delete_slot(self, rom_id, slot):
         return await self._save_sync_service.delete_slot(rom_id, slot)
 
@@ -972,8 +954,6 @@ class Plugin:
         return await self._save_sync_service.get_save_setup_info(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def confirm_slot_choice(
         self, rom_id, chosen_slot, migrate=False, migrate_from_slot=None, use_server_on_conflict=False
     ):
@@ -982,14 +962,10 @@ class Plugin:
         )
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def sync_all_saves(self):
         return await self._save_sync_service.sync_all_saves()
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def resolve_sync_conflict(self, rom_id, filename, server_save_id, action):
         return await self._save_sync_service.resolve_sync_conflict(rom_id, filename, server_save_id, action)
 
@@ -998,13 +974,10 @@ class Plugin:
         return self._save_sync_service.get_save_sync_settings()
 
     @route
-    @migration_blocked
     async def update_save_sync_settings(self, settings):
-        return self._save_sync_service.update_save_sync_settings(settings)
+        return await self._save_sync_service.update_save_sync_settings(settings)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def delete_local_saves(self, rom_id):
         return await self._save_sync_service.delete_local_saves(rom_id)
 
@@ -1013,8 +986,6 @@ class Plugin:
         return await self._save_sync_service.count_platform_saves(platform_slug)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def delete_platform_saves(self, platform_slug):
         return await self._save_sync_service.delete_platform_saves(platform_slug)
 
@@ -1023,14 +994,10 @@ class Plugin:
         return await self._save_sync_service.list_file_versions(rom_id, slot, filename)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def saves_rollback_to_version(self, rom_id, slot, save_id):
         return await self._save_sync_service.rollback_to_version(rom_id, slot, save_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def copy_save_to_slot(self, rom_id, save_id, target_slot):
         return await self._save_sync_service.copy_save_to_slot(rom_id, save_id, target_slot)
 

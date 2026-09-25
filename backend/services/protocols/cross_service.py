@@ -516,18 +516,20 @@ class LaunchGateSaveStatusReader(Protocol):
     The composition root satisfies this with ``SaveService``. The gate
     first consults ``is_save_sync_enabled`` — when the feature toggle is
     off there is no conflict state to gate on, so the gate allows the
-    launch and skips the ``get_save_status`` round-trip entirely. With
-    save-sync on, it calls ``get_save_status`` for the canonical conflict
+    launch and skips the save-status round-trip entirely. With
+    save-sync on, it calls ``get_save_status_unchecked`` for the canonical conflict
     signal (a non-empty ``conflicts`` array blocks the launch) and falls
     back to the synchronous ``has_tracked_save`` in-memory check to decide
-    whether a ``get_save_status`` failure should be soft-warned (ROM has
+    whether a save-status failure should be soft-warned (ROM has
     tracked saves — silent allow would risk data loss) or silently
-    allowed (no tracked saves — nothing to corrupt).
+    allowed (no tracked saves — nothing to corrupt). The unchecked read is
+    the one the gate takes because it runs under ``evaluate_launch``'s own
+    conflict rules.
     """
 
     def is_save_sync_enabled(self) -> bool: ...
 
-    async def get_save_status(self, rom_id: int) -> dict[str, Any]: ...
+    async def get_save_status_unchecked(self, rom_id: int) -> dict[str, Any]: ...
 
     def has_tracked_save(self, rom_id: int) -> bool: ...
 
@@ -601,8 +603,8 @@ class SessionMigrationReader(Protocol):
     ``refresh_state`` and ``is_retrodeck_migration_pending``. The
     refresh result is repacked into the typed DTO the frontend feeds
     into its migration stores; the pending check matches the safety
-    net the ``@migration_blocked`` decorator provides for other
-    callables, gating the destructive post-exit save sync from inside
+    net the migration rule provides for the endpoints that carry it,
+    gating the destructive post-exit save sync from inside
     the lifecycle orchestration.
     """
 

@@ -1,13 +1,13 @@
-"""Save-sync aggregate root and facade for the callable surface.
+"""Save-sync aggregate root and facade for the save endpoints.
 
 Composes the save-sync sub-services (sync_engine, status, versions, slots,
 rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate
-(reached through the injected Unit-of-Work factory) and exposes the public
-methods the frontend reaches through callables. The five save-sync feature
-toggles live in ``settings.json`` and are read/written here directly; the
-device label beside them is ``DeviceRegistry``'s. Most methods are thin
-delegations; orchestration that genuinely spans multiple sub-services lives
-here, single-sub-service logic does not.
+(reached through the injected Unit-of-Work factory) and exposes the use cases
+the endpoints call. The five save-sync feature toggles live in
+``settings.json`` and are read/written here directly; the device label beside
+them is ``DeviceRegistry``'s. Most methods are thin delegations; orchestration
+that genuinely spans multiple sub-services lives here, single-sub-service
+logic does not.
 """
 
 from __future__ import annotations
@@ -50,9 +50,12 @@ class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
     Composes the save-sync sub-services (sync_engine, status, versions, slots,
-    rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate. Exposes the callable
-    surface consumed by the callables on ``Plugin`` — every public method delegates to
-    a sub-service or reads ``settings.json``. Bulk local-save deletion is the
+    rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate. Exposes the use
+    cases the endpoints on ``Plugin`` call — every public method delegates to
+    a sub-service or reads ``settings.json``. A use case an endpoint calls checks
+    its conflict rules at its entry, under that endpoint's name, and answers the
+    canonical refusal when one holds; a peer service that calls one calls its
+    ``<verb>_unchecked`` twin instead (CONTEXT.md → Conflict rules). Bulk local-save deletion is the
     only flow whose orchestration lives directly on the aggregate root because it
     spans :class:`RomInfoService` (file discovery), the on-disk save files (via
     the injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository
@@ -71,6 +74,7 @@ class SaveService:
         self._save_file_store = config.save_file_store
         self._uow_factory: UnitOfWorkFactory = config.uow_factory
         self._settings_persister = config.settings_persister
+        self._rules = config.conflict_rules
         # Held for the one read this façade offloads itself: the per-platform
         # save count walks the filesystem once per installed ROM, and the page
         # asks it on every selection.
@@ -229,7 +233,33 @@ class SaveService:
 
     async def get_save_status(self, rom_id: int) -> dict[str, Any]:
         """Get save sync status for a ROM (local files, server saves, conflict state)."""
+        async with self._rules.hold("get_save_status", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self.get_save_status_unchecked(rom_id)
+
+    async def get_save_status_unchecked(self, rom_id: int) -> dict[str, Any]:
+        """:meth:`get_save_status` without its prune rule, for the launch gate.
+
+        The launch gate asks from inside ``evaluate_launch``, which runs under
+        that endpoint's own conflict rules; a use case never refuses the peer
+        whose caller already passed them.
+        """
         return await self._status.get_save_status(rom_id)
+
+    async def refresh_save_status(self, rom_id: int) -> dict[str, Any]:
+        """Start a background save-status check for a ROM and answer at once.
+
+        The check emits ``save_status_updated`` when it is done and owns its own
+        error handling. It holds an operation on the prune conflicts until it
+        ends, so a cleanup cannot start under it.
+        """
+        async with self._rules.hold("refresh_save_status", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            task = self._loop.create_task(self.check_save_status_background(rom_id))
+            await self._rules.retain(task, "refresh_save_status")
+            return {"success": True}
 
     async def check_save_status_background(self, rom_id: int) -> None:
         """Run full save status check in background and emit result to frontend."""
@@ -297,7 +327,10 @@ class SaveService:
 
     async def pre_launch_sync(self, rom_id: int) -> dict[str, Any]:
         """Download newer saves from server before game launch."""
-        return await self._sync_engine.pre_launch_sync(rom_id)
+        async with self._rules.hold("pre_launch_sync", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._sync_engine.pre_launch_sync(rom_id)
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]:
         """Upload changed saves after game exit."""
@@ -305,11 +338,17 @@ class SaveService:
 
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:
         """Bidirectional sync for a single ROM (manual trigger from game detail)."""
-        return await self._sync_engine.sync_rom_saves(rom_id)
+        async with self._rules.hold("sync_rom_saves", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._sync_engine.sync_rom_saves(rom_id)
 
     async def sync_all_saves(self) -> dict[str, Any]:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
-        return await self._sync_engine.sync_all_saves()
+        async with self._rules.hold("sync_all_saves", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._sync_engine.sync_all_saves()
 
     async def record_save_directories_once(self) -> None:
         """Record the installed ROMs' answered save directories, once per database.
@@ -370,7 +409,10 @@ class SaveService:
         action: str,
     ) -> dict[str, Any]:
         """Resolve a pending sync conflict (true two-sided divergence)."""
-        return await self._sync_engine.resolve_sync_conflict(rom_id, filename, server_save_id, action)
+        async with self._rules.hold("resolve_sync_conflict", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._sync_engine.resolve_sync_conflict(rom_id, filename, server_save_id, action)
 
     # ------------------------------------------------------------------
     # Slots (delegated to SlotsService)
@@ -378,7 +420,10 @@ class SaveService:
 
     async def get_save_slots(self, rom_id: int) -> dict[str, Any]:
         """List available save slots for a ROM."""
-        return await self._slots.get_save_slots(rom_id)
+        async with self._rules.hold("get_save_slots", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._slots.get_save_slots(rom_id)
 
     async def get_slot_saves(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Fetch server save files for a specific slot."""
@@ -386,7 +431,10 @@ class SaveService:
 
     async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any]:
         """Switch the active save slot with immediate state sync."""
-        return await self._slots.switch_slot(rom_id, new_slot)
+        async with self._rules.hold("switch_slot", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._slots.switch_slot(rom_id, new_slot)
 
     def is_save_tracking_configured(self, rom_id: int) -> dict[str, Any]:
         """Check if save slot tracking is configured for a game."""
@@ -413,9 +461,12 @@ class SaveService:
         decision unless ``use_server_on_conflict`` resolves it in the server's
         favour.
         """
-        return await self._slots.confirm_slot_choice(
-            rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict
-        )
+        async with self._rules.hold("confirm_slot_choice", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._slots.confirm_slot_choice(
+                rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict
+            )
 
     async def get_slot_delete_info(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Return info about what deleting a slot would do, for the confirmation modal."""
@@ -423,7 +474,10 @@ class SaveService:
 
     async def delete_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Delete a save slot and all its saves (local state + server if applicable)."""
-        return await self._slots.delete_slot(rom_id, slot)
+        async with self._rules.hold("delete_slot", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._slots.delete_slot(rom_id, slot)
 
     # ------------------------------------------------------------------
     # Versions (delegated to VersionsService)
@@ -435,7 +489,10 @@ class SaveService:
 
     async def rollback_to_version(self, rom_id: int, slot: str, save_id: int) -> dict[str, Any]:
         """Switch the local + tracked save to a chosen older server version."""
-        return await self._versions.rollback_to_version(rom_id, slot, save_id)
+        async with self._rules.hold("saves_rollback_to_version", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._versions.rollback_to_version(rom_id, slot, save_id)
 
     # ------------------------------------------------------------------
     # Copy-to-slot (delegated to SaveCopyService)
@@ -443,7 +500,10 @@ class SaveService:
 
     async def copy_save_to_slot(self, rom_id: int, save_id: int, target_slot: str) -> dict[str, Any]:
         """Copy a specific server save into another slot (which becomes active)."""
-        return await self._copies.copy_save_to_slot(rom_id, save_id, target_slot)
+        async with self._rules.hold("copy_save_to_slot", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._copies.copy_save_to_slot(rom_id, save_id, target_slot)
 
     # ------------------------------------------------------------------
     # Settings (settings.json — read/written directly)
@@ -457,18 +517,21 @@ class SaveService:
         """Return current save sync settings as the frontend dict shape."""
         return save_sync_settings_view(self._settings)
 
-    def update_save_sync_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
+    async def update_save_sync_settings(self, settings: dict[str, Any]) -> dict[str, Any]:
         """Update save sync settings (sync toggles, slot, etc.) in settings.json."""
-        for key, value in settings.items():
-            if key not in ALLOWED_SETTINGS_KEYS:
-                continue
-            coerced, skip = sanitize_setting(key, value)
-            if skip:
-                continue
-            self._settings[key] = coerced
+        async with self._rules.hold("update_save_sync_settings", migration=True) as refusal:
+            if refusal is not None:
+                return refusal
+            for key, value in settings.items():
+                if key not in ALLOWED_SETTINGS_KEYS:
+                    continue
+                coerced, skip = sanitize_setting(key, value)
+                if skip:
+                    continue
+                self._settings[key] = coerced
 
-        self._settings_persister.save_settings()
-        return {"success": True, "settings": save_sync_settings_view(self._settings)}
+            self._settings_persister.save_settings()
+            return {"success": True, "settings": save_sync_settings_view(self._settings)}
 
     def forget_device(self) -> None:
         """Drop the registered server device id on a server-origin change.
@@ -614,9 +677,10 @@ class SaveService:
 
     async def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
         """Delete local save files (.srm, .rtc) for a ROM."""
-        rom_id = int(rom_id)
-
-        deleted, errors = await self._delete_saves_for_roms([rom_id])
+        async with self._rules.hold("delete_local_saves", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            deleted, errors = await self._delete_saves_for_roms([int(rom_id)])
 
         if deleted == 0 and not errors:
             return {"success": True, "deleted_count": 0, "message": "No local save files found"}
@@ -679,10 +743,13 @@ class SaveService:
 
     async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
         """Delete local save files for all installed ROMs on a platform."""
-        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
+        async with self._rules.hold("delete_platform_saves", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
+            total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
 
         rom_count = len(rom_ids)
-        total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
 
         if total_errors:
             return {

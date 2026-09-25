@@ -754,12 +754,14 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=PRE_LAUNCH_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # Defense in depth: block pre_launch_sync if a future caller bypasses
-                # the @migration_blocked decorator at the public callable. saves_dir
-                # would otherwise resolve under the new home and silently desync from
-                # files still living at the old home. Internal do_sync_rom_saves callers
-                # (sync_all_saves, rollback_to_version) are protected by the decorator
-                # on their own public callables — this guard is for pre_launch_sync.
+                # Defense in depth: SaveService.pre_launch_sync checks the migration
+                # rule before this call waits for the device gate and the ROM lock,
+                # and a caller could reach the engine without it. saves_dir would
+                # otherwise resolve under the new home and silently desync from
+                # files still living at the old home. Internal do_sync_rom_saves
+                # callers (sync_all_saves, rollback_to_version) are covered by the
+                # migration rule their own use cases check — this guard is for
+                # pre_launch_sync.
                 if self._is_retrodeck_migration_pending():
                     return {
                         "success": False,

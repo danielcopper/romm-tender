@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_api import FakeSaveApi
 
@@ -380,23 +381,20 @@ class TestRetroDeckMigrationBlocksSaveSync:
         }
 
     @pytest.mark.asyncio
-    async def test_sync_all_saves_respects_migration_block_via_decorator_chain(self, tmp_path):
-        """End-to-end chain check: Plugin.sync_all_saves must be blocked by the
-        @migration_blocked decorator before SaveService.sync_all_saves runs, so
-        the internal do_sync_rom_saves call path is never reached when migration
-        is pending. Protects against accidental decorator removal at the public
-        callable layer."""
+    async def test_sync_all_saves_respects_migration_block_via_its_conflict_rules(self, tmp_path):
+        """End-to-end chain check: Plugin.sync_all_saves must be refused by the
+        migration rule SaveService.sync_all_saves checks at its entry, so the
+        internal do_sync_rom_saves call path is never reached when migration is
+        pending. Protects against the rule being dropped from the use case."""
         from main import Plugin
 
-        svc, _ = make_service(tmp_path)
+        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(migration_pending=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
         plugin = Plugin()
         plugin._save_sync_service = svc
-        plugin._migration_service = MagicMock()
-        plugin._migration_service.is_retrodeck_migration_pending.return_value = True
 
         spy = MagicMock(name="do_sync_rom_saves_spy")
         svc._sync_engine.do_sync_rom_saves = spy  # type: ignore[method-assign]
@@ -409,6 +407,84 @@ class TestRetroDeckMigrationBlocksSaveSync:
             "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
         }
         spy.assert_not_called()
+
+
+class TestConflictRulesAtTheUseCase:
+    """What the save use cases answer under their conflict rules, and the twin a peer calls instead."""
+
+    async def test_get_save_status_is_refused_while_a_cleanup_runs(self, tmp_path):
+        conflicts = _make_prune_conflicts()
+        conflicts.register_run("held-run")
+        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(prune_conflicts=conflicts))
+
+        result = await svc.get_save_status(42)
+
+        assert result["reason"] == "prune_active"
+        assert conflicts.conflicting_operations == 0
+
+    async def test_get_save_status_unchecked_answers_while_a_cleanup_runs(self, tmp_path):
+        """The launch gate's read: its caller already passed its own rules, so the twin checks none."""
+        conflicts = _make_prune_conflicts()
+        conflicts.register_run("held-run")
+        svc, _ = make_service(
+            tmp_path, conflict_rules=_make_conflict_rules(prune_conflicts=conflicts, migration_pending=True)
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_status_unchecked(42)
+
+        assert result["rom_id"] == 42
+        assert "reason" not in result
+
+    async def test_refresh_save_status_refused_while_a_cleanup_runs_starts_no_check(self, tmp_path, monkeypatch):
+        conflicts = _make_prune_conflicts()
+        conflicts.register_run("held-run")
+        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(prune_conflicts=conflicts))
+        started: list[int] = []
+
+        async def check(rom_id):
+            started.append(rom_id)
+
+        monkeypatch.setattr(svc, "check_save_status_background", check)
+
+        result = await svc.refresh_save_status(42)
+        await asyncio.sleep(0)
+
+        assert result["reason"] == "prune_active"
+        assert started == []
+        assert conflicts.conflicting_operations == 0
+
+    async def test_refresh_save_status_holds_an_operation_until_the_check_ends(self, tmp_path, monkeypatch):
+        conflicts = _make_prune_conflicts()
+        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(prune_conflicts=conflicts))
+        release = asyncio.Event()
+        checked: list[int] = []
+
+        async def check(rom_id):
+            await release.wait()
+            checked.append(rom_id)
+
+        monkeypatch.setattr(svc, "check_save_status_background", check)
+
+        assert await svc.refresh_save_status(42) == {"success": True}
+        assert conflicts.conflicting_operations == 1
+        assert await conflicts.reserve_start() is not None
+
+        release.set()
+        await asyncio.gather(*(task for task in asyncio.all_tasks() if task is not asyncio.current_task()))
+        await asyncio.gather(*conflicts._release_tasks)
+        assert checked == [42]
+        assert conflicts.conflicting_operations == 0
+
+    async def test_update_save_sync_settings_refused_while_a_migration_is_pending_changes_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(migration_pending=True))
+
+        result = await svc.update_save_sync_settings({"save_sync_enabled": True})
+
+        assert result["reason"] == "blocked_by_migration"
+        assert "save_sync_enabled" not in svc._config.settings
 
 
 class TestPostExitSyncConnectivity:
@@ -469,7 +545,7 @@ class TestSettings:
     @pytest.mark.asyncio
     async def test_update_settings(self, tmp_path):
         svc, _ = make_service(tmp_path)
-        result = svc.update_save_sync_settings(
+        result = await svc.update_save_sync_settings(
             {
                 "save_sync_enabled": True,
                 "sync_before_launch": False,
@@ -482,7 +558,7 @@ class TestSettings:
     @pytest.mark.asyncio
     async def test_unknown_key_ignored(self, tmp_path):
         svc, _ = make_service(tmp_path)
-        result = svc.update_save_sync_settings({"unknown_key": "value"})
+        result = await svc.update_save_sync_settings({"unknown_key": "value"})
         assert result["success"] is True
         assert "unknown_key" not in result["settings"]
 
@@ -794,20 +870,20 @@ class TestEmulatorTag:
 class TestSaveSyncSettingsSlotAndCleanup:
     """Tests for default_slot and autocleanup_limit settings."""
 
-    def test_update_default_slot(self, tmp_path):
+    async def test_update_default_slot(self, tmp_path):
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        result = svc.update_save_sync_settings({"default_slot": "desktop"})
+        result = await svc.update_save_sync_settings({"default_slot": "desktop"})
         assert result["success"] is True
         assert result["settings"]["default_slot"] == "desktop"
 
-    def test_update_default_slot_empty_string_becomes_autosave(self, tmp_path):
+    async def test_update_default_slot_empty_string_becomes_autosave(self, tmp_path):
         # Legacy no-slot mode is retired (#1276): a blank slot coerces to the
         # canonical "autosave" slot rather than None/legacy.
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         svc._config.settings["default_slot"] = "desktop"
-        result = svc.update_save_sync_settings({"default_slot": ""})
+        result = await svc.update_save_sync_settings({"default_slot": ""})
         assert result["settings"]["default_slot"] == "autosave"
 
     def test_empty_string_becomes_autosave(self, tmp_path):
@@ -849,17 +925,17 @@ class TestSaveSyncSettingsSlotAndCleanup:
         slot = game_state.get("active_slot", "default")
         assert slot is None
 
-    def test_update_autocleanup_limit(self, tmp_path):
+    async def test_update_autocleanup_limit(self, tmp_path):
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        result = svc.update_save_sync_settings({"autocleanup_limit": 5})
+        result = await svc.update_save_sync_settings({"autocleanup_limit": 5})
         assert result["success"] is True
         assert result["settings"]["autocleanup_limit"] == 5
 
-    def test_update_autocleanup_limit_clamped(self, tmp_path):
+    async def test_update_autocleanup_limit_clamped(self, tmp_path):
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
-        result = svc.update_save_sync_settings({"autocleanup_limit": 0})
+        result = await svc.update_save_sync_settings({"autocleanup_limit": 0})
         assert result["settings"]["autocleanup_limit"] == 1
 
     def test_get_settings_includes_new_defaults(self, tmp_path):

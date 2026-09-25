@@ -11,13 +11,13 @@ prune active.
 Every test here but the five at the bottom drives ``harness.plugin.<endpoint>``
 with frontend-shaped arguments and reads the answer, so it holds wherever the
 rules are enforced. Four of those five, the ``test_*_names_every_endpoint_*``
-tests, read the gate decorators instead, to keep each list from falling behind
-an endpoint that gains or loses its gate: when a rule moves off its decorator,
-its test is rewritten to read the rule where it went, and the lists and the
-tests driving them do not change. The fifth,
+tests, read where each rule is declared instead, to keep each list from falling
+behind an endpoint that gains or loses a rule: the endpoint's gate decorator, or
+the ``hold("<endpoint>", …)`` call at the entry of the use case it calls
+(``tests/_gate_rules.py``). The fifth,
 ``test_every_gated_endpoint_has_its_arguments``, reads only the lists. Outside
 this module, ``tests/test_plugin.py``'s ``TestMigrationBlockedDecoratorCoverage``
-reads ``@migration_blocked`` as well.
+reads the migration rule the same way.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ import threading
 from typing import Any
 
 import pytest
+from _gate_rules import endpoints_with_rule
 
 from domain.sync_state import SyncState
 
@@ -280,13 +281,6 @@ async def _until_entered(entered: asyncio.Event, running: asyncio.Task[Any]) -> 
     pytest.fail("the endpoint neither reached the held call nor answered within 10 s")
 
 
-def _endpoints_marked(marker: str) -> set[str]:
-    from host.dispatch import reachable_methods
-    from main import Plugin
-
-    return {name for name, method in reachable_methods(Plugin()).items() if getattr(method, marker, False)}
-
-
 # ── The four refusals ────────────────────────────────────────────────────────
 
 
@@ -441,35 +435,35 @@ async def test_start_prune_refused_for_a_sync_in_flight_leaves_no_cleanup_claim_
 
 
 def test_the_prune_active_matrix_names_every_endpoint_the_gate_covers():
-    """Holds ``PRUNE_ACTIVE`` equal to the endpoints ``@prune_active_blocked`` marks.
+    """Holds ``PRUNE_ACTIVE`` equal to the endpoints ``@prune_active_blocked`` marks or a use case's ``hold`` names.
 
-    Reads the decorator, not behaviour.
+    Reads where the rule is declared, not behaviour.
     """
-    assert set(PRUNE_ACTIVE) == _endpoints_marked("_prune_active_blocked")
+    assert set(PRUNE_ACTIVE) == endpoints_with_rule("prune")
 
 
 def test_the_migration_matrix_names_every_endpoint_the_gate_covers():
-    """Holds ``MIGRATION`` equal to the endpoints ``@migration_blocked`` marks.
+    """Holds ``MIGRATION`` equal to the endpoints ``@migration_blocked`` marks or a use case's ``hold`` names.
 
-    Reads the decorator, not behaviour.
+    Reads where the rule is declared, not behaviour.
     """
-    assert set(MIGRATION) == _endpoints_marked("_migration_blocked")
+    assert set(MIGRATION) == endpoints_with_rule("migration")
 
 
 def test_the_sync_active_matrix_names_every_endpoint_the_gate_covers():
-    """Holds ``SYNC_ACTIVE`` equal to the endpoints ``@sync_active_blocked`` marks.
+    """Holds ``SYNC_ACTIVE`` equal to the endpoints ``@sync_active_blocked`` marks or a use case's ``hold`` names.
 
-    Reads the decorator, not behaviour.
+    Reads where the rule is declared, not behaviour.
     """
-    assert set(SYNC_ACTIVE) == _endpoints_marked("_sync_active_blocked")
+    assert set(SYNC_ACTIVE) == endpoints_with_rule("sync")
 
 
 def test_the_exclusive_start_names_every_endpoint_the_gate_covers():
     """Holds ``EXCLUSIVE_START`` equal to the endpoints ``@prune_exclusive_start`` marks.
 
-    Reads the decorator, not behaviour.
+    Reads where the rule is declared, not behaviour.
     """
-    assert set(EXCLUSIVE_START) == _endpoints_marked("_prune_exclusive_start")
+    assert set(EXCLUSIVE_START) == endpoints_with_rule("exclusive_start")
 
 
 def test_every_gated_endpoint_has_its_arguments():

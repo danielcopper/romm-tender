@@ -5,7 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from _factories import _make_retry
+from _factories import _make_conflict_rules, _make_retry
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
@@ -75,6 +75,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "log_debug": lambda _msg: None,
         "emit": emit if emit is not None else _noop_emit,
         "is_retrodeck_migration_pending": lambda: False,
+        "conflict_rules": _make_conflict_rules(),
         "uow_factory": FakeUnitOfWorkFactory(),
     }
     config_kwargs.update(overrides)

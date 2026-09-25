@@ -46,7 +46,7 @@ class LaunchVerdict:
     with no save conflict, or the save status check failed for a ROM
     with no tracked saves). ``action="warn"``
     means the launch may proceed but the frontend should surface a
-    soft toast — used when ``get_save_status`` failed for a ROM that
+    soft toast — used when the save-status read failed for a ROM that
     *does* have tracked saves, where silent allow would risk data loss
     on an unseen conflict. ``action="block"`` carries a machine-readable
     ``reason`` and the human-readable toast title and body the frontend
@@ -148,7 +148,7 @@ class LaunchGateService:
             )
 
         # Save-sync off → there is no conflict state to gate on. Allow the
-        # launch and skip the get_save_status round-trip entirely. Otherwise a
+        # launch and skip the save-status round-trip entirely. Otherwise a
         # stale server-side conflict (e.g. another device moved the save while
         # sync was disabled) would block every launch with no way to resolve
         # it — the Saves tab is hidden while the feature is off — leaving the
@@ -157,7 +157,7 @@ class LaunchGateService:
             return LaunchVerdict(action="allow")
 
         try:
-            save_status = await self._save_status_reader.get_save_status(rom_id)
+            save_status = await self._save_status_reader.get_save_status_unchecked(rom_id)
         except Exception as e:
             # A failed conflict check must not silently allow the launch
             # for ROMs with tracked saves — an unseen conflict would

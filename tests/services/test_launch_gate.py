@@ -71,7 +71,7 @@ class FakeSaveStatusReader:
     def is_save_sync_enabled(self) -> bool:
         return self.save_sync_enabled
 
-    async def get_save_status(self, rom_id: int) -> dict[str, Any]:
+    async def get_save_status_unchecked(self, rom_id: int) -> dict[str, Any]:
         self.calls.append(rom_id)
         if self.side_effect is not None:
             raise self.side_effect
@@ -395,7 +395,7 @@ class TestEvaluateEdgeCases:
 
 class TestEvaluateSaveSyncDisabled:
     def test_disabled_installed_allows_and_skips_status_round_trip(self, event_loop, logger):
-        """Save-sync off + installed → allow, even with a server-side conflict, and ``get_save_status`` is never called.
+        """Save-sync off + installed → allow, even with a server-side conflict, and the save status is never read.
 
         Regression for #1056: a stale conflict (another device moved the save
         while sync was disabled) must not block the launch, and the gate must

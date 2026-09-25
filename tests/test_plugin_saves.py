@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_retry, _make_testable_plugin
+from _factories import _make_conflict_rules, _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
@@ -119,6 +119,7 @@ def plugin(tmp_path, logger, home, project_root):
             log_debug=p._log_debug,
             emit=AsyncMock(),
             is_retrodeck_migration_pending=lambda: False,
+            conflict_rules=_make_conflict_rules(),
             uow_factory=p._uow_factory,
         ),
     )

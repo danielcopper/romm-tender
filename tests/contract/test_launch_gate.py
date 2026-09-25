@@ -13,6 +13,7 @@ the round-trip is a real, toggle-driven difference, not an unconditional skip.
 
 from __future__ import annotations
 
+from ._harness import hold_prune_active
 from ._seed import enable_save_sync, seed_install, seed_rom, seed_server_save
 
 
@@ -55,4 +56,20 @@ async def test_evaluate_launch_enabled_performs_round_trip(harness):
     verdict = await harness.plugin.evaluate_launch(1)
 
     assert verdict["action"] in {"allow", "warn", "block"}
+    assert "list_saves" in _call_names(harness)
+
+
+async def test_the_launch_gate_reads_save_status_while_its_callers_rules_hold(harness):
+    """The launch gate reads through ``get_save_status_unchecked``, which no rule refuses.
+
+    ``evaluate_launch`` answers for its own rules before the gate runs; the read
+    inside it must not be refused by them again. Driven on the service directly,
+    with a cleanup's run claim held, so only the read's own rules could refuse.
+    """
+    enable_save_sync(harness)
+    seed_install(harness, 1)
+    hold_prune_active(harness)
+
+    await harness.plugin._launch_gate_service.evaluate(1)
+
     assert "list_saves" in _call_names(harness)

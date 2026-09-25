@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from domain.identity import VERSION
 from domain.shortcut_data import RETRODECK_APP_ID
+from lib.conflict_rules import ConflictRuleSet
 from lib.late_binding import LateBinding
 from lib.prune_gate import PruneConflicts
 from services.achievements import AchievementsService, AchievementsServiceConfig
@@ -162,6 +163,16 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # The one record of every claim that conflicts with a removed-game cleanup,
     # whoever holds it. Built before every service so any of them can be handed it.
     prune_conflicts = PruneConflicts(logger=cfg.runtime.logger, log_debug=cfg.callbacks.log_debug)
+    # The conflict rules every use case checks at its entry, built beside the
+    # prune conflicts so any service can be handed them. The migration and
+    # sync services that answer the other two rules are built later.
+    migration_pending_binding: LateBinding[bool] = LateBinding("migration_pending")
+    sync_in_flight_binding: LateBinding[bool] = LateBinding("sync_in_flight")
+    conflict_rules = ConflictRuleSet(
+        prune_conflicts=prune_conflicts,
+        migration_pending=migration_pending_binding.get,
+        sync_in_flight=sync_in_flight_binding.get,
+    )
 
     # Forward-reference bindings for producers constructed later in this
     # function. Consumers receive ``binding.get`` (a bound method); the
@@ -242,6 +253,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
         ),
     )
+    migration_pending_binding.set(migration_service.is_retrodeck_migration_pending)
 
     save_service_config = SaveServiceConfig(
         romm_api=cfg.adapters.romm_api,
@@ -263,6 +275,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         log_debug=cfg.callbacks.log_debug,
         emit=cfg.runtime.emit,
         is_retrodeck_migration_pending=migration_service.is_retrodeck_migration_pending,
+        conflict_rules=conflict_rules,
         uow_factory=cfg.callbacks.uow_factory,
     )
     save_sync_service = SaveService(config=save_service_config)
@@ -336,6 +349,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
     pending_sync_binding.set(lambda: sync_service.pending_sync)
+    sync_in_flight_binding.set(sync_service.is_sync_in_flight)
 
     rom_install_recorder = RomInstallRecorder(
         config=RomInstallRecorderConfig(

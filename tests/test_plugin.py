@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _factories import _make_prune_conflicts
+from _gate_rules import endpoints_with_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
@@ -952,47 +953,53 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
 
 class TestMigrationBlockedDecoratorCoverage:
     """Every callable on Plugin must be classified: either explicitly
-    whitelisted (read-only / unblock pathway / non-retrodeck) or decorated
-    with @migration_blocked. Prevents new callables from being silently
-    unguarded against pending migration corruption (#251)."""
+    whitelisted (read-only / unblock pathway / non-retrodeck) or declaring the
+    migration rule — ``@migration_blocked``, or a ``hold(<endpoint>,
+    migration=True)`` at the entry of the use case it calls. Prevents new
+    callables from being silently unguarded against pending migration
+    corruption (#251)."""
 
     def test_all_callables_either_whitelisted_or_decorated(self):
         from host.dispatch import reachable_methods
         from main import Plugin
 
+        migration_ruled = endpoints_with_rule("migration")
         unclassified: list[str] = []
-        for name, value in reachable_methods(Plugin()).items():
+        for name in reachable_methods(Plugin()):
             if name in _MIGRATION_BLOCKED_WHITELIST:
                 continue
-            if getattr(value, "_migration_blocked", False):
+            if name in migration_ruled:
                 continue
             unclassified.append(name)
 
         assert not unclassified, (
             "Unclassified endpoints on Plugin — every one must be in "
-            "_MIGRATION_BLOCKED_WHITELIST or carry @migration_blocked: "
+            "_MIGRATION_BLOCKED_WHITELIST or declare the migration rule: "
             f"{sorted(unclassified)}"
         )
 
     def test_no_callable_is_both_decorated_and_whitelisted(self):
-        """A callable that is both decorated AND whitelisted is silently
-        passing the coverage check — likely a misclassification. Catch it."""
+        """A callable that both declares the migration rule AND is whitelisted
+        is silently passing the coverage check — likely a misclassification.
+        Catch it."""
         from host.dispatch import reachable_methods
         from main import Plugin
 
-        double_classified: list[str] = []
-        for name, value in reachable_methods(Plugin()).items():
-            if name in _MIGRATION_BLOCKED_WHITELIST and getattr(value, "_migration_blocked", False):
-                double_classified.append(name)
+        migration_ruled = endpoints_with_rule("migration")
+        double_classified = [
+            name
+            for name in reachable_methods(Plugin())
+            if name in _MIGRATION_BLOCKED_WHITELIST and name in migration_ruled
+        ]
 
         assert not double_classified, (
-            "Callables both whitelisted AND decorated with @migration_blocked — "
+            "Callables both whitelisted AND declaring the migration rule — "
             f"remove from one: {sorted(double_classified)}"
         )
 
     def test_whitelisted_callables_are_endpoints_and_not_decorated(self):
         """Every name in _MIGRATION_BLOCKED_WHITELIST must be an endpoint on
-        Plugin and must NOT carry the @migration_blocked marker. Reads from the
+        Plugin and must NOT declare the migration rule. Reads from the
         whitelist side, so a name left behind by a removed or renamed endpoint
         fails here instead of classifying nothing."""
         from host.dispatch import reachable_methods
@@ -1002,10 +1009,8 @@ class TestMigrationBlockedDecoratorCoverage:
         stale = sorted(_MIGRATION_BLOCKED_WHITELIST - endpoints.keys())
         assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
 
-        decorated = sorted(
-            name for name in _MIGRATION_BLOCKED_WHITELIST if getattr(endpoints[name], "_migration_blocked", False)
-        )
-        assert not decorated, f"Whitelisted callables that also carry @migration_blocked: {decorated}"
+        decorated = sorted(_MIGRATION_BLOCKED_WHITELIST & endpoints_with_rule("migration"))
+        assert not decorated, f"Whitelisted callables that also declare the migration rule: {decorated}"
 
 
 class TestMainStartupOrdering:
