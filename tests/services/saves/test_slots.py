@@ -364,20 +364,20 @@ class TestSaveSlots:
     @pytest.mark.asyncio
     async def test_set_active_slot_triggers_background_check(self, tmp_path):
         """set_active_slot fires a background save status check task."""
-        emitted = []
+        status_emitted = asyncio.Event()
 
         async def fake_emit(event, payload):
-            emitted.append((event, payload))
+            if event == "save_status_updated":
+                status_emitted.set()
 
         svc, _ = make_service(tmp_path, emit=fake_emit)
         _install_rom(svc, tmp_path)
 
         await svc._slots.set_active_slot(42, "slot1")
 
-        # Give the background task a chance to run
-        await asyncio.sleep(0.1)
-
-        assert any(e[0] == "save_status_updated" for e in emitted)
+        # The service keeps no handle on the task it starts, so the test waits
+        # on the emit the task ends with.
+        await asyncio.wait_for(status_emitted.wait(), timeout=5)
 
 
 class TestSaveTrackingConfigured:
