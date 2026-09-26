@@ -67,6 +67,11 @@ jobs:
       - name: Install dependencies
         run: pnpm -C frontend install --frozen-lockfile
 
+      # Non-blocking, so an upstream disclosure cannot block unrelated work.
+      - name: Audit the npm packages the panel ships
+        run: pnpm -C frontend audit --prod --audit-level=high
+        continue-on-error: true
+
       - name: ESLint
         run: pnpm -C frontend lint
 
