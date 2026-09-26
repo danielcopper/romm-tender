@@ -28,7 +28,9 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
   files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs. An emulator that
-  asks for exactly one file — DuckStation, on a stock RetroDECK — reads "The one file DuckStation requires is in place"
+  asks for exactly one file — DuckStation, on a stock RetroDECK — reads "The one file DuckStation requires is in place".
+  A line saying the required files are in place can end in "(2 optional missing)": files that same emulator lists as
+  optional and that are not in place. Another emulator's optional files are not counted there.
 - **Orange** — some required files present: "1 of 2 files mGBA requires are in place"
 - **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
   one), or "mGBA cannot start this system without a BIOS image" where the console itself will not start without one of

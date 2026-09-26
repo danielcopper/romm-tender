@@ -83,6 +83,28 @@ describe("BiosTab", () => {
     expect(container.innerHTML).toContain("#8f98a0");
   });
 
+  it.each([
+    [2, "All 2 files the launching emulator requires are in place (5/20 RomM library files)"],
+    [1, "The one file the launching emulator requires is in place (5/20 RomM library files)"],
+  ])("states a ready requirement of %i beside a library ratio that counts a different set", (required, sentence) => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 5,
+          all_downloaded: false,
+          required_count: required,
+          required_downloaded: required,
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain(sentence);
+  });
+
   it("drops the ratio when the library holds none of the platform's files", () => {
     // A "(0/0 RomM library files)" beside the sentence counts a set that does not exist.
     const { container } = render(
@@ -1023,6 +1045,27 @@ describe("BiosTab", () => {
         "1 more file an installed emulator asks for — not required for this launch, nothing to download; " +
           "the Library page's Platforms tab lists it",
       );
+    });
+
+    it.each([
+      [2, "2 files on server no installed emulator asks for"],
+      [1, "1 file on server no installed emulator asks for"],
+    ])("counts server files nothing asks for in a note of their own (%i)", (count, note) => {
+      const nobodys = Array.from({ length: count }, (_, i) =>
+        row(`extra${i}.bin`, { wanted: "not_needed", cores: {}, on_server: true }),
+      );
+      const { container } = render(
+        <BiosTab
+          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...nobodys])}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      expect(container.textContent).toContain(note);
+      // A note, not rows: none of them is drawn with the files an emulator wants.
+      const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
+      expect(names.some((name) => name.startsWith("extra"))).toBe(false);
     });
 
     it("moves no number in the header", () => {

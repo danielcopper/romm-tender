@@ -192,8 +192,13 @@ class FirmwareDownloader:
             return [], resp
 
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
-        rows = [fw for fw in firmware_list if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs]
-        return rows, None
+        # One row per name, the first listed: RomM may list a name in both of a
+        # platform's folders, and every copy lands at the same destination.
+        rows: dict[str, dict[str, Any]] = {}
+        for fw in firmware_list:
+            if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs:
+                rows.setdefault(fw.get("file_name", ""), fw)
+        return list(rows.values()), None
 
     async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
         """Download all firmware for a given platform slug."""

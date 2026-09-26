@@ -123,6 +123,11 @@ interface FirmwareFile extends FirmwareVerdict {
    *  axis the "BIOS needed" badge and the required counts key off, distinct
    *  from `wanted`, which is about every installed emulator. */
   required_by_active: boolean;
+  /** Whether the platform's launching emulator declares the file at all,
+   *  required or optional. Also true of a row no emulator declares, and of every
+   *  row when the launching emulator could not be identified, so it is read
+   *  beside `wanted`, never alone. */
+  used_by_active?: boolean;
   /** Whether this row is one of the images that would answer the platform's
    *  launching core CONSOLE on its own — see {@link SystemImage}. Set only where
    *  that core marks nothing required, which is the only shape in which "one of

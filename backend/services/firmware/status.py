@@ -645,11 +645,15 @@ class FirmwareStatusReader:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
 
-        server_rows = [
-            {"file_name": fw.get("file_name", ""), "on_server": True}
+        # A platform can read two firmware folders (``psx`` reads ``psx`` and
+        # ``ps``), and RomM may list one name in both. A row carries nothing but
+        # the name, so the copies are the same row and the first is kept.
+        server_names = dict.fromkeys(
+            fw.get("file_name", "")
             for fw in firmware_list
             if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs
-        ]
+        )
+        server_rows = [{"file_name": name, "on_server": True} for name in server_names]
         catalogue, rows = await self._loop.run_in_executor(
             None, self._platform_demand, system, server_rows, {fw.get("file_name", "") for fw in firmware_list}
         )
@@ -723,6 +727,7 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "description": entry.description,
         "wanted": entry.wanted,
         "required_by_active": entry.required_by_active,
+        "used_by_active": entry.used_by_active,
         "system_image_candidate": entry.system_image_candidate,
         "supplied_by": entry.supplied_by,
         "satisfied": entry.satisfied,

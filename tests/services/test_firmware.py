@@ -3479,6 +3479,36 @@ class TestDownloadAllFirmware:
         assert 1 not in download_called_ids
 
     @pytest.mark.asyncio
+    async def test_a_name_listed_under_both_psx_folders_is_attempted_once(self, plugin, fw, tmp_path):
+        """``psx`` reads two firmware folders; both copies land at one destination.
+
+        A failed first download leaves that destination empty, which is when a
+        second copy of the name would be fetched again and reported twice.
+        """
+        bios_dir = tmp_path / "retrodeck" / "bios"
+        bios_dir.mkdir(parents=True)
+        firmware_list = [
+            {"id": 1, "file_name": "scph5501.bin", "file_path": "bios/psx/scph5501.bin", "file_size_bytes": 1},
+            {"id": 2, "file_name": "scph5501.bin", "file_path": "bios/ps/scph5501.bin", "file_size_bytes": 1},
+        ]
+        _set_loop(fw, asyncio.get_running_loop())
+        download_called_ids = []
+
+        async def failing_download(fw_id, _placements):
+            download_called_ids.append(fw_id)
+            return {"success": False}
+
+        with (
+            patch.object(plugin._romm_api, "list_firmware", return_value=firmware_list),
+            patch.object(fw._downloads, "_download_one", side_effect=failing_download),
+            patch.object(fw._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(bios_dir))),
+        ):
+            result = await fw.download_all_firmware("psx")
+
+        assert download_called_ids == [1]
+        assert result["message"] == "Downloaded 0 firmware files (1 failed: scph5501.bin)"
+
+    @pytest.mark.asyncio
     async def test_a_folder_declaration_is_never_fetched(self, plugin, fw, tmp_path):
         """The emulator lists that name, so there is no file to fetch into it.
 
@@ -4349,6 +4379,23 @@ class TestCheckPlatformBiosRequired:
         # No required file downloaded → bios_level 'missing' (single source of
         # truth: domain.bios_status.compute_bios_level, threaded off this payload, #461).
         assert result["bios_level"] == "missing"
+
+    @pytest.mark.asyncio
+    async def test_a_name_listed_under_both_psx_folders_is_one_row(self, fw):
+        """``psx`` reads two firmware folders; a name RomM lists in both is one file, counted once."""
+        firmware_list = [
+            {"id": 1, "file_name": "scph5501.bin", "file_path": "bios/psx/scph5501.bin", "file_size_bytes": 1},
+            {"id": 2, "file_name": "scph5501.bin", "file_path": "bios/ps/scph5501.bin", "file_size_bytes": 1},
+            {"id": 3, "file_name": "scph5502.bin", "file_path": "bios/ps/scph5502.bin", "file_size_bytes": 1},
+        ]
+        _declare(fw, ("scph5501.bin", "PS1 BIOS (US)", True), ("scph5502.bin", "PS1 BIOS (EU)", False))
+        _stub_listing(fw, firmware_list)
+        _inline_executor(fw)
+
+        result = await fw.check_platform_bios("psx")
+
+        assert (result["server_count"], result["required_count"]) == (2, 1)
+        assert [f["file_name"] for f in result["files"]] == ["scph5501.bin", "scph5502.bin"]
 
     @pytest.mark.asyncio
     async def test_all_required_downloaded(self, fw, tmp_path):

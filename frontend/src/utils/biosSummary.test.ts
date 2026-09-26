@@ -67,19 +67,52 @@ describe("the seven states", () => {
 
   it("adds the optional gap beside a finished requirement", () => {
     const rows: BiosSummaryRow[] = [
-      { wanted: "optional", required_by_active: false, downloaded: false },
-      { wanted: "optional", required_by_active: false, downloaded: false },
-      { wanted: "optional", required_by_active: false, downloaded: true },
+      { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: false },
+      { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: false },
+      { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: true },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
       "All 2 files SwanStation requires are in place (2 optional missing)",
     );
   });
 
+  // The sentence names one emulator, so its tail counts that emulator's set.
+  // `wanted` is about every installed emulator and cannot say which one.
+  it("counts a file the named emulator marks optional where another emulator requires it", () => {
+    const rows: BiosSummaryRow[] = [
+      { wanted: "needed", required_by_active: false, used_by_active: true, downloaded: false },
+    ];
+    expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
+      "All 2 files SwanStation requires are in place (1 optional missing)",
+    );
+  });
+
+  it("does not count an optional file only another emulator declares", () => {
+    const rows: BiosSummaryRow[] = [
+      { wanted: "optional", required_by_active: false, used_by_active: false, downloaded: false },
+    ];
+    expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
+      "All 2 files SwanStation requires are in place",
+    );
+  });
+
+  it("never counts a row no emulator declares, which the launching one is said to use", () => {
+    // The backend answers `used_by_active: true` for a row nothing declares.
+    const rows: BiosSummaryRow[] = [
+      { wanted: "not_needed", required_by_active: false, used_by_active: true, downloaded: false },
+      { wanted: "unknown", required_by_active: false, used_by_active: true, downloaded: false },
+    ];
+    expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
+      "All 2 files SwanStation requires are in place",
+    );
+  });
+
   it("says ONE file rather than `All 1 files`, and keeps the optional gap behind it", () => {
     // Reachable on the reference machine rather than a theoretical count:
     // DuckStation requires exactly one image on a stock RetroDECK.
-    const rows: BiosSummaryRow[] = [{ wanted: "optional", required_by_active: false, downloaded: false }];
+    const rows: BiosSummaryRow[] = [
+      { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: false },
+    ];
     expect(summary({ required_count: 1, required_downloaded: 1 }, "ok", rows)).toEqual({
       status: "1 / 1 required",
       sentence: "The one file SwanStation requires is in place (1 optional missing)",

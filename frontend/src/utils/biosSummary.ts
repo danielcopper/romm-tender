@@ -85,6 +85,7 @@ export interface BiosSummarySource {
 export interface BiosSummaryRow {
   wanted?: FirmwareWanted;
   required_by_active?: boolean;
+  used_by_active?: boolean;
   downloaded?: boolean;
 }
 
@@ -275,8 +276,15 @@ function requiredFilesSummary(
   // that file is in place and state 6 while it is not.
   const one = requiredCount === 1;
   if (ready) {
+    // The optional set of the emulator the sentence names, not of every
+    // installed one: `wanted` says whether ANY emulator requires a file, so a
+    // file this one marks optional and another requires reads "needed" there.
     const optionalMissing = rows.filter(
-      (row) => row.wanted === "optional" && !row.required_by_active && !row.downloaded,
+      (row) =>
+        row.used_by_active === true &&
+        (row.wanted === "needed" || row.wanted === "optional") &&
+        !row.required_by_active &&
+        !row.downloaded,
     ).length;
     const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
     const held = one

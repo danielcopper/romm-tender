@@ -73,6 +73,9 @@ _ROW_KEYS = {
     "description",
     "wanted",
     "required_by_active",
+    # Not in a5777746: the ready sentence's optional tail counts the launching
+    # emulator's own files, and this is the row field that says which they are.
+    "used_by_active",
     "system_image_candidate",
     "supplied_by",
     "satisfied",
