@@ -6,6 +6,12 @@
  *
  * steamShortcuts is mocked so the confirm-poll and the existing-shortcut map
  * are observable; backend callables default to the test-setup undefined-stub.
+ *
+ * Apart from the first test, a unit is applied by calling the listener
+ * `initUnitSyncManager` returns and awaiting it. That listener is the manager's
+ * async handler, so the await ends when the unit's work does — a later
+ * assertion reads finished state, and none of a test's work runs on into the
+ * next test's mocks.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -61,10 +67,6 @@ function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
   };
 }
 
-function flush(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 describe("syncManager — existing-shortcut update uses confirm-poll", () => {
   beforeEach(() => {
     setLaunchOptionsConfirmed.mockClear();
@@ -78,18 +80,21 @@ describe("syncManager — existing-shortcut update uses confirm-poll", () => {
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
+    // Through the event bus, so the listener's registration under
+    // `sync_apply_unit` is covered too. The ack is the last thing the handler
+    // awaits, so waiting for it waits for the unit's work.
     initUnitSyncManager();
     await act(async () => {
       emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-confirm"));
-      // One shortcut + the 50ms inter-item delay; give the async loop room.
-      await flush(120);
+      // The rom_id→appId binding is reported back to the backend, echoing the
+      // run + unit + chunk identity so the backend can reject a stale ack (#1041/#1025).
+      await vi.waitFor(() =>
+        expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "42": 5000 }, "run-confirm", 1, 0),
+      );
     });
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(5000, cmd);
     expect(addShortcut).not.toHaveBeenCalled();
-    // The rom_id→appId binding is reported back to the backend, echoing the
-    // run + unit + chunk identity so the backend can reject a stale ack (#1041/#1025).
-    expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "42": 5000 }, "run-confirm", 1, 0);
   });
 });
 
@@ -155,10 +160,9 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       shortcuts: [groupItem({ rom_id: 1, name: "Zelda (USA)", launch_options: jpCmd })],
     };
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(150);
+      await applyUnit(data);
     });
 
     // Reused via the existing-shortcut update path — launch options re-baked to
@@ -193,10 +197,9 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       shortcuts: [groupItem({ rom_id: 10, name: "Zelda" }), groupItem({ rom_id: 20, name: "Mario" })],
     };
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(250);
+      await applyUnit(data);
     });
 
     // Two groups → exactly two shortcuts, one per game.
@@ -271,13 +274,9 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
     addShortcut.mockResolvedValue(6000);
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
-        unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-create"),
-      );
-      await flush(120);
+      await applyUnit(unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-create"));
     });
 
     expect(registerRomMAppId).toHaveBeenCalledWith(6000);
@@ -287,13 +286,9 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
     // rom 42 already maps to appId 5000 → update path, never addShortcut.
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
-        unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-update"),
-      );
-      await flush(120);
+      await applyUnit(unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-update"));
     });
 
     expect(registerRomMAppId).toHaveBeenCalledWith(5000);
@@ -308,13 +303,9 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
     // the entry's own rom_id here.
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[1, 5000]]));
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
-        unitOf([item({ rom_id: 1, name: "Zelda (USA)" })], "run-reg-rebind"),
-      );
-      await flush(150);
+      await applyUnit(unitOf([item({ rom_id: 1, name: "Zelda (USA)" })], "run-reg-rebind"));
     });
 
     expect(registerRomMAppId).toHaveBeenCalledWith(5000);
@@ -341,10 +332,9 @@ describe("syncManager — does not ack a cancelled unit (#1041)", () => {
     });
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-cancel-1041"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-cancel-1041"));
     });
 
     // Observable effect of the post-cancel guard: the ack callable is NEVER
@@ -364,15 +354,13 @@ describe("syncManager — once-per-run existing-shortcut scan cache", () => {
 
   it("scans once for two units sharing the same run_id", async () => {
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
 
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-same"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-same"));
     });
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-same"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-same"));
     });
 
     // Second unit reuses the cached scan from the first.
@@ -381,15 +369,13 @@ describe("syncManager — once-per-run existing-shortcut scan cache", () => {
 
   it("re-scans when a second unit carries a different run_id", async () => {
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
 
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-diff-a"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-diff-a"));
     });
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-diff-b"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-diff-b"));
     });
 
     // A new run_id is a cache miss → fresh scan.
@@ -440,10 +426,9 @@ describe("syncManager — records created shortcuts into the per-run delta store
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-create"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-create"));
     });
 
     expect(addShortcut).toHaveBeenCalledTimes(1);
@@ -455,10 +440,9 @@ describe("syncManager — records created shortcuts into the per-run delta store
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-update"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-update"));
     });
 
     expect(addShortcut).not.toHaveBeenCalled();
@@ -470,10 +454,9 @@ describe("syncManager — records created shortcuts into the per-run delta store
     addShortcut.mockResolvedValue(null);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-create-fail"));
-      await flush(120);
+      await applyUnit(unit(cmd, "run-create-fail"));
     });
 
     expect(addShortcut).toHaveBeenCalledTimes(1);
@@ -511,13 +494,12 @@ describe("syncManager — every frame it writes names the chunk's run", () => {
     setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-previous" });
     const update = vi.spyOn(syncProgress, "updateSyncProgress");
     try {
-      initUnitSyncManager();
+      const applyUnit = initUnitSyncManager();
       await act(async () => {
-        emitHostEvent<SyncApplyUnitData>("sync_apply_unit", {
+        await applyUnit({
           ...unit("", "run-now"),
           cover_refreshes: [{ rom_id: 7, app_id: 5007 }],
         });
-        await flush(200);
       });
 
       // The three writes: the chunk seed, one per item, and the cover counter.
@@ -605,20 +587,16 @@ describe("syncManager — chunked apply (#1025)", () => {
       snapshots.push({ current: p.current, message: p.message, total: p.total });
     });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 2, unitTotal: 3, runId: "run-chunked" }),
       );
-      await flush(180);
     });
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(3)], { chunkIndex: 1, chunkOffset: 2, chunkCount: 2, unitTotal: 3, runId: "run-chunked" }),
       );
-      await flush(120);
     });
     unsub();
 
@@ -653,13 +631,11 @@ describe("syncManager — chunked apply (#1025)", () => {
       snapshots.push({ ...getSyncProgress() });
     });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 2, runId: "run-selfheal" }),
       );
-      await flush(180);
     });
     unsub();
 
@@ -679,20 +655,16 @@ describe("syncManager — chunked apply (#1025)", () => {
   });
 
   it("acks each chunk with its own chunk_index", async () => {
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 2, unitTotal: 3, runId: "run-ack" }),
       );
-      await flush(180);
     });
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(3)], { chunkIndex: 1, chunkOffset: 2, chunkCount: 2, unitTotal: 3, runId: "run-ack" }),
       );
-      await flush(120);
     });
 
     // Each chunk acks only its own bindings, echoing its own chunk index so the
@@ -708,31 +680,35 @@ describe("syncManager — chunked apply (#1025)", () => {
     // (cache-missing) scan and its own ack. The guard must drop it instead. This
     // is the overlap that, unguarded, corrupts the shared per-unit state.
     let resolveScan!: (m: Map<number, number>) => void;
-    getExistingRomMShortcuts.mockReturnValue(
-      new Promise<Map<number, number>>((r) => {
-        resolveScan = r;
-      }),
-    );
+    // Only the first scan hangs. A second event the guard failed to drop gets an
+    // answer at once and runs to its end, so the count below fails on it rather
+    // than the test hanging on the same promise.
+    getExistingRomMShortcuts
+      .mockReturnValueOnce(
+        new Promise<Map<number, number>>((r) => {
+          resolveScan = r;
+        }),
+      )
+      .mockResolvedValue(new Map<number, number>());
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
 
     // Event 1: starts, suspends on the hung scan (in-flight guard now set).
+    let first!: unknown;
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      first = applyUnit(
         chunkOf([sc(1)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 1, runId: "run-guard-1" }),
       );
-      await flush(0);
+      await vi.waitFor(() => expect(getExistingRomMShortcuts).toHaveBeenCalledTimes(1));
     });
 
     // Event 2: arrives while event 1 is still hung → dropped by the guard before
-    // it can scan or process anything.
+    // it can scan or process anything. Its handler has returned once the await
+    // does, so nothing of event 2 is still to come.
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         chunkOf([sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 1, runId: "run-guard-2" }),
       );
-      await flush(0);
     });
 
     // Observable proof of the drop: only event 1's scan ever ran, and no ack has
@@ -743,7 +719,7 @@ describe("syncManager — chunked apply (#1025)", () => {
     // Release event 1 and let it run to completion.
     await act(async () => {
       resolveScan(new Map<number, number>([[1, 5001]]));
-      await flush(120);
+      await first;
     });
 
     // Event 1 finished normally and acked exactly once for its own run; event 2's
@@ -824,10 +800,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     addShortcut.mockResolvedValue(6000);
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-create"));
-      await flush(120);
+      await applyUnit(chunkOf([sc(42)], "run-cover-create"));
     });
 
     // The cover is fetched by the item's OWN rom_id (the representative on create)
@@ -840,10 +815,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-update"));
-      await flush(120);
+      await applyUnit(chunkOf([sc(42)], "run-cover-update"));
     });
 
     // An updated shortcut keeps its existing grid file — no cover fetched or applied.
@@ -857,10 +831,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     addShortcut.mockResolvedValue(6000);
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-null"));
-      await flush(120);
+      await applyUnit(chunkOf([sc(42)], "run-cover-null"));
     });
 
     // base64 null → the artwork API is never called and nothing errors; the shortcut
@@ -877,10 +850,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
     setCustomArtwork.mockRejectedValueOnce(new Error("artwork boom"));
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-fail"));
-      await flush(120);
+      await applyUnit(chunkOf([sc(42)], "run-cover-fail"));
     });
 
     // The failure is logged and the item is NOT failed — its binding is still acked
@@ -906,10 +878,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 77, app_id: 5077 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(300);
+      await applyUnit(data);
     });
 
     // Each refresh entry is fetched by rom_id and applied to its EXISTING appId
@@ -940,10 +911,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 11, app_id: 7011 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(300);
+      await applyUnit(data);
     });
 
     expect(addShortcut).not.toHaveBeenCalled();
@@ -974,10 +944,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 12, app_id: 7012 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(300);
+      await applyUnit(data);
     });
     unsub();
 
@@ -1015,10 +984,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 99, app_id: 5099 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(400);
+      await applyUnit(data);
     });
     unsub();
 
@@ -1042,10 +1010,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 2, app_id: 5002 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(250);
+      await applyUnit(data);
     });
 
     // Entry 1 failed (logged), entry 2 still applied, and the chunk acked.
@@ -1068,10 +1035,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       { rom_id: 2, app_id: 5002 },
     ];
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
-      await flush(250);
+      await applyUnit(data);
     });
 
     // Entry 1 completes (already in flight); entry 2 is never fetched, and the
@@ -1086,10 +1052,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-no-refresh-field"));
-      await flush(120);
+      await applyUnit(chunkOf([sc(42)], "run-no-refresh-field"));
     });
 
     // Update path + no cover_refreshes → no cover work at all, ack still fires.
@@ -1111,10 +1076,9 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     addShortcut.mockImplementation(async () => next++);
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(10), sc(20)], "run-cover-cancel"));
-      await flush(200);
+      await applyUnit(chunkOf([sc(10), sc(20)], "run-cover-cancel"));
     });
 
     // Only the first item's cover was fetched/applied; the second item after the
@@ -1214,10 +1178,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-happy"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-happy"));
     });
 
     // No new shortcut minted — the orphan's appId is reused and rewritten via the
@@ -1247,10 +1210,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-nomatch"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-nomatch"));
     });
 
     // No orphan of this name → fresh create, and the orphan's appId is untouched.
@@ -1268,10 +1230,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-null"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-null"));
     });
 
     expect(addShortcut).toHaveBeenCalledTimes(1);
@@ -1287,13 +1248,11 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     stubAppStore({ 9000: "Dup" });
     addShortcut.mockResolvedValue(6000);
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         unitOf([item({ rom_id: 10, name: "Dup" }), item({ rom_id: 20, name: "Dup" })], "run-adopt-twice"),
       );
-      await flush(250);
     });
 
     // Exactly one fresh create (the second item); the orphan 9000 was adopted once.
@@ -1322,10 +1281,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     stubAppStore({ 9000: "Test ROM" });
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-onescan"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-onescan"));
     });
 
     // The orphan was adopted (single scan feeds both the bound map and the pool)…
@@ -1345,10 +1303,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     getLiveRomMShortcutAppIds.mockResolvedValue([9000]);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-lazy"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-lazy"));
     });
 
     // Update path only → the orphan pool (appStore name resolution) was never built.
@@ -1370,13 +1327,11 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     stubAppStore({ 5000: "Bound Game", 9000: "Orphan Game" });
     addShortcut.mockResolvedValue(6000);
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>(
-        "sync_apply_unit",
+      await applyUnit(
         unitOf([item({ rom_id: 42, name: "Bound Game" }), item({ rom_id: 43, name: "Bound Game" })], "run-adopt-bound"),
       );
-      await flush(200);
     });
 
     // rom 43 minted a fresh shortcut (6000) rather than stealing the bound 5000 —
@@ -1400,10 +1355,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-noappstore"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-noappstore"));
     });
 
     // appStore gone → adoption disabled → rom 42 minted fresh (non-vacuous: a
@@ -1424,10 +1378,9 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-noname"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-noname"));
     });
 
     // Empty name → orphan not poolable → fresh create.
@@ -1444,14 +1397,12 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     addShortcut.mockResolvedValue(6000);
     const cmd = 'flatpak run net.retrodeck.retrodeck "/games/test.bin"';
 
-    initUnitSyncManager();
+    const applyUnit = initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-cacheA"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-cacheA"));
     });
     await act(async () => {
-      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-cacheB"));
-      await flush(150);
+      await applyUnit(unit(cmd, "run-adopt-cacheB"));
     });
 
     // Two distinct runs → two scans (one per run), not one shared across runs.
