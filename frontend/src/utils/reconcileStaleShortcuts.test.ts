@@ -8,16 +8,17 @@
  * shares syncManager's module-level per-unit state (_isUnitRunning / _scanCache)
  * with the event-handler tests in syncManager.test.ts.
  *
- * steamShortcuts is mocked so getLiveRomMShortcutAppIds is observable; the
- * backend reconcileShortcuts callable uses the global test-setup mock.
+ * steamShortcuts is mocked so the ownership scan is controllable; the backend
+ * reconcileShortcuts callable uses the global test-setup mock.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 
-const getLiveRomMShortcutAppIds = vi.fn();
+const scanShortcutOwnership = vi.fn();
 vi.mock("./steamShortcuts", () => ({
-  getLiveRomMShortcutAppIds: (...args: unknown[]) => getLiveRomMShortcutAppIds(...args),
+  scanShortcutOwnership: (...args: unknown[]) => scanShortcutOwnership(...args),
+  getLiveRomMShortcutAppIds: vi.fn(),
   // The other steamShortcuts exports are unused by reconcileStaleShortcuts but
   // must exist so syncManager's imports resolve.
   setLaunchOptionsConfirmed: vi.fn(),
@@ -29,21 +30,33 @@ import { reconcileStaleShortcuts } from "./syncManager";
 
 describe("reconcileStaleShortcuts (#1046)", () => {
   beforeEach(() => {
-    getLiveRomMShortcutAppIds.mockReset();
+    scanShortcutOwnership.mockReset();
     vi.mocked(backend.reconcileShortcuts).mockReset();
     vi.mocked(backend.reconcileShortcuts).mockResolvedValue({ success: true, message: "", unbound_count: 0 });
   });
 
   it("passes the live appId set to the backend reconcile callable", async () => {
-    getLiveRomMShortcutAppIds.mockResolvedValue([100, 200]);
+    scanShortcutOwnership.mockResolvedValue({ owned: [100, 200], unresolved: [] });
 
     await reconcileStaleShortcuts();
 
     expect(vi.mocked(backend.reconcileShortcuts)).toHaveBeenCalledWith([100, 200]);
   });
 
+  it("keeps a shortcut Steam did not answer for in the live set, so it is not reported stale (#1979)", async () => {
+    // 300's details timed out: nothing was established about it, so it must not
+    // be read as a shortcut the user deleted. The backend unbinds exactly the
+    // bindings absent from the set it is sent.
+    scanShortcutOwnership.mockResolvedValue({ owned: [100], unresolved: [300] });
+
+    await reconcileStaleShortcuts();
+
+    expect(vi.mocked(backend.reconcileShortcuts)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.reconcileShortcuts)).toHaveBeenCalledWith([100, 300]);
+  });
+
   it("passes an empty live set through (scan ran, found none)", async () => {
-    getLiveRomMShortcutAppIds.mockResolvedValue([]);
+    scanShortcutOwnership.mockResolvedValue({ owned: [], unresolved: [] });
 
     await reconcileStaleShortcuts();
 
@@ -52,7 +65,7 @@ describe("reconcileStaleShortcuts (#1046)", () => {
   });
 
   it("does NOT reconcile when the live scan returns null (store unreadable)", async () => {
-    getLiveRomMShortcutAppIds.mockResolvedValue(null);
+    scanShortcutOwnership.mockResolvedValue(null);
 
     await reconcileStaleShortcuts();
 
@@ -61,7 +74,7 @@ describe("reconcileStaleShortcuts (#1046)", () => {
   });
 
   it("swallows a scan rejection without calling reconcile", async () => {
-    getLiveRomMShortcutAppIds.mockRejectedValue(new Error("scan boom"));
+    scanShortcutOwnership.mockRejectedValue(new Error("scan boom"));
     const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
     try {
       await expect(reconcileStaleShortcuts()).resolves.toBeUndefined();
@@ -75,7 +88,7 @@ describe("reconcileStaleShortcuts (#1046)", () => {
   });
 
   it("swallows a backend reconcile rejection (best-effort, never blocks sync)", async () => {
-    getLiveRomMShortcutAppIds.mockResolvedValue([100]);
+    scanShortcutOwnership.mockResolvedValue({ owned: [100], unresolved: [] });
     vi.mocked(backend.reconcileShortcuts).mockRejectedValue(new Error("reconcile boom"));
     const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
     try {
@@ -89,7 +102,7 @@ describe("reconcileStaleShortcuts (#1046)", () => {
   });
 
   it("logs the unbound count when the backend reports stale bindings cleared", async () => {
-    getLiveRomMShortcutAppIds.mockResolvedValue([100]);
+    scanShortcutOwnership.mockResolvedValue({ owned: [100], unresolved: [] });
     vi.mocked(backend.reconcileShortcuts).mockResolvedValue({ success: true, message: "", unbound_count: 3 });
     const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
     try {

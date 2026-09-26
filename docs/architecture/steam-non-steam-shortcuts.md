@@ -268,13 +268,21 @@ The fix is a **frontend-assisted reconcile at sync start**, because only the fro
 It runs **before** the sync builds its work queue — so the unbind lands before the incremental-skip decision — on both
 the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
 
-1. `getLiveRomMShortcutAppIds()` (`frontend/src/utils/steamShortcuts.ts`) scans Steam's live shortcuts and returns the
-   raw appIds of every RomM-owned shortcut (exe ends with `/bin/tender-rom-launcher`), regardless of any backend
-   binding. It returns `null` when the store was **unreadable** (`collectionStore` absent) versus `[]` when the scan
-   **ran and found none** — a load-bearing distinction.
+1. `scanShortcutOwnership()` (`frontend/src/utils/steamShortcuts.ts`) scans Steam's live shortcuts and answers two sets
+   of raw appIds, regardless of any backend binding: `owned`, every RomM-owned shortcut (exe ends with
+   `/bin/tender-rom-launcher`), and `unresolved`, every entry whose details Steam did not answer for before
+   `getAppDetails` timed out. It returns `null` when the store was **unreadable** (`collectionStore` absent) versus two
+   empty sets when the scan **ran and found none** — a load-bearing distinction.
 2. `reconcileStaleShortcuts()` (`frontend/src/utils/syncManager.ts`) skips the reconcile on a `null` scan (reconciling
-   against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with the
-   live set. It is best-effort: a scan or backend failure is logged and swallowed, never blocking the sync.
+   against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with
+   `owned` and `unresolved` together. An unresolved entry is one nothing was established about, so it keeps its binding:
+   a binding that should have gone is corrected by the next run that can read the entry. Unbinding a live shortcut
+   instead sends its platform back through a full fetch and the ROM through the apply, which adopts the unbound shortcut
+   by its display name when the apply's own scan identifies it as ours (the orphan-adoption pool in `syncManager.ts`).
+   The Steam-side state on it — its collections, and the appId playtime and artwork hang off — is lost when that scan
+   cannot identify it either, or when the shortcut's display name no longer matches the game's name — a game renamed in
+   RomM; in both cases the apply creates a second shortcut beside it. It is best-effort: a scan or backend failure is
+   logged and swallowed, never blocking the sync.
 3. `ShortcutRemovalService.reconcile_live_shortcuts` unbinds every bound `roms` row whose `shortcut_app_id` is **not**
    in the live set — clearing only the binding (`Rom.unbind_shortcut`, ADR-0007), never deleting the row or its per-ROM
    children. An empty live set is the correct "they're all gone" signal and unbinds every binding.

@@ -3,12 +3,13 @@
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``reconcileShortcuts = callable<[number[]], {success, reason?, message, unbound_count?}>``.
 
-The frontend reads Steam's live RomM-shortcut appIds at sync start and passes
-them here; the backend unbinds every bound ``roms.shortcut_app_id`` absent from
-that live set so the next sync's incremental skip recreates the shortcut the
-user deleted via Steam's own UI (#1046). The contract is the response SHAPE and
-the binding side effect: dead bindings cleared, live bindings untouched, rows
-always kept (ADR-0007).
+The frontend scans Steam's live shortcut store at sync start and passes the
+owned plus unresolved entries here — every appId it could not rule out; the
+backend unbinds every bound ``roms.shortcut_app_id`` absent from that set so the
+next sync's incremental skip recreates the shortcut the user deleted via
+Steam's own UI (#1046). The contract is the response SHAPE and the binding side
+effect: dead bindings cleared, live bindings untouched, rows always kept
+(ADR-0007).
 """
 
 from __future__ import annotations
