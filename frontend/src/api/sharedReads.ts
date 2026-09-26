@@ -42,7 +42,7 @@
  * next read answers differently. What admits it anyway is that no such action
  * ever leads to a read through this module. Every re-read that follows one is
  * change-driven and calls `api/backend` directly — the play row's post-download
- * `refreshBiosStatus`, the `bios` event's own `check_platform_bios`, both
+ * `refreshBiosStatus`, the `bios` event's own `get_bios_status`, both
  * stores' core-change handlers, and the info panel's version-switch re-read —
  * and neither store re-runs a LOAD on a `bios` event, so a shared read is never
  * issued after a firmware mutation.

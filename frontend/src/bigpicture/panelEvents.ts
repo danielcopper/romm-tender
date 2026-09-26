@@ -15,14 +15,14 @@ import {
   invalidateCachedGameDetail,
   getCachedGameDetail,
   getRomMetadata,
-  checkPlatformBios,
   getBiosStatus,
   getPlatformCoreInfo,
   getSaveStatus,
   isCallableFailure,
   debugLog,
+  type BiosAnswer,
 } from "../api/backend";
-import type { BiosStatus, CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteEvent } from "../types";
+import type { CoreInfo, RomMetadata, SaveStatus, SyncConflict, DownloadCompleteEvent } from "../types";
 import type { RommDataChangedDetail } from "../types/events";
 import { detach } from "../utils/detach";
 import {
@@ -35,7 +35,6 @@ import {
   refreshSlotState,
   saveStatusFromCache,
   takeReadTicket,
-  unknownBiosFields,
   type PanelReadSeqs,
   type PanelState,
   type RomBinding,
@@ -146,25 +145,25 @@ async function handleBiosChange(
 ): Promise<void> {
   // bios events fan out to every mounted panel — ignore platforms other
   // than this panel's own, both to avoid cross-platform BIOS-list bleed
-  // and to skip the wasted checkPlatformBios fetch (#1082). Read via ref
-  // to avoid a stale closure.
+  // and to skip the wasted re-read (#1082). Read via ref to avoid a stale
+  // closure.
   if (!detail.platform_slug || detail.platform_slug !== ctx.platformSlugRef.current) return;
-  // Only an ANSWER moves the tab, in either direction. A rejected check is not
-  // one — writing it would drop the whole BIOS tab while the play row above
-  // keeps its level (#1693) — and on this path a rejection is the ONLY way a
-  // read fails, because `check_platform_bios` reports its own degradation
-  // instead of raising it.
-  const updated = await checkPlatformBios(detail.platform_slug).catch((): BiosStatus | null => null);
-  if (ctx.cancelled() || !updated) return;
-  // That degradation IS the answer for a platform whose emulators the plugin
-  // cannot ask, and there is no second reading to wait for: shown as unknown,
-  // never hidden as "needs nothing" (#1660).
-  if (updated.bios_status_unknown) {
-    ctx.setState((prev) => ({ ...prev, ...unknownBiosFields() }));
-    return;
-  }
-  const biosLevel = updated.needs_bios ? (updated.bios_level ?? null) : null;
-  ctx.setState((prev) => ({ ...prev, biosStatus: updated.needs_bios ? updated : null, biosLevel }));
+  const romId = ctx.romIdRef.current;
+  if (!romId) return;
+  // Keyed on the rom rather than the platform: the requirement depends on the
+  // core, and a per-game core pin is keyed on rom_id. Read directly —
+  // the firmware just changed, so joining a read issued before it would hand
+  // back the pre-change answer.
+  const binding = bindCurrentRom(ctx, romId);
+  const overtaken = takeReadTicket(ctx.readSeqs, "bios");
+  const answer = await getBiosStatus(binding.romId).catch((): BiosAnswer | null => null);
+  if (!answer || overtaken()) return;
+  // A rejected read is not an answer, and neither is a payload carrying none —
+  // writing either would drop the whole BIOS tab while the play row above keeps
+  // its level (#1693).
+  const biosFields = biosFieldsFromCache(answer);
+  if (!biosFields) return;
+  binding.write((prev) => ({ ...prev, ...biosFields }));
 }
 
 async function handleCoreChange(

@@ -177,11 +177,8 @@ export interface PanelReadSeqs {
   /** `is_save_tracking_configured`, from the slot refresh alone. */
   slotTracking: number;
   /** `get_bios_status`, from the live re-read every cached-detail fold issues
-   *  when the backend marked its BIOS answer stale — and claimed by the fold
-   *  itself, see {@link refreshBiosIfStale}. The `bios` event's own check is
-   *  deliberately outside it: it answers for the platform's default core rather
-   *  than this ROM's, so ordering it against a rom-keyed answer would settle the
-   *  wrong question (#1718). */
+   *  when the backend marked its BIOS answer stale and from the `bios` event's
+   *  re-read — and claimed by the fold itself, see {@link refreshBiosIfStale}. */
   bios: number;
 }
 
@@ -250,10 +247,10 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
 }
 
 /** The status the BIOS tab stands on when the requirement could not be
- *  established — the wire payload for that answer, kept whole rather than
- *  restated: `check_platform_bios` says exactly this, and `BiosTab` renders the
- *  grey dot off the level beside it, over the sentence `utils/biosSummary.ts`
- *  gives a declined level with no gap it can name. No file rows, because there is
+ *  established — what {@link biosFieldsFromCache} folds in for an answer that
+ *  ran and said so (the flag with the `"unknown"` level). `BiosTab` renders the
+ *  grey dot off that level, over the sentence `utils/biosSummary.ts` gives a
+ *  declined level with no gap it can name. No file rows, because there is
  *  nothing the plugin could say about any file. */
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
@@ -284,13 +281,6 @@ export function biosFieldsFromCache(cached: BiosAnswer): Pick<PanelState, "biosS
     biosStatus: { needs_bios: true, ...cached.bios_status },
     biosLevel: cached.bios_level ?? null,
   };
-}
-
-/** The fields a platform-level BIOS answer of "unknown" folds in — the same two
- *  {@link biosFieldsFromCache} builds, for the one caller that reads the raw
- *  `check_platform_bios` payload instead of a game-detail one. */
-export function unknownBiosFields(): Pick<PanelState, "biosStatus" | "biosLevel"> {
-  return { biosStatus: UNKNOWN_REQUIREMENT_STATUS, biosLevel: "unknown" };
 }
 
 /** Go back for the BIOS answer the cached detail could not give, and fold it in.

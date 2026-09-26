@@ -267,7 +267,7 @@ export interface PlatformsPageState {
  *
  * Call it only when firmware actually changed. The event fans out to every
  * mounted panel and each one that matches the slug pays a live
- * `check_platform_bios` for it (#1082), so a run that moved no files must stay
+ * `get_bios_status` for it (#1082), so a run that moved no files must stay
  * silent rather than send an event no panel can act on.
  */
 function announceBiosChange(platformSlug: string): void {
@@ -856,7 +856,7 @@ export function usePlatformsPage(): PlatformsPageState {
               await readPlatform(slug);
               // Only when something actually went. The event fans out to every
               // mounted panel and each matching one pays a live
-              // `check_platform_bios` for it, so a run that moved no files must
+              // `get_bios_status` for it, so a run that moved no files must
               // stay silent — the same rule the download path four lines up
               // keeps.
               if (result.deleted_count > 0) announceBiosChange(slug);

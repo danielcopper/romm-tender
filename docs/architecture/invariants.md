@@ -1090,16 +1090,17 @@ Format: **invariant** — tier — enforced by.
   outlive the identity it was read for. A version switch re-keys without closing, so neither the store's generation
   counter nor the panel's `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for
   the SAME rom are ordered instead, by a sequence taken when the read is issued — the store's `loadSeq`, the panel's
-  `takeReadTicket` (#1717). Four writes are unbound: the two identity writes install what a binding would compare
-  against, so ordering is all they can have, and both have it. The other two have neither — the store's
-  `cached.bios_status` fold runs in the same synchronous run as its guard, and the event lane's `handleBiosChange`
-  answers for the platform's default core and can overwrite a rom-keyed answer (#1718). The panel's remaining lazy lane
-  writes through the raw setter, ordered by the same ticket. The play button is NOT covered (#1714)** — test +
-  prompt-only — the panel's thirteen bound sites each carry a version-switch test
-  (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are
-  prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
-  written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
-  them here
+  `takeReadTicket` (#1717). Four writes are unbound. Three are ordered: the two identity writes install what a binding
+  would compare against, so ordering is all they can have, and the panel's lazy SAVES-tab slot load
+  (`frontend/src/bigpicture/panelSlotsLoad.ts`) writes through the raw setter, ordered by its own `slots` ticket. The
+  fourth has neither — the store's `cached.bios_status` fold runs in the same synchronous run as its guard. The event
+  lane's `handleBiosChange` is bound and ordered: it re-reads `get_bios_status` for the rom it shows, whose emulator is
+  resolved per ROM — a per-game pin over the platform's pick — and takes the `bios` ticket the panel's other BIOS
+  re-reads take (#1718). The play button is NOT covered (#1714)** — test + prompt-only — the panel's fourteen bound
+  sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and
+  every new write site on either are prompt-only, because a checker scoped to the store's own function bodies would be
+  green on the case this rule was written for. The reasons behind the two writer mechanisms live at `writerForRom` and
+  `RomBinding` — do not restate them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own, so the reader can walk the
   table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`

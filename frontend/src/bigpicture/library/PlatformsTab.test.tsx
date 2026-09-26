@@ -2810,7 +2810,7 @@ describe("Library › Platforms", () => {
 
     it("announces nothing when the BIOS delete refuses", async () => {
       // The event fans out to every open game page and each match pays a live
-      // check_platform_bios for it, so a delete that moved no file must stay
+      // get_bios_status for it, so a delete that moved no file must stay
       // silent rather than send one nothing can act on.
       mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockResolvedValue({
