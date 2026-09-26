@@ -257,10 +257,11 @@ and the row you focus is the one the right-hand pane describes.
    machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
    all. The sentence below the line says which of the three it is
 6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
-   two colours, as the one on a game's page. It is always there: it opens the menu once the platform has games in Steam
-   and there is more than one emulator to choose between, and is greyed out otherwise, with the reason shown if you
-   hover it. Where the reason is a problem rather than simply nothing to choose — no emulator for the platform, or
-   RetroDECK not found — a line under the header says so as well, since a tooltip needs a mouse
+   two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
+   emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
+   and is greyed out otherwise, with the reason shown if you hover it. Where the reason is a problem rather than simply
+   nothing to choose — no emulator for the platform, or RetroDECK not found — a line under the header says so as well,
+   since a tooltip needs a mouse
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").

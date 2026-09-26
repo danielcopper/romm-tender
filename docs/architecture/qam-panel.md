@@ -1122,27 +1122,29 @@ it, for the focused platform:
   directions, and the middle state is why the split is three rather than two: it is unpinnable like the first and does
   not start like the last.
 
-  **The button is always rendered**, and opens a menu only when there is something to pick: the platform has games in
-  Steam, the core read landed, RetroDECK was found, at least one option is bakeable, and there are at least two. In
-  every other case it is the same chip, disabled, with the reason in its `title` — the ruling the Remove group already
-  follows, and what keeps the header's shape constant across panes. A disabled button is still a focus stop and the wide
-  page's own sheet gives it Steam's focus outline, so a reader walking the header lands on it and is told why.
+  **The button is always rendered**, and opens a menu only when there is something to pick: the core read landed,
+  RetroDECK was found, at least one option is bakeable, and there are at least two. The platform's shortcut count is
+  deliberately not a condition: the per-platform core is a setting read when a game is resolved, so it applies to games
+  synced later too, and picking it before the first sync is the ordinary case. In every other case it is the same chip,
+  disabled, with the reason in its `title` — the ruling the Remove group already follows, and what keeps the header's
+  shape constant across panes. A disabled button is still a focus stop and the wide page's own sheet gives it Steam's
+  focus outline, so a reader walking the header lands on it and is told why.
 
   **Which of those cases also keeps a line under the header is a judgement about what it reports, not about the chip.**
-  "Nothing to switch" states — sync this platform first, the read in flight, one emulator on the menu — say it in the
-  tooltip alone: a sentence would spend a row of the pane reporting that nothing can be done, which is what the device
-  round asked to remove. States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's
-  controller cannot perform one: the read failed, RetroDECK was not found, **ES-DE lists no emulator at all**, nothing
-  on its menu is bakeable, and the fallback is not installed. The first two of those three are the split above and they
-  are checked in that order: an empty menu is the case where RetroDECK's own fallback fails too, so it is answered
-  before the not-bakeable one, and the surviving count branch then speaks only for a menu that really does hold one
-  bakeable option. A switch the backend refuses is reported in the same place, and the header keeps naming the old core,
-  which every shortcut following the platform's pick still launches with. A switch takes the page's busy hold from the
-  moment it is picked until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is
-  why the hold has to cover the whole of it. The chip and the pane's buttons disable, another platform's pane says
-  `Working on X`, and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a
-  success takes that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back
-  too, because such a switch either committed or never ran and there is no pane left to report to either way.
+  "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence
+  would spend a row of the pane reporting that nothing can be done, which is what the device round asked to remove.
+  States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
+  one: the read failed, RetroDECK was not found, **ES-DE lists no emulator at all**, nothing on its menu is bakeable,
+  and the fallback is not installed. The first two of those three are the split above and they are checked in that
+  order: an empty menu is the case where RetroDECK's own fallback fails too, so it is answered before the not-bakeable
+  one, and the surviving count branch then speaks only for a menu that really does hold one bakeable option. A switch
+  the backend refuses is reported in the same place, and the header keeps naming the old core, which every shortcut
+  following the platform's pick still launches with. A switch takes the page's busy hold from the moment it is picked
+  until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is why the hold has to
+  cover the whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`, and the
+  acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line
+  back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch
+  either committed or never ran and there is no pane left to report to either way.
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds all seven
   states and answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note
   beside `BIOS FILES`, the `sentence` under it, with the library's own `(d/t RomM library files)` ratio behind the
@@ -1389,9 +1391,9 @@ the list itself), `get_firmware_status` (**which** platforms have a BIOS answer 
 (ROMs bound to a Steam shortcut per platform — the shortcut counts, and what "has synced games" means here). Only the
 first gates the list; the other two fill in beside it, and **each says so on the pane when it fails**, because for both
 of them a failure and an answer arrive the same way — as an absence. A failed `get_registry_platforms` read as zero
-shortcuts would empty the header, withdraw the core picker behind "sync this platform first" and disable the removal,
-three claims about a platform nothing was learned about; the counts go to `null` instead, which is not zero, and a line
-under the header says the number is missing while the removal stays live (it needs only the slug).
+shortcuts would print `0 in Steam` in the header and disable the removal, two claims about a platform nothing was
+learned about; the counts go to `null` instead, which is not zero, and a line under the header says the number is
+missing while the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page, because
 what a platform's BIOS state IS costs a live per-system reading of the machine. Measured on the reference device: the

@@ -135,9 +135,8 @@ export interface PlatformRow {
    *  answer at all: one pane warns about its rows, the other has none. */
   firmwareStale: boolean;
   /** How many of the platform's ROMs are bound to a Steam shortcut, or `null`
-   *  when that read failed. `null` is not zero: read as zero it withdraws the
-   *  core picker and disables the shortcut removal — two claims about a platform
-   *  nothing was learned about.
+   *  when that read failed. `null` is not zero: read as zero it disables the
+   *  shortcut removal — a claim about a platform nothing was learned about.
    *
    *  This is the count of SHORTCUTS, so it is what the Remove group says and acts
    *  on. The header line states `reachableCount` instead. */

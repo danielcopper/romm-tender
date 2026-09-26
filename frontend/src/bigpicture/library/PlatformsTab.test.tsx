@@ -1035,19 +1035,6 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("Switching cores may affect save compatibility");
     });
 
-    it("asks for a sync before offering a core when nothing of the platform is in Steam", async () => {
-      vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      // The chip stays and goes grey with the reason in its tooltip: a sentence
-      // would spend a row of the pane saying there is nothing to press.
-      const chip = coreButton(container);
-      expect(chip).toBeDisabled();
-      expect(chip?.title).toContain("Sync this platform first");
-      expect(container.textContent).not.toContain("Sync this platform first");
-    });
-
     it("offers nothing to switch when the platform has one emulator", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo({ emulators: [MGBA] }));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1079,16 +1066,15 @@ describe("Library › Platforms", () => {
       expect(clauses).toEqual([]);
     });
 
-    it("says the shortcut count failed instead of stating three things that are not true", async () => {
-      // Read as zero, a failed count withdraws the core picker, empties the
-      // header and disables the removal — none of which was established.
+    it("says the shortcut count failed instead of stating two things that are not true", async () => {
+      // Read as zero, a failed count prints "0 in Steam" in the header and
+      // disables the removal — neither of which was established.
       vi.mocked(backend.getRegistryPlatforms).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       expect(container.textContent).toContain("Could not read how many of these games are in Steam");
       expect(container.textContent).not.toContain("in Steam ·");
-      expect(container.textContent).not.toContain("Sync this platform first");
       expect(coreButton(container)).not.toBeNull();
       expect(buttonByText(container, "Remove shortcuts")).not.toBeDisabled();
     });
@@ -1437,6 +1423,22 @@ describe("Library › Platforms", () => {
     it("pins the picked emulator", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
+      await openCoreMenu(container);
+      await pickFromCoreMenu("VBA Next");
+
+      expect(vi.mocked(backend.setSystemCore)).toHaveBeenCalledWith("gba", "VBA Next");
+    });
+
+    it("offers the core picker for a platform with no shortcuts in Steam, and pins the pick", async () => {
+      // The per-platform core is a setting read when a game is resolved, so it
+      // applies to games synced later; choosing it first is the ordinary case.
+      vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("0 in Steam");
+      expect(coreButton(container)).not.toBeDisabled();
       await openCoreMenu(container);
       await pickFromCoreMenu("VBA Next");
 
