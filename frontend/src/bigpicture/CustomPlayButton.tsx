@@ -1416,6 +1416,54 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     fontWeight: "bold",
   };
 
+  const renderFlashButton = (flash: {
+    containerClassName: string | undefined;
+    classNames: string[];
+    background: string;
+    filter: string;
+    label: string;
+  }) => (
+    <Focusable className={flash.containerClassName} style={btnContainerStyle}>
+      <DialogButton
+        className={[appActionButtonClasses?.PlayButton, ...flash.classNames].filter(Boolean).join(" ")}
+        style={{
+          ...mainBtnStyle,
+          borderRadius: "2px",
+          background: flash.background,
+          filter: flash.filter,
+        }}
+        disabled
+      >
+        <span className="romm-dl-label">{flash.label}</span>
+      </DialogButton>
+    </Focusable>
+  );
+
+  const renderThrobberButton = (label: string) => (
+    <Focusable className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
+      <DialogButton
+        className={[appActionButtonClasses?.PlayButton, "romm-btn-play", isOffline && "romm-offline"]
+          .filter(Boolean)
+          .join(" ")}
+        style={{
+          ...mainBtnStyle,
+          borderRadius: "2px",
+          background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
+          backgroundPosition: "25%",
+          backgroundSize: "330% 100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+        }}
+        disabled
+      >
+        <span className={`${appActionButtonClasses?.Throbber || ""} romm-throbber`.trim()} />
+        <span>{label}</span>
+      </DialogButton>
+    </Focusable>
+  );
+
   // Running overlay (#1313) — top precedence over install/conflict/download. The
   // green Resume button brings the live session to front via `handleResumeGame`;
   // a chevron beside it opens the Stop Game action, which confirms and then has
@@ -1473,29 +1521,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
 
   if (state === "dl_complete") {
     // "Ready!" state — must match the Play button exactly (same classes + Green tint)
-    return (
-      <Focusable
-        className={[appActionButtonClasses?.PlayButtonContainer, appActionButtonClasses?.Green]
-          .filter(Boolean)
-          .join(" ")}
-        style={btnContainerStyle}
-      >
-        <DialogButton
-          className={[appActionButtonClasses?.PlayButton, "romm-btn-play", "romm-dl-complete-flash"]
-            .filter(Boolean)
-            .join(" ")}
-          style={{
-            ...mainBtnStyle,
-            borderRadius: "2px",
-            background: "linear-gradient(to right, #80e62a, #01b866)",
-            filter: "brightness(1.2)",
-          }}
-          disabled
-        >
-          <span className="romm-dl-label">Ready!</span>
-        </DialogButton>
-      </Focusable>
-    );
+    return renderFlashButton({
+      containerClassName: [appActionButtonClasses?.PlayButtonContainer, appActionButtonClasses?.Green]
+        .filter(Boolean)
+        .join(" "),
+      classNames: ["romm-btn-play", "romm-dl-complete-flash"],
+      background: "linear-gradient(to right, #80e62a, #01b866)",
+      filter: "brightness(1.2)",
+      label: "Ready!",
+    });
   }
 
   if (state === "download") {
@@ -1749,78 +1783,21 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   }
 
   if (state === "uninstalling") {
-    return (
-      <Focusable className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
-        <DialogButton
-          className={[appActionButtonClasses?.PlayButton, "romm-btn-download", "romm-dl-uninstall-flash"]
-            .filter(Boolean)
-            .join(" ")}
-          style={{
-            ...mainBtnStyle,
-            borderRadius: "2px",
-            background: "linear-gradient(to right, #47b3ff, #1a9fff)",
-            filter: "brightness(1.3)",
-          }}
-          disabled
-        >
-          <span className="romm-dl-label">Uninstalled</span>
-        </DialogButton>
-      </Focusable>
-    );
+    return renderFlashButton({
+      containerClassName: appActionButtonClasses?.PlayButtonContainer,
+      classNames: ["romm-btn-download", "romm-dl-uninstall-flash"],
+      background: "linear-gradient(to right, #47b3ff, #1a9fff)",
+      filter: "brightness(1.3)",
+      label: "Uninstalled",
+    });
   }
 
   if (state === "launching") {
-    return (
-      <Focusable className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
-        <DialogButton
-          className={[appActionButtonClasses?.PlayButton, "romm-btn-play", isOffline && "romm-offline"]
-            .filter(Boolean)
-            .join(" ")}
-          style={{
-            ...mainBtnStyle,
-            borderRadius: "2px",
-            background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
-            backgroundPosition: "25%",
-            backgroundSize: "330% 100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-          }}
-          disabled
-        >
-          <span className={`${appActionButtonClasses?.Throbber || ""} romm-throbber`.trim()} />
-          <span>Launching...</span>
-        </DialogButton>
-      </Focusable>
-    );
+    return renderThrobberButton("Launching...");
   }
 
   if (state === "syncing") {
-    return (
-      <Focusable className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
-        <DialogButton
-          className={[appActionButtonClasses?.PlayButton, "romm-btn-play", isOffline && "romm-offline"]
-            .filter(Boolean)
-            .join(" ")}
-          style={{
-            ...mainBtnStyle,
-            borderRadius: "2px",
-            background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
-            backgroundPosition: "25%",
-            backgroundSize: "330% 100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-          }}
-          disabled
-        >
-          <span className={`${appActionButtonClasses?.Throbber || ""} romm-throbber`.trim()} />
-          <span>Syncing saves...</span>
-        </DialogButton>
-      </Focusable>
-    );
+    return renderThrobberButton("Syncing saves...");
   }
 
   if (state === "conflict") {
