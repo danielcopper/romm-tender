@@ -1728,11 +1728,11 @@ twice**, not two: both consult the same frozenset, so removing a name from it op
 
 The second is ordering: the configured headers go on FIRST, so a later `req.add_header` wins the same name whatever came
 before it. This one is **partial**, and the gap is worth knowing. It covers only the names the adapter re-adds after
-`_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Range`, `If-None-Match` and
-`If-Modified-Since`. It does nothing for `Host` or `Content-Length`, which the adapter never sets: `http.client`
-supplies both itself and skips its own when the caller already did. So for `host` — reserved precisely because
-`http.client._send_request` suppresses its derived `Host` when the caller supplied one, which would retarget every
-request's virtual host — the frozenset is the only defence that exists.
+`_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Accept-Encoding` (on the
+JSON GETs only), `Range`, `If-None-Match` and `If-Modified-Since`. It does nothing for `Host` or `Content-Length`, which
+the adapter never sets: `http.client` supplies both itself and skips its own when the caller already did. So for `host`
+— reserved precisely because `http.client._send_request` suppresses its derived `Host` when the caller supplied one,
+which would retarget every request's virtual host — the frozenset is the only defence that exists.
 
 Nothing pins the ordering leg. `test_a_stored_authorization_never_displaces_the_bearer` and
 `test_a_stored_host_never_retargets_the_request` read as though they do, but both pass because `stored_custom_headers`

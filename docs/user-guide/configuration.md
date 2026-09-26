@@ -98,7 +98,7 @@ URL is plain `http://`, where anyone on the network between you and the server c
 
 **What they cannot be.** These names are refused when you save, so nothing you enter can quietly replace a header the
 plugin or its HTTP library already sets: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`,
-`Range`, `If-None-Match` and `If-Modified-Since`.
+`Accept-Encoding`, `Range`, `If-None-Match` and `If-Modified-Since`.
 
 `Authorization` is the one worth explaining. Proxy documentation often suggests it — Pangolin documents a Basic-auth
 `Authorization` header — but that is exactly the header your RomM API token travels in. One request cannot carry both,

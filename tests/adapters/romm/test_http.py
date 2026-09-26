@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import http.client
 import io
 import json
@@ -377,6 +378,17 @@ class TestCustomProxyHeaders:
             plugin._http_adapter.request("/api/test")
 
         assert mock_open.call_args[0][0].get_header("Host") is None
+
+    def test_a_stored_accept_encoding_never_reaches_a_download(self, plugin, tmp_path):
+        """A download writes the body to disk undecoded and resumes with ``Range``, so it must not ask for gzip."""
+        plugin.settings["romm_url"] = "http://romm.local"
+        plugin.settings["romm_custom_headers"] = [{"name": "Accept-Encoding", "value": "gzip"}]
+        resp = _make_resp(200, {"Content-Length": "5"}, b"BYTES")
+
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            plugin._http_adapter.download("/api/roms/1/content/x.bin", str(tmp_path / "x.bin"))
+
+        assert mock_open.call_args[0][0].get_header("Accept-encoding") is None
 
     def test_a_stored_value_that_would_inject_a_header_is_never_sent(self, plugin):
         plugin.settings["romm_url"] = "http://romm.local"
@@ -814,6 +826,102 @@ class TestRommRequestOnce:
             plugin._http_adapter.request_once("/api/heartbeat", timeout=3)
 
         assert mock_open.call_count == 1
+
+
+_GZIPPED_JSON = gzip.compress(json.dumps({"items": [], "total": 0}).encode())
+
+
+class TestGzipJsonReads:
+    """The JSON GETs ask for gzip and read a compressed body; the byte-stream fetches never ask."""
+
+    @pytest.mark.parametrize(
+        "read",
+        [
+            pytest.param(lambda adapter: adapter.request("/api/roms"), id="request"),
+            pytest.param(lambda adapter: adapter.request_once("/api/roms", timeout=3), id="request_once"),
+        ],
+    )
+    def test_a_json_get_asks_for_gzip_and_parses_a_gzip_body(self, read):
+        adapter = _resume_adapter()
+        resp = _make_resp(200, {"Content-Encoding": "gzip"}, _GZIPPED_JSON)
+
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            result = read(adapter)
+
+        assert result == {"items": [], "total": 0}
+        assert mock_open.call_args[0][0].get_header("Accept-encoding") == "gzip"
+
+    def test_a_response_without_content_encoding_is_read_as_it_came(self):
+        adapter = _resume_adapter()
+        resp = _make_resp(200, {}, json.dumps({"items": [], "total": 0}).encode())
+
+        with patch("urllib.request.urlopen", return_value=resp):
+            assert adapter.request("/api/roms") == {"items": [], "total": 0}
+
+    @pytest.mark.parametrize("fetch", ["download", "download_conditional", "download_external"])
+    def test_a_byte_stream_fetch_asks_for_no_encoding(self, tmp_path, fetch):
+        adapter = _resume_adapter()
+        dest = str(tmp_path / "file.bin")
+        resp = _make_resp(200, {"Content-Length": "5"}, b"BYTES")
+
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            if fetch == "download":
+                adapter.download("/api/roms/1/content/x.bin", dest)
+            elif fetch == "download_conditional":
+                adapter.download_conditional("/cover/big.png?ts=1", dest)
+            else:
+                adapter.download_external("https://cdn.example.com/x.png", dest)
+
+        assert mock_open.call_args[0][0].get_header("Accept-encoding") is None
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param(b'{"items": []}', id="not-gzip"),
+            pytest.param(_GZIPPED_JSON[:-12], id="truncated"),
+            pytest.param(_GZIPPED_JSON[:10] + b"\xff" * 8 + _GZIPPED_JSON[18:], id="corrupt-deflate"),
+        ],
+    )
+    def test_a_gzip_body_that_does_not_decompress_is_a_plain_api_error(self, body):
+        """Not a transport failure (no retry, no connection error) and never a 404 verdict."""
+        adapter = _resume_adapter()
+        resp = _make_resp(200, {"Content-Encoding": "gzip"}, body)
+
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open, pytest.raises(RommApiError) as exc_info:
+            adapter.request("/api/roms")
+
+        assert type(exc_info.value) is RommApiError
+        assert "gzip" in str(exc_info.value)
+        assert mock_open.call_count == 1
+
+    @staticmethod
+    def _gzip_404(detail: str) -> urllib.error.HTTPError:
+        hdrs = http.client.HTTPMessage()
+        hdrs["Content-Type"] = "application/json"
+        hdrs["Content-Encoding"] = "gzip"
+        body = gzip.compress(json.dumps({"detail": detail}).encode())
+        return urllib.error.HTTPError("http://romm.local/api/roms/4375", 404, "Not Found", hdrs, io.BytesIO(body))
+
+    def test_a_gzip_entity_404_is_still_an_entity_verdict(self):
+        """A compressed error body is decoded before the 404 proof reads its ``detail``."""
+        adapter = _resume_adapter()
+
+        with (
+            patch("urllib.request.urlopen", side_effect=self._gzip_404("Rom with id '4375' not found")),
+            pytest.raises(RommNotFoundError),
+        ):
+            adapter.request("/api/roms/4375")
+
+    def test_a_gzip_generic_route_404_is_still_no_entity_verdict(self):
+        adapter = _resume_adapter()
+
+        with (
+            patch("urllib.request.urlopen", side_effect=self._gzip_404("Not Found")),
+            pytest.raises(RommApiError) as exc_info,
+        ):
+            adapter.request("/api/roms/4375")
+
+        assert not isinstance(exc_info.value, RommNotFoundError)
 
 
 class TestRommJsonRequest:

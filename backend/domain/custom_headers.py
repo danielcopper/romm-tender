@@ -41,6 +41,7 @@ RESERVED_NAMES = frozenset(
         "range",
         "if-none-match",
         "if-modified-since",
+        "accept-encoding",
     }
 )
 

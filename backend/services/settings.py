@@ -62,7 +62,7 @@ _HEADER_REFUSAL_MESSAGES: dict[HeaderProblem, str] = {
         "'{name}' is not a valid header name — it may not contain a space or a colon; "
         "letters, digits and - _ . are safe."
     ),
-    # Not "set by the plugin": two of the eight reserved names are not. `Host`
+    # Not "set by the plugin": not every name in ``RESERVED_NAMES`` is. `Host`
     # is set by nobody here (it is reserved because http.client suppresses its
     # own derived one once a caller supplies it) and `Content-Length` is set by
     # http.client, so a message naming the plugin is false for both.

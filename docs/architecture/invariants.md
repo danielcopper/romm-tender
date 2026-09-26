@@ -240,14 +240,14 @@ Format: **invariant** — tier — enforced by.
   reached from both `resolve_custom_headers` (the wire) and `stored_custom_headers` (every request, so a hand-edited
   `settings.json` cannot route around it). Those are two call sites of ONE frozenset: drop a name from it and both gates
   open in a single edit. The other is attachment ORDER, and it covers only a name the adapter itself re-adds after
-  `_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Range` / `If-None-Match` /
-  `If-Modified-Since`. It covers `Host` and `Content-Length` **not at all**, because the adapter sets neither:
-  `http.client._send_request` suppresses its own derived `Host` when the caller supplied one, so a configured `Host`
-  retargets every request's virtual host — and for that name, the one this list singles out as dangerous, the frozenset
-  is the only defence there is. Nothing pins the ordering leg either: the two tests that look like they do
-  (`..._never_displaces_the_bearer`, `..._never_retargets_the_request`) pass because `stored_custom_headers` drops the
-  entry long before `add_header` is reached, so both stay green if the ordering is reversed. Detail:
-  `docs/architecture/backend-architecture.md` → "the headers every RomM-origin request carries"
+  `_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Accept-Encoding` / `Range`
+  / `If-None-Match` / `If-Modified-Since`. It covers `Host` and `Content-Length` **not at all**, because the adapter
+  sets neither: `http.client._send_request` suppresses its own derived `Host` when the caller supplied one, so a
+  configured `Host` retargets every request's virtual host — and for that name, the one this list singles out as
+  dangerous, the frozenset is the only defence there is. Nothing pins the ordering leg either: the two tests that look
+  like they do (`..._never_displaces_the_bearer`, `..._never_retargets_the_request`) pass because
+  `stored_custom_headers` drops the entry long before `add_header` is reached, so both stay green if the ordering is
+  reversed. Detail: `docs/architecture/backend-architecture.md` → "the headers every RomM-origin request carries"
 - **`dist/globals.js` is never evaluated into Steam where Decky Loader is serving, and what decides that is read from
   the MACHINE rather than from the window** — test + prompt-only — `tests/host/inject/test_bundles.py` pins both choices
   in both directions (the globals bundle absent beside a serving loader, and the standalone panel absent too, since it

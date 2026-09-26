@@ -90,6 +90,24 @@ class TestRefusedNames:
         refused = resolve_custom_headers([_set(name, "v")], stored=())
         assert refused == HeaderRefusal(HeaderProblem.RESERVED_NAME, name)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Authorization",
+            "User-Agent",
+            "Content-Type",
+            "Content-Length",
+            "Host",
+            "Accept-Encoding",
+            "Range",
+            "If-None-Match",
+            "If-Modified-Since",
+        ],
+    )
+    def test_a_header_set_for_the_request_is_reserved_by_name(self, name):
+        """Named rather than read off the set, so a name dropped from it fails here."""
+        assert name.lower() in RESERVED_NAMES
+
     @pytest.mark.parametrize("spelling", ["authorization", "AUTHORIZATION", "Authorization"])
     def test_authorization_is_refused_with_a_reason_of_its_own(self, spelling):
         """It is the header a proxy's docs suggest first and the one the RomM bearer occupies."""

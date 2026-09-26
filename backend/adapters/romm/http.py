@@ -1,6 +1,7 @@
 """Standalone HTTP client for the RomM API."""
 
 import base64
+import gzip
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
@@ -280,7 +282,7 @@ class RommHttpAdapter:
         non-JSON body degrades to ``None``.
         """
         try:
-            raw = exc.read().decode()
+            raw = RommHttpAdapter._decoded_body(exc.read(), exc.headers).decode()
             body = json.loads(raw) if raw else None
         except Exception:  # unreadable / non-JSON body — degrade to no detail
             return None
@@ -475,6 +477,28 @@ class RommHttpAdapter:
         """
         return self._build_get(path, timeout=timeout)()
 
+    @staticmethod
+    def _decoded_body(raw: bytes, headers) -> bytes:
+        """*raw* un-gzipped when *headers* carry ``Content-Encoding: gzip``, else *raw* as it came."""
+        encoding = headers.get("Content-Encoding", "") if headers else ""
+        return gzip.decompress(raw) if encoding.strip().lower() == "gzip" else raw
+
+    @classmethod
+    def _read_body(cls, resp, url: str, method: str) -> bytes:
+        """Read *resp*'s body, un-gzipped when it was sent compressed.
+
+        A body that claims gzip and does not decompress raises a plain
+        :class:`RommApiError`, the class an unparseable JSON body already
+        reaches: not retried, never a 404 verdict, and — like every plain
+        ``RommApiError`` a ladder gives up on — recorded as known-unreachable
+        and classified ``server_unreachable``.
+        """
+        raw = resp.read()
+        try:
+            return cls._decoded_body(raw, resp.headers)
+        except (OSError, EOFError, zlib.error) as exc:
+            raise RommApiError(f"Undecodable gzip body: {exc}", url=url, method=method) from exc
+
     def _build_get(self, path: str, *, timeout: int = 30):
         """Build the GET worker closure shared by :meth:`request` / :meth:`request_once`."""
         url = self._settings["romm_url"].rstrip("/") + path
@@ -482,9 +506,12 @@ class RommHttpAdapter:
         def _do_request():
             req = urllib.request.Request(url, method="GET")
             self._apply_default_headers(req)
+            # Only the JSON reads ask for gzip: ``download`` resumes with
+            # ``Range``, which a compressed response defeats.
+            req.add_header("Accept-Encoding", "gzip")
             try:
                 with self._urlopen(req, timeout=timeout) as resp:
-                    return json.loads(resp.read().decode())
+                    return json.loads(self._read_body(resp, url, "GET").decode())
             except RommApiError:
                 raise
             except Exception as exc:
