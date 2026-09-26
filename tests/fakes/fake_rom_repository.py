@@ -84,6 +84,9 @@ class FakeRomRepository:
     def count(self) -> int:
         return len(self._roms)
 
+    def count_bound(self) -> int:
+        return sum(1 for rom in self._roms.values() if rom.shortcut_app_id is not None)
+
     def set_emulator_override(self, rom_id: int, label: str | None) -> None:
         rom = self._roms.get(rom_id)
         if rom is not None:

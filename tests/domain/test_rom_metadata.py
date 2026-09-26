@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domain.rom_metadata import _METADATA_TTL_SEC, RomMetadata
+from domain.rom_metadata import RomMetadata
 
 
 def _make_metadata(*, cached_at: float, steam_categories: tuple[int, ...] | None = None) -> RomMetadata:
@@ -47,22 +47,3 @@ class TestCached:
     def test_steam_categories_defaults_to_empty_tuple(self):
         meta = _make_metadata(cached_at=1000.0)
         assert meta.steam_categories == ()
-
-
-class TestIsStale:
-    def test_stale_when_older_than_ttl(self):
-        meta = _make_metadata(cached_at=0.0)
-        assert meta.is_stale(_METADATA_TTL_SEC + 1) is True
-
-    def test_not_stale_within_ttl(self):
-        meta = _make_metadata(cached_at=0.0)
-        assert meta.is_stale(_METADATA_TTL_SEC - 1) is False
-
-    def test_boundary_exactly_at_ttl_is_not_stale(self):
-        # Strict ``>``: exactly cached_at + TTL is NOT stale.
-        meta = _make_metadata(cached_at=100.0)
-        assert meta.is_stale(100.0 + _METADATA_TTL_SEC) is False
-
-    def test_just_past_ttl_is_stale(self):
-        meta = _make_metadata(cached_at=100.0)
-        assert meta.is_stale(100.0 + _METADATA_TTL_SEC + 1) is True

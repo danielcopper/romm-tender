@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 from typing import get_args
@@ -412,6 +413,66 @@ class TestAtomicRollback:
         tables = _tables(db_path)
         assert "ok" in tables
         assert "oops" not in tables
+
+
+class TestForeignKeysPragmaRefused:
+    """A migration cannot toggle foreign keys inside the runner's transaction, so
+    one that tries is refused before it runs rather than applied as a no-op."""
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "PRAGMA foreign_keys=OFF;",
+            "pragma  Foreign_Keys = off;",
+            "-- PRAGMA foreign_keys=OFF is ignored in a transaction",
+            # Spellings SQLite accepts for the same pragma, each checked against
+            # SQLite 3.50.4 to turn foreign keys off outside a transaction.
+            "PRAGMA main.foreign_keys=OFF;",
+            'PRAGMA "main".foreign_keys=OFF;',
+            'PRAGMA main . "foreign_keys" = OFF;',
+            'PRAGMA "foreign_keys"=OFF;',
+            "PRAGMA [foreign_keys]=OFF;",
+            "PRAGMA `foreign_keys`=OFF;",
+            "PRAGMA 'foreign_keys'=OFF;",
+            "PRAGMA/**/foreign_keys=OFF;",
+            "PRAGMA\n-- between\nforeign_keys=OFF;",
+            "PRAGMA foreign_keys(OFF);",
+        ],
+    )
+    def test_refuses_the_pending_migration_and_keeps_the_prior_version(self, tmp_path: Path, statement: str):
+        migrations_dir = tmp_path / "migrations"
+        migrations_dir.mkdir()
+        (migrations_dir / "001_ok.sql").write_text("CREATE TABLE ok (x INTEGER);")
+        (migrations_dir / "002_rebuild.sql").write_text(f"{statement}\nCREATE TABLE rebuilt (x INTEGER);")
+
+        db_path = str(tmp_path / "romm_sync.db")
+
+        with pytest.raises(ValueError, match=re.escape("002_rebuild.sql contains PRAGMA foreign_keys")):
+            apply_migrations(db_path, str(migrations_dir))
+
+        assert _user_version(db_path) == 1
+        tables = _tables(db_path)
+        assert "ok" in tables
+        assert "rebuilt" not in tables
+
+    def test_an_applied_migration_is_not_judged_again(self, tmp_path: Path):
+        migrations_dir = tmp_path / "migrations"
+        migrations_dir.mkdir()
+        (migrations_dir / "001_old.sql").write_text("PRAGMA foreign_keys=OFF;\nCREATE TABLE old (x INTEGER);")
+        db_path = str(tmp_path / "romm_sync.db")
+        _set_user_version(db_path, 1)
+
+        assert apply_migrations(db_path, str(migrations_dir)) == 1
+
+    def test_a_foreign_key_mention_without_the_pragma_passes(self, tmp_path: Path):
+        migrations_dir = tmp_path / "migrations"
+        migrations_dir.mkdir()
+        (migrations_dir / "001_ok.sql").write_text(
+            "-- foreign_keys must be ON at runtime for the cascade below\nCREATE TABLE ok (x INTEGER);"
+        )
+        db_path = str(tmp_path / "romm_sync.db")
+
+        assert apply_migrations(db_path, str(migrations_dir)) == 1
 
 
 class TestUnreadableSource:

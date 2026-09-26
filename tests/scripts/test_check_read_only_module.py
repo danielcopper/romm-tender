@@ -40,6 +40,7 @@ _REASON = "it only ever reads"
 _EXPECTED_READS = frozenset(
     {
         "count",
+        "count_bound",
         "get",
         "get_all_emulator_overrides",
         "get_by_app_id",

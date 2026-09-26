@@ -31,6 +31,7 @@ from lib.errors import DeviceNotRegisteredError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._helpers import local_save_target
 from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_NOT_REGISTERED_REASON
+from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
@@ -98,11 +99,6 @@ class RollbackOrchestrator:
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._device_registry.get_device_id()
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        """Short write UoW: persist the mutated save state for *rom_id*."""
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     async def resolve(
         self,
@@ -221,7 +217,7 @@ class RollbackOrchestrator:
                     info["rom_name"],
                     save_names,
                 )
-            await loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+            await loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             self._logger.info(
                 "resolve_sync_conflict(rom_id=%d, filename=%s, action=%s) -> success",
                 rom_id,

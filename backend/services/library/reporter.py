@@ -483,7 +483,7 @@ class SyncReporter:
     def _count_bound_roms(self) -> int:
         """Count ROMs that still carry a Steam-shortcut binding."""
         with self._uow_factory() as uow:
-            return sum(1 for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None)
+            return uow.roms.count_bound()
 
     # ── Report unit results (per-unit pipeline) ──────────────────
 

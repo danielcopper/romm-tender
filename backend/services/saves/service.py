@@ -1,13 +1,13 @@
 """Save-sync aggregate root and facade for the callable surface.
 
-Composes the save-sync sub-services (sync_engine, status, versions,
-slots, rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate (reached
-through the injected Unit-of-Work factory) and exposes the public
-methods the frontend reaches through callables. The five save-sync
-feature toggles and the device label live in ``settings.json`` and are
-read/written here directly. Most methods are thin delegations;
-orchestration that genuinely spans multiple sub-services lives here,
-single-sub-service logic does not.
+Composes the save-sync sub-services (sync_engine, status, versions, slots,
+rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate
+(reached through the injected Unit-of-Work factory) and exposes the public
+methods the frontend reaches through callables. The five save-sync feature
+toggles live in ``settings.json`` and are read/written here directly; the
+device label beside them is ``DeviceRegistry``'s. Most methods are thin
+delegations; orchestration that genuinely spans multiple sub-services lives
+here, single-sub-service logic does not.
 """
 
 from __future__ import annotations
@@ -469,31 +469,6 @@ class SaveService:
 
         self._settings_persister.save_settings()
         return {"success": True, "settings": save_sync_settings_view(self._settings)}
-
-    def get_device_name(self) -> str | None:
-        """Return the user-set device label from settings.json (``None`` if unset)."""
-        return self._settings.get("device_name")
-
-    def set_device_name(self, name: str) -> None:
-        """Persist the device label to settings.json, atomic on failure.
-
-        Mutates the in-memory settings dict and triggers the persist; if the
-        persist raises, the in-memory dict is rolled back to its prior value so
-        an unsaved label never lingers in memory (a later unrelated
-        ``save_settings`` would otherwise commit it), then the failure
-        re-raises.
-        """
-        had_name = "device_name" in self._settings
-        prior = self._settings.get("device_name")
-        self._settings["device_name"] = name
-        try:
-            self._settings_persister.save_settings()
-        except Exception:
-            if had_name:
-                self._settings["device_name"] = prior
-            else:
-                self._settings.pop("device_name", None)
-            raise
 
     def forget_device(self) -> None:
         """Drop the registered server device id on a server-origin change.

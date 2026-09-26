@@ -17,7 +17,7 @@ from .adapters import (
     StateBundle,
     bootstrap,
 )
-from .services import WiringConfig, wire_services
+from .services import ServicesBundle, WiringConfig, wire_services
 
 __all__ = [
     "AdapterBundle",
@@ -26,6 +26,7 @@ __all__ = [
     "CallbackBundle",
     "RuntimeAdaptersBundle",
     "RuntimeBundle",
+    "ServicesBundle",
     "StateBundle",
     "WiringConfig",
     "bootstrap",

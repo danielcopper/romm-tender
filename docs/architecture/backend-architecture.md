@@ -2331,7 +2331,8 @@ only — consumers write `from bootstrap import …` and never deep-import a sub
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
    `min_required_version`, `directories`, `launcher` and `update_source`, and constructs every service, injecting each
-   one's `*ServiceConfig`. Returns a dict of named service instances.
+   one's `*ServiceConfig`. Returns a frozen `ServicesBundle` holding every service and the prune conflict gate as typed
+   fields.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`
 composes the runtime bundle (event loop, event funnel) and calls `wire_services()`. Services receive the `settings` dict

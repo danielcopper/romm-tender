@@ -52,6 +52,7 @@ from services.saves._messages import (
     SAVE_SYNC_IN_CONTENT_DIR,
     SAVE_SYNC_IN_CONTENT_DIR_REASON,
 )
+from services.saves._save_state import write_save_state
 from services.saves._settings import (
     autocleanup_limit,
     resolve_default_slot,
@@ -459,16 +460,11 @@ class SyncEngine:
         and the server device id (read through the shared
         :class:`DeviceRegistry`, the single device-id owner). The aggregate is
         mutated outside the transaction by the matrix worker;
-        :meth:`_write_save_state` persists it.
+        :func:`write_save_state` persists it.
         """
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._devices.get_device_id()
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        """Short write UoW: persist the mutated save state for *rom_id*."""
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     # ------------------------------------------------------------------
     # Public sync orchestration callables
@@ -685,7 +681,7 @@ class SyncEngine:
                         save_answer=save_answer,
                     ),
                 )
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             finally:
                 synced = uploaded + downloaded
                 if own_session_id is not None:
@@ -733,7 +729,7 @@ class SyncEngine:
     async def _close_negotiate_session(self, session_id: int, completed: int, failed: int) -> None:
         """Close a negotiate session, reporting op counts (non-fatal).
 
-        Invoked off-loop like :meth:`_write_save_state` and swallows any failure:
+        Invoked off-loop like :func:`write_save_state` and swallows any failure:
         a session the server never hears closed lingers until it is cancelled by
         this device's next ``negotiate``, so a failed close must never fail the
         sync run.

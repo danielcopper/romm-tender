@@ -403,6 +403,10 @@ the whole change — on the next startup the runner sees `NNN > user_version`, a
 bumps `user_version` to `NNN`. Existing databases receive only the new migrations; fresh databases receive all of them
 in order. No code change is needed to register the file.
 
+Foreign keys stay on for every migration and a migration cannot turn them off — the runner refuses one that contains
+`PRAGMA foreign_keys` — so a table another table references cannot be rebuilt through the runner as it stands. Why, and
+what such a rebuild needs from the runner first, is in `apply_migrations`' docstring.
+
 The first migration past `001` is
 [`002_add_emulator_override.sql`](https://github.com/danielcopper/romm-tender/blob/main/backend/db/migrations/002_add_emulator_override.sql)
 — a single `ALTER TABLE roms ADD COLUMN emulator_override TEXT;` for the per-game core override

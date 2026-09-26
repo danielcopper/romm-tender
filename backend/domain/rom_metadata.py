@@ -1,21 +1,20 @@
 """RomMetadata — cached RomM game metadata with a staleness signal.
 
 The descriptive metadata the plugin caches per ROM (summary, genres, companies,
-ratings, derived Steam categories) plus the ``cached_at`` epoch that drives the
-7-day staleness check. Regenerated independently of library sync — staleness,
-not a schedule, prompts a refresh. References its Rom by id.
+ratings, derived Steam categories) plus ``cached_at``, the Unix time it was
+cached, which a reader measures its age against. Regenerated independently of
+library sync — staleness, not a schedule, prompts a refresh. References its Rom
+by id.
 """
 
 from __future__ import annotations
 
 from domain._aggregate import cosmic_aggregate
 
-_METADATA_TTL_SEC = 7 * 24 * 3600  # metadata older than 7 days is stale
-
 
 @cosmic_aggregate
 class RomMetadata:
-    """Cached ROM metadata plus the epoch that drives its 7-day staleness check."""
+    """Cached ROM metadata plus the Unix time it was cached (``cached_at``)."""
 
     summary: str
     genres: tuple[str, ...]
@@ -53,7 +52,3 @@ class RomMetadata:
             cached_at=cached_at,
             steam_categories=steam_categories,
         )
-
-    def is_stale(self, now: float) -> bool:
-        """Return True when the cache is older than the 7-day TTL at Unix time ``now``."""
-        return (now - self.cached_at) > _METADATA_TTL_SEC
