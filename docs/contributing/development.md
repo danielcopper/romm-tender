@@ -239,16 +239,8 @@ PYTHONPATH=backend lint-imports   # check service/adapter layer rules
 mise run lint                     # same via mise
 ```
 
-The `.importlinter` config enforces the layer boundary contracts:
-
-- Services must not import concrete adapter implementations (Protocols are allowed)
-- Adapters must not import services
-- Utilities (`lib/`) must not import services, adapters, or domain
-- Domain must not import services or adapters (`lib` is allowed)
-- Models must not import services, adapters, domain, or lib
-- Services must not import stdlib I/O / non-deterministic primitives (`time`, `uuid`, `random`, `subprocess`,
-  `threading`, `requests`)
-- Services must be independent of each other (no cross-service imports)
+The `.importlinter` config holds the layer boundary contracts, one section per rule with the rule stated on its `name`
+line; [Boundary Enforcement](../architecture/backend-architecture.md#1-import-linter-ci-enforced) walks through them.
 
 `mise run lint` also runs `scripts/check_cosmic_call_bans.sh`, which complements the import rules at the call site:
 services may not call `datetime.now()` / `asyncio.sleep()` / `time.time()` / `time.monotonic()` / `uuid.uuid4()` /
@@ -361,8 +353,7 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
   0 bugs, 0 vulnerabilities. The scan is skipped on Dependabot PRs (no `SONAR_TOKEN` access in that restricted context);
   the required status check is the `sonar-gate` job, which passes when SonarCloud succeeded or was skipped and fails
   only when it failed — so dependency PRs aren't deadlocked on a check that can never run for them.
-- **Ruff** — Python linting in CI. Expanded ruleset includes B (bugbear), SIM (simplify), UP (pyupgrade), RUF
-  (ruff-specific), and ARG (unused arguments) in addition to the base E/F rules.
+- **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
 - **pytest-cov** — Branch coverage reported to SonarCloud.
@@ -399,27 +390,13 @@ backend/
   bootstrap/                         # Composition root — re-exported through __init__.py
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles
-  services/                          # Orchestration / business logic (Protocol-typed deps via *ServiceConfig)
-    protocols/                       # Protocol interfaces, grouped: transport / determinism /
-                                     #   persistence / paths / infra / files / cross_service
-    library/                         # LibraryService façade — fetcher, sync_orchestrator, reporter, shared state box
-    saves/                           # SaveService aggregate — state, sync_engine/, slots/, status/, versions
-    downloads.py                     # DownloadService — ROM downloads, ZIP/M3U, fcntl queue
-    firmware/                        # FirmwareService façade — listing, demand, status, downloads, deletion
-    session_lifecycle.py             # SessionLifecycleService — post-exit orchestration
-    migration/                       # MigrationService — RetroDECK home migration
-    steamgrid.py                     # SteamGridService — SteamGridDB artwork
-    artwork.py                       # ArtworkService — cover art staging/cleanup
-    game_detail.py / playtime.py / achievements.py / settings.py / cores.py
-    metadata.py / rom_removal.py / shortcut_removal.py / launch_gate.py
-    startup_healing.py / connection.py
+  services/                          # Orchestration / business logic (Protocol-typed deps via *ServiceConfig);
+                                     #   every module is in Backend Architecture → Services
   adapters/                          # I/O boundaries — implement Protocols
     romm/{http,romm_api}.py          # RomM HTTP transport + REST adapter
     steam_config.py / steamgriddb.py / sgdb_artwork_cache.py / cover_art_file_store.py
     persistence.py                   # settings.json read/write + one-time legacy save_sync_state fold
-    repositories/                    # SqliteUnitOfWork (unit_of_work.py) + 9 repos (8 aggregate + kv_config)
-                                     #   (rom, rom_install, rom_metadata, playtime, rom_save_sync_state,
-                                     #    bios_file, firmware_cache, sync_run, kv_config)
+    repositories/                    # SqliteUnitOfWork (unit_of_work.py) + one repo per aggregate root, plus kv_config
     sqlite_migrations.py / machine_id.py  # schema migration runner (PRAGMA user_version) + machine-id reader
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
     retrodeck_paths.py / es_find_rules.py
@@ -427,21 +404,13 @@ backend/
     system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / debug_logger.py
   db/
     migrations/001_initial.sql       # SQLite schema DDL
-  domain/                            # Pure compute — no I/O, no service/adapter imports
+  domain/                            # Pure compute — no I/O, imports no other internal layer
+                                     #   (Backend Architecture → Domain; the aggregate roots: Database Design)
     _aggregate.py                    # the @cosmic_aggregate decorator
-    rom.py / rom_install.py / rom_metadata.py / rom_metadata_mapping.py / playtime.py
-    rom_save_sync_state.py / bios_file.py / firmware_cache.py / sync_run.py
-    sync_action.py / sync_diff.py / preview_delta.py / work_unit.py
-    save_path.py / save_status*.py / save_attribution.py / save_answer.py / savestate_location.py
-    firmware_paths.py / bios.py / achievements.py / shortcut_data.py / steam_categories.py
-    sgdb_artwork.py / installed_roms.py / rom_files.py
-    state_migrations.py / sync_state.py / emulator_tag.py / version.py
   models/                            # Data shapes (TypedDicts/dataclasses) — independent of other layers
   lib/                               # Cross-cutting utilities (errors, list_result, iso_time, path_safety, late_binding, ...)
-  _vendor/                           # Vendored third-party deps — not our code, only imported by adapters
-    README.md                        # Provenance per package: upstream URL, version/commit, local patches
-    vdf/                             # Valve Data Format parser (Steam shortcuts.vdf)
-      LICENSE                        # Upstream MIT license — preserved on redistribution
+  _vendor/                           # Vendored third-party deps — not our code, only imported by adapters;
+                                     #   each package's provenance is in _vendor/README.md
 frontend/src/                        # Frontend TypeScript
   index.tsx                          # Plugin entry, event listeners, QAM router, the Quick Access entry's install
   qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary

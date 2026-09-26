@@ -379,9 +379,11 @@ Single-file vs multi-file is **read from `rom_dir` presence** — never re-deriv
 stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-and-rom-dir.md)). Migration moves
 `rom_dir` whole when set, else the file; uninstall removes `rom_dir` whole when set, else the file. A future per-file
 `RomFile[]` model — one row per physical file, each tagged with a RomM `category` (`game` / `dlc` / `update` / `mod` /
-…) — is the planned shape for the multi-file features in [#140](https://github.com/danielcopper/romm-tender/issues/140)
-/ [#129](https://github.com/danielcopper/romm-tender/issues/129); it is an additive 1:N child of `rom_installs`
-(deferred until those land), and `file_path` + `rom_dir` are its forward-compatible projection.
+…) — is the planned shape for the multi-file features in
+[#1125](https://github.com/danielcopper/romm-tender/issues/1125) /
+[#2035](https://github.com/danielcopper/romm-tender/issues/2035) /
+[#129](https://github.com/danielcopper/romm-tender/issues/129); it is an additive 1:N child of `rom_installs` (deferred
+until those land), and `file_path` + `rom_dir` are its forward-compatible projection.
 
 ### Launchable install / no launch target
 

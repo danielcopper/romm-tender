@@ -1,4 +1,4 @@
-"""Descriptor-relative exact-identity mutation helpers for recovery-backed cleanup."""
+"""Descriptor-relative exact-identity mutation helpers."""
 
 from __future__ import annotations
 

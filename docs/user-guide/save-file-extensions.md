@@ -8,6 +8,7 @@ informs the implementation of [#196](https://github.com/danielcopper/romm-tender
     The plugin held a per-system list of save extensions, and this page is the research behind it. **That list is
     retired.** The plugin now asks the machine which files a game's save consists of, per game and per the emulator
     that will launch it, and reads the answer fresh on every sync — see
+    [Save File Discovery](../architecture/save-file-sync-architecture.md#save-file-discovery),
     [Save sync coverage](../architecture/save-sync-coverage.md) and
     [ADR-0034](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0034-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
@@ -18,9 +19,9 @@ informs the implementation of [#196](https://github.com/danielcopper/romm-tender
     version digit (`<rom>.0.srm`) the table never had, and Saturn's third extension turned out to be console
     configuration rather than progress, and is no longer synced.
 
-    Keep this page as the record of how the original `.srm`/`.dsv`/`.brm` decision was reached. Do not use it to
-    predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the broader view, and
-    your own machine is the authority.
+    What stays here is the research: which extensions each core writes, and what was recommended for each at the time.
+    Do not use it to predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the
+    broader view, and your own machine is the authority.
 
 ## How RetroArch Save Extensions Work
 
@@ -88,8 +89,9 @@ These cores all produce `.srm` (and optionally `.rtc`). No additional extensions
 - No `libretro_saves` field in core info -- uses its own VMU format
 - Produces `vmu_save_{A1-D1}.bin` files and `dc_nvmem.bin`
 - Multi-slot VMU support (games can produce multiple `.bin` files)
-- **Action**: Tracked separately in [#151](https://github.com/danielcopper/romm-tender/issues/151). Not included in
-  extension expansion.
+- **Action**: Not included in extension expansion. Syncing a shared card is
+  [#901](https://github.com/danielcopper/romm-tender/issues/901); switching Flycast onto per-game VMUs is
+  [#1645](https://github.com/danielcopper/romm-tender/issues/1645).
 
 #### MAME / FBNeo (Arcade) -- `.nv`
 
@@ -140,37 +142,3 @@ Uses a **per-emulator** mapping:
 | MAME                        | `.nv`                          |
 
 Again, standalone emulator formats that don't apply to RetroDECK's RetroArch-based setup.
-
-## Implementation Decision
-
-For Tender (RetroDECK-only):
-
-| Extension                      | Include?                          | Reason                                                       |
-| ------------------------------ | --------------------------------- | ------------------------------------------------------------ |
-| `.srm`                         | **Yes** (already supported)       | Standard RetroArch SRAM                                      |
-| `.rtc`                         | **Yes** (already supported)       | Standard RetroArch RTC                                       |
-| `.dsv`                         | **Yes** (add as DS override)      | DeSmuME native format                                        |
-| `.brm`                         | **Yes** (add as Sega CD override) | Genesis Plus GX Sega CD BRAM                                 |
-| `.sav`                         | **Yes** (add to defaults)         | gpsp fallback, DeSmuME fallback, defensive                   |
-| `.bin`                         | **No** (separate ticket #151)     | Flycast Dreamcast VMU -- needs special handling              |
-| `.eep`, `.sra`, `.fla`, `.mpk` | **No**                            | N64 standalone formats, Mupen64Plus packs into `.srm`        |
-| `.mcr`, `.mcd`                 | **No**                            | PSX Mednafen/DuckStation formats, RetroArch cores use `.srm` |
-| `.nv`                          | **No**                            | MAME NVRAM, completely different directory structure         |
-
-### System Override Map
-
-Override keys are RetroDECK **system** names (the normalized value from `resolve_system` / `platform_map`), not raw RomM
-platform slugs — this keeps the extension lookup aligned with the save directory, cores, and gamelists, which are all
-system-keyed.
-
-```python
-_DEFAULT_EXTENSIONS = (".srm", ".rtc", ".sav")
-
-_PLATFORM_OVERRIDES = {
-    "nds": (".srm", ".rtc", ".sav", ".dsv"),
-    "segacd": (".srm", ".rtc", ".sav", ".brm"),
-}
-```
-
-Adding `.sav` to defaults is conservative but safe -- it ensures we pick up saves from any core that uses `.sav` as an
-alternative SRAM format, without false-matching on non-save files.

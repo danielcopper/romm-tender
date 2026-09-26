@@ -164,7 +164,7 @@ Every core's save behavior falls into one of these (plus "no save"):
 
 | Class   | Shape                                                                                  | What it needs                                                                                                                 |
 | ------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **(a)** | Per-game, single-token `<rom>.<ext>`, save folder                                      | Just add `<ext>` to the override map. No architecture change.                                                                 |
+| **(a)** | Per-game, single-token `<rom>.<ext>`, save folder                                      | Nothing: the save answer names these files, and the sync probes them.                                                         |
 | **(b)** | Per-game, but a **slot/unit infix** (`<rom>.1.mcr`, `<rom>.A1.bin`)                    | Infix-aware discovery **and** download-target derivation (the current code drops the infix), plus multi-file-per-ROM support. |
 | **(c)** | **Shared** card (one file, many games), **fixed** name, or **outside** the save folder | Breaks the per-game model. Not solvable by an extension — see strategy below.                                                 |
 
@@ -192,14 +192,13 @@ decides on ambiguity" stance:
 
 ## Roadmap mapping
 
-- **(a)** — nothing to add: the resolver names these files already. Verification tracked in
-  [#237](https://github.com/danielcopper/romm-tender/issues/237).
 - **(b)** — infix-aware per-game discovery (PS1 multi-card, Flycast per-game VMU, 3DO NVRAM); research in
   [#237](https://github.com/danielcopper/romm-tender/issues/237), implementation under the save-format epic
   [#255](https://github.com/danielcopper/romm-tender/issues/255).
 - **(c)** — shared/system-dir handling under [#255](https://github.com/danielcopper/romm-tender/issues/255) (save
-  formats), [#151](https://github.com/danielcopper/romm-tender/issues/151) (Dreamcast VMU), and
-  [#129](https://github.com/danielcopper/romm-tender/issues/129) (standalone emulators) — all v2.0.
+  formats), [#901](https://github.com/danielcopper/romm-tender/issues/901) (shared cards, Dreamcast's default VMUs among
+  them), and [#129](https://github.com/danielcopper/romm-tender/issues/129) (standalone emulators) — all v2.0. Switching
+  Flycast onto per-game VMUs is [#1645](https://github.com/danielcopper/romm-tender/issues/1645).
 
 ## Evidence level, and where the audit has since disagreed
 

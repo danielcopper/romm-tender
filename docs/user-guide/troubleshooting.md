@@ -194,10 +194,15 @@ sync. Re-check the game in RomM (a server database reset re-registers this devic
 
 **Symptom**: The game detail page shows save status but no save file is being synced.
 
-**Fix**: Save sync only works for RetroArch `.srm` save files. If you're using a standalone emulator (PCSX2,
-DuckStation, Dolphin, etc.), saves for those systems are not yet supported.
+**Fix**: What syncs is not one file type. For each game, the plugin asks the emulator that will launch it which files
+its save consists of, and syncs only those. Where that answer is something the plugin cannot carry — a card many games
+share, a save inside the game file, a name built from the game's own identity, or nothing established — save sync does
+nothing for that game rather than guessing.
+[When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why) explains each
+case, and the [save sync support matrix](save-sync-support-matrix.md) shows how each system usually lands.
 
-Also verify the game actually creates a `.srm` file — some games use in-game passwords instead of battery saves.
+Also check that the game has saved at all — some games use in-game passwords instead of battery saves, so there is
+nothing to sync.
 
 ### Saves being overwritten unexpectedly
 

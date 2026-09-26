@@ -185,12 +185,12 @@ detail itself 404s, `bound_vanished` is true, `server_query_failed` stays false,
 individually. That entity-specific 404 is not fed into the global connection store; a genuine explicit
 server-unreachable result still is. Cover and save endpoints are not liveness authorities.
 
-Vanished rows stay visible with their active and downloaded markers, but are disabled and excluded before the existing
-default-resolution kernel runs. `vanished` does not change `switchable` or
-`domain.sibling_group.target_in_sibling_group`: availability and sibling membership remain separate verdicts. This lets
-a shortcut still bound to a vanished id show the retained context while the user selects a live alternative. The Saves
-tab likewise skips positively vanished inactive installs before checking local drift, then continues through later live
-candidates.
+Vanished rows stay visible with their active and downloaded markers, but cannot be switched to — selecting one opens its
+cleanup — and are excluded before the existing default-resolution kernel runs. `vanished` does not change `switchable`
+or `domain.sibling_group.target_in_sibling_group`: availability and sibling membership remain separate verdicts. This
+lets a shortcut still bound to a vanished id show the retained context while the user selects a live alternative. The
+Saves tab likewise skips positively vanished inactive installs before checking local drift, then continues through later
+live candidates.
 
 The list verdict is advisory UI state, not authority for a later write. Immediately before `switch_version` moves the
 binding onto an already-local target, it checks that exact target id again through the same three-second, single-attempt

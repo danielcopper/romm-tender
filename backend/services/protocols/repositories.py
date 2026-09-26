@@ -12,8 +12,9 @@ concern — services see a single aggregate.
 The Protocols match the aggregate roots settled in ADR-0003 — ``Rom``,
 ``RomInstall``, ``RomMetadata``, ``Playtime``, ``RomSaveSyncState``, ``BiosFile``,
 ``FirmwareCacheEntry``, ``SyncRun`` — plus ``PlatformSyncState`` (the per-platform
-completion stamp, ADR-0023), ``AnsweredSaveDirectory`` (the save directory the
-resolver last answered per ROM, ADR-0041) and the ``kv_config`` key-value surface.
+completion stamp, ADR-0023), its per-collection sibling ``CollectionSyncState``,
+``AnsweredSaveDirectory`` (the save directory the resolver last answered per ROM,
+ADR-0041) and the ``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 

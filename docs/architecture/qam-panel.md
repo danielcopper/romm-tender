@@ -1813,8 +1813,8 @@ The pages land in this order under #1808, each with the open work that already s
    become visible. After Library, which removes the platform modal.
 
 Main has no issue of its own: each change to Main lands with the page that gives it a home. Downloads has none either.
-i18n (#133, #1524) comes after the rebuild, and the pages avoid copy that breaks when German or French expands it; the
-store screenshots (#830) are taken after.
+i18n (#1524) comes after the rebuild, and the pages avoid copy that breaks when German or French expands it; the store
+screenshots (#830) are taken after.
 
 ## Design record
 

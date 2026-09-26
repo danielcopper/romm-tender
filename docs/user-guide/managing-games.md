@@ -53,10 +53,12 @@ a not-yet-synced version whose match conflicts, are both shown (so you know they
 either would move the shortcut onto a different game. To make one selectable, fix its metadata match in RomM so it
 agrees with this game's, then re-sync.
 
-A retained local version that RomM has positively confirmed it no longer has is also shown dimmed and disabled, with the
-separate label _"No longer available on RomM"_. Its **active** and **Downloaded** markers remain visible so it is clear
-what the shortcut and local files still refer to, but it never receives the **Default** badge. If the shortcut is still
-active on that unavailable id, choose any live alternative in the same list to recover the game.
+A retained local version that RomM has positively confirmed it no longer has is also shown dimmed, with the separate
+label _"No longer available on RomM"_, and it cannot be switched to: selecting it instead opens the cleanup confirmation
+described under [Cleaning up versions removed from RomM](#cleaning-up-versions-removed-from-romm). Its **active** and
+**Downloaded** markers remain visible so it is clear what the shortcut and local files still refer to, but it never
+receives the **Default** badge. If the shortcut is still active on that unavailable id, choose any live alternative in
+the same list to recover the game.
 
 When the version the shortcut is bound to is the one confirmed gone, the **Download** button is greyed out as well — it
 stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
@@ -164,11 +166,10 @@ named `<game>_<date>_<id>`, and its `README.txt` lists every game the bundle cov
 copied file with the exact path to put it back, the playtime in hours and minutes, and the steps to restore by hand
 starting with `sha256sum -c checksums.sha256`. The recovery folder itself carries a `README.txt` explaining what it is.
 
-A synced vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens
-the same confirmation scoped to that one version. A synced singleton vanished binding shows the same trash action as a
-single button, without opening an otherwise empty picker. The vanished version itself remains non-switchable either way
-— selecting it can only ever start the cleanup, never rebind the shortcut to it. A vanished version with no local data
-to remove stays listed and disabled, with no trash icon.
+A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
+confirmation scoped to that one version. A singleton vanished binding shows the same trash action as a single button,
+without opening an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it
+can only ever start the cleanup, never rebind the shortcut to it.
 
 While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
 phase in words (checking with RomM, backing up, backup complete, updating or removing the Steam shortcut, removing local

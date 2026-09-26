@@ -717,12 +717,11 @@ class RommHttpAdapter:
     # Schemes an external ``url_cover`` fetch may use. A server-supplied
     # ``url_cover`` is untrusted input, so anything else (``file:``, ``ftp:``,
     # ``data:``, scheme-relative, …) is refused before any request — a
-    # ``file:///etc/passwd`` must never reach ``urlopen`` (#1450). Post-DNS
-    # private/link-local IP blocking and per-redirect-hop revalidation are the
-    # broader bounded-SSRF hardening tracked in #1182 (they also cover the
-    # pre-existing RomM download paths); stdlib's ``HTTPRedirectHandler`` already
-    # refuses redirects to non-http(s) schemes, so this allowlist closes the
-    # ``file:`` primitive on its own.
+    # ``file:///etc/passwd`` must never reach ``urlopen`` (#1450). stdlib's
+    # ``HTTPRedirectHandler`` already refuses redirects to non-http(s) schemes,
+    # so this allowlist closes the ``file:`` primitive on its own. It is not a
+    # general SSRF guard: what it leaves open is stated beside the ``url_cover``
+    # fallback in docs/architecture/backend-architecture.md.
     _EXTERNAL_URL_SCHEMES = ("http", "https")
 
     def download_external(self, url: str, dest: str) -> None:
