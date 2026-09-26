@@ -442,10 +442,10 @@ class StatusService:
         # folded over the system default), keyed by rom_id so it never diverges
         # from the launched core. Core labels come from ES-DE config which may
         # differ from RetroArch's corename (e.g. "Snes9x - Current" vs "Snes9x").
-        # Aligning with RetroArch core names is tracked in #208.
         try:
             active_core, active_label = self._active_core.active_core_for_rom(rom_id)
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"check_core_change: active-core resolution failed for rom {rom_id}: {e}")
             return {"changed": False}
 
         changed = detect_core_change(stored_core, active_core)
