@@ -91,6 +91,10 @@ class RomRepository(Protocol):
         """Return the number of ROMs in the registry. (library/reporter.py len registry, shortcut_removal.py stats)"""
         ...
 
+    def count_bound(self) -> int:
+        """Return the number of ROMs that carry a Steam-shortcut binding. (library/reporter.py sync totals)"""
+        ...
+
     def set_emulator_override(self, rom_id: int, label: str | None) -> None:
         """Pin (or clear with ``None``) the per-game emulator override for *rom_id*.
 
