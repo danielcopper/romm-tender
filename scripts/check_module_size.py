@@ -78,7 +78,9 @@ SCOPE_DIRS = (
 # Never taken silently: a number raised without that reasoning has retired the
 # gate, and that costs more than any module's size.
 ALLOWLIST = {
-    "backend/services/downloads.py": 1119,
+    # Lowered 1119 → 1059 (#1171): the download and extract progress callbacks
+    # became one phase-parameterised factory.
+    "backend/services/downloads.py": 1059,
     # Lowered 1150 → 1085 (#1815): the per-platform ``collapsed_count`` garnish
     # on ``get_platforms`` was deleted once it was established that nothing read
     # it, which banked 65 lines. Reclaimed rather than left as headroom, because

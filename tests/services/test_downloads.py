@@ -4252,6 +4252,107 @@ class TestMakeProgressCallback:
         assert plugin._download_service._loop.call_soon_threadsafe.call_count == 1
 
 
+class TestProgressPhase:
+    """The downloading and extracting phases share one callback and differ only in
+    the frame's ``status``, what they do to the entry's status, the ``resumable``
+    they report, and the log line's label."""
+
+    def _eager_loop(self, plugin):
+        """Run the marshaled update synchronously; return the recorded emits."""
+        plugin._download_service._loop = MagicMock()
+        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
+        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        emit_calls: list[tuple[str, dict[str, Any]]] = []
+
+        def _record_emit(event, payload):
+            emit_calls.append((event, payload))
+
+            async def _noop():
+                return None
+
+            return _noop()
+
+        plugin._download_service._emit = _record_emit
+        fake_clock = FakeClock()
+        fake_clock.advance(60)  # clear both throttles
+        plugin._download_service._clock = fake_clock
+        return emit_calls
+
+    def _seed_entry(self, plugin, rom_id, *, status):
+        plugin._download_service._download_queue[rom_id] = {
+            "rom_id": rom_id,
+            "status": status,
+            "progress": 0,
+            "bytes_downloaded": 0,
+            "total_bytes": 0,
+            "resumable": True,
+        }
+
+    def test_extracting_flips_the_entry_and_is_never_resumable(self, plugin):
+        emit_calls = self._eager_loop(plugin)
+        self._seed_entry(plugin, 7, status="downloading")
+
+        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.zip", phase="extracting")
+        cb(512, 1024)
+
+        entry = plugin._download_service._download_queue[7]
+        assert entry["status"] == "extracting"
+        assert entry["bytes_downloaded"] == 512
+        assert emit_calls == [
+            (
+                "download_progress",
+                {
+                    "rom_id": 7,
+                    "rom_name": "Mario",
+                    "platform_name": "N64",
+                    "file_name": "mario.zip",
+                    "status": "extracting",
+                    "progress": 0.5,
+                    "bytes_downloaded": 512,
+                    "total_bytes": 1024,
+                    "resumable": False,
+                },
+            )
+        ]
+
+    def test_downloading_leaves_the_entry_status_and_reports_its_resumable(self, plugin):
+        emit_calls = self._eager_loop(plugin)
+        self._seed_entry(plugin, 7, status="paused")
+
+        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64")
+        cb(512, 1024)
+
+        entry = plugin._download_service._download_queue[7]
+        assert entry["status"] == "paused"
+        assert emit_calls == [
+            (
+                "download_progress",
+                {
+                    "rom_id": 7,
+                    "rom_name": "Mario",
+                    "platform_name": "N64",
+                    "file_name": "mario.z64",
+                    "status": "downloading",
+                    "progress": 0.5,
+                    "bytes_downloaded": 512,
+                    "total_bytes": 1024,
+                    "resumable": True,
+                },
+            )
+        ]
+
+    @pytest.mark.parametrize(("phase", "label"), [("downloading", "Download"), ("extracting", "Extract")])
+    def test_the_log_line_names_the_phase(self, plugin, caplog, phase, label):
+        self._eager_loop(plugin)
+        self._seed_entry(plugin, 7, status="downloading")
+
+        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64", phase=phase)
+        with caplog.at_level(logging.INFO):
+            cb(512 * 1024 * 1024, 1024 * 1024 * 1024)
+
+        assert f"{label} progress: Mario — 512.0/1024.0 MB (50%)" in caplog.messages
+
+
 class TestCleanupPartialDownloadFailureInjection:
     """Tests for _cleanup_partial_download — adapter raises mid-cleanup.
 
@@ -4429,7 +4530,7 @@ class TestProgressCallbackEvictionSafe:
 
     def _eager_loop(self, plugin):
         """Make call_soon_threadsafe run its target synchronously so the marshaled
-        ``_apply_download_progress`` executes in-test; create_task consumes the
+        ``_apply_progress`` executes in-test; create_task consumes the
         coroutine. Returns the recorded emit calls list.
         """
         plugin._download_service._loop = MagicMock()
@@ -4454,7 +4555,7 @@ class TestProgressCallbackEvictionSafe:
         fake_clock.advance(60)  # clear both throttles
         plugin._download_service._clock = fake_clock
 
-        # No queue entry for rom_id 99 — the callback's _apply_download_progress
+        # No queue entry for rom_id 99 — the callback's _apply_progress
         # hits the ``.get`` guard. Before the #973 fix this was ``self._download_queue[99]
         # .update(...)`` on the worker thread → KeyError.
         cb = plugin._download_service._make_progress_callback(99, "Ghost", "N64", "ghost.z64")
