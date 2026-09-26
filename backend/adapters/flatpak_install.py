@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 
-_DEFAULT_APP_ID = "net.retrodeck.retrodeck"
+from domain.shortcut_data import RETRODECK_APP_ID
 
 # System-wide flatpak install root. Module-level so tests can repoint it at a
 # fabricated tmp tree (the per-user root derives from ``user_home``, which is
@@ -33,7 +33,7 @@ _USER_FLATPAK_SUFFIX = os.path.join(".local", "share", "flatpak")
 _APP_FILES_RELATIVE = os.path.join("current", "active", "files")
 
 
-def flatpak_app_files_dirs(user_home: str, app_id: str = _DEFAULT_APP_ID) -> list[str]:
+def flatpak_app_files_dirs(user_home: str, app_id: str = RETRODECK_APP_ID) -> list[str]:
     """Return existing ``<root>/app/<app_id>/current/active/files`` dirs across flatpak roots.
 
     Roots probed, in the order **flatpak itself** resolves an app:

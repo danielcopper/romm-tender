@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from _vendor import vdf
 
 from domain.sgdb_artwork import to_unsigned_app_id
+from domain.shortcut_data import RETRODECK_APP_ID
 from lib.errors import SteamGridDirMissingError
 
 if TYPE_CHECKING:
@@ -251,7 +252,7 @@ class SteamConfigAdapter:
     def check_retroarch_input_driver(self) -> dict[str, Any] | None:
         """Check if RetroArch input_driver is set to a problematic value."""
         candidates = [
-            "~/.var/app/net.retrodeck.retrodeck/config/retroarch/retroarch.cfg",
+            f"~/.var/app/{RETRODECK_APP_ID}/config/retroarch/retroarch.cfg",
             "~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg",
             "~/.config/retroarch/retroarch.cfg",
         ]
