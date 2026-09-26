@@ -158,6 +158,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
       }
     } catch (e) {
       detach(debugLog(`VersionHistoryPanel: restore error for save ${version.id}: ${e}`));
+      showToast("Couldn't confirm the restore.", { subtext: e instanceof Error ? e.message : String(e) });
     } finally {
       setRestoring(null);
     }

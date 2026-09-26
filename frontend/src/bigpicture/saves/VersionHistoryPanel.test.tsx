@@ -444,15 +444,18 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
-    it("swallows thrown errors from the rollback call (logged via debugLog, no toast)", async () => {
+    it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
       const { getByText } = await expand();
-      const initialToasts = vi.mocked(toaster.toast).mock.calls.length;
       fireEvent.click(getByText("Restore"));
       await flushAsync();
       await flushAsync();
-      // No new toaster call from the rollback path itself (debugLog only)
-      expect(vi.mocked(toaster.toast).mock.calls.length).toBe(initialToasts);
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Couldn't confirm the restore.", subtext: "boom" }),
+      );
+      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("restore error"));
+      // The row is released for another try.
+      expect(getByText("Restore")).not.toBeDisabled();
     });
   });
 
