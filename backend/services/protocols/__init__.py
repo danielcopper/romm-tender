@@ -117,6 +117,7 @@ from services.protocols.persistence import SettingsPersister
 from services.protocols.repositories import (
     AnsweredSaveDirectoryRepository,
     BiosFileRepository,
+    CollectionSyncStateRepository,
     FirmwareCacheRepository,
     KvConfigRepository,
     PlatformSyncStateRepository,
@@ -160,6 +161,7 @@ __all__ = [
     "BiosChecker",
     "BiosFileRepository",
     "Clock",
+    "CollectionSyncStateRepository",
     "ComputeSyncActionFn",
     "CoreInfoProvider",
     "CoreResolverFn",
