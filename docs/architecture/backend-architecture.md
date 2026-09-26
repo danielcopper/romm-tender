@@ -2208,8 +2208,8 @@ Protocol into services). The full pattern, source catalog, and decisions log are
 
 ### Models (`backend/models/`)
 
-TypedDicts and dataclasses describing on-disk and in-flight data shapes (`state.py`, `metadata.py`). Models import
-nothing from the other layers.
+TypedDicts and dataclasses describing on-disk and in-flight data shapes (`state.py`, `sync.py`). Models import nothing
+from the other layers.
 
 ### Other
 

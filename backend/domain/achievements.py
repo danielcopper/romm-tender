@@ -2,13 +2,25 @@
 
 Pure transforms over RomM ROM-detail and user-progression dicts: pick the
 right metadata branch, normalize achievement entries, and reduce per-game
-progression into a flat summary. Anything that fetches, caches, or reads
-the wall clock belongs in ``services/achievements.py``, not here.
+progression into a flat summary — plus the cached summary shape the badge
+renders from. Anything that fetches, caches, or reads the wall clock belongs
+in ``services/achievements.py``, not here.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass(frozen=True)
+class AchievementSummary:
+    """Cached achievement progress summary for badge rendering."""
+
+    earned: int
+    total: int
+    earned_hardcore: int
+    cached_at: float
 
 
 def extract_achievements_from_rom(rom_data: dict[str, Any]) -> list[dict[str, Any]]:

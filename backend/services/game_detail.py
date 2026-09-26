@@ -15,8 +15,7 @@ import os
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from models.metadata import AchievementSummary
-
+from domain.achievements import AchievementSummary
 from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
 from domain.platform_names import decode_platform_names
 from domain.save_status import compute_save_sync_display
