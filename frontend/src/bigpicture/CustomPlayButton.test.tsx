@@ -15,10 +15,11 @@
  * shape. The bus is reset between tests by `frontend/src/test-setup.ts`.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor, act, within } from "@testing-library/react";
 import { toaster } from "../api/host";
 import { showContextMenu, Navigation } from "@decky/ui";
+import * as deckyUi from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
@@ -32,6 +33,17 @@ import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent 
 vi.mock("../utils/cachedGameDetailStore", () => ({
   getCachedGameDetail: vi.fn<(appId: number) => Promise<CachedGameDetail>>(),
   invalidateCachedGameDetail: vi.fn(),
+}));
+
+// Steam's class maps are absent under happy-dom, which leaves every Steam class
+// name out of the rendered markup. The markup tests below put a map in place so
+// those names are pinned too; every other test sees the absence it always had.
+const steamClasses = vi.hoisted(() => ({ appActionButtons: undefined as Record<string, string> | undefined }));
+vi.mock("../utils/deckyUiInternals", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/deckyUiInternals")>()),
+  get appActionButtonClasses() {
+    return steamClasses.appActionButtons;
+  },
 }));
 
 // The real in-memory connection store is used so the button's live offline
@@ -4425,5 +4437,157 @@ describe("CustomPlayButton — the backstop (#260)", () => {
 
     expect(vi.mocked(backend.startDownload)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+  });
+});
+
+describe("CustomPlayButton — the disabled state buttons' markup", () => {
+  let dialogButton: ReturnType<typeof vi.spyOn>;
+
+  // What the button hands Steam's DialogButton as its style: the suite's mock
+  // renders no style attribute, so the prop is read off the call instead.
+  const buttonStyle = (): unknown => (dialogButton.mock.lastCall?.[0] as { style?: unknown } | undefined)?.style;
+
+  const CONTAINER_STYLE = `style="display: flex; flex-direction: row; width: 200px; height: 48px;"`;
+  const MAIN_BUTTON_STYLE = {
+    height: "100%",
+    flex: "1 1 auto",
+    padding: "4px 12px",
+    border: "none",
+    color: "#fff",
+    fontSize: "16px",
+    fontWeight: "bold",
+    borderRadius: "2px",
+  };
+  const THROBBER_BUTTON_STYLE = {
+    ...MAIN_BUTTON_STYLE,
+    background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
+    backgroundPosition: "25%",
+    backgroundSize: "330% 100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  };
+  const throbberMarkup = (label: string, offline: boolean): string =>
+    `<div data-testid="focusable" class="steam-container" ${CONTAINER_STYLE}>` +
+    `<button class="steam-play romm-btn-play${offline ? " romm-offline" : ""}" disabled="">` +
+    `<span class="steam-throbber romm-throbber"></span><span>${label}</span></button></div>`;
+
+  beforeEach(() => {
+    steamClasses.appActionButtons = {
+      PlayButtonContainer: "steam-container",
+      PlayButton: "steam-play",
+      Green: "steam-green",
+      Throbber: "steam-throbber",
+    };
+    dialogButton = vi.spyOn(deckyUi, "DialogButton");
+    vi.mocked(getCachedGameDetail).mockReset();
+    vi.mocked(showContextMenu).mockReset();
+    vi.mocked(setLaunchOptionsConfirmed).mockReset();
+    vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
+    vi.mocked(backend.removeRom).mockReset();
+    vi.mocked(backend.removeRom).mockResolvedValue({ success: true, message: "" });
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+    vi.stubGlobal("SteamClient", { Apps: { RunGame: vi.fn() } });
+    vi.stubGlobal("appStore", {
+      GetAppOverviewByAppID: vi.fn(() => ({ GetGameID: () => "gid-1" })),
+      allApps: [],
+    });
+  });
+
+  afterEach(() => {
+    steamClasses.appActionButtons = undefined;
+    dialogButton.mockRestore();
+  });
+
+  it("renders Ready! as the green flash", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false });
+    const { container, findByText, getByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download");
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
+          rom_id: 42,
+          rom_name: "Test ROM",
+          platform_name: "PSX",
+          file_path: "/roms/psx/game.chd",
+          app_id: 100,
+          launch_options: "run game",
+        });
+      });
+      expect(getByText("Ready!")).toBeInTheDocument();
+      expect(container.innerHTML).toBe(
+        `<div data-testid="focusable" class="steam-container steam-green" ${CONTAINER_STYLE}>` +
+          `<button class="steam-play romm-btn-play romm-dl-complete-flash" disabled="">` +
+          `<span class="romm-dl-label">Ready!</span></button></div>`,
+      );
+      expect(buttonStyle()).toEqual({
+        ...MAIN_BUTTON_STYLE,
+        background: "linear-gradient(to right, #80e62a, #01b866)",
+        filter: "brightness(1.2)",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders Uninstalled as the blue flash", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { container, findByText, getByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+    const pressUninstall = await openUninstallMenu(container, 12);
+
+    vi.useFakeTimers();
+    try {
+      await pressUninstall();
+      expect(getByText("Uninstalled")).toBeInTheDocument();
+      expect(container.innerHTML).toBe(
+        `<div data-testid="focusable" class="steam-container" ${CONTAINER_STYLE}>` +
+          `<button class="steam-play romm-btn-download romm-dl-uninstall-flash" disabled="">` +
+          `<span class="romm-dl-label">Uninstalled</span></button></div>`,
+      );
+      expect(buttonStyle()).toEqual({
+        ...MAIN_BUTTON_STYLE,
+        background: "linear-gradient(to right, #47b3ff, #1a9fff)",
+        filter: "brightness(1.3)",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders Syncing saves... and then Launching... as the same throbber button, online and offline", async () => {
+    let finishSync!: () => void;
+    vi.mocked(backend.preLaunchSync).mockReturnValue(
+      new Promise((resolve) => {
+        finishSync = () => resolve({ success: true, message: "", synced: 0 });
+      }),
+    );
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+
+    await act(async () => {
+      playBtn.click();
+    });
+    await findByText("Syncing saves...");
+    expect(container.innerHTML).toBe(throbberMarkup("Syncing saves...", false));
+    expect(buttonStyle()).toEqual(THROBBER_BUTTON_STYLE);
+    act(() => setRommConnectionState("offline"));
+    expect(container.innerHTML).toBe(throbberMarkup("Syncing saves...", true));
+    act(() => setRommConnectionState("connected"));
+
+    await act(async () => {
+      finishSync();
+    });
+    await findByText("Launching...");
+    expect(container.innerHTML).toBe(throbberMarkup("Launching...", false));
+    expect(buttonStyle()).toEqual(THROBBER_BUTTON_STYLE);
+    act(() => setRommConnectionState("offline"));
+    expect(container.innerHTML).toBe(throbberMarkup("Launching...", true));
   });
 });
