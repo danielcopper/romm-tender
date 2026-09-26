@@ -135,9 +135,8 @@ export interface PlatformRow {
    *  answer at all: one pane warns about its rows, the other has none. */
   firmwareStale: boolean;
   /** How many of the platform's ROMs are bound to a Steam shortcut, or `null`
-   *  when that read failed. `null` is not zero: read as zero it withdraws the
-   *  core picker and disables the shortcut removal — two claims about a platform
-   *  nothing was learned about.
+   *  when that read failed. `null` is not zero: read as zero it disables the
+   *  shortcut removal — a claim about a platform nothing was learned about.
    *
    *  This is the count of SHORTCUTS, so it is what the Remove group says and acts
    *  on. The header line states `reachableCount` instead. */
@@ -267,7 +266,7 @@ export interface PlatformsPageState {
  *
  * Call it only when firmware actually changed. The event fans out to every
  * mounted panel and each one that matches the slug pays a live
- * `check_platform_bios` for it (#1082), so a run that moved no files must stay
+ * `get_bios_status` for it (#1082), so a run that moved no files must stay
  * silent rather than send an event no panel can act on.
  */
 function announceBiosChange(platformSlug: string): void {
@@ -856,7 +855,7 @@ export function usePlatformsPage(): PlatformsPageState {
               await readPlatform(slug);
               // Only when something actually went. The event fans out to every
               // mounted panel and each matching one pays a live
-              // `check_platform_bios` for it, so a run that moved no files must
+              // `get_bios_status` for it, so a run that moved no files must
               // stay silent — the same rule the download path four lines up
               // keeps.
               if (result.deleted_count > 0) announceBiosChange(slug);

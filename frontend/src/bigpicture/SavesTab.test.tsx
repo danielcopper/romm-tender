@@ -229,19 +229,7 @@ describe("SavesTab", () => {
     });
   });
 
-  describe("legacy-mode warning + files section", () => {
-    it("renders the legacy warning when activeSlot is null", async () => {
-      const { container } = render(<SavesTab {...defaultProps({ activeSlot: null })} />);
-      expect(container.textContent).toContain("This game uses legacy mode");
-      await flushAsync();
-    });
-
-    it("does NOT render the legacy warning when activeSlot is a real slot", async () => {
-      const { container } = render(<SavesTab {...defaultProps()} />);
-      expect(container.textContent).not.toContain("This game uses legacy mode");
-      await flushAsync();
-    });
-
+  describe("files section", () => {
     it("renders legacy save-file rows when activeSlot is null and saveStatus has files", async () => {
       const status = makeSaveStatus({
         files: [makeSaveFile({ filename: "a.srm" }), makeSaveFile({ filename: "b.srm" })],
@@ -428,10 +416,9 @@ describe("SavesTab", () => {
       await flushAsync();
     });
 
-    it("shows the tracked-files empty state without claiming legacy mode", async () => {
+    it("shows the tracked-files empty state while no slot answer has landed", async () => {
       const { container } = render(<SavesTab {...defaultProps({ activeSlotKnown: false, saveStatus: null })} />);
       expect(container.textContent).toContain("No save files tracked yet");
-      expect(container.textContent).not.toContain("legacy mode");
       await flushAsync();
     });
 

@@ -41,11 +41,20 @@ export interface RommSessionChangedDetail {
   romId: number;
 }
 
+/**
+ * A shortcut's playtime in Steam's app overview was rewritten. Dispatched by
+ * `updatePlaytimeDisplay` (`utils/metadataPatches.ts`).
+ */
+export interface RommPlaytimeChangedDetail {
+  appId: number;
+}
+
 declare global {
   interface WindowEventMap {
     romm_data_changed: CustomEvent<RommDataChangedDetail>;
     romm_rom_uninstalled: CustomEvent<RommRomUninstalledDetail>;
     romm_tab_switch: CustomEvent<RommTabSwitchDetail>;
     romm_session_changed: CustomEvent<RommSessionChangedDetail>;
+    romm_playtime_changed: CustomEvent<RommPlaytimeChangedDetail>;
   }
 }

@@ -34,7 +34,7 @@ import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
-import { useVersionError } from "./VersionErrorCard";
+import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
 
 // Type-only import — vi.mock("./CustomPlayButton", ...) below replaces the
@@ -43,7 +43,8 @@ import { useMigrationStatus } from "../utils/migrationStore";
 import type { CustomPlayButton } from "./CustomPlayButton";
 
 // ----- Sibling hook mocks -----
-vi.mock("./VersionErrorCard", () => ({
+vi.mock("../utils/connectionState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/connectionState")>()),
   useVersionError: vi.fn(() => null),
 }));
 // Only the hook is replaced — the store's writers stay real, so anything else
@@ -4087,35 +4088,6 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    it("legacy slot warning shows when activeSlot null and saveSyncEnabled true", async () => {
-      // The shared state starts on activeSlot "default" (not null), so the
-      // warning only appears once a real save status reports the legacy
-      // slot:null — which is what the store's save-status read folds in.
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 42,
-        save_sync_enabled: true,
-        save_sync_display: { status: "none", label: "No saves", last_sync_check_at: null },
-      });
-      vi.mocked(backend.getSaveStatus).mockResolvedValue({
-        rom_id: 42,
-        files: [],
-        playtime: {
-          total_seconds: 0,
-          session_count: 0,
-          last_session_start: null,
-          last_session_duration_sec: null,
-          last_played: null,
-        },
-        device_id: "d",
-        last_sync_check_at: null,
-        active_slot: null,
-      });
-      const { container } = render(<RomMPlaySection appId={testAppId} />);
-      await flushAsync();
-      expect(container.textContent).toContain("Legacy save slot");
-    });
-
     it("BIOS warning shows when a required file is missing; click dispatches romm_tab_switch with tab=bios", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
@@ -4356,6 +4328,36 @@ describe("RomMPlaySection", () => {
       expect(getGameDetail(testAppId).savefilesInContentDir).toBe(true);
       expect(container.textContent).not.toContain("Write Saves to Content Directory");
       expect(container.querySelector('[data-testid="play-button"]')).not.toBeNull();
+    });
+
+    it("does NOT render the banner after save sync is re-enabled and the status read fails (#1657)", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        save_sync_enabled: true,
+      });
+      stubSaveStatus(42, true);
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("can't be synced");
+
+      const dispatchSettings = async (enabled: boolean) => {
+        await act(async () => {
+          globalThis.dispatchEvent(
+            new CustomEvent("romm_data_changed", {
+              detail: { type: "save_sync_settings", save_sync_enabled: enabled },
+            }),
+          );
+          await Promise.resolve();
+        });
+        await flushAsync();
+      };
+      await dispatchSettings(false);
+      vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("offline"));
+      await dispatchSettings(true);
+
+      expect(getGameDetail(testAppId).saveSyncEnabled).toBe(true);
+      expect(container.textContent).not.toContain("can't be synced");
     });
 
     it("does NOT probe getSaveStatus for the flag when save sync is disabled", async () => {

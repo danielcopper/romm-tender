@@ -2,10 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getCachedGameDetail, invalidateCachedGameDetail, _cacheForTests } from "./cachedGameDetailStore";
 import type { CachedGameDetail } from "../api/backend";
 
+const raw = vi.hoisted(() => vi.fn());
+vi.mock("../api/host", () => ({ callable: () => raw }));
+
 describe("getCachedGameDetail", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     _cacheForTests.clear();
+    raw.mockReset();
+    raw.mockResolvedValue({ found: true, rom_id: 1 });
   });
 
   afterEach(() => {
@@ -37,6 +42,49 @@ describe("getCachedGameDetail", () => {
     // Direct cache injection bypasses the .then-scheduled eviction; callers
     // who poke the cache directly should clean up themselves.
     expect(_cacheForTests.has(7)).toBe(true);
+  });
+
+  it("evicts its own entry once the TTL has passed after the call resolved", async () => {
+    await getCachedGameDetail(5);
+    vi.advanceTimersByTime(3000);
+    expect(_cacheForTests.has(5)).toBe(false);
+  });
+
+  it("an earlier fetch's TTL timer leaves an entry installed after it in place", async () => {
+    await getCachedGameDetail(5);
+    vi.advanceTimersByTime(2000);
+    invalidateCachedGameDetail(5);
+    const fresher = getCachedGameDetail(5);
+    await fresher;
+
+    // The first fetch's timer fires here; the fresher entry's runs 2 s later.
+    vi.advanceTimersByTime(1000);
+
+    expect(_cacheForTests.get(5)?.promise).toBe(fresher);
+    expect(getCachedGameDetail(5)).toBe(fresher);
+  });
+
+  it("an earlier fetch that rejects leaves an entry installed after it in place", async () => {
+    let rejectFirst!: (e: Error) => void;
+    raw.mockReturnValueOnce(
+      new Promise<CachedGameDetail>((_resolve, reject) => {
+        rejectFirst = reject;
+      }),
+    );
+    const first = getCachedGameDetail(5);
+    invalidateCachedGameDetail(5);
+    const fresher = getCachedGameDetail(5);
+
+    rejectFirst(new Error("boom"));
+    await expect(first).rejects.toThrow("boom");
+
+    expect(_cacheForTests.get(5)?.promise).toBe(fresher);
+  });
+
+  it("drops its own entry when the call rejects", async () => {
+    raw.mockRejectedValueOnce(new Error("boom"));
+    await expect(getCachedGameDetail(5)).rejects.toThrow("boom");
+    expect(_cacheForTests.has(5)).toBe(false);
   });
 });
 

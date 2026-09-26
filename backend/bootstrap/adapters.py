@@ -406,6 +406,10 @@ def bootstrap(
     # `host.logging_setup.configure_logging`'s.
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
     http_adapter = RommHttpAdapter(settings, directories.code_dir, logger, user_agent, log_debug=debug_logger)
+    # Once, at start, rather than per request: the adapter reads the flag on
+    # every call, and a line per request would drown the log it is written into.
+    if settings.get("romm_allow_insecure_ssl", False):
+        logger.warning("Certificate verification is off for RomM requests (romm_allow_insecure_ssl is on)")
     romm_api = RommApiAdapter(http_adapter)
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)

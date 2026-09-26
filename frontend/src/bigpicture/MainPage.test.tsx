@@ -38,7 +38,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, useSyncExternalStore } from "react";
 import { MainPage, ConnectionIndicator } from "./MainPage";
 import * as backend from "../api/backend";
-import { useVersionError } from "./VersionErrorCard";
+import { useVersionError } from "../utils/connectionState";
 import {
   resetSyncProgressStoreForTests,
   setSyncProgress,
@@ -81,9 +81,13 @@ import type {
 // -----------------------------------------------------------------------------
 
 vi.mock("./VersionErrorCard", () => ({
-  useVersionError: vi.fn(() => null),
   VersionErrorCard: (props: { message: string; compact?: boolean }) =>
     createElement("div", { "data-testid": "version-error-card" }, props.message),
+}));
+
+vi.mock("../utils/connectionState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/connectionState")>()),
+  useVersionError: vi.fn(() => null),
 }));
 
 vi.mock("./MigrationBlockedPage", () => ({

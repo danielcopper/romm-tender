@@ -300,13 +300,15 @@ deleted after the lock is released.
   legacy saves and offers to **migrate them into a named slot**, never to "track legacy in place."
 - **`switch_slot`, `set_active_slot`, and `delete_slot` reject the legacy bucket too** — not just `confirm_slot_choice`.
   An empty / whitespace / `None` slot name returns `{success: false, reason: "invalid_slot_name", …}` before any lock or
-  I/O, so a ROM can never be switched _into_ legacy mode through the slot switcher, and the web-player bucket can never
-  be torn down from the plugin ([#1478](https://github.com/danielcopper/romm-tender/issues/1478)). The SAVES-tab UI
-  matches this: it no longer offers a "Use Legacy Mode?" action, and the legacy bucket's panel is **fully read-only** —
-  its saves stay listable and expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is
-  also visually **demoted**: muted styling, sorted last (below every named slot, just above "+ New Slot"), and a note
-  reading "Used by the RomM web player. Read-only here — manage in the RomM web app." Only the _entry_ is closed, not
-  existing state — a ROM already in legacy mode keeps syncing until migration `005` re-opens the wizard.
+  I/O, so a ROM can never be switched _into_ legacy mode through the slot switcher, and the slot-less bucket — a manual
+  upload or an older web player's save — can never be torn down from the plugin
+  ([#1478](https://github.com/danielcopper/romm-tender/issues/1478)). The SAVES-tab UI matches this: it no longer offers
+  a "Use Legacy Mode?" action, and the legacy bucket's panel is **fully read-only** — its saves stay listable and
+  expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is also visually **demoted**:
+  muted styling, sorted last (below every named slot, just above "+ New Slot"), labelled **Manual archive** and a note
+  reading "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between
+  devices." Only the _entry_ is closed, not existing state — a ROM already in legacy mode keeps syncing until migration
+  `005` re-opens the wizard.
 - **Migration `005`** (`005_unconfirm_legacy_slot_confirmations.sql`) un-confirms any ROM previously confirmed in legacy
   mode — `UPDATE rom_save_states SET slot_confirmed=0 WHERE active_slot IS NULL AND slot_confirmed=1` (the pre-rename
   table name migration `005` targets; migration `018` later renames it to `rom_save_sync_states`). No save data is
@@ -325,7 +327,7 @@ deleted after the lock is released.
 #### Migrating legacy saves into a named slot (content-based, #1498)
 
 When the wizard's **Track** action carries a game's legacy (`slot:null`) saves into a chosen named slot, the migration
-is **content-based**, not filename-based. RomM's web player writes legacy saves under timestamped names (e.g.
+is **content-based**, not filename-based. An older RomM web player wrote legacy saves under timestamped names (e.g.
 `Game [2026-07-19 13-41-44-611].srm`) that never equal the canonical local name, so the old filename-equality migration
 silently left the target slot empty (the [#1498](https://github.com/danielcopper/romm-tender/issues/1498) defect, part
 of the [#1478](https://github.com/danielcopper/romm-tender/issues/1478) triage). Instead, for each **canonical local
@@ -364,10 +366,11 @@ the user can simply retry Track. Once the apply phase begins, a **per-target** u
 lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that confirms the
 slot silently; a requested migration can never return `success: true` with nothing migrated while legacy saves existed.)
 
-The wizard names the target slot on **every** surface — the pre-click explainer under the legacy entry ("the legacy save
-itself is left untouched"), the confirm modal, and the completion toast
-(`Migrated 1 save into 'default'. The legacy save stays in the read-only legacy bucket.`) — never log-only, and the
-completion copy pre-empts the "why is the legacy save still there?" confusion.
+The wizard names the target slot on **every** surface — the pre-click explainer under the legacy entry ("the archived
+save itself is left untouched"), the confirm modal ("Copy the archived save into 'default'? If a local save differs,
+you'll confirm before anything is replaced."), and the completion toast ("Migrated 1 save into 'default'. The archived
+save stays in the manual archive.") — never log-only, and the completion copy pre-empts the "why is the legacy save
+still there?" confusion.
 
 #### Addressing legacy saves on the wire (#1061)
 
@@ -380,9 +383,9 @@ This is the core invariant for every per-slot server read that can target legacy
 `get_slot_delete_info`): legacy → `slot_query_param(...) == None` (param omitted) + `save_in_slot(...)` client filter; a
 named slot → `&slot=<name>` (server filters) **and** the same client re-filter (defence in depth). `delete_slot` uses
 the same named-slot addressing but **refuses the legacy bucket outright** (#1478): an empty slot name is rejected before
-any I/O, so `delete_slot` never reaches the wire for `""` and the web-player bucket is never torn down from here.
-Sending `&slot=` (empty) for a legacy read was the bug: the server returned `[]`, the local tracking was cleared, and
-the slot resurrected on the next merge (zombie slot).
+any I/O, so `delete_slot` never reaches the wire for `""` and the slot-less bucket is never torn down from here. Sending
+`&slot=` (empty) for a legacy read was the bug: the server returned `[]`, the local tracking was cleared, and the slot
+resurrected on the next merge (zombie slot).
 
 The **active-slot matching filter** applies the same funnel from the other direction. The matrix sync run,
 `get_save_status`, and rollback narrow the fetched saves through `domain.save_slot.filter_saves_to_slot`, and
@@ -2000,7 +2003,7 @@ Copying a single save from one slot into another is supported via the per-save *
 [Copy a save to another slot](#copy-a-save-to-another-slot)) — the target slot becomes the ROM's active slot and the
 source save is preserved. What is _not_ supported is a bulk **move** of a whole slot's contents (delete-from-source
 semantics): users copy individual saves, then delete the source slot from the server if they want it gone. The legacy
-(web-player) bucket is a read-only copy _source_ — it cannot be a copy target, and cannot be deleted from the plugin
+(slot-less) bucket is a read-only copy _source_ — it cannot be a copy target, and cannot be deleted from the plugin
 (#1478).
 
 ### Cross-device save browsing limited

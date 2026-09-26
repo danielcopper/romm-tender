@@ -68,8 +68,10 @@ The **Connections** section manages your RomM server connection.
 - **Custom headers** — extra HTTP headers sent with every request to your RomM server. Shows how many are configured, or
   **(none)**. Only needed when your server sits behind a proxy that authenticates requests itself — see
   [Custom headers for an authenticating proxy](#custom-headers-for-an-authenticating-proxy) below.
-- **Allow Insecure SSL** — shown only for `https://` URLs; skips certificate verification for self-signed certs (LAN
-  only).
+- **Allow Insecure SSL** — shown only for `https://` URLs; skips certificate checks for a self-signed server. Anyone who
+  can intercept the connection can then read what the plugin sends — your RomM token, your password when you sign in
+  with it, and any custom headers — and use your account, so turn it on only on a network you trust. While it is on,
+  every start of the backend writes a warning to its log saying certificate verification is off.
 
 The plugin checks the connection for you — there is no manual "Test Connection" button. The **Connection** row on the
 plugin's main QAM panel shows the live status whenever you open it, and names the problem when it can't connect (for

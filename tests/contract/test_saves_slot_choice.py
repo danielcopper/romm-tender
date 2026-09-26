@@ -250,7 +250,7 @@ async def test_delete_slot_legacy_rejected(harness):
     Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``deleteSlot``
     is ``callable<[number, string], …>``). The callable returns the canonical
     ``invalid_slot_name`` failure before any server I/O, so the game's
-    web-player bucket can never be torn down from the plugin.
+    slot-less bucket can never be torn down from the plugin.
     """
     enable_save_sync(harness)
     seed_rom(harness, 42)

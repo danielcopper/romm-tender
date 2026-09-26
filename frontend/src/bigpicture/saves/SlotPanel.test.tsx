@@ -367,7 +367,7 @@ describe("SlotPanel", () => {
         slot: "default",
         saves: [],
       });
-      const newStatus = makeStatus({ active_slot: "default" });
+      const newStatus = makeStatus();
       vi.mocked(backend.switchSlot).mockResolvedValue({
         success: true,
         save_status: newStatus,
@@ -809,15 +809,15 @@ describe("SlotPanel", () => {
     });
   });
 
-  it("renders 'Legacy' for an empty slot name", () => {
+  it("renders 'Manual archive' for an empty slot name", () => {
     const { container } = render(<SlotPanel {...defaultProps({ slot: makeSummary({ slot: "" }) })} />);
-    expect(container.textContent).toContain("Legacy");
+    expect(container.textContent).toContain("Manual archive");
     expect(container.textContent).not.toContain("(no slot)");
   });
 
   it("the legacy '' slot is read-only: no Activate/Delete, note + muted styling, files shown (#1478)", async () => {
-    // The slot-less legacy bucket is the RomM web-player bucket — read-only
-    // (#1276 retired switching in; #1478 removed deletion). It may be expanded
+    // The slot-less legacy bucket is read-only (#1276 retired switching in;
+    // #1478 removed deletion). It may be expanded
     // to view its saves, but carries neither control.
     const files: SlotSaveFile[] = [{ id: 1, filename: "legacy.srm", size: 512, updated_at: "", emulator: "mgba" }];
     vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "", saves: files });
@@ -825,7 +825,7 @@ describe("SlotPanel", () => {
     // Muted styling + the read-only note are visible without expanding.
     expect(container.querySelector(".romm-slot-panel-legacy")).not.toBeNull();
     expect(container.textContent).toContain(
-      "Used by the RomM web player. Read-only here — manage in the RomM web app.",
+      "Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.",
     );
     fireEvent.click(container.querySelector("button")!); // expand
     await flushAsync();
@@ -838,7 +838,7 @@ describe("SlotPanel", () => {
   it("a named slot carries neither the legacy note nor the muted class (#1478)", () => {
     const { container } = render(<SlotPanel {...defaultProps({ slot: makeSummary({ slot: "speedrun" }) })} />);
     expect(container.querySelector(".romm-slot-panel-legacy")).toBeNull();
-    expect(container.textContent).not.toContain("Used by the RomM web player");
+    expect(container.textContent).not.toContain("RomM keeps them as a manual archive");
   });
 
   it("loads and renders inactive slot files when expanded", async () => {

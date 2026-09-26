@@ -105,7 +105,6 @@ export interface SaveStatus {
   device_id: string;
   last_sync_check_at: string | null;
   conflicts?: SyncConflict[];
-  active_slot?: string | null;
   save_sync_display?: SaveSyncDisplay;
   /** True when the backend's ``list_saves`` call raised before the matrix
    *  ran. Every file row carries ``status: "unknown"`` in that case — the
@@ -154,7 +153,7 @@ export interface SaveSlotSummary {
  *  `availableSlots` and rendered as history (#1755). */
 export interface LastKnownSlots {
   slots: SaveSlotSummary[];
-  /** The slot that was active then; `null` is the legacy web-player bucket. */
+  /** The slot that was active then; `null` is the slot-less legacy bucket. */
   activeSlot: string | null;
 }
 

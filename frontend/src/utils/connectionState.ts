@@ -9,7 +9,7 @@
  * banner) subscribes so it re-derives live instead of only at mount (#1345).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { debugLog } from "../api/backend";
 import { detach } from "./detach";
 
@@ -170,4 +170,10 @@ export function onVersionErrorChange(cb: (err: string | null) => void): () => vo
   return () => {
     versionErrorListeners.delete(cb);
   };
+}
+
+/** Subscribe to the version error from a component. Re-renders the caller
+ *  whenever it changes and drops its subscription on unmount. */
+export function useVersionError(): string | null {
+  return useSyncExternalStore(onVersionErrorChange, getVersionError);
 }

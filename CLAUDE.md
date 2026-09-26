@@ -709,9 +709,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   sequence taken at issue (`loadSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's
   `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
-  `cached.bios_status` fold and `handleBiosChange`. The play button is NOT covered** — test + prompt-only — the panel's
-  bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side
-  and every new write site are prompt-only
+  `cached.bios_status` fold. The panel's `handleBiosChange` is bound and ordered (`bios` ticket). The play button is NOT
+  covered** — test + prompt-only — the panel's bound sites each carry a version-switch test
+  (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site are prompt-only
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own** — check + prompt-only —
   `tender/qam-focusable-row` for the syntactic slice — it passes a row with an unknown spread, any opaque child, or a

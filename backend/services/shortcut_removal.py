@@ -202,8 +202,9 @@ class ShortcutRemovalService:
     def _reconcile_live_shortcuts_io(self, live_app_ids: list[int | str]) -> int:
         """Unbind every bound ROM whose ``shortcut_app_id`` is absent from the live set.
 
-        *live_app_ids* is the set of appIds the frontend observed in Steam's live
-        shortcut store (every shortcut whose exe is the plugin launcher). Each
+        *live_app_ids* is the set of appIds the frontend's scan of Steam's live
+        shortcut store could not rule out: every shortcut whose exe is the plugin
+        launcher, plus every entry Steam did not answer for in time. Each
         bound ROM (``shortcut_app_id`` not NULL) whose appId is **not** in that
         set lost its Steam shortcut out-of-band — unbind it (ADR-0007: clear the
         link, keep the row and its per-ROM children), so the next sync's
@@ -246,14 +247,15 @@ class ShortcutRemovalService:
     async def reconcile_live_shortcuts(self, live_app_ids: list[int | str]) -> dict[str, Any]:
         """Reconcile bound ROMs against the live Steam-shortcut set the frontend supplies.
 
-        Called at sync start with the appIds of every RomM shortcut still present
-        in Steam's live shortcut store. Bindings absent from that set are stale
-        (the user deleted the shortcut via Steam's own UI) and are unbound so the
-        next sync recreates them — fixing the "deleted shortcut never comes back"
-        loop (#1046). An empty *live_app_ids* means the frontend's scan found zero
-        RomM shortcuts in Steam, so every binding is unbound; the frontend MUST
-        only call this when its scan actually ran (Steam's store was readable),
-        never on a scan it could not perform.
+        Called at sync start with the owned plus unresolved entries of the
+        frontend's scan of Steam's live shortcut store — the set is what to
+        KEEP. Bindings absent from it are stale (the user deleted the shortcut
+        via Steam's own UI) and are unbound so the next sync recreates them —
+        fixing the "deleted shortcut never comes back" loop (#1046). An empty
+        *live_app_ids* means the frontend's scan found no RomM shortcut and no
+        entry it could not identify, so every binding is unbound; the frontend
+        MUST only call this when its scan actually ran (Steam's store was
+        readable), never on a scan it could not perform.
         """
         try:
             unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)

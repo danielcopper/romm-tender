@@ -168,10 +168,10 @@ import {
   setRommConnectionState,
   setVersionError,
   useRommConnectionState,
+  useVersionError,
   type RommConnectionState,
 } from "../utils/connectionState";
 import { registerConnectionHeartbeat } from "../utils/connectionHeartbeat";
-import { useVersionError } from "./VersionErrorCard";
 import { useMigrationStatus } from "../utils/migrationStore";
 import { detach } from "../utils/detach";
 
@@ -456,9 +456,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // (handleGameStop) or a multi-device reconcile-on-view refreshes the value on
   // the SAME mount — no navigate-away/back remount required.
   useEffect(() => {
-    const onPlaytimeChanged = (e: Event) => {
-      const payload = (e as CustomEvent<{ appId?: number } | null>).detail;
-      if (payload?.appId !== appId) return;
+    const onPlaytimeChanged = (e: WindowEventMap["romm_playtime_changed"]) => {
+      if (e.detail.appId !== appId) return;
       const ov = appStore.GetAppOverviewByAppID(appId);
       if (!ov) return;
       setPlaytimeInfo((prev) => ({
@@ -995,16 +994,6 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
-  // Save Sync moved to dedicated tab — show legacy slot warning only
-  if (detail.activeSlot == null && detail.saveSyncEnabled) {
-    infoItems.push(
-      <div key="legacy-slot-warning" className="romm-info-item">
-        <div className="romm-info-header">SAVE SYNC</div>
-        <div style={{ fontSize: "11px", color: "#ff8800", marginTop: "4px" }}>{"\u26A0 Legacy save slot"}</div>
-      </div>,
-    );
-  }
-
   // BIOS warning. What decides it is one question with two established
   // absences behind it (`extractBiosInfo`): a file the launching emulator
   // requires is not on disk, or the console cannot start without one of the
@@ -1126,7 +1115,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // no DOM node, so the row stays a direct child of the injected panel either way.
   return (
     <Fragment>
-      {detail.savefilesInContentDir && detail.saveSyncEnabled ? (
+      {detail.savefilesInContentDir === true && detail.saveSyncEnabled ? (
         <WarningCard
           key="savefiles-content-dir-warning"
           title="Save sync off"

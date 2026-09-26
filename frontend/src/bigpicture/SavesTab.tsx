@@ -179,25 +179,6 @@ export const SavesTab: FC<SavesTabProps> = ({
     </div>
   ) : null;
 
-  // --- Legacy mode warning ---
-  const legacyWarning =
-    activeSlot === null ? (
-      <div
-        key="legacy-warning"
-        style={{
-          padding: "8px",
-          background: "rgba(255, 136, 0, 0.15)",
-          borderRadius: "4px",
-          border: "1px solid rgba(255, 136, 0, 0.3)",
-          marginBottom: "12px",
-          fontSize: "12px",
-          color: "#ff8800",
-        }}
-      >
-        This game uses legacy mode (no slot). Only one save version per game is supported.
-      </div>
-    ) : null;
-
   // --- Loading state ---
   // A spinner + live retry progress (#1345) instead of bare italic text — the
   // slot fetch pays the backend retry ladder, so surface "Connecting to RomM…
@@ -310,7 +291,6 @@ export const SavesTab: FC<SavesTabProps> = ({
     <Focusable noFocusRing={true} style={{ display: "flex", flexDirection: "column" as const, gap: "0" }}>
       {offlineBanner}
       {strandedBanner}
-      {legacyWarning}
 
       {/* Save files that belong to no slot panel — above the panels, if any. */}
       {unslottedFilesSection}

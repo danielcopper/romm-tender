@@ -377,9 +377,9 @@ describe("applyWizardRetrySetupResult", () => {
 });
 
 describe("legacy-migration copy (#1498)", () => {
-  it("the Track explainer names the concrete target slot and says the legacy save is left untouched", () => {
+  it("the Track explainer names the concrete target slot and says the archived save is left untouched", () => {
     const body = legacyTrackExplainer("default");
-    expect(body).toContain("copies the legacy save");
+    expect(body).toContain("copies the archived save");
     // Names the resolved slot — never "a named slot", which reads as still-open.
     expect(body).toContain("‘default’");
     expect(body).not.toContain("a named slot");
@@ -389,7 +389,7 @@ describe("legacy-migration copy (#1498)", () => {
   it("the conflict notice states the backup-and-replace and that cancelling changes nothing", () => {
     const body = legacyConflictReplaceNotice("default");
     expect(body).toContain(".romm-backup");
-    expect(body).toContain("replaced with the legacy save");
+    expect(body).toContain("replaced with the archived save");
     expect(body).toContain("nothing changes");
     expect(body).toContain("‘default’");
   });
@@ -418,21 +418,21 @@ describe("legacy-migration copy (#1498)", () => {
   });
 
   describe("wizardMigrationOutcomeToastBody", () => {
-    it("names the slot and count and reassures the legacy save stays (singular)", () => {
+    it("names the slot and count and reassures the archived save stays (singular)", () => {
       expect(wizardMigrationOutcomeToastBody(1, 0, "default")).toBe(
-        "Migrated 1 save into ‘default’. The legacy save stays in the read-only legacy bucket.",
+        "Migrated 1 save into ‘default’. The archived save stays in the manual archive.",
       );
     });
 
     it("pluralizes the count and the legacy-stays clause when more than one save migrated", () => {
       expect(wizardMigrationOutcomeToastBody(2, 0, "default")).toBe(
-        "Migrated 2 saves into ‘default’. The legacy saves stay in the read-only legacy bucket.",
+        "Migrated 2 saves into ‘default’. The archived saves stay in the manual archive.",
       );
     });
 
     it("reports failures alongside successes and still reassures", () => {
       expect(wizardMigrationOutcomeToastBody(1, 1, "slotA")).toBe(
-        "Migrated 1 save into ‘slotA’; 1 could not be migrated. The legacy save stays in the read-only legacy bucket.",
+        "Migrated 1 save into ‘slotA’; 1 could not be migrated. The archived save stays in the manual archive.",
       );
     });
 

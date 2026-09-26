@@ -399,6 +399,40 @@ class TestBootstrapSettingsResetMarker:
         assert "_settings_reset_notice" not in result.stores.settings
 
 
+class TestBootstrapWarnsWhenCertificateChecksAreOff:
+    """A start with ``romm_allow_insecure_ssl`` on says so once, so a log read
+    for a later problem shows that the RomM connection was not verified."""
+
+    _WARNING = "Certificate verification is off for RomM requests"
+
+    def _seed_settings(self, tmp_path, **values):
+        import json
+        import pathlib
+
+        settings_dir = pathlib.Path(_directories_at(tmp_path).config_dir)
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        (settings_dir / "settings.json").write_text(json.dumps(values))
+
+    def test_a_start_with_the_setting_on_logs_one_warning(self, tmp_path, caplog):
+        self._seed_settings(tmp_path, romm_allow_insecure_ssl=True)
+
+        with caplog.at_level(logging.WARNING):
+            result = _bootstrap_for(tmp_path)
+
+        assert result.stores.settings["romm_allow_insecure_ssl"] is True
+        warnings = [r for r in caplog.records if self._WARNING in r.getMessage()]
+        assert len(warnings) == 1
+        assert warnings[0].levelno == logging.WARNING
+
+    def test_a_start_with_the_setting_off_logs_nothing_about_it(self, tmp_path, caplog):
+        self._seed_settings(tmp_path, romm_allow_insecure_ssl=False)
+
+        with caplog.at_level(logging.WARNING):
+            _bootstrap_for(tmp_path)
+
+        assert not [r for r in caplog.records if self._WARNING in r.getMessage()]
+
+
 class TestWireServices:
     def _make_deps(self, tmp_path):
         logger = logging.getLogger("test_wire")

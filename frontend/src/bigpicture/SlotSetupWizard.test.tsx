@@ -393,7 +393,7 @@ describe("SlotSetupWizard", () => {
       expect(container.textContent).toContain("No saves on server");
     });
 
-    it("displays a null slot as 'Legacy'", async () => {
+    it("displays a null slot as 'Manual archive'", async () => {
       const info = makeSetupInfo({
         server_slots: [{ slot: null, saves: [], count: 1, latest_updated_at: null }],
       });
@@ -402,11 +402,11 @@ describe("SlotSetupWizard", () => {
       });
       const { container } = render(<SlotSetupWizard {...defaultProps()} />);
       await flushAsync();
-      expect(container.textContent).toContain("Legacy");
+      expect(container.textContent).toContain("Manual archive");
       expect(container.textContent).not.toContain("(no slot)");
     });
 
-    it("displays an empty-string slot as 'Legacy'", async () => {
+    it("displays an empty-string slot as 'Manual archive'", async () => {
       const info = makeSetupInfo({
         server_slots: [{ slot: "", saves: [], count: 1, latest_updated_at: null }],
       });
@@ -415,7 +415,7 @@ describe("SlotSetupWizard", () => {
       });
       const { container } = render(<SlotSetupWizard {...defaultProps()} />);
       await flushAsync();
-      expect(container.textContent).toContain("Legacy");
+      expect(container.textContent).toContain("Manual archive");
       expect(container.textContent).not.toContain("(no slot)");
     });
 
@@ -475,7 +475,7 @@ describe("SlotSetupWizard", () => {
       fireEvent.click(getByText("Track"));
       expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
       const migrateModal = confirmModalPropsAt(0);
-      expect(migrateModal?.strTitle).toBe("Migrate Legacy Saves?");
+      expect(migrateModal?.strTitle).toBe("Move archived saves into a slot?");
       expect(migrateModal?.strDescription).toContain("fallback");
 
       // OK migrates the legacy saves into the default slot.
@@ -585,7 +585,7 @@ describe("SlotSetupWizard", () => {
       });
       const { container } = render(<SlotSetupWizard {...defaultProps()} />);
       await flushAsync();
-      expect(container.textContent).toContain("Tracking copies the legacy save into ‘default’");
+      expect(container.textContent).toContain("Tracking copies the archived save into ‘default’");
       expect(container.textContent).not.toContain("into a named slot");
     });
 
@@ -662,7 +662,7 @@ describe("SlotSetupWizard", () => {
       expect(vi.mocked(backend.confirmSlotChoice)).toHaveBeenCalledWith(5, "default", true, null, false);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Migrated 1 save into ‘default’. The legacy save stays in the read-only legacy bucket.",
+        body: "Migrated 1 save into ‘default’. The archived save stays in the manual archive.",
       });
       expect(onComplete).toHaveBeenCalledOnce();
     });
@@ -720,7 +720,7 @@ describe("SlotSetupWizard", () => {
       const sub = render(<>{conflictModal}</>);
       expect(sub.container.textContent).toContain("game.srm");
       expect(sub.container.textContent).toContain("Your local save");
-      expect(sub.container.textContent).toContain("Legacy save on server");
+      expect(sub.container.textContent).toContain("Archived save on server");
       sub.unmount();
       // Nothing completed — the user still has to choose.
       expect(onComplete).not.toHaveBeenCalled();

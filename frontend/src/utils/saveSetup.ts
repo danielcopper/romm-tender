@@ -246,7 +246,7 @@ export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardR
  *  reads as still-open, and states that the legacy save itself is left untouched
  *  (it is copied, never moved) so the user isn't surprised to see it afterwards. */
 export function legacyTrackExplainer(slot: string): string {
-  return `Tracking copies the legacy save into ‘${slot}’ — the legacy save itself is left untouched in the read-only legacy bucket.`;
+  return `Tracking copies the archived save into ‘${slot}’ — the archived save itself is left untouched in the manual archive.`;
 }
 
 /** What the legacy-migration conflict dialog promises before the user confirms:
@@ -255,7 +255,7 @@ export function legacyTrackExplainer(slot: string): string {
  *  it would produce the same end state as the wizard's own "Use slot" button and
  *  re-open a decision already made by clicking Track. */
 export function legacyConflictReplaceNotice(slot: string): string {
-  return `Your local save is moved to .romm-backup and replaced with the legacy save. Cancel to go back — nothing changes, and you can start fresh with ‘${slot}’ instead.`;
+  return `Your local save is moved to .romm-backup and replaced with the archived save. Cancel to go back — nothing changes, and you can start fresh with ‘${slot}’ instead.`;
 }
 
 /** Confirm-modal body for migrating the legacy group — names the target slot and
@@ -264,7 +264,7 @@ export function legacyConflictReplaceNotice(slot: string): string {
  *  choose-which-to-keep: the conflict dialog is confirm-or-cancel, and the
  *  keep-local outcome is the wizard's own "Use slot" button. */
 export function legacyMigrateConfirmDescription(slot: string): string {
-  return `Copy the legacy save into ‘${slot}’? If a local save differs, you’ll confirm before anything is replaced.`;
+  return `Copy the archived save into ‘${slot}’? If a local save differs, you’ll confirm before anything is replaced.`;
 }
 
 /** Hint under the "start fresh" buttons: a fresh slot holds no save until the
@@ -291,8 +291,8 @@ export function startFreshHintNewSlot(): string {
 export function wizardMigrationOutcomeToastBody(migrated: number, failed: number, slot: string): string | null {
   const legacyNote =
     migrated === 1
-      ? " The legacy save stays in the read-only legacy bucket."
-      : " The legacy saves stay in the read-only legacy bucket.";
+      ? " The archived save stays in the manual archive."
+      : " The archived saves stay in the manual archive.";
   if (migrated > 0 && failed > 0) {
     return `Migrated ${migrated} save${migrated === 1 ? "" : "s"} into ‘${slot}’; ${failed} could not be migrated.${legacyNote}`;
   }

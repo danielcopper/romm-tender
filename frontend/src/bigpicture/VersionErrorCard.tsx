@@ -1,16 +1,5 @@
-import { FC, useEffect, useState } from "react";
-import { getVersionError, onVersionErrorChange } from "../utils/connectionState";
+import { FC } from "react";
 import { WarningCard } from "./WarningCard";
-
-/**
- * Subscribe to version error state changes.
- * Returns the current version error (or null).
- */
-export function useVersionError(): string | null {
-  const [err, setErr] = useState<string | null>(getVersionError());
-  useEffect(() => onVersionErrorChange(setErr), []);
-  return err;
-}
 
 interface VersionErrorCardProps {
   message: string;

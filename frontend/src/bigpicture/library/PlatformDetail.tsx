@@ -505,13 +505,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: Rea
  */
 type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
 
-function coreOffer(row: PlatformRow, core: CoreAnswer): CoreOffer {
-  // Strictly zero, so an unread shortcut count does not withdraw the picker:
-  // "sync this first" would be a claim about a platform nothing was learned
-  // about, and the core read is independent of the count anyway.
-  if (row.shortcutCount === 0) {
-    return { kind: "blocked", reason: "Sync this platform first — the core applies to the games it puts in Steam." };
-  }
+function coreOffer(core: CoreAnswer): CoreOffer {
   if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
   if (core === null) {
     const failed = "Could not read the emulators for this platform. Reopen the page to try again.";
@@ -981,7 +975,7 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
 export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
   const core = state.coreFor(row.slug);
   const firmware = row.firmware;
-  const offer = coreOffer(row, core);
+  const offer = coreOffer(core);
   // The core clause is absent while this platform's core read is in flight, and
   // stays absent if it failed — the read is issued per selection, so walking the
   // list shows each newly focused platform's header without a core until its own

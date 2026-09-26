@@ -25,17 +25,14 @@ export function getCachedGameDetail(appId: number): Promise<CachedGameDetail> {
   const entry = _cache.get(appId);
   if (entry && now - entry.ts < CACHE_TTL_MS) return entry.promise;
   const promise = _raw(appId);
-  _cache.set(appId, { promise, ts: now });
-  promise.then(
-    () => {
-      setTimeout(() => {
-        _cache.delete(appId);
-      }, CACHE_TTL_MS);
-    },
-    () => {
-      _cache.delete(appId);
-    },
-  );
+  const installed: CacheEntry = { promise, ts: now };
+  _cache.set(appId, installed);
+  const evict = () => {
+    if (_cache.get(appId) === installed) _cache.delete(appId);
+  };
+  promise.then(() => {
+    setTimeout(evict, CACHE_TTL_MS);
+  }, evict);
   return promise;
 }
 

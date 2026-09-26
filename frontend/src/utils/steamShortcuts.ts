@@ -94,15 +94,19 @@ export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutM
  *
  * Returns the raw live appId list, or `null` when the scan could **not** run
  * because Steam's shortcut store was unreadable (`collectionStore` /
- * `deckDesktopApps.apps` absent). The `null`-vs-`[]` distinction is
- * load-bearing for reconcile: `[]` means "scan ran, found zero RomM shortcuts"
- * (a real signal — unbind everything), whereas `null` means "could not look"
- * (callers must NOT reconcile against it, or they'd unbind every binding on a
- * transiently-broken store).
+ * `deckDesktopApps.apps` absent). Its callers ask which shortcuts are OURS: the
+ * sync's existing-shortcut map and its orphan-adoption pool
+ * (`syncManager.ts`), and the remove-all sweep's search for shortcuts the
+ * backend did not list (`bigpicture/data/useDataPage.ts`). Two of them tell
+ * `null` from `[]`: the orphan-adoption pool disables adoption for the run on
+ * `null`, and the sweep falls back to the backend's list, where `[]` would say
+ * "looked, found none". The existing-shortcut map
+ * ({@link getExistingRomMShortcuts}) answers an empty map for both.
  *
  * The sweep itself is {@link scanShortcutOwnership}; this drops the entries it
  * could not identify, which is right for a caller asking only which shortcuts
- * are OURS and wrong for one deciding which are NOT.
+ * are OURS and wrong for one deciding which are NOT — the sync-start reconcile
+ * reads the sweep itself for that reason.
  */
 export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
   const scan = await scanShortcutOwnership();
