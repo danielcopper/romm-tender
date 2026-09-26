@@ -135,10 +135,10 @@ const LegacyMigrationConflictModal: FC<{
     <ModalRoot {...(closeModal !== undefined ? { closeModal } : {})}>
       <div style={{ padding: "8px 4px", minWidth: "360px" }}>
         <div style={{ fontSize: "15px", fontWeight: "bold", color: "#fff", marginBottom: "4px" }}>
-          A local save differs from the legacy save
+          A local save differs from the archived save
         </div>
         <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", marginBottom: "12px", lineHeight: "1.4" }}>
-          Copying the legacy save into &lsquo;{slot}&rsquo; replaces your local save.
+          Copying the archived save into &lsquo;{slot}&rsquo; replaces your local save.
         </div>
         {conflicts.map((c) => (
           <div key={c.filename} style={{ marginBottom: "10px" }}>
@@ -170,7 +170,7 @@ const LegacyMigrationConflictModal: FC<{
                 }}
               >
                 <div style={{ fontSize: "11px", fontWeight: "bold", color: "#64b5f6", marginBottom: "2px" }}>
-                  Legacy save on server
+                  Archived save on server
                 </div>
                 <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.7)" }}>
                   {formatSize(c.server_size)} · saved {formatTimestamp(c.server_updated_at)}
@@ -354,7 +354,7 @@ function buildSlotRow(
             // by the backend after OK (#1498).
             showModal(
               <ConfirmModal
-                strTitle="Migrate Legacy Saves?"
+                strTitle="Move archived saves into a slot?"
                 strDescription={legacyMigrateConfirmDescription(defaultSlot)}
                 onOK={() => {
                   detach(handleConfirm(defaultSlot, true, null));

@@ -71,6 +71,12 @@ function saveStatus(overrides: Partial<SaveStatus> = {}): SaveStatus {
   };
 }
 
+/** A save status whose display label names it, so a test can tell which of two
+ *  answers the shared state folded in. */
+function labelledStatus(label: string, overrides: Partial<SaveStatus> = {}): SaveStatus {
+  return saveStatus({ save_sync_display: { status: "synced", label, last_sync_check_at: null }, ...overrides });
+}
+
 /** A deferred stand-in for a callable, so a test can hold a read open across an
  *  event and settle it afterwards. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (e: unknown) => void } {
@@ -221,7 +227,7 @@ describe("gameDetailStore", () => {
 
   describe("subscription lifecycle", () => {
     it("reports the neutral default for an appId nobody is subscribed to", () => {
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: null, installed: false, activeSlot: "default" });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: null, installed: false, saveSyncLabel: "" });
     });
 
     it("loads the cached detail on first subscribe and notifies with the folded state", async () => {
@@ -356,14 +362,11 @@ describe("gameDetailStore", () => {
 
     it("folds the read into the shared state", async () => {
       subscribe(nextAppId);
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(
-        saveStatus({ active_slot: "slot-a", savefiles_in_content_dir: true }),
-      );
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
       await flush();
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
       expect(getGameDetail(nextAppId)).toMatchObject({
-        activeSlot: "slot-a",
         savefilesInContentDir: true,
         saveSyncStatus: "synced",
         saveSyncLabel: "Up to date",
@@ -380,12 +383,12 @@ describe("gameDetailStore", () => {
 
       const first = refreshSaveStatus(nextAppId);
       const second = refreshSaveStatus(nextAppId);
-      pending.resolve(saveStatus({ active_slot: "shared" }));
+      pending.resolve(labelledStatus("shared"));
       const [firstStatus, secondStatus] = await Promise.all([first, second]);
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(1);
       expect(firstStatus).toBe(secondStatus);
-      expect(getGameDetail(nextAppId).activeSlot).toBe("shared");
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("shared");
     });
 
     it("issues a fresh request once the shared one has settled", async () => {
@@ -410,7 +413,7 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ rom_id: 43, save_sync_enabled: true }));
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ rom_id: 43, active_slot: "new-version" }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("new-version", { rom_id: 43 }));
 
       await act(async () => {
         globalThis.dispatchEvent(
@@ -423,14 +426,14 @@ describe("gameDetailStore", () => {
       await flush();
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(43);
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, activeSlot: "new-version" });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 43, saveSyncLabel: "new-version" });
 
-      previousRom.resolve(saveStatus({ rom_id: 42, active_slot: "old-version", savefiles_in_content_dir: true }));
+      previousRom.resolve(labelledStatus("old-version", { rom_id: 42, savefiles_in_content_dir: true }));
       await flush();
 
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: 43,
-        activeSlot: "new-version",
+        saveSyncLabel: "new-version",
         savefilesInContentDir: false,
       });
     });
@@ -457,9 +460,9 @@ describe("gameDetailStore", () => {
 
       await expect(refreshSaveStatus(nextAppId)).rejects.toThrow("offline");
 
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ active_slot: "after-retry" }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("after-retry"));
       await refreshSaveStatus(nextAppId);
-      expect(getGameDetail(nextAppId).activeSlot).toBe("after-retry");
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("after-retry");
     });
 
     it("does nothing while the rom identity is unresolved", async () => {
@@ -481,7 +484,7 @@ describe("gameDetailStore", () => {
       subscribe(nextAppId);
       await flush();
       vi.mocked(backend.getSaveStatus).mockClear();
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ active_slot: "re-read" }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("re-read"));
 
       await act(async () => {
         dispatchSaveSync({ rom_id: 42 });
@@ -490,7 +493,7 @@ describe("gameDetailStore", () => {
       await flush();
 
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
-      expect(getGameDetail(nextAppId).activeSlot).toBe("re-read");
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("re-read");
     });
 
     it("ignores a notification for another rom_id", async () => {
@@ -517,7 +520,7 @@ describe("gameDetailStore", () => {
       await flush();
       expect(getGameDetail(nextAppId).romId).toBeNull();
 
-      const foreign = saveStatus({ rom_id: 999, active_slot: null, savefiles_in_content_dir: true });
+      const foreign = labelledStatus("foreign", { rom_id: 999, savefiles_in_content_dir: true });
       vi.mocked(backend.getSaveStatus).mockResolvedValue(foreign);
       await act(async () => {
         dispatchSaveSync({ rom_id: 999 });
@@ -531,16 +534,16 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: null,
-        activeSlot: "default",
+        saveSyncLabel: "",
         savefilesInContentDir: false,
         saveStatus: null,
       });
 
       // The load that was in flight all along still brings this ROM's own state.
       cached.resolve(found({ save_sync_enabled: true }));
-      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ active_slot: "ours" }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("ours"));
       await flush();
-      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, activeSlot: "ours" });
+      expect(getGameDetail(nextAppId)).toMatchObject({ romId: 42, saveSyncLabel: "ours" });
     });
 
     // `rom_id` and `save_status` are independently optional on the event, so a
@@ -554,7 +557,7 @@ describe("gameDetailStore", () => {
 
       await act(async () => {
         dispatchSaveSync({
-          save_status: saveStatus({ rom_id: 999, active_slot: "foreign", savefiles_in_content_dir: true }),
+          save_status: labelledStatus("foreign", { rom_id: 999, savefiles_in_content_dir: true }),
         });
         await Promise.resolve();
       });
@@ -562,7 +565,7 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
       expect(getGameDetail(nextAppId)).toMatchObject({
         romId: 42,
-        activeSlot: "default",
+        saveSyncLabel: "",
         savefilesInContentDir: false,
         saveStatus: null,
       });
@@ -575,12 +578,12 @@ describe("gameDetailStore", () => {
       vi.mocked(backend.getSaveStatus).mockClear();
 
       await act(async () => {
-        dispatchSaveSync({ rom_id: 42, save_status: saveStatus({ active_slot: "inline" }) });
+        dispatchSaveSync({ rom_id: 42, save_status: labelledStatus("inline") });
         await Promise.resolve();
       });
 
       expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
-      expect(getGameDetail(nextAppId).activeSlot).toBe("inline");
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("inline");
     });
   });
 

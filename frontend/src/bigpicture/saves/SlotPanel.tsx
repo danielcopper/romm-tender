@@ -291,7 +291,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   // active-slot placeholder before getSaveSlots resolves).
   const fileCount = isActive ? slot.count || (saveStatus?.files.length ?? 0) : (slotFiles?.length ?? slot.count);
 
-  // The slot-less legacy (web-player) bucket is read-only (#1276, #1478) and
+  // The slot-less legacy bucket is read-only (#1276, #1478) and
   // demoted: muted styling + a read-only note; it sorts last (in SavesTab).
   const isLegacy = slotName === "";
 
@@ -366,7 +366,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   // --- Read-only note (legacy bucket only, always visible) ---
   const legacyNoteEl = isLegacy ? (
     <div key="legacy-note" className="romm-slot-legacy-note">
-      Used by the RomM web player. Read-only here — manage in the RomM web app.
+      Saves uploaded to RomM without a slot. RomM keeps them as a manual archive and never syncs them between devices.
     </div>
   ) : null;
 

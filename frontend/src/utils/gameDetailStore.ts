@@ -79,7 +79,6 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
    *  that follows answers, so a read that fails leaves nothing asserted rather
    *  than the answer from before sync was switched off. */
   savefilesInContentDir: boolean | null;
-  activeSlot: string | null;
   raId: number | null;
   achievementEarned: number;
   achievementTotal: number;
@@ -96,7 +95,6 @@ const DEFAULT_STATE: GameDetailState = {
   saveSyncStatus: null,
   saveSyncLabel: "",
   savefilesInContentDir: false,
-  activeSlot: "default",
   raId: null,
   achievementEarned: 0,
   achievementTotal: 0,
@@ -325,8 +323,8 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
     // await in between for a newer load to land in.
     const writeForRom = writerForRom(entry, generation, romId);
 
-    // The live save status carries what the cached detail does not: the active
-    // slot, the content-dir flag, and the conflicts. Fire-and-forget — a failed
+    // The live save status carries what the cached detail does not: the
+    // content-dir flag and the conflicts. Fire-and-forget — a failed
     // read leaves the cached display standing, and a caller that needs to know
     // reads it again itself.
     if (cached.save_sync_enabled) detach(refreshSaveStatus(appId));
@@ -444,7 +442,6 @@ function applySaveStatus(entry: Entry, generation: number, status: SaveStatus): 
     saveSyncStatus,
     saveSyncLabel,
     savefilesInContentDir: status.savefiles_in_content_dir === true,
-    activeSlot: "active_slot" in status ? (status.active_slot ?? null) : prev.activeSlot,
   }));
 }
 

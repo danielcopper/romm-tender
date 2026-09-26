@@ -4088,35 +4088,6 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    it("legacy slot warning shows when activeSlot null and saveSyncEnabled true", async () => {
-      // The shared state starts on activeSlot "default" (not null), so the
-      // warning only appears once a real save status reports the legacy
-      // slot:null — which is what the store's save-status read folds in.
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 42,
-        save_sync_enabled: true,
-        save_sync_display: { status: "none", label: "No saves", last_sync_check_at: null },
-      });
-      vi.mocked(backend.getSaveStatus).mockResolvedValue({
-        rom_id: 42,
-        files: [],
-        playtime: {
-          total_seconds: 0,
-          session_count: 0,
-          last_session_start: null,
-          last_session_duration_sec: null,
-          last_played: null,
-        },
-        device_id: "d",
-        last_sync_check_at: null,
-        active_slot: null,
-      });
-      const { container } = render(<RomMPlaySection appId={testAppId} />);
-      await flushAsync();
-      expect(container.textContent).toContain("Legacy save slot");
-    });
-
     it("BIOS warning shows when a required file is missing; click dispatches romm_tab_switch with tab=bios", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,

@@ -8,9 +8,11 @@ import type { DeviceSyncInfo, RollbackStatus, SaveStatus, SyncConflict, SlotDele
 
 export const MUTED_COLOR = "#8f98a0";
 
-/** Display a slot name, labelling the null/empty (legacy) slot explicitly */
+/** Display a slot name, labelling the null/empty slot with RomM's own name for a
+ *  save uploaded without a slot: `upload-slot-hint` in RomM's
+ *  `frontend/src/locales/en_US/rom.json`, at 5.3.1. */
 export function displaySlot(slot: string | null | undefined): string {
-  if (slot === null || slot === undefined || slot === "") return "Legacy";
+  if (slot === null || slot === undefined || slot === "") return "Manual archive";
   return slot;
 }
 

@@ -52,7 +52,7 @@ describe("renderLastKnownSlots", () => {
       renderLastKnownSlots(makeLastKnown({ slots: [makeSlot({ slot: "" })], activeSlot: null })),
     );
     const row = getByTestId("last-known-slot-legacy");
-    expect(row.textContent).toContain("Legacy");
+    expect(row.textContent).toContain("Manual archive");
     expect(row.textContent).toContain("active");
   });
 

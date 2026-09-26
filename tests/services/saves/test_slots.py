@@ -2322,7 +2322,7 @@ class TestDeleteSlot:
     async def test_delete_legacy_slot_rejected(self, tmp_path):
         """#1478: deleting the legacy bucket ("") is refused — it is read-only.
 
-        The web-player bucket is managed in the RomM web app; an accidental tap
+        The slot-less bucket is managed in the RomM web app; an accidental tap
         must not wipe it. The refusal returns the canonical ``invalid_slot_name``
         failure before any lock, server I/O, or state change — no ``list_saves``,
         no ``delete_server_saves``, and every slot (including "") left intact.

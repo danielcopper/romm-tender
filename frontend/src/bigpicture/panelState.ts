@@ -65,7 +65,7 @@ export interface PanelState {
   raId: number | null;
   slotConfirmed: boolean;
   // The slot the saves surfaces attribute this ROM's saves to. `null` is the
-  // legacy web-player bucket — a real answer with its own rendering, never a
+  // slot-less legacy bucket — a real answer with its own rendering, never a
   // stand-in for "we don't know". What carries "we don't know" is the flag
   // below: until it is set, `activeSlot` holds the placeholder every panel
   // starts on, and `default` is a real slot name in this system, so a reader

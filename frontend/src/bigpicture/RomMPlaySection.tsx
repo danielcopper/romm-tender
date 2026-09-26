@@ -994,16 +994,6 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
-  // Save Sync moved to dedicated tab — show legacy slot warning only
-  if (detail.activeSlot == null && detail.saveSyncEnabled) {
-    infoItems.push(
-      <div key="legacy-slot-warning" className="romm-info-item">
-        <div className="romm-info-header">SAVE SYNC</div>
-        <div style={{ fontSize: "11px", color: "#ff8800", marginTop: "4px" }}>{"\u26A0 Legacy save slot"}</div>
-      </div>,
-    );
-  }
-
   // BIOS warning. What decides it is one question with two established
   // absences behind it (`extractBiosInfo`): a file the launching emulator
   // requires is not on disk, or the console cannot start without one of the

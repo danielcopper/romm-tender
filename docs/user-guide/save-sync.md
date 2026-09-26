@@ -123,8 +123,8 @@ conflicts" list on the settings page.
 ## Copying a Save to Another Slot
 
 On the SAVES tab, most save rows carry a **Copy to slot…** button — the active slot's current save, its Previous
-Versions, and the saves listed under any other slot (including the read-only legacy web-player bucket). Tap it to copy
-that save into another slot:
+Versions, and the saves listed under any other slot (including the read-only **Manual archive** — saves uploaded to RomM
+without a slot). Tap it to copy that save into another slot:
 
 - Pick an existing slot, or type a name to create a new one.
 - The **copy is not a move** — the original save stays where it is. Delete it from the RomM web app later if you want it
@@ -133,8 +133,8 @@ that save into another slot:
 - If that save's content is **already in the destination slot**, nothing is copied — you're told it's already there
   (shown as `#<id>`).
 
-Common uses: promote an old web-player (legacy) save into a proper named slot, or bring a save from one slot onto
-another so you can continue it there.
+Common uses: promote a save from the Manual archive into a named slot, or bring a save from one slot onto another so you
+can continue it there.
 
 The button is unavailable while RomM is offline. If the game's current slot has an unresolved conflict, resolve it first
 (you'll be prompted). If the destination slot has newer changes from another device, sync that slot first, then copy

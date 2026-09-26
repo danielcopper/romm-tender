@@ -31,8 +31,8 @@ describe("CopyToSlotModal", () => {
     expect(getByText("promoted")).toBeInTheDocument();
     // …the source slot is not (same-slot copy == rollback)…
     expect(queryByText("backup")).toBeNull();
-    // …and the legacy "" bucket (displayed as "Legacy") is a read-only source only.
-    expect(queryByText("Legacy")).toBeNull();
+    // …and the legacy "" bucket (displayed as "Manual archive") is a read-only source only.
+    expect(queryByText("Manual archive")).toBeNull();
   });
 
   it("submits an existing target and closes on pick", () => {

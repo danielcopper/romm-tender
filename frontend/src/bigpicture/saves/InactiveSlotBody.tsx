@@ -19,9 +19,9 @@ export interface InactiveSlotBodyProps {
   switchError: string | null;
   isOffline: boolean;
   /**
-   * The slot-less legacy (RomM web-player) bucket — fully read-only (#1276,
-   * #1478). Drops the Activate/Delete controls and switch hints, keeping only
-   * the file list. Note + muted styling live in SlotPanel.
+   * The slot-less legacy bucket — fully read-only (#1276, #1478). Drops the
+   * Activate/Delete controls and switch hints, keeping only the file list.
+   * Note + muted styling live in SlotPanel.
    */
   isLegacy: boolean;
   handleActivate: () => void;
@@ -63,7 +63,7 @@ export const InactiveSlotBody: FC<InactiveSlotBodyProps> = ({
     );
   }
 
-  // Legacy web-player bucket: read-only — no Activate/Delete, no switch hints.
+  // Slot-less legacy bucket: read-only — no Activate/Delete, no switch hints.
   if (!isLegacy) {
     const activateLabel = switching ? "Switching..." : "Activate Slot";
     const deleteLabel = deleting ? "Deleting..." : "Delete Slot";

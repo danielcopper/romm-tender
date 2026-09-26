@@ -13,16 +13,16 @@ import {
 import type { DeviceSyncInfo, SaveStatus, SyncConflict, SlotDeleteInfo } from "../../types";
 
 describe("displaySlot", () => {
-  it("returns 'Legacy' for null", () => {
-    expect(displaySlot(null)).toBe("Legacy");
+  it("returns 'Manual archive' for null", () => {
+    expect(displaySlot(null)).toBe("Manual archive");
   });
 
-  it("returns 'Legacy' for undefined", () => {
-    expect(displaySlot(undefined)).toBe("Legacy");
+  it("returns 'Manual archive' for undefined", () => {
+    expect(displaySlot(undefined)).toBe("Manual archive");
   });
 
-  it("returns 'Legacy' for empty string", () => {
-    expect(displaySlot("")).toBe("Legacy");
+  it("returns 'Manual archive' for empty string", () => {
+    expect(displaySlot("")).toBe("Manual archive");
   });
 
   it("returns the slot name as-is for non-empty input", () => {

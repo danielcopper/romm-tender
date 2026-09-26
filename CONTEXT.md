@@ -804,7 +804,10 @@ newly-tracked ROM starts on. Slots let the same ROM carry distinct save sets wit
 a slot (`confirm_slot(...)`) is an explicit user/flow decision that requires a real slot name — the plugin never
 silently adopts a foreign slot, and it never confirms a ROM onto the legacy `slot:null`. The legacy `slot:null` is
 **retired as a confirmable target** (#1276 / ADR-0017): it survives only as a one-time migration **source** — the Slot
-Setup Wizard migrates those pre-slot saves into a named slot — and is never a ROM's active slot.
+Setup Wizard offers to copy a game's slot-less saves into a named slot, leaving the originals where they are in RomM —
+and is never a ROM's active slot. RomM still creates slot-less saves, from a manual upload without a slot. The user sees
+the bucket as the **Manual archive**, RomM's own word for it (`frontend/src/locales/en_US/rom.json`, `upload-slot-hint`,
+at RomM 5.3.1); `legacy` stays the word in code. A `null` slot is never the same as `"default"`.
 
 ### Baseline
 
