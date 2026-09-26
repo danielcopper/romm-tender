@@ -51,13 +51,18 @@ restage_formatted() {
 }
 
 # --- Python: format + lint staged files with ruff -------------------------
-# Find ruff — prefer Mason binary, fall back to PATH
-RUFF="${HOME}/.local/share/nvim/mason/bin/ruff"
+# Find ruff — the venv's first, because that is the version requirements-dev.lock
+# pins and CI formats with; an editor's copy of another version formats
+# differently. Then PATH, then Mason last.
+RUFF="$(git rev-parse --show-toplevel)/.venv/bin/ruff"
 if [ ! -x "$RUFF" ]; then
     RUFF="$(command -v ruff 2>/dev/null)"
 fi
+if [ -z "$RUFF" ] && [ -x "${HOME}/.local/share/nvim/mason/bin/ruff" ]; then
+    RUFF="${HOME}/.local/share/nvim/mason/bin/ruff"
+fi
 if [ -z "$RUFF" ]; then
-    echo "pre-commit: ruff not found (install via Mason or pip), skipping Python format"
+    echo "pre-commit: ruff not found (run 'mise run setup'), skipping Python format"
 else
     # Get staged Python files. Skip the Python step if none changed.
     STAGED=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
@@ -66,15 +71,15 @@ else
         DIRTY=$(git diff --name-only -- $STAGED)
 
         # Format staged files, then re-stage
-        $RUFF format $STAGED
-        $RUFF check --fix $STAGED
+        "$RUFF" format $STAGED
+        "$RUFF" check --fix $STAGED
 
         restage_formatted "$STAGED" "$DIRTY"
 
         # Final ruff check — abort on unfixable errors (e.g. line too long).
         # This reads the worktree, so a file held back above is checked as it
         # will look once its formatting is committed, not as it was staged.
-        if ! $RUFF check $STAGED; then
+        if ! "$RUFF" check $STAGED; then
             echo "pre-commit: ruff found unfixable errors, aborting commit"
             exit 1
         fi

@@ -356,6 +356,10 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
 - **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
+- **pnpm audit** — CI's `build` job runs `pnpm -C frontend audit --prod --audit-level=high`, which reports high and
+  critical advisories in what the panel ships: the `dependencies` of `frontend/package.json` and what they pull in, not
+  the dev tooling. It is informational — the step has `continue-on-error: true`, so an advisory shows in the job log and
+  never turns the build red — and `mise run gate` does not run it.
 - **pytest-cov** — Branch coverage reported to SonarCloud.
 - **pytest-timeout** — Bounds a single test at 120 s (`timeout` in `pytest.ini`), so a test that blocks fails by name
   instead of running the CI job out of its `timeout-minutes: 15` with nothing to say which test it was; on the main
@@ -363,6 +367,13 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
   failure: the traceback is only as sharp as the block is synchronous — a test stuck on an `await` points into the event
   loop's own `select()` rather than at the awaiting line, so the test name is what identifies it. A test that
   legitimately waits longer raises its own with `@pytest.mark.timeout(<seconds>)`.
+- **Un-awaited coroutines fail the suite** — `filterwarnings` in `pytest.ini` makes `RuntimeWarning` and
+  `PytestUnraisableExceptionWarning` errors, and a coroutine that is created and never awaited needs both to go red: the
+  first turns the warning Python issues when it finalizes the coroutine into an exception, and pytest reports that
+  exception as the second. Reading such a failure: it lands on whichever test is running when the coroutine is finalized
+  — it can surface as an error in a later test's setup — so the test it names need not be the one that dropped it; and
+  when no test runs after that point, pytest reports it at session end, where every test shows as passed, the run exits
+  1, and the traceback names no test.
 
 ## Where the coding conventions live
 

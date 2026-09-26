@@ -34,7 +34,10 @@ These are the only real duplicates, and **Renovate is configured to never touch 
 
 Update PRs are opened by [Renovate](https://docs.renovatebot.com/) (`renovate.json`, the Renovate GitHub App).
 Auto-merge uses GitHub's native auto-merge, so **the required CI checks are the gate** — a PR only merges itself when
-everything is green.
+everything is green. The checks say nothing about whether a release is authentic, so Renovate proposes an npm or PyPI
+release only once it is three days old (the `security:minimumReleaseAgeNpm` and `security:minimumReleaseAgePypi`
+presets), which gives a compromised release time to be flagged and pulled before it can merge itself — lock-file
+maintenance, pins and replacements are exempt, and GitHub Actions updates carry no such wait.
 
 | Category                                           | Auto-merges?                    |
 | -------------------------------------------------- | ------------------------------- |

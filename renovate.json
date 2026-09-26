@@ -1,7 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "security:minimumReleaseAgeNpm",
+    "security:minimumReleaseAgePypi"
   ],
   "schedule": [
     "before 6am on monday"
