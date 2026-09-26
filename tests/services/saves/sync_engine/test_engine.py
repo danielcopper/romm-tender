@@ -1164,6 +1164,25 @@ class TestSyncEngineDelegates:
         assert entry["server_size"] == 2048
         assert "created_at" in entry
 
+    @pytest.mark.parametrize("missing", ["absent", "null"])
+    def test_build_sync_conflict_entry_refuses_a_server_save_without_id(self, tmp_path, missing):
+        """A server save with no id never becomes a descriptor with ``server_save_id: None``."""
+        svc, _ = make_service(tmp_path)
+        server = _server_save(save_id=77, filename="pokemon.srm")
+        if missing == "absent":
+            del server["id"]
+        else:
+            server["id"] = None
+
+        with pytest.raises(ValueError, match="without an id"):
+            svc._sync_engine.build_sync_conflict_entry(
+                rom_id=42,
+                filename="pokemon.srm",
+                server=server,
+                local_path=None,
+                local_hash=None,
+            )
+
     @pytest.mark.asyncio
     async def test_list_devices_delegates_to_device_registry(self, tmp_path):
         """SyncEngine.list_devices forwards to DeviceRegistry.list_devices."""

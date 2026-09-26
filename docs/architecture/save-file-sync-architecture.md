@@ -768,6 +768,11 @@ un-synced edits); a `"conflict"` result appends a `SyncConflict` and returns wit
 via Keep Local / Use Server exactly as a matrix-row conflict. This is the upload mirror of the matrix's download-side
 safety: an automatic upload never blindly overwrites a save the device isn't current on.
 
+A `SyncConflict` names the server save by its `server_save_id`, which the resolution round-trips, so the id is required:
+a re-fetched head without an `id` is a RomM contract violation, and it is reported as that file's sync error rather than
+surfaced as a conflict nobody could resolve. A matrix-row conflict cannot meet one: the gavel adapter's marshalling
+already fails on an id-less save before the core decides anything.
+
 **`overwrite=true` is reserved for the explicit `keep_local` resolution.** The only caller that sets it is
 `_resolve_conflict_keep_local` — when the user has chosen to overwrite the server head, the re-POST carries
 `overwrite=true` to bypass the 409 gate deliberately ([#1276](https://github.com/danielcopper/romm-tender/issues/1276) /

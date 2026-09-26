@@ -2212,9 +2212,10 @@ class TestSyncRomSavesDispatch:
         assert [c[1][0] for c in download_calls] == [foreign["id"]]
         assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"newer from device B"
 
-    def test_sync_rom_saves_upload_409_no_baseline_surfaces_conflict(self, tmp_path):
-        """Upload POST 409 with no local baseline to prove innocence → the backstop
-        surfaces a conflict; nothing is overwritten on either side."""
+    def test_sync_rom_saves_foreign_head_with_no_baseline_surfaces_conflict(self, tmp_path):
+        """A foreign head in the slot and no local baseline to prove innocence →
+        the matrix decides Conflict itself, before any upload is attempted;
+        nothing is overwritten on either side."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
@@ -2241,9 +2242,64 @@ class TestSyncRomSavesDispatch:
         assert c["type"] == "sync_conflict"
         assert c["server_save_id"] == foreign["id"]
         assert c["local_hash"] == local_hash
-        # Nothing overwritten: local file untouched, no content downloaded.
+        # Nothing overwritten: local file untouched, no content downloaded, and
+        # no upload attempted.
         assert save_path.read_bytes() == b"local unsynced edit"
         assert not any(x[0] == "download_save_content" for x in fake.call_log)
+        assert not any(x[0] == "upload_save" for x in fake.call_log)
+
+    def test_sync_rom_saves_upload_409_conflict_on_a_save_without_id_is_a_file_error(self, tmp_path):
+        """The backstop's re-fetch returns a head without an ``id``: the conflict
+        it would surface is refused as this file's error instead, so no
+        descriptor with ``server_save_id: None`` reaches the frontend — and the
+        run goes on to the next file, which still downloads."""
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"local unsynced edit")
+
+        srm_head = fake.seed_foreign_save(
+            42,
+            uploaded_by="device-B",
+            slot="default",
+            updated_at="2026-03-01T00:00:00Z",
+            content=b"server content",
+        )
+        rtc = fake.seed_foreign_save(
+            42,
+            uploaded_by="device-B",
+            slot="default",
+            filename="pokemon.rtc",
+            updated_at="2026-02-01T00:00:00Z",
+            content=b"server clock",
+        )
+        fake.saves[rtc["id"]]["file_extension"] = "rtc"
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True, "files": {}})
+        list_saves = fake.list_saves
+        listings = 0
+
+        # The planning listing misses the .srm head, so the matrix plans an
+        # upload that the POST 409s; the backstop's re-fetch then sees every
+        # save without its id. The .rtc was planned as a download off the first
+        # listing, ids intact.
+        def list_saves_hiding_then_losing_ids(*args, **kwargs):
+            nonlocal listings
+            listings += 1
+            saves = list_saves(*args, **kwargs)
+            if listings == 1:
+                return [s for s in saves if s["id"] != srm_head["id"]]
+            return [{k: v for k, v in s.items() if k != "id"} for s in saves]
+
+        fake.list_saves = list_saves_hiding_then_losing_ids
+
+        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
+
+        assert listings == 2
+        assert conflicts == []
+        assert errors == ["pokemon.srm: RomM returned a server save without an id"]
+        assert save_path.read_bytes() == b"local unsynced edit"
+        assert (uploaded, downloaded) == (0, 1)
+        assert (tmp_path / "saves" / "gba" / "pokemon.rtc").read_bytes() == b"server clock"
 
     def test_sync_rom_saves_dedup_to_non_head_surfaces_conflict(self, tmp_path):
         """On-device #1482 repro: slot holds an older save A and a newer head B

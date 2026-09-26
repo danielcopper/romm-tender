@@ -530,7 +530,15 @@ class MatrixExecutor:
         local_path: str | None,
         local_hash: str | None,
     ) -> dict[str, Any]:
-        """Build a Phase-2 ``sync_conflict`` descriptor for the frontend."""
+        """Build a Phase-2 ``sync_conflict`` descriptor for the frontend.
+
+        Raises ``ValueError`` when *server* carries no ``id``: a resolution names
+        the server save by the descriptor's ``server_save_id``, and a RomM save
+        without an id is a contract violation, not a state to describe.
+        """
+        server_save_id = server.get("id")
+        if server_save_id is None:
+            raise ValueError("RomM returned a server save without an id")
         local_mtime = None
         local_size = None
         if local_path and self._save_file_store.is_file(local_path):
@@ -540,7 +548,7 @@ class MatrixExecutor:
             "type": "sync_conflict",
             "rom_id": rom_id,
             "filename": filename,
-            "server_save_id": server.get("id"),
+            "server_save_id": server_save_id,
             "server_updated_at": server.get("updated_at", ""),
             "server_size": server.get("file_size_bytes"),
             "local_path": local_path,
