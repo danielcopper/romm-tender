@@ -3216,7 +3216,6 @@ def _rom_scoped_surfaces(
             resolve_system=resolve_system,
             settings={},
             settings_persister=FakeSettingsPersister(),
-            bios_checker=fw,
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),

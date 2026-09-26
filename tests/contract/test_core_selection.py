@@ -128,6 +128,17 @@ async def test_set_system_core_rebakes_only_unpinned_rom(harness):
     assert all(item["app_id"] != 2 for item in items)
 
 
+async def test_set_system_core_answers_exactly_its_rebake_list_and_lease(harness):
+    """A stored switch answers its re-bake list and the lease for it, and no BIOS verdict."""
+    seed_es_systems(harness)
+    seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
+
+    result = await harness.plugin.set_system_core("gba", "VBA Next")
+
+    assert set(result) == {"success", "rebake_items", "prune_lease_token"}
+    assert result["success"] is True
+
+
 async def test_set_game_core_unbakeable_label_returns_canonical_failure(harness):
     """A label that does not resolve to a bakeable emulator hard-fails, no write."""
     seed_es_systems(harness)

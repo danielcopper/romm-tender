@@ -1136,13 +1136,13 @@ it, for the focused platform:
   on its menu is bakeable, and the fallback is not installed. The first two of those three are the split above and they
   are checked in that order: an empty menu is the case where RetroDECK's own fallback fails too, so it is answered
   before the not-bakeable one, and the surviving count branch then speaks only for a menu that really does hold one
-  bakeable option. The frontend half of #1016 lands in the same place: a switch the backend refuses is reported there,
-  and the header keeps naming the core that is actually active. A switch takes the page's busy hold from the moment it
-  is picked until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is why the hold
-  has to cover the whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`,
-  and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes
-  that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because
-  such a switch either committed or never ran and there is no pane left to report to either way.
+  bakeable option. A switch the backend refuses is reported in the same place, and the header keeps naming the old core,
+  which every shortcut following the platform's pick still launches with. A switch takes the page's busy hold from the
+  moment it is picked until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is
+  why the hold has to cover the whole of it. The chip and the pane's buttons disable, another platform's pane says
+  `Working on X`, and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a
+  success takes that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back
+  too, because such a switch either committed or never ran and there is no pane left to report to either way.
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds all seven
   states and answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note
   beside `BIOS FILES`, the `sentence` under it, with the library's own `(d/t RomM library files)` ratio behind the

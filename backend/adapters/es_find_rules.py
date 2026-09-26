@@ -31,6 +31,7 @@ import re
 from typing import TYPE_CHECKING
 
 from adapters.flatpak_install import flatpak_app_files_dirs
+from domain.shortcut_data import RETRODECK_APP_ID
 
 if TYPE_CHECKING:
     import logging
@@ -39,11 +40,6 @@ if TYPE_CHECKING:
 # entry that resolves the emulator binary (e.g. ``%EMULATOR_RYUBING%`` →
 # ``<emulator name="RYUBING">``). Captures ``<NAME>``.
 _EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_([A-Z0-9_-]+)%")
-
-# RetroDECK app id — its data/config trees back the sandbox ``/var/data`` and
-# ``/var/config`` prefixes the find rules use for user-installed (external)
-# components and per-emulator config.
-_RETRODECK_APP_ID = "net.retrodeck.retrodeck"
 
 # A find-rule ``staticpath`` entry that names one of these path fragments points
 # at a RetroDECK-managed component (bundled under the flatpak's ``/app`` tree, or
@@ -370,4 +366,4 @@ class EsFindRulesAdapter:
         RetroDECK's sandbox ``/var/data`` and ``/var/config`` are backed by the
         flatpak app's per-user ``~/.var/app/<app-id>/{data,config}`` trees.
         """
-        return os.path.join(self._user_home, ".var", "app", _RETRODECK_APP_ID, kind, rest)
+        return os.path.join(self._user_home, ".var", "app", RETRODECK_APP_ID, kind, rest)

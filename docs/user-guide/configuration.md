@@ -314,9 +314,9 @@ navigation in RetroArch menus. The result is reported under the button, and the 
 been changed.
 
 The button **asks before it acts** — it opens a confirmation naming the change, and only **Apply Fix** writes anything;
-**Cancel** leaves your config exactly as it was. The confirmation is there because the change is made in place and the
-plugin keeps no copy of the file it replaces, so if you have hand-edited your `retroarch.cfg` and want a copy, take one
-before confirming.
+**Cancel** leaves your config exactly as it was. The confirmation is there because the change is written straight into
+your config and the plugin keeps no copy of the file it replaces, so if you have hand-edited your `retroarch.cfg` and
+want a copy, take one before confirming.
 
 <!-- Screenshot: RetroArch input_driver warning with fix button -->
 

@@ -1478,7 +1478,7 @@ describe("Library › Platforms", () => {
       }
     });
 
-    it("shows a refused switch instead of leaving the old label standing (#1016)", async () => {
+    it("shows a refused switch instead of leaving the old label standing", async () => {
       vi.mocked(backend.setSystemCore).mockResolvedValue({
         success: false,
         message: "RetroDECK is not installed",
@@ -1489,7 +1489,8 @@ describe("Library › Platforms", () => {
       await pickFromCoreMenu("VBA Next");
 
       expect(within(container).getByTestId("status-core").textContent).toBe("RetroDECK is not installed");
-      // The label the header carries is still the core that is actually active.
+      // The header still names the old core, which every shortcut following the
+      // platform's pick still launches with.
       expect(container.textContent).toContain("· mGBA");
     });
 

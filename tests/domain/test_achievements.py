@@ -1,6 +1,8 @@
-"""Tests for domain.achievements — pure RA payload normalization."""
+"""Tests for domain.achievements — pure RA payload normalization and the summary dataclass."""
 
-from domain.achievements import extract_achievements_from_rom, extract_game_progress
+from dataclasses import asdict
+
+from domain.achievements import AchievementSummary, extract_achievements_from_rom, extract_game_progress
 
 
 def _sample_achievements():
@@ -259,3 +261,15 @@ class TestExtractGameProgress:
         }
         result = extract_game_progress(ra_progression, ra_id=9999, total=12, cached_at=0.0)
         assert result["total"] == 12
+
+
+class TestAchievementSummary:
+    def test_construction(self):
+        a = AchievementSummary(earned=5, total=20, earned_hardcore=3, cached_at=9999.0)
+        assert a.earned == 5
+        assert a.total == 20
+
+    def test_asdict(self):
+        a = AchievementSummary(earned=10, total=10, earned_hardcore=10, cached_at=1.0)
+        d = asdict(a)
+        assert d == {"earned": 10, "total": 10, "earned_hardcore": 10, "cached_at": 1.0}

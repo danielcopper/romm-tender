@@ -1041,6 +1041,27 @@ class TestCheckCoreChange:
 
         assert result == {"changed": False}
 
+    def test_active_core_resolution_raising_is_logged_and_answers_unchanged(self, tmp_path):
+        """A resolver that raises still answers changed=False, and the failure is logged."""
+
+        class _RaisingResolver(FakeActiveCoreResolver):
+            def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
+                raise OSError("database is locked")
+
+        logged: list[str] = []
+        svc, _ = make_service(tmp_path, active_core=_RaisingResolver(), log_debug=logged.append)
+        svc._config.settings["save_sync_enabled"] = True
+        _seed_save_state(
+            svc,
+            42,
+            self._make_save_entry(system="snes", last_synced_core="snes9x_libretro"),
+        )
+
+        result = svc.check_core_change(42)
+
+        assert result == {"changed": False}
+        assert logged == ["check_core_change: active-core resolution failed for rom 42: database is locked"]
+
     def test_save_sync_disabled(self, tmp_path):
         """Returns changed=False when save sync is disabled regardless of state."""
         svc, _ = make_service(

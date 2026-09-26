@@ -1803,9 +1803,11 @@ status.
   truncated file from a prior crash) is the data-loss hazard: returning defaults silently would let the immediate
   bootstrap save overwrite the corrupt file, wiping the user's RomM URL, API token, SGDB key, and platform/collection
   selections with no trace. Instead the adapter logs the corruption loudly at error level, renames the unparseable file
-  aside to `settings.json.corrupt-<ts>` (the `<ts>` is the injected `Clock`'s epoch seconds — filesystem-safe), and sets
-  a transient in-memory `corrupt_reset` flag before returning defaults. If the backup rename itself fails (e.g.
-  permissions), the error is logged and defaults are still returned so boot never crashes. Bootstrap reads that
+  aside to `settings.json.corrupt-<ts>` (the `<ts>` is the injected `Clock`'s epoch seconds — filesystem-safe),
+  restricts the backup to `0600` like the live file — it still holds the token and the SGDB key, and a rename keeps
+  whatever mode the corrupt file had — and sets a transient in-memory `corrupt_reset` flag before returning defaults. If
+  the backup rename itself fails (e.g. permissions), the error is logged and defaults are still returned so boot never
+  crashes; a failed `chmod` is logged as well and leaves the backup and the flag standing. Bootstrap reads that
   transient flag after migration and — before the immediate save — folds it into the settings dict as a **persistent**
   `_settings_reset_notice` marker (`{"backed_up_to": <basename>}`), so it survives a plugin reload. The frontend reads
   it via the non-consuming `get_settings_reset_notice` callable and surfaces a persistent notice — a QAM `PanelSection`
@@ -2206,8 +2208,8 @@ Protocol into services). The full pattern, source catalog, and decisions log are
 
 ### Models (`backend/models/`)
 
-TypedDicts and dataclasses describing on-disk and in-flight data shapes (`state.py`, `metadata.py`). Models import
-nothing from the other layers.
+TypedDicts and dataclasses describing on-disk and in-flight data shapes (`state.py`, `sync.py`). Models import nothing
+from the other layers.
 
 ### Other
 

@@ -40,6 +40,7 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
+from domain.shortcut_data import RETRODECK_APP_ID
 from lib.retrodeck_health import RetroDeckConfigHealth
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ class RetroDeckPathsAdapter:
             self._user_home,
             ".var",
             "app",
-            "net.retrodeck.retrodeck",
+            RETRODECK_APP_ID,
             "config",
             "retrodeck",
             "retrodeck.json",
