@@ -18,6 +18,7 @@ from domain.save_slot import save_in_slot
 from lib.errors import classify_error
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._messages import SAVE_SYNC_IN_CONTENT_DIR
+from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
 if TYPE_CHECKING:
@@ -79,10 +80,6 @@ class SlotSwitcher:
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._device_registry.get_device_id()
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     async def set_active_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Set the active save slot for a specific game.
@@ -283,7 +280,7 @@ class SlotSwitcher:
 
             # 8. Persist the coherent state regardless of partial download failures.
             save_state.mark_sync_evaluated(self._clock.now().isoformat())
-            await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
             if switch_errors:
                 return {

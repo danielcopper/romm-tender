@@ -23,6 +23,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from services.saves import SaveService, SaveServiceConfig
+from services.saves._save_state import write_save_state
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
 # so every service built here can share the same instance.
@@ -193,7 +194,7 @@ def _do_sync(svc, rom_id: int):
     core_so = engine.resolve_core(rom_id)
     default_slot = _default_slot(svc)
     result = engine.do_sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot)
-    engine._write_save_state(rom_id, save_state)
+    write_save_state(engine._uow_factory, rom_id, save_state)
     return result
 
 
@@ -216,7 +217,7 @@ def _do_upload(svc, rom_id, file_path, filename, system, *, server_save=None, co
     engine.do_upload_save(
         rom_id, file_path, filename, save_state, device_id, system, core_so, server_save, _default_slot(svc)
     )
-    engine._write_save_state(rom_id, save_state)
+    write_save_state(engine._uow_factory, rom_id, save_state)
     return save_state
 
 
@@ -225,7 +226,7 @@ def _do_download(svc, server_save, saves_dir, filename, rom_id, system):
     engine = svc._sync_engine
     save_state, device_id = engine._read_sync_inputs(rom_id)
     engine.do_download_save(server_save, saves_dir, filename, save_state, device_id, system, _default_slot(svc))
-    engine._write_save_state(rom_id, save_state)
+    write_save_state(engine._uow_factory, rom_id, save_state)
     return save_state
 
 

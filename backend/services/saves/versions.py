@@ -22,6 +22,7 @@ from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommNotFoundError
 from services.saves._helpers import local_save_target
+from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
@@ -92,10 +93,6 @@ class VersionsService:
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._device_registry.get_device_id()
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -394,13 +391,13 @@ class VersionsService:
                 None, self._sync_engine.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
             )
             if conflicts:
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {
                     "status": "conflict_blocked",
                     "conflicts": list(conflicts),
                 }
             if errors:
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "preflight_failed", "errors": errors}
 
             # Re-fetch server saves after the pre-flight: it may have created
@@ -417,12 +414,12 @@ class VersionsService:
                 # Not a connectivity verdict, so the toast must not blame the
                 # connection or invite a retry that cannot succeed (#1570).
                 self._log_debug(f"rollback_to_version: server has no such entity: {e}")
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
             except Exception as e:
                 self._log_debug(f"rollback_to_version: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "server_unreachable", "message": str(e)}
 
             # Scope to the requested slot. Legacy ('' / None) omitted the param
@@ -448,6 +445,6 @@ class VersionsService:
                 # uploads/downloads whose baselines/tracked-ids live only in the
                 # in-memory aggregate; persist them regardless of how the switch
                 # ends, or the next sync mis-classifies (#1012).
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
             return result

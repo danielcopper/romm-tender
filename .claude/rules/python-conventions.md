@@ -51,6 +51,16 @@ within share an internal type, helper, or state**, not when they share a brand-n
 a core lookup share only a brand name). Service decompositions with shared state qualify — `services/saves/`,
 `services/library/`.
 
+## Package-private helpers are functions `[ours]`
+
+A helper the modules of one package share is a module function that takes its dependencies as arguments —
+`write_save_state(uow_factory, rom_id, save_state)` in `services/saves/_save_state.py`, as `_settings.py` takes the
+settings dict. What this forbids is a base class or mixin that reads a field it does not set itself, such as a mixin
+calling `self._uow_factory` that only its subclasses assign: the dependency disappears from the call, and every subclass
+has to hold a private attribute under the name the base happens to use. `BaseRepository`
+(`adapters/repositories/_base.py`) is the deliberate exception, because it declares its dependency in its own
+`__init__(self, conn)` and sets the field itself.
+
 ## Sub-package `__init__.py` `[ours]`
 
 - **Top-level layer namespace** (`adapters/`, `services/`, `domain/`, `lib/`, `models/`): empty (docstring optional).

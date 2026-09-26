@@ -26,6 +26,7 @@ from services.saves._messages import (
     MIGRATION_DEVICE_NOT_REGISTERED,
     SAVE_SYNC_IN_CONTENT_DIR,
 )
+from services.saves._save_state import read_save_state, write_save_state
 from services.saves._settings import autocleanup_limit, resolve_default_slot
 
 if TYPE_CHECKING:
@@ -77,14 +78,6 @@ class SetupWizard:
         self._log_debug = log_debug
         self._sync_engine = sync_engine
 
-    def _read_save_state(self, rom_id: int) -> RomSaveSyncState | None:
-        with self._uow_factory() as uow:
-            return uow.rom_save_sync_states.get(rom_id)
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
-
     def is_save_tracking_configured(self, rom_id: int) -> dict[str, Any]:
         """Check if save slot tracking is configured for a game.
 
@@ -92,7 +85,7 @@ class SetupWizard:
         Returns {"configured": bool, "active_slot": str|None}
         """
         rom_id = int(rom_id)
-        game_state = self._read_save_state(rom_id)
+        game_state = read_save_state(self._uow_factory, rom_id)
         configured = bool(game_state.slot_confirmed) if game_state else False
         active_slot = game_state.active_slot if (game_state and configured) else None
         return {"configured": configured, "active_slot": active_slot}
@@ -322,12 +315,14 @@ class SetupWizard:
         # read_save_answer and _migrate_slot_saves_io do NOT acquire rom_lock,
         # so calling them inside the held lock is safe (no re-entry).
         async with self._sync_engine.rom_lock(rom_id):
-            save_state = await self._loop.run_in_executor(None, self._read_save_state, rom_id) or RomSaveSyncState()
+            save_state = (
+                await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id) or RomSaveSyncState()
+            )
 
             # Non-migration path: a plain, non-destructive metadata flip.
             if not migrate:
                 save_state.confirm_slot(normalized_slot)
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"success": True, "needs_conflict_resolution": False, "message": "Slot confirmed"}
 
             # The emulator writes this game's save beside its content, which the
@@ -339,7 +334,7 @@ class SetupWizard:
             if self._sync_engine.content_dir_blocked(rom_id, save_answer, "confirm_slot_choice"):
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
                 save_state.confirm_slot(normalized_slot)
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {
                     "success": False,
                     "reason": SAVE_SYNC_CONTENT_DIR_REASON,
@@ -375,7 +370,7 @@ class SetupWizard:
             if info["save_answer"].sync_directory is None:
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
                 save_state.confirm_slot(normalized_slot)
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {
                     "success": False,
                     "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
@@ -427,7 +422,7 @@ class SetupWizard:
             # ``no_op`` (server had no legacy saves) and ``migrated`` (the apply
             # phase ran) both confirm the slot. A partial per-target failure in
             # the apply phase is counted, not fatal (confirm-with-warning).
-            await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
             if outcome["status"] == "no_op":
                 return {
                     "success": True,

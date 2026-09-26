@@ -22,6 +22,7 @@ from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommConflictError, RommNotFoundError
 from services.saves._helpers import local_save_target
+from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
 if TYPE_CHECKING:
@@ -94,10 +95,6 @@ class SaveCopyService:
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._device_registry.get_device_id()
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     def _local_component_filenames(self, rom_id: int) -> list[str]:
         """Distinct local save filenames on disk for the ROM (one per extension).
@@ -335,10 +332,10 @@ class SaveCopyService:
                 None, self._sync_engine.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot
             )
             if conflicts:
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "conflict_blocked", "conflicts": list(conflicts)}
             if errors:
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "preflight_failed", "errors": errors}
 
             # No slot filter: the chosen save may live in ANY slot (a named slot or
@@ -355,12 +352,12 @@ class SaveCopyService:
                 # report the server offline (#1570).
                 self._log_debug(f"copy_save_to_slot: server has no such entity: {e}")
                 # Persist whatever the pre-flight mutated before bailing.
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
             except Exception as e:
                 self._log_debug(f"copy_save_to_slot: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "server_unreachable", "message": str(e)}
 
             # Dedup pre-check: if the chosen save's content is already present in
@@ -380,7 +377,7 @@ class SaveCopyService:
                 # The pre-flight may have performed real uploads/downloads on the
                 # current slot; persist those baselines even though the copy is a
                 # no-op (#1012). No copy state was mutated.
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "already_present", "existing_id": existing_id}
 
             try:
@@ -401,6 +398,6 @@ class SaveCopyService:
                 # The pre-flight (and the copy's own download/upload) mutate the
                 # in-memory aggregate; persist regardless of how the copy ends or
                 # the next sync mis-classifies (#1012).
-                await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
             return result
