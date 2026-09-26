@@ -2280,6 +2280,29 @@ class TestFinalizePerUnitRun:
         assert progress["total"] == 2
 
     @pytest.mark.asyncio
+    async def test_emit_sync_complete_counts_only_bound_roms(self, plugin, emit):
+        """A completed run's terminal frame counts the ROMs that carry a shortcut;
+        a row whose shortcut was unbound stays out of the total."""
+
+        uow = plugin._uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game B")
+        _seed_rom(uow, 3, app_id=1003, platform_slug="n64", name="Game C")
+
+        await plugin._sync_service._reporter.emit_sync_complete(
+            platform_app_ids={"n64": [1001, 1003]},
+            romm_collection_app_ids={},
+            total_games=2,
+            cancelled=False,
+            interrupt_reason=None,
+            restart_recommended=False,
+        )
+
+        progress = plugin._sync_service._sync_progress
+        assert progress["message"] == "Sync complete: 2 games from 1 platforms"
+        assert progress["total"] == 2
+
+    @pytest.mark.asyncio
     async def test_finalize_does_not_reset_run_lifecycle(self, plugin, emit):
         """finalize_per_unit_run + emit_sync_complete never touch the run lifecycle (#1202).
 

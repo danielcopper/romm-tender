@@ -269,3 +269,6 @@ class SqliteRomRepository(BaseRepository):
 
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM roms").fetchone()[0])
+
+    def count_bound(self) -> int:
+        return int(self._conn.execute("SELECT COUNT(*) FROM roms WHERE shortcut_app_id IS NOT NULL").fetchone()[0])

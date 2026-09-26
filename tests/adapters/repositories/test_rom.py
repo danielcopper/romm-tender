@@ -225,6 +225,19 @@ class TestIteration:
         uow.roms.save(_rom(2))
         assert uow.roms.count() == 2
 
+    def test_count_bound_is_zero_on_an_empty_registry(self, uow: SqliteUnitOfWork):
+        assert uow.roms.count_bound() == 0
+
+    def test_count_bound_counts_only_rows_with_a_shortcut(self, uow: SqliteUnitOfWork):
+        unbound = _rom(2, app_id=6000)
+        unbound.unbind_shortcut()
+        uow.roms.save(_rom(1, app_id=5000))
+        uow.roms.save(unbound)
+        uow.roms.save(_rom(3, app_id=7000))
+
+        assert uow.roms.count_bound() == 2
+        assert uow.roms.count() == 3
+
 
 class TestIterByGroupKey:
     """``iter_by_group_key`` — the sibling-group resolution seam (ADR-0021 #1297)."""
