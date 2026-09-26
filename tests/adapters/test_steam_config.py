@@ -473,6 +473,82 @@ class TestFixRetroarchInputDriver:
         assert 'other = "yes"' in content
         assert 'more = "no"' in content
 
+    def test_changes_only_the_input_driver_line(self, tmp_path):
+        cfg_path = tmp_path / "retroarch.cfg"
+        cfg_path.write_bytes(b'other = "yes"\r\ninput_driver = "x"\r\nmore = "no"\nlast = "1"')
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
+            result = adapter.fix_retroarch_input_driver()
+        assert result["success"] is True
+        assert cfg_path.read_bytes() == b'other = "yes"\r\ninput_driver = "sdl2"\r\nmore = "no"\nlast = "1"'
+
+    def test_input_driver_as_last_line_without_newline_gains_none(self, tmp_path):
+        cfg_path = tmp_path / "retroarch.cfg"
+        cfg_path.write_bytes(b'other = "yes"\ninput_driver = "x"')
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
+            adapter.fix_retroarch_input_driver()
+        assert cfg_path.read_bytes() == b'other = "yes"\ninput_driver = "sdl2"'
+
+    def test_a_failure_while_writing_leaves_the_original_intact(self, tmp_path):
+        cfg_path = tmp_path / "retroarch.cfg"
+        original = b'other = "yes"\ninput_driver = "x"\nmore = "no"\n'
+        cfg_path.write_bytes(original)
+        real_open = open
+
+        class _DiskFullAfterFirstWrite:
+            def __init__(self, f):
+                self._f = f
+                self._writes = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self._f.close()
+
+            def write(self, text):
+                self._writes += 1
+                if self._writes > 1:
+                    raise OSError(28, "No space left on device")
+                return self._f.write(text)
+
+        def fake_open(path, mode="r", *args, **kwargs):
+            f = real_open(path, mode, *args, **kwargs)
+            return _DiskFullAfterFirstWrite(f) if "w" in mode else f
+
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with (
+            patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)),
+            patch("adapters.steam_config.open", fake_open, create=True),
+        ):
+            result = adapter.fix_retroarch_input_driver()
+        assert result["success"] is False
+        assert cfg_path.read_bytes() == original
+        assert os.listdir(tmp_path) == ["retroarch.cfg"]
+
+    def test_keeps_the_config_files_mode(self, tmp_path):
+        cfg_path = tmp_path / "retroarch.cfg"
+        cfg_path.write_text('input_driver = "x"\n')
+        cfg_path.chmod(0o600)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
+            adapter.fix_retroarch_input_driver()
+        assert cfg_path.stat().st_mode & 0o777 == 0o600
+
+    def test_a_symlinked_config_is_written_at_its_target(self, tmp_path):
+        target = tmp_path / "real" / "retroarch.cfg"
+        target.parent.mkdir()
+        target.write_text('input_driver = "x"\n')
+        link = tmp_path / "retroarch.cfg"
+        link.symlink_to(target)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with patch("adapters.steam_config.os.path.expanduser", return_value=str(link)):
+            result = adapter.fix_retroarch_input_driver()
+        assert result["success"] is True
+        assert link.is_symlink()
+        assert target.read_text() == 'input_driver = "sdl2"\n'
+
     def test_no_fix_needed(self, tmp_path):
         cfg_path = tmp_path / "retroarch.cfg"
         cfg_path.write_text('input_driver = "sdl2"\n')
