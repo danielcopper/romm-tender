@@ -190,35 +190,35 @@ class Plugin:
         )
         # Bound before anything below can emit: the event funnel every service
         # was handed reads it on the first continuation event.
-        self._prune_conflicts = services["prune_conflicts"]
-        self._save_sync_service = services["save_sync_service"]
-        self._playtime_service = services["playtime_service"]
-        self._sync_service = services["sync_service"]
-        self._download_service = services["download_service"]
-        self._rom_adoption_service = services["rom_adoption_service"]
-        self._rom_removal_service = services["rom_removal_service"]
-        self._firmware_service = services["firmware_service"]
-        self._sgdb_service = services["sgdb_service"]
-        self._metadata_service = services["metadata_service"]
-        self._achievements_service = services["achievements_service"]
-        self._migration_service = services["migration_service"]
-        self._game_detail_service = services["game_detail_service"]
-        self._artwork_service = services["artwork_service"]
-        self._shortcut_removal_service = services["shortcut_removal_service"]
-        self._settings_service = services["settings_service"]
-        self._core_service = services["core_service"]
-        self._disc_service = services["disc_service"]
-        self._version_switch_service = services["version_switch_service"]
-        self._prune_service = services["prune_service"]
-        self._data_inventory_service = services["data_inventory_service"]
-        self._connection_service = services["connection_service"]
-        self._startup_healing_service = services["startup_healing_service"]
-        self._shortcut_relocation_service = services["shortcut_relocation_service"]
-        self._update_check_service = services["update_check_service"]
-        self._launch_gate_service = services["launch_gate_service"]
-        self._session_lifecycle_service = services["session_lifecycle_service"]
-        self._game_process_service = services["game_process_service"]
-        self._relaunch_options_resolver = services["relaunch_options_resolver"]
+        self._prune_conflicts = services.prune_conflicts
+        self._save_sync_service = services.save_sync_service
+        self._playtime_service = services.playtime_service
+        self._sync_service = services.sync_service
+        self._download_service = services.download_service
+        self._rom_adoption_service = services.rom_adoption_service
+        self._rom_removal_service = services.rom_removal_service
+        self._firmware_service = services.firmware_service
+        self._sgdb_service = services.sgdb_service
+        self._metadata_service = services.metadata_service
+        self._achievements_service = services.achievements_service
+        self._migration_service = services.migration_service
+        self._game_detail_service = services.game_detail_service
+        self._artwork_service = services.artwork_service
+        self._shortcut_removal_service = services.shortcut_removal_service
+        self._settings_service = services.settings_service
+        self._core_service = services.core_service
+        self._disc_service = services.disc_service
+        self._version_switch_service = services.version_switch_service
+        self._prune_service = services.prune_service
+        self._data_inventory_service = services.data_inventory_service
+        self._connection_service = services.connection_service
+        self._startup_healing_service = services.startup_healing_service
+        self._shortcut_relocation_service = services.shortcut_relocation_service
+        self._update_check_service = services.update_check_service
+        self._launch_gate_service = services.launch_gate_service
+        self._session_lifecycle_service = services.session_lifecycle_service
+        self._game_process_service = services.game_process_service
+        self._relaunch_options_resolver = services.relaunch_options_resolver
 
         # ── 5. Startup repairs ──────────────────────────────────────────────
         # Each runs through the reporting wrapper: these are repairs, not

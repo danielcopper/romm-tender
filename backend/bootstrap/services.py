@@ -95,7 +95,42 @@ class WiringConfig:
     update_source: UpdateSource
 
 
-def wire_services(cfg: WiringConfig) -> dict[str, Any]:
+@dataclass(frozen=True)
+class ServicesBundle:
+    """Every wired service, and the prune conflict gate, as ``wire_services`` hands them to ``Plugin._main()``."""
+
+    prune_conflicts: PruneConflicts
+    save_sync_service: SaveService
+    playtime_service: PlaytimeService
+    sync_service: LibraryService
+    download_service: DownloadService
+    rom_adoption_service: RomAdoptionService
+    rom_removal_service: RomRemovalService
+    prune_service: PruneService
+    data_inventory_service: DataInventoryService
+    firmware_service: FirmwareService
+    sgdb_service: SteamGridService
+    metadata_service: MetadataService
+    achievements_service: AchievementsService
+    migration_service: MigrationService
+    game_detail_service: GameDetailService
+    artwork_service: ArtworkService
+    shortcut_removal_service: ShortcutRemovalService
+    settings_service: SettingsService
+    core_service: CoreService
+    disc_service: DiscService
+    version_switch_service: VersionSwitchService
+    connection_service: ConnectionService
+    startup_healing_service: StartupHealingService
+    shortcut_relocation_service: ShortcutRelocationService
+    update_check_service: UpdateCheckService
+    launch_gate_service: LaunchGateService
+    session_lifecycle_service: SessionLifecycleService
+    game_process_service: GameProcessService
+    relaunch_options_resolver: RelaunchOptionsResolver
+
+
+def wire_services(cfg: WiringConfig) -> ServicesBundle:
     """Create service instances after plugin state is initialised.
 
     Called from ``Plugin._main()`` after save-sync state is populated
@@ -104,10 +139,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
 
     Returns
     -------
-    Every wired service, and the prune conflict gate, keyed by the
-    attribute name ``Plugin._main()`` binds it to. Callers index the keys
-    they need; the mapping is not enumerated here because it grows with
-    the service surface.
+    The :class:`ServicesBundle` of every wired service.
     """
 
     # Retry-progress surface (#1345): the RommHttpAdapter runs its retry+backoff
@@ -611,34 +643,34 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
-    return {
-        "prune_conflicts": prune_conflicts,
-        "save_sync_service": save_sync_service,
-        "playtime_service": playtime_service,
-        "sync_service": sync_service,
-        "download_service": download_service,
-        "rom_adoption_service": rom_adoption_service,
-        "rom_removal_service": rom_removal_service,
-        "prune_service": prune_service,
-        "data_inventory_service": data_inventory_service,
-        "firmware_service": firmware_service,
-        "sgdb_service": sgdb_service,
-        "metadata_service": metadata_service,
-        "achievements_service": achievements_service,
-        "migration_service": migration_service,
-        "game_detail_service": game_detail_service,
-        "artwork_service": artwork_service,
-        "shortcut_removal_service": shortcut_removal_service,
-        "settings_service": settings_service,
-        "core_service": core_service,
-        "disc_service": disc_service,
-        "version_switch_service": version_switch_service,
-        "connection_service": connection_service,
-        "startup_healing_service": startup_healing_service,
-        "shortcut_relocation_service": shortcut_relocation_service,
-        "update_check_service": update_check_service,
-        "launch_gate_service": launch_gate_service,
-        "session_lifecycle_service": session_lifecycle_service,
-        "game_process_service": game_process_service,
-        "relaunch_options_resolver": relaunch_options_resolver,
-    }
+    return ServicesBundle(
+        prune_conflicts=prune_conflicts,
+        save_sync_service=save_sync_service,
+        playtime_service=playtime_service,
+        sync_service=sync_service,
+        download_service=download_service,
+        rom_adoption_service=rom_adoption_service,
+        rom_removal_service=rom_removal_service,
+        prune_service=prune_service,
+        data_inventory_service=data_inventory_service,
+        firmware_service=firmware_service,
+        sgdb_service=sgdb_service,
+        metadata_service=metadata_service,
+        achievements_service=achievements_service,
+        migration_service=migration_service,
+        game_detail_service=game_detail_service,
+        artwork_service=artwork_service,
+        shortcut_removal_service=shortcut_removal_service,
+        settings_service=settings_service,
+        core_service=core_service,
+        disc_service=disc_service,
+        version_switch_service=version_switch_service,
+        connection_service=connection_service,
+        startup_healing_service=startup_healing_service,
+        shortcut_relocation_service=shortcut_relocation_service,
+        update_check_service=update_check_service,
+        launch_gate_service=launch_gate_service,
+        session_lifecycle_service=session_lifecycle_service,
+        game_process_service=game_process_service,
+        relaunch_options_resolver=relaunch_options_resolver,
+    )
