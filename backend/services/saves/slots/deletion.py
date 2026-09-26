@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.save_slot import save_in_slot, slot_query_param
 from lib.errors import classify_error
+from services.saves._save_state import read_save_state, write_save_state
 from services.saves._settings import save_sync_enabled
 
 if TYPE_CHECKING:
@@ -60,14 +61,6 @@ class SlotDeleter:
         self._log_debug = log_debug
         self._sync_engine = sync_engine
 
-    def _read_save_state(self, rom_id: int) -> RomSaveSyncState | None:
-        with self._uow_factory() as uow:
-            return uow.rom_save_sync_states.get(rom_id)
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
-
     def _validate_slot_operation(
         self, rom_id: int, slot: str
     ) -> dict[str, Any] | tuple[RomSaveSyncState, dict[str, dict[str, Any]]]:
@@ -75,13 +68,13 @@ class SlotDeleter:
 
         Returns an error dict on failure, or a (rom_state, slots_dict) tuple on
         success. The returned ``rom_state`` is the loaded aggregate; callers that
-        mutate it must persist via :meth:`_write_save_state`.
+        mutate it must persist via :func:`write_save_state`.
         """
         if not save_sync_enabled(self._settings):
             return {"success": False, "reason": "disabled", "message": "Save sync is disabled"}
         if not self._rom_info.is_content_installed(rom_id):
             return {"success": False, "reason": "not_installed", "message": "ROM is not installed"}
-        save_state = self._read_save_state(rom_id)
+        save_state = read_save_state(self._uow_factory, rom_id)
         if save_state is None:
             return {"success": False, "reason": "not_found", "message": "No save state found"}
         slots_dict: dict[str, dict[str, Any]] = save_state.slots
@@ -252,7 +245,7 @@ class SlotDeleter:
                     cleaned_files += 1
 
             save_state.delete_slot_tracking(slot)
-            await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
+            await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
             return {
                 "success": True,

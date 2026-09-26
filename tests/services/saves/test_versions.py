@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import save_shape_message, unestablished_answer
 from lib.errors import RommNotFoundError
 from tests.services.saves._helpers import (
@@ -921,32 +922,24 @@ class TestRollbackToVersion:
         fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
 
         # rollback_to_version is delegated to the VersionsService sub-service,
-        # which owns _write_save_state and _rollback_to_version_io.
+        # which owns _rollback_to_version_io. The switch clobbers the stored row
+        # and then raises AFTER the clean pre-flight, modelling the #1012 hazard:
+        # only the finally-branch persist can put the service's state back.
         versions = svc._versions
 
-        # Spy on the persist so the finally-branch write is observable. Make the
-        # switch raise AFTER the clean pre-flight to model the #1012 hazard.
-        original_write = versions._write_save_state
-        write_calls: list[int] = []
-
-        def spy_write(rom_id, save_state):
-            write_calls.append(rom_id)
-            return original_write(rom_id, save_state)
-
-        def raising_io(*args, **kwargs):
+        def raising_io(rom_id, save_state, *args, **kwargs):
+            with versions._uow_factory() as uow:
+                uow.rom_save_sync_states.save(rom_id, RomSaveSyncState())
             raise RuntimeError("switch I/O exploded")
 
-        versions._write_save_state = spy_write  # type: ignore[method-assign]
         versions._rollback_to_version_io = raising_io  # type: ignore[method-assign]
 
-        try:
-            with pytest.raises(RuntimeError, match="switch I/O exploded"):
-                await svc.rollback_to_version(42, "default", 50)
-        finally:
-            versions._write_save_state = original_write  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError, match="switch I/O exploded"):
+            await svc.rollback_to_version(42, "default", 50)
 
-        # Non-vacuous: the persist actually fired for rom 42 despite the raise.
-        assert 42 in write_calls
+        # Non-vacuous: the stored row is the service's state again, not the
+        # clobbered empty one, so the persist ran despite the raise.
+        assert _require_save_state(svc, 42).files["pokemon.srm"].tracked_save_id == 100
 
     @pytest.mark.asyncio
     async def test_rollback_to_already_tracked_save_is_idempotent(self, tmp_path):

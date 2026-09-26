@@ -14,6 +14,7 @@ from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot, slot_query_param
 from lib.errors import classify_error
 from services.saves._messages import SAVE_SYNC_DISABLED
+from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
 if TYPE_CHECKING:
@@ -137,13 +138,9 @@ class SlotListing:
         else:
             game_entry = rom_state
         game_entry.refresh_slot_listing(merged)
-        await self._loop.run_in_executor(None, self._write_save_state, rom_id, game_entry)
+        await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, game_entry)
 
         return {"success": True, "slots": _slot_rows(merged), "active_slot": active_slot}
-
-    def _write_save_state(self, rom_id: int, save_state: RomSaveSyncState) -> None:
-        with self._uow_factory() as uow:
-            uow.rom_save_sync_states.save(rom_id, save_state)
 
     @staticmethod
     def _merge_persisted_slots(
