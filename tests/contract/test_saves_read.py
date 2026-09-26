@@ -11,13 +11,14 @@ Failure injection note: the save read paths run their RomM calls through
 attempt (no backoff sleep). A ``RommConnectionError`` (a real
 server-unreachable transport error) is therefore fast to inject.
 
-Explicitly OUT of Phase 1 (NOT tested here, named as deferred):
-
-- ``confirm_slot_choice`` and ``switch_slot`` — their fixed contract is not
-  decided until #1004 / #1005; the contract tests land with that fix.
-- ``delete_slot`` / ``resolve_sync_conflict`` / ``sync_rom_saves`` and the
-  other mutation flows — mutation + event contracts (#1017) land with their
-  own fixes; this tier covers the read surface only.
+This module covers the read surface only; the mutating save callables have
+their own modules beside it (``test_saves_slot_choice.py``,
+``test_saves_destructive.py``, ``test_saves_upload_409.py`` and the other
+``test_saves_*.py``). Still reached at this tier only by the gate refusals in
+``test_gate_refusals.py``: ``sync_all_saves``, ``update_save_sync_settings``,
+``delete_local_saves``, ``copy_save_to_slot`` and
+``saves_rollback_to_version``; ``switch_slot`` is exercised only for its
+legacy-bucket refusal.
 """
 
 from __future__ import annotations
