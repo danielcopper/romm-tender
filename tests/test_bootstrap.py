@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import pathlib
+from dataclasses import fields
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -277,7 +278,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
         try:
             # Where the covers are written, and where the purge goes looking —
             # the purge's own answer, through the seam the service calls.
-            assert services["artwork_service"]._cover_cache_dir.startswith(directories.cache_dir)
+            assert services.artwork_service._cover_cache_dir.startswith(directories.cache_dir)
             roots = {a["safe_root"] for a in result.adapters.prune_artifacts.recovery_artifacts([7])}
             assert roots == {directories.cache_dir}
         finally:
@@ -567,14 +568,14 @@ class TestWireServices:
     def test_returns_all_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert isinstance(result["save_sync_service"], SaveService)
-        assert isinstance(result["playtime_service"], PlaytimeService)
-        assert isinstance(result["sync_service"], LibraryService)
-        assert isinstance(result["download_service"], DownloadService)
-        assert isinstance(result["firmware_service"], FirmwareService)
-        assert isinstance(result["sgdb_service"], SteamGridService)
-        assert isinstance(result["metadata_service"], MetadataService)
-        assert isinstance(result["achievements_service"], AchievementsService)
+        assert isinstance(result.save_sync_service, SaveService)
+        assert isinstance(result.playtime_service, PlaytimeService)
+        assert isinstance(result.sync_service, LibraryService)
+        assert isinstance(result.download_service, DownloadService)
+        assert isinstance(result.firmware_service, FirmwareService)
+        assert isinstance(result.sgdb_service, SteamGridService)
+        assert isinstance(result.metadata_service, MetadataService)
+        assert isinstance(result.achievements_service, AchievementsService)
         deps["loop"].close()
 
     def test_wires_http_adapter_on_retry_to_threadsafe_emit(self, tmp_path):
@@ -609,34 +610,22 @@ class TestWireServices:
         # MigrationService holds the live settings dict; all relational
         # migration state (installs, BIOS, markers) reads through the UoW
         # factory after the SQLite cutover (#784).
-        assert result["migration_service"]._settings is deps["settings"]
+        assert result.migration_service._settings is deps["settings"]
         deps["loop"].close()
 
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 29
-        assert isinstance(result["prune_conflicts"], PruneConflicts)
-        assert "migration_service" in result
-        assert "game_detail_service" in result
-        assert "rom_removal_service" in result
-        assert "settings_service" in result
-        assert "core_service" in result
-        assert isinstance(result["core_service"], CoreService)
-        assert "disc_service" in result
-        assert isinstance(result["disc_service"], DiscService)
-        assert "version_switch_service" in result
-        assert isinstance(result["version_switch_service"], VersionSwitchService)
-        assert isinstance(result["prune_service"], PruneService)
-        assert isinstance(result["data_inventory_service"], DataInventoryService)
-        assert "connection_service" in result
-        assert "startup_healing_service" in result
-        assert "launch_gate_service" in result
-        assert "session_lifecycle_service" in result
-        assert "game_process_service" in result
-        assert isinstance(result["game_process_service"], GameProcessService)
-        assert "relaunch_options_resolver" in result
-        assert isinstance(result["update_check_service"], UpdateCheckService)
+        assert len(fields(result)) == 29
+        assert all(getattr(result, field.name) is not None for field in fields(result))
+        assert isinstance(result.prune_conflicts, PruneConflicts)
+        assert isinstance(result.core_service, CoreService)
+        assert isinstance(result.disc_service, DiscService)
+        assert isinstance(result.version_switch_service, VersionSwitchService)
+        assert isinstance(result.prune_service, PruneService)
+        assert isinstance(result.data_inventory_service, DataInventoryService)
+        assert isinstance(result.game_process_service, GameProcessService)
+        assert isinstance(result.update_check_service, UpdateCheckService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
@@ -648,9 +637,9 @@ class TestWireServices:
         """
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        sync_service = result["sync_service"]
-        artwork_service = result["artwork_service"]
-        sgdb_service = result["sgdb_service"]
+        sync_service = result.sync_service
+        artwork_service = result.artwork_service
+        sgdb_service = result.sgdb_service
 
         # Producer rebinds _pending_sync to a fresh dict (mirrors sync_apply_delta).
         sync_service._pending_sync = {42: {"name": "Game", "platform_name": "N64"}}
@@ -665,7 +654,7 @@ class TestWireServices:
 
         result = wire_services(self._make_config(deps))
 
-        assert result["sync_service"]._orchestrator._launcher_exe == deps["launcher"].path
+        assert result.sync_service._orchestrator._launcher_exe == deps["launcher"].path
         deps["loop"].close()
 
     def test_migration_service_receives_the_firmware_resolver(self, tmp_path):
@@ -677,7 +666,7 @@ class TestWireServices:
         """
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        migration_service = result["migration_service"]
+        migration_service = result.migration_service
 
         assert migration_service._firmware_resolver is deps["firmware_resolver"]
         deps["loop"].close()
@@ -687,8 +676,8 @@ class TestWireServices:
         deps = self._make_deps(tmp_path)
         shared_uow = deps["uow_factory"].uow
         result = wire_services(self._make_config(deps))
-        save_sync_service = result["save_sync_service"]
-        migration_service = result["migration_service"]
+        save_sync_service = result.save_sync_service
+        migration_service = result.migration_service
         assert migration_service._uow_factory() is shared_uow
         assert save_sync_service._rom_info._uow_factory() is shared_uow
         deps["loop"].close()
@@ -700,8 +689,8 @@ class TestWireServices:
         still has files at the previous RetroDECK home."""
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        save_sync_service = result["save_sync_service"]
-        migration_service = result["migration_service"]
+        save_sync_service = result.save_sync_service
+        migration_service = result.migration_service
         # is_retrodeck_migration_pending is consumed by the sync_engine sub-service.
         assert save_sync_service._sync_engine._is_retrodeck_migration_pending == (
             migration_service.is_retrodeck_migration_pending

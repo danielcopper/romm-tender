@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 # The wired attributes ``main.py:_main`` binds onto ``Plugin`` — every service
 # and the prune conflict gate. The harness binds the same set; the loud-failure
 # assert below checks every one is present so a wiring drift (a renamed/added
-# service key) fails the fixture instead of surfacing as a confusing
+# service field) fails the fixture instead of surfacing as a confusing
 # ``AttributeError`` mid-test.
 _BOUND_SERVICE_ATTRS = {
     "_prune_conflicts": "prune_conflicts",
@@ -290,8 +290,8 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     plugin._debug_logger = result.handles.debug_logger
     plugin._persistence = result.handles.persistence
     plugin._retrodeck_paths = result.callbacks.retrodeck_paths
-    for attr, key in _BOUND_SERVICE_ATTRS.items():
-        setattr(plugin, attr, services[key])
+    for attr, field in _BOUND_SERVICE_ATTRS.items():
+        setattr(plugin, attr, getattr(services, field))
 
     # Loud-failure guard: a wiring drift (renamed/added service) must fail the
     # fixture here, not as a confusing AttributeError deep in a contract test.
