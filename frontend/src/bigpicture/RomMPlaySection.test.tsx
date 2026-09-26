@@ -34,7 +34,7 @@ import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
-import { useVersionError } from "./VersionErrorCard";
+import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
 
 // Type-only import — vi.mock("./CustomPlayButton", ...) below replaces the
@@ -43,7 +43,8 @@ import { useMigrationStatus } from "../utils/migrationStore";
 import type { CustomPlayButton } from "./CustomPlayButton";
 
 // ----- Sibling hook mocks -----
-vi.mock("./VersionErrorCard", () => ({
+vi.mock("../utils/connectionState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/connectionState")>()),
   useVersionError: vi.fn(() => null),
 }));
 // Only the hook is replaced — the store's writers stay real, so anything else

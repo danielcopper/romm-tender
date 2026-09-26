@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { expectStableSubscribe } from "../test-utils/store-hook-subscription";
 import {
   getRommConnectionState,
   setRommConnectionState,
@@ -9,8 +11,19 @@ import {
   onServerRetryProgressChange,
   beginServerLoad,
   settleServerLoad,
+  setVersionError,
+  onVersionErrorChange,
+  useVersionError,
 } from "./connectionState";
 import { debugLog } from "../api/backend";
+
+// Fakes nothing — the real useSyncExternalStore runs; the wrapper only records
+// what useVersionError passes it. See expectStableSubscribe's docstring for why
+// the mock has to live in this file.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return { ...actual, useSyncExternalStore: vi.fn(actual.useSyncExternalStore) };
+});
 
 describe("connectionState store (#1345)", () => {
   beforeEach(() => {
@@ -230,5 +243,42 @@ describe("retry-progress monotonicity within one load (#1758)", () => {
     setServerRetryProgress({ attempt: 3, maxAttempts: 3 });
     settleServerLoad(load);
     expect(getServerRetryProgress()).toBeNull();
+  });
+});
+
+describe("useVersionError", () => {
+  // The store is a module singleton; reset it so no test leaks an error into a
+  // sibling. act-wrapped: a hook may still be mounted when this runs, and the
+  // reset notifies it.
+  afterEach(() => {
+    act(() => {
+      setVersionError(null);
+    });
+  });
+
+  it("returns the current error on mount", () => {
+    setVersionError("initial err");
+    const { result } = renderHook(() => useVersionError());
+    expect(result.current).toBe("initial err");
+  });
+
+  it("returns null when no error is set", () => {
+    setVersionError(null);
+    const { result } = renderHook(() => useVersionError());
+    expect(result.current).toBeNull();
+  });
+
+  it("updates when setVersionError fires after mount", () => {
+    setVersionError(null);
+    const { result } = renderHook(() => useVersionError());
+    expect(result.current).toBeNull();
+    act(() => {
+      setVersionError("new err");
+    });
+    expect(result.current).toBe("new err");
+  });
+
+  it("subscribes with the store's own seam, so a re-render does not re-subscribe", () => {
+    expectStableSubscribe(useVersionError, onVersionErrorChange);
   });
 });

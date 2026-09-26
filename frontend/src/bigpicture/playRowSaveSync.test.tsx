@@ -15,11 +15,14 @@ import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { setRommConnectionState, setVersionError } from "../utils/connectionState";
 import { registerConnectionHeartbeat } from "../utils/connectionHeartbeat";
 import { stubAppStore } from "../test-utils/steamStubs";
-import { useVersionError } from "./VersionErrorCard";
+import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
 import type { SaveStatus, SyncConflict } from "../types";
 
-vi.mock("./VersionErrorCard", () => ({ useVersionError: vi.fn(() => null) }));
+vi.mock("../utils/connectionState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/connectionState")>()),
+  useVersionError: vi.fn(() => null),
+}));
 // Only the hook is replaced — the store's writers stay real, so anything else
 // in the tree that reads migration state still sees a consistent module.
 vi.mock("../utils/migrationStore", async (importOriginal) => ({

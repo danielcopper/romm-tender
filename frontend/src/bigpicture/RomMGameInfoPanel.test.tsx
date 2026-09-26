@@ -25,8 +25,8 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import { useVersionError } from "./VersionErrorCard";
 import {
+  useVersionError,
   setRommConnectionState,
   reportServerReachable,
   getRommConnectionState,
@@ -72,6 +72,10 @@ vi.mock("./VersionErrorCard", () => ({
     capturedVersionErrorCard.push(props);
     return createElement("div", { "data-testid": "version-error-card" });
   },
+}));
+
+vi.mock("../utils/connectionState", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/connectionState")>()),
   useVersionError: vi.fn(() => null),
 }));
 

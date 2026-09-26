@@ -168,10 +168,10 @@ import {
   setRommConnectionState,
   setVersionError,
   useRommConnectionState,
+  useVersionError,
   type RommConnectionState,
 } from "../utils/connectionState";
 import { registerConnectionHeartbeat } from "../utils/connectionHeartbeat";
-import { useVersionError } from "./VersionErrorCard";
 import { useMigrationStatus } from "../utils/migrationStore";
 import { detach } from "../utils/detach";
 
@@ -456,9 +456,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // (handleGameStop) or a multi-device reconcile-on-view refreshes the value on
   // the SAME mount — no navigate-away/back remount required.
   useEffect(() => {
-    const onPlaytimeChanged = (e: Event) => {
-      const payload = (e as CustomEvent<{ appId?: number } | null>).detail;
-      if (payload?.appId !== appId) return;
+    const onPlaytimeChanged = (e: WindowEventMap["romm_playtime_changed"]) => {
+      if (e.detail.appId !== appId) return;
       const ov = appStore.GetAppOverviewByAppID(appId);
       if (!ov) return;
       setPlaytimeInfo((prev) => ({
