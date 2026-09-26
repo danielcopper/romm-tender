@@ -1125,7 +1125,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // no DOM node, so the row stays a direct child of the injected panel either way.
   return (
     <Fragment>
-      {detail.savefilesInContentDir && detail.saveSyncEnabled ? (
+      {detail.savefilesInContentDir === true && detail.saveSyncEnabled ? (
         <WarningCard
           key="savefiles-content-dir-warning"
           title="Save sync off"

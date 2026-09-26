@@ -75,8 +75,10 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   saveSyncLabel: string;
   /** The emulator writes this game's saves beside the game file, so they can't
    *  be synced. Read off the local machine, so it is populated even while RomM
-   *  is unreachable. */
-  savefilesInContentDir: boolean;
+   *  is unreachable. `null` from re-enabling save sync until the status read
+   *  that follows answers, so a read that fails leaves nothing asserted rather
+   *  than the answer from before sync was switched off. */
+  savefilesInContentDir: boolean | null;
   activeSlot: string | null;
   raId: number | null;
   achievementEarned: number;
@@ -552,7 +554,7 @@ async function handleSaveSyncSettingsChange(
     }));
     return;
   }
-  writerFor(entry, entry.generation)((prev) => ({ ...prev, saveSyncEnabled: true }));
+  writerFor(entry, entry.generation)((prev) => ({ ...prev, saveSyncEnabled: true, savefilesInContentDir: null }));
   await refreshSaveStatus(appId).catch(() => null);
 }
 

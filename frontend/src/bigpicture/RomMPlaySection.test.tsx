@@ -4359,6 +4359,36 @@ describe("RomMPlaySection", () => {
       expect(container.querySelector('[data-testid="play-button"]')).not.toBeNull();
     });
 
+    it("does NOT render the banner after save sync is re-enabled and the status read fails (#1657)", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        save_sync_enabled: true,
+      });
+      stubSaveStatus(42, true);
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("can't be synced");
+
+      const dispatchSettings = async (enabled: boolean) => {
+        await act(async () => {
+          globalThis.dispatchEvent(
+            new CustomEvent("romm_data_changed", {
+              detail: { type: "save_sync_settings", save_sync_enabled: enabled },
+            }),
+          );
+          await Promise.resolve();
+        });
+        await flushAsync();
+      };
+      await dispatchSettings(false);
+      vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("offline"));
+      await dispatchSettings(true);
+
+      expect(getGameDetail(testAppId).saveSyncEnabled).toBe(true);
+      expect(container.textContent).not.toContain("can't be synced");
+    });
+
     it("does NOT probe getSaveStatus for the flag when save sync is disabled", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,

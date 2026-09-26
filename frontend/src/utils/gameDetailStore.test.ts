@@ -608,6 +608,48 @@ describe("gameDetailStore", () => {
       expect(getGameDetail(nextAppId).saveSyncEnabled).toBe(true);
     });
 
+    it("enabling with a failed status read leaves the content-dir fact unknown, not the old answer", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId).savefilesInContentDir).toBe(true);
+
+      await act(async () => {
+        dispatchSettings(false);
+        await Promise.resolve();
+      });
+      vi.mocked(backend.getSaveStatus).mockRejectedValue(new Error("offline"));
+      await act(async () => {
+        dispatchSettings(true);
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenLastCalledWith(42);
+      expect(getGameDetail(nextAppId)).toMatchObject({ saveSyncEnabled: true, savefilesInContentDir: null });
+    });
+
+    it("enabling takes the content-dir fact from the status read that follows", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
+      subscribe(nextAppId);
+      await flush();
+
+      await act(async () => {
+        dispatchSettings(false);
+        await Promise.resolve();
+      });
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: false }));
+      await act(async () => {
+        dispatchSettings(true);
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(getGameDetail(nextAppId).savefilesInContentDir).toBe(false);
+    });
+
     it("disabling clears the sync-derived display without a read, keeping the content-dir fact", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
       vi.mocked(backend.getSaveStatus).mockResolvedValue(saveStatus({ savefiles_in_content_dir: true }));
