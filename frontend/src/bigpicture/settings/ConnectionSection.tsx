@@ -135,7 +135,7 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
         <PanelSectionRow>
           <ToggleField
             label="Allow Insecure SSL"
-            description="Skip certificate verification for self-signed certs (LAN only)"
+            description="Skip certificate checks for a self-signed server. Anyone who can intercept the connection can read what the plugin sends — your RomM token, your password when you sign in with it, and any custom headers — and use your account. Only on a network you trust."
             checked={allowInsecureSsl}
             onChange={onAllowInsecureSslChange}
           />

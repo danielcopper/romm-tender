@@ -320,6 +320,13 @@ describe("ConnectionSection", () => {
       expect(toggleCaptured.items[0]?.label).toBe("Allow Insecure SSL");
     });
 
+    it("says what skipping the checks exposes: the token, a sign-in password and custom headers, and with them the account", () => {
+      render(<ConnectionSection {...defaultProps({ url: "https://romm.local" })} />);
+      expect(toggleCaptured.items[0]?.description).toBe(
+        "Skip certificate checks for a self-signed server. Anyone who can intercept the connection can read what the plugin sends — your RomM token, your password when you sign in with it, and any custom headers — and use your account. Only on a network you trust.",
+      );
+    });
+
     it("treats case-insensitive https prefix", () => {
       render(<ConnectionSection {...defaultProps({ url: "HTTPS://romm.local" })} />);
       expect(toggleCaptured.items).toHaveLength(1);
