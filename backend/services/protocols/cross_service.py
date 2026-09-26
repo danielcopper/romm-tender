@@ -199,7 +199,7 @@ class RetryStrategy(Protocol):
 
 
 class BiosChecker(Protocol):
-    """BIOS status checking consumed by GameDetailService and CoreService.
+    """BIOS status checking consumed by GameDetailService.
 
     One entry point, and it is live. There is deliberately no cheap cached twin:
     a BIOS answer may not outlive the page that asked for it, so a page that
@@ -215,9 +215,8 @@ class BiosChecker(Protocol):
     caller can pair one emulator's identity with another's name
     (``domain.emulator_commands.LaunchingEmulator``). Its identity names a
     standalone emulator as readily as a libretro core. ``None`` means "use the
-    platform's own pick" — the platform-level checks (the
-    ``check_platform_bios`` callable, the post-system-core-write recheck) pass
-    it, and so does the per-game path when nothing could be resolved for the ROM.
+    platform's own pick" — the ``check_platform_bios`` callable passes it, and
+    so does the per-game path when nothing could be resolved for the ROM.
     """
 
     async def check_platform_bios(

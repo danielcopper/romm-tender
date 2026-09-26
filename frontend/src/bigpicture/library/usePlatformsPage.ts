@@ -704,9 +704,9 @@ export function usePlatformsPage(): PlatformsPageState {
             const result = await setSystemCore(slug, label);
             detach(debugLog(`setSystemCore: result success=${result.success}`));
             if (!result.success) {
-              // #1016's frontend half: the switch did not happen and the label
-              // still names the old core, so say so rather than leaving the
-              // detail looking as though the pick landed.
+              // Nothing below re-bakes a failed switch, so every live shortcut
+              // keeps its old command: report the failure rather than leaving
+              // the detail looking as though the switch took effect.
               setStatus({ slug, scope: "core", text: result.message ?? "Could not change the core" });
               return;
             }

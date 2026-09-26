@@ -477,7 +477,11 @@ so standalone emulators and disabled un-bakeable entries render identically (#12
    resolves the ROM's full active core and appends `{app_id, launch_options}` to a `rebake_items` list. ROMs with a
    per-game pin, uninstalled ROMs, and unbound ROMs are skipped — they have nothing live to rewrite, or their pin
    already wins.
-3. It re-checks BIOS against the newly chosen core and returns `{success, bios_status, rebake_items}`.
+3. It returns `{success: true, rebake_items}`. A failure in either step answers `{success: false, reason, message}`, and
+   the frontend re-bakes only on success — so a fan-out failure after step 1 leaves the choice stored while no shortcut
+   is re-baked. The write checks no BIOS, so a firmware read cannot add a second way to report a stored switch as
+   failed. The platform detail re-reads the platform once the re-bake is done, and that read answers for the new core's
+   firmware.
 
 The frontend confirm-sets each `rebake_items` entry on its live Steam shortcut the same way the per-game flow does, so a
 per-platform core change applies **immediately** to every installed game on the platform — no sync required. Because the

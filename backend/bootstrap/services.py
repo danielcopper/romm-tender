@@ -454,7 +454,6 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             resolve_system=cfg.adapters.http_adapter.resolve_system,
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
-            bios_checker=firmware_service,
             uow_factory=cfg.callbacks.uow_factory,
             active_core=active_core_resolver,
             disc_resolver=disc_launch_resolver,

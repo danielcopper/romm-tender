@@ -5,9 +5,7 @@ Owns the plugin's two core-selection deviations: the per-platform core (the
 ``roms.emulator_override`` pin). Enumerating the cores available for a platform —
 by slug, or for a ROM with its per-game pin layered on top — toggling the
 per-platform default (with the fan-out that re-bakes every affected shortcut),
-and pinning/clearing a per-game core all live here; the
-cross-service BIOS recheck that follows a per-platform core write is also
-scheduled from this service.
+and pinning/clearing a per-game core all live here.
 
 Neither selection is written to the retired ES-DE gamelist: the per-platform core
 lands in ``settings.json`` via the injected ``SettingsPersister`` and the per-game
@@ -38,7 +36,6 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from services.protocols import (
         ActiveCoreReader,
-        BiosChecker,
         CoreInfoProvider,
         DiscResolver,
         SettingsPersister,
@@ -54,12 +51,12 @@ class CoreServiceConfig:
     Carries the runtime infrastructure (event loop, logger), the ES-DE
     core-info read seam, the platform-slug-to-system resolver, the live
     ``settings`` dict + its persister (where the per-platform core lands), the
-    cross-service BIOS checker, the SQLite Unit-of-Work factory (to read the ROM
-    + its install and write the per-game pin), the shared per-ROM
-    active-core resolver (the menu's active marker + the source of every
-    re-baked launch command), and the shared per-ROM disc resolver (so a re-baked
-    launch command keeps the ROM's pinned disc rather than reverting to disc 1 /
-    the m3u). Bundled here so the ctor stays within the S107 parameter budget.
+    SQLite Unit-of-Work factory (to read the ROM + its install and write the
+    per-game pin), the shared per-ROM active-core resolver (the menu's active
+    marker + the source of every re-baked launch command), and the shared
+    per-ROM disc resolver (so a re-baked launch command keeps the ROM's pinned
+    disc rather than reverting to disc 1 / the m3u). Bundled here so the ctor
+    stays within the S107 parameter budget.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -68,7 +65,6 @@ class CoreServiceConfig:
     resolve_system: SystemResolver
     settings: dict[str, Any]
     settings_persister: SettingsPersister
-    bios_checker: BiosChecker
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
@@ -84,7 +80,6 @@ class CoreService:
         self._resolve_system = config.resolve_system
         self._settings = config.settings
         self._settings_persister = config.settings_persister
-        self._bios_checker = config.bios_checker
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
@@ -243,9 +238,8 @@ class CoreService:
         and every installed+bound ROM on the platform (minus per-game-overridden
         ROMs) is re-baked: the response carries ``rebake_items`` (a list of
         ``{"app_id", "launch_options"}``) the frontend confirm-sets on the live
-        Steam shortcuts, plus ``bios_status`` re-checked against the newly chosen
-        core. On any failure (settings write error, fan-out error, BIOS recheck
-        error) returns ``{"success": False, "message": ...}``.
+        Steam shortcuts. On any failure (settings write error, fan-out error)
+        returns ``{"success": False, "reason": ..., "message": ...}``.
         """
         try:
             rebake_items = await self._loop.run_in_executor(
@@ -254,8 +248,7 @@ class CoreService:
                 platform_slug,
                 core_label,
             )
-            bios = await self._bios_checker.check_platform_bios(platform_slug)
-            return {"success": True, "bios_status": bios, "rebake_items": rebake_items}
+            return {"success": True, "rebake_items": rebake_items}
         except Exception as e:
             self._logger.error(f"Failed to set system core: {e}")
             return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": str(e)}

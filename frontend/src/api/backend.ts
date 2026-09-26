@@ -583,7 +583,6 @@ export const setSystemCore = callable<
   {
     success: boolean;
     message?: string;
-    bios_status?: BiosStatus;
     rebake_items?: RebakeItem[];
     prune_lease_token?: string;
   }

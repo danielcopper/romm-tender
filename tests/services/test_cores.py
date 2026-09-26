@@ -15,7 +15,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
 from domain.disc_selection import Disc
-from domain.emulator_commands import LaunchingEmulator, options_to_payload
+from domain.emulator_commands import options_to_payload
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
@@ -37,23 +37,6 @@ class FakeSystemResolver:
     def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str:
         self.calls.append((platform_slug, platform_fs_slug))
         return self.mapping.get(platform_slug, platform_slug)
-
-
-class FakeBiosChecker:
-    """In-memory ``BiosChecker`` for tests (only implements the async entry CoreService uses)."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, LaunchingEmulator | None]] = []
-        self.payload: dict[str, Any] = {"needs_bios": False}
-        self.side_effect: BaseException | None = None
-
-    async def check_platform_bios(
-        self, platform_slug: str, launching_emulator: LaunchingEmulator | None = None
-    ) -> dict[str, Any]:
-        if self.side_effect is not None:
-            raise self.side_effect
-        self.calls.append((platform_slug, launching_emulator))
-        return self.payload
 
 
 def _seed_rom(
@@ -134,11 +117,6 @@ def resolve_system() -> FakeSystemResolver:
 
 
 @pytest.fixture
-def bios_checker() -> FakeBiosChecker:
-    return FakeBiosChecker()
-
-
-@pytest.fixture
 def settings() -> dict[str, Any]:
     return {"platform_cores": {}}
 
@@ -176,7 +154,6 @@ def service(
     resolve_system,
     settings,
     settings_persister,
-    bios_checker,
     uow_factory,
     active_core,
     disc_resolver,
@@ -189,7 +166,6 @@ def service(
             resolve_system=resolve_system,
             settings=settings,
             settings_persister=settings_persister,
-            bios_checker=bios_checker,
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
@@ -559,39 +535,38 @@ class TestSetSystemCore:
         assert result["success"] is True
         assert settings["platform_cores"] == {}
 
-    def test_rechecks_bios_and_invalidates_core_cache(self, event_loop, service, core_info, bios_checker):
-        bios_checker.payload = {"needs_bios": True, "files": []}
-        result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
-        assert result["bios_status"] == {"needs_bios": True, "files": []}
+    def test_invalidates_core_cache(self, event_loop, service, core_info):
+        event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
         assert core_info.reset_cache_count == 1
-        # The platform-level recheck passes None (no per-game core).
-        assert bios_checker.calls == [("snes", None)]
 
-    def test_bios_status_carries_no_core_fields(self, event_loop, service, bios_checker):
-        bios_checker.payload = {
-            "needs_bios": True,
-            "server_count": 1,
-            "local_count": 0,
-            "all_downloaded": False,
-            "required_count": 1,
-            "required_downloaded": 0,
-            "unknown_count": 0,
-            "files": [],
+    def test_a_stored_switch_answers_success_with_exactly_the_rebake_list(self, event_loop, service, uow, active_core):
+        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
+        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
+        active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
+
+        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+
+        assert result == {
+            "success": True,
+            "rebake_items": [
+                {
+                    "app_id": 101,
+                    "launch_options": (
+                        "flatpak run net.retrodeck.retrodeck -e "
+                        '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
+                        '"/roms/snes/a.sfc"'
+                    ),
+                }
+            ],
         }
-        result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
-        assert result["success"] is True
-        bios = result["bios_status"]
-        assert "active_core" not in bios
-        assert "active_core_label" not in bios
-        assert "available_cores" not in bios
 
-    def test_bios_checker_raises_returns_error(self, event_loop, service, settings, bios_checker):
-        bios_checker.side_effect = RuntimeError("bios probe failed")
+    def test_a_failed_settings_write_answers_the_canonical_failure(self, event_loop, service, settings_persister):
+        def refuse() -> None:
+            raise OSError("read-only file system")
+
+        settings_persister.save_settings = refuse
         result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
-        assert result["success"] is False
-        assert "bios probe failed" in result["message"]
-        # The settings write already landed before the BIOS recheck raised.
-        assert settings["platform_cores"] == {"snes": "Snes9x"}
+        assert result == {"success": False, "reason": "unknown", "message": "read-only file system"}
 
 
 # ── set_system_core fan-out (re-bake installed+bound ROMs on the platform) ──

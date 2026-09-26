@@ -806,33 +806,32 @@ Format: **invariant** — tier — enforced by.
   `check_platform_bios`'s `launching_emulator=None` fallback) and `FirmwareDownloader._platform_emulator_identity`.
   **Nothing joins them**, and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked
   PCSX ReARMed and judged the platform by the libretro system default beside it, so one PlayStation read `not_demanded`
-  / `ok` on the game page and `absent` / `missing` on the pane, and the write's own response carried the wrong verdict.
-  `.label` and `.emulator` must come off ONE call — two calls agree by coincidence, which is what the old pair did until
-  an override was set. **One seam now carries the pick rather than a projection of it**: `BiosChecker` takes a
-  `LaunchingEmulator` (`domain/emulator_commands.py` — `emulator` and `label`, both read-only), so the per-game caller
-  hands over the whole resolution and `check_platform_bios` reads both projections off that one value. A mismatched pair
-  is not representable there, which is why the answer may state its own `active_core_label`: it is the label half of the
-  pick those very counts were filtered by, and the game page's BIOS headline names the emulator from it
-  (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks differing only in label and holds the name
-  to moving while the judgment does not). That covers this seam and no other — the remaining sites still pair by
-  discipline. **The key is the emulator IDENTITY, not `.core_so`** (#1821): the identity names a standalone pick as
-  readily as a libretro one, where `core_so` is `None` for every standalone emulator and sent the rows back to "every
-  declaring emulator". Reaching for `.core_so` here again restores that degradation silently, because the field is still
-  there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the "first libretro
-  entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is the same rule one
-  layer in, over a different pair of modules**: the game page is assembled by two services that each ask
-  `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the pick
-  in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
-  `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an emulator (nothing pinned, the
-  platform's pick, a per-game override, the override over a platform pick naming something else, a standalone pick, a
-  stale pin that degrades). They read one seam today and nothing says they must; the picker reaching for
-  `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every standalone pick and
-  send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM. **What the ROM
-  sibling cannot pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation
-  from the `active_core` tuple, which carries no identity, so a test on the bare fake resolves an unpinned ROM to a
-  `None` where the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file renders the
-  declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the
-  weaker resolution
+  / `ok` on the game page and `absent` / `missing` on the pane. `.label` and `.emulator` must come off ONE call — two
+  calls agree by coincidence, which is what the old pair did until an override was set. **One seam now carries the pick
+  rather than a projection of it**: `BiosChecker` takes a `LaunchingEmulator` (`domain/emulator_commands.py` —
+  `emulator` and `label`, both read-only), so the per-game caller hands over the whole resolution and
+  `check_platform_bios` reads both projections off that one value. A mismatched pair is not representable there, which
+  is why the answer may state its own `active_core_label`: it is the label half of the pick those very counts were
+  filtered by, and the game page's BIOS headline names the emulator from it (`TestTheAnswerNamesTheEmulatorItJudgedBy`,
+  which hands the check two picks differing only in label and holds the name to moving while the judgment does not).
+  That covers this seam and no other — the remaining sites still pair by discipline. **The key is the emulator IDENTITY,
+  not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one, where `core_so` is `None`
+  for every standalone emulator and sent the rows back to "every declaring emulator". Reaching for `.core_so` here again
+  restores that degradation silently, because the field is still there and still right for the picker payload beside it.
+  `CoreInfoProvider.get_active_core` — the "first libretro entry, bakeable or not" reading these sites used — has no
+  production caller left. **The ROM scope is the same rule one layer in, over a different pair of modules**: the game
+  page is assembled by two services that each ask `ActiveCoreReader.active_emulator_for_rom` for themselves —
+  `services/cores.py::get_platform_core_info` names the pick in the picker, `services/game_detail.py::get_bios_status`
+  scopes the BIOS question to it — and `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an
+  emulator (nothing pinned, the platform's pick, a per-game override, the override over a platform pick naming something
+  else, a standalone pick, a stale pin that degrades). They read one seam today and nothing says they must; the picker
+  reaching for `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every
+  standalone pick and send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM.
+  **What the ROM sibling cannot pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds
+  its invocation from the `active_core` tuple, which carries no identity, so a test on the bare fake resolves an
+  unpinned ROM to a `None` where the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file
+  renders the declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still
+  exercises the weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the four halves that can be seen from a test: the two
