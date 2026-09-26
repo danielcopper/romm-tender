@@ -435,6 +435,39 @@ class TestCorruptQuarantine:
             assert result[key] == default_value
         assert adapter._corrupt_reset is None
 
+    def test_backup_of_a_world_readable_file_is_restricted_to_0600(self, tmp_path, logger):
+        clock = FakeClock()
+        adapter = self._make_adapter(tmp_path, logger, clock)
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            f.write("CORRUPT{{{")
+        os.chmod(settings_path, 0o644)
+
+        adapter.load_settings()
+
+        backup_path = os.path.join(adapter._settings_dir, f"settings.json.corrupt-{int(clock.time())}")
+        assert os.stat(backup_path).st_mode & 0o777 == 0o600
+
+    def test_failed_backup_chmod_is_logged_and_the_backup_still_stands(self, tmp_path, logger, monkeypatch, caplog):
+        clock = FakeClock()
+        adapter = self._make_adapter(tmp_path, logger, clock)
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            f.write("CORRUPT{{{")
+
+        def boom(_path, _mode):
+            raise OSError("operation not permitted")
+
+        monkeypatch.setattr(os, "chmod", boom)
+        with caplog.at_level(logging.ERROR):
+            result = adapter.load_settings()
+
+        backup_name = f"settings.json.corrupt-{int(clock.time())}"
+        assert os.path.exists(os.path.join(adapter._settings_dir, backup_name))
+        assert adapter._corrupt_reset == {"backed_up_to": backup_name}
+        assert result["romm_url"] == ""
+        assert any("0600" in r.getMessage() and backup_name in r.getMessage() for r in caplog.records)
+
     def test_corrupt_perms_still_enforced_on_backup_path(self, tmp_path, logger):
         """The fresh defaults written after a reset must still land at 0600 on the
         next save — quarantine does not relax permission enforcement."""

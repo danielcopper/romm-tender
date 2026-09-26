@@ -247,8 +247,10 @@ class PersistenceAdapter:
         is already taken (two corruptions in the same wall-clock second, or a
         clock rollback onto an existing stamp) a ``-<n>`` suffix disambiguates
         so an older backup is never clobbered. Sets :attr:`_corrupt_reset` so
-        bootstrap can persist the reset marker. A failed rename (e.g. perms) is
-        logged and swallowed — boot must not crash.
+        bootstrap can persist the reset marker. The backup is restricted to
+        ``0600`` like the live file, since it still holds the credentials. A
+        failed rename or chmod (e.g. perms) is logged and swallowed — boot must
+        not crash; after a failed chmod the backup and the reset still stand.
         """
         stamp = int(self._clock.time())
         backup_name = f"settings.json.corrupt-{stamp}"
@@ -263,6 +265,10 @@ class PersistenceAdapter:
         except OSError as exc:
             self._logger.error("could not back up corrupt settings.json to %s: %s", backup_name, exc)
             return
+        try:
+            os.chmod(backup_path, 0o600)
+        except OSError as exc:
+            self._logger.error("could not restrict %s to 0600: %s", backup_name, exc)
         self._corrupt_reset = {"backed_up_to": backup_name}
 
     @property
