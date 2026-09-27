@@ -282,9 +282,9 @@ class SessionLifecycleService:
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While a RetroDECK migration is pending the post-exit sync does not
-        run and the answer is the standard failure. ``finalize_game_session``
-        carries no ``@migration_blocked``, so this check is what keeps the
-        sync off a pending migration.
+        run and the verdict is the failed-sync one. The
+        ``finalize_game_session`` endpoint checks no migration rule, so this is
+        the first check a pending migration meets on the way to that sync.
         """
         if self._migration_reader.is_retrodeck_migration_pending():
             return SessionFinalizeSyncResult(

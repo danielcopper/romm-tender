@@ -3,9 +3,10 @@
 Narrow callable seams that don't belong to a specific I/O surface or
 external system: frontend event emission, debug logging, generic
 filesystem existence probes, the prune conflict gate as the prune
-service sees it, the conflict rules a use case checks at its entry, and the small cross-service read/cleanup hooks
-(LibraryService pending-sync map, download queue cleanup) that would
-otherwise require service-to-service concrete imports.
+service sees it, the conflict rules a use case checks at its entry, and the
+small cross-service read/cleanup hooks (LibraryService pending-sync map,
+download queue cleanup) that would otherwise require service-to-service
+concrete imports.
 """
 
 from __future__ import annotations
@@ -266,11 +267,13 @@ class PruneRunClaim(Protocol):
 class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
-    ``hold(label, migration=…, sync=…, prune=…)`` yields the first named rule's
-    canonical refusal, or ``None`` when the block may run; with ``prune`` the
-    block runs under an operation named *label*. *label* is the endpoint's name.
-    ``retain`` holds an operation named *label* for detached work until *task*
-    ends. CONTEXT.md → Conflict rules.
+    ``hold(label, migration=…, sync=…, prune=…)`` yields the canonical refusal
+    of the first named rule that holds, or ``None`` when the block may run; with
+    ``prune`` the block runs under an operation named *label*. *label* is the
+    endpoint's name. ``retain`` holds an operation named *label* for detached
+    work until *task* ends; it checks no rule, so it is called inside the
+    ``hold(..., prune=True)`` block that started *task*. CONTEXT.md → Conflict
+    rules.
     """
 
     def hold(

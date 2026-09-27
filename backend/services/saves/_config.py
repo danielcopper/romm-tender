@@ -98,9 +98,10 @@ class SaveServiceConfig:
         Event emitter for pushing save-sync progress to the frontend.
     is_retrodeck_migration_pending:
         Callback returning ``True`` when a RetroDECK migration is in
-        flight; SaveService gates destructive operations on this signal.
+        flight; the sync engine's own backstop — it refuses a pre-launch or
+        post-exit sync and does not follow a save directory on this signal.
     conflict_rules:
-        ``ConflictRules`` seam — the rules each save use case checks at its
+        ``ConflictRules`` seam — the rules a save use case checks at its
         entry under its endpoint's name, and the operation it retains for
         detached work.
     log_debug:

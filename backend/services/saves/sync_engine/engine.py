@@ -758,10 +758,10 @@ class SyncEngine:
                 # rule before this call waits for the device gate and the ROM lock,
                 # and a caller could reach the engine without it. saves_dir would
                 # otherwise resolve under the new home and silently desync from
-                # files still living at the old home. Internal do_sync_rom_saves
-                # callers (sync_all_saves, rollback_to_version) are covered by the
-                # migration rule their own use cases check — this guard is for
-                # pre_launch_sync.
+                # files still living at the old home. Every other path into
+                # do_sync_rom_saves either checks the migration rule at its use
+                # case's entry or carries a guard of its own; this one is
+                # pre_launch_sync's.
                 if self._is_retrodeck_migration_pending():
                     return {
                         "success": False,

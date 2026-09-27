@@ -50,15 +50,16 @@ class SaveService:
     """Aggregate root for bidirectional save file sync between RetroDECK and RomM.
 
     Composes the save-sync sub-services (sync_engine, status, versions, slots,
-    rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate. Exposes the use
-    cases the endpoints on ``Plugin`` call — every public method delegates to
-    a sub-service or reads ``settings.json``. A use case an endpoint calls checks
-    its conflict rules at its entry, under that endpoint's name, and answers the
-    canonical refusal when one holds; a peer service that calls one calls its
-    ``<verb>_unchecked`` twin instead (CONTEXT.md → Conflict rules). Bulk local-save deletion is the
-    only flow whose orchestration lives directly on the aggregate root because it
-    spans :class:`RomInfoService` (file discovery), the on-disk save files (via
-    the injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository
+    rom_info, prune_support) over the SQLite ``rom_save_sync_states``
+    aggregate. Exposes the use cases the endpoints on ``Plugin`` call — every
+    public method delegates to a sub-service or reads ``settings.json``. A use
+    case an endpoint calls checks its conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds; a peer
+    service that calls one calls its ``<verb>_unchecked`` twin instead
+    (CONTEXT.md → Conflict rules). Bulk local-save deletion is the only flow
+    whose orchestration lives directly on the aggregate root because it spans
+    :class:`RomInfoService` (file discovery), the on-disk save files (via the
+    injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository
     (file-tracking state hygiene) without belonging to any single sub-service.
 
     Parameters
@@ -241,18 +242,18 @@ class SaveService:
     async def get_save_status_unchecked(self, rom_id: int) -> dict[str, Any]:
         """:meth:`get_save_status` without its prune rule, for the launch gate.
 
-        The launch gate asks from inside ``evaluate_launch``, which runs under
-        that endpoint's own conflict rules; a use case never refuses the peer
-        whose caller already passed them.
+        The gate reads the status from inside ``evaluate_launch``, whose own
+        prune rule already holds an operation for the whole call; the read is
+        part of that call, not a second one to be checked.
         """
         return await self._status.get_save_status(rom_id)
 
     async def refresh_save_status(self, rom_id: int) -> dict[str, Any]:
         """Start a background save-status check for a ROM and answer at once.
 
-        The check emits ``save_status_updated`` when it is done and owns its own
-        error handling. It holds an operation on the prune conflicts until it
-        ends, so a cleanup cannot start under it.
+        The check emits ``save_status_updated`` with the status answer; if the
+        read raises, it logs and emits nothing. It holds an operation on the
+        prune conflicts until it ends, so a cleanup cannot start under it.
         """
         async with self._rules.hold("refresh_save_status", prune=True) as refusal:
             if refusal is not None:

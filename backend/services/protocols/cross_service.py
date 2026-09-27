@@ -516,15 +516,13 @@ class LaunchGateSaveStatusReader(Protocol):
     The composition root satisfies this with ``SaveService``. The gate
     first consults ``is_save_sync_enabled`` — when the feature toggle is
     off there is no conflict state to gate on, so the gate allows the
-    launch and skips the save-status round-trip entirely. With
-    save-sync on, it calls ``get_save_status_unchecked`` for the canonical conflict
+    launch and skips the save-status round-trip entirely. With save-sync
+    on, it calls ``get_save_status_unchecked`` for the canonical conflict
     signal (a non-empty ``conflicts`` array blocks the launch) and falls
     back to the synchronous ``has_tracked_save`` in-memory check to decide
-    whether a save-status failure should be soft-warned (ROM has
-    tracked saves — silent allow would risk data loss) or silently
-    allowed (no tracked saves — nothing to corrupt). The unchecked read is
-    the one the gate takes because it runs under ``evaluate_launch``'s own
-    conflict rules.
+    whether a save-status failure should be soft-warned (ROM has tracked
+    saves — silent allow would risk data loss) or silently allowed (no
+    tracked saves — nothing to corrupt).
     """
 
     def is_save_sync_enabled(self) -> bool: ...
@@ -604,8 +602,8 @@ class SessionMigrationReader(Protocol):
     refresh result is repacked into the typed DTO the frontend feeds
     into its migration stores; the pending check matches the safety
     net the migration rule provides for the endpoints that carry it,
-    gating the destructive post-exit save sync from inside
-    the lifecycle orchestration.
+    gating the destructive post-exit save sync from inside the lifecycle
+    orchestration.
     """
 
     async def refresh_state(self) -> object: ...

@@ -279,9 +279,7 @@ class LibraryService:
     def is_sync_in_flight(self) -> bool:
         """True while a sync run is in flight (RUNNING or CANCELLING; IDLE is not).
 
-        Read-only predicate consumed by the sync rule — the
-        ``@sync_active_blocked`` gate on the destructive removal endpoints, and
-        the conflict rules the composition root builds.
+        Read-only predicate behind the sync rule.
         """
         return self._box.is_in_flight()
 

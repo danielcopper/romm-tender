@@ -163,7 +163,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # The one record of every claim that conflicts with a removed-game cleanup,
     # whoever holds it. Built before every service so any of them can be handed it.
     prune_conflicts = PruneConflicts(logger=cfg.runtime.logger, log_debug=cfg.callbacks.log_debug)
-    # The conflict rules every use case checks at its entry, built beside the
+    # The conflict rules a use case checks at its entry, built beside the
     # prune conflicts so any service can be handed them. The migration and
     # sync services that answer the other two rules are built later.
     migration_pending_binding: LateBinding[bool] = LateBinding("migration_pending")

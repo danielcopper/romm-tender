@@ -134,14 +134,14 @@ cleanup. Each conflicting endpoint holds an operation before its first `await`, 
 for the task's lifetime.
 
 Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
-conflicts). The composition root builds it before any service and hands it on: the prune service registers its run
-there; the conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
-there, and retain one for detached work it starts, such as the background save-status check; and `Plugin` reads it for
-the two decorators, the event funnel, and every endpoint that takes, renews or releases a lease or retains an operation
-for detached work. The reservation lasts from the moment a start gets past the gate until the start returns; the run
-claim, from the moment the revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a
-run task cancelled before it first ran, in the task's done callback. The run is registered before the reservation is
-given back, so the two overlap and a conflicting endpoint finds no gap between them.
+conflicts). The composition root builds it before any service and hands it on. The prune service registers its run
+there. The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
+there, and retain one for detached work it starts, such as a background save-status check. `Plugin` reads it for the two
+decorators, the event funnel, and every endpoint that takes, renews or releases a lease or retains an operation for
+detached work. The reservation lasts from the moment a start gets past the gate until the start returns; the run claim,
+from the moment the revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run
+task cancelled before it first ran, in the task's done callback. The run is registered before the reservation is given
+back, so the two overlap and a conflicting endpoint finds no gap between them.
 
 The start is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the
