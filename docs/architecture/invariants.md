@@ -888,22 +888,22 @@ Format: **invariant** — tier — enforced by.
 - **No sentinel objects on the wire — explicit JSON-representable tagged values only** — prompt-only — no sentinel
   survives on the wire today (`NO_MIGRATION` retired with #1004, legacy `slot:null` confirmation with #1276), so the
   rule now guards reintroduction; nothing mechanical detects a new one
-- **Every destructive op has backup-or-confirm; never delete data that exists nowhere else** — prompt-only — save-file
-  removals route through the `.romm-backup` funnel (`MatrixExecutor.quarantine_local_file`; the removed-game cleanup's
-  claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule unmechanized.
-  Removed-game cleanup takes the **confirm** leg for one case deliberately: installed ROM content the user did not
-  select for the recovery bundle is deleted with its row. The ROM is re-downloadable from RomM where a save is not, the
-  per-candidate opt-in and its consequence are stated in the confirmation dialog and the user guide, and the row cannot
-  be removed at all without a fresh 404 — so this is a disclosed choice, not an exception that drifted in. The adopt
-  dialog's **replace** exit is the second such case, and it does **not** rest on that justification: the premise is that
-  the content is the user's own — a different rip, a patch, a romhack — which is exactly what the server cannot hand
-  back. What carries it instead is that the user is shown both sides, offered a content check, and chooses between two
-  named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)). That reasoning
-  covers the **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take the **backup**
-  leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not quarantining a ROM
-  (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at
-  all. It is the first caller to hand that funnel a directory outside the saves root: it takes the directory it is
-  given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save directory
+- **Every destructive op has backup-or-confirm; never delete data that exists nowhere else** — test + prompt-only —
+  save-file removals route through the `.romm-backup` funnel (`MatrixExecutor.quarantine_local_file`; the removed-game
+  cleanup's claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule
+  unmechanized. Removed-game cleanup takes the **confirm** leg for one case deliberately: installed ROM content the user
+  did not select for the recovery bundle is deleted with its row. The ROM is re-downloadable from RomM where a save is
+  not, the per-candidate opt-in and its consequence are stated in the confirmation dialog and the user guide, and the
+  row cannot be removed at all without a fresh 404 — so this is a disclosed choice, not an exception that drifted in.
+  The adopt dialog's **replace** exit is the second such case, and it does **not** rest on that justification: the
+  premise is that the content is the user's own — a different rip, a patch, a romhack — which is exactly what the server
+  cannot hand back. What carries it instead is that the user is shown both sides, offered a content check, and chooses
+  between two named outcomes behind a second confirmation ([ADR-0028](../adr/0028-adopted-install-is-an-install.md)).
+  That reasoning covers the **ROM** only: an adoption's Overwrite also replaces save and savestate files, and those take
+  the **backup** leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not
+  quarantining a ROM (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is
+  synced nowhere at all. It is the first caller to hand that funnel a directory outside the saves root: it takes the
+  directory it is given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save directory
   (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
   [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The installer
   replaces the user's database and settings on two paths, and they are held to the rule differently. A **rollback by

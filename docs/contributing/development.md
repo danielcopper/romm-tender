@@ -235,14 +235,18 @@ own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-relea
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
 **An install over an existing one is an update, and an update whose new version does not answer is rolled back.**
-Whenever `install.sh` runs and a tree is already at `~/.local/lib/romm-tender/`, the run goes in this order:
+Whenever `install.sh` installs over a tree already at `~/.local/lib/romm-tender/`, the run goes in this order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The unit is stopped.
 3. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
    `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup — beside a
-   `backed-up-at` file holding when, as one line of ISO-8601 UTC. Plain copies are whole only because the unit is
-   stopped.
+   `backed-up-at` file holding when, as one line of ISO-8601 UTC, and a `data-of-version` file holding the version of
+   the tree installed at the time, as one line. Plain copies are whole only because the unit is stopped. The copy is
+   staged beside the backup, the previous backup is renamed to `update-backup.prev`, the staged one takes its name, and
+   only then is the previous one removed: a removal that fails leaves `update-backup.prev` behind rather than a
+   half-removed backup under the real name, and the update goes on. The next backup removes a leftover
+   `update-backup.prev` first, or puts it back where the name is empty, and refuses, changing nothing, where it cannot.
 4. The new tree is renamed into place and the old one is kept as `~/.local/lib/romm-tender.old` — one kept tree, so the
    one an earlier update kept goes now, whether or not this update then answers. The covers' move runs and the unit is
    written as on a first install.
@@ -264,14 +268,17 @@ file and renamed, with three keys:
 `rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file.
 
 `~/.local/lib/romm-tender/install.sh --rollback` does the same restore by hand — the release tarball ships the
-installer, so every tree installed from this release on carries one — and writes no record, because going back by choice
-is not an update that failed. It refuses, changing nothing, when there is no kept tree or no backup. Before it restores
-anything it stops the unit and copies the database files and `settings.json` it is about to replace into
-`~/.local/share/romm-tender/rollback-backup/`, staged and renamed over the copy the previous rollback by hand made; a
-copy that cannot be made refuses the rollback, changes nothing and starts the unit again where it was running. No update
-touches that directory. The run names the date the data goes back to — the backup's `backed-up-at` — and where the copy
-is. The automatic rollback above makes no such copy: what it discards was written by a version that was never seen to
-answer.
+installer, so every tree whose tarball ships `install.sh` carries one — and writes no record, because going back by
+choice is not an update that failed. It refuses, changing nothing, when there is no kept tree or no backup, and when the
+kept tree's `version.txt` does not name the version the backup's `data-of-version` does: an update that ended after
+replacing the backup and before swapping the tree leaves the older kept tree beside the data of the version still
+installed, and rolling back would run that older code over newer data. Before it restores anything it stops the unit and
+copies the database files and `settings.json` it is about to replace into `~/.local/share/romm-tender/rollback-backup/`,
+put in place over the copy the previous rollback by hand made the same way as the update's backup (a leftover is
+`rollback-backup.prev`); a copy that cannot be made refuses the rollback, changes nothing and starts the unit again
+where it was running. No update touches that directory. The run names the date the data goes back to — the backup's
+`backed-up-at` — and where the copy is. The automatic rollback above makes no such copy: what it discards was written by
+a version that was never seen to answer.
 
 Going back, by itself or by hand, puts the kept tree in place of the current one, so there is none left afterwards and
 `--rollback` refuses until the next update keeps one. `--uninstall` removes the kept tree and leaves both backups with
