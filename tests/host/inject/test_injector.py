@@ -1010,11 +1010,16 @@ class TestAcrossBackendStarts:
         record.write_text(json.dumps({"takedowns": [now - seconds for seconds in ago]}), encoding="utf-8")
         return record
 
-    async def test_under_the_limit_it_reloads_and_records_it(self, injecting, tmp_path):
+    async def test_under_the_limit_it_reloads_and_records_it(self, injecting, tmp_path, caplog):
         record = self.planted(tmp_path, 60)
-        running = await injecting(page=stranded_page())
-        await wait_until(lambda: running.page.reloads == 1)
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(
+                lambda: running.webhelper.terminations == 1 or logged(caplog, "already taken Steam's interface down")
+            )
 
+        assert running.page.reloads == 1
+        assert running.webhelper.terminations == 0
         assert len(json.loads(record.read_text(encoding="utf-8"))["takedowns"]) == 2
 
     async def test_at_the_limit_it_reloads_nothing_and_says_so_once(self, injecting, tmp_path, caplog):
