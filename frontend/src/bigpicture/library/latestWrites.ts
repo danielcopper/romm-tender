@@ -106,10 +106,12 @@ export function createLineWrites(): LineWrites {
 
 /** A {@link LineWrites} kept for the component's lifetime. */
 export function useLineWrites(): LineWrites {
-  return useState(createLineWrites)[0];
+  // State rather than a lazily filled ref (here and below): react-hooks/refs
+  // forbids reading a ref during render.
+  return useState(createLineWrites)[0]; // NOSONAR(typescript:S6754) — no setter exists; the object is mutated, never replaced.
 }
 
 /** A {@link LatestWrites} kept for the component's lifetime. */
 export function useLatestWrites<V>(): LatestWrites<V> {
-  return useState(() => createLatestWrites<V>())[0];
+  return useState(() => createLatestWrites<V>())[0]; // NOSONAR(typescript:S6754) — no setter exists; the object is mutated, never replaced.
 }
