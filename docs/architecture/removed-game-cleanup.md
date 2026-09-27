@@ -130,8 +130,8 @@ until a new complete fetch landed.
 
 A running cleanup excludes library sync, downloads and resumes, migrations, version switches, core/disc/controller
 writes, launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache
-cleanup. Each conflicting endpoint holds an operation before its first `await`, and detached work retains that operation
-for the task's lifetime.
+cleanup. Each conflicting endpoint holds an operation before anything it does can yield, and detached work retains that
+operation for the task's lifetime.
 
 Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
 conflicts). The composition root builds it before any service and hands it on. The prune service registers its run

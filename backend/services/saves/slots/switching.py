@@ -1,10 +1,8 @@
-"""Active-slot mutation and the destructive slot-switch flow.
+"""The destructive slot-switch flow.
 
-Anything that flips the active slot on a ROM lives here — the
-``switch_slot`` flow that synchronises the local saves directory to the new
-slot's contents.
-Slot listing, the setup wizard, and slot deletion belong in their own
-sub-modules. Persistence is each operation's own narrow Unit of Work
+``switch_slot`` synchronises the local saves directory to the new slot's
+contents. Slot listing, the setup wizard, and slot deletion belong in their
+own sub-modules. Persistence is each operation's own narrow Unit of Work
 (ADR-0006).
 """
 

@@ -894,8 +894,7 @@ and they are asked in this order:
 1. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
 2. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
 3. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
-   **operation** named after itself for as long as its call runs (see **Prune conflicts**), so a cleanup start refused
-   meanwhile names that endpoint as the holder.
+   **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
 The first named rule that holds answers with its refusal, and a refused call holds nothing. A cleanup's exclusive start
 is asked before all three.
