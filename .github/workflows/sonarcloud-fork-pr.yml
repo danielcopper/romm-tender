@@ -1,0 +1,149 @@
+name: SonarCloud fork PRs
+
+# A fork's pull request runs CI without secrets, so ci.yml's `sonarcloud` job
+# skips it. This workflow scans it instead, once that CI run has succeeded:
+# GitHub runs a `workflow_run` workflow from the default branch's copy, in this
+# repository's context and with SONAR_TOKEN. SonarSource's pattern for pull
+# requests from forks:
+# https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud
+#
+# Nothing the fork wrote is executed here — no install, build, test, script or
+# action from its checkout. Its tree, the artifacts its CI run uploaded and the
+# branch name it chose are data. A value taken from any of them reaches a shell
+# only through `env:`, and reaches the scanner only after a regex check.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read # the CI run's artifacts
+  contents: read # the fork's head, fetched through this repository
+  pull-requests: read # the cross-check of the PR number CI uploaded
+
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    steps:
+      # Into RUNNER_TEMP, outside the workspace the fork's tree is checked out
+      # into, so no path in that tree decides where an artifact lands.
+      - name: Download the PR metadata artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: pr-metadata
+          path: ${{ runner.temp }}/ci-artifacts/pr-metadata
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Python coverage artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/ci-artifacts/coverage-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download frontend coverage artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-coverage
+          path: ${{ runner.temp }}/ci-artifacts/frontend-coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # `workflow_run.pull_requests` is empty for a run whose head is in a fork,
+      # so the PR number comes from the artifact — which the fork's own copy of
+      # ci.yml produced. It is trusted only once the API confirms that PR's head
+      # is the commit and repository GitHub reports for the run, and the base
+      # branch is taken from that API answer.
+      - name: Resolve the pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER_FILE: ${{ runner.temp }}/ci-artifacts/pr-metadata/pr-number
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: |
+          set -euo pipefail
+          ref_re='^[A-Za-z0-9/_.-]+$'
+
+          [[ -f "$PR_NUMBER_FILE" && ! -L "$PR_NUMBER_FILE" ]] || { echo "::error::No PR number in the artifact"; exit 1; }
+          pr_number=$(head -c 32 "$PR_NUMBER_FILE" | tr -d '\n')
+          [[ "$pr_number" =~ ^[1-9][0-9]{0,9}$ ]] || { echo "::error::Invalid PR number"; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid head SHA"; exit 1; }
+          [[ "$HEAD_BRANCH" =~ $ref_re ]] || { echo "::error::Head branch name outside $ref_re"; exit 1; }
+          [[ "$HEAD_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::Invalid head repository"; exit 1; }
+
+          pr_json=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number")
+          api_head_sha=$(jq -r '.head.sha' <<<"$pr_json")
+          api_head_repo=$(jq -r '.head.repo.full_name' <<<"$pr_json")
+          base_ref=$(jq -r '.base.ref' <<<"$pr_json")
+          [[ "$api_head_sha" == "$HEAD_SHA" ]] || { echo "::error::PR #$pr_number's head is not $HEAD_SHA"; exit 1; }
+          [[ "$api_head_repo" == "$HEAD_REPO" ]] || { echo "::error::PR #$pr_number does not come from $HEAD_REPO"; exit 1; }
+          [[ "$base_ref" =~ $ref_re ]] || { echo "::error::Invalid base branch"; exit 1; }
+
+          {
+            echo "number=$pr_number"
+            echo "head-branch=$HEAD_BRANCH"
+            echo "base-ref=$base_ref"
+          } >> "$GITHUB_OUTPUT"
+
+      # This repository, not the fork: a fork's head commit is reachable here
+      # through the pull request's ref, and `origin/<base>` is then this
+      # repository's branch, which the scanner diffs against for new code.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every scanner input that stands in the tree is replaced with main's or
+      # CI's before the scan starts:
+      # - symlinks: one could point a source file at anything on the runner
+      #   (/proc/self/environ holds SONAR_TOKEN in the scanner's process), and
+      #   the scanner uploads source text;
+      # - sonar-project.properties: the fork's copy could set any scanner
+      #   property, `sonar.host.url` among them, which is where the token goes;
+      #   main's is read from the commit this workflow file came from;
+      # - .scannerwork, the scanner's working directory, and the coverage paths:
+      #   removed, so nothing the fork planted there is read or written
+      #   through. The reports land where the `sonarcloud` job in ci.yml puts
+      #   them, which is what the report paths in sonar-project.properties name.
+      - name: Replace the fork's scanner inputs
+        env:
+          ARTIFACTS: ${{ runner.temp }}/ci-artifacts
+        run: |
+          set -euo pipefail
+          find . -path ./.git -prune -o -type l -print0 | xargs -0 -r rm -f --
+          rm -rf -- sonar-project.properties .scannerwork coverage.xml coverage
+          git cat-file blob "$GITHUB_SHA:sonar-project.properties" > sonar-project.properties
+
+          for report in "$ARTIFACTS/coverage-report/coverage.xml" "$ARTIFACTS/frontend-coverage/lcov.info"; do
+            [[ -f "$report" && ! -L "$report" ]] || { echo "::error::Missing coverage report ${report#"$ARTIFACTS"/}"; exit 1; }
+          done
+          cp -- "$ARTIFACTS/coverage-report/coverage.xml" coverage.xml
+          mkdir coverage
+          cp -- "$ARTIFACTS/frontend-coverage/lcov.info" coverage/lcov.info
+
+      # `args` values stay unquoted, as SonarSource's guide says: quoting
+      # changes how the action splits them. Each one passed the regex check
+      # above, so none holds whitespace or a quote.
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.pullrequest.key=${{ steps.pr.outputs.number }}
+            -Dsonar.pullrequest.branch=${{ steps.pr.outputs.head-branch }}
+            -Dsonar.pullrequest.base=${{ steps.pr.outputs.base-ref }}
+            -Dsonar.pullrequest.provider=github
+            -Dsonar.pullrequest.github.repository=${{ github.repository }}
+            -Dsonar.scm.revision=${{ github.event.workflow_run.head_sha }}

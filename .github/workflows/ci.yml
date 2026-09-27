@@ -263,19 +263,43 @@ jobs:
       - name: Check the installer's terminal mark against its generator
         run: python scripts/check_generated_installer_logo.py
 
-  # Skipped when SONAR_TOKEN is structurally unavailable: Dependabot PRs and
-  # PRs from forks (GitHub withholds secrets from `pull_request` runs whose head
-  # is not this repo). SonarSource does not support forked-PR analysis at all, so
-  # the scan would only fail auth and block the merge. Sonar still runs on
-  # push-to-main, so forked contributions are analysed once they land.
+  # A fork's PR only. The `workflow_run` event that starts
+  # sonarcloud-fork-pr.yml names no pull request for a run whose head is in a
+  # fork, so the number travels as an artifact; that workflow checks it against
+  # the API before using it.
+  pr-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Record the PR number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir pr-metadata
+          echo "$PR_NUMBER" > pr-metadata/pr-number
+
+      - name: Upload PR metadata artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-metadata
+          path: pr-metadata/
+
+  # Runs on every push to main and every pull request whose head is a branch of
+  # this repository. A Dependabot PR is one of those, and its run reads
+  # SONAR_TOKEN from the Dependabot secret store, not the Actions one. A fork's
+  # PR is skipped here — GitHub withholds secrets from its `pull_request` run —
+  # and scanned by sonarcloud-fork-pr.yml once this workflow has succeeded, from
+  # the two coverage artifacts above and the `pr-metadata` one.
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [test, frontend-test]
     if: >-
-      github.actor != 'dependabot[bot]' &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v7
         with:
@@ -297,18 +321,19 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # Branch-protection shim: the `sonarcloud` job is skipped when SONAR_TOKEN is
-  # unavailable (Dependabot PRs and forked PRs), and a skipped required check
-  # never reports success, which would deadlock those PRs. This gate always
-  # reports, passing when SonarCloud succeeded or was skipped and failing only
-  # when it failed. Make THIS job the required status check instead of `sonarcloud`.
+  # The required status check that carries the `sonarcloud` job's verdict: it
+  # always reports, passing when SonarCloud succeeded or was skipped and failing
+  # when it failed or was cancelled. On a fork's PR `sonarcloud` is skipped, so
+  # this gate passes without saying anything about the analysis; which check
+  # carries the verdict there is under "Code Quality" in
+  # docs/contributing/development.md.
   sonar-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [sonarcloud]
     if: always()
     steps:
-      - name: Require SonarCloud to pass (skipped on Dependabot / forked PRs)
+      - name: Require SonarCloud to pass (skipped on forked PRs)
         env:
           SONAR_RESULT: ${{ needs.sonarcloud.result }}
         run: |

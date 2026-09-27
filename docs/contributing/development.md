@@ -428,10 +428,23 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
 
 ## Code Quality
 
-- **SonarCloud** — CI-based analysis on every human PR and push to main. Quality Gate enforces 80% coverage on new code,
-  0 bugs, 0 vulnerabilities. The scan is skipped on Dependabot PRs (no `SONAR_TOKEN` access in that restricted context);
-  the required status check is the `sonar-gate` job, which passes when SonarCloud succeeded or was skipped and fails
-  only when it failed — so dependency PRs aren't deadlocked on a check that can never run for them.
+- **SonarCloud** — CI-based analysis on every PR and every push to main. Quality Gate enforces 80% coverage on new code,
+  0 bugs, 0 vulnerabilities. The scanner waits for the gate (`sonar.qualitygate.wait`), so a failed gate fails the job
+  that ran the scan. Which job that is depends on where the PR comes from:
+  - **A branch of this repository** — own branches, Renovate, release-please and Dependabot alike, and every push to
+    main — is scanned by the `sonarcloud` job in `ci.yml`, and the required check `sonar-gate` reports its verdict. A
+    Dependabot PR's run reads `SONAR_TOKEN` from the repository's Dependabot secrets rather than its Actions secrets, so
+    the token is stored in both.
+  - **A fork** gets no secrets in its CI run, so `sonarcloud` skips it and `sonar-gate` passes without an analysis. Once
+    that CI run has succeeded, `.github/workflows/sonarcloud-fork-pr.yml` scans the fork's head in this repository's
+    context, following
+    [SonarSource's pattern for pull requests from forks](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud):
+    it takes the coverage reports CI uploaded and `main`'s `sonar-project.properties`, and executes nothing from the
+    fork. Its run is not a check on the PR; the verdict there is the SonarCloud app's own check,
+    `SonarCloud Code Analysis`, which `main`'s ruleset requires on every PR. GitHub runs a `workflow_run` workflow from
+    the default branch's copy, so a change to that file takes effect only once it is merged.
+  - A fork's coverage comes from the fork's own build and can be forged. On a fork's PR the Sonar verdict informs the
+    review; it does not replace it.
 - **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
