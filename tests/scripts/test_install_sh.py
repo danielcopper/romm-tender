@@ -27,7 +27,6 @@ import contextlib
 import fcntl
 import hashlib
 import os
-import pty
 import re
 import selectors
 import shutil
@@ -184,6 +183,19 @@ exec(sys.argv[2])
 ' "${STUB_PYTHON_VERSION:-3.13}" "$2"
 """
 
+# Runs in the new session before the installer does and makes the pty its
+# controlling terminal. bash takes one by itself only by reopening the tty on its
+# stdin, which in the `curl … | bash` shape is a pipe — so TIOCSCTTY, on fd 1.
+# Started with PYTHONCOERCECLOCALE=0, which it drops again: Python in the C locale
+# otherwise writes LC_CTYPE=C.UTF-8 into its own environment (PEP 538), and bash
+# would inherit a UTF-8 locale the test did not give it.
+_TAKE_THE_TERMINAL = (
+    "import fcntl, os, sys, termios; "
+    "del os.environ['PYTHONCOERCECLOCALE']; "
+    "fcntl.ioctl(1, termios.TIOCSCTTY, 0); "
+    "os.execv('/bin/bash', ['bash', *sys.argv[1:]])"
+)
+
 
 class Install:
     """One machine under test: its home, its stubs, and a way to run the script."""
@@ -306,42 +318,52 @@ class Install:
     ) -> tuple[int, str]:
         """Run the installer with a controlling terminal, and type *answer* at its prompt.
 
-        ``pty.fork`` rather than a pipe: the acknowledgement opens ``/dev/tty``,
-        which resolves only for a process that HAS a controlling terminal, and a
-        pipe on stdin does not give it one. The child becomes a session leader
-        with the pty attached, which is what a user running this in a shell has.
+        A pty rather than a pipe: the acknowledgement opens ``/dev/tty``, which
+        resolves only for a process that HAS a controlling terminal, and a pipe
+        on stdin does not give it one. The child becomes a session leader with
+        the pty attached, which is what a user running this in a shell has.
+
+        ``subprocess`` rather than ``pty.fork``: a fork from Python in a process
+        that runs threads — a pytest-xdist worker does — can deadlock the child
+        before it execs. ``Popen`` has no step that attaches a controlling
+        terminal, so the child execs ``_TAKE_THE_TERMINAL`` first.
 
         *stdin_pipe* puts a pipe on the child's fd 0 and leaves the pty on the
         other two, which is the shape ``curl … | bash`` has: a terminal to draw
         on, a terminal to ask on, and the script itself on stdin. The answer
         still goes through the pty, because that is where ``/dev/tty`` reads.
 
-        *width* is the terminal's own width, in columns. It is set from the
-        CHILD on the pty's slave end before the script is exec'd, so there is no
-        window in which the script could ask and be answered by the default.
+        *width* is the terminal's own width, in columns. It is set on the pty
+        before the child exists, so there is no window in which the script could
+        ask and be answered by the default.
 
         Answers with the exit status and everything that reached the terminal —
         one stream, because a terminal is one stream.
         """
         env = self.env(**extra)
         feed = os.pipe() if stdin_pipe else None
-        pid, master = pty.fork()
-        if pid == 0:  # pragma: no cover - the child execs before it can be measured
-            try:
-                if width is not None:
-                    fcntl.ioctl(1, termios.TIOCSWINSZ, struct.pack("HHHH", 40, width, 0, 0))
-                if feed is not None:
-                    os.dup2(feed[0], 0)
-                    os.close(feed[0])
-                    os.close(feed[1])
-                os.execve("/bin/bash", ["bash", str(_INSTALL), *args], env)
-            finally:
-                os._exit(127)
-        if feed is not None:
-            os.close(feed[0])
-            os.close(feed[1])
+        master, terminal = os.openpty()
+        try:
+            if width is not None:
+                fcntl.ioctl(terminal, termios.TIOCSWINSZ, struct.pack("HHHH", 40, width, 0, 0))
+            process = subprocess.Popen(
+                [sys.executable, "-c", _TAKE_THE_TERMINAL, str(_INSTALL), *args],
+                stdin=terminal if feed is None else feed[0],
+                stdout=terminal,
+                stderr=terminal,
+                env={**env, "PYTHONCOERCECLOCALE": "0"},
+                start_new_session=True,
+            )
+        except BaseException:
+            os.close(master)
+            raise
+        finally:
+            os.close(terminal)
+            if feed is not None:
+                os.close(feed[0])
+                os.close(feed[1])
         os.write(master, f"{answer}\n".encode())
-        return _drain(pid, master)
+        return _drain(process, master)
 
     def systemctl_calls(self) -> list[str]:
         return self.systemctl_log.read_text(encoding="utf-8").split("\n")[:-1]
@@ -369,7 +391,7 @@ class Install:
         return self.serve / name
 
 
-def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
+def _drain(process: subprocess.Popen[bytes], master: int, timeout: float = 30.0) -> tuple[int, str]:
     """Read the terminal until the child is gone, then reap it.
 
     A pty's master reports ``EIO`` rather than end-of-file once the last slave
@@ -395,9 +417,7 @@ def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
     finally:
         selector.close()
         os.close(master)
-    _, status = os.waitpid(pid, 0)
-    code = os.waitstatus_to_exitcode(status)
-    return code, b"".join(chunks).decode(errors="replace")
+    return process.wait(), b"".join(chunks).decode(errors="replace")
 
 
 _ANSI = re.compile(r"\x1b\[([\d;]*)([A-Za-z])")
