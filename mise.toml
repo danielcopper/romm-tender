@@ -30,7 +30,8 @@ depends = ["setup"]
 
 [tasks.test]
 description = "Run Python tests"
-run = "python -m pytest tests/ -q"
+# Why `-n auto` is here and not in pytest.ini: docs/contributing/development.md, "Testing".
+run = "python -m pytest tests/ -q -n auto"
 
 [tasks."test:frontend"]
 description = "Run frontend tests"

@@ -35,7 +35,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
 
       - name: Run tests with coverage
-        run: python -m pytest tests/ -q --cov=backend --cov-report=xml --cov-branch
+        run: python -m pytest tests/ -q -n auto --cov=backend --cov-report=xml --cov-branch
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7

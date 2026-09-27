@@ -65,15 +65,25 @@ are two panels: [How the panel is built and loaded](../architecture/frontend-bun
 ## Testing
 
 ```bash
-python -m pytest tests/ -q     # run the backend test suite
-mise run test                   # same thing via mise
+mise run test                        # run the backend test suite, one worker per logical CPU
+python -m pytest tests/ -q -n auto   # same thing without mise
+python -m pytest tests/ -q           # the whole suite in one process, for debugging
 ```
+
+`mise run test`, and with it `mise run gate`, runs the suite across every logical CPU with
+[pytest-xdist](https://pytest-xdist.readthedocs.io/), and so does CI's `test` job. `-n auto` is passed there rather than
+set in `pytest.ini`, so a run of one file or one test stays in a single process. Leave `-n` off when you debug a failure
+— `pdb`, `-s` and print output only behave in a single process — and when a failure shows up only under `-n auto`,
+suspect a test that shares state with another one running beside it, or one that depends on timing: every CPU is busy,
+so a thread or a callback can land later than it does in a single process.
 
 To run with coverage:
 
 ```bash
-python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch
+python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch
 ```
+
+pytest-cov combines the workers' data into one report, the same one a single-process run writes.
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
 with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`: among them the fresh
@@ -361,6 +371,8 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
   the dev tooling. It is informational — the step has `continue-on-error: true`, so an advisory shows in the job log and
   never turns the build red — and `mise run gate` does not run it.
 - **pytest-cov** — Branch coverage reported to SonarCloud.
+- **pytest-xdist** — Runs the backend suite across every logical CPU in `mise run test`, the gate and CI's `test` job;
+  see [Testing](#testing).
 - **pytest-timeout** — Bounds a single test at 120 s (`timeout` in `pytest.ini`), so a test that blocks fails by name
   instead of running the CI job out of its `timeout-minutes: 15` with nothing to say which test it was; on the main
   thread the default `signal` method raises inside the test, so the rest of the session still runs. Reading such a

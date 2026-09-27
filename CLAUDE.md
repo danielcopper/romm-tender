@@ -259,9 +259,9 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 
 - **Build**: `pnpm -C frontend build` (Rollup -> `dist/globals.js`, `dist/index.js`, `dist/index-coexistence.js`, and
   `@decky/ui`'s licence text beside them)
-- **Tests**: backend — `python -m pytest tests/ -q` or `mise run test`; frontend — `mise run test:frontend` (Vitest +
-  happy-dom)
-- **Coverage**: backend — `python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch`; frontend —
+- **Tests**: backend — `mise run test` (the whole suite across every logical CPU; `python -m pytest tests/ -q` runs it
+  in one process, for debugging); frontend — `mise run test:frontend` (Vitest + happy-dom)
+- **Coverage**: backend — `python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch`; frontend —
   `mise run test:frontend:coverage`
 - **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Ruff and basedpyright run only
   inside `mise run gate`.

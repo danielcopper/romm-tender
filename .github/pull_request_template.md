@@ -7,7 +7,7 @@
 
 - [ ] `pnpm build` clean
 - [ ] `basedpyright` zero errors
-- [ ] `python -m pytest tests/ -q`
+- [ ] `mise run test`
 - [ ] Manual QA on Steam Deck if UI changed
 
 ## Docs
