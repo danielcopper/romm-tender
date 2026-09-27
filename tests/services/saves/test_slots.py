@@ -27,7 +27,7 @@ from tests.services.saves._helpers import (
 
 
 class TestSaveSlots:
-    """Tests for get_save_slots and set_active_slot."""
+    """Tests for get_save_slots."""
 
     @pytest.mark.asyncio
     async def test_get_save_slots(self, tmp_path):
@@ -308,76 +308,6 @@ class TestSaveSlots:
         assert slot_names == ["default"]
         # State persisted: reload from SQLite and confirm the slots map matches.
         assert "default" in _require_save_state(svc, 123).slots
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _seed_save_state(svc, 123, RomSaveSyncState(system="gba", active_slot="default"))
-        result = await svc._slots.set_active_slot(123, "desktop")
-        assert result["success"] is True
-        assert _require_save_state(svc, 123).active_slot == "desktop"
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_creates_entry(self, tmp_path):
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _seed_rom(svc, 456)
-        result = await svc._slots.set_active_slot(456, "my-slot")
-        assert result["success"] is True
-        assert _require_save_state(svc, 456).active_slot == "my-slot"
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_empty_rejected(self, tmp_path):
-        """An empty slot name is rejected — legacy is no longer a switch target (#1276)."""
-        svc, _ = make_service(tmp_path)
-        _seed_rom(svc, 123)
-        result = await svc._slots.set_active_slot(123, "")
-        assert result == {
-            "success": False,
-            "reason": "invalid_slot_name",
-            "message": "Slot name cannot be empty",
-        }
-        # No state mutation — the ROM is never switched into legacy mode.
-        assert _get_save_state(svc, 123) is None
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_whitespace_rejected(self, tmp_path):
-        """A whitespace-only slot name normalises to empty and is rejected."""
-        svc, _ = make_service(tmp_path)
-        _seed_rom(svc, 123)
-        result = await svc._slots.set_active_slot(123, "   ")
-        assert result["success"] is False
-        assert result["reason"] == "invalid_slot_name"
-        assert _get_save_state(svc, 123) is None
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_none_rejected(self, tmp_path):
-        """A None slot name hits the defensive fallback and is rejected the same way."""
-        svc, _ = make_service(tmp_path)
-        _seed_rom(svc, 123)
-        result = await svc._slots.set_active_slot(123, cast("str", None))
-        assert result["success"] is False
-        assert result["reason"] == "invalid_slot_name"
-        assert _get_save_state(svc, 123) is None
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_triggers_background_check(self, tmp_path):
-        """set_active_slot fires a background save status check task."""
-        status_emitted = asyncio.Event()
-
-        async def fake_emit(event, payload):
-            if event == "save_status_updated":
-                status_emitted.set()
-
-        svc, _ = make_service(tmp_path, emit=fake_emit)
-        _install_rom(svc, tmp_path)
-
-        await svc._slots.set_active_slot(42, "slot1")
-
-        # The service keeps no handle on the task it starts, so the test waits
-        # on the emit the task ends with.
-        await asyncio.wait_for(status_emitted.wait(), timeout=5)
 
 
 class TestSaveTrackingConfigured:
@@ -2617,24 +2547,6 @@ class TestSlotMutationLocking:
         state = _require_save_state(svc, 42)
         assert state.slot_confirmed is True
         assert state.active_slot == "default"
-
-    @pytest.mark.asyncio
-    async def test_set_active_slot_serialises_on_rom_lock(self, tmp_path):
-        """set_active_slot blocks while the per-ROM lock is held, then completes on release."""
-        svc, _ = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _seed_save_state(svc, 123, RomSaveSyncState(system="gba", active_slot="default"))
-
-        lock = svc._sync_engine.rom_lock(123)
-        await lock.acquire()
-        task = asyncio.create_task(svc._slots.set_active_slot(123, "desktop"))
-        await asyncio.sleep(0.05)
-        assert not task.done()  # blocked on the held lock
-
-        lock.release()
-        result = await asyncio.wait_for(task, timeout=5)
-        assert result["success"] is True
-        assert _require_save_state(svc, 123).active_slot == "desktop"
 
     @pytest.mark.asyncio
     async def test_switch_slot_does_not_self_deadlock_on_tail_status(self, tmp_path):

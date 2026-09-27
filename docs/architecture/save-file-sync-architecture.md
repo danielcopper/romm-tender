@@ -298,10 +298,10 @@ deleted after the lock is released.
   [ADR-0017](../adr/0017-client-baseline-detection-authoritative-negotiate-is-transport.md)): a ROM can no longer be
   confirmed onto the legacy slot. Every confirmed slot is now a real, addressable name. The Slot Setup Wizard detects
   legacy saves and offers to **migrate them into a named slot**, never to "track legacy in place."
-- **`switch_slot`, `set_active_slot`, and `delete_slot` reject the legacy bucket too** — not just `confirm_slot_choice`.
-  An empty / whitespace / `None` slot name returns `{success: false, reason: "invalid_slot_name", …}` before any lock or
-  I/O, so a ROM can never be switched _into_ legacy mode through the slot switcher, and the slot-less bucket — a manual
-  upload or an older web player's save — can never be torn down from the plugin
+- **`switch_slot` and `delete_slot` reject the legacy bucket too** — not just `confirm_slot_choice`. An empty /
+  whitespace / `None` slot name returns `{success: false, reason: "invalid_slot_name", …}` before any lock or I/O, so a
+  ROM can never be switched _into_ legacy mode through the slot switcher, and the slot-less bucket — a manual upload or
+  an older web player's save — can never be torn down from the plugin
   ([#1478](https://github.com/danielcopper/romm-tender/issues/1478)). The SAVES-tab UI matches this: it no longer offers
   a "Use Legacy Mode?" action, and the legacy bucket's panel is **fully read-only** — its saves stay listable and
   expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is also visually **demoted**:
@@ -1072,14 +1072,14 @@ input.
 `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`, and `resolve_sync_conflict` for the same
 `rom_id`. `StatusService.get_save_status` also takes the lock — not for the read, but for its one write: the executor
 body adopts a baseline hash (`Skip(adopt_baseline=True)`) and persists it through a `rom_save_sync_states`
-read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update. The four **slot
-mutations** — `SlotSwitcher.switch_slot` / `set_active_slot`, `SetupWizard.confirm_slot_choice`, and
-`SlotDeleter.delete_slot` — take the lock too: each loads the `RomSaveSyncState` aggregate, mutates it (active-slot
-flip, slot-confirm, slot/file tracking teardown, switch downloads/deletes), and persists, so without the lock a slot op
-racing an in-flight sync on the same ROM loses updates or PUTs the wrong slot's content into the tracked server save
-(#1057). The lock-free server-saves network fetch stays outside the lock; only the local RMW is the critical section.
-Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All Saves running concurrently with a
-resolve on one specific rom) is unaffected. The lock is created lazily on first access (`SyncEngine.rom_lock(rom_id)`).
+read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update. The three **slot
+mutations** — `SlotSwitcher.switch_slot`, `SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take the
+lock too: each loads the `RomSaveSyncState` aggregate, mutates it (active-slot flip, slot-confirm, slot/file tracking
+teardown, switch downloads/deletes), and persists, so without the lock a slot op racing an in-flight sync on the same
+ROM loses updates or PUTs the wrong slot's content into the tracked server save (#1057). The lock-free server-saves
+network fetch stays outside the lock; only the local RMW is the critical section. Different rom_ids have independent
+locks, so cross-game concurrency (e.g. Sync All Saves running concurrently with a resolve on one specific rom) is
+unaffected. The lock is created lazily on first access (`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is

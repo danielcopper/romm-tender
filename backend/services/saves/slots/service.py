@@ -143,14 +143,8 @@ class SlotsService:
         return await self._listing.get_slot_saves(rom_id, slot)
 
     # ------------------------------------------------------------------
-    # Active slot mutation + slot switching — delegate to :class:`SlotSwitcher`.
-    # Kept on the facade so tests that reach for ``svc._slots.set_active_slot``
-    # continue to drive the same code path.
+    # Slot switching — delegates to :class:`SlotSwitcher`.
     # ------------------------------------------------------------------
-
-    async def set_active_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
-        """Set the active save slot for a specific game."""
-        return await self._switcher.set_active_slot(rom_id, slot)
 
     async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any]:
         """Switch the active save slot with immediate state sync."""

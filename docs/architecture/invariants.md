@@ -921,7 +921,7 @@ Format: **invariant** — tier — enforced by.
   stands behind any of this.** A delete path looping a status list on `downloaded` alone would go green — which is
   exactly the shape this one had when it destroyed that file
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
-  paths, `get_save_status`, and the four slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
+  paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
 - **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
   sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the five states

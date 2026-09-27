@@ -1,8 +1,8 @@
 """Active-slot mutation and the destructive slot-switch flow.
 
-Anything that flips the active slot on a ROM lives here — the simple
-state-only ``set_active_slot`` flip and the full ``switch_slot`` flow
-that synchronises the local saves directory to the new slot's contents.
+Anything that flips the active slot on a ROM lives here — the
+``switch_slot`` flow that synchronises the local saves directory to the new
+slot's contents.
 Slot listing, the setup wizard, and slot deletion belong in their own
 sub-modules. Persistence is each operation's own narrow Unit of Work
 (ADR-0006).
@@ -39,12 +39,10 @@ if TYPE_CHECKING:
 
 
 class SlotSwitcher:
-    """Active-slot setter + the destructive slot-switch flow.
+    """The destructive slot-switch flow.
 
-    Owns ``set_active_slot`` (the lightweight active-slot flip used
-    elsewhere in the slots package and by the setup wizard) and
-    ``switch_slot`` (the full pre-check + state-sync flow surfaced as a
-    public callable).
+    Owns ``switch_slot``: the full pre-check + state-sync flow an endpoint
+    reaches.
     """
 
     def __init__(
@@ -80,35 +78,6 @@ class SlotSwitcher:
         with self._uow_factory() as uow:
             state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
         return state, self._device_registry.get_device_id()
-
-    async def set_active_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
-        """Set the active save slot for a specific game.
-
-        The slot name must be a real, non-empty value: switching a ROM into the
-        slot-less legacy bucket is retired (#1276), so an empty / whitespace-only
-        / ``None`` name is rejected up front with the canonical
-        ``invalid_slot_name`` failure — before any state change or lock
-        acquisition. If the (named) slot doesn't exist yet on the server, it is
-        persisted as a local slot and promoted to server once a save is uploaded
-        to it. Owns its own read→mutate→write Unit of Work, held under the
-        per-ROM lock so the flip serialises against any in-flight sync/status on
-        the same ROM (see SyncEngine.rom_lock).
-        """
-        rom_id = int(rom_id)
-        slot_str = str(slot).strip() if slot else ""
-        if not slot_str:
-            return {"success": False, "reason": "invalid_slot_name", "message": "Slot name cannot be empty"}
-
-        async with self._sync_engine.rom_lock(rom_id):
-            with self._uow_factory() as uow:
-                rom_state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-                rom_state.switch_active_slot(slot_str)
-                uow.rom_save_sync_states.save(rom_id, rom_state)
-
-        # The background check re-acquires rom_lock when it runs later, so it
-        # must be scheduled outside the held lock above.
-        self._loop.create_task(self._status_service.check_save_status_background(rom_id))
-        return {"success": True, "active_slot": slot_str}
 
     def _check_slot_switch_readiness(self, rom_id: int, save_state: RomSaveSyncState) -> dict[str, Any]:
         """Check whether it is safe to switch slots for this ROM.
