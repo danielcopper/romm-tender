@@ -1362,11 +1362,13 @@ class TestAnUpdateThatStarts:
 
         assert sorted(entry.name for entry in machine.backup.iterdir()) == [
             "backed-up-at",
+            "data-of-version",
             "romm-tender.service",
             "romm_sync.db",
             "romm_sync.db-wal",
             "settings.json",
         ]
+        assert (machine.backup / "data-of-version").read_text(encoding="utf-8") == f"{_VERSION}\n"
         assert (machine.backup / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
         assert (machine.backup / "romm_sync.db-wal").read_bytes() == before[machine.data / "romm_sync.db-wal"]
         assert (machine.backup / "settings.json").read_bytes() == before[machine.config / "settings.json"]
@@ -1468,23 +1470,76 @@ class TestAnUpdateThatStarts:
         assert "is stopped" not in result.stderr
 
     def test_a_backup_that_cannot_replace_the_earlier_one_is_refused(self, machine):
-        """An earlier backup that cannot be removed stops the update; the new one never lands inside it."""
+        """A copy an earlier run set aside and could not remove stops the update, and the backup stays whole."""
+        _installed(machine)
+        _seed_data(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        earlier = {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()}
+        stuck = Path(f"{machine.backup}.prev") / "stuck"
+        stuck.mkdir(parents=True)
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
+        finally:
+            stuck.chmod(0o700)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not back up your data to {machine.backup}"]
+        assert sorted(entry.name for entry in machine.backup.iterdir()) == sorted(earlier)
+        assert {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()} == earlier
+        assert _tree_version(machine.code) == _NEW
+
+    def test_an_earlier_backup_that_cannot_be_removed_does_not_stop_the_update(self, machine):
+        """The new backup takes the name whole; what would not go is left beside it."""
         _installed(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
         stuck = machine.backup / "stuck"
         stuck.mkdir()
         (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
         stuck.chmod(0o500)
+        aside = Path(f"{machine.backup}.prev")
         try:
             result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
-            inside = sorted(entry.name for entry in machine.backup.iterdir())
+            left = sorted(entry.name for entry in aside.iterdir())
+        finally:
+            for where in (stuck, aside / "stuck"):
+                if where.exists():
+                    where.chmod(0o700)
+
+        assert result.returncode == 0, result.stderr
+        assert _tree_version(machine.code) == "1.4.0"
+        assert sorted(entry.name for entry in machine.backup.iterdir()) == [
+            "backed-up-at",
+            "data-of-version",
+            "romm-tender.service",
+        ]
+        assert (machine.backup / "data-of-version").read_text(encoding="utf-8") == f"{_NEW}\n"
+        assert left == ["stuck"]
+
+    def test_an_update_that_ends_before_the_new_version_is_in_place_says_so(self, machine):
+        """The tree an earlier update kept cannot be removed: the run ends after the backup, with the unit stopped."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        stuck = machine.old / "stuck"
+        stuck.mkdir()
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
         finally:
             stuck.chmod(0o700)
 
-        assert result.returncode == 1
-        assert _refusals(result.stderr) == [f"install.sh: could not back up your data to {machine.backup}"]
-        assert "update-backup.new" not in inside
+        assert result.returncode != 0
         assert _tree_version(machine.code) == _NEW
+        assert (
+            "romm-tender is stopped: the update ended before the new version was in place."
+            in result.stderr.splitlines()
+        )
+        assert (
+            f"  the installed version is still at {machine.code}; "
+            "start it again with systemctl --user start romm-tender"
+        ) in result.stderr.splitlines()
 
     def test_an_update_that_ends_with_the_unit_stopped_says_so(self, machine):
         """The new tree is in place and the unit file cannot be written: the run ends before the start."""
@@ -1730,6 +1785,82 @@ class TestRollingBackByHand:
 
         assert result.returncode == 0, result.stderr
         assert {entry.name: entry.read_bytes() for entry in copy.iterdir()} == kept
+
+    def test_a_kept_version_the_backup_does_not_belong_to_is_refused_and_nothing_changes(self, machine):
+        """An update that ended after its backup and before its swap leaves the older kept tree beside newer data."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        stuck = machine.old / "stuck"
+        stuck.mkdir()
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        try:
+            machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
+        finally:
+            stuck.chmod(0o700)
+        backup = {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()}
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
+        assert (
+            f"the backup holds the data of {_NEW}. Nothing was changed: "
+            "start the service with systemctl --user start romm-tender"
+        ) in result.stderr
+        assert machine.systemctl_calls() == []
+        assert _tree_version(machine.code) == _NEW
+        assert {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()} == backup
+        assert not (machine.data / "rollback-backup").exists()
+
+    def test_a_rollback_that_ends_before_it_moves_either_version_says_the_service_is_stopped(self, machine):
+        """A tree left at the name the rollback moves the current one to cannot be removed."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        stuck = Path(f"{machine.code}.new") / "stuck"
+        stuck.mkdir(parents=True)
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        try:
+            result = machine.run("--rollback", STUB_BACKEND="up")
+        finally:
+            stuck.chmod(0o700)
+
+        assert result.returncode != 0
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert (
+            "romm-tender is stopped: the rollback ended before it moved either version." in result.stderr.splitlines()
+        )
+        assert "  start it again with systemctl --user start romm-tender" in result.stderr.splitlines()
+
+    def test_a_rollback_that_ends_before_the_data_is_back_says_so(self, machine):
+        """The tree being left cannot be removed once the earlier one is in its place, so the restore never runs."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        stuck = machine.code / "stuck"
+        stuck.mkdir()
+        (stuck / "file").write_text("cannot be removed\n", encoding="utf-8")
+        stuck.chmod(0o500)
+        moved = Path(f"{machine.code}.new") / "stuck"
+        try:
+            result = machine.run("--rollback", STUB_BACKEND="up")
+        finally:
+            for where in (stuck, moved):
+                if where.exists():
+                    where.chmod(0o700)
+
+        assert result.returncode != 0
+        assert _tree_version(machine.code) == _VERSION
+        assert (
+            "romm-tender is stopped: the rollback put the earlier version in place and ended before its data was back."
+            in result.stderr.splitlines()
+        )
+        assert (
+            f"  copy the files in {machine.backup} back before starting it with systemctl --user start romm-tender"
+            in result.stderr.splitlines()
+        )
 
     def test_it_records_no_failure(self, machine):
         """Going back by hand is a choice, not an update that failed."""
