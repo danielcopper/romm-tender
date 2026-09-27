@@ -29,7 +29,7 @@ from typing import Any
 
 
 def migration_refusal() -> dict[str, Any]:
-    """The canonical answer of an operation refused while a RetroDECK migration is pending."""
+    """The canonical answer of an endpoint refused while a RetroDECK migration is pending."""
     return {
         "success": False,
         "reason": "blocked_by_migration",

@@ -287,7 +287,7 @@ class PruneConflicts:
 
 
 def prune_active_refusal() -> dict[str, Any]:
-    """The canonical answer of an operation refused while a removed-game cleanup is running."""
+    """The canonical answer of an endpoint refused while a removed-game cleanup is running."""
     return {"success": False, "reason": "prune_active", "message": _BLOCKED_MESSAGE}
 
 

@@ -1,16 +1,14 @@
-"""The conflict rules a use case checks at its entry, applied in one order.
+"""The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules).
 
-Three conditions refuse an operation before it does anything, and they are
-asked in this order: a pending RetroDECK migration, a library sync in flight,
-and a running removed-game cleanup (CONTEXT.md → Conflict rules). The answer to
-a refused call is the canonical refusal the matching gate decorator gives, from
-the same home in ``lib/migration_gate.py``, ``lib/sync_gate.py`` and
-``lib/prune_gate.py``.
+A refused endpoint answers with the canonical refusal the matching gate
+decorator gives, from the same home in ``lib/migration_gate.py``,
+``lib/sync_gate.py`` and ``lib/prune_gate.py``.
 
 A use case names the endpoint it serves as the label, the same label the
 decorator takes from the method's name, so the prune gate names the holder in
-its log lines either way. The contract tests read each ``hold`` call's label and
-rule keywords from the source, so both are written as literals.
+its log lines either way. The rule-coverage tests (``tests/_gate_rules.py``)
+read each ``hold`` call's label and rule keywords from the source, so both are
+written as literals.
 """
 
 from __future__ import annotations
@@ -24,13 +22,13 @@ from lib.sync_gate import sync_refusal
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
 
     from lib.prune_gate import PruneConflicts
 
 
 class ConflictRuleSet:
-    """The one place the conflict rules are checked, in their pinned order."""
+    """Checks the conflict rules a use case names, in their pinned order."""
 
     def __init__(
         self,
@@ -46,10 +44,11 @@ class ConflictRuleSet:
     @contextlib.asynccontextmanager
     async def hold(
         self, label: str, *, migration: bool = False, sync: bool = False, prune: bool = False
-    ) -> AsyncIterator[dict[str, Any] | None]:
+    ) -> AsyncGenerator[dict[str, Any] | None]:
         """Check the named rules for *label* and hold what they need for the block.
 
-        Yields the first rule's refusal, or ``None`` when the block may run.
+        Yields the refusal of the first named rule that holds, or ``None`` when
+        the block may run.
         A refused call registers nothing. With ``prune`` the block runs under an
         operation named *label*, registered in the same lock hold as the check
         and released when the block ends, however it ends.
@@ -73,5 +72,10 @@ class ConflictRuleSet:
             await self._prune_conflicts.release_operation(registration)
 
     async def retain(self, task: asyncio.Task[Any], label: str) -> None:
-        """Hold an operation named *label* until *task* ends — detached work a use case started."""
+        """Hold an operation named *label* until *task* ends — detached work a use case started.
+
+        Checks no rule: call it inside the ``hold(..., prune=True)`` block that
+        started *task*, so the operation is registered before that block's own
+        is released and no cleanup can start in between.
+        """
         await self._prune_conflicts.retain(task, label)
