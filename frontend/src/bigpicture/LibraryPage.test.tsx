@@ -1,6 +1,8 @@
-// The Library page's frame: the wide page, its Back row, and when each tab's
-// reads are asked. What each tab shows and does is pinned beside it —
-// `library/PlatformsTab.test.tsx` and `library/CollectionsTab.test.tsx`.
+// The Library page's frame: the wide page, its Back row, when each tab's reads
+// are asked, and what entering Platforms again does to its list line — the one
+// Platforms behaviour that needs a second tab to drive. What each tab shows and
+// does is otherwise pinned beside it — `library/PlatformsTab.test.tsx` and
+// `library/CollectionsTab.test.tsx`.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
@@ -99,5 +101,59 @@ describe("LibraryPage", () => {
     expect(vi.mocked(backend.getCollections)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backend.getSettings)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backend.getPlatforms)).toHaveBeenCalledTimes(1);
+  });
+
+  describe("the Platforms list line on entering the tab again", () => {
+    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+    const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="status-list"]')?.textContent ?? null;
+    const toggle = (c: HTMLElement) => c.querySelector<HTMLInputElement>('[data-testid="toggle-input"]')!;
+
+    beforeEach(() => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [{ id: 1, name: "Game Boy Advance", slug: "gba", rom_count: 12, sync_enabled: false }],
+      });
+      vi.mocked(backend.getPlatformFirmwareStatus).mockResolvedValue({ success: true, platform: null });
+      vi.mocked(backend.getSystemCoreInfo).mockRejectedValue(new Error("net"));
+      vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 0 });
+    });
+
+    it("is gone once Collections is entered and Platforms entered again", async () => {
+      vi.mocked(backend.savePlatformSync).mockResolvedValueOnce(REFUSED);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      fireEvent.click(toggle(container));
+      await flushAsync();
+      expect(listStatus(container)).toBe("Migration pending");
+
+      await showTab(container, "collections");
+      await showTab(container, "platforms");
+
+      expect(listStatus(container)).toBeNull();
+    });
+
+    it("takes no refusal issued before leaving, while the switch still goes back to what is stored", async () => {
+      let answer: (value: typeof REFUSED) => void = () => {};
+      vi.mocked(backend.savePlatformSync).mockReturnValueOnce(
+        new Promise((r) => {
+          answer = r;
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      fireEvent.click(toggle(container));
+      await flushAsync();
+      expect(toggle(container).checked).toBe(true);
+
+      await showTab(container, "collections");
+      await showTab(container, "platforms");
+      await act(async () => {
+        answer(REFUSED);
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+
+      expect(listStatus(container)).toBeNull();
+      expect(toggle(container).checked).toBe(false);
+    });
   });
 });

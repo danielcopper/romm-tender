@@ -1016,11 +1016,12 @@ asking for a preview and starting the run is made on the frontend, by this page'
 Wide, two tabs.
 
 **Every sync write on either tab is optimistic, and a write that does not take says so.** A switch shows its new value
-before the backend answers. A refusal or a rejection is one outcome — none of these callables throws to refuse: the
-switch goes back to the value last stored for it, and a line says why, carrying the backend's own message, or a short
-fixed sentence where there is none (`SYNC_WRITE_FAILED`), and taking no space otherwise. Without the line a switch that
-goes back is indistinguishable from one that never moved. A later write in the same place that succeeds takes the line
-back, within the rule below. Which writes each tab makes, and where its lines sit, is under the tab below.
+before the backend answers. A refusal or a rejection is one outcome — none of these callables throws to refuse. The
+switch goes back to the value last stored for it while its write is still the latest for that switch, and a line says
+why, carrying the backend's own message, or a short fixed sentence where there is none (`SYNC_WRITE_FAILED`), and taking
+no space otherwise. Without the line a switch that goes back is indistinguishable from one that never moved. A later
+write in the same place that succeeds takes the line back, within the rule below. Which writes each tab makes, and where
+its lines sit, is under the tab below.
 
 **Only the latest write speaks** — on a switch's value, and on a line. **A switch** — a platform, a collection, the
 owner toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and
@@ -1030,8 +1031,9 @@ a failure puts back the stored value. An answer that is no longer the latest onl
 a success, and never touches what is shown. So two refused writes to one switch leave it showing what is stored, a
 refusal of an older write cannot undo a newer one still in flight, and a refused Enable all puts back only the switches
 no later write has touched. **A line** numbers the writes issued in its place, and an answer sets or clears that line
-only while it is still the latest write there. So a slow refusal cannot stand a line over a write that has since
-succeeded, and a slow success cannot take back a newer refusal's line. The bookkeeping is
+only while it is still the latest write there and the tab has not been entered again since it was issued; entering a tab
+also clears its lines. So a slow refusal cannot stand a line over a write that has since succeeded, a slow success
+cannot take back a newer refusal's line, and nothing lands on a view entered afresh. The bookkeeping is
 `frontend/src/bigpicture/library/latestWrites.ts`, shared by both tabs' hooks.
 
 **Platforms** is list and detail. The list holds every platform RomM reports with at least one ROM — what
@@ -1601,12 +1603,12 @@ toggle are already standing, and each pane shows a spinner where its table goes.
 they follow the rule § Library opens with (**Only the latest write speaks**). Each is reported **where it was made**,
 and each place has a line of its own: a refused owner toggle or Favorites switch in the list column, under the owner
 toggle; a refused table switch or Enable all / Disable all in the pane, under the search line. The pane's line also goes
-when another row is selected, and both go when the tab is entered again. Selecting another row also clears the search,
-since a search is about the row it was typed on.
+when another row is selected. Selecting another row also clears the search, since a search is about the row it was typed
+on.
 
-**Two more things keep an answer off a line here.** An answer sets or clears a line only while the tab has not been
-entered again since its write was issued, and a pane answer also only while no other row has been selected since, a
-round trip back to the same row included. So nothing lands on a pane entered since, or on a view entered afresh.
+**One more thing keeps an answer off the pane's line.** A pane answer sets or clears it only while no other row has been
+selected since its write was issued, a round trip back to the same row included. So nothing lands on a pane entered
+since.
 
 ## Settings
 

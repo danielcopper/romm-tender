@@ -1,15 +1,15 @@
 /**
  * The bookkeeping behind the Library page's optimistic writes: which write to a
- * control or a line is the latest, and what a control is known to be stored
- * as. The rule it serves is `docs/architecture/qam-panel.md` § Library, "Only
- * the latest write speaks"; the hooks decide what an answer shows.
+ * control or a line is the latest, whether a line's write was issued since the
+ * tab was last entered, and what a control is known to be stored as. The rule
+ * it serves is `docs/architecture/qam-panel.md` § Library, "Only the latest
+ * write speaks"; the hooks decide what an answer shows.
  */
 
 import { useState } from "react";
 
 /** Numbers the writes issued to each target, a control or a line. */
 export interface WriteSequence {
-  /** Number a new write to *target* and return its number. */
   issue: (target: string) => number;
   isLatest: (target: string, seq: number) => boolean;
   /** The number of the latest write issued to *target*, 0 before any. */
@@ -80,9 +80,34 @@ export function createLatestWrites<V>(): LatestWrites<V> {
   };
 }
 
-/** A {@link WriteSequence} kept for the component's lifetime. */
-export function useWriteSequence(): WriteSequence {
-  return useState(createWriteSequence)[0];
+/** Numbers the writes issued to each line of one tab, and counts the tab's
+ *  entries. */
+export interface LineWrites {
+  /** The returned check holds only while this write is the latest issued to
+   *  *line* and the tab has not been entered since. */
+  issue: (line: string) => () => boolean;
+  /** The tab was entered: no write issued before now speaks on any line. */
+  enter: () => void;
+}
+
+export function createLineWrites(): LineWrites {
+  const writes = createWriteSequence();
+  let entries = 0;
+  return {
+    issue: (line) => {
+      const seq = writes.issue(line);
+      const entry = entries;
+      return () => writes.isLatest(line, seq) && entries === entry;
+    },
+    enter: () => {
+      entries += 1;
+    },
+  };
+}
+
+/** A {@link LineWrites} kept for the component's lifetime. */
+export function useLineWrites(): LineWrites {
+  return useState(createLineWrites)[0];
 }
 
 /** A {@link LatestWrites} kept for the component's lifetime. */

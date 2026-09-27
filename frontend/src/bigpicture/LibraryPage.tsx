@@ -48,6 +48,7 @@ export const LibraryPage: FC<LibraryPageProps> = ({ onBack }) => {
           setActiveTab("collections");
           return;
         }
+        platformsState.enter();
         setActiveTab("platforms");
       }}
     />

@@ -31,7 +31,7 @@ import {
   wireKind,
   type CollectionsRowId,
 } from "./collectionKinds";
-import { useLatestWrites, useWriteSequence } from "./latestWrites";
+import { useLatestWrites, useLineWrites } from "./latestWrites";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
 /** Where the collections read stands. A failure is not final: entering the tab
@@ -144,8 +144,7 @@ export function useCollectionsPage(): CollectionsPageState {
 
   // Which answer may still speak on each line — `docs/architecture/qam-panel.md`
   // § Library, "Only the latest write speaks".
-  const lines = useWriteSequence();
-  const entries = useRef(0);
+  const lines = useLineWrites();
   const shownKind = useRef<CollectionsRowId>("standard");
   // Bumped by every change of selection, so a pane answer is about the pane it
   // was made on even after a round trip back to the same row.
@@ -153,11 +152,10 @@ export function useCollectionsPage(): CollectionsPageState {
 
   const lineFor = useCallback(
     (place: WritePlace) => {
-      const ticket = lines.issue(place);
-      const entry = entries.current;
+      const speaks = lines.issue(place);
       const selection = selections.current;
       return (text: string | null) => {
-        if (!lines.isLatest(place, ticket) || entries.current !== entry) return;
+        if (!speaks()) return;
         if (place === "pane" && selections.current !== selection) return;
         if (place === "list") setListStatus(text);
         else setPaneStatus(text);
@@ -167,13 +165,13 @@ export function useCollectionsPage(): CollectionsPageState {
   );
 
   const enter = useCallback(() => {
-    entries.current += 1;
+    lines.enter();
     setSearch("");
     setListStatus(null);
     setPaneStatus(null);
     if (settingsRead.current === "idle" || settingsRead.current === "failed") readOwnerScope();
     if (collectionsRead.current === "idle" || collectionsRead.current === "failed") readCollections();
-  }, [readCollections, readOwnerScope]);
+  }, [lines, readCollections, readOwnerScope]);
 
   // A search and a pane refusal are both about the row they were made on, so
   // another row is entered without either.

@@ -3,7 +3,7 @@
 // `PlatformsTab.test.tsx` and `CollectionsTab.test.tsx`.
 
 import { describe, it, expect } from "vitest";
-import { createLatestWrites, createWriteSequence } from "./latestWrites";
+import { createLatestWrites, createLineWrites, createWriteSequence } from "./latestWrites";
 
 describe("createWriteSequence", () => {
   it("numbers each target's writes on their own, from 1", () => {
@@ -92,5 +92,30 @@ describe("createLatestWrites", () => {
     const newer = writes.issue(["a"], false);
     expect(older.isLatest("a")).toBe(false);
     expect(newer.isLatest("a")).toBe(true);
+  });
+});
+
+describe("createLineWrites", () => {
+  it("lets a write speak on its line only while no later write was issued there", () => {
+    const lines = createLineWrites();
+    const first = lines.issue("list");
+    expect(first()).toBe(true);
+    const pane = lines.issue("pane");
+    expect(first()).toBe(true);
+    const second = lines.issue("list");
+    expect(first()).toBe(false);
+    expect(second()).toBe(true);
+    expect(pane()).toBe(true);
+  });
+
+  it("silences every write issued before an entry, on every line, and none issued after", () => {
+    const lines = createLineWrites();
+    const list = lines.issue("list");
+    const pane = lines.issue("pane");
+    lines.enter();
+    expect(list()).toBe(false);
+    expect(pane()).toBe(false);
+    const after = lines.issue("list");
+    expect(after()).toBe(true);
   });
 });

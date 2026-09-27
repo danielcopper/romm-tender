@@ -848,6 +848,28 @@ describe("Library › Platforms", () => {
         expect(listStatus(container)).toBeNull();
       });
 
+      it("leaves a platform to its own write still out when an earlier Enable all is refused", async () => {
+        const batch = held();
+        const single = held();
+        vi.mocked(backend.setAllPlatformsSync).mockReturnValueOnce(batch.promise);
+        vi.mocked(backend.savePlatformSync).mockReturnValueOnce(single.promise);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(buttonByText(container, "Enable all")!);
+        // Dreamcast is on in the read, and is switched off on its own while the
+        // batch is out; that write has not answered when the batch is refused.
+        await press(rowToggle(container, "Dreamcast"));
+
+        await batch.answer(REFUSED);
+        expect(rowToggle(container, "Dreamcast").checked).toBe(false);
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(false);
+        expect(listStatus(container)).toBeNull();
+
+        await single.answer(REFUSED);
+        expect(rowToggle(container, "Dreamcast").checked).toBe(true);
+        expect(listStatus(container)).toBe("Migration pending");
+      });
+
       it("says nothing in the list column once a later write has succeeded", async () => {
         const first = held();
         vi.mocked(backend.savePlatformSync).mockReturnValueOnce(first.promise).mockResolvedValueOnce({ success: true });
@@ -876,6 +898,35 @@ describe("Library › Platforms", () => {
         await first.answer({ success: true });
 
         expect(listStatus(container)).toBe("Refused");
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
+      });
+    });
+
+    describe("a refused write after one that was stored", () => {
+      const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+
+      beforeEach(() => {
+        vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
+      });
+
+      it("puts a platform back to what its last stored write set", async () => {
+        vi.mocked(backend.savePlatformSync).mockResolvedValueOnce({ success: true }).mockResolvedValueOnce(REFUSED);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        // Nintendo 64 is off in the read; switched on and stored, then off and refused.
+        await press(rowToggle(container, "Nintendo 64"));
+        await press(rowToggle(container, "Nintendo 64"));
+
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
+      });
+
+      it("puts a platform back to what a stored Enable all set", async () => {
+        vi.mocked(backend.savePlatformSync).mockResolvedValueOnce(REFUSED);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(buttonByText(container, "Enable all")!);
+        await press(rowToggle(container, "Nintendo 64"));
+
         expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
       });
     });

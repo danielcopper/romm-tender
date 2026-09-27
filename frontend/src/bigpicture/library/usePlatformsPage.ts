@@ -61,7 +61,7 @@ import {
 } from "../../utils/pruneLease";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
-import { useLatestWrites, useWriteSequence } from "./latestWrites";
+import { useLatestWrites, useLineWrites } from "./latestWrites";
 import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
 /** How long the pressed button says `Failed` before everything returns. Two of
@@ -203,10 +203,13 @@ export interface PlatformsPageState {
    * about a row the reader is already looking at, so neither belongs in
    * {@link DetailStatus}, which is bound to one platform's pane.
    *
-   * Set and cleared only by the answer to the latest sync write —
-   * `docs/architecture/qam-panel.md` § Library, "Only the latest write speaks".
+   * Cleared when the tab is entered, and otherwise set and cleared only by the
+   * answer to the latest sync write — `docs/architecture/qam-panel.md`
+   * § Library, "Only the latest write speaks".
    */
   listStatus: string | null;
+  /** The tab was entered: take the list's line down. */
+  enter: () => void;
   /**
    * The platform whose action is in flight, or `null`. Every action the detail
    * offers disables on every platform while one is running; the list's own sync
@@ -328,7 +331,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const [listStatus, setListStatus] = useState<string | null>(null);
   // Touched only in handlers and in answers, never during render.
   const syncWrites = useLatestWrites<boolean>();
-  const lines = useWriteSequence();
+  const lines = useLineWrites();
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [removalProgress, setRemovalProgress] = useState<{ slug: string; removed: number; total: number } | null>(null);
 
@@ -629,10 +632,15 @@ export function usePlatformsPage(): PlatformsPageState {
   const saveCountFor = useCallback((slug: string): SaveCountAnswer => saveCounts[slug], [saveCounts]);
 
   const listLine = useCallback(() => {
-    const ticket = lines.issue(LIST_LINE);
+    const speaks = lines.issue(LIST_LINE);
     return (text: string | null) => {
-      if (lines.isLatest(LIST_LINE, ticket)) setListStatus(text);
+      if (speaks()) setListStatus(text);
     };
+  }, [lines]);
+
+  const enter = useCallback(() => {
+    lines.enter();
+    setListStatus(null);
   }, [lines]);
 
   // The writes are optimistic; what an answer may change on its toggle and on
@@ -1010,6 +1018,7 @@ export function usePlatformsPage(): PlatformsPageState {
     saveCountFor,
     status,
     listStatus,
+    enter,
     busySlug,
     removalProgress,
     toggleSync,
