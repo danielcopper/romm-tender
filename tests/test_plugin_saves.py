@@ -140,11 +140,6 @@ def plugin(tmp_path, logger, home, project_root):
     # Store fake_api on plugin for test access
     p._fake_api = fake_api
 
-    # Default migration service mock — no migration pending. Tests that
-    # exercise the @migration_blocked gate override this.
-    p._migration_service = MagicMock()
-    p._migration_service.is_retrodeck_migration_pending.return_value = False
-
     # Enable save sync for tests — matches pre-feature-flag behavior
     p._save_settings["save_sync_enabled"] = True
     return p

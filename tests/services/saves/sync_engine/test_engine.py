@@ -629,11 +629,11 @@ class TestCheckSaveStatusBackground:
 
 class TestMigrationPendingGuards:
     """The engine's own migration-pending refusals in pre_launch_sync and
-    post_exit_sync. Neither is the first check a pending migration meets: the
-    pre_launch_sync endpoint carries @migration_blocked, and post_exit_sync has
-    no endpoint — SessionLifecycleService asks about the migration before it
-    calls it. These guards answer a caller that reaches the engine without
-    either."""
+    post_exit_sync. Neither is the first check a pending migration meets:
+    ``SaveService.pre_launch_sync`` checks the migration rule at its entry, and
+    post_exit_sync has no endpoint — SessionLifecycleService asks about the
+    migration before it calls it. These guards answer a caller that reaches the
+    engine without either."""
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_returns_blocked_when_migration_pending(self, tmp_path):

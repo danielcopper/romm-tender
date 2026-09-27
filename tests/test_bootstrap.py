@@ -49,8 +49,10 @@ from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
+from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
 from lib.prune_gate import PruneConflicts
+from lib.sync_gate import sync_refusal
 from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -680,6 +682,19 @@ class TestWireServices:
         migration_service = result.migration_service
         assert migration_service._uow_factory() is shared_uow
         assert save_sync_service._rom_info._uow_factory() is shared_uow
+        deps["loop"].close()
+
+    async def test_the_sync_rule_reads_the_library_sync_the_wiring_built(self, tmp_path):
+        """No use case names the sync rule, so nothing else shows the rule set's sync condition is bound."""
+        deps = self._make_deps(tmp_path)
+        result = wire_services(self._make_config(deps))
+        rules = result.save_sync_service._rules
+
+        async with rules.hold("probe", sync=True) as refusal:
+            assert refusal is None
+        assert result.sync_service._box.try_begin_run("held-sync-run", kind=SyncRunKind.APPLY)
+        async with rules.hold("probe", sync=True) as refusal:
+            assert refusal == sync_refusal()
         deps["loop"].close()
 
     def test_save_service_receives_is_retrodeck_migration_pending(self, tmp_path):

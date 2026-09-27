@@ -8,8 +8,17 @@ from the source by AST, since a use case's rules are not visible on the object.
 A ``hold`` call whose label or rule keywords are not literals fails the read
 instead of being skipped.
 
-Import as ``from _gate_rules import endpoints_with_rule`` — ``tests/`` is on the
-path via the root conftest.
+What the ``hold`` read does not see:
+
+- a ``hold`` reached any way but as the direct context expression of an
+  ``async with`` — through a local alias, an ``AsyncExitStack``, or a helper
+  that calls it — and any ``hold`` outside ``backend/services/``;
+- which object ``hold`` is called on: every ``async with <x>.hold(...)`` there
+  counts, whatever ``<x>`` is;
+- a rule keyword whose literal is anything but ``True`` (``prune=1`` names no
+  rule);
+- whether the endpoint the label names reaches that use case at all: a label in
+  a method nothing calls still counts.
 """
 
 from __future__ import annotations
@@ -19,13 +28,15 @@ from pathlib import Path
 
 _SERVICES = Path(__file__).resolve().parent.parent / "backend" / "services"
 
-# Each rule's decorator marker; the rule's name is also its ``hold`` keyword.
+# Each rule's decorator marker.
 _MARKERS = {
     "exclusive_start": "_prune_exclusive_start",
     "migration": "_migration_blocked",
     "sync": "_sync_active_blocked",
     "prune": "_prune_active_blocked",
 }
+# The rules ``hold`` takes, each as a keyword named after the rule.
+_HOLD_RULES = frozenset({"migration", "sync", "prune"})
 
 
 def _held_rules() -> dict[str, set[str]]:
@@ -48,8 +59,8 @@ def _held_rules() -> dict[str, set[str]]:
                 )
                 rules = held.setdefault(call.args[0].value, set())
                 for keyword in call.keywords:
-                    assert keyword.arg in _MARKERS and isinstance(keyword.value, ast.Constant), (
-                        f"{where}: hold's rules must be literal keywords among {sorted(_MARKERS)}"
+                    assert keyword.arg in _HOLD_RULES and isinstance(keyword.value, ast.Constant), (
+                        f"{where}: hold's rules must be literal keywords among {sorted(_HOLD_RULES)}"
                     )
                     if keyword.value.value is True:
                         rules.add(keyword.arg)

@@ -952,12 +952,12 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
 
 
 class TestMigrationBlockedDecoratorCoverage:
-    """Every callable on Plugin must be classified: either explicitly
+    """Every endpoint on Plugin must be classified: either explicitly
     whitelisted (read-only / unblock pathway / non-retrodeck) or declaring the
-    migration rule — ``@migration_blocked``, or a ``hold(<endpoint>,
-    migration=True)`` at the entry of the use case it calls. Prevents new
-    callables from being silently unguarded against pending migration
-    corruption (#251)."""
+    migration rule — ``@migration_blocked``, or a
+    ``hold("<endpoint>", migration=True)`` at the entry of the use case it
+    calls. Prevents a new endpoint from being silently unguarded against
+    pending migration corruption."""
 
     def test_all_callables_either_whitelisted_or_decorated(self):
         from host.dispatch import reachable_methods
@@ -979,7 +979,7 @@ class TestMigrationBlockedDecoratorCoverage:
         )
 
     def test_no_callable_is_both_decorated_and_whitelisted(self):
-        """A callable that both declares the migration rule AND is whitelisted
+        """An endpoint that both declares the migration rule AND is whitelisted
         is silently passing the coverage check — likely a misclassification.
         Catch it."""
         from host.dispatch import reachable_methods
@@ -993,7 +993,7 @@ class TestMigrationBlockedDecoratorCoverage:
         ]
 
         assert not double_classified, (
-            "Callables both whitelisted AND declaring the migration rule — "
+            "Endpoints both whitelisted AND declaring the migration rule — "
             f"remove from one: {sorted(double_classified)}"
         )
 
@@ -1009,8 +1009,8 @@ class TestMigrationBlockedDecoratorCoverage:
         stale = sorted(_MIGRATION_BLOCKED_WHITELIST - endpoints.keys())
         assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
 
-        decorated = sorted(_MIGRATION_BLOCKED_WHITELIST & endpoints_with_rule("migration"))
-        assert not decorated, f"Whitelisted callables that also declare the migration rule: {decorated}"
+        ruled = sorted(_MIGRATION_BLOCKED_WHITELIST & endpoints_with_rule("migration"))
+        assert not ruled, f"Whitelisted endpoints that also declare the migration rule: {ruled}"
 
 
 class TestMainStartupOrdering:
