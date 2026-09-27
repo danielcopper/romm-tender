@@ -1908,6 +1908,48 @@ class TestRollingBackByHand:
             in result.stderr.splitlines()
         )
 
+    def test_a_backup_left_aside_by_an_interrupted_update_is_put_back_and_restored(self, machine):
+        """An update that ended between putting its backup aside and the new one in its place left only the `.prev`."""
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        aside = Path(f"{machine.backup}.prev")
+        machine.backup.rename(aside)
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert _tree_version(machine.code) == _VERSION
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert not aside.exists()
+        assert (machine.backup / "data-of-version").read_text(encoding="utf-8") == f"{_VERSION}\n"
+
+    def test_a_backup_left_aside_that_cannot_be_moved_back_is_refused_and_nothing_changes(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        aside = Path(f"{machine.backup}.prev")
+        machine.backup.rename(aside)
+        kept = {entry.name: entry.read_bytes() for entry in aside.iterdir()}
+        machine.systemctl_log.write_text("", encoding="utf-8")
+        machine.data.chmod(0o500)
+        try:
+            result = machine.run("--rollback", STUB_BACKEND="up")
+        finally:
+            machine.data.chmod(0o700)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: could not move the backup at {aside} back to {machine.backup}"
+        ]
+        assert "  nothing was changed" in result.stderr.splitlines()
+        assert machine.systemctl_calls() == []
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert not machine.backup.exists()
+        assert {entry.name: entry.read_bytes() for entry in aside.iterdir()} == kept
+
     def test_it_records_no_failure(self, machine):
         """Going back by hand is a choice, not an update that failed."""
         _installed(machine)

@@ -26,7 +26,8 @@ exactly as before, and nothing on this page moves them.
 Before an update replaces Tender, it stops it and copies your library database and your settings to
 `~/.local/share/romm-tender/update-backup/`, replacing the copy the previous update made. Uninstalling leaves it there,
 with the rest of your data. A previous copy that cannot be removed is left beside the new one as `update-backup.prev/`;
-the next update removes it first, and does not go ahead until it can.
+the next update removes it first, and does not go ahead until it can. An update interrupted while replacing the copy can
+leave it only as `update-backup.prev/`; the next update, and going back by hand, move it back first.
 
 If the new version has not started within about a minute, the installer puts the previous version and that copy back and
 starts it again — so anything the new version recorded in that minute is gone, and nothing from before it is. It then

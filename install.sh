@@ -1574,19 +1574,25 @@ copy_data_into() {
     [ ! -e "$CONFIG/$SETTINGS" ] || cp -p "$CONFIG/$SETTINGS" "$1/$SETTINGS" || return 1
 }
 
+# A `.prev` with nothing at the name is the copy itself, from a run that ended
+# between put_in_place's two renames, so it is moved back under the name.
+recover_aside() {
+    local target="$1" aside="$1.prev"
+    if [ -e "$aside" ] && [ ! -e "$target" ]; then
+        mv -T "$aside" "$target" || return 1
+    fi
+}
+
 # The earlier copy is renamed aside rather than removed until the staged one
 # holds its name: a removal that failed partway would leave a gutted copy under
 # that name, which a rollback then restores from. The aside copy is removed
 # last, and one that will not go stays as `.prev` rather than failing a copy
-# that is already in place. A `.prev` found first is an earlier run's: the
-# removal that failed, or — with nothing at the name — the copy itself, from a
-# run that ended between the two renames. `-T`, because `mv` onto a directory
-# that is still there moves INTO it.
+# that is already in place. A `.prev` still there once recover_aside has run is
+# an earlier run's removal that failed. `-T`, because `mv` onto a directory that
+# is still there moves INTO it.
 put_in_place() {
     local staged="$1" target="$2" aside="$2.prev"
-    if [ -e "$aside" ] && [ ! -e "$target" ]; then
-        mv -T "$aside" "$target" || return 1
-    fi
+    recover_aside "$target" || return 1
     rm -rf "$aside" || return 1
     [ ! -e "$target" ] || mv -T "$target" "$aside" || return 1
     if ! mv -T "$staged" "$target"; then
@@ -1953,13 +1959,17 @@ roll_back_the_update() {
 }
 
 # Puts back the tree and the data the last update replaced, by hand. Nothing is
-# asked or changed before both are known to be there and to belong together,
-# and the data it replaces is copied aside first — without a prompt, because
+# asked or changed before both are known to be there and to belong together —
+# except that a backup an interrupted update left as `.prev` is moved back under
+# its name, which is what lets it be found — and the data it replaces is copied
+# aside first — without a prompt, because
 # the copy is what makes the question unnecessary. A copy that cannot be made
 # refuses the rollback.
 do_rollback() {
     [ -d "$CODE.old" ] ||
         abort "there is no earlier version to go back to" "an update keeps the one it replaced at $(tilde "$CODE.old"), and there is none"
+    recover_aside "$BACKUP" ||
+        abort "could not move the backup at $(tilde "$BACKUP.prev") back to $(tilde "$BACKUP")" "nothing was changed"
     [ -d "$BACKUP" ] ||
         abort "there is no backup to go back to" "an update backs your data up to $(tilde "$BACKUP") first, and there is none"
     local previous="" belongs="" made
