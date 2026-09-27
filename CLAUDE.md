@@ -618,7 +618,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   still on disk and alone gates the Delete offer, and a folder row's counts the distinct recorded files beneath it; the
   three buttons share `PlatformBiosDeleter._delete_recorded_io`, never a copy of it
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
-  paths, `get_save_status`, and the four slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
+  paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
 - **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
   sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
