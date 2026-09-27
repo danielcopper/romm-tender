@@ -701,20 +701,26 @@ class DownloadService:
         pct = (done / total * 100) if total else 0
         self._logger.info(f"{label} progress: {rom_name} — {mb_done:.1f}/{mb_total:.1f} MB ({pct:.0f}%)")
 
+    def _live_entry(self, rom_id) -> dict[str, Any] | None:
+        # Every applier the worker queues with ``call_soon_threadsafe`` reads the entry
+        # here. None for an evicted entry (never resurrected) and for an ended one: a
+        # callback queued before the end can run after the terminal frame, because
+        # asyncio settles an executor future that finished before the loop chained it
+        # without yielding (``asyncio.futures._chain_future``).
+        entry = self._download_queue.get(rom_id)
+        return None if entry is None or entry.get("status") in _TERMINAL_DOWNLOAD_STATUSES else entry
+
     def _apply_progress(self, phase: _ProgressPhase, rom_id, rom_name, platform_name, file_name, progress, done, total):
         """Update the live queue entry and schedule a ``download_progress`` emit for *phase*.
 
-        Runs on the loop thread (marshaled from the executor worker via
-        ``call_soon_threadsafe``). Guarded by ``.get`` — if the entry was evicted
-        between ticks we must not resurrect it or raise KeyError off-thread (#973).
-        The extracting phase flips the entry to "extracting" and reports
-        ``resumable: False`` (extraction is never resumable); the downloading
-        phase leaves the entry's status as it is and reports the entry's
-        ``resumable``.
+        Runs on the loop thread, marshaled from the worker via ``call_soon_threadsafe``;
+        an evicted or ended entry is left alone and no frame is sent (``_live_entry``).
+        Extracting flips the entry to "extracting" and reports ``resumable: False``,
+        as extraction never resumes; downloading keeps the status and its ``resumable``.
         """
-        entry = self._download_queue.get(rom_id)
+        entry = self._live_entry(rom_id)
         if entry is None:
-            return  # evicted mid-transfer — do not resurrect or emit
+            return
         extracting = phase == "extracting"
         if extracting:
             entry["status"] = "extracting"
@@ -818,9 +824,9 @@ class DownloadService:
 
         def on_meta(range_supported: bool) -> None:
             def _apply() -> None:
-                entry = self._download_queue.get(rom_id)
+                entry = self._live_entry(rom_id)
                 if entry is None:
-                    return  # evicted mid-download — do not resurrect or emit
+                    return
                 entry["resumable"] = range_supported
                 self._loop.create_task(
                     self._emit(

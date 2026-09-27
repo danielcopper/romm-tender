@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import logging
 import os
 import sqlite3
@@ -4589,6 +4590,177 @@ class TestProgressCallbackEvictionSafe:
         assert len(emit_calls) == 1
         assert emit_calls[0][0] == "download_progress"
         assert emit_calls[0][1]["rom_id"] == 7
+
+
+class _FinishedWorkerExecutor(concurrent.futures.Executor):
+    """Runs each job before ``submit`` returns, so its future is already done when the loop chains it.
+
+    CPython's ``asyncio.futures._chain_future`` (3.13) copies a finished concurrent future's state onto the
+    asyncio future on the spot when it is chained on the running loop, so the ``await`` does not yield — while
+    a progress tick the worker queued with ``call_soon_threadsafe`` is still waiting in the loop's ready queue.
+    On a real worker thread that happens only when the job ends before the loop thread chains it.
+    """
+
+    def submit(self, fn, /, *args, **kwargs):
+        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except Exception as e:
+            future.set_exception(e)
+        return future
+
+
+class TestAProgressTickAfterTheDownloadEnded:
+    """A tick queued before a download ended and run after it changes nothing and sends no frame."""
+
+    @pytest.fixture
+    async def finished_workers(self, monkeypatch):
+        loop = asyncio.get_running_loop()
+        run_in_executor = loop.run_in_executor
+        executor = _FinishedWorkerExecutor()
+        monkeypatch.setattr(loop, "run_in_executor", lambda _executor, fn, *args: run_in_executor(executor, fn, *args))
+
+    @staticmethod
+    async def _drain():
+        """Let the queued ticks run, and any emit they schedule after them."""
+        for _ in range(3):
+            await asyncio.sleep(0)
+
+    def _wire_paths(self, plugin, tmp_path):
+        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+            roms=str(tmp_path / "retrodeck" / "roms"),
+            bios=str(tmp_path / "retrodeck" / "bios"),
+        )
+
+    @pytest.mark.usefixtures("finished_workers")
+    @pytest.mark.asyncio
+    async def test_a_completed_multi_file_download_stays_completed(self, plugin, tmp_path, emit):
+        import zipfile as zf
+        from unittest.mock import patch
+
+        self._wire_paths(plugin, tmp_path)
+        roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
+        roms_dir.mkdir(parents=True)
+        target_path = str(roms_dir / "FF9.zip")
+        zip_content_path = tmp_path / "source.zip"
+        with zf.ZipFile(str(zip_content_path), "w") as z:
+            z.writestr("disc1.cue", "FILE disc1.bin BINARY")
+            z.writestr("disc1.bin", b"\x00" * 100)
+        zip_bytes = zip_content_path.read_bytes()
+        rom_detail = {
+            "id": 75,
+            "name": "Final Fantasy IX",
+            "fs_name": "FF9.zip",
+            "fs_name_no_ext": "FF9",
+            "platform_slug": "psx",
+            "platform_name": "PlayStation",
+            "has_multiple_files": True,
+        }
+
+        def fake_download(_rom_id, _filename, dest, progress_callback, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(zip_bytes)
+            progress_callback(len(zip_bytes), len(zip_bytes))
+
+        _seed_rom(plugin._uow, 75, platform_slug="psx")
+        plugin._download_service._download_queue[75] = {"rom_id": 75, "status": "downloading", "progress": 0}
+
+        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
+            await plugin._download_service._do_download(75, rom_detail, target_path, "psx", "FF9.zip")
+        await self._drain()
+
+        assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
+        entry = plugin._download_service._download_queue[75]
+        assert entry["status"] == "completed"
+        assert entry["progress"] == 1.0
+
+    @pytest.mark.usefixtures("finished_workers")
+    @pytest.mark.asyncio
+    async def test_a_failed_download_keeps_its_progress(self, plugin, tmp_path, emit):
+        from unittest.mock import patch
+
+        self._wire_paths(plugin, tmp_path)
+        roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
+        roms_dir.mkdir(parents=True)
+        target_path = str(roms_dir / "zelda.z64")
+        rom_detail = {
+            "id": 42,
+            "name": "Zelda",
+            "fs_name": "zelda.z64",
+            "platform_slug": "n64",
+            "platform_name": "Nintendo 64",
+            "has_multiple_files": False,
+        }
+
+        def fake_download(_rom_id, _filename, _dest, progress_callback, *, resume=False, on_meta=None):
+            progress_callback(1024, 1024)
+            raise OSError("simulated network drop")
+
+        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+
+        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
+            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        await self._drain()
+
+        assert [c.args[0] for c in emit.call_args_list] == ["download_failed"]
+        entry = plugin._download_service._download_queue[42]
+        assert entry["status"] == "failed"
+        assert entry["progress"] == 0
+
+    @pytest.mark.usefixtures("finished_workers")
+    @pytest.mark.asyncio
+    async def test_a_late_resumability_verdict_is_not_applied(self, plugin, tmp_path, emit):
+        from unittest.mock import patch
+
+        self._wire_paths(plugin, tmp_path)
+        roms_dir = tmp_path / "retrodeck" / "roms" / "gba"
+        roms_dir.mkdir(parents=True)
+        target_path = str(roms_dir / "Game.gba")
+        rom_detail = {
+            "id": 73,
+            "name": "Game",
+            "fs_name": "Game.gba",
+            "platform_slug": "gba",
+            "platform_name": "Game Boy Advance",
+            "has_multiple_files": False,
+            "files": [{"file_name": "Game.gba"}],
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback, *, resume=False, on_meta):
+            on_meta(True)
+            with open(dest, "wb") as f:
+                f.write(b"\x00" * 100)
+
+        _seed_rom(plugin._uow, 73, platform_slug="gba")
+        plugin._download_service._download_queue[73] = {
+            "rom_id": 73,
+            "status": "downloading",
+            "progress": 0,
+            "resumable": False,
+        }
+
+        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
+            await plugin._download_service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
+        await self._drain()
+
+        assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
+        entry = plugin._download_service._download_queue[73]
+        assert entry["status"] == "completed"
+        assert entry["resumable"] is False
+
+    @pytest.mark.parametrize("status", ["completed", "failed", "cancelled"])
+    @pytest.mark.parametrize("phase", ["downloading", "extracting"])
+    @pytest.mark.asyncio
+    async def test_an_ended_entry_is_left_alone(self, plugin, emit, status, phase):
+        entry = {"rom_id": 7, "status": status, "progress": 0.25, "bytes_downloaded": 256, "total_bytes": 1024}
+        plugin._download_service._download_queue[7] = entry
+        before = dict(entry)
+
+        plugin._download_service._apply_progress(phase, 7, "Mario", "N64", "mario.z64", 0.5, 512, 1024)
+        await self._drain()
+
+        assert plugin._download_service._download_queue[7] == before
+        emit.assert_not_called()
 
 
 class TestDoDownloadRedownloadPreservesExisting:

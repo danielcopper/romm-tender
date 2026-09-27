@@ -1386,7 +1386,9 @@ copies each member in chunks and reports byte progress through an optional callb
 `download_progress` frames with `status: "extracting"` (`bytes_downloaded`/`total_bytes` over the **uncompressed**
 total, `resumable: false`) after the transfer hits 100%. The frontend reuses the same event — no new event name — to
 switch the download button and QAM queue into the non-cancellable **Extracting…** phase. Single-file downloads never
-emit it.
+emit it. No `download_progress` frame follows a download's terminal frame (`download_complete`, `download_failed`, or
+the `cancelled` frame): a progress tick or resumability verdict the worker queued before the end can reach the loop
+after it, and `DownloadService._live_entry` drops it once the entry has been evicted or its status is terminal.
 
 **Bounded concurrency + reserved-bytes pre-flight**: at most **two** ROMs transfer at once, gated by an
 `asyncio.Semaphore(2)` around the transfer + post-IO critical section. `start_download` enters the queue with status
