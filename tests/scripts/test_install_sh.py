@@ -1806,8 +1806,8 @@ class TestRollingBackByHand:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
         assert (
-            f"the backup holds the data of {_NEW}. Nothing was changed: "
-            "start the service with systemctl --user start romm-tender"
+            f"the backup holds the data of {_NEW}. Nothing was changed; "
+            "start the service if it is not running: systemctl --user start romm-tender"
         ) in result.stderr
         assert machine.systemctl_calls() == []
         assert _tree_version(machine.code) == _NEW

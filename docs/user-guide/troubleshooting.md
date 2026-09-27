@@ -103,7 +103,7 @@ That copy stays until the next time you go back by hand.
 It works once per update — afterwards there is no previous version left to go back to — and refuses without changing
 anything when there is nothing to go back to. It also refuses when the previous version and the saved data do not belong
 together, which an update that was interrupted can leave behind: going back would run the older version over data a
-newer one wrote. Start Tender again instead, with `systemctl --user start romm-tender`.
+newer one wrote. Start Tender instead if it is not running, with `systemctl --user start romm-tender`.
 
 ## Games Won't Launch
 

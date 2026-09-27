@@ -908,14 +908,14 @@ Format: **invariant** — tier — enforced by.
   [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory). The installer
   replaces the user's database and settings on two paths, and they are held to the rule differently. A **rollback by
   hand** (`install.sh --rollback`) takes the **backup** leg: it stops the unit and copies the database files and
-  `settings.json` it is about to replace into `rollback-backup/` under the data root — staged and renamed over the
-  previous copy, and never touched by an update — and a copy that cannot be made refuses the rollback with nothing
-  changed. No prompt: the copy is what makes asking unnecessary. The **automatic rollback** of an update whose new
-  version did not answer makes no such copy, because all it discards is what that version wrote while the installer
-  waited for it, and that version was never seen to answer. Both are pinned in `tests/scripts/test_install_sh.py`
-  (`TestRollingBackByHand`, and `TestAnUpdateThatDoesNotStart::test_it_keeps_no_copy_of_what_the_failed_version_wrote`);
-  what an update and a rollback do, in order:
-  [Running an installed one](../contributing/development.md#running-an-installed-one)
+  `settings.json` it is about to replace into `rollback-backup/` under the data root — put in place over the previous
+  copy the same way as the update's backup, and never touched by an update — and a copy that cannot be made refuses the
+  rollback with nothing changed. No prompt: the copy is what makes asking unnecessary. The **automatic rollback** of an
+  update whose new version did not answer makes no such copy, because all it discards is what that version wrote while
+  the installer waited for it, and that version was never seen to answer. Both are pinned in
+  `tests/scripts/test_install_sh.py` (`TestRollingBackByHand`, and
+  `TestAnUpdateThatDoesNotStart::test_it_keeps_no_copy_of_what_the_failed_version_wrote`); what an update and a rollback
+  do, in order: [Running an installed one](../contributing/development.md#running-an-installed-one)
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios` and `::TestDeleteOneBiosFile` pin every direction
