@@ -208,7 +208,8 @@ export interface PlatformsPageState {
    * § Library, "Only the latest write speaks".
    */
   listStatus: string | null;
-  /** The tab was entered: take the list's line down. */
+  /** The tab was entered: no answer to a sync write issued before now sets or
+   *  clears the list's line. */
   enter: () => void;
   /**
    * The platform whose action is in flight, or `null`. Every action the detail
@@ -643,10 +644,8 @@ export function usePlatformsPage(): PlatformsPageState {
     setListStatus(null);
   }, [lines]);
 
-  // The writes are optimistic; what an answer may change on its toggle and on
-  // the list's line is `docs/architecture/qam-panel.md` § Library, "Only the
-  // latest write speaks". A refusal and a rejection are one outcome here —
-  // neither leaves the write standing; neither callable throws to refuse.
+  // What an answer may change on its switch and on the list's line:
+  // `docs/architecture/qam-panel.md` § Library, "Only the latest write speaks".
   const toggleSync = useCallback(
     (row: PlatformRow, enabled: boolean) => {
       const show = (want: boolean) =>

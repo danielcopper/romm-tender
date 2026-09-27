@@ -356,6 +356,7 @@ describe("Library › Platforms", () => {
       platform({ id: 2, name: "Game Boy Advance", slug: "gba", sync_enabled: true }),
       platform({ id: 3, name: "Dreamcast", slug: "dc", sync_enabled: true }),
     ];
+    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
 
     it("groups Synced above Available, alphabetical inside each", async () => {
       vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
@@ -786,7 +787,6 @@ describe("Library › Platforms", () => {
     });
 
     describe("a sync write that answers late", () => {
-      const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
       const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="status-list"]')?.textContent ?? null;
 
       beforeEach(() => {
@@ -903,8 +903,6 @@ describe("Library › Platforms", () => {
     });
 
     describe("a refused write after one that was stored", () => {
-      const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
-
       beforeEach(() => {
         vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
       });

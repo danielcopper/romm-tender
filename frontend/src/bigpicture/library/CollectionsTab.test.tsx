@@ -6,8 +6,8 @@
 // `collectionKinds.test.ts`.
 //
 // CATCH-REJECTION ASSERTION RULE: every write's refusal and rejection is
-// asserted through what the reader then sees — the control back where it was,
-// and the line that says why, in the column the write was made in.
+// asserted through what the reader then sees — the switch back to what is
+// stored, and the line that says why, in the column the write was made in.
 //
 // Focus selects, so a kind is selected by firing focusin on its row, which is
 // what Steam's navigation does; the @decky/ui stub in `frontend/src/test-setup.ts`

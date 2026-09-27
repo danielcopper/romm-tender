@@ -202,13 +202,13 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
           Disable all
         </DialogButton>
       </Focusable>
-      {/* Why a sync write did not take, under the buttons and inset with them:
-          the writes are optimistic, so a refusal puts the row back, and a revert
-          with nothing said is what a toggle that never moved looks like. Plain
-          text for the reason the group headings are plain text — a focus stop
-          here would sit between the buttons and the first row and lead nowhere —
-          and it belongs to the list rather than to a platform's pane, because
-          Enable all is about every row at once. */}
+      {/* Why a sync write did not take, under the buttons and inset with them;
+          what it says and when is `docs/architecture/qam-panel.md` § Library,
+          "Only the latest write speaks". Plain text for the reason the group
+          headings are plain text — a focus stop here would sit between the
+          buttons and the first row and lead nowhere — and it belongs to the
+          list rather than to a platform's pane, because Enable all is about
+          every row at once. */}
       {state.listStatus && (
         <div
           data-testid="status-list"

@@ -184,10 +184,8 @@ export function useCollectionsPage(): CollectionsPageState {
     setPaneStatus(null);
   }, []);
 
-  // The writes are optimistic; what an answer may change on its control and on
-  // its line is `docs/architecture/qam-panel.md` § Library, "Only the latest
-  // write speaks". A refusal and a rejection are one outcome here — neither
-  // leaves the write standing; none of these callables throws to refuse.
+  // What an answer may change on its switch and on its line:
+  // `docs/architecture/qam-panel.md` § Library, "Only the latest write speaks".
   const toggleCollection = useCallback(
     (collection: CollectionSyncSetting, enabled: boolean, place: WritePlace) => {
       const key = collectionKey(collection);

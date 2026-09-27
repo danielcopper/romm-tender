@@ -1016,12 +1016,11 @@ asking for a preview and starting the run is made on the frontend, by this page'
 Wide, two tabs.
 
 **Every sync write on either tab is optimistic, and a write that does not take says so.** A switch shows its new value
-before the backend answers. A refusal or a rejection is one outcome — none of these callables throws to refuse. The
-switch goes back to the value last stored for it while its write is still the latest for that switch, and a line says
-why, carrying the backend's own message, or a short fixed sentence where there is none (`SYNC_WRITE_FAILED`), and taking
-no space otherwise. Without the line a switch that goes back is indistinguishable from one that never moved. A later
-write in the same place that succeeds takes the line back, within the rule below. Which writes each tab makes, and where
-its lines sit, is under the tab below.
+before the backend answers. A refusal or a rejection is one outcome — none of the write callables throws to refuse. The
+switch goes back and a line says why, both within the rule below; the line carries the backend's own message, or a short
+fixed sentence where there is none (`SYNC_WRITE_FAILED`), and takes no space otherwise. Without the line a switch that
+goes back is indistinguishable from one that never moved. A later write in the same place that succeeds takes the line
+back, within the rule below. Which writes each tab makes, and where its lines sit, is under the tab below.
 
 **Only the latest write speaks** — on a switch's value, and on a line. **A switch** — a platform, a collection, the
 owner toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and
@@ -1056,7 +1055,7 @@ finding. Do not restore it as a regression. Enable all and Disable all sit above
 outside every row, so reaching them reports no selection. The order freezes while the page is open.
 
 **The sync writes are a row's toggle and Enable all / Disable all, which write every row in the list**, and they follow
-the rule this section opens with (**Only the latest write speaks**). Both report in one line, under those two buttons:
+the rule at the top of § Library (**Only the latest write speaks**). Both report in one line, under those two buttons:
 in the list column, scrolling with the rows, plain text rather than a focus stop. Either write is refused while a
 RetroDECK path migration is pending, and Enable all / Disable all also when the RomM listing they need fails.
 
@@ -1600,7 +1599,7 @@ as the page is open, and a read still out is not asked twice. While the collecti
 toggle are already standing, and each pane shows a spinner where its table goes.
 
 **The four writes** are a table row's switch, the Favorites switch, Enable all / Disable all, and the owner toggle, and
-they follow the rule § Library opens with (**Only the latest write speaks**). Each is reported **where it was made**,
+they follow the rule at the top of § Library (**Only the latest write speaks**). Each is reported **where it was made**,
 and each place has a line of its own: a refused owner toggle or Favorites switch in the list column, under the owner
 toggle; a refused table switch or Enable all / Disable all in the pane, under the search line. The pane's line also goes
 when another row is selected. Selecting another row also clears the search, since a search is about the row it was typed

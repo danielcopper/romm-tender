@@ -1,14 +1,14 @@
 /**
  * The bookkeeping behind the Library page's optimistic writes: which write to a
- * control or a line is the latest, whether a line's write was issued since the
- * tab was last entered, and what a control is known to be stored as. The rule
+ * switch or a line is the latest, whether a line's write was issued since the
+ * tab was last entered, and what a switch is known to be stored as. The rule
  * it serves is `docs/architecture/qam-panel.md` § Library, "Only the latest
  * write speaks"; the hooks decide what an answer shows.
  */
 
 import { useState } from "react";
 
-/** Numbers the writes issued to each target, a control or a line. */
+/** Numbers the writes issued to each target, a switch or a line. */
 export interface WriteSequence {
   issue: (target: string) => number;
   isLatest: (target: string, seq: number) => boolean;
@@ -29,22 +29,21 @@ export function createWriteSequence(): WriteSequence {
   };
 }
 
-/** One write of one value to one or more controls, from issue to answer. */
+/** One write of one value to one or more switches, from issue to answer. */
 export interface ValueWrite {
   /** Whether this write is still the latest issued to *target* — false for a
    *  target it did not write. */
   isLatest: (target: string) => boolean;
-  /** The write was stored: every control it wrote is now stored as its value. */
+  /** The write was stored: every switch it wrote is now stored as its value. */
   stored: () => void;
 }
 
-/** What each control is known to be stored as, and its writes numbered. */
+/** What each switch is known to be stored as, and its writes numbered. */
 export interface LatestWrites<V> {
   /** Take what a read found as stored, in place of everything held. Write
    *  numbers are kept, so an answer still out stays ordered against later ones. */
   seed: (entries: Iterable<readonly [string, V]>) => void;
-  /** Record *value* as stored for *target*, as a read that no write has
-   *  passed found it. */
+  /** Record *value* as stored for *target*, as a read found it. */
   confirm: (target: string, value: V) => void;
   /** The value last confirmed as stored for *target*, or `undefined` before
    *  anything was. */
