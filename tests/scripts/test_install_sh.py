@@ -1786,8 +1786,8 @@ class TestRollingBackByHand:
         assert result.returncode == 0, result.stderr
         assert {entry.name: entry.read_bytes() for entry in copy.iterdir()} == kept
 
-    def test_a_kept_version_the_backup_does_not_belong_to_is_refused_and_nothing_changes(self, machine):
-        """An update that ended after its backup and before its swap leaves the older kept tree beside newer data."""
+    def test_a_kept_version_that_records_no_version_is_refused_and_nothing_changes(self, machine):
+        """An update that ended while removing the kept tree left what would not go, without its `version.txt`."""
         _installed(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
         stuck = machine.old / "stuck"
@@ -1806,11 +1806,57 @@ class TestRollingBackByHand:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
         assert (
-            f"the backup holds the data of {_NEW}. Nothing was changed; "
+            f"  {machine.old} is an unrecorded version and the backup holds the data of {_NEW}. Nothing was changed; "
             "start the service if it is not running: systemctl --user start romm-tender"
-        ) in result.stderr
+        ) in result.stderr.splitlines()
         assert machine.systemctl_calls() == []
         assert _tree_version(machine.code) == _NEW
+        assert {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()} == backup
+        assert not (machine.data / "rollback-backup").exists()
+
+    def test_a_kept_version_the_backup_does_not_belong_to_is_refused_and_nothing_changes(self, machine):
+        """Both record a version, and they differ: the older code would run over data a newer version wrote."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.backup / "data-of-version").write_text("1.4.0\n", encoding="utf-8")
+        backup = {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()}
+        data = {path: path.read_bytes() for path in machine.data.iterdir() if path.is_file()}
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
+        assert (
+            f"  {machine.old} is {_VERSION} and the backup holds the data of 1.4.0. Nothing was changed; "
+            "start the service if it is not running: systemctl --user start romm-tender"
+        ) in result.stderr.splitlines()
+        assert machine.systemctl_calls() == []
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()} == backup
+        assert {path: path.read_bytes() for path in machine.data.iterdir() if path.is_file()} == data
+        assert not (machine.data / "rollback-backup").exists()
+
+    def test_a_backup_that_records_no_version_is_refused_and_nothing_changes(self, machine):
+        """A backup without its `data-of-version` cannot be matched to the kept tree."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.backup / "data-of-version").unlink()
+        backup = {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()}
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run("--rollback", STUB_BACKEND="up")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
+        assert (
+            f"  {machine.old} is {_VERSION} and the backup holds the data of an unrecorded version. "
+            "Nothing was changed; start the service if it is not running: systemctl --user start romm-tender"
+        ) in result.stderr.splitlines()
+        assert machine.systemctl_calls() == []
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
         assert {entry.name: entry.read_bytes() for entry in machine.backup.iterdir()} == backup
         assert not (machine.data / "rollback-backup").exists()
 
