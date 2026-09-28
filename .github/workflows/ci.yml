@@ -263,10 +263,8 @@ jobs:
       - name: Check the installer's terminal mark against its generator
         run: python scripts/check_generated_installer_logo.py
 
-  # A fork's PR only. The `workflow_run` event that starts
-  # sonarcloud-fork-pr.yml names no pull request for a run whose head is in a
-  # fork, so the number travels as an artifact; that workflow checks it against
-  # the API before using it.
+  # A fork's PR only: sonarcloud-fork-pr.yml reads the PR number from this
+  # artifact and checks it against the API.
   pr-metadata:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -288,11 +286,10 @@ jobs:
           path: pr-metadata/
 
   # Runs on every push to main and every pull request whose head is a branch of
-  # this repository. A Dependabot PR is one of those, and its run reads
-  # SONAR_TOKEN from the Dependabot secret store, not the Actions one. A fork's
-  # PR is skipped here — GitHub withholds secrets from its `pull_request` run —
-  # and scanned by sonarcloud-fork-pr.yml once this workflow has succeeded, from
-  # the two coverage artifacts above and the `pr-metadata` one.
+  # this repository; where Dependabot's PRs get SONAR_TOKEN from is under "Code
+  # Quality" in docs/contributing/development.md. A fork's PR is skipped here
+  # and scanned by sonarcloud-fork-pr.yml once CI has succeeded, using the two
+  # coverage artifacts above and the PR number in `pr-metadata`.
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -321,19 +318,16 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # The required status check that carries the `sonarcloud` job's verdict: it
-  # always reports, passing when SonarCloud succeeded or was skipped and failing
-  # when it failed or was cancelled. On a fork's PR `sonarcloud` is skipped, so
-  # this gate passes without saying anything about the analysis; which check
-  # carries the verdict there is under "Code Quality" in
-  # docs/contributing/development.md.
+  # The required check that carries the `sonarcloud` job's verdict. On a fork's
+  # PR `sonarcloud` is skipped, so this gate says nothing about the analysis
+  # there; see "Code Quality" in docs/contributing/development.md.
   sonar-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [sonarcloud]
     if: always()
     steps:
-      - name: Require SonarCloud to pass (skipped on forked PRs)
+      - name: Require SonarCloud to pass (SonarCloud is skipped on a fork's PR)
         env:
           SONAR_RESULT: ${{ needs.sonarcloud.result }}
         run: |

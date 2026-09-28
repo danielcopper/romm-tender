@@ -103,8 +103,8 @@ description = "Run the full CI battery locally — every PR check in ci.yml, in 
 # (`deno fmt --check`). `pnpm build` precedes `pnpm check:bundle`, `pnpm size` and
 # the packager because all three depend on what the build produced. `build/` is emptied
 # first: nothing else ever clears it, so after a version change it would hold two
-# archives and the glob below would match both. Not reproducible locally, so omitted: the SonarCloud scan +
-# sonar-gate (need SONAR_TOKEN and CI coverage artifacts).
+# archives and the glob below would match both. Not reproducible locally, so omitted: the Sonar jobs (see
+# "Full CI gate" in docs/contributing/development.md).
 depends = ["test", "lint"]
 run = [
     "ruff check .",

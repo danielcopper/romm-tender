@@ -424,27 +424,31 @@ architecture/lint gates (`mise run lint`), then adds the rest of what CI enforce
 `basedpyright`, the frontend `eslint` / `prettier --check` / build / `tsc` typecheck / bundle-size budget, the frontend
 tests (`pnpm -C frontend test`), and `deno fmt --check` for Markdown. It is slow — a full pytest run plus a production
 frontend build — so it is a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are
-the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI coverage artifacts).
+the Sonar jobs — `pr-metadata`, `sonarcloud` and `sonar-gate` — which need a pull request, `SONAR_TOKEN` or the CI
+coverage artifacts.
 
 ## Code Quality
 
-- **SonarCloud** — CI-based analysis on every PR and every push to main. Quality Gate enforces 80% coverage on new code,
-  0 bugs, 0 vulnerabilities. The scanner waits for the gate (`sonar.qualitygate.wait`), so a failed gate fails the job
-  that ran the scan. Which job that is depends on where the PR comes from:
-  - **A branch of this repository** — own branches, Renovate, release-please and Dependabot alike, and every push to
-    main — is scanned by the `sonarcloud` job in `ci.yml`, and the required check `sonar-gate` reports its verdict. A
-    Dependabot PR's run reads `SONAR_TOKEN` from the repository's Dependabot secrets rather than its Actions secrets, so
-    the token is stored in both.
-  - **A fork** gets no secrets in its CI run, so `sonarcloud` skips it and `sonar-gate` passes without an analysis. Once
-    that CI run has succeeded, `.github/workflows/sonarcloud-fork-pr.yml` scans the fork's head in this repository's
-    context, following
+- **SonarCloud** — CI-based analysis on every PR to `main` and every push to `main`. Quality Gate enforces 80% coverage
+  on new code, 0 bugs, 0 vulnerabilities. The scanner waits for the gate (`sonar.qualitygate.wait`), so a failed gate
+  fails the job that ran the scan. Which job that is depends on where the PR comes from:
+  - **A branch of this repository** — own branches, Renovate, release-please and Dependabot's security updates alike,
+    and every push to `main` — is scanned by the `sonarcloud` job in `ci.yml`, and the required check `sonar-gate`
+    reports its verdict. A Dependabot PR's run reads `SONAR_TOKEN` from the repository's Dependabot secrets rather than
+    its Actions secrets, so the token is stored in both.
+  - **A fork** gets no secrets in its CI run (only a read-only `GITHUB_TOKEN`), so `sonarcloud` skips it and
+    `sonar-gate` passes without an analysis. Once that CI run has succeeded, `.github/workflows/sonarcloud-fork-pr.yml`
+    scans the fork's head in this repository's context, following
     [SonarSource's pattern for pull requests from forks](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud):
     it takes the coverage reports CI uploaded and `main`'s `sonar-project.properties`, and executes nothing from the
-    fork. Its run is not a check on the PR; the verdict there is the SonarCloud app's own check,
-    `SonarCloud Code Analysis`, which `main`'s ruleset requires on every PR. GitHub runs a `workflow_run` workflow from
-    the default branch's copy, so a change to that file takes effect only once it is merged.
-  - A fork's coverage comes from the fork's own build and can be forged. On a fork's PR the Sonar verdict informs the
-    review; it does not replace it.
+    fork. A run whose PR has moved to a newer commit since ends without a scan, because the newer commit's CI run starts
+    its own; and the branch name reaches SonarCloud with every character outside `A-Za-z0-9/_.-` replaced by `-`. Both
+    the coverage and the CI success that starts the scan come from the fork's own copy of `ci.yml`, so the coverage can
+    be forged: on a fork's PR the Sonar verdict informs the review; it does not replace it.
+
+  On every analysed PR the SonarCloud app posts its own check, `SonarCloud Code Analysis`. On a branch PR `sonar-gate`
+  carries the same verdict; on a fork's PR the app check is the only check that carries it, so it is the one `main`'s
+  ruleset has to require for a fork's PR to block on the quality gate.
 - **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
