@@ -481,9 +481,8 @@ class RomAdoptionService:
         bound ROM's adoption carries an ``adopt_existing_rom`` lease in
         ``prune_lease_token``: the lease covers the frontend's write of the
         launch command onto the shortcut, and an unbound ROM has no shortcut to
-        write to, so the frontend would hold the token to its full TTL with
-        nothing to release it. A download's ``download_complete`` is leased on
-        the same condition.
+        write to, so its lease would hold off every cleanup until it expired. A
+        download's ``download_complete`` is leased on the same condition.
         """
         async with self._rules.hold("adopt_existing_rom", migration=True, prune=True) as refusal:
             if refusal is not None:

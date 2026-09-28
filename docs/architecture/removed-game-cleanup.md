@@ -130,21 +130,23 @@ until a new complete fetch landed.
 
 A running cleanup excludes library sync, downloads and resumes, migrations, version switches, core/disc/controller
 writes, launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache
-cleanup. Each conflicting endpoint holds an operation before anything it does can yield, and detached work retains that
-operation for the task's lifetime.
+cleanup. Each conflicting endpoint holds an operation before anything it does can yield; which detached work retains one
+for its lifetime is named below. The achievement refresh a game session's finalize starts is detached and holds none,
+because it only reads — the ROM's RetroAchievements id and RomM's achievement data — and writes nothing but an in-memory
+cache.
 
 Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
 conflicts). The composition root builds it before any service and hands it on. The prune service registers its run
 there. The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
 there, retain one for detached work it starts — a background save-status check, a download, the outbox flush a play
 session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
-uninstall's, a core, disc or version change's, an adoption's, each launch-command re-confirm's, and the ones
-`sync_complete`, `sync_stale` and `download_complete` carry. `Plugin` reads it for the two decorators, the event funnel,
-and every endpoint that takes, renews or releases a lease itself. The reservation lasts from the moment a start gets
-past the gate until the start returns; the run claim, from the moment the revalidated preview becomes a run until that
-run ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done callback.
-The run is registered before the reservation is given back, so the two overlap and a conflicting endpoint finds no gap
-between them.
+uninstall's, a core, disc or version change's, an adoption's, the pre-launch re-confirm's and the start-up reconcile's,
+and the ones `sync_complete`, `sync_stale` and `download_complete` carry. `Plugin` reads it for the two decorators, the
+event funnel, and every endpoint that takes, renews or releases a lease itself. The reservation lasts from the moment a
+start gets past the gate until the start returns; the run claim, from the moment the revalidated preview becomes a run
+until that run ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done
+callback. The run is registered before the reservation is given back, so the two overlap and a conflicting endpoint
+finds no gap between them.
 
 The start is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the

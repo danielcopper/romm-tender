@@ -101,8 +101,7 @@ class TestCleanupLeftoverTmpFiles:
         with caplog.at_level(logging.WARNING, logger=logger.name):
             service.cleanup_leftover_tmp_files()
 
-        # Per-file warning must be emitted; sister-PR pattern in
-        # SteamGridService.prune_orphaned_artwork_cache.
+        # Per-file warning must be emitted.
         assert any(
             "Failed to remove tmp file" in rec.message and tmp_file_path in rec.message for rec in caplog.records
         ), f"expected warning about {tmp_file_path}, got {[r.message for r in caplog.records]}"

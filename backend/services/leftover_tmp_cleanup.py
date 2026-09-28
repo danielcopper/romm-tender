@@ -1,10 +1,11 @@
 """LeftoverTmpCleanupService — the start-up removal of partial transfer files.
 
-A download writes its bytes to a ``.tmp`` (or ``.zip.tmp``) beside its target
-and renames it into place once it is whole, and a BIOS download does the same
-under the BIOS directory. A backend that stopped mid-transfer leaves that
-partial behind; this service removes every one it finds under the ROM and BIOS
-directories when the backend starts.
+A single-file download writes its bytes to a ``.tmp`` beside its target and
+renames it into place once it is whole, and a BIOS download does the same under
+the BIOS directory; a download RomM serves as a ZIP is written to a
+``.zip.tmp``, which is extracted and then removed. A backend that stopped
+mid-transfer leaves that partial behind; this service removes every one it finds
+under the ROM and BIOS directories when the backend starts.
 """
 
 from __future__ import annotations
@@ -44,11 +45,9 @@ class LeftoverTmpCleanupService:
     def _remove_tmp_files(self, paths: list[str]) -> int:
         """Remove each path in *paths*, logging a warning on per-file failure.
 
-        Returns the count of successful removals. Mirrors the
-        SteamGridService cache-prune pattern: service owns the loop +
-        ``try``/``except`` + ``logger.warning`` so the operational
-        signal on each failure is preserved instead of being swallowed
-        inside the adapter.
+        Returns the count of successful removals. The loop and its
+        ``logger.warning`` live here rather than in the file store, so each
+        failure is logged instead of being swallowed inside the adapter.
         """
         removed = 0
         for path in paths:
@@ -78,10 +77,10 @@ class LeftoverTmpCleanupService:
     def cleanup_leftover_tmp_files(self):
         """Remove leftover .tmp and .zip.tmp files from ROM and BIOS directories on startup.
 
-        v1 note: this also deletes the ``.tmp`` of a download paused before a
-        plugin reload. That is acceptable — the in-memory download queue does not
-        survive a reload either, so a paused download could not have been resumed
-        across one regardless; the next download restarts from scratch.
+        This also deletes the ``.tmp`` of a download paused before the backend
+        stopped. The in-memory download queue does not survive a restart either,
+        so a paused download could not have been resumed across one regardless;
+        the next download starts from scratch.
         """
         cleaned = self._clean_rom_tmp_files() + self._clean_bios_tmp_files()
         if cleaned:

@@ -1,8 +1,8 @@
 """Tests for RelaunchOptionsResolver — the shared installed+bound relaunch seam.
 
 The single (deadlock-free) build of the ``{app_id, launch_options}`` items the
-RetroDECK-home migration, the startup launch-options reconcile, and the
-Play-button pre-launch re-confirm (#1150) all delegate to. These cases pin the
+RetroDECK-home migration, the startup launch-options reconcile, and both launch
+funnels' pre-launch re-confirm (#1150) all delegate to. These cases pin the
 resolution behavior — empty, skip-on-missing-rom, skip-unbound, default core,
 ``-e`` core-override form, multiple installs, and the multi-disc pin — over the
 fake active-core / disc seams and the fake UoW, for both the batch
@@ -367,7 +367,7 @@ def test_launch_path_never_resolves_the_active_core():
     assert active_core.emulator_calls == []
 
 
-# ── get_rom_relaunch_options — the Play button's re-confirm use case ─────────
+# ── get_rom_relaunch_options — the launch funnels' re-confirm use case ───────
 
 
 async def test_the_reconfirm_answers_the_item_with_success_and_a_lease():

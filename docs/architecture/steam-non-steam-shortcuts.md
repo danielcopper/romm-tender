@@ -216,14 +216,16 @@ carries a trash affordance, the menu row being the focusable unit) or as a focus
 vanished binding. Candidate discovery is not deletion authority: the backend freshly probes each exact RomM id, and only
 typed 404s can proceed.
 
-For a vanished bound version with a live sibling, the default-on repoint action reuses `switch_version` independently of
-the row-removal option, then the frontend confirm-writes the returned exact launch options. Cover/cache publication and
-the `version_switched` event are deferred until terminal prune completion. Before emitting a terminal result that needs
-repoint publication, the backend acquires a continuation lease while the old run is still active; the frontend registers
-that token immediately and holds it across both release acknowledgement and the final artwork write. Another prune
-therefore cannot enter between the old claim and publication. Publication uses the same path as VersionPicker. Repoint
-changes neither shortcut name nor exe and never calls `AddShortcut`, so the assigned appId, collections, and Steam
-playtime remain attached. Unsynced-save stranding can be overridden only after enabled recovery has sealed.
+For a vanished bound version with a live sibling, the default-on repoint action reuses the version switch independently
+of the row-removal option — through `switch_version_unchecked`, which checks no conflict rule and takes no lease, since
+the cleanup switches from inside its own run — then the frontend confirm-writes the returned exact launch options.
+Cover/cache publication and the `version_switched` event are deferred until terminal prune completion. Before emitting a
+terminal result that needs repoint publication, the backend acquires a continuation lease while the old run is still
+active; the frontend registers that token immediately and holds it across both release acknowledgement and the final
+artwork write. Another prune therefore cannot enter between the old claim and publication. Publication uses the same
+path as VersionPicker. Repoint changes neither shortcut name nor exe and never calls `AddShortcut`, so the assigned
+appId, collections, and Steam playtime remain attached. Unsynced-save stranding can be overridden only after enabled
+recovery has sealed.
 
 For a fully vanished bound game, whole-game cleanup is its own confirmation option, default-on and paired with the
 default-on recovery bundle that keeps the shortcut rebuildable. With recovery enabled, the root frontend handler

@@ -28,7 +28,8 @@ resolving inside the iteration UoW would deadlock until ``busy_timeout`` then
 raise ``database is locked`` (#1154). The disc scan is the resolver's I/O seam,
 none at this layer.
 
-The Play button's re-confirm reaches the single-ROM item through
+Both launch funnels — the game-detail Play button and Steam's direct-launch
+watcher — re-confirm the single-ROM item just before a launch through
 :meth:`RelaunchOptionsResolver.get_rom_relaunch_options`, the one use case here
 an endpoint calls: it checks that endpoint's conflict rules and leases the
 frontend's write. Every other consumer calls the plain reads, which check none.
@@ -156,9 +157,9 @@ class RelaunchOptionsResolver:
         rom/install in one short read UoW, closes it, then resolves outside —
         same non-reentrant-write-lock reason as the batch path (#1154).
 
-        The Play-button funnel re-confirms the shortcut's launch command from
-        this just before launch, healing mid-session ``launch_options`` drift on
-        the most common launch path (#1150).
+        Both launch funnels re-confirm the shortcut's launch command from this
+        just before a launch, through :meth:`get_rom_relaunch_options`, healing
+        mid-session ``launch_options`` drift (#1150).
         """
         pair = self._bound_install(rom_id)
         return self._resolve_item(*pair) if pair is not None else None

@@ -670,8 +670,9 @@ class Plugin:
     async def get_rom_relaunch_options(self, rom_id):
         """Return one lease-bearing relaunch item, a refusal, or ``None``.
 
-        The Play-button funnel re-confirms the shortcut's launch command from
-        this just before launch to heal mid-session ``launch_options`` drift
+        Both launch funnels — the game-detail Play button and Steam's
+        direct-launch watcher — re-confirm the shortcut's launch command from
+        this just before a launch to heal mid-session ``launch_options`` drift
         (#1150). The lease covers the subsequent frontend Steam write.
         """
         return await self._relaunch_options_resolver.get_rom_relaunch_options(rom_id)

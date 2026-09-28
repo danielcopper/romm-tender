@@ -760,7 +760,7 @@ class DownloadService:
         }
         # A bound ROM's event carries a lease for the frontend's write of the
         # launch command onto its shortcut; an unbound ROM has no shortcut to
-        # write to, so nothing would ever release one.
+        # write to, so its lease would hold off every cleanup until it expired.
         if app_id is None:
             await self._emit("download_complete", payload)
         else:

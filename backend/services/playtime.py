@@ -71,8 +71,9 @@ class PlaytimeServiceConfig:
     runtime infrastructure, the clock/debug-logger seams, and the SQLite
     Unit-of-Work factory (the transactional seam over the ``rom_playtime``
     aggregate and the ``kv_config`` scope-notice flag this service reads and
-    writes), and the ``ConflictRules`` a use case an endpoint calls checks at
-    its entry.
+    writes), and the ``ConflictRules`` that
+    :meth:`PlaytimeService.record_session_start` and
+    :meth:`PlaytimeService.reconcile_playtime` check at their entry.
     """
 
     romm_api: RommPlaytimeApi
@@ -121,9 +122,9 @@ def _session_debug_line(
 class PlaytimeService:
     """Playtime tracking: record sessions, flush the outbox, and reconcile with RomM.
 
-    A use case an endpoint calls checks its conflict rules at its entry, under
-    that endpoint's name, and answers the canonical refusal when one holds
-    (CONTEXT.md → Conflict rules).
+    :meth:`record_session_start` and :meth:`reconcile_playtime` check their
+    conflict rules at their entry, under their endpoint's name, and answer the
+    canonical refusal when one holds (CONTEXT.md → Conflict rules).
     """
 
     def __init__(self, *, config: PlaytimeServiceConfig) -> None:
@@ -161,8 +162,7 @@ class PlaytimeService:
         Checks the endpoint's conflict rules, records the start, then begins an
         outbox flush so an offline backlog reaches RomM's native ingest on the
         next launch. The flush is detached — the launch is never held up on the
-        round trip — and holds an operation until it ends; it never raises
-        (:meth:`flush_pending_sessions`).
+        round trip — and holds an operation until it ends.
         """
         async with self._rules.hold("record_session_start", prune=True) as refusal:
             if refusal is not None:
@@ -301,9 +301,8 @@ class PlaytimeService:
     async def flush_pending_sessions(self) -> None:
         """Flush the pending-session outbox to RomM's native ingest (best-effort).
 
-        Scheduled as a fire-and-forget background task by
-        :meth:`record_session_start` so an offline backlog catches up on the
-        next reconnect. Not an endpoint — internal orchestration only.
+        Begun as a detached task by :meth:`record_session_start`. Not an
+        endpoint — internal orchestration only.
         """
         await self._loop.run_in_executor(None, self._flush_pending_sessions_io)
 
@@ -315,7 +314,8 @@ class PlaytimeService:
         debug and swallowed — the outbox stays intact and catches up on the next
         flush. The actual gather/POST/dequeue work lives in
         :meth:`_flush_pending_sessions_worker`; this wrapper is the single
-        never-raise boundary both callers (session-end, reconcile) rely on.
+        never-raise boundary every caller (session start, session end,
+        reconcile) relies on.
         """
         try:
             self._flush_pending_sessions_worker()

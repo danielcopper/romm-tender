@@ -26,6 +26,7 @@ from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
+from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from lib.list_result import ErrorCode
@@ -4230,10 +4231,10 @@ class TestCleanupPartialDownloadFailureInjection:
         # Stage the two transient candidates plus a pre-existing install at the
         # bare target. Cleanup must remove only the transients (the .tmp variant
         # is marked failing) and NEVER the bare target (#1049 data-loss guard).
-        fake.files[target + _ZIP_TMP_EXT_LITERAL] = b"junk1"
-        fake.files[target + _TMP_EXT_LITERAL] = b"junk2"
+        fake.files[target + ZIP_TMP_EXT] = b"junk1"
+        fake.files[target + TMP_EXT] = b"junk2"
         fake.files[target] = b"preexisting install"
-        fake.remove_failures.add(target + _TMP_EXT_LITERAL)
+        fake.remove_failures.add(target + TMP_EXT)
         plugin._download_service._download_file_store = fake
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
@@ -4241,15 +4242,13 @@ class TestCleanupPartialDownloadFailureInjection:
 
         # The failing transient is still in the fake (remove raised); the
         # other transient was successfully removed.
-        assert (target + _TMP_EXT_LITERAL) in fake.files
-        assert (target + _ZIP_TMP_EXT_LITERAL) not in fake.files
+        assert (target + TMP_EXT) in fake.files
+        assert (target + ZIP_TMP_EXT) not in fake.files
         # The bare target is NEVER touched — a re-download that fails mid-stream
         # must not destroy a pre-existing (or just-committed) install.
         assert target in fake.files
         # Warning mentions the failing path.
-        assert any(
-            "Cleanup failed for" in rec.message and (target + _TMP_EXT_LITERAL) in rec.message for rec in caplog.records
-        )
+        assert any("Cleanup failed for" in rec.message and (target + TMP_EXT) in rec.message for rec in caplog.records)
 
     def test_remove_tree_failure_is_logged_and_swallowed(self, plugin, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
@@ -5229,12 +5228,6 @@ class TestCooperativeCancel:
         assert plugin._download_service._download_queue[42]["bytes_downloaded"] == 1024
 
 
-# Internal constants — re-declared so the test file doesn't reach into
-# the service module's private names. Keep in sync with services/downloads.py.
-_ZIP_TMP_EXT_LITERAL = ".zip.tmp"
-_TMP_EXT_LITERAL = ".tmp"
-
-
 class TestPauseResume:
     """#1124: pause keeps the partial .tmp; resume re-begins with resume=True."""
 
@@ -5292,7 +5285,7 @@ class TestPauseResume:
 
         # Status flips to "paused" and the partial .tmp is KEPT for resume.
         assert plugin._download_service._download_queue[42]["status"] == "paused"
-        assert os.path.exists(target_path + _TMP_EXT_LITERAL)
+        assert os.path.exists(target_path + TMP_EXT)
         # A terminal "paused" frame reached the frontend, carrying resumable.
         paused_frames = [
             c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "paused"
@@ -5340,7 +5333,7 @@ class TestPauseResume:
         # Cancel evicts its entry (#149 downloads-round) and deletes the partial
         # .tmp — the contrast with pause, which keeps both for resume.
         assert 42 not in plugin._download_service._download_queue
-        assert not os.path.exists(target_path + _TMP_EXT_LITERAL)
+        assert not os.path.exists(target_path + TMP_EXT)
 
     @pytest.mark.asyncio
     async def test_on_meta_sets_resumable_and_emits(self, plugin, tmp_path, emit):
@@ -5442,7 +5435,7 @@ class TestPauseResume:
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
         # A partial .tmp left by the paused download.
-        with open(str(roms_dir / "zelda.z64") + _TMP_EXT_LITERAL, "wb") as f:
+        with open(str(roms_dir / "zelda.z64") + TMP_EXT, "wb") as f:
             f.write(b"\x00" * 256)
 
         rom_detail = {
@@ -5494,7 +5487,7 @@ class TestPauseResume:
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "zelda.z64")
-        with open(target_path + _TMP_EXT_LITERAL, "wb") as f:
+        with open(target_path + TMP_EXT, "wb") as f:
             f.write(b"\x00" * 256)
 
         rom_detail = {

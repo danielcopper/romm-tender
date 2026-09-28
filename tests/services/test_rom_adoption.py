@@ -437,8 +437,8 @@ class TestReplace:
 class TestTheAdoptionLease:
     """A bound ROM's adoption carries an ``adopt_existing_rom`` lease for the frontend's launch-command write.
 
-    An unbound ROM has no shortcut to write to, so nothing would ever release
-    one.
+    An unbound ROM has no shortcut to write to, so its lease would hold off
+    every cleanup until it expired.
     """
 
     def _stage(self, h, *, app_id: int | None = 1042) -> None:
