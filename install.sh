@@ -1684,6 +1684,14 @@ replaces_a_stranded_panel() {
     [ -f "$CODE/backend/host/inject/recovery.py" ]
 }
 
+# Whether a panel an earlier backend left in Steam goes without a restart: it
+# is replaced by the backend now running where that one was seen to answer and
+# knows how. The Steam row and the closing line both say what follows from it.
+panel_comes_back_by_itself() {
+    [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" = "yes" ] &&
+        [ "$ANSWERED" = "yes" ] && replaces_a_stranded_panel
+}
+
 # ------------------------------------------------------------ covers once
 
 # An earlier install wrote covers and artwork under the data root; this version
@@ -2026,7 +2034,11 @@ report_steam() {
     row_start "$STEAM"
     ensure_marker
     probe_debugger
-    if [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" = "yes" ]; then
+    if panel_comes_back_by_itself; then
+        row_detail "$STEAM" "running"
+        row_sub "$STEAM" "the backend now running replaces the earlier panel once no game is running"
+        row_end "$STEAM" ok
+    elif [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" = "yes" ]; then
         row_detail "$STEAM" "running, an earlier Tender's panel is still loaded"
         row_end "$STEAM" warn
     elif [ "$DEBUGGER_ANSWERED" = "yes" ]; then
@@ -2077,13 +2089,12 @@ closing_block() {
     # the process, not the probe: the probe cannot tell a Steam that is not
     # running from one running without the marker Steam only reads at start-up.
     #
-    # A panel an earlier backend left is replaced by the one now running where
-    # that one was seen to answer and knows how; otherwise only a Steam restart
-    # takes it out.
+    # Where a panel an earlier backend left does not come back by itself, only
+    # a Steam restart takes it out.
     local next
     if [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" != "yes" ]; then
         next="open the Quick Access menu — Tender's entry appears once the backend has loaded it"
-    elif [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$ANSWERED" = "yes" ] && replaces_a_stranded_panel; then
+    elif panel_comes_back_by_itself; then
         next="Tender's panel comes back by itself once no game is running — if it hasn't after a few minutes, restart Steam"
     elif [ "$DEBUGGER_ANSWERED" = "yes" ] || steam_is_running; then
         next="restart Steam, then open the Quick Access menu"

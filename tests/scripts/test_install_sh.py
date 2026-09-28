@@ -1320,6 +1320,14 @@ _COMES_BACK = (
     "Tender's panel comes back by itself once no game is running — if it hasn't after a few minutes, restart Steam"
 )
 
+# The Steam row where the closing line says the panel comes back by itself, and
+# where it cannot: the first is the expected state after an update, not a fault.
+_REPLACED_BY_ITSELF = (
+    "[ok] Steam        running",
+    "    the backend now running replaces the earlier panel once no game is running",
+)
+_STILL_LOADED = "[--] Steam        running, an earlier Tender's panel is still loaded"
+
 
 def _seed_data(machine: Install) -> dict[Path, bytes]:
     """The user's data as an update finds it, and the unit with a line of the user's own.
@@ -2779,6 +2787,25 @@ class TestHowTheRunLooks:
         assert "Needs        no sudo" in screen
         assert "Steam restart" not in screen.split("Checking", 1)[0]
 
+    def test_an_update_whose_backend_replaces_the_panel_ends_steam_on_a_tick(self, machine):
+        """The earlier panel still loaded is what an update leaves, and the closing line says it goes by itself."""
+        _installed(machine)
+
+        _code, output = machine.on_a_terminal(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            COLUMNS="160",
+            COLORTERM="truecolor",
+            STUB_BACKEND="up",
+            STUB_DEBUGGER="answer",
+        )
+
+        lines = _screen(output).splitlines()
+        at = lines.index("✓ Steam        running")
+        assert lines[at + 1] == "    the backend now running replaces the earlier panel once no game is running"
+        assert not [line for line in lines if line.startswith("✗ Steam")]
+        assert "\033[33m✗" not in output, "a row is drawn in the warn colour"
+
     def test_the_four_rows_end_in_one_mark_each(self, machine):
         _code, output = machine.on_a_terminal(
             "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLORTERM="truecolor"
@@ -3058,7 +3085,10 @@ class TestWhatTheRunSaysAboutSteam:
         )
 
         assert result.returncode == 0, result.stderr
-        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        lines = result.stdout.splitlines()
+        at = lines.index(_REPLACED_BY_ITSELF[0])
+        assert lines[at + 1] == _REPLACED_BY_ITSELF[1]
+        assert "still loaded" not in result.stdout
         assert f"Next: {_COMES_BACK}." in result.stdout
 
     def test_an_update_to_a_release_that_cannot_replace_the_panel_asks_for_a_restart(self, machine):
@@ -3074,14 +3104,18 @@ class TestWhatTheRunSaysAboutSteam:
         )
 
         assert result.returncode == 0, result.stderr
+        assert _STILL_LOADED in result.stdout.splitlines()
         assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
 
     @pytest.mark.parametrize(
-        ("replaces", "next_step"),
-        [(True, _COMES_BACK), (False, "restart Steam, then open the Quick Access menu")],
+        ("replaces", "steam_row", "next_step"),
+        [
+            (True, list(_REPLACED_BY_ITSELF), _COMES_BACK),
+            (False, [_STILL_LOADED], "restart Steam, then open the Quick Access menu"),
+        ],
         ids=["back-on-a-release-that-replaces-it", "back-on-a-release-from-before"],
     )
-    def test_after_a_rollback_it_is_the_restored_release_that_decides(self, machine, replaces, next_step):
+    def test_after_a_rollback_it_is_the_restored_release_that_decides(self, machine, replaces, steam_row, next_step):
         _installed(machine, replaces_a_stranded_panel=replaces)
 
         result = machine.run(
@@ -3094,7 +3128,9 @@ class TestWhatTheRunSaysAboutSteam:
         )
 
         assert result.returncode == 1
-        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        lines = result.stdout.splitlines()
+        at = lines.index(steam_row[0])
+        assert lines[at : at + len(steam_row)] == steam_row
         assert f"Next: {next_step}." in result.stdout
 
     def test_a_rollback_by_hand_into_a_running_steam_says_the_same(self, machine):
@@ -3104,6 +3140,8 @@ class TestWhatTheRunSaysAboutSteam:
         result = machine.run("--rollback", STUB_BACKEND="up", STUB_DEBUGGER="answer")
 
         assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        assert lines[lines.index(_REPLACED_BY_ITSELF[0]) + 1] == _REPLACED_BY_ITSELF[1]
         assert f"Next: {_COMES_BACK}." in result.stdout
 
     def test_a_running_unit_counts_as_something_to_replace(self, machine):
@@ -3119,7 +3157,7 @@ class TestWhatTheRunSaysAboutSteam:
             STUB_UNIT_ACTIVE="0",
         )
 
-        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        assert _STILL_LOADED in result.stdout.splitlines()
         assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
 
     def test_a_silent_debugger_with_steam_up_asks_for_a_restart(self, machine):

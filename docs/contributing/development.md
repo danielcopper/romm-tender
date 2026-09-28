@@ -291,7 +291,9 @@ Where Steam's debugger is answering, an update or a rollback that ends on a back
 one left
 ([A panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind))
 closes by saying the panel comes back by itself once no game is running, and to restart Steam only if it has not after a
-few minutes. Going back to a release from before that replacement asks for the restart instead.
+few minutes; its Steam row is marked done, with the line under it saying the backend now running replaces the earlier
+panel. Going back to a release from before that replacement asks for the restart instead, and marks that row as not
+done.
 
 Every step that runs once per machine — the covers' move above, a backend backfill behind a `kv_config` marker, a rung
 of either version ladder — stays safe to run again and stays in every later release, because an update jumps from
