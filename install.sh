@@ -1905,7 +1905,7 @@ do_install() {
 
     if [ "$ROLLED_BACK" = "yes" ]; then
         echo "install.sh: update to $new failed; back on $previous" >&2
-        echo "  $new did not answer within ${UPDATE_WAIT}s; what it logged is in $(tilde "$STATE/backend.log")" >&2
+        echo "  $new did not answer within ${UPDATE_WAIT}s; what it logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME" >&2
         exit 1
     fi
 }

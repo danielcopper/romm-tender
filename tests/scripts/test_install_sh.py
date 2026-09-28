@@ -1623,7 +1623,10 @@ class TestAnUpdateThatDoesNotStart:
         _before, result = self._failed(machine)
 
         assert _refusals(result.stderr) == [f"install.sh: update to {_NEW} failed; back on {_VERSION}"]
-        assert f"  {_NEW} did not answer within 1s; what it logged is in {machine.state}/backend.log" in result.stderr
+        assert (
+            f"  {_NEW} did not answer within 1s; what it logged is in {machine.state}/backend.log, "
+            "and a start that failed early only in journalctl --user -u romm-tender"
+        ) in result.stderr.splitlines()
         assert f"[!!] Service      update to {_NEW} failed; back on {_VERSION}" in result.stdout
         assert "Rolled back in" in result.stdout
         assert "Done in" not in result.stdout

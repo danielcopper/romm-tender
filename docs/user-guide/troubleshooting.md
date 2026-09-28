@@ -69,7 +69,7 @@ panel went with it but the new one did not arrive — so the missing panel, not 
 ## An Update Was Rolled Back
 
 **Symptom**: An update marks the **Service** row failed, says **Rolled back** instead of **Done**, and ends with
-`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log.
+`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log and at the journal.
 
 **Explanation**: The new version did not start within about a minute, so the installer put the version you had back,
 together with the library database and settings it had before the update, and started it again. Tender is running as it
@@ -77,7 +77,8 @@ was. Anything the new version wrote in that minute is gone. The installer does n
 `~/.local/state/romm-tender/update-failure.json` naming both versions and the time.
 
 **Fix**: Look at what the new version logged — the log is shared by both versions, so the lines just before the previous
-version's start are the new version's:
+version's start are the new version's. A version that failed before it could open its log left nothing there, and its
+reason is only in the journal:
 
 ```bash
 tail -n 100 ~/.local/state/romm-tender/backend.log
