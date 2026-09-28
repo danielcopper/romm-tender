@@ -1698,13 +1698,15 @@ start_the_reverted_unit() {
 # it. The versions come off tree_version, so the only characters JSON needs
 # escaped in them are the quote and the backslash. Non-zero where the record
 # could not be written. The steps are chained by hand because `set -e` does not
-# reach into a function whose status its caller tests.
+# reach into a function whose status its caller tests. Their own errors are
+# dropped, since the caller says once that the record was not written; `2>`
+# stands before `>` so the error of a redirect that fails is dropped as well.
 record_update_failure() {
     local record="$STATE/$UPDATE_FAILURE"
-    mkdir -p "$STATE" &&
+    mkdir -p "$STATE" 2> /dev/null &&
         printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
-            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$record.tmp" &&
-        mv "$record.tmp" "$record" &&
+            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2> /dev/null > "$record.tmp" &&
+        mv "$record.tmp" "$record" 2> /dev/null &&
         return 0
     rm -f "$record.tmp"
     return 1

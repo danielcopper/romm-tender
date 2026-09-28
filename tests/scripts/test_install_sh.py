@@ -1819,6 +1819,9 @@ class TestAnUpdateThatDoesNotStart:
             f"install.sh: could not record the rolled-back update in {machine.failure_record}; Tender will not show it",
             f"install.sh: update to {_NEW} failed; back on {_VERSION}",
         ]
+        assert [line for line in result.stderr.splitlines() if machine.failure_record.name in line] == [
+            f"install.sh: could not record the rolled-back update in {machine.failure_record}; Tender will not show it",
+        ]
         assert "could not record the rolled-back update; Tender will not show it" in (
             line.strip() for line in result.stdout.splitlines()
         )
