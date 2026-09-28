@@ -204,12 +204,7 @@ class TestCoreCallableDelegation:
         )
         result = await plugin.set_game_core(42, "Snes9x")
         plugin._core_service.set_game_core.assert_awaited_once_with(42, "Snes9x")
-        assert result == {
-            "success": True,
-            "launch_options": "flatpak run …",
-            "app_id": 99,
-            "prune_lease_token": "game_core:1",
-        }
+        assert result == {"success": True, "launch_options": "flatpak run …", "app_id": 99}
 
     @pytest.mark.asyncio
     async def test_clear_game_core_delegates(self, plugin):
@@ -220,12 +215,7 @@ class TestCoreCallableDelegation:
         )
         result = await plugin.clear_game_core(42)
         plugin._core_service.clear_game_core.assert_awaited_once_with(42)
-        assert result == {
-            "success": True,
-            "launch_options": "flatpak run …",
-            "app_id": 99,
-            "prune_lease_token": "game_core:1",
-        }
+        assert result == {"success": True, "launch_options": "flatpak run …", "app_id": 99}
 
     @pytest.mark.asyncio
     async def test_get_platform_core_info_delegates(self, plugin):
@@ -483,6 +473,21 @@ class TestLifecycleCallableDelegation:
         result = await plugin.finalize_game_session(7)
         plugin._session_lifecycle_service.finalize.assert_awaited_once_with(7)
         assert result == {"synced": False}
+
+    @pytest.mark.asyncio
+    async def test_evaluate_launch_passes_a_refusal_through(self, plugin):
+        """A refused use case answers the refusal dict in place of a verdict; there is nothing to translate."""
+        refusal = {"success": False, "reason": "prune_active", "message": "held"}
+        plugin._launch_gate_service.evaluate = AsyncMock(return_value=refusal)
+
+        assert await plugin.evaluate_launch(12345) == refusal
+
+    @pytest.mark.asyncio
+    async def test_finalize_game_session_passes_a_refusal_through(self, plugin):
+        refusal = {"success": False, "reason": "prune_active", "message": "held"}
+        plugin._session_lifecycle_service.finalize = AsyncMock(return_value=refusal)
+
+        assert await plugin.finalize_game_session(7) == refusal
 
     @pytest.mark.asyncio
     async def test_stop_running_game_delegates(self, plugin):
@@ -852,12 +857,14 @@ class TestUnloadHook:
         plugin._migration_service.shutdown = AsyncMock()
         plugin._session_lifecycle_service.shutdown = AsyncMock()
         plugin._prune_service.shutdown = AsyncMock()
+        plugin._playtime_service.shutdown = AsyncMock()
         await plugin._unload()
         plugin._sync_service.shutdown.assert_called_once_with()
         plugin._download_service.shutdown.assert_awaited_once_with()
         plugin._migration_service.shutdown.assert_awaited_once_with()
         plugin._session_lifecycle_service.shutdown.assert_awaited_once_with()
         plugin._prune_service.shutdown.assert_awaited_once_with()
+        plugin._playtime_service.shutdown.assert_awaited_once_with()
 
     @pytest.mark.asyncio
     async def test_unload_cancels_a_save_directory_backfill_still_running(self, plugin):
@@ -875,6 +882,7 @@ class TestUnloadHook:
         plugin._migration_service.shutdown = AsyncMock()
         plugin._session_lifecycle_service.shutdown = AsyncMock()
         plugin._prune_service.shutdown = AsyncMock()
+        plugin._playtime_service.shutdown = AsyncMock()
         plugin._start_save_directory_backfill()
         await started.wait()
 

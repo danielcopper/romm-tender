@@ -11,8 +11,9 @@ in a session that never started one.
 
 Dropping is exactly why the answer is returned. Whoever attached a prune claim
 to an event whose Steam-side work outlives the backend's acts on it: the funnel
-in ``main.py`` for the events it leases, and the library service for
-``sync_complete`` and ``sync_stale``. A claim handed to a panel that is not
+in ``main.py`` for the events it leases, the library service for
+``sync_complete`` and ``sync_stale``, and the download service for
+``download_complete``. A claim handed to a panel that is not
 there holds off every removed-game cleanup until it expires, so the side that
 attached it releases it the moment the sink says nobody heard.
 """

@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -189,6 +190,7 @@ class Harness:
         # so the search behaves exactly as it did before the check existed.
         self.known_systems: dict[str, bool | None] = {}
         self.debug_log: list[str] = []
+        self.prune_conflicts = _make_prune_conflicts()
         self.service = RomAdoptionService(
             config=RomAdoptionServiceConfig(
                 romm_api=self.romm_api,
@@ -210,6 +212,7 @@ class Harness:
                 log_debug=lambda msg: self.debug_log.append(msg),
                 emit=self._emit,
                 clock=self.clock,
+                conflict_rules=_make_conflict_rules(prune_conflicts=self.prune_conflicts),
             ),
         )
 
@@ -429,6 +432,62 @@ class TestReplace:
 
 
 # ── adopt ────────────────────────────────────────────────────────────────
+
+
+class TestTheAdoptionLease:
+    """A bound ROM's adoption carries an ``adopt_existing_rom`` lease for the frontend's launch-command write.
+
+    An unbound ROM has no shortcut to write to, so nothing would ever release
+    one.
+    """
+
+    def _stage(self, h, *, app_id: int | None = 1042) -> None:
+        h.seed_rom(app_id=app_id)
+        h.stage_detail(_single_file_detail())
+        h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
+
+    async def test_a_bound_roms_adoption_carries_a_lease(self, h):
+        self._stage(h)
+
+        result = await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert result["success"] is True
+        assert result["prune_lease_token"].startswith("adopt_existing_rom:")
+        assert h.prune_conflicts.conflicting_operations == 1
+
+    async def test_the_lease_is_taken_while_the_adoptions_operation_still_holds(self, h, monkeypatch):
+        """No cleanup can start between the adoption's operation and the lease that outlasts it."""
+        self._stage(h)
+        seen = _record_operations_at_lease(h.prune_conflicts, monkeypatch)
+
+        await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert seen == [["adopt_existing_rom"]]
+
+    async def test_an_unbound_roms_adoption_carries_none(self, h):
+        self._stage(h, app_id=None)
+
+        result = await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert result["success"] is True
+        assert "prune_lease_token" not in result
+        assert h.prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("migration_pending", "cleanup_running", "reason"),
+        [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
+    )
+    async def test_an_adoption_its_rules_refuse_records_nothing(self, h, migration_pending, cleanup_running, reason):
+        self._stage(h)
+        if cleanup_running:
+            h.prune_conflicts.register_run("held-run")
+        h.service._rules = _make_conflict_rules(prune_conflicts=h.prune_conflicts, migration_pending=migration_pending)
+
+        result = await h.service.adopt_existing_rom(_ROM_ID)
+
+        assert result["reason"] == reason
+        assert h.uow.rom_installs.get(_ROM_ID) is None
+        assert h.prune_conflicts.conflicting_operations == 0
 
 
 class TestAdopt:

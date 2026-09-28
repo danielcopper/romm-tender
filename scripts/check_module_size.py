@@ -79,8 +79,10 @@ SCOPE_DIRS = (
 # gate, and that costs more than any module's size.
 ALLOWLIST = {
     # Lowered 1119 → 1059 (#1171): the download and extract progress callbacks
-    # became one phase-parameterised factory.
-    "backend/services/downloads.py": 1059,
+    # became one phase-parameterised factory. Lowered 1059 → 1056 (#2041): the
+    # start-up tmp cleanup left for its own service, which made room for the
+    # start and resume use cases to check their own conflict rules.
+    "backend/services/downloads.py": 1056,
     # Lowered 1150 → 1085 (#1815): the per-platform ``collapsed_count`` garnish
     # on ``get_platforms`` was deleted once it was established that nothing read
     # it, which banked 65 lines. Reclaimed rather than left as headroom, because

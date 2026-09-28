@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -147,8 +148,14 @@ def disc_resolver() -> FakeDiscResolver:
 
 
 @pytest.fixture
+def prune_conflicts():
+    return _make_prune_conflicts()
+
+
+@pytest.fixture
 def service(
     event_loop,
+    prune_conflicts,
     logger,
     core_info,
     resolve_system,
@@ -169,6 +176,7 @@ def service(
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=disc_resolver,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -544,8 +552,9 @@ class TestSetSystemCore:
         _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
         active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
 
-        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+        result = dict(event_loop.run_until_complete(service.set_system_core("snes", "bsnes")))
 
+        assert result.pop("prune_lease_token").startswith("system_core:")
         assert result == {
             "success": True,
             "rebake_items": [
@@ -861,3 +870,91 @@ class TestSetGameCoreTransactionBoundary:
         assert "not available" not in result["message"]
         with uow as u:
             assert u.roms.get(42).emulator_override is None
+
+
+# ── The three writes' conflict rules and leases ───────────────────────────────
+
+
+def _seed_bound_install(uow: FakeUnitOfWork, rom_id: int = 42) -> None:
+    _seed_rom(uow, rom_id=rom_id, platform_slug="snes", shortcut_app_id=99)
+    _seed_install(uow, rom_id=rom_id, file_path="/roms/snes/mario.sfc")
+
+
+class TestTheCoreWriteLeases:
+    """A write whose launch command the frontend applies to a live shortcut carries a lease for that write."""
+
+    def test_a_system_core_change_that_rebakes_carries_a_lease(self, event_loop, service, uow, prune_conflicts):
+        _seed_bound_install(uow)
+
+        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+
+        assert result["rebake_items"]
+        assert result["prune_lease_token"].startswith("system_core:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    def test_a_system_core_change_with_nothing_to_rebake_carries_none(self, event_loop, service, prune_conflicts):
+        result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
+
+        assert result == {"success": True, "rebake_items": []}
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("call", "label"),
+        [
+            (lambda service: service.set_system_core("snes", "bsnes"), "set_system_core"),
+            (lambda service: service.set_game_core(42, "bsnes"), "set_game_core"),
+            (lambda service: service.clear_game_core(42), "clear_game_core"),
+        ],
+    )
+    def test_the_lease_is_taken_while_the_writes_operation_still_holds(
+        self, event_loop, service, uow, prune_conflicts, monkeypatch, call, label
+    ):
+        """No cleanup can start between the write's operation and the lease that outlasts it."""
+        _seed_bound_install(uow)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        event_loop.run_until_complete(call(service))
+
+        assert seen == [[label]]
+
+    @pytest.mark.parametrize(
+        "call",
+        [lambda service: service.set_game_core(42, "bsnes"), lambda service: service.clear_game_core(42)],
+    )
+    def test_a_per_game_write_to_a_live_shortcut_carries_a_lease(self, event_loop, service, uow, call):
+        _seed_bound_install(uow)
+
+        result = event_loop.run_until_complete(call(service))
+
+        assert result["prune_lease_token"].startswith("game_core:")
+
+    @pytest.mark.parametrize(
+        "call",
+        [lambda service: service.set_game_core(42, "bsnes"), lambda service: service.clear_game_core(42)],
+    )
+    def test_a_per_game_write_with_no_live_shortcut_carries_none(self, event_loop, service, uow, prune_conflicts, call):
+        _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)  # bound, not installed
+
+        result = event_loop.run_until_complete(call(service))
+
+        assert result["success"] is True
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("migration_pending", "cleanup_running", "reason"),
+        [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
+    )
+    def test_a_refused_pin_writes_nothing(
+        self, event_loop, service, uow, prune_conflicts, migration_pending, cleanup_running, reason
+    ):
+        _seed_bound_install(uow)
+        if cleanup_running:
+            prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
+
+        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+
+        assert result["reason"] == reason
+        assert uow.roms.get(42).emulator_override is None
+        assert prune_conflicts.conflicting_operations == 0

@@ -18,11 +18,13 @@ from domain.installed_roms import is_pending_migration_path
 from domain.migration_paths import pending_homes_from_kv
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
     from collections.abc import Sequence
 
     from services.protocols import (
         Clock,
+        ConflictRules,
         PathExistsReader,
         RelaunchOptionsReader,
         ResolvedPathFn,
@@ -43,8 +45,10 @@ class StartupHealingServiceConfig:
     previous home marker). The shared ``relaunch_options`` seam builds each
     installed+bound ROM's full launch command (active core, selected disc) so
     the startup launch-options reconcile draws its items from the same resolver
-    the RetroDECK-home migration does. Bundled here so the ctor stays within the
-    S107 parameter budget and the service stays free of raw filesystem I/O.
+    the RetroDECK-home migration does. ``loop`` runs that build off the loop
+    thread, and ``conflict_rules`` are what its use case checks and leases
+    through. Bundled here so the ctor stays within the S107 parameter budget
+    and the service stays free of raw filesystem I/O.
     """
 
     logger: logging.Logger
@@ -54,6 +58,8 @@ class StartupHealingServiceConfig:
     resolve_path: ResolvedPathFn
     uow_factory: UnitOfWorkFactory
     relaunch_options: RelaunchOptionsReader
+    loop: asyncio.AbstractEventLoop
+    conflict_rules: ConflictRules
 
 
 class StartupHealingService:
@@ -67,6 +73,8 @@ class StartupHealingService:
         self._resolve_path = config.resolve_path
         self._uow_factory = config.uow_factory
         self._relaunch_options = config.relaunch_options
+        self._loop = config.loop
+        self._rules = config.conflict_rules
 
     def prune_stale_installed_roms(self) -> None:
         """Remove ``rom_installs`` rows whose files no longer exist on disk.
@@ -151,15 +159,25 @@ class StartupHealingService:
             run.mark_interrupted(at=self._clock.now().isoformat(), reason="interrupted by restart")
             uow.sync_runs.save(run)
 
-    def get_installed_relaunch_options(self) -> list[dict[str, Any]]:
+    async def get_installed_relaunch_options(self) -> dict[str, Any]:
         """Build the relaunch items for every installed+bound ROM so the
         frontend can re-confirm drifted ``launch_options`` at startup (#1043).
 
-        Delegates to the shared ``relaunch_options`` resolver — the same seam
-        the RetroDECK-home migration re-bakes through — so the startup reconcile
-        and the migration relaunch never carry a divergent build of the list. It
-        snapshots the installed+bound rows in one short read UoW it closes before
-        resolving the core and disc, so the nested resolver UoW never deadlocks
-        (#1154).
+        Checks the ``get_installed_relaunch_options`` endpoint's conflict rules
+        first. Answers ``{"success": True, "items", "prune_lease_token"}``: the
+        token is an ``installed_reconcile`` lease for the frontend's Steam
+        writes when there are items, and ``None`` when there are none.
+
+        Delegates, off the loop thread, to the shared ``relaunch_options``
+        resolver — the same seam the RetroDECK-home migration re-bakes through —
+        so the startup reconcile and the migration relaunch never carry a
+        divergent build of the list. It snapshots the installed+bound rows in one
+        short read UoW it closes before resolving the core and disc, so the
+        nested resolver UoW never deadlocks (#1154).
         """
-        return self._relaunch_options.installed_relaunch_items()
+        async with self._rules.hold("get_installed_relaunch_options", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            items = await self._loop.run_in_executor(None, self._relaunch_options.installed_relaunch_items)
+            token = await self._rules.acquire_lease("installed_reconcile") if items else None
+            return {"success": True, "items": items, "prune_lease_token": token}

@@ -7,6 +7,7 @@ import contextlib
 import logging
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -88,7 +89,12 @@ def disc_resolver() -> FakeDiscResolver:
 
 
 @pytest.fixture
-def service(event_loop, uow_factory, disc_resolver) -> DiscService:
+def prune_conflicts():
+    return _make_prune_conflicts()
+
+
+@pytest.fixture
+def service(event_loop, uow_factory, disc_resolver, prune_conflicts) -> DiscService:
     return DiscService(
         config=DiscServiceConfig(
             loop=event_loop,
@@ -96,6 +102,7 @@ def service(event_loop, uow_factory, disc_resolver) -> DiscService:
             uow_factory=uow_factory,
             disc_resolver=disc_resolver,
             active_core=FakeActiveCoreResolver(default=(None, None)),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -381,3 +388,58 @@ class TestTransactionBoundary:
         assert result["reason"] == "not_installed"
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
+
+
+# ── The pick's conflict rules and lease ───────────────────────────────────────
+
+
+class TestTheDiscSelectionLease:
+    """A pick carries a ``disc_selection`` lease for the frontend's write of the baked launch command."""
+
+    def test_a_pick_carries_a_lease(self, event_loop, service, uow, prune_conflicts):
+        _seed_rom(uow, rom_id=1)
+        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
+
+        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+
+        assert result["prune_lease_token"].startswith("disc_selection:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    def test_the_lease_is_taken_while_the_picks_operation_still_holds(
+        self, event_loop, service, uow, prune_conflicts, monkeypatch
+    ):
+        """No cleanup can start between the pick's operation and the lease that outlasts it."""
+        _seed_rom(uow, rom_id=1)
+        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        event_loop.run_until_complete(service.select_disc(1, _DISC2))
+
+        assert seen == [["select_disc"]]
+
+    def test_a_refused_pick_carries_none(self, event_loop, service, prune_conflicts):
+        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+
+        assert result["reason"] == "not_installed"
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("migration_pending", "cleanup_running", "reason"),
+        [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
+    )
+    def test_a_pick_its_rules_refuse_writes_nothing(
+        self, event_loop, service, uow, prune_conflicts, migration_pending, cleanup_running, reason
+    ):
+        _seed_rom(uow, rom_id=1)
+        _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
+        if cleanup_running:
+            prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
+
+        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+
+        assert result["reason"] == reason
+        with uow_unwrap(uow) as u:
+            assert u.roms.get(1).selected_disc is None
+        assert prune_conflicts.conflicting_operations == 0

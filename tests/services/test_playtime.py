@@ -1,11 +1,12 @@
 """Tests for PlaytimeService — SQLite ``rom_playtime`` aggregate + native play-session ingest."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from _factories import _make_retry
+from _factories import _make_conflict_rules, _make_prune_conflicts, _make_retry
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -81,10 +82,118 @@ def make_service(fake_api=None, clock=None, uow=None, device_id: str | None = "d
         "clock": clk,
         "log_debug": lambda _msg: None,
         "uow_factory": FakeUnitOfWorkFactory(unit),
+        "conflict_rules": _make_conflict_rules(),
     }
     defaults.update(overrides)
     svc = PlaytimeService(config=PlaytimeServiceConfig(**defaults))
     return svc, fake, unit
+
+
+async def _start(svc: PlaytimeService, rom_id: int) -> dict[str, Any]:
+    """Open a session and let the outbox flush the start begins run out before the test goes on."""
+    result = await svc.record_session_start(rom_id)
+    await asyncio.gather(*svc._flush_tasks)
+    return result
+
+
+class TestTheSessionStartFlush:
+    """A session start begins a detached outbox flush that holds an operation until it ends.
+
+    The service keeps the flush strongly referenced until it ends, and
+    ``shutdown`` cancels and awaits one still running.
+    """
+
+    @staticmethod
+    def _service_over(prune_conflicts, **overrides):
+        svc, _, uow = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts), **overrides)
+        _seed_rom(uow, 7)
+        return svc
+
+    async def test_a_start_begins_a_flush_that_is_let_go_when_it_ends(self, monkeypatch):
+        svc = self._service_over(_make_prune_conflicts())
+        flushed: list[bool] = []
+
+        async def flush() -> None:
+            flushed.append(True)
+
+        monkeypatch.setattr(svc, "flush_pending_sessions", flush)
+
+        result = await svc.record_session_start(7)
+
+        assert result == {"success": True}
+        assert len(svc._flush_tasks) == 1
+        await asyncio.gather(*svc._flush_tasks)
+        assert svc._flush_tasks == set()
+        assert flushed == [True]
+
+    async def test_a_flush_holds_its_operation_until_it_ends(self, monkeypatch):
+        prune_conflicts = _make_prune_conflicts()
+        svc = self._service_over(prune_conflicts)
+        release = asyncio.Event()
+
+        async def flush() -> None:
+            await release.wait()
+
+        monkeypatch.setattr(svc, "flush_pending_sessions", flush)
+
+        await svc.record_session_start(7)
+
+        assert sorted(holder.label for holder in prune_conflicts._operations.values()) == ["record_session_start"]
+        assert await prune_conflicts.reserve_start() is not None
+        release.set()
+        await asyncio.gather(*svc._flush_tasks)
+        await asyncio.gather(*prune_conflicts._release_tasks)
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_shutdown_cancels_a_flush_still_running(self, monkeypatch):
+        svc = self._service_over(_make_prune_conflicts())
+        started = asyncio.Event()
+
+        async def flush() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(svc, "flush_pending_sessions", flush)
+        await svc.record_session_start(7)
+        await started.wait()
+        (task,) = tuple(svc._flush_tasks)
+
+        await svc.shutdown()
+
+        assert task.cancelled()
+
+    async def test_shutdown_with_no_flush_is_a_no_op(self):
+        svc = self._service_over(_make_prune_conflicts())
+
+        await svc.shutdown()
+
+        assert svc._flush_tasks == set()
+
+    async def test_a_running_cleanup_refuses_the_start_and_begins_no_flush(self):
+        prune_conflicts = _make_prune_conflicts()
+        prune_conflicts.register_run("held-run")
+        svc, _, uow = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts))
+        _seed_rom(uow, 7)
+
+        result = await svc.record_session_start(7)
+
+        assert result["reason"] == "prune_active"
+        assert uow.playtime.get(7) is None
+        assert svc._flush_tasks == set()
+        assert prune_conflicts.conflicting_operations == 0
+
+
+class TestReconcilePlaytimeRules:
+    async def test_a_running_cleanup_refuses_the_reconcile_before_the_server_is_asked(self):
+        prune_conflicts = _make_prune_conflicts()
+        prune_conflicts.register_run("held-run")
+        svc, fake, uow = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts))
+        _seed_rom(uow, 7)
+
+        result = await svc.reconcile_playtime(7)
+
+        assert result["reason"] == "prune_active"
+        assert fake.call_log == []
 
 
 # ---------------------------------------------------------------------------
@@ -98,24 +207,26 @@ class TestRecordSession:
         svc, _, uow = make_service()
         _seed_rom(uow, 42)
 
-        result = svc.record_session_start(42)
+        result = await svc.record_session_start(42)
 
         assert result["success"] is True
         assert uow.committed is True
         entry = uow.playtime.get(42)
         assert entry is not None
         assert entry.last_session_start is not None
+        await asyncio.gather(*svc._flush_tasks)
 
     @pytest.mark.asyncio
     async def test_start_on_orphan_rom_id_fails(self):
         """No ``roms`` row → FK violation at commit → failure dict, not committed."""
         svc, _, uow = make_service()  # no _seed_rom
 
-        result = svc.record_session_start(42)
+        result = await svc.record_session_start(42)
 
         assert result["success"] is False
         assert "Unknown ROM" in result["message"]
         assert uow.committed is False
+        await asyncio.gather(*svc._flush_tasks)
 
     @pytest.mark.asyncio
     async def test_end_records_duration(self):
@@ -173,11 +284,11 @@ class TestRecordSession:
         svc, _, uow = make_service(clock=clk)
         _seed_rom(uow, 42)
 
-        svc.record_session_start(42)  # opens at now, monotonic 0
+        await _start(svc, 42)  # opens at now, monotonic 0
         clk.advance(30)  # 30s awake
         await svc.record_session_end(42)
 
-        svc.record_session_start(42)
+        await _start(svc, 42)
         clk.advance(45)  # 45s awake
         result2 = await svc.record_session_end(42)
 
@@ -203,7 +314,7 @@ class TestRecordSession:
         svc, _, uow = make_service(clock=clk)
         _seed_rom(uow, 42)
 
-        svc.record_session_start(42)  # opens at now, monotonic 0
+        await _start(svc, 42)  # opens at now, monotonic 0
         clk.advance_wall(120)  # 120s suspended: wall advances, monotonic frozen
         clk.advance(180)  # 180s awake: both clocks advance
 
@@ -223,7 +334,7 @@ class TestRecordSession:
         svc, _, uow = make_service(clock=clk)
         _seed_rom(uow, 42)
 
-        svc.record_session_start(42)
+        await _start(svc, 42)
         clk.advance(300)  # 5 min, both clocks advance
 
         result = await svc.record_session_end(42)
@@ -239,7 +350,7 @@ class TestRecordSession:
         svc, _, uow = make_service(clock=clk, log_debug=logs.append)
         _seed_rom(uow, 42)
 
-        svc.record_session_start(42)
+        await _start(svc, 42)
         clk.advance_wall(120)  # suspend
         clk.advance(180)  # awake
 

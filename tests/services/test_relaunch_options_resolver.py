@@ -12,14 +12,21 @@ entry points that share the one resolve body.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 
 from domain.disc_selection import Disc
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
+
+if TYPE_CHECKING:
+    from lib.prune_gate import PruneConflicts
 
 
 def _make_rom(rom_id: int, *, shortcut_app_id: int | None) -> Rom:
@@ -63,12 +70,15 @@ def _make_resolver(
     uow: FakeUnitOfWork,
     active_core: FakeActiveCoreResolver | None = None,
     disc_resolver: FakeDiscResolver | None = None,
+    prune_conflicts: PruneConflicts | None = None,
 ) -> RelaunchOptionsResolver:
     return RelaunchOptionsResolver(
         config=RelaunchOptionsResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(),
             disc_resolver=disc_resolver if disc_resolver is not None else FakeDiscResolver(),
+            loop=running_loop(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -355,3 +365,61 @@ def test_launch_path_never_resolves_the_active_core():
     resolver.launch_path_for_rom(1)
 
     assert active_core.emulator_calls == []
+
+
+# ── get_rom_relaunch_options — the Play button's re-confirm use case ─────────
+
+
+async def test_the_reconfirm_answers_the_item_with_success_and_a_lease():
+    uow = FakeUnitOfWork()
+    file_path = "/roms/n64/zelda.z64"
+    _seed_install(uow, 1, file_path=file_path, shortcut_app_id=4242)
+    prune_conflicts = _make_prune_conflicts()
+    resolver = _make_resolver(uow=uow, prune_conflicts=prune_conflicts)
+
+    item = await resolver.get_rom_relaunch_options("1")
+
+    assert item is not None
+    token = item.pop("prune_lease_token")
+    assert token.startswith("launch_reconfirm:")
+    assert item == {
+        "app_id": 4242,
+        "launch_options": f'flatpak run net.retrodeck.retrodeck "{file_path}"',
+        "success": True,
+    }
+    assert prune_conflicts.conflicting_operations == 1
+
+
+async def test_the_reconfirm_lease_is_taken_while_the_calls_operation_still_holds(monkeypatch):
+    """No cleanup can start between the call's operation and the lease that outlasts it."""
+    uow = FakeUnitOfWork()
+    _seed_install(uow, 1, file_path="/roms/n64/zelda.z64", shortcut_app_id=4242)
+    prune_conflicts = _make_prune_conflicts()
+    resolver = _make_resolver(uow=uow, prune_conflicts=prune_conflicts)
+    seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+    await resolver.get_rom_relaunch_options(1)
+
+    assert seen == [["get_rom_relaunch_options"]]
+
+
+async def test_the_reconfirm_of_a_rom_with_no_launch_command_answers_none_and_takes_no_lease():
+    prune_conflicts = _make_prune_conflicts()
+    resolver = _make_resolver(uow=FakeUnitOfWork(), prune_conflicts=prune_conflicts)
+
+    assert await resolver.get_rom_relaunch_options(1) is None
+    assert prune_conflicts.conflicting_operations == 0
+
+
+async def test_a_running_cleanup_refuses_the_reconfirm():
+    uow = FakeUnitOfWork()
+    _seed_install(uow, 1, file_path="/roms/n64/zelda.z64", shortcut_app_id=4242)
+    prune_conflicts = _make_prune_conflicts()
+    prune_conflicts.register_run("held-run")
+    resolver = _make_resolver(uow=uow, prune_conflicts=prune_conflicts)
+
+    result = await resolver.get_rom_relaunch_options(1)
+
+    assert result is not None
+    assert result["reason"] == "prune_active"
+    assert prune_conflicts.conflicting_operations == 0

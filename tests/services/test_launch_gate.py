@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.running_loop import running_loop
 
 from services.launch_gate import (
@@ -171,6 +172,7 @@ def _make_service(
             ),
             loop=loop if loop is not None else running_loop(),
             logger=logger,
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 
@@ -587,3 +589,47 @@ class TestCheckLocalDrift:
         result = event_loop.run_until_complete(service.check_local_drift(42))
 
         assert result == {"drifted": False, "rom_id": 42}
+
+
+class TestTheLaunchGatesRules:
+    async def test_a_running_cleanup_refuses_the_evaluation_before_anything_is_read(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        prune_conflicts.register_run("held-run")
+        rom_lookup = FakeRomLookup()
+        service = _make_service(
+            rom_lookup=rom_lookup,
+            installed_checker=FakeInstalledChecker(),
+            save_status_reader=FakeSaveStatusReader(),
+            logger=logger,
+        )
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts)
+
+        refusal = await service.evaluate(123_456)
+
+        assert isinstance(refusal, dict)
+        assert refusal["reason"] == "prune_active"
+        assert rom_lookup.calls == []
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_the_evaluation_holds_an_operation_while_it_runs(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        seen: list[int] = []
+
+        class _Lookup(FakeRomLookup):
+            def get_rom_by_steam_app_id(self, app_id):
+                seen.append(prune_conflicts.conflicting_operations)
+                return super().get_rom_by_steam_app_id(app_id)
+
+        service = _make_service(
+            rom_lookup=_Lookup(),
+            installed_checker=FakeInstalledChecker(),
+            save_status_reader=FakeSaveStatusReader(),
+            logger=logger,
+        )
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts)
+
+        verdict = await service.evaluate(123_456)
+
+        assert verdict == LaunchVerdict(action="allow")
+        assert seen == [1]
+        assert prune_conflicts.conflicting_operations == 0

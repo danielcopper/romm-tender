@@ -8,6 +8,7 @@ import threading
 from typing import Any
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -173,8 +174,21 @@ def active_downloads() -> _FakeActiveDownloads:
 
 
 @pytest.fixture
+def prune_conflicts():
+    return _make_prune_conflicts()
+
+
+@pytest.fixture
 def service(
-    event_loop, uow_factory, romm, settings, drift_probe, reachability_probe, relaunch_resolver, active_downloads
+    event_loop,
+    uow_factory,
+    romm,
+    settings,
+    drift_probe,
+    reachability_probe,
+    relaunch_resolver,
+    active_downloads,
+    prune_conflicts,
 ) -> VersionSwitchService:
     return VersionSwitchService(
         config=VersionSwitchServiceConfig(
@@ -188,6 +202,7 @@ def service(
             reachability_probe=reachability_probe,
             relaunch_resolver=relaunch_resolver,
             active_downloads=active_downloads,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -597,6 +612,8 @@ class TestGetVersionList:
 
 
 def _assert_success(result: dict[str, Any], *, rom_id: int, installed: bool, launch_options: str) -> None:
+    result = dict(result)
+    assert result.pop("prune_lease_token").startswith("version_switch:")
     assert result == {
         "success": True,
         "rom_id": rom_id,
@@ -1223,3 +1240,93 @@ class TestSwitchVersion:
         assert isinstance(result["message"], str)
         assert "error" not in result
         assert "error_code" not in result
+
+
+# ── The switch's conflict rules, its lease, and the unchecked twin ────────────
+
+
+def _seed_active_install(uow: FakeUnitOfWork, relaunch_resolver) -> None:
+    _seed_rom(uow, rom_id=1, app_id=_APP_ID, name="Game 1")
+    _seed_install(uow, 1)
+    relaunch_resolver.items[1] = {"app_id": _APP_ID, "launch_options": "cmd"}
+
+
+class TestTheVersionSwitchLease:
+    """A switch that succeeded carries a ``version_switch`` lease for the frontend's Steam write."""
+
+    def test_a_switch_that_succeeded_carries_a_lease(
+        self, event_loop, service, uow, relaunch_resolver, prune_conflicts
+    ):
+        _seed_active_install(uow, relaunch_resolver)
+
+        result = _run(event_loop, service.switch_version(_APP_ID, 1, False))
+
+        assert result["prune_lease_token"].startswith("version_switch:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    def test_the_lease_is_taken_while_the_switchs_operation_still_holds(
+        self, event_loop, service, uow, relaunch_resolver, prune_conflicts, monkeypatch
+    ):
+        """No cleanup can start between the switch's operation and the lease that outlasts it."""
+        _seed_active_install(uow, relaunch_resolver)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        _run(event_loop, service.switch_version(_APP_ID, 1, False))
+
+        assert seen == [["switch_version"]]
+
+    def test_a_switch_that_failed_carries_none(self, event_loop, service, prune_conflicts):
+        result = _run(event_loop, service.switch_version(999, 2, False))
+
+        assert result["reason"] == "not_found"
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("migration_pending", "cleanup_running", "reason"),
+        [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
+    )
+    def test_a_switch_its_rules_refuse_moves_nothing(
+        self, event_loop, service, uow, relaunch_resolver, prune_conflicts, migration_pending, cleanup_running, reason
+    ):
+        _seed_active_install(uow, relaunch_resolver)
+        _seed_rom(uow, rom_id=2, app_id=None)
+        if cleanup_running:
+            prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
+
+        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
+
+        assert result["reason"] == reason
+        assert uow.roms.get(1).shortcut_app_id == _APP_ID
+        assert uow.roms.get(2).shortcut_app_id is None
+        assert prune_conflicts.conflicting_operations == 0
+
+
+class TestSwitchVersionUnchecked:
+    """The removed-game cleanup switches through the twin, from inside its own run, which no rule refuses."""
+
+    def test_it_switches_while_every_rule_of_the_endpoint_holds(
+        self, event_loop, service, uow, relaunch_resolver, prune_conflicts
+    ):
+        _seed_active_install(uow, relaunch_resolver)
+        prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=True)
+
+        result = _run(event_loop, service.switch_version_unchecked(_APP_ID, 1, False))
+
+        assert result == {
+            "success": True,
+            "rom_id": 1,
+            "target_installed": True,
+            "launch_options": "cmd",
+            "app_id": _APP_ID,
+        }
+
+    def test_it_takes_no_lease(self, event_loop, service, uow, relaunch_resolver, prune_conflicts):
+        _seed_active_install(uow, relaunch_resolver)
+
+        result = _run(event_loop, service.switch_version_unchecked(_APP_ID, 1, False))
+
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0

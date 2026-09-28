@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from services.protocols import (
         ActiveCoreReader,
+        ConflictRules,
         CoreInfoProvider,
         DiscResolver,
         SettingsPersister,
@@ -55,8 +56,9 @@ class CoreServiceConfig:
     per-game pin), the shared per-ROM active-core resolver (the menu's active
     marker + the source of every re-baked launch command), and the shared
     per-ROM disc resolver (so a re-baked launch command keeps the ROM's pinned
-    disc rather than reverting to disc 1 / the m3u). Bundled here so the ctor
-    stays within the S107 parameter budget.
+    disc rather than reverting to disc 1 / the m3u), and the ``ConflictRules``
+    the three writes check at their entry and take their lease through.
+    Bundled here so the ctor stays within the S107 parameter budget.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -68,10 +70,16 @@ class CoreServiceConfig:
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
+    conflict_rules: ConflictRules
 
 
 class CoreService:
-    """RetroArch core override reads and writes — per-platform (settings) + per-game (DB)."""
+    """RetroArch core override reads and writes — per-platform (settings) + per-game (DB).
+
+    Each write checks its endpoint's conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: CoreServiceConfig) -> None:
         self._loop = config.loop
@@ -83,6 +91,7 @@ class CoreService:
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
+        self._rules = config.conflict_rules
 
     async def get_platform_core_info(self, rom_id: int) -> dict[str, Any]:
         """Return the emulators available for ``rom_id``'s platform + the active one.
@@ -238,20 +247,28 @@ class CoreService:
         and every installed+bound ROM on the platform (minus per-game-overridden
         ROMs) is re-baked: the response carries ``rebake_items`` (a list of
         ``{"app_id", "launch_options"}``) the frontend confirm-sets on the live
-        Steam shortcuts. On any failure (settings write error, fan-out error)
-        returns ``{"success": False, "reason": ..., "message": ...}``.
+        Steam shortcuts, and a ``system_core`` lease in ``prune_lease_token``
+        for those writes when there is any to make. On any failure (settings
+        write error, fan-out error) returns
+        ``{"success": False, "reason": ..., "message": ...}``.
         """
-        try:
-            rebake_items = await self._loop.run_in_executor(
-                None,
-                self._set_system_core_io,
-                platform_slug,
-                core_label,
-            )
-            return {"success": True, "rebake_items": rebake_items}
-        except Exception as e:
-            self._logger.error(f"Failed to set system core: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": str(e)}
+        async with self._rules.hold("set_system_core", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            try:
+                rebake_items = await self._loop.run_in_executor(
+                    None,
+                    self._set_system_core_io,
+                    platform_slug,
+                    core_label,
+                )
+            except Exception as e:
+                self._logger.error(f"Failed to set system core: {e}")
+                return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": str(e)}
+            result: dict[str, Any] = {"success": True, "rebake_items": rebake_items}
+            if rebake_items:
+                result["prune_lease_token"] = await self._rules.acquire_lease("system_core")
+            return result
 
     async def set_game_core(self, rom_id: int, label: str) -> dict[str, Any]:
         """Pin the per-game emulator override for ``rom_id`` to *label*.
@@ -268,9 +285,15 @@ class CoreService:
         Steam shortcut. When the ROM is not installed or not bound to a shortcut
         there is nothing to update live: the pin still lands and
         ``launch_options``/``app_id`` are ``None`` (the override applies on the
-        next download).
+        next download). A live update carries a ``game_core`` lease in
+        ``prune_lease_token`` for the frontend's write.
         """
-        return await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
+        async with self._rules.hold("set_game_core", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
+            await self._lease_live_update(result)
+            return result
 
     def _set_game_core_io(self, rom_id: int, label: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -348,9 +371,21 @@ class CoreService:
         to ``(None, None)``) — never an unconditional plain launch. Clearing is
         always valid — there is no label to resolve. When the ROM is unknown the
         canonical failure shape is returned; when it is uninstalled or unbound the
-        NULL still lands and ``launch_options``/``app_id`` are ``None``.
+        NULL still lands and ``launch_options``/``app_id`` are ``None``. A live
+        update carries a ``game_core`` lease in ``prune_lease_token`` for the
+        frontend's write.
         """
-        return await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
+        async with self._rules.hold("clear_game_core", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
+            await self._lease_live_update(result)
+            return result
+
+    async def _lease_live_update(self, result: dict[str, Any]) -> None:
+        """Put a ``game_core`` lease on a per-game write the frontend applies to a live shortcut."""
+        if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
+            result["prune_lease_token"] = await self._rules.acquire_lease("game_core")
 
     def _clear_game_core_io(self, rom_id: int) -> dict[str, Any]:
         with self._uow_factory() as uow:

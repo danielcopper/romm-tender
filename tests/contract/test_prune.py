@@ -330,10 +330,10 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
     else:
         task = asyncio.create_task(release.wait())
 
-        async def start_download(_rom_id, *_answers):
+        async def begin_download(_rom_id, **_answers):
             return {"success": True, "message": "started"}
 
-        monkeypatch.setattr(harness.plugin._download_service, "start_download", start_download)
+        monkeypatch.setattr(harness.plugin._download_service, "_begin_download", begin_download)
         monkeypatch.setattr(harness.plugin._download_service, "task_for_rom", lambda _rom_id: task)
         assert (await harness.plugin.start_download(41))["success"] is True
 
@@ -378,10 +378,10 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
     _seed_bulk_candidate(harness)
     preview = await harness.plugin.get_prune_preview(_preview_request())
 
-    async def set_game_core(_rom_id, _label):
+    def set_game_core_io(_rom_id, _label):
         return {"success": True, "app_id": 0x80000001, "launch_options": "launch"}
 
-    monkeypatch.setattr(harness.plugin._core_service, "set_game_core", set_game_core)
+    monkeypatch.setattr(harness.plugin._core_service, "_set_game_core_io", set_game_core_io)
     result = await harness.plugin.set_game_core(41, "core")
     token = result["prune_lease_token"]
 
@@ -625,10 +625,10 @@ async def test_stage_selection_rejects_a_page_after_the_selection_was_finalized(
 async def test_conflict_lease_renewal_extends_a_live_lease_and_denies_a_released_one(harness, monkeypatch):
     _seed_bulk_candidate(harness)
 
-    async def set_game_core(_rom_id, _label):
+    def set_game_core_io(_rom_id, _label):
         return {"success": True, "app_id": 0x80000041, "launch_options": "launch"}
 
-    monkeypatch.setattr(harness.plugin._core_service, "set_game_core", set_game_core)
+    monkeypatch.setattr(harness.plugin._core_service, "_set_game_core_io", set_game_core_io)
     token = (await harness.plugin.set_game_core(41, "core"))["prune_lease_token"]
 
     assert await harness.plugin.renew_prune_conflict_lease(token) == {

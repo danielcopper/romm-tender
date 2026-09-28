@@ -63,13 +63,15 @@ async def test_the_launch_gate_reads_save_status_while_its_callers_rules_hold(ha
     """The launch gate reads through ``get_save_status_unchecked``, which no rule refuses.
 
     ``evaluate_launch`` answers for its own rules before the gate runs; the read
-    inside it must not be refused by them again. Driven on the service directly,
-    with a cleanup's run claim held, so only the read's own rules could refuse.
+    inside it must not be refused by them again. Driven on the evaluation's body
+    without its own rules (``_evaluate``), with a cleanup's run claim held, so
+    only the read's own rules could refuse — ``evaluate`` itself checks the
+    ``evaluate_launch`` prune rule and would refuse before any read.
     """
     enable_save_sync(harness)
     seed_install(harness, 1)
     hold_prune_active(harness)
 
-    await harness.plugin._launch_gate_service.evaluate(1)
+    await harness.plugin._launch_gate_service._evaluate(1)
 
     assert "list_saves" in _call_names(harness)

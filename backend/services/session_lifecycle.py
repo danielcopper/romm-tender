@@ -28,6 +28,7 @@ from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
 if TYPE_CHECKING:
     import logging
 
+    from services.protocols import ConflictRules
     from services.protocols.cross_service import (
         SessionAchievementSync,
         SessionMigrationReader,
@@ -124,7 +125,8 @@ class SessionLifecycleServiceConfig:
     composition root satisfies with the existing playtime, save,
     achievement, and migration services. ``logger`` is carried for
     backend-side reporting of the fire-and-forget achievement sync —
-    its result and failures never reach the frontend.
+    its result and failures never reach the frontend. ``conflict_rules`` are
+    what :meth:`SessionLifecycleService.finalize` checks at its entry.
     """
 
     playtime_recorder: SessionPlaytimeRecorder
@@ -132,6 +134,7 @@ class SessionLifecycleServiceConfig:
     achievement_sync: SessionAchievementSync
     migration_reader: SessionMigrationReader
     logger: logging.Logger
+    conflict_rules: ConflictRules
 
 
 def _render_failure_toast(
@@ -185,6 +188,7 @@ class SessionLifecycleService:
         self._achievement_sync = config.achievement_sync
         self._migration_reader = config.migration_reader
         self._logger = config.logger
+        self._rules = config.conflict_rules
         # Strong refs to in-flight background tasks. ``asyncio.create_task``
         # alone is not enough — without a strong ref, the loop is free to
         # garbage-collect the task before it completes. ``add_done_callback``
@@ -203,8 +207,12 @@ class SessionLifecycleService:
         if self._background_tasks:
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
 
-    async def finalize(self, rom_id: int) -> SessionFinalizeResult:
+    async def finalize(self, rom_id: int) -> SessionFinalizeResult | dict[str, Any]:
         """Run the four end-of-session steps and return the combined verdict.
+
+        Checks the ``finalize_game_session`` endpoint's conflict rules at its
+        entry and answers the canonical refusal dict when one holds, in place of
+        a verdict (CONTEXT.md → Conflict rules).
 
         Parameters
         ----------
@@ -223,16 +231,19 @@ class SessionLifecycleService:
             ``romm_data_changed`` event dispatch. ``migration`` carries
             the RetroDECK home migration's status payload.
         """
-        total_seconds = await self._record_playtime(rom_id)
-        self._schedule_achievement_sync(rom_id)
-        sync_result = await self._build_sync_result(rom_id)
-        migration = await self._refresh_migration()
+        async with self._rules.hold("finalize_game_session", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            total_seconds = await self._record_playtime(rom_id)
+            self._schedule_achievement_sync(rom_id)
+            sync_result = await self._build_sync_result(rom_id)
+            migration = await self._refresh_migration()
 
-        return SessionFinalizeResult(
-            total_seconds=total_seconds,
-            sync=sync_result,
-            migration=migration,
-        )
+            return SessionFinalizeResult(
+                total_seconds=total_seconds,
+                sync=sync_result,
+                migration=migration,
+            )
 
     async def _record_playtime(self, rom_id: int) -> int | None:
         """Record session end and return the updated ``total_seconds``.
@@ -283,7 +294,7 @@ class SessionLifecycleService:
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While a RetroDECK migration is pending the post-exit sync does not
         run and the verdict is the failed-sync one. The
-        ``finalize_game_session`` endpoint checks no migration rule, so this is
+        ``finalize_game_session`` use case checks no migration rule, so this is
         the first check a pending migration meets on the way to that sync.
         """
         if self._migration_reader.is_retrodeck_migration_pending():

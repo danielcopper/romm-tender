@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import TYPE_CHECKING
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.sync_run import SyncRun
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
+
+if TYPE_CHECKING:
+    from lib.prune_gate import PruneConflicts
 
 _RETRODECK_HOME = "/run/media/deck/Emulation/retrodeck"
 
@@ -71,6 +77,7 @@ def _make_service(
     uow: FakeUnitOfWork | None = None,
     clock: FakeClock | None = None,
     relaunch_options: FakeRelaunchOptionsResolver | None = None,
+    prune_conflicts: PruneConflicts | None = None,
 ) -> StartupHealingService:
     probe = path_probe if path_probe is not None else FakePathExistsReader(paths={retrodeck_home})
     return StartupHealingService(
@@ -82,6 +89,8 @@ def _make_service(
             resolve_path=resolve_path if resolve_path is not None else FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(uow) if uow is not None else FakeUnitOfWorkFactory(),
             relaunch_options=relaunch_options if relaunch_options is not None else FakeRelaunchOptionsResolver(),
+            loop=running_loop(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -318,7 +327,7 @@ class TestGetInstalledRelaunchOptions:
     forwards the resolver's list through unchanged and queries it once.
     """
 
-    def test_delegates_to_resolver(self, logger):
+    async def test_delegates_to_resolver(self, logger):
         """Returns the resolver's items verbatim and queries the seam once."""
         items = [
             {"app_id": 11, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'},
@@ -326,13 +335,69 @@ class TestGetInstalledRelaunchOptions:
         ]
         relaunch_options = FakeRelaunchOptionsResolver(items=items)
         service = _make_service(logger=logger, relaunch_options=relaunch_options)
-        result = service.get_installed_relaunch_options()
+        result = (await service.get_installed_relaunch_options())["items"]
         assert result == items
         assert relaunch_options.calls == 1
 
-    def test_empty_resolver_yields_empty_list(self, logger):
+    async def test_empty_resolver_yields_empty_list(self, logger):
         """An empty resolver list passes straight through."""
         relaunch_options = FakeRelaunchOptionsResolver(items=[])
         service = _make_service(logger=logger, relaunch_options=relaunch_options)
-        assert service.get_installed_relaunch_options() == []
+        assert (await service.get_installed_relaunch_options())["items"] == []
         assert relaunch_options.calls == 1
+
+
+_ITEM = {"app_id": 11, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'}
+
+
+class TestTheInstalledReconcileLease:
+    """Items to heal carry an ``installed_reconcile`` lease for the frontend's Steam writes; none carry no lease."""
+
+    async def test_items_carry_a_lease(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        service = _make_service(
+            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[_ITEM]), prune_conflicts=prune_conflicts
+        )
+
+        result = await service.get_installed_relaunch_options()
+
+        assert result["success"] is True
+        assert result["prune_lease_token"].startswith("installed_reconcile:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    async def test_the_lease_is_taken_while_the_calls_operation_still_holds(self, logger, monkeypatch):
+        """No cleanup can start between the call's operation and the lease that outlasts it."""
+        prune_conflicts = _make_prune_conflicts()
+        service = _make_service(
+            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[_ITEM]), prune_conflicts=prune_conflicts
+        )
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        await service.get_installed_relaunch_options()
+
+        assert seen == [["get_installed_relaunch_options"]]
+
+    async def test_no_items_carry_no_lease(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        service = _make_service(
+            logger=logger, relaunch_options=FakeRelaunchOptionsResolver(items=[]), prune_conflicts=prune_conflicts
+        )
+
+        assert await service.get_installed_relaunch_options() == {
+            "success": True,
+            "items": [],
+            "prune_lease_token": None,
+        }
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_a_running_cleanup_refuses_it_before_the_resolver_is_asked(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        prune_conflicts.register_run("held-run")
+        relaunch_options = FakeRelaunchOptionsResolver(items=[_ITEM])
+        service = _make_service(logger=logger, relaunch_options=relaunch_options, prune_conflicts=prune_conflicts)
+
+        result = await service.get_installed_relaunch_options()
+
+        assert result["reason"] == "prune_active"
+        assert relaunch_options.calls == 0
+        assert prune_conflicts.conflicting_operations == 0

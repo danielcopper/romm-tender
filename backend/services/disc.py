@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from services.protocols import (
         ActiveCoreReader,
+        ConflictRules,
         DiscResolver,
         UnitOfWorkFactory,
     )
@@ -46,7 +47,8 @@ class DiscServiceConfig:
     Unit-of-Work factory (to read the ROM + its install and write the disc pin),
     the shared per-ROM disc resolver (enumeration + launch-path resolution), and
     the shared per-ROM active-core resolver (so a re-baked launch command keeps
-    the ROM's full active core, not a plain launch).
+    the ROM's full active core, not a plain launch), and the ``ConflictRules``
+    ``select_disc`` checks at its entry and takes its lease through.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -54,10 +56,16 @@ class DiscServiceConfig:
     uow_factory: UnitOfWorkFactory
     disc_resolver: DiscResolver
     active_core: ActiveCoreReader
+    conflict_rules: ConflictRules
 
 
 class DiscService:
-    """Disc-picker reads (``get_disc_selection``) and writes (``select_disc``)."""
+    """Disc-picker reads (``get_disc_selection``) and writes (``select_disc``).
+
+    The write checks its endpoint's conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: DiscServiceConfig) -> None:
         self._loop = config.loop
@@ -65,6 +73,7 @@ class DiscService:
         self._uow_factory = config.uow_factory
         self._disc_resolver = config.disc_resolver
         self._active_core = config.active_core
+        self._rules = config.conflict_rules
 
     async def get_disc_selection(self, rom_id: int) -> dict[str, Any]:
         """Report the disc picker's state for ``rom_id``.
@@ -123,9 +132,16 @@ class DiscService:
         pick is persisted via the pin-only ``set_selected_disc`` write path and
         the response carries the freshly-baked ``launch_options`` (the disc's path
         folded over the ROM's full active core) for the frontend to confirm-set on
-        the live Steam shortcut, plus the now-effective ``selected`` value.
+        the live Steam shortcut, plus the now-effective ``selected`` value, and a
+        ``disc_selection`` lease in ``prune_lease_token`` for that write.
         """
-        return await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
+        async with self._rules.hold("select_disc", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
+            if result.get("success") and result.get("launch_options") is not None:
+                result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
+            return result
 
     def _select_disc_io(self, rom_id: int, filename: str | None) -> dict[str, Any]:
         with self._uow_factory() as uow:

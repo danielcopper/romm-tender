@@ -66,6 +66,7 @@ if TYPE_CHECKING:
         ActiveCoreReader,
         AdoptionMoveStore,
         Clock,
+        ConflictRules,
         DebugLogger,
         DownloadFileStore,
         EventEmitter,
@@ -148,6 +149,8 @@ class RomAdoptionServiceConfig:
     The save-location and core seams below are the renamer's, and the search seams the
     search's — they are taken here and handed straight on, so the service has one
     constructor rather than three the composition root has to keep in step.
+    ``conflict_rules`` are what an adoption checks at its entry and takes its
+    lease through.
     """
 
     romm_api: RommRomReader
@@ -171,10 +174,16 @@ class RomAdoptionServiceConfig:
     log_debug: DebugLogger
     emit: EventEmitter
     clock: Clock
+    conflict_rules: ConflictRules
 
 
 class RomAdoptionService:
-    """Collision detection, candidate search, content verification, and adoption of on-disk ROMs."""
+    """Collision detection, candidate search, content verification, and adoption of on-disk ROMs.
+
+    An adoption checks its endpoint's conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: RomAdoptionServiceConfig) -> None:
         self._romm_api = config.romm_api
@@ -213,6 +222,7 @@ class RomAdoptionService:
         self._logger = config.logger
         self._emit = config.emit
         self._clock = config.clock
+        self._rules = config.conflict_rules
 
     # ── Download pre-flight (DownloadTargetGateFn) ──────────────────
 
@@ -465,6 +475,25 @@ class RomAdoptionService:
     # ── Adopt ───────────────────────────────────────────────────────
 
     async def adopt_existing_rom(self, rom_id, candidate_path=None, collision_choice=None) -> dict[str, Any]:
+        """Adopt content already on disk for the ``adopt_existing_rom`` endpoint.
+
+        :meth:`_adopt_existing_rom` under the endpoint's conflict rules. Only a
+        bound ROM's adoption carries an ``adopt_existing_rom`` lease in
+        ``prune_lease_token``: the lease covers the frontend's write of the
+        launch command onto the shortcut, and an unbound ROM has no shortcut to
+        write to, so the frontend would hold the token to its full TTL with
+        nothing to release it. A download's ``download_complete`` is leased on
+        the same condition.
+        """
+        async with self._rules.hold("adopt_existing_rom", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)
+            if result.get("success") and result.get("app_id") is not None:
+                result["prune_lease_token"] = await self._rules.acquire_lease("adopt_existing_rom")
+            return result
+
+    async def _adopt_existing_rom(self, rom_id, candidate_path, collision_choice) -> dict[str, Any]:
         """Record content already on disk as this ROM's install.
 
         *candidate_path* is empty for content sitting at the ROM's own target

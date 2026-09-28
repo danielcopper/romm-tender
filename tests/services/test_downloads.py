@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin, _record_operations_at_lease
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -217,6 +217,7 @@ def plugin(emit, logger, home):
             log_debug=lambda msg: None,
             emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     p._download_service = DownloadService(
@@ -239,6 +240,7 @@ def plugin(emit, logger, home):
             # Late-bound remover for the #1298 sibling supersede — resolved at call
             # time, by which point ``p._rom_removal_service`` is constructed below.
             rom_remover=lambda: p._rom_removal_service.remove_rom_unchecked,
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     p._rom_removal_service = RomRemovalService(
@@ -6012,3 +6014,172 @@ class TestResumeSupersede:
         result = await plugin.resume_download(7)
         assert result["reason"] == "not_paused"
         provider.assert_not_called()
+
+
+# ── The start and resume use cases: rules, the retained task, the lease ───────
+
+
+def _begin_leaving_a_task(service: DownloadService, release: asyncio.Event, finish=None):
+    """A ``_begin_download`` that starts the download's task and answers success, as a started download does."""
+
+    async def begin(rom_id, *, resume, replace_existing=False, **answer):
+        async def run() -> None:
+            await release.wait()
+            if finish is not None:
+                await finish(rom_id)
+
+        service._download_tasks[rom_id] = asyncio.get_running_loop().create_task(run())
+        return {"success": True, "message": "Download started"}
+
+    return begin
+
+
+def _operation_labels(prune_conflicts) -> list[str]:
+    return sorted(holder.label for holder in prune_conflicts._operations.values())
+
+
+async def _let_the_task_end(service: DownloadService, rom_id: int, prune_conflicts, release: asyncio.Event) -> None:
+    release.set()
+    await service._download_tasks[rom_id]
+    await asyncio.gather(*prune_conflicts._release_tasks)
+
+
+class TestAStartedDownloadHoldsAnOperation:
+    """The task a start or resume leaves running holds an operation until it ends."""
+
+    async def test_a_started_download_holds_its_operation_until_its_task_ends(self, plugin, monkeypatch):
+        service = plugin._download_service
+        release = asyncio.Event()
+        monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release))
+
+        result = await service.start_download(42)
+
+        assert result["success"] is True
+        assert _operation_labels(plugin._prune_conflicts) == ["start_download"]
+        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    async def test_a_resumed_download_holds_its_operation_until_its_task_ends(self, plugin, monkeypatch):
+        service = plugin._download_service
+        service._download_queue[42] = {"rom_id": 42, "status": "paused"}
+        release = asyncio.Event()
+        monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release))
+
+        result = await service.resume_download(42)
+
+        assert result["success"] is True
+        assert _operation_labels(plugin._prune_conflicts) == ["resume_download"]
+        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    async def test_a_start_that_failed_holds_nothing(self, plugin):
+        service = plugin._download_service
+        service._download_in_progress.add(42)
+
+        result = await service.start_download(42)
+
+        assert result["reason"] == "already_downloading"
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize("call", ["start_download", "resume_download"])
+    @pytest.mark.parametrize(
+        ("migration_pending", "cleanup_running", "reason"),
+        [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
+    )
+    async def test_a_download_its_rules_refuse_begins_nothing(
+        self, plugin, monkeypatch, call, migration_pending, cleanup_running, reason
+    ):
+        service = plugin._download_service
+        service._download_queue[42] = {"rom_id": 42, "status": "paused"}
+        begun: list[int] = []
+
+        async def begin(rom_id, **_kwargs):
+            begun.append(rom_id)
+            return {"success": True}
+
+        monkeypatch.setattr(service, "_begin_download", begin)
+        if cleanup_running:
+            plugin._prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(
+            prune_conflicts=plugin._prune_conflicts, migration_pending=migration_pending
+        )
+
+        result = await getattr(service, call)(42)
+
+        assert result["reason"] == reason
+        assert begun == []
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+
+class TestTheDownloadCompleteLease:
+    """A bound ROM's ``download_complete`` carries a lease for the frontend's write of its launch command.
+
+    An unbound ROM has no shortcut to write to, so its event carries none; a
+    lease on an event nobody heard, or whose emit raised, is given back.
+    """
+
+    @staticmethod
+    async def _finish(plugin, rom_id: int) -> None:
+        service = plugin._download_service
+        service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        detail = {"id": rom_id, "name": "Zelda", "fs_name": "zelda.z64", "platform_slug": "n64"}
+        await service._finalize_download_complete(rom_id, detail, "/roms/n64/zelda.z64", "Zelda", "N64")
+
+    @staticmethod
+    def _payload(emit) -> dict[str, Any]:
+        (payload,) = [c.args[1] for c in emit.call_args_list if c.args[0] == "download_complete"]
+        return payload
+
+    async def test_a_bound_roms_event_carries_a_lease(self, plugin, emit):
+        _seed_rom(plugin._uow, 42)
+        emit.return_value = True
+
+        await self._finish(plugin, 42)
+
+        assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
+        assert plugin._prune_conflicts.conflicting_operations == 1
+
+    async def test_an_unbound_roms_event_carries_none(self, plugin, emit):
+        with plugin._uow:
+            plugin._uow.roms.save(
+                Rom(
+                    rom_id=7,
+                    platform_slug="n64",
+                    name="Metroid",
+                    fs_name="metroid.z64",
+                    shortcut_app_id=None,
+                    last_synced_at="2025-01-01T00:00:00",
+                )
+            )
+
+        await self._finish(plugin, 7)
+
+        assert "prune_lease_token" not in self._payload(emit)
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    async def test_an_event_nobody_heard_gives_its_lease_back(self, plugin, emit):
+        _seed_rom(plugin._uow, 42)
+        emit.return_value = False
+
+        await self._finish(plugin, 42)
+
+        assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    async def test_the_lease_is_taken_while_the_downloads_operation_still_holds(self, plugin, emit, monkeypatch):
+        """No cleanup can start between the download's own operation and the lease that outlasts it."""
+        _seed_rom(plugin._uow, 42)
+        emit.return_value = True
+        service = plugin._download_service
+        release = asyncio.Event()
+
+        async def finish(rom_id: int) -> None:
+            await self._finish(plugin, rom_id)
+
+        monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release, finish))
+        seen = _record_operations_at_lease(plugin._prune_conflicts, monkeypatch)
+
+        await service.start_download(42)
+        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
+
+        assert seen == [["start_download"]]

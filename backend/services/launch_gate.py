@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from services.protocols import ConflictRules
     from services.protocols.cross_service import (
         LaunchGateDriftReader,
         LaunchGateInstalledChecker,
@@ -71,6 +72,8 @@ class LaunchGateServiceConfig:
     hashes the on-disk files (content MD5) and ``loop`` offloads that
     blocking hash I/O to the executor. ``logger`` is carried for parity with
     sibling services and to log drift-check internal errors.
+    ``conflict_rules`` are what :meth:`LaunchGateService.evaluate` checks at
+    its entry.
     """
 
     rom_lookup: LaunchGateRomLookup
@@ -80,6 +83,7 @@ class LaunchGateServiceConfig:
     save_file_store: SaveFileStore
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    conflict_rules: ConflictRules
 
 
 def _has_any_save_conflict(save_status: dict[str, Any] | None) -> bool:
@@ -108,9 +112,14 @@ class LaunchGateService:
         self._save_file_store = config.save_file_store
         self._loop = config.loop
         self._logger = config.logger
+        self._rules = config.conflict_rules
 
-    async def evaluate(self, steam_app_id: int) -> LaunchVerdict:
+    async def evaluate(self, steam_app_id: int) -> LaunchVerdict | dict[str, Any]:
         """Return the launch-time verdict for the given Steam app id.
+
+        Checks the ``evaluate_launch`` endpoint's conflict rules at its entry
+        and answers the canonical refusal dict when one holds, in place of a
+        verdict (CONTEXT.md → Conflict rules).
 
         Parameters
         ----------
@@ -132,6 +141,12 @@ class LaunchGateService:
             ``reason="save_conflict"`` and the matching toast strings
             otherwise.
         """
+        async with self._rules.hold("evaluate_launch", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._evaluate(steam_app_id)
+
+    async def _evaluate(self, steam_app_id: int) -> LaunchVerdict:
         rom = self._rom_lookup.get_rom_by_steam_app_id(steam_app_id)
         if rom is None:
             return LaunchVerdict(action="allow")

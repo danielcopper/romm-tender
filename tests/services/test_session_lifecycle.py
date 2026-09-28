@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts
 
 from services.session_lifecycle import (
     SessionFinalizeMigration,
@@ -139,6 +140,7 @@ def _make_service(
             achievement_sync=achievement_sync,
             migration_reader=migration_reader,
             logger=logger,
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 
@@ -1128,4 +1130,28 @@ class TestBackgroundTaskTracking:
         # Must not raise, must not block.
         await service.shutdown()
 
+        assert service._background_tasks == set()
+
+
+class TestTheFinalizesRules:
+    async def test_a_running_cleanup_refuses_the_finalize_before_any_step_runs(self, logger):
+        prune_conflicts = _make_prune_conflicts()
+        prune_conflicts.register_run("held-run")
+        playtime_recorder = FakePlaytimeRecorder()
+        post_exit_sync = FakePostExitSync()
+        service = _make_service(
+            playtime_recorder=playtime_recorder,
+            post_exit_sync=post_exit_sync,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts)
+
+        refusal = await service.finalize(7)
+
+        assert isinstance(refusal, dict)
+        assert refusal["reason"] == "prune_active"
+        assert playtime_recorder.calls == []
+        assert post_exit_sync.calls == []
         assert service._background_tasks == set()

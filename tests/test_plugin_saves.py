@@ -134,6 +134,7 @@ def plugin(tmp_path, logger, home, project_root):
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             log_debug=p._log_debug,
             uow_factory=p._uow_factory,
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

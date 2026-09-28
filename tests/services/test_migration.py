@@ -123,6 +123,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             platform_core_reader=FakePlatformCoreReader(),
             uow_factory=FakeUnitOfWorkFactory(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -158,6 +159,8 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             active_core=p._active_core,
             disc_resolver=FakeDiscResolver(),
+            loop=running_loop(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

@@ -5,7 +5,7 @@ import os
 from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _factories import _make_conflict_rules, _make_testable_plugin
@@ -135,6 +135,7 @@ def _make_firmware_service(
     resolve_system: FakeSystemResolver | None = None,
     platform_core_reader: FakePlatformCoreReader | None = None,
     logger=None,
+    conflict_rules=None,
 ) -> FirmwareService:
     """Build a ``FirmwareService`` over fake adapters + a fake Unit of Work.
 
@@ -178,6 +179,7 @@ def _make_firmware_service(
             resolve_system=resolve_system if resolve_system is not None else FakeSystemResolver(),
             platform_core_reader=platform_core_reader if platform_core_reader is not None else FakePlatformCoreReader(),
             uow_factory=uow_factory if uow_factory is not None else FakeUnitOfWorkFactory(),
+            conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
         ),
     )
 
@@ -3220,6 +3222,7 @@ def _rom_scoped_surfaces(
             uow_factory=uow_factory,
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
+            conflict_rules=_make_conflict_rules(),
         )
     )
     detail = GameDetailService(
@@ -5704,3 +5707,28 @@ class TestBadPathFirmwareCallables:
         assert "message" in result
         # The cache was not populated by the failed fetch.
         assert fw._listing._firmware_cache is None
+
+
+class TestAPendingMigrationRefusesEveryDownloadAndDelete:
+    """The façade checks each endpoint's migration rule before a sub-service is reached."""
+
+    @pytest.mark.parametrize(
+        ("method", "sub_service", "args"),
+        [
+            ("download_all_firmware", "_downloads", ("n64",)),
+            ("download_required_firmware", "_downloads", ("n64",)),
+            ("download_platform_firmware_file", "_downloads", ("n64", "pifdata.bin")),
+            ("delete_platform_bios", "_deletion", ("n64",)),
+            ("delete_bios_file", "_deletion", ("n64", "pifdata.bin")),
+            ("delete_bios_folder", "_deletion", ("n64", "bios")),
+        ],
+    )
+    async def test_it_refuses_before_the_sub_service_runs(self, method, sub_service, args, monkeypatch):
+        service = _make_firmware_service(conflict_rules=_make_conflict_rules(migration_pending=True))
+        reached = AsyncMock()
+        monkeypatch.setattr(getattr(service, sub_service), method, reached)
+
+        refusal = await getattr(service, method)(*args)
+
+        assert refusal["reason"] == "blocked_by_migration"
+        reached.assert_not_awaited()

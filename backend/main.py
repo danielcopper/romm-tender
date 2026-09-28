@@ -78,13 +78,6 @@ class Plugin:
     _steam_config: Any
     _retrodeck_paths: Any
 
-    # Strong refs to the fire-and-forget play-session flush tasks. ``create_task``
-    # alone is not enough — without a strong ref the loop is free to GC the task
-    # before it completes. ``add_done_callback`` prunes finished entries and
-    # ``_unload`` cancels any still in-flight (mirrors SessionLifecycleService).
-    # Lazily created on first schedule so a bare ``Plugin()`` (test/harness that
-    # skips ``_main``) still tracks tasks.
-    _playtime_flush_tasks: set[asyncio.Task[None]]
     # The one-time save-directory backfill, held so the loop cannot collect it.
     _save_directory_backfill: asyncio.Task[None]
 
@@ -114,12 +107,12 @@ class Plugin:
         """Attach a prune lease to events whose Steam writes outlive backend work; answer whether anybody heard it.
 
         The library service leases ``sync_complete`` and ``sync_stale`` itself
-        when it emits them, so neither is leased here.
+        when it emits them, and the download service ``download_complete``, so
+        none of the three is leased here.
         """
         fields = cast("dict[str, Any]", payload) if isinstance(payload, dict) else None
         needs_lease = fields is not None and (
             (event == "prune_complete" and fields.get("final") is not False and fields.get("publication_required"))
-            or (event == "download_complete" and fields.get("app_id") is not None)
             or (event == "migration_relaunch_options" and bool(fields.get("items")))
         )
         lease_token = None
@@ -277,21 +270,7 @@ class Plugin:
         await self._download_service.shutdown()
         await self._migration_service.shutdown()
         await self._session_lifecycle_service.shutdown()
-        await self._cancel_playtime_flush_tasks()
-
-    async def _cancel_playtime_flush_tasks(self):
-        """Cancel and await any in-flight play-session flush tasks on unload.
-
-        Mirrors ``SessionLifecycleService.shutdown`` so a detached flush
-        coroutine does not leak across the plugin-unload boundary. No-op when
-        none are pending (or the set was never created).
-        """
-        tasks = getattr(self, "_playtime_flush_tasks", None)
-        if not tasks:
-            return
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await self._playtime_service.shutdown()
 
     # ── Endpoints ──────────────────────────────────────────────────────
 
@@ -407,31 +386,16 @@ class Plugin:
         return await self.loop.run_in_executor(None, self._game_detail_service.get_cached_game_detail, app_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def set_system_core(self, platform_slug, core_label):
-        result = await self._core_service.set_system_core(platform_slug, core_label)
-        if result.get("success") and result.get("rebake_items"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("system_core")
-        return result
+        return await self._core_service.set_system_core(platform_slug, core_label)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def set_game_core(self, rom_id, label):
-        result = await self._core_service.set_game_core(rom_id, label)
-        if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("game_core")
-        return result
+        return await self._core_service.set_game_core(rom_id, label)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def clear_game_core(self, rom_id):
-        result = await self._core_service.clear_game_core(rom_id)
-        if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("game_core")
-        return result
+        return await self._core_service.clear_game_core(rom_id)
 
     @route
     async def get_platform_core_info(self, rom_id):
@@ -448,13 +412,8 @@ class Plugin:
         return await self._disc_service.get_disc_selection(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def select_disc(self, rom_id, filename):
-        result = await self._disc_service.select_disc(rom_id, filename)
-        if result.get("success") and result.get("launch_options") is not None:
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("disc_selection")
-        return result
+        return await self._disc_service.select_disc(rom_id, filename)
 
     # ── Version picker delegation to VersionSwitchService ──────────────
 
@@ -463,13 +422,8 @@ class Plugin:
         return await self._version_switch_service.get_version_list(app_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def switch_version(self, app_id, target_rom_id, allow_stranded):
-        result = await self._version_switch_service.switch_version(app_id, target_rom_id, allow_stranded)
-        if result.get("success"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("version_switch")
-        return result
+        return await self._version_switch_service.switch_version(app_id, target_rom_id, allow_stranded)
 
     @route
     @migration_blocked
@@ -540,17 +494,14 @@ class Plugin:
         return await self._firmware_service.get_platform_firmware_status(platform_slug)
 
     @route
-    @migration_blocked
     async def download_all_firmware(self, platform_slug):
         return await self._firmware_service.download_all_firmware(platform_slug)
 
     @route
-    @migration_blocked
     async def download_required_firmware(self, platform_slug):
         return await self._firmware_service.download_required_firmware(platform_slug)
 
     @route
-    @migration_blocked
     async def download_platform_firmware_file(self, platform_slug, file_name):
         return await self._firmware_service.download_platform_firmware_file(platform_slug, file_name)
 
@@ -565,17 +516,14 @@ class Plugin:
         return await self._game_detail_service.get_bios_status(rom_id)
 
     @route
-    @migration_blocked
     async def delete_platform_bios(self, platform_slug):
         return await self._firmware_service.delete_platform_bios(platform_slug)
 
     @route
-    @migration_blocked
     async def delete_bios_file(self, platform_slug, file_name):
         return await self._firmware_service.delete_bios_file(platform_slug, file_name)
 
     @route
-    @migration_blocked
     async def delete_bios_folder(self, platform_slug, folder_path):
         return await self._firmware_service.delete_bios_folder(platform_slug, folder_path)
 
@@ -710,29 +658,23 @@ class Plugin:
         return self._sync_service.get_sync_runs()
 
     @route
-    @prune_active_blocked
     async def evaluate_launch(self, steam_app_id):
         verdict = await self._launch_gate_service.evaluate(steam_app_id)
-        return asdict(verdict)
+        return verdict if isinstance(verdict, dict) else asdict(verdict)
 
     @route
     async def check_local_drift(self, rom_id):
         return await self._launch_gate_service.check_local_drift(rom_id)
 
     @route
-    @prune_active_blocked
     async def get_rom_relaunch_options(self, rom_id):
-        """Return one lease-bearing relaunch item, a gate failure, or ``None``.
+        """Return one lease-bearing relaunch item, a refusal, or ``None``.
 
         The Play-button funnel re-confirms the shortcut's launch command from
         this just before launch to heal mid-session ``launch_options`` drift
         (#1150). The lease covers the subsequent frontend Steam write.
         """
-        item = await self.loop.run_in_executor(None, self._relaunch_options_resolver.relaunch_item_for_rom, int(rom_id))
-        if item is not None:
-            item["success"] = True
-            item["prune_lease_token"] = await self._prune_conflicts.acquire_lease("launch_reconfirm")
-        return item
+        return await self._relaunch_options_resolver.get_rom_relaunch_options(rom_id)
 
     @route
     async def probe_reachability(self):
@@ -756,16 +698,13 @@ class Plugin:
         return await self._game_process_service.stop_running_game(int(rom_id))
 
     @route
-    @prune_active_blocked
     async def finalize_game_session(self, rom_id):
         result = await self._session_lifecycle_service.finalize(rom_id)
-        return asdict(result)
+        return result if isinstance(result, dict) else asdict(result)
 
     # ── Download delegation to DownloadService ──────────────
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def start_download(
         self, rom_id, replace_existing=False, candidate_path=None, collision_choice=None, page_saw_candidate=False
     ):
@@ -779,17 +718,11 @@ class Plugin:
         game page told the user, so a page that found a copy can never end in a
         silent download.
         """
-        result = await self._download_service.start_download(
+        return await self._download_service.start_download(
             rom_id, replace_existing, candidate_path, collision_choice, page_saw_candidate
         )
-        task = self._download_service.task_for_rom(int(rom_id)) if result.get("success") else None
-        if task is not None:
-            await self._prune_conflicts.retain(task, "start_download")
-        return result
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def adopt_existing_rom(self, rom_id, candidate_path=None, collision_choice=None):
         """Record content already on disk as this ROM's install, without downloading.
 
@@ -799,15 +732,7 @@ class Plugin:
         (``"overwrite"`` / ``"keep"``) and is null until that dialog has been
         shown.
         """
-        result = await self._rom_adoption_service.adopt_existing_rom(rom_id, candidate_path, collision_choice)
-        # Only a bound ROM gets a lease: the lease covers the frontend's write of
-        # the launch command onto the shortcut, and an unbound ROM has no
-        # shortcut to write to, so the frontend would hold the token to its full
-        # TTL with nothing to release it. Same guard the download-complete emit
-        # applies (``_emit_with_prune_continuation``).
-        if result.get("success") and result.get("app_id") is not None:
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("adopt_existing_rom")
-        return result
+        return await self._rom_adoption_service.adopt_existing_rom(rom_id, candidate_path, collision_choice)
 
     @route
     async def verify_existing_content(self, rom_id, candidate_path=None):
@@ -827,14 +752,8 @@ class Plugin:
         return self._download_service.pause_download(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def resume_download(self, rom_id):
-        result = await self._download_service.resume_download(rom_id)
-        task = self._download_service.task_for_rom(int(rom_id)) if result.get("success") else None
-        if task is not None:
-            await self._prune_conflicts.retain(task, "resume_download")
-        return result
+        return await self._download_service.resume_download(rom_id)
 
     @route
     def get_download_queue(self):
@@ -959,39 +878,14 @@ class Plugin:
         return await self._save_sync_service.copy_save_to_slot(rom_id, save_id, target_slot)
 
     @route
-    @prune_active_blocked
     async def record_session_start(self, rom_id):
-        result = self._playtime_service.record_session_start(rom_id)
-        # Fire-and-forget: drain any offline play-session backlog into RomM's
-        # native ingest on the next launch; returns immediately so the launch is
-        # never blocked on the round-trip. flush_pending_sessions owns its own
-        # error handling (best-effort, offline-safe).
-        task = self._schedule_playtime_flush()
-        await self._prune_conflicts.retain(task, "record_session_start")
-        return result
-
-    def _schedule_playtime_flush(self):
-        """Kick off the offline play-session flush as a tracked background task.
-
-        Keeps a strong ref in ``_playtime_flush_tasks`` so the loop cannot GC the
-        task mid-flush, prunes it on completion, and lets ``_unload`` cancel any
-        still pending. The set is created lazily so a bare ``Plugin()`` works too.
-        """
-        tasks = getattr(self, "_playtime_flush_tasks", None)
-        if tasks is None:
-            tasks = set()
-            self._playtime_flush_tasks = tasks
-        task = self.loop.create_task(self._playtime_service.flush_pending_sessions())
-        tasks.add(task)
-        task.add_done_callback(tasks.discard)
-        return task
+        return await self._playtime_service.record_session_start(rom_id)
 
     @route
     def get_all_playtime(self):
         return self._playtime_service.get_all_playtime()
 
     @route
-    @prune_active_blocked
     async def reconcile_playtime(self, rom_id):
         return await self._playtime_service.reconcile_playtime(int(rom_id))
 
@@ -1061,15 +955,12 @@ class Plugin:
         return self._metadata_service.get_app_id_rom_id_map()
 
     @route
-    @prune_active_blocked
     async def get_installed_relaunch_options(self):
         """Return lease-bearing relaunch items for installed and bound ROMs.
 
         The frontend uses them to heal Steam-shortcut drift at startup (#1043).
         """
-        items = await self.loop.run_in_executor(None, self._startup_healing_service.get_installed_relaunch_options)
-        token = await self._prune_conflicts.acquire_lease("installed_reconcile") if items else None
-        return {"success": True, "items": items, "prune_lease_token": token}
+        return await self._startup_healing_service.get_installed_relaunch_options()
 
     # ── Achievements delegation to AchievementsService ───────
 

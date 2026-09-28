@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from services.protocols import (
         Clock,
+        ConflictRules,
         DownloadFileStore,
         DownloadTargetGateFn,
         EventEmitter,
@@ -107,7 +108,9 @@ class DownloadServiceConfig:
     DownloadService needs at construction time. ``install_recorder`` is the
     shared writer of the ``rom_installs`` row and the shortcut bake behind it;
     ``target_gate`` is the pre-flight that refuses to write over content the
-    plugin did not put there (ADR-0028).
+    plugin did not put there (ADR-0028). ``conflict_rules`` are what a start or
+    resume checks at its entry, and what a download's task and its
+    ``download_complete`` lease are held through.
     """
 
     romm_api: RommRomReader
@@ -127,10 +130,16 @@ class DownloadServiceConfig:
     # supersede — the two services form a construction cycle, so the composition
     # root binds it after both exist.
     rom_remover: RomRemoverProvider
+    conflict_rules: ConflictRules
 
 
 class DownloadService:
-    """ROM download engine: downloads and queue management."""
+    """ROM download engine: downloads and queue management.
+
+    A start and a resume check their endpoint's conflict rules at their entry,
+    under that endpoint's name, and answer the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: DownloadServiceConfig) -> None:
         self._romm_api = config.romm_api
@@ -147,6 +156,7 @@ class DownloadService:
         self._m3u_support = config.m3u_support
         self._uow_factory = config.uow_factory
         self._rom_remover = config.rom_remover
+        self._rules = config.conflict_rules
 
         # Owned state
         self._download_in_progress: set[int] = set()
@@ -206,16 +216,24 @@ class DownloadService:
         or replace — passes the same prologue: the ``already_downloading`` guard,
         the path-safety coercion, the occupancy gate, the supersede, the disk
         pre-flight. ``DownloadTargetGateFn`` owns what each of them means.
+
+        Checked against the ``start_download`` endpoint's conflict rules first.
+        A started download's task holds an operation until it ends.
         """
-        rom_id = int(rom_id)
-        if rom_id in self._download_in_progress:
-            return {"success": False, "reason": "already_downloading", "message": "Already downloading"}
-        # The page's report rides with the user's answers because the gate reads
-        # them together, but it is added apart from them to keep the difference
-        # visible: the two above are choices the user made, this one is not.
-        answer = {"candidate_path": candidate_path, "collision_choice": collision_choice}
-        answer["page_saw_candidate"] = page_saw_candidate
-        return await self._begin_download(rom_id, resume=False, replace_existing=bool(replace_existing), **answer)
+        async with self._rules.hold("start_download", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            rom_id = int(rom_id)
+            if rom_id in self._download_in_progress:
+                return {"success": False, "reason": "already_downloading", "message": "Already downloading"}
+            # The page's report rides with the user's answers because the gate reads
+            # them together, but it is added apart from them to keep the difference
+            # visible: the two above are choices the user made, this one is not.
+            answer = {"candidate_path": candidate_path, "collision_choice": collision_choice}
+            answer["page_saw_candidate"] = page_saw_candidate
+            result = await self._begin_download(rom_id, resume=False, replace_existing=bool(replace_existing), **answer)
+            await self._retain_started_task(result, rom_id, "start_download")
+            return result
 
     async def supersede_sibling_installs(self, rom_id: int) -> dict[str, Any] | None:
         """Strip any other installed version of ``rom_id``'s sibling group (#1298 T7).
@@ -456,6 +474,17 @@ class DownloadService:
     def task_for_rom(self, rom_id: int) -> asyncio.Task[None] | None:
         """Return the detached task whose lifetime owns this ROM's install write."""
         return self._download_tasks.get(int(rom_id))
+
+    async def _retain_started_task(self, result: dict[str, Any], rom_id: int, label: str) -> None:
+        """Hold an operation named *label* for the task a successful start or resume left running.
+
+        Called inside that call's own ``hold``, so no cleanup can start between
+        the two operations; the task's ``download_complete`` lease is taken
+        while this one still holds.
+        """
+        task = self.task_for_rom(rom_id) if result.get("success") else None
+        if task is not None:
+            await self._rules.retain(task, label)
 
     def _safe_local_file_name(self, rom_detail: dict[str, Any]) -> str:
         """The on-disk name for this ROM: the server's, coerced to one safe component.
@@ -720,18 +749,25 @@ class DownloadService:
         app_id, launch_options = await self._loop.run_in_executor(
             None, self._install_recorder.do_resolve_launch_bake, rom_id, rom_detail, final_path
         )
-        await self._emit(
-            "download_complete",
-            {
-                "rom_id": rom_id,
-                "rom_name": rom_name,
-                "platform_name": platform_name,
-                "file_path": final_path,
-                "app_id": app_id,
-                "launch_options": launch_options,
-                "resumable": entry.get("resumable", False),
-            },
-        )
+        payload = {
+            "rom_id": rom_id,
+            "rom_name": rom_name,
+            "platform_name": platform_name,
+            "file_path": final_path,
+            "app_id": app_id,
+            "launch_options": launch_options,
+            "resumable": entry.get("resumable", False),
+        }
+        # A bound ROM's event carries a lease for the frontend's write of the
+        # launch command onto its shortcut; an unbound ROM has no shortcut to
+        # write to, so nothing would ever release one.
+        if app_id is None:
+            await self._emit("download_complete", payload)
+        else:
+            await self._rules.emit_under_lease(
+                "download_complete",
+                lambda token: self._emit("download_complete", {**payload, "prune_lease_token": token}),
+            )
         # Record the freshly baked launch command as this ROM's applied state (the
         # value the frontend confirm-sets onto the shortcut), so the next sync
         # skips the now-correct shortcut instead of re-touching it (delta apply,
@@ -1223,15 +1259,24 @@ class DownloadService:
         appeared there while it sat paused — but never the candidate search,
         which is skipped on a resume so a file the user already declined cannot
         refuse the transfer they started.
+
+        Checked against the ``resume_download`` endpoint's conflict rules first.
+        A resumed download's task holds an operation until it ends.
         """
-        rom_id = int(rom_id)
-        entry = self._download_queue.get(rom_id)
-        if entry is None or entry.get("status") != "paused":
-            return {"success": False, "reason": "not_paused", "message": "No paused download for this ROM"}
-        if self._resume_target_superseded(rom_id):
-            self.evict(rom_id)
-            return {"success": False, "reason": "superseded", "message": "Another version is now active"}
-        return await self._begin_download(rom_id, resume=True, replace_existing=bool(entry.get("_replace_existing")))
+        async with self._rules.hold("resume_download", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            rom_id = int(rom_id)
+            entry = self._download_queue.get(rom_id)
+            if entry is None or entry.get("status") != "paused":
+                return {"success": False, "reason": "not_paused", "message": "No paused download for this ROM"}
+            if self._resume_target_superseded(rom_id):
+                self.evict(rom_id)
+                return {"success": False, "reason": "superseded", "message": "Another version is now active"}
+            replace_existing = bool(entry.get("_replace_existing"))
+            result = await self._begin_download(rom_id, resume=True, replace_existing=replace_existing)
+            await self._retain_started_task(result, rom_id, "resume_download")
+            return result
 
     def _resume_target_superseded(self, rom_id: int) -> bool:
         """True when a sibling now owns the group's shortcut, stranding this resume.

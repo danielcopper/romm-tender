@@ -130,6 +130,7 @@ def plugin(tmp_path, emit, logger, home):
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -158,6 +159,7 @@ def plugin(tmp_path, emit, logger, home):
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             platform_core_reader=FakePlatformCoreReader(),
             uow_factory=FakeUnitOfWorkFactory(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

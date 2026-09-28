@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ActiveDownloadRomIdsFn,
         Clock,
+        ConflictRules,
         ReachabilityProbeFn,
         RommRomReader,
         RomRelaunchItemReader,
@@ -67,7 +68,9 @@ class VersionSwitchServiceConfig:
     supplies the ``server_reachable`` hint on that refusal; ``relaunch_resolver``
     re-bakes a switched-onto install's full launch command; ``active_downloads``
     reports the rom ids currently downloading so a switch is refused while any
-    group member has an active download (#1298).
+    group member has an active download (#1298). ``conflict_rules`` are what
+    the ``switch_version`` endpoint's use case checks at its entry and takes its
+    lease through.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -80,6 +83,7 @@ class VersionSwitchServiceConfig:
     reachability_probe: ReachabilityProbeFn
     relaunch_resolver: RomRelaunchItemReader
     active_downloads: ActiveDownloadRomIdsFn
+    conflict_rules: ConflictRules
 
 
 @dataclass(frozen=True)
@@ -136,7 +140,13 @@ class _SwitchContext:
 
 
 class VersionSwitchService:
-    """Version-picker reads (``get_version_list``) and writes (``switch_version``)."""
+    """Version-picker reads (``get_version_list``) and writes (``switch_version``).
+
+    The write checks its endpoint's conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds; the
+    removed-game cleanup, which switches from inside its own run, calls
+    ``switch_version_unchecked`` instead (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: VersionSwitchServiceConfig) -> None:
         self._loop = config.loop
@@ -149,6 +159,7 @@ class VersionSwitchService:
         self._reachability_probe = config.reachability_probe
         self._relaunch_resolver = config.relaunch_resolver
         self._active_downloads = config.active_downloads
+        self._rules = config.conflict_rules
 
     # ── get_version_list ─────────────────────────────────────────────────
 
@@ -534,7 +545,26 @@ class VersionSwitchService:
     # ── switch_version ───────────────────────────────────────────────────
 
     async def switch_version(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
+        """Move the group's active-version binding for the ``switch_version`` endpoint.
+
+        :meth:`switch_version_unchecked` under the endpoint's conflict rules. A
+        switch that succeeded carries a ``version_switch`` lease in
+        ``prune_lease_token`` for the frontend's Steam write.
+        """
+        async with self._rules.hold("switch_version", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self.switch_version_unchecked(app_id, target_rom_id, allow_stranded)
+            if result.get("success"):
+                result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")
+            return result
+
+    async def switch_version_unchecked(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
         """Move the group's active-version binding to ``target_rom_id``.
+
+        :meth:`switch_version` without its conflict rules or its lease, for the
+        removed-game cleanup's repoint, which switches from inside its own run
+        while the run claim that the prune rule refuses on is held.
 
         A pure binding move (ADR-0021 §2/§4): the target row is bound to the
         group's ``app_id`` and the repository's collision-unbind clears the old

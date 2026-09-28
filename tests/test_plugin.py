@@ -36,12 +36,13 @@ from services.settings import SettingsService, SettingsServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
+_RELAUNCH_ITEMS = {"items": [{"app_id": 42, "launch_options": "launch"}]}
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("event", "payload"),
     [
-        ("download_complete", {"app_id": 42, "launch_options": "launch"}),
         ("migration_relaunch_options", {"items": [{"app_id": 42, "launch_options": "launch"}]}),
     ],
 )
@@ -63,10 +64,14 @@ async def test_continuation_events_hold_a_renewable_prune_lease(plugin, event, p
     [
         ("sync_complete", {"total_games": 1}),
         ("sync_stale", {"remove": [{"rom_id": 1, "app_id": 42}]}),
+        ("download_complete", {"app_id": 42, "launch_options": "launch"}),
     ],
 )
-async def test_the_funnel_leaves_the_library_sync_events_to_the_library(plugin, event, payload):
-    """The library service leases these two itself; a second lease here would never be released."""
+async def test_the_funnel_leaves_the_events_their_services_lease_themselves(plugin, event, payload):
+    """The library service leases the two sync events and the download service ``download_complete``.
+
+    A second lease here would never be released.
+    """
     await plugin._emit_with_prune_continuation(event, payload)
 
     assert plugin._event_sink.last_payload == payload
@@ -87,7 +92,7 @@ async def test_rejected_continuation_event_releases_its_unreachable_lease(plugin
     plugin._event_sink.raises = RuntimeError("transport rejected event")
 
     with pytest.raises(RuntimeError, match="transport rejected event"):
-        await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
+        await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
 
     assert plugin._prune_conflicts.conflicting_operations == 0
 
@@ -97,26 +102,18 @@ async def test_a_continuation_event_nobody_heard_releases_its_lease(plugin):
     """A claim the panel cannot discharge holds off every removed-game cleanup until it expires."""
     plugin._event_sink.delivers = False
 
-    await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
+    await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
 
-    assert plugin._event_sink.last_payload["prune_lease_token"].startswith("download_complete:")
+    assert plugin._event_sink.last_payload["prune_lease_token"].startswith("migration_relaunch_options:")
     assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
 async def test_a_delivered_continuation_event_keeps_its_lease(plugin):
     """The control for the case above — the release must follow the answer, not the send."""
-    await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
+    await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
 
     assert plugin._prune_conflicts.conflicting_operations == 1
-
-
-@pytest.mark.asyncio
-async def test_download_without_a_bound_shortcut_emits_no_continuation_lease(plugin):
-    await plugin._emit_with_prune_continuation("download_complete", {"app_id": None})
-
-    assert "prune_lease_token" not in plugin._event_sink.last_payload
-    assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
@@ -234,6 +231,8 @@ def plugin(logger, home, data_dir):
             resolve_path=FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(),
             relaunch_options=FakeRelaunchOptionsResolver(),
+            loop=running_loop(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     return p
@@ -1286,59 +1285,3 @@ class TestRetroDeckStatus:
         plugin._retrodeck_paths = FakeRetroDeckPaths(health=RetroDeckConfigHealth.ABSENT)
         result = plugin.get_retrodeck_status()
         assert result["status"] == "absent"
-
-
-class TestPlaytimeFlushTaskLifecycle:
-    """FIX 8 — the fire-and-forget play-session flush task is strong-reffed on
-    schedule, pruned on completion, and cancelled+awaited on unload."""
-
-    def _plugin_with_playtime(self):
-        p = Plugin()
-        p.loop = asyncio.get_running_loop()
-        p._playtime_service = MagicMock()
-        p._playtime_service.record_session_start.return_value = {"success": True}
-        p._prune_conflicts = _make_prune_conflicts()
-        return p
-
-    @pytest.mark.asyncio
-    async def test_record_start_schedules_and_prunes_flush_task(self):
-        """record_session_start kicks off flush and the task self-prunes when done."""
-        p = self._plugin_with_playtime()
-        p._playtime_service.flush_pending_sessions = AsyncMock(return_value=None)
-
-        result = await p.record_session_start(7)
-
-        assert result == {"success": True}
-        assert len(p._playtime_flush_tasks) == 1
-        # Let the scheduled flush run to completion; the done-callback prunes it.
-        await asyncio.gather(*p._playtime_flush_tasks)
-        assert p._playtime_flush_tasks == set()
-        p._playtime_service.flush_pending_sessions.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_unload_cancels_pending_flush_task(self):
-        """A still-in-flight flush is cancelled and awaited on unload (no leak)."""
-        started = asyncio.Event()
-
-        async def _never_finishing():
-            started.set()
-            await asyncio.Event().wait()  # blocks until cancelled
-
-        p = self._plugin_with_playtime()
-        p._playtime_service.flush_pending_sessions = _never_finishing
-
-        await p.record_session_start(7)
-        await started.wait()  # ensure the task is running
-        assert len(p._playtime_flush_tasks) == 1
-        (task,) = tuple(p._playtime_flush_tasks)
-
-        await p._cancel_playtime_flush_tasks()
-
-        assert task.cancelled()
-
-    @pytest.mark.asyncio
-    async def test_cancel_is_noop_when_no_tasks(self):
-        """Unload with no scheduled flush (bare plugin) is a safe no-op."""
-        p = self._plugin_with_playtime()
-        # No record_session_start called → the set was never created.
-        await p._cancel_playtime_flush_tasks()  # must not raise
