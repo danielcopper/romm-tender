@@ -1156,6 +1156,23 @@ class TestTheAcknowledgement:
             assert len(drawn) == 1, f"{label} is not on screen exactly once in its finished form"
         assert "\n".join(screen).rstrip().endswith(f"{machine.state}/backend.log")
 
+    def test_an_install_over_an_existing_tree_does_not_ask(self, machine):
+        """Someone with Tender already at the code root is not coming from the Decky plugin."""
+        _installed(machine)
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert "Coming from the Decky plugin?" not in result.stdout
+        assert _tree_version(machine.code) == _NEW
+
+    def test_a_first_install_still_asks_on_a_terminal(self, machine):
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="no")
+
+        assert code == 1
+        assert "Coming from the Decky plugin?" in _screen(output)
+        assert not machine.code.exists()
+
     def test_it_is_not_shown_once_its_expiry_has_passed(self, machine):
         """The warning carries an expiry in the code so it does not outlive its reason."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), TENDER_ACK_UNTIL="2000-01-01")

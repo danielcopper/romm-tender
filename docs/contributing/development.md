@@ -234,8 +234,10 @@ tree rolls back with and the licence texts a distributed copy carries, nothing t
 own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md)
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
-**An install over an existing one is an update, and an update whose new version does not answer is rolled back.**
-Whenever `install.sh` installs over a tree already at `~/.local/lib/romm-tender/`, the run goes in this order:
+**An install over an existing one is an update, and an update whose new version does not answer is rolled back.** It
+does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes`: a machine
+with a tree at the code root already is not coming from it. Whenever `install.sh` installs over a tree already at
+`~/.local/lib/romm-tender/`, the run goes in this order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The unit is stopped.

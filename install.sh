@@ -237,7 +237,8 @@ Usage: install.sh [options]
   --rollback       go back to the version the last update replaced
   --disable        stop Tender and leave it installed
   --uninstall      remove Tender
-  --yes            skip the acknowledgement (required when there is no terminal)
+  --yes            skip the question a first install asks (required there when
+                   there is no terminal)
   --help           this text
 TEXT
 }
@@ -1239,6 +1240,9 @@ service_main_pid() {
 acknowledge() {
     [ "$ASSUME_YES" = "yes" ] && return 0
     [ "$(date -u +%Y-%m-%d)" \< "$ACK_UNTIL" ] || return 0
+    # A tree already at the code root is this installer's own, so whoever runs
+    # it over one is not coming from the Decky plugin.
+    [ ! -d "$CODE" ] || return 0
 
     local sign="!"
     if utf8_terminal; then
