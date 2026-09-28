@@ -100,8 +100,8 @@ description = "Run the full CI battery locally — every PR check in ci.yml, in 
 # `lint`, `gate:frontend-static` and `gate:build` the rest of the `build` job,
 # `gate:frontend-test` the `frontend-test` job (`pnpm test` stands in for CI's
 # `pnpm test:coverage` — pass/fail parity), and `gate:markdown-format` the
-# `markdown-format` job. Not reproducible locally, so omitted: the Sonar jobs (see
-# "Full CI gate" in docs/contributing/development.md).
+# `markdown-format` job. Not reproducible locally, so omitted: the two jobs that
+# feed Sonar (see "Full CI gate" in docs/contributing/development.md).
 depends = [
     "test",
     "lint",
