@@ -22,7 +22,7 @@ from lib.sync_gate import sync_refusal
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from lib.prune_gate import PruneConflicts
 
@@ -95,3 +95,23 @@ class ConflictRuleSet:
     async def release_lease(self, token: str) -> None:
         """Release the lease *token* names; an unknown or expired token changes nothing."""
         await self._prune_conflicts.release_lease(token)
+
+    async def emit_under_lease(self, key: str, emit_with: Callable[[str], Awaitable[bool]]) -> None:
+        """Take a lease under *key* and emit through *emit_with*, which puts its token in ``prune_lease_token``.
+
+        For an event whose Steam writes the frontend makes after the backend's
+        part is over. Checks no rule, like :meth:`acquire_lease`, so call it
+        while something else still refuses a cleanup's start. *emit_with* is
+        the emit itself, written at the call site as a literal
+        ``self._emit("<event>", …)`` so ``scripts/check_event_parity.py`` sees
+        the event. The lease is released again when the emit raises or nobody
+        heard the event, since no frontend holds its token then to release it.
+        """
+        token = await self.acquire_lease(key)
+        try:
+            heard = await emit_with(token)
+        except BaseException:
+            await self.release_lease(token)
+            raise
+        if not heard:
+            await self.release_lease(token)

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Awaitable, Callable
     from contextlib import AbstractAsyncContextManager
 
     from domain.game_instance import GameInstance
@@ -275,6 +276,8 @@ class ConflictRules(Protocol):
     ``hold(..., prune=True)`` block that started *task*. ``acquire_lease``
     takes a lease under *key* for Steam writes the frontend makes after the
     call or the event and answers its token; ``release_lease`` gives one back by token.
+    ``emit_under_lease`` emits an event through *emit_with* under a lease it
+    takes, and gives the lease back when the emit raises or nobody heard it.
     CONTEXT.md → Conflict rules, Prune conflicts.
     """
 
@@ -287,3 +290,5 @@ class ConflictRules(Protocol):
     async def acquire_lease(self, key: str) -> str: ...
 
     async def release_lease(self, token: str) -> None: ...
+
+    async def emit_under_lease(self, key: str, emit_with: Callable[[str], Awaitable[bool]]) -> None: ...

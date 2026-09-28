@@ -32,7 +32,6 @@ from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, should_include_in_platform_collection
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
-from services.library._leased_emit import emit_under_lease
 
 if TYPE_CHECKING:
     import asyncio
@@ -436,8 +435,7 @@ class SyncReporter:
                 complete_payload["interrupt_reason"] = interrupt_reason
         elif restart_recommended:
             complete_payload["restart_recommended"] = True
-        await emit_under_lease(
-            self._rules,
+        await self._rules.emit_under_lease(
             "sync_complete",
             lambda token: self._emit("sync_complete", {**complete_payload, "prune_lease_token": token}),
         )

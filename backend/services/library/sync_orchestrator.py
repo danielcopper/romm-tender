@@ -57,7 +57,6 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import classify_error
 from lib.list_result import ErrorCode
-from services.library._leased_emit import emit_under_lease
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
@@ -1229,8 +1228,7 @@ class SyncOrchestrator:
             stale = []
         remove = [{"rom_id": rom_id, "app_id": app_id} for rom_id, app_id in stale]
         if remove:
-            await emit_under_lease(
-                self._rules,
+            await self._rules.emit_under_lease(
                 "sync_stale",
                 lambda token: self._emit("sync_stale", {"remove": remove, "prune_lease_token": token}),
             )

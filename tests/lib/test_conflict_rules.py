@@ -207,3 +207,62 @@ async def test_a_lease_checks_no_rule():
     assert rules.conflicts.conflicting_operations == 1
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
+
+
+# ── An event under a lease ───────────────────────────────────────────────────
+
+
+class _Emit:
+    """The emit a use case passes: records the token it was handed and answers whether anybody heard."""
+
+    def __init__(self, *, heard: bool = True, raises: BaseException | None = None) -> None:
+        self.heard = heard
+        self.raises = raises
+        self.tokens: list[str] = []
+
+    async def __call__(self, token: str) -> bool:
+        self.tokens.append(token)
+        if self.raises is not None:
+            raise self.raises
+        return self.heard
+
+
+async def test_an_event_somebody_heard_keeps_the_lease_its_token_names():
+    rules = _Rules()
+    emit = _Emit()
+
+    await rules.rules.emit_under_lease("download_complete", emit)
+
+    (token,) = emit.tokens
+    assert token.startswith("download_complete:")
+    assert rules.conflicts.conflicting_operations == 1
+    await rules.rules.release_lease(token)
+    assert rules.conflicts.conflicting_operations == 0
+
+
+async def test_an_event_nobody_heard_gives_its_lease_back():
+    rules = _Rules()
+
+    await rules.rules.emit_under_lease("download_complete", _Emit(heard=False))
+
+    assert rules.conflicts.conflicting_operations == 0
+
+
+async def test_an_event_whose_emit_raises_gives_its_lease_back():
+    rules = _Rules()
+
+    with pytest.raises(RuntimeError, match="transport rejected event"):
+        await rules.rules.emit_under_lease("download_complete", _Emit(raises=RuntimeError("transport rejected event")))
+
+    assert rules.conflicts.conflicting_operations == 0
+
+
+async def test_an_event_under_a_lease_checks_no_rule():
+    """The emit happens while something else still refuses a cleanup's start."""
+    rules = _Rules(migration=True, sync=True, cleanup=True)
+
+    await rules.rules.emit_under_lease("download_complete", _Emit())
+
+    assert rules.conflicts.conflicting_operations == 1
+    assert rules.migration.asked == 0
+    assert rules.sync.asked == 0
