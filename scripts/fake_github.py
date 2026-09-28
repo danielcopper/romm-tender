@@ -204,8 +204,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
 
-class _Stopped(Exception):
-    """A stop signal arrived: the way this server is meant to end, not a failure."""
+class _Stopped(BaseException):
+    """A stop signal arrived: the way this server is meant to end, not a failure.
+
+    A ``BaseException`` because ``socketserver.BaseServer._handle_request_noblock``
+    catches ``Exception`` around ``process_request``: a stop raised there would be
+    swallowed, and with both signals already switched to ``_swallow`` the server
+    could then be ended by nothing short of SIGKILL.
+    """
 
 
 def _stop(signum: int, frame: object) -> None:
@@ -256,13 +262,16 @@ def main(argv: list[str] | None = None) -> int:
         corrupt_tarball=args.corrupt_tarball,
     )
     server = build_server(args.dir, args.latest, args.port, faults)
-    print(f"Serving {args.dir} on {server.base_url}, latest {_TAG_PREFIX}{server.latest}. Point Tender at it with:")
-    for key, value in server.environment().items():
-        print(f"  {key}={value}")
-    sys.stdout.flush()
+    # Installed before the "Serving" line, and that line written inside the
+    # ``try``: whoever reads it may signal at once, and the stop can land in the
+    # print or the flush as well as in ``serve_forever``.
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
     try:
+        print(f"Serving {args.dir} on {server.base_url}, latest {_TAG_PREFIX}{server.latest}. Point Tender at it with:")
+        for key, value in server.environment().items():
+            print(f"  {key}={value}")
+        sys.stdout.flush()
         server.serve_forever()
     except _Stopped:
         pass
