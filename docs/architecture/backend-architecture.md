@@ -80,11 +80,14 @@ and the caller's own pending register answers it `connection_lost`. A lost answe
 no panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and
 "sync finished" delivered three hours later lands in a session that never started one.
 
-The answer is what `_emit_with_prune_continuation` needs. That funnel attaches a prune claim to the five events whose
-Steam-side work outlives the backend's, and a claim handed to a panel that is not there blocks every later operation
-until it expires — so the funnel gives it straight back the moment the sink says nobody heard. One consequence follows
-and nothing checks it: **an event carrying a claim is awaited, never scheduled as a task** (the answer would arrive
-after the claim was handed out).
+The answer is what a prune claim on an event needs. Five events carry one, because their Steam-side work outlives the
+backend's: the funnel every service emits through, `_emit_with_prune_continuation`, attaches it to `download_complete`,
+`prune_complete` and `migration_relaunch_options`, and the library service takes it itself for `sync_complete` and
+`sync_stale` when it emits them. The funnel hands the sink's answer back, so a service's `EventEmitter` answers whether
+anybody heard too. A claim handed to a panel that is not there blocks every later operation until it expires — so
+whichever side took it gives it straight back the moment the answer says nobody heard. One consequence follows and
+nothing checks it: **an event carrying a claim is awaited, never scheduled as a task** (the answer would arrive after
+the claim was handed out).
 
 **The start-up order** is what makes the port file meaningful:
 

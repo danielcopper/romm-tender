@@ -266,7 +266,7 @@ export function useSyncPage(): SyncPageState {
       await reconcileStaleShortcuts();
       const result = await syncPreview();
       if (!result.success) {
-        // A `@migration_blocked` or `@prune_active_blocked` refusal arrives here
+        // A refusal by the migration or prune rule arrives here
         // too — `success`, a reason and a message, and none of the preview's own
         // fields — which is why nothing below this line reads the answer.
         setStoredSyncProgress({ running: false, stage: "" });

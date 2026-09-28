@@ -959,8 +959,8 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
       )}
       {/* The hint was a ButtonItem `description`, attached to the one button it
           was about; under a row it has nowhere to hang, so it names that button
-          instead. Only the shortcut removal is sync-gated — `main.py`'s
-          `remove_platform_shortcuts` carries `@sync_active_blocked` and
+          instead. Only the shortcut removal is sync-gated — the
+          `remove_platform_shortcuts` use case names the sync rule and
           `delete_platform_saves` deliberately does not — so an unscoped sentence
           claims a restriction the backend does not impose. Scoping the sentence
           rather than gating the delete: the gate is the authority on what a sync

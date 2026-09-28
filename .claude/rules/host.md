@@ -50,10 +50,11 @@ policy built from the wish refuses every request there is.
 
 ## 4. An event carrying a claim is awaited, never scheduled
 
-`EventSink.emit` answers whether anybody heard. One caller acts on it — the funnel in `main.py` that attaches a prune
-claim to the events whose Steam-side work outlives the backend's — and it can only act on it if it **awaited** the emit.
-Scheduled as a task, the answer arrives after the claim has already been handed out, and a claim nobody can discharge
-blocks every later operation until it expires.
+`EventSink.emit` answers whether anybody heard. The funnel in `main.py` hands that answer back to the service that
+emitted, and two callers act on it for a prune claim on an event whose Steam-side work outlives the backend's: the
+funnel for the claims it attaches itself, and the library service for the ones it attaches to `sync_complete` and
+`sync_stale`. Each can only act on it if the emit was **awaited**. Scheduled as a task, the answer arrives after the
+claim has already been handed out, and a claim nobody can discharge blocks every later operation until it expires.
 
 ## 5. The size cap is judged before the payload is buffered
 

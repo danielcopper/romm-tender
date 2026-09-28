@@ -3472,7 +3472,7 @@ describe("Library › Platforms", () => {
 
       expect(buttonByText(container, "Remove 9 shortcuts")).toBeDisabled();
       // The sentence names the one button it is about: only the shortcut removal
-      // is @sync_active_blocked, so an unscoped line would claim a restriction
+      // names the sync rule, so an unscoped line would claim a restriction
       // the backend does not impose on the delete beside it.
       expect(container.textContent).toContain("Removing shortcuts: Unavailable while a library sync is running.");
       expect(buttonByText(container, "Delete 3 save files")).not.toBeDisabled();

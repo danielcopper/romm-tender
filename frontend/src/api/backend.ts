@@ -423,10 +423,10 @@ export const removePlatformShortcuts = callable<
   {
     success: boolean;
     // The success path returns success/app_ids/rom_ids/platform_name, plus
-    // prune_lease_token when app_ids is non-empty; the @migration_blocked,
-    // @sync_active_blocked and @prune_active_blocked gates short-circuit to
-    // success/reason/message, omitting app_ids/rom_ids. Every field below the
-    // discriminant is therefore path-dependent (mirrors removeAllShortcuts).
+    // prune_lease_token when app_ids is non-empty; a refusal by the migration,
+    // sync or prune rule answers success/reason/message, omitting
+    // app_ids/rom_ids. Every field below the discriminant is therefore
+    // path-dependent (mirrors removeAllShortcuts).
     app_ids?: number[];
     rom_ids?: (string | number)[];
     platform_name?: string;
@@ -440,10 +440,10 @@ export const removeAllShortcuts = callable<
   {
     success: boolean;
     // The success path returns only success/app_ids/rom_ids, plus
-    // prune_lease_token when app_ids is non-empty; the @migration_blocked,
-    // @sync_active_blocked and @prune_active_blocked gates short-circuit to
-    // success/reason/message, omitting app_ids/rom_ids. Every field below the
-    // discriminant is therefore path-dependent.
+    // prune_lease_token when app_ids is non-empty; a refusal by the migration,
+    // sync or prune rule answers success/reason/message, omitting
+    // app_ids/rom_ids. Every field below the discriminant is therefore
+    // path-dependent.
     reason?: string;
     message?: string;
     app_ids?: number[];
@@ -467,9 +467,8 @@ export const refreshCoverArtwork = callable<
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a
 // dry_run flag. A dry run returns candidate_count without deleting; the real
 // run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound
-// shortcut is missing from the live set, no_grid_dir) and the
-// @migration_blocked / @sync_active_blocked / @prune_active_blocked gates
-// short-circuit to success/reason/message with no count.
+// shortcut is missing from the live set, no_grid_dir) and a refusal by the
+// migration, sync or prune rule answer success/reason/message with no count.
 export const cleanupOrphanedGridImages = callable<
   [number[], boolean],
   {
@@ -537,9 +536,9 @@ export const uninstallAllRoms = callable<
     success: boolean;
     // The removal path always carries removed_count/errors/app_ids — success
     // is False on a PARTIAL failure (some deletions failed) but the payload
-    // stays. The @migration_blocked / @sync_active_blocked /
-    // @prune_active_blocked gates short-circuit to success/reason/message with
-    // NO payload, so a missing app_ids is the gate-refusal discriminant.
+    // stays. A refusal by the migration, sync or prune rule answers
+    // success/reason/message with NO payload, so a missing app_ids is the
+    // refusal discriminant.
     removed_count?: number;
     errors?: { rom_id: string; error: string }[];
     app_ids?: number[];

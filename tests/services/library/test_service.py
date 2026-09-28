@@ -721,7 +721,7 @@ def _seed_platform_names(uow, names: dict[str, str]) -> None:
 
 
 class TestIsSyncInFlight:
-    """Tests for is_sync_in_flight() — the read the @sync_active_blocked gate uses.
+    """Tests for is_sync_in_flight() — the read behind the sync rule.
 
     State is driven ONLY through the box's lifecycle verbs
     (``try_begin_run`` / ``request_cancel`` / ``finish_run``) — the

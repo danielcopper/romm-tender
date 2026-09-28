@@ -2473,7 +2473,7 @@ describe("SyncPage", () => {
     });
 
     it("says a refusal where the reader is looking, and returns to idle", async () => {
-      // A `@migration_blocked` answer arrives exactly like this: success false,
+      // A migration-rule refusal arrives exactly like this: success false,
       // a reason, a message, and none of the fields the type requires.
       vi.mocked(backend.syncPreview).mockResolvedValue({
         success: false,

@@ -217,7 +217,7 @@ export interface PlatformsPageState {
    * singular, so a second action would overwrite the first's line and the first
    * `finally` would clear the busy state out from under the second. The prune
    * lease is no obstacle and must not be cited as one: leases are keyed by
-   * token on both sides, and `@prune_active_blocked` refuses on a prune *run*
+   * token on both sides, and the prune rule refuses on a prune *run*
    * reservation rather than on a sibling lease, so two platform removals would
    * both be admitted. Making these three per-slug is what a per-platform
    * disable would take.
@@ -920,9 +920,8 @@ export function usePlatformsPage(): PlatformsPageState {
         (async () => {
           try {
             const result = await removePlatformShortcuts(row.slug);
-            // The @migration_blocked / @sync_active_blocked / @prune_active_blocked
-            // gates short-circuit to { success: false, reason, message } with no
-            // app_ids/rom_ids —
+            // A refusal by the migration, sync or prune rule answers
+            // { success: false, reason, message } with no app_ids/rom_ids —
             // surface that message instead of cosmetically reporting a removal.
             if (!result.success) {
               setStatus({ slug: row.slug, scope: "remove", text: result.message ?? "Failed to remove shortcuts" });

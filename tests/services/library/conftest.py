@@ -3,7 +3,8 @@
 Wires a ``Plugin`` instance with the full LibraryService composition
 (fetcher + orchestrator + reporter) plus the peer services
 LibraryService coordinates with (MetadataService, ArtworkService,
-ShortcutRemovalService) and a mocked MigrationService. All test files
+ShortcutRemovalService), whose conflict rules share the plugin's prune
+conflicts and refuse nothing unless a test holds a claim. All test files
 under ``tests/services/library/`` consume the same ``plugin`` fixture
 so coverage of the façade integration and the sub-service internals
 sits on top of an identical setup.
@@ -145,10 +146,6 @@ def plugin(tmp_path, emit, logger, home):
             conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
-    # Default migration service mock — no migration pending. Tests that need
-    # to exercise the @migration_blocked gate override this.
-    p._migration_service = MagicMock()
-    p._migration_service.is_retrodeck_migration_pending.return_value = False
     return p
 
 
