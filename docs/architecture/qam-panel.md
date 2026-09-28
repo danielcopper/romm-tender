@@ -1079,28 +1079,33 @@ outstanding as of the last sync" rather than a fresh server-side proof. And **a 
 reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as an identity anchor and only the
 removed-game cleanup removes one — and its group's shortcut still reaches it (CONTEXT.md → Reachable), but the right
 half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less those
-the platform's last completed fetch did not return, which `domain/fetch_generation.py::prune_candidate_ids` already
+the fetch its completion stamp records did not return, which `domain/fetch_generation.py::prune_candidate_ids` already
 answers for the cleanup's own discovery: every row not carrying the fetch generation the platform's completion stamp
 recorded, a row carrying none included. Where no usable stamp exists — none, one with no generation, or one recording an
 empty fetch — it names nothing and every row counts, so the exclusion's worst case is the number printed before it.
 
 **That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
-at once, while its row still carries the generation the stamp recorded and so still counts on the right. Only a sync
-that **applies** that platform closes the window: the stamp and the rows' generation are written by the apply's commit
-(`services/library/chunk_dispatcher.py`), and a preview writes neither. So a sync that ends at "Everything is up to
-date." leaves it open, and one can: an unbound version deleted from a group that still holds a binding changes no
-shortcut, and the preview's removals count bound rows only. An apply interrupted inside the platform leaves it open too,
-because it deletes the stamp at its start and no stamp leaves nothing out. Closing it without a sync would need a live
-server call, which this read deliberately does not make — `get_registry_platforms` answers offline, and that is what
-keeps the pane useful with RomM unreachable.
+at once, while its row, where its group holds a binding, still carries the generation the stamp recorded and so still
+counts on the right. Short of removing the platform's shortcuts, which takes the platform out of the payload, only a
+sync that **applies** that platform closes the window: the stamp and the rows' generation are written only by an apply's
+commit ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
+skip", and `domain/fetch_generation.py`), and a preview writes neither. So the window survives a sync that ends at
+"Everything is up to date.", and such a sync is possible: an unbound version deleted from a group that still holds a
+binding changes no shortcut, and the preview's removals count bound rows only. An apply that stops inside the platform
+(cancelled, interrupted or paused) leaves it open too, and wider: it deletes the stamp at its start, and with no stamp
+every reachable version RomM no longer serves counts again. Closing it without a sync would need a live server call,
+which this read deliberately does not make — `get_registry_platforms` answers offline, and that is what keeps the pane
+useful with RomM unreachable.
 
-The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the last fetch did not
+The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
 `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, in the gap before that run's stale-removal
 scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
-leaves out a row RomM still serves — and both heal through the next sync that applies that platform: the second at the
-platform's commit, the first at that run's stale-removal scan, which a cancelled run skips. The direction is a
-conservative under-count, which is why it is recorded rather than guarded.
+leaves out a row RomM still serves — and both heal at a sync that applies that platform: the second at the platform's
+commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs
+skip the unchanged platform, so after a stop the first waits until the platform is fetched and applied again (RomM
+changes it, or Force Full Sync). The direction is a conservative under-count, which is why it is recorded rather than
+guarded.
 
 **The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a
 long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
