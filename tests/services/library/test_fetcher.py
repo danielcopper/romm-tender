@@ -886,6 +886,80 @@ class TestIncrementalSkipSupersededRows:
         assert {r["id"] for r in result} == {10}
 
 
+class TestIncrementalSkipBoundRowNotReturned:
+    """A bound row the stamp's fetch did not return forces a full fetch (#2084).
+
+    The skip rebuilds its unit from every bound row, and a rebuilt row counts as
+    returned, so the stale-removal scan could never name one RomM has deleted. A
+    run that stamps the platform and then stops leaves exactly such a row behind
+    under counts that still match the server.
+    """
+
+    @pytest.mark.asyncio
+    async def test_bound_row_of_an_older_generation_forces_a_full_fetch(self, plugin, fake_romm_api):
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
+        # Deleted on RomM before the stamping fetch, still bound.
+        _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id="run-old")
+        fake_romm_api.roms = {i: {"id": i, "platform_id": 1, "name": f"G{i}"} for i in (1, 2)}
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        unit_roms, skipped = await plugin._sync_service._fetcher.fetch_platform_unit(unit)
+
+        assert skipped is False
+        assert {r["id"] for r in unit_roms} == {1, 2}
+
+    @pytest.mark.asyncio
+    async def test_bound_row_with_no_generation_forces_a_full_fetch(self, plugin, fake_romm_api):
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id=None)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        result = await plugin._sync_service._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_skips_when_every_bound_row_carries_the_generation(self, plugin, fake_romm_api):
+        """The control: the same platform once the stale row is unbound skips again,
+        so an unbound row of an older generation holds nothing off."""
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 3, app_id=None, group_key="igdb:3:1", fetch_id="run-old")
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        result = await plugin._sync_service._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is not None
+        assert {r["id"] for r in result} == {1, 2}
+
+    @pytest.mark.asyncio
+    async def test_pre_migration_stamp_skips_whatever_generation_a_bound_row_carries(self, plugin, fake_romm_api):
+        """A stamp with no generation cannot say which rows its fetch returned, so
+        no bound row forces the fetch — the legacy path keeps skipping."""
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id=None)
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-old")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id=None)
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        result = await plugin._sync_service._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is not None
+        assert {r["id"] for r in result} == {1, 2}
+
+
 class TestIncrementalSkipFromPlatformStamp:
     """Per-platform completion stamp drives the skip even without a completed run (ADR-0023 / #1025).
 
@@ -1685,6 +1759,39 @@ class TestPlanEstimates:
         assert len(units) == 1
         assert units[0].predicted_skip is True
         assert units[0].collapsed_count == 1
+
+    @pytest.mark.asyncio
+    async def test_bound_row_not_returned_predicts_no_skip(self, plugin, fake_romm_api):
+        """The gate full-fetches a platform holding a bound row its stamp's fetch
+        did not return (#2084), so the estimate must not price it as a skip."""
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
+        plugin.settings["enabled_platforms"] = {"1": True}
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 3, app_id=5003, group_key="igdb:3:1", fetch_id="run-old")
+
+        units = await plugin._sync_service._fetcher.build_work_queue()
+
+        assert units[0].predicted_skip is False
+
+    @pytest.mark.asyncio
+    async def test_every_bound_row_carrying_the_generation_predicts_skip(self, plugin, fake_romm_api):
+        """The control for the case above: the stale row unbound, the skip returns."""
+        _wire_fake(plugin, fake_romm_api)
+        uow = plugin._uow
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
+        plugin.settings["enabled_platforms"] = {"1": True}
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2, fetch_id="run-new")
+        _seed_persisted_rom(uow, 1, app_id=5001, group_key="igdb:1:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 2, app_id=5002, group_key="igdb:2:1", fetch_id="run-new")
+        _seed_persisted_rom(uow, 3, app_id=None, group_key="igdb:3:1", fetch_id="run-old")
+
+        units = await plugin._sync_service._fetcher.build_work_queue()
+
+        assert units[0].predicted_skip is True
 
     @pytest.mark.asyncio
     async def test_grandfathered_group_counts_each_bound_sibling(self, plugin, fake_romm_api):

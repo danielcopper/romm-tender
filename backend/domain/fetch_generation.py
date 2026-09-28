@@ -3,7 +3,8 @@
 The generation marker's read side: given a platform's ``roms`` rows and the
 generation its completion stamp recorded, decide the row count the skip's
 "local mirror matches the server" condition compares against RomM's platform ROM
-count. Anything that decides whether to skip belongs to the fetcher, and
+count, and which rows the stamped fetch did not return. Anything that decides
+whether to skip belongs to the fetcher, and
 anything that writes a generation belongs to the reporter; this module only
 decides which rows still count.
 """
@@ -66,6 +67,27 @@ def backfill_needed(rows: Sequence[Rom], fetch_id: str | None) -> bool:
     if not fetch_id:
         return any(rom.sibling_group_key is None for rom in rows)
     return any(rom.sibling_group_key is None and rom.last_fetch_id == fetch_id for rom in rows)
+
+
+def bound_row_not_returned(rows: Sequence[Rom], fetch_id: str | None) -> bool:
+    """Whether a bound row among *rows* is one the stamp's fetch did not return.
+
+    The skip rebuilds its unit from every bound row, and a rebuilt row counts as
+    returned, so the run's stale-removal scan can never name it. A bound row the
+    stamped fetch did not return — a version deleted on RomM whose stale-removal
+    scan never ran because the run that stamped the platform stopped first — would
+    keep its shortcut for as long as the platform keeps skipping. Such a row forces
+    a full fetch instead, which returns every ROM RomM still serves and leaves only
+    the dropped ones for the next completed run's stale-removal scan. A row whose
+    generation is NULL did not ride the stamped fetch either, so it forces one too.
+
+    A stamp with **no** generation (``fetch_id`` falsy) predates the contract and
+    cannot say what its fetch saw, so no row forces the fetch — the same legacy
+    path :func:`count_rows_for_skip` takes.
+    """
+    if not fetch_id:
+        return False
+    return any(rom.shortcut_app_id is not None and rom.last_fetch_id != fetch_id for rom in rows)
 
 
 def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

@@ -30,6 +30,7 @@ def predict_unit_skip(
     fetched_count: int,
     registry_count: int,
     needs_backfill: bool,
+    bound_row_not_returned: bool,
 ) -> bool:
     """Predict whether the wholesale-skip gate will skip a platform unit.
 
@@ -37,8 +38,10 @@ def predict_unit_skip(
     (truthy ``completed_at``, non-``None`` ``rom_count``), the stamped ROM
     count still matches the server's ``rom_count`` for the unit, rows are
     persisted and at least one is bound, no ``sibling_group_key`` backfill
-    is pending, and the count of rows carrying the stamp's fetch generation
-    matches the server count. ``fetched_count`` is that generation-filtered
+    is pending, no bound row is one the stamp's fetch did not return
+    (``domain/fetch_generation.bound_row_not_returned``), and the count of
+    rows carrying the stamp's fetch generation matches the server count.
+    ``fetched_count`` is that generation-filtered
     count (``domain/fetch_generation.count_rows_for_skip``), not every
     persisted row: a row for a rom_id the server dropped is retained
     (ADR-0007) but does not count (#1504). The
@@ -62,6 +65,7 @@ def predict_unit_skip(
         and fetched_count == unit_rom_count
         and registry_count > 0
         and not needs_backfill
+        and not bound_row_not_returned
     )
 
 

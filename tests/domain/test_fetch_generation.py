@@ -6,6 +6,7 @@ import pytest
 
 from domain.fetch_generation import (
     backfill_needed,
+    bound_row_not_returned,
     count_rows_for_skip,
     current_generation_ids,
     prune_candidate_ids,
@@ -128,6 +129,48 @@ class TestBackfillNeeded:
     def test_no_rows_never_demands_a_backfill(self):
         assert backfill_needed([], "run-new") is False
         assert backfill_needed([], None) is False
+
+
+def _bound_row(rom_id: int, fetch_id: str | None, app_id: int | None) -> Rom:
+    return Rom(
+        rom_id=rom_id,
+        platform_slug="dc",
+        name=f"rom-{rom_id}",
+        fs_name=f"rom-{rom_id}.gdi",
+        shortcut_app_id=app_id,
+        last_synced_at="2026-07-20T06:27:12",
+        sibling_group_key="group-a",
+        last_fetch_id=fetch_id,
+    )
+
+
+class TestBoundRowNotReturned:
+    def test_a_bound_row_of_an_older_generation_was_not_returned(self):
+        """The #2084 shape: a bound version the stamped fetch no longer returned."""
+        rows = [_bound_row(1, "run-new", 5001), _bound_row(3, "run-old", 5003)]
+        assert bound_row_not_returned(rows, "run-new") is True
+
+    def test_a_bound_row_with_no_generation_was_not_returned(self):
+        rows = [_bound_row(1, "run-new", 5001), _bound_row(3, None, 5003)]
+        assert bound_row_not_returned(rows, "run-new") is True
+
+    def test_every_bound_row_carrying_the_generation_forces_nothing(self):
+        rows = [_bound_row(1, "run-new", 5001), _bound_row(2, "run-new", 5002)]
+        assert bound_row_not_returned(rows, "run-new") is False
+
+    def test_an_unbound_row_of_an_older_generation_forces_nothing(self):
+        """A superseded row retained per ADR-0007 has no shortcut to hide (#1504)."""
+        rows = [_bound_row(1, "run-new", 5001), _bound_row(3, "run-old", None), _bound_row(4, None, None)]
+        assert bound_row_not_returned(rows, "run-new") is False
+
+    def test_a_stamp_without_a_generation_forces_nothing(self):
+        """The legacy path cannot say what its fetch saw, so it keeps skipping."""
+        rows = [_bound_row(1, "run-old", 5001), _bound_row(2, None, 5002)]
+        assert bound_row_not_returned(rows, None) is False
+        assert bound_row_not_returned(rows, "") is False
+
+    def test_no_rows_forces_nothing(self):
+        assert bound_row_not_returned([], "run-new") is False
 
 
 class TestCurrentGenerationIds:

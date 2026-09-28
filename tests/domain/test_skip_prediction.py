@@ -14,6 +14,7 @@ def _kwargs(**overrides):
         "fetched_count": 3,
         "registry_count": 1,
         "needs_backfill": False,
+        "bound_row_not_returned": False,
     }
     base.update(overrides)
     return base
@@ -55,6 +56,11 @@ class TestPredictUnitSkip:
 
     def test_needs_backfill_predicts_full_fetch(self):
         assert predict_unit_skip(**_kwargs(needs_backfill=True)) is False
+
+    def test_bound_row_not_returned_predicts_full_fetch(self):
+        """The gate full-fetches a platform holding a bound row its stamp's fetch
+        did not return, so the estimate must not price that platform as a skip."""
+        assert predict_unit_skip(**_kwargs(bound_row_not_returned=True)) is False
 
 
 class TestCollapsedShortcutCount:

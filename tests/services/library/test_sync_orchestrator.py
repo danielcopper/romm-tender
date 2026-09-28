@@ -95,12 +95,18 @@ def _seed_completed_run(plugin, *, at, platforms=None, collections=None, run_id=
         plugin._uow.sync_runs.save(run)
 
 
-def _seed_platform_stamp(plugin, slug, *, at, rom_count):
-    """Persist a per-platform completion stamp (ADR-0023) into the shared UoW."""
+def _seed_platform_stamp(plugin, slug, *, at, rom_count, fetch_id=None):
+    """Persist a per-platform completion stamp (ADR-0023) into the shared UoW.
+
+    ``fetch_id`` is the generation the stamp's fetch marked its rows with (#1504);
+    ``None`` is a stamp written before that contract.
+    """
     from domain.platform_sync_state import PlatformSyncState
 
     with plugin._uow:
-        plugin._uow.platform_sync_state.save(PlatformSyncState.stamp(platform_slug=slug, at=at, rom_count=rom_count))
+        plugin._uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug=slug, at=at, rom_count=rom_count, fetch_id=fetch_id)
+        )
 
 
 class _ClockAdvancingSleeper:
@@ -4619,6 +4625,74 @@ class TestPlatformCompletionStamp:
             stamp = uow.platform_sync_state.get("n64")
         assert stamp is not None
         assert stamp.rom_count == 5  # untouched — the apply never started
+
+
+class TestStoppedRunLeavesNoHiddenStaleRow:
+    """A version deleted on RomM loses its shortcut at the next completed run (#2084).
+
+    A run that commits a platform writes its completion stamp with the platform's
+    new count and generation, but the stale-removal scan runs only for a run that
+    was not stopped. A bound version the stamping fetch did not return therefore
+    survives a stopped run. The next run must full-fetch that platform instead of
+    rebuilding the version from the bound rows as if RomM had returned it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_next_completed_run_removes_a_version_a_stopped_run_left_bound(self, plugin, fake_romm_api, emit):
+        plugin.loop = asyncio.get_running_loop()
+        _use_fake_romm(plugin, fake_romm_api)
+
+        # RomM serves A and B; V (rom 3) was deleted since the last completed fetch.
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "Z"}])
+        plugin.settings["enabled_platforms"] = {"1": True, "2": True}
+        _seed_platform_stamp(plugin, "n64", at="2025-01-01T00:00:00", rom_count=3, fetch_id="run-0")
+        for rom_id, name in ((1, "A"), (2, "B"), (3, "V")):
+            _seed_rom_row(plugin, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=name)
+            with plugin._uow as uow:
+                row = uow.roms.get(rom_id)
+                row.record_fetch_generation("run-0")
+                uow.roms.save(row)
+
+        plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = plugin._sync_service._box
+
+        # Run 1 applies N64 in full, then the user cancels inside GBA.
+        async def cancel_inside_gba(unit, event):
+            if unit.slug == "gba":
+                box.sync_state = SyncState.CANCELLING
+                return None
+            event.set()
+            return {}
+
+        plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = cancel_inside_gba
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-1"
+        await plugin._sync_service._orchestrator._do_sync_per_unit()
+
+        with plugin._uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+            assert uow.roms.get(3).shortcut_app_id == 5003
+        assert stamp is not None
+        assert (stamp.rom_count, stamp.fetch_id) == (2, "run-1")
+
+        # Run 2 completes.
+        run_2_starts_at = len(emit.call_args_list)
+        plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-2"
+        await plugin._sync_service._orchestrator._do_sync_per_unit()
+
+        run_2 = emit.call_args_list[run_2_starts_at:]
+        applied_units = {c.args[1]["unit_name"] for c in run_2 if c.args and c.args[0] == "sync_apply_unit"}
+        assert "N64" in applied_units
+        stale_events = [c.args[1] for c in run_2 if c.args and c.args[0] == "sync_stale"]
+        assert [event["remove"] for event in stale_events] == [[{"rom_id": 3, "app_id": 5003}]]
+        with plugin._uow as uow:
+            assert uow.roms.get(3).shortcut_app_id is None
+            assert uow.roms.get(1).shortcut_app_id == 5001
 
 
 class TestRegression738CacheCorruption:
