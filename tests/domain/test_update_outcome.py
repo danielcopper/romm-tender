@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from domain.update_outcome import UpdateFailure, announced_update, decode_update_failure
+from domain.update_outcome import UpdateFailure, announced_update, decode_update_failure, standing_update_failure
 
 _RECORD = {"attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z"}
 _FAILURE = UpdateFailure(attempted_version="1.3.0", restored_version="1.2.3", rolled_back_at="2026-09-25T10:15:00Z")
@@ -38,6 +38,19 @@ class TestDecodeUpdateFailure:
     def test_a_record_missing_any_key_is_no_record(self, key):
         record = {name: value for name, value in _RECORD.items() if name != key}
         assert decode_update_failure(json.dumps(record)) is None
+
+
+class TestStandingUpdateFailure:
+    def test_a_record_stands_while_the_version_it_restored_is_running(self):
+        assert standing_update_failure(_FAILURE, "1.2.3") == _FAILURE
+
+    @pytest.mark.parametrize("running", ["1.3.0", "1.4.0", "1.2.2"])
+    def test_a_record_is_a_leftover_on_any_other_version(self, running):
+        """Its attempted version included: an update to it that went through left the record behind."""
+        assert standing_update_failure(_FAILURE, running) is None
+
+    def test_no_record_is_none(self):
+        assert standing_update_failure(None, "1.2.3") is None
 
 
 class TestAnnouncedUpdate:

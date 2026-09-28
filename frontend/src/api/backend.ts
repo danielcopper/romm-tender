@@ -1218,7 +1218,8 @@ export interface UpdateFailure {
  * `announce_version` is the version this backend process was updated to and
  * the panel has not yet acknowledged announcing — `null` on every other start.
  * `failure` is the installer's record of an update it rolled back, read afresh
- * on every call, so it is gone once the installer removes it.
+ * on every call, so it is gone once the installer removes it, and `null` too
+ * where the running version is not the one it restored.
  * `failure_dismissed` says the user waved away that exact record.
  */
 export interface UpdateOutcome {

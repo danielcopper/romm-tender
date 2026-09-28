@@ -1671,14 +1671,18 @@ The service tells the user what the last update did, in one of two ways, and nev
   running version after trying the stored one.
 - **A rolled-back update is the installer's record, read, never written.** `update-failure.json` in the state root
   (`adapters/update_failure.py`) is read at start — one WARNING,
-  `the update to <X> was rolled back at <T>; back on <Y> — the installer's output says why` — and again on every
-  `get_update_outcome`, so the card goes as soon as the next update that answers removes the file. A record that is
-  missing, unreadable or short of any of its three keys is no record. Its card's Dismiss is per record:
-  `update_failure_dismissed_at` in `settings.json` holds the dismissed record's `rolled_back_at`, written only through
-  the `SettingsPersister`, so the next rollback raises the card again.
-- **Which card stands** where both apply is the panel's rule, in `frontend/src/utils/updateOutcomeStore.ts`: for as long
-  as a record stands, the version it tried has no "is available" card, dismissed or not
-  ([QAM panel](qam-panel.md#notices-and-homes)).
+  `the update to <X> was rolled back at <T>; back on <Y> — what <X> logged when it tried to start is earlier in this log, or in journalctl --user -u romm-tender if it failed before logging`
+  — and again on every `get_update_outcome`, so the card goes as soon as the next update that answers removes the file.
+  A record that is missing, unreadable or short of any of its three keys is no record.
+- **A record stands only while the running version is the one it restored**
+  (`domain/update_outcome.py::standing_update_failure`). One that names another `restored_version` — the installer's
+  removal did not happen, and a later update went through anyway — is a leftover: no WARNING, `failure` is `None`, and
+  so there is no card and no row under Settings › Updates. The file is left where it is, since removing it is the
+  installer's.
+- **Dismiss is per record.** `update_failure_dismissed_at` in `settings.json` holds the dismissed record's
+  `rolled_back_at`, written only through the `SettingsPersister`, so the next rollback raises the card again.
+- Which card stands where both apply is the panel's rule (`failureTakesThePlaceOf`,
+  [QAM panel](qam-panel.md#notices-and-homes)).
 
 ### Adapters (`backend/adapters/`)
 

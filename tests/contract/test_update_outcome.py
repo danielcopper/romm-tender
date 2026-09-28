@@ -87,6 +87,17 @@ async def test_a_start_after_a_rollback_announces_nothing_and_reports_the_record
     }
 
 
+async def test_a_record_left_behind_by_an_update_that_went_through_is_no_record(harness):
+    """The update to the running version answered and the record was not removed: it no longer stands."""
+    _last_run(harness, "0.0.1")
+    _record(harness, attempted=VERSION, restored="0.0.1")
+    harness.plugin._update_outcome_service.note_start()
+
+    outcome = await harness.plugin.get_update_outcome()
+
+    assert outcome == {"announce_version": VERSION, "failure": None, "failure_dismissed": False}
+
+
 async def test_the_record_goes_when_the_installer_removes_it(harness):
     _record(harness)
     assert (await harness.plugin.get_update_outcome())["failure"] is not None

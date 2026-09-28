@@ -3,8 +3,9 @@
 Owns the two outcomes a start can find: an update that went through, which the
 panel announces once per process, and an update the installer rolled back,
 which the panel shows until the user dismisses that record or the installer
-removes it. Which version is announced, and how the installer's record is read,
-live in ``domain/update_outcome.py``; the record itself is behind a seam.
+removes it. Which version is announced, how the installer's record is read, and
+whether it still stands live in ``domain/update_outcome.py``; the record itself
+is behind a seam.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.update_outcome import announced_update
+from domain.update_outcome import announced_update, standing_update_failure
 
 if TYPE_CHECKING:
     import asyncio
@@ -76,10 +77,10 @@ class UpdateOutcomeService:
         Runs once, at start. An update that went through is logged at INFO and
         owed to the panel as one announcement; a record of a rolled-back update
         is logged at WARNING whether or not it has been dismissed, because the
-        log is where the reason is looked for. The first start that records a
-        version announces nothing.
+        log is where the reason is looked for — but only while it stands. The
+        first start that records a version announces nothing.
         """
-        failure = self._read_failure_io()
+        failure = self._standing_failure_io()
         with self._uow_factory() as uow:
             last_run = uow.kv_config.get(LAST_RUN_KEY)
             if last_run != self._current_version:
@@ -90,7 +91,8 @@ class UpdateOutcomeService:
         if failure is not None:
             self._logger.warning(
                 f"the update to {failure.attempted_version} was rolled back at {failure.rolled_back_at}; "
-                f"back on {failure.restored_version} — the installer's output says why"
+                f"back on {failure.restored_version} — what {failure.attempted_version} logged when it tried to "
+                "start is earlier in this log, or in journalctl --user -u romm-tender if it failed before logging"
             )
 
     async def get_update_outcome(self) -> dict[str, Any]:
@@ -102,10 +104,10 @@ class UpdateOutcomeService:
         installer's record of a rolled-back update as
         ``{"attempted_version", "restored_version", "rolled_back_at"}``, read
         afresh on every call so it goes when the installer removes it, and
-        ``None`` where there is none. ``failure_dismissed`` says the user waved
-        away that exact record.
+        ``None`` where there is none or it no longer stands.
+        ``failure_dismissed`` says the user waved away that exact record.
         """
-        failure = await self._loop.run_in_executor(None, self._read_failure_io)
+        failure = await self._loop.run_in_executor(None, self._standing_failure_io)
         return {
             "announce_version": self._announcement,
             "failure": _failure_payload(failure) if failure is not None else None,
@@ -113,7 +115,7 @@ class UpdateOutcomeService:
         }
 
     def acknowledge_update_announcement(self) -> dict[str, Any]:
-        """Record that the panel announced the update, so this process does not announce it again.
+        """Record that the panel announced the update, so a reloaded panel does not announce it again.
 
         Idempotent. Returns ``{"success": True}``.
         """
@@ -137,8 +139,8 @@ class UpdateOutcomeService:
         dismissed = self._settings.get(FAILURE_DISMISSED_KEY)
         return dismissed if isinstance(dismissed, str) else None
 
-    def _read_failure_io(self) -> UpdateFailure | None:
-        """Ask the record seam, degrading a raising one to no record.
+    def _standing_failure_io(self) -> UpdateFailure | None:
+        """Ask the record seam for a record that still stands, degrading a raising seam to no record.
 
         The seam's contract is that it never raises. This guard is here because
         what is promised — a start that records its version and a panel read
@@ -146,10 +148,11 @@ class UpdateOutcomeService:
         implementation of a Protocol need not share the adapter's discipline.
         """
         try:
-            return self._read_update_failure()
+            failure = self._read_update_failure()
         except Exception as e:
             self._logger.warning(f"the record of a rolled-back update could not be read: {e!r}")
             return None
+        return standing_update_failure(failure, self._current_version)
 
 
 def _failure_payload(failure: UpdateFailure) -> dict[str, str]:

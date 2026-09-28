@@ -1,8 +1,9 @@
 """What became of the last update, as a start of this program finds it.
 
 Contract: everything pure about an update's outcome — the record the installer
-leaves when it rolled an update back (its filename and how it is read), and
-which version, if any, a start owes the user an announcement of. Reading the
+leaves when it rolled an update back (its filename, how it is read, and whether
+it still stands), and which version, if any, a start owes the user an
+announcement of. Reading the
 record stays in the adapter; the version a start remembers stays in the service.
 """
 
@@ -51,6 +52,20 @@ def decode_update_failure(raw: str) -> UpdateFailure | None:
     if not (_is_text(attempted) and _is_text(restored) and _is_text(rolled_back_at)):
         return None
     return UpdateFailure(attempted_version=attempted, restored_version=restored, rolled_back_at=rolled_back_at)
+
+
+def standing_update_failure(failure: UpdateFailure | None, running: str) -> UpdateFailure | None:
+    """The record, where it still describes this start, or ``None``.
+
+    A record stands only while *running* is the version it restored. The
+    installer removes it once a later update's new version answered, but a
+    record that outlived that — the removal failed, or the version moved some
+    other way — describes a start that is over, and is a leftover rather than a
+    rollback to tell the user about.
+    """
+    if failure is None or failure.restored_version != running:
+        return None
+    return failure
 
 
 def announced_update(last_run: str | None, running: str, failure: UpdateFailure | None) -> str | None:

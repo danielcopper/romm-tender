@@ -169,7 +169,8 @@ class TestAStartAfterARollback:
 
         assert _lines(caplog, logger, logging.WARNING) == [
             "the update to 1.3.0 was rolled back at 2026-09-25T10:15:00Z; back on 1.2.3"
-            " — the installer's output says why"
+            " — what 1.3.0 logged when it tried to start is earlier in this log,"
+            " or in journalctl --user -u romm-tender if it failed before logging"
         ]
 
     def test_logs_it_even_when_the_card_was_dismissed(self, logger, caplog):
@@ -189,6 +190,33 @@ class TestAStartAfterARollback:
             service.note_start()
 
         assert _lines(caplog, logger, logging.WARNING) == []
+
+
+class TestARecordThatNoLongerStands:
+    """A record stands only while the running version is the one it restored; any other is a leftover."""
+
+    async def test_a_later_update_that_went_through_logs_no_rollback_and_reports_no_record(self, logger, caplog):
+        """The installer's removal did not happen, and the update to 1.3.0 went through after all."""
+        service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3", record=_Record(_FAILURE))
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            service.note_start()
+            outcome = await service.get_update_outcome()
+
+        assert _lines(caplog, logger, logging.WARNING) == []
+        assert _lines(caplog, logger, logging.INFO) == ["updated from 1.2.3 to 1.3.0"]
+        assert outcome == {"announce_version": "1.3.0", "failure": None, "failure_dismissed": False}
+
+    async def test_a_record_whose_restored_version_is_not_running_is_ignored(self, logger, caplog):
+        service, _, _, _ = _make(logger, running="1.4.0", last_run="1.4.0", record=_Record(_FAILURE))
+
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            service.note_start()
+            outcome = await service.get_update_outcome()
+
+        assert _lines(caplog, logger, logging.WARNING) == []
+        assert outcome["failure"] is None
+        assert outcome["failure_dismissed"] is False
 
 
 class TestTheRecord:
@@ -268,6 +296,6 @@ class TestDismissingTheCard:
         assert persister.save_count == 0
 
     async def test_a_dismissal_stored_as_something_else_does_not_hide_the_card(self, logger):
-        service, _, _, _ = _make(logger, record=_Record(_FAILURE), settings={FAILURE_DISMISSED_KEY: 7})
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE), settings={FAILURE_DISMISSED_KEY: 7})
 
         assert (await service.get_update_outcome())["failure_dismissed"] is False

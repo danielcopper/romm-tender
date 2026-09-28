@@ -953,14 +953,15 @@ class Plugin:
         ``None`` on every other start. ``failure`` is the installer's record of
         an update it rolled back, ``{"attempted_version", "restored_version",
         "rolled_back_at"}``, read afresh so it goes when the installer removes
-        it; ``None`` where there is none. ``failure_dismissed`` says the user
-        waved away that exact record.
+        it; ``None`` where there is none, or where the running version is not
+        the one it restored. ``failure_dismissed`` says the user waved away
+        that exact record.
         """
         return await self._update_outcome_service.get_update_outcome()
 
     @route
     def acknowledge_update_announcement(self):
-        """Record that the panel announced this process's update, so a reloaded panel does not again.
+        """Record that the panel announced this process's update, so a reloaded panel does not announce it again.
 
         Returns ``{"success": True}``.
         """
