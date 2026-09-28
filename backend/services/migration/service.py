@@ -284,6 +284,20 @@ class MigrationService:
         else:
             uow.kv_config.delete(_KV_RETRODECK_HOME_HOPS)
 
+    def get_retrodeck_status(self) -> dict[str, Any]:
+        """Report RetroDECK path-resolution health for the frontend banner.
+
+        Discriminated-status union (Callable response shapes carve-out):
+        ``status`` carries one of ``ok`` / ``absent`` / ``unreadable`` /
+        ``root_missing``. The frontend owns the human-readable copy; the
+        backend returns the discriminant plus the probed paths.
+        """
+        return {
+            "status": self._retrodeck_paths.config_health().value,
+            "config_path": self._retrodeck_paths.config_path(),
+            "resolved_home": self._retrodeck_paths.retrodeck_home(),
+        }
+
     def is_retrodeck_migration_pending(self) -> bool:
         """Return True while a RetroDECK home path migration is pending or still running.
 

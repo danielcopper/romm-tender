@@ -301,18 +301,7 @@ class Plugin:
 
     @route
     def get_retrodeck_status(self):
-        """Report RetroDECK path-resolution health for the frontend banner.
-
-        Discriminated-status union (Callable response shapes carve-out):
-        ``status`` carries one of ``ok`` / ``absent`` / ``unreadable`` /
-        ``root_missing``. The frontend owns the human-readable copy; the
-        backend returns the discriminant plus the probed paths.
-        """
-        return {
-            "status": self._retrodeck_paths.config_health().value,
-            "config_path": self._retrodeck_paths.config_path(),
-            "resolved_home": self._retrodeck_paths.retrodeck_home(),
-        }
+        return self._migration_service.get_retrodeck_status()
 
     @route
     def get_whitelist_settings(self):
@@ -324,15 +313,7 @@ class Plugin:
 
     @route
     async def get_cached_game_detail(self, app_id):
-        """Return the game page's whole payload, assembled off the loop thread.
-
-        Network-free but not free: a read UoW, a firmware-cache read, and for an
-        uninstalled ROM a ``stat`` and a directory listing on storage that may
-        have to wake up. Every game page opens this, so it goes to a worker —
-        which is also where a `SqliteUnitOfWork` connection is meant to live
-        (ADR-0004).
-        """
-        return await self.loop.run_in_executor(None, self._game_detail_service.get_cached_game_detail, app_id)
+        return await self._game_detail_service.get_cached_game_detail(app_id)
 
     @route
     async def set_system_core(self, platform_slug, core_label):
@@ -916,19 +897,7 @@ class Plugin:
 
     @route
     def get_settings_reset_notice(self):
-        """Report whether a corrupt ``settings.json`` was reset at boot.
-
-        Reads the persistent ``_settings_reset_notice`` marker from the live
-        settings dict (written by bootstrap when ``load_settings`` quarantined an
-        unparseable file). Returns ``{"pending": bool, "backed_up_to": str |
-        None}``. Non-consuming — the marker survives a plugin reload and is
-        cleared only by an explicit user acknowledgement in the QAM
-        (``dismiss_settings_reset_notice``), so the frontend banner + game-detail
-        cards stay up until the user dismisses. A clean boot returns
-        ``{"pending": False, "backed_up_to": None}``.
-        """
-        notice = self.settings.get("_settings_reset_notice")
-        return {"pending": notice is not None, "backed_up_to": (notice or {}).get("backed_up_to")}
+        return self._settings_service.get_settings_reset_notice()
 
     @route
     def dismiss_settings_reset_notice(self):

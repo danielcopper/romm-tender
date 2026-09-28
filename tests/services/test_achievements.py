@@ -111,6 +111,7 @@ def plugin(clock, emit, logger, home):
     p._game_detail_service = GameDetailService(
         config=GameDetailServiceConfig(
             settings=p.settings,
+            loop=running_loop(),
             logger=logger,
             clock=clock,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -130,8 +131,6 @@ def plugin(clock, emit, logger, home):
 async def _set_event_loop(plugin):
     """Ensure service loops match the running event loop for async tests."""
     plugin._achievements_service._loop = asyncio.get_running_loop()
-    # ``get_cached_game_detail`` runs its work on an executor worker.
-    plugin.loop = asyncio.get_running_loop()
 
 
 @pytest.fixture

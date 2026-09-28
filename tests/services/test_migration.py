@@ -27,6 +27,7 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.persistence import PersistenceAdapter
 from adapters.steam_config import SteamConfigAdapter
+from lib.retrodeck_health import RetroDeckConfigHealth
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -542,6 +543,41 @@ class TestPathChangeDetection:
         assert payload["cleared"] is True
         assert payload["old_path"] == old_home
         assert payload["new_path"] == old_home
+
+
+class TestGetRetroDeckStatus:
+    """The banner's answer: the health discriminant as a plain string, plus the probed paths."""
+
+    def test_ok_status_carries_paths(self, plugin):
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(
+            home="/retrodeck",
+            config_path="/cfg/retrodeck.json",
+            health=RetroDeckConfigHealth.OK,
+        )
+        assert plugin._migration_service.get_retrodeck_status() == {
+            "status": "ok",
+            "config_path": "/cfg/retrodeck.json",
+            "resolved_home": "/retrodeck",
+        }
+
+    @pytest.mark.parametrize(
+        ("health", "status"),
+        [
+            (RetroDeckConfigHealth.OK, "ok"),
+            (RetroDeckConfigHealth.ABSENT, "absent"),
+            (RetroDeckConfigHealth.UNREADABLE, "unreadable"),
+            (RetroDeckConfigHealth.ROOT_MISSING, "root_missing"),
+        ],
+    )
+    def test_each_health_answers_its_discriminant_as_a_plain_string(self, plugin, health, status):
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(
+            home="/missing",
+            config_path="/cfg/retrodeck.json",
+            health=health,
+        )
+        result = plugin._migration_service.get_retrodeck_status()
+        assert result == {"status": status, "config_path": "/cfg/retrodeck.json", "resolved_home": "/missing"}
+        assert type(result["status"]) is str
 
 
 class TestIsRetroDeckMigrationPending:

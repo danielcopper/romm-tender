@@ -17,8 +17,6 @@ underlying service logic, which is covered elsewhere.
 
 from __future__ import annotations
 
-import asyncio
-import threading
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -147,6 +145,13 @@ class TestSettingsCallableDelegation:
         assert result == {"success": True}
 
     @pytest.mark.asyncio
+    async def test_get_settings_reset_notice_delegates(self, plugin):
+        plugin._settings_service.get_settings_reset_notice.return_value = {"pending": False, "backed_up_to": None}
+        result = plugin.get_settings_reset_notice()
+        plugin._settings_service.get_settings_reset_notice.assert_called_once_with()
+        assert result == {"pending": False, "backed_up_to": None}
+
+    @pytest.mark.asyncio
     async def test_debug_log_routes_through_frontend_log(self, plugin):
         plugin.debug_log("hello")
         plugin._settings_service.frontend_log.assert_called_once_with("debug", "hello")
@@ -222,6 +227,13 @@ class TestMigrationCallableDelegation:
         result = plugin.dismiss_retrodeck_migration()
         plugin._migration_service.dismiss_retrodeck_migration.assert_called_once_with()
         assert result == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_get_retrodeck_status_delegates(self, plugin):
+        plugin._migration_service.get_retrodeck_status.return_value = {"status": "ok"}
+        result = plugin.get_retrodeck_status()
+        plugin._migration_service.get_retrodeck_status.assert_called_once_with()
+        assert result == {"status": "ok"}
 
 
 # ── Core / firmware / BIOS callables ───────────────────────────────────
@@ -758,29 +770,10 @@ class TestAchievementsCallableDelegation:
 class TestGameDetailCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_cached_game_detail_delegates(self, plugin):
-        # Runs on an executor worker, so the callable needs the real loop.
-        plugin.loop = asyncio.get_running_loop()
-        plugin._game_detail_service.get_cached_game_detail.return_value = {"detail": "x"}
+        plugin._game_detail_service.get_cached_game_detail = AsyncMock(return_value={"detail": "x"})
         result = await plugin.get_cached_game_detail("12345")
-        plugin._game_detail_service.get_cached_game_detail.assert_called_once_with("12345")
+        plugin._game_detail_service.get_cached_game_detail.assert_awaited_once_with("12345")
         assert result == {"detail": "x"}
-
-    @pytest.mark.asyncio
-    async def test_get_cached_game_detail_leaves_the_loop_thread(self, plugin):
-        # Every game page opens this read, and it is neither trivial nor
-        # bounded — a UoW, a firmware-cache read, a stat and a directory
-        # listing. Running it on the loop thread stalls everything else the
-        # plugin is doing for as long as the storage takes to answer.
-        plugin.loop = asyncio.get_running_loop()
-        seen: list[int] = []
-        plugin._game_detail_service.get_cached_game_detail.side_effect = lambda _app_id: (
-            seen.append(threading.get_ident()) or {"found": False}
-        )
-
-        await plugin.get_cached_game_detail(12345)
-
-        assert len(seen) == 1
-        assert seen[0] != threading.get_ident()
 
 
 # ── Error-propagation tests ────────────────────────────────────────────

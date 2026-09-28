@@ -3228,6 +3228,7 @@ def _rom_scoped_surfaces(
     detail = GameDetailService(
         config=GameDetailServiceConfig(
             settings={},
+            loop=asyncio.get_running_loop(),
             logger=logger,
             clock=_make_clock(),
             uow_factory=uow_factory,

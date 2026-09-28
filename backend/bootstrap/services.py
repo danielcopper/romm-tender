@@ -494,6 +494,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=GameDetailServiceConfig(
             candidate_probe=rom_adoption_service.has_adoption_candidate,
             settings=cfg.stores.settings,
+            loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             clock=cfg.runtime.clock,
             uow_factory=cfg.callbacks.uow_factory,

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -214,6 +215,7 @@ def game_detail_service(plugin, clock, active_core_resolver, path_probe):
     return GameDetailService(
         config=GameDetailServiceConfig(
             settings=plugin.settings,
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=clock,
             uow_factory=FakeUnitOfWorkFactory(uow=plugin._uow),
@@ -382,7 +384,7 @@ class TestGetCachedGameDetailFound:
             last_sync_check_at="2025-01-01T00:00:00Z",
         )
 
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
 
         assert result["found"] is True
         assert result["rom_id"] == 123
@@ -400,26 +402,50 @@ class TestGetCachedGameDetailFound:
         assert result["bios_status"] is None
 
 
+class TestGetCachedGameDetailLeavesTheLoopThread:
+    """Every game page opens this read, and it is neither trivial nor bounded — a
+    UoW, a stat and a directory listing. Run on the loop thread, it stalls
+    everything else the backend is doing for as long as the storage takes to answer."""
+
+    @pytest.mark.asyncio
+    async def test_the_read_runs_on_a_worker_thread(self, plugin, game_detail_service):
+        _seed_rom(plugin, 42, app_id=50000)
+        inner = game_detail_service._uow_factory
+        seen: list[int] = []
+
+        def recording_uow_factory():
+            seen.append(threading.get_ident())
+            return inner()
+
+        game_detail_service._uow_factory = recording_uow_factory
+
+        result = await game_detail_service.get_cached_game_detail(50000)
+
+        assert result["found"] is True
+        assert len(seen) == 1
+        assert seen[0] != threading.get_ident()
+
+
 class TestGetCachedGameDetailNotFound:
     """Test get_cached_game_detail when no ROM is bound to the app_id."""
 
     @pytest.mark.asyncio
     async def test_not_found(self, game_detail_service):
         """Unknown app_id returns found=False."""
-        result = game_detail_service.get_cached_game_detail(12345)
+        result = await game_detail_service.get_cached_game_detail(12345)
         assert result == {"found": False}
 
     @pytest.mark.asyncio
     async def test_not_found_empty_registry(self, game_detail_service):
         """Empty roms table returns found=False."""
-        result = game_detail_service.get_cached_game_detail(1)
+        result = await game_detail_service.get_cached_game_detail(1)
         assert result == {"found": False}
 
     @pytest.mark.asyncio
     async def test_not_found_different_app_id(self, plugin, game_detail_service):
         """roms has entries but none match the requested app_id."""
         _seed_rom(plugin, 10, app_id=11111, name="Other Game", platform_slug="nes")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result == {"found": False}
 
 
@@ -430,7 +456,7 @@ class TestGetCachedGameDetailPartialData:
     async def test_no_save_status(self, plugin, game_detail_service):
         """No save state for this rom returns save_status=None."""
         _seed_rom(plugin, 10, app_id=50000, name="Zelda", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert result["save_status"] is None
 
@@ -438,7 +464,7 @@ class TestGetCachedGameDetailPartialData:
     async def test_no_metadata(self, plugin, game_detail_service):
         """No metadata cached returns metadata=None."""
         _seed_rom(plugin, 10, app_id=50000, name="Zelda", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert result["metadata"] is None
 
@@ -446,7 +472,7 @@ class TestGetCachedGameDetailPartialData:
     async def test_no_pending_conflicts_key(self, plugin, game_detail_service):
         """pending_conflicts is no longer in the response (conflicts are inline)."""
         _seed_rom(plugin, 10, app_id=50000, name="Zelda", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert "pending_conflicts" not in result
 
@@ -455,14 +481,14 @@ class TestGetCachedGameDetailPartialData:
         """save_sync_enabled reflects the setting."""
         _seed_rom(plugin, 10, app_id=50000, name="Zelda", platform_slug="snes")
         plugin.settings["save_sync_enabled"] = False
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["save_sync_enabled"] is False
 
     @pytest.mark.asyncio
     async def test_empty_platform_slug_defaults_empty(self, plugin, game_detail_service):
         """A ROM with an empty platform_slug degrades platform_name to empty."""
         _seed_rom(plugin, 10, app_id=50000, name="", platform_slug="")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert result["rom_name"] == ""
         assert result["platform_slug"] == ""
@@ -473,7 +499,7 @@ class TestGetCachedGameDetailPartialData:
         """No platform-name cache row → platform_name degrades to the slug."""
         _seed_rom(plugin, 10, app_id=50000, name="Zelda", platform_slug="snes")
         # No _seed_platform_names — the kv_config cache row is absent.
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert result["platform_slug"] == "snes"
         assert result["platform_name"] == "snes"
@@ -487,7 +513,7 @@ class TestGetCachedGameDetailInstalled:
         """ROM with a rom_installs row returns installed=True."""
         _seed_rom(plugin, 10, app_id=50000, name="Game", platform_slug="snes")
         _install_rom(plugin, plugin._tmp_path, rom_id=10, system="snes", file_name="game.sfc")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["installed"] is True
         assert result["rom_file"] == "game.sfc"
 
@@ -495,7 +521,7 @@ class TestGetCachedGameDetailInstalled:
     async def test_not_installed(self, plugin, game_detail_service):
         """ROM without a rom_installs row returns installed=False, rom_file from fs_name."""
         _seed_rom(plugin, 10, app_id=50000, name="Game", platform_slug="snes", fs_name="game_10.sfc")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["installed"] is False
         # No install record → rom_file falls back to Rom.fs_name.
         assert result["rom_file"] == "game_10.sfc"
@@ -511,14 +537,14 @@ class TestTargetPathOccupied:
     @pytest.mark.asyncio
     async def test_false_when_nothing_is_at_the_target_path(self, plugin, game_detail_service):
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["target_path_occupied"] is False
 
     @pytest.mark.asyncio
     async def test_true_when_the_target_path_exists(self, plugin, game_detail_service, path_probe):
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
         path_probe.paths.add(f"{_ROMS_BASE}/snes/game_10.sfc")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["target_path_occupied"] is True
 
     @pytest.mark.asyncio
@@ -527,7 +553,7 @@ class TestTargetPathOccupied:
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
         plugin._candidate_present = True
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["adoption_candidate_present"] is True
         assert plugin._candidate_probe_calls == [("snes", "game_10.sfc")]
@@ -536,7 +562,7 @@ class TestTargetPathOccupied:
     async def test_no_candidate_leaves_the_page_saying_download(self, plugin, game_detail_service):
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["adoption_candidate_present"] is False
 
@@ -548,7 +574,7 @@ class TestTargetPathOccupied:
         path_probe.paths.add(f"{_ROMS_BASE}/snes/game_10.sfc")
         plugin._candidate_present = True
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["target_path_occupied"] is True
         assert result["adoption_candidate_present"] is False
@@ -560,7 +586,7 @@ class TestTargetPathOccupied:
         _install_rom(plugin, plugin._tmp_path, rom_id=10, system="snes", file_name="game.sfc")
         plugin._candidate_present = True
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["installed"] is True
         assert result["adoption_candidate_present"] is False
@@ -574,7 +600,7 @@ class TestTargetPathOccupied:
         _install_rom(plugin, plugin._tmp_path, rom_id=10, system="snes", file_name="game.sfc")
         path_probe.paths.add(f"{_ROMS_BASE}/snes/game_10.sfc")
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["installed"] is True
         assert result["target_path_occupied"] is False
@@ -585,7 +611,7 @@ class TestTargetPathOccupied:
         probed: list[str] = []
         path_probe.exists = lambda path: bool(probed.append(path))
 
-        game_detail_service.get_cached_game_detail(50000)
+        await game_detail_service.get_cached_game_detail(50000)
 
         assert len(probed) == 1
 
@@ -594,7 +620,7 @@ class TestTargetPathOccupied:
         game_detail_service._retrodeck_paths.roms = ""
         path_probe.exists = lambda _path: True
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["target_path_occupied"] is False
 
     @pytest.mark.asyncio
@@ -615,7 +641,7 @@ class TestTargetPathOccupied:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["target_path_occupied"] is False
 
     @pytest.mark.asyncio
@@ -624,7 +650,7 @@ class TestTargetPathOccupied:
         path_probe.exists = lambda path: bool(probed.append(path))
         _seed_rom(plugin, 10, app_id=50000, platform_slug="snes", fs_name="../../../etc/passwd")
 
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["target_path_occupied"] is False
         assert probed == []
@@ -637,14 +663,14 @@ class TestGetCachedGameDetailConflictFiltering:
     async def test_no_pending_conflicts_in_response(self, plugin, game_detail_service):
         """pending_conflicts key is no longer in the response."""
         _seed_rom(plugin, 10, app_id=50000, name="Game A", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert "pending_conflicts" not in result
 
     @pytest.mark.asyncio
     async def test_response_still_has_save_status(self, plugin, game_detail_service):
         """Response still includes save status fields."""
         _seed_rom(plugin, 10, app_id=50000, name="Game A", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert "save_sync_enabled" in result
 
@@ -652,7 +678,7 @@ class TestGetCachedGameDetailConflictFiltering:
     async def test_app_id_as_string(self, plugin, game_detail_service):
         """app_id passed as string is handled correctly."""
         _seed_rom(plugin, 10, app_id=50000, name="Game", platform_slug="snes")
-        result = game_detail_service.get_cached_game_detail("50000")
+        result = await game_detail_service.get_cached_game_detail("50000")
         assert result["found"] is True
         assert result["rom_id"] == 10
 
@@ -675,7 +701,7 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
     @pytest.mark.asyncio
     async def test_cold_cache_flags_bios_status_unknown(self, plugin, game_detail_service):
         _seed_rom(plugin, 42, app_id=50000, name="Pokemon", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert result["found"] is True
         assert result["bios_status"] is None
         assert result["bios_status_unknown"] is True
@@ -707,7 +733,7 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
         listing._firmware_cache_epoch = 99.0
 
         with patch.object(plugin._firmware_service._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(tmp_path))):
-            result = game_detail_service.get_cached_game_detail(50000)
+            result = await game_detail_service.get_cached_game_detail(50000)
 
         assert result["bios_status"] is None
         assert result["bios_level"] is None
@@ -718,14 +744,14 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
     async def test_bios_is_always_stale_so_the_page_always_asks(self, plugin, game_detail_service):
         """With nothing stored there is nothing to age — the refresh is unconditional."""
         _seed_rom(plugin, 42, app_id=50000, name="Pokemon", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(50000)
+        result = await game_detail_service.get_cached_game_detail(50000)
         assert "bios" in result["stale_fields"]
 
     @pytest.mark.asyncio
     async def test_a_rom_without_a_platform_asks_nothing(self, plugin, game_detail_service):
         """No platform, no BIOS question — the flag would promise an answer that never comes."""
         _seed_rom(plugin, 43, app_id=50001, name="Homebrew", platform_slug="")
-        result = game_detail_service.get_cached_game_detail(50001)
+        result = await game_detail_service.get_cached_game_detail(50001)
         assert result["bios_status_unknown"] is False
         assert "bios" not in result["stale_fields"]
 
@@ -1013,7 +1039,7 @@ class TestGetCachedGameDetailSaveStatusConflicts:
             files={"test.srm": FileSyncState(last_sync_hash="abc", last_sync_at="2026-01-01T00:00:00Z")},
             last_sync_check_at="2026-01-01T00:00:00Z",
         )
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result["save_status"] is not None
         assert "conflicts" in result["save_status"]
         assert result["save_status"]["conflicts"] == []
@@ -1023,7 +1049,7 @@ class TestGetCachedGameDetailSaveStatusConflicts:
         """A save state with an empty files{} returns an empty files list."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba")
         _seed_save_state(plugin, 42, files={}, last_sync_check_at=None)
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result["save_status"] is not None
         assert result["save_status"]["files"] == []
         assert result["save_status"]["last_sync_check_at"] is None
@@ -1036,7 +1062,7 @@ class TestComputedFields:
     async def test_bios_level_and_label_are_never_computed_here(self, plugin, game_detail_service):
         """The cached payload carries no level: there is no answer to derive one from."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result["bios_level"] is None
         assert result["bios_label"] is None
 
@@ -1051,7 +1077,7 @@ class TestComputedFields:
             files={"test.srm": FileSyncState(last_sync_hash="abc", last_sync_at="2026-01-01T00:00:00Z")},
             last_sync_check_at="2026-01-01T00:00:00Z",
         )
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result["save_sync_display"] is not None
         assert result["save_sync_display"]["status"] == "synced"
         # Synced + recorded check → backend leaves label None for frontend formatTimeAgo.
@@ -1062,7 +1088,7 @@ class TestComputedFields:
     async def test_save_sync_display_none_when_no_saves(self, plugin, game_detail_service):
         """When no save data, save_sync_display should be None."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert result["save_sync_display"] is None
 
 
@@ -1089,7 +1115,7 @@ class TestAchievementSummaryCachedAt:
             "cached_at": clock.time(),
         }
 
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
 
         assert result["achievement_summary"] is not None
         assert result["achievement_summary"]["earned"] == 5
@@ -1117,7 +1143,7 @@ class TestAchievementSummaryCachedAt:
             "cached_at": clock.time(),
         }
 
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
 
         assert result["achievement_summary"]["cached_at"] == storage_time
         assert result["achievement_summary"]["cached_at"] < clock.time() - 1700
@@ -1127,7 +1153,7 @@ class TestAchievementSummaryCachedAt:
         """Without RA username, achievement_summary is None even with ra_id."""
         _seed_rom(plugin, 42, app_id=99999, name="Sonic", platform_slug="genesis", ra_id=555)
 
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
 
         assert result["achievement_summary"] is None
 
@@ -1140,7 +1166,7 @@ class TestAchievementSummaryCachedAt:
             "cached_at": clock.time(),
         }
 
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
 
         assert result["achievement_summary"] is None
 
@@ -1152,7 +1178,7 @@ class TestStaleFields:
     async def test_stale_fields_empty_when_all_fresh(self, plugin, game_detail_service, clock):
         """No stale fields when all caches are fresh."""
         _seed_metadata(plugin, 42, cached_at=clock.time(), app_id=99999, platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert "stale_fields" in result
         assert "metadata" not in result["stale_fields"]
 
@@ -1160,21 +1186,21 @@ class TestStaleFields:
     async def test_metadata_stale_when_old(self, plugin, game_detail_service, clock):
         """Metadata older than 7 days should appear in stale_fields."""
         _seed_metadata(plugin, 42, cached_at=clock.time() - 8 * 24 * 3600, app_id=99999, platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert "metadata" in result["stale_fields"]
 
     @pytest.mark.asyncio
     async def test_metadata_stale_when_missing(self, plugin, game_detail_service):
         """Missing metadata should appear in stale_fields."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert "metadata" in result["stale_fields"]
 
     @pytest.mark.asyncio
     async def test_bios_stale_when_old(self, plugin, game_detail_service):
         """BIOS older than 1 hour should appear in stale_fields."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba")
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         # With no BIOS cache, bios_status is None → bios should be stale
         assert "bios" in result["stale_fields"]
 
@@ -1182,11 +1208,11 @@ class TestStaleFields:
     async def test_achievements_stale_when_missing(self, plugin, game_detail_service):
         """Missing achievement progress should appear in stale_fields when ra_id is set."""
         _seed_rom(plugin, 42, app_id=99999, name="Test", platform_slug="gba", ra_id=123)
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert "achievements" in result["stale_fields"]
 
     @pytest.mark.asyncio
     async def test_not_found_has_no_stale_fields(self, game_detail_service):
         """When ROM not found, response has no stale_fields."""
-        result = game_detail_service.get_cached_game_detail(99999)
+        result = await game_detail_service.get_cached_game_detail(99999)
         assert "stale_fields" not in result

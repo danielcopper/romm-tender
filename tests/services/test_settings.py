@@ -814,6 +814,39 @@ class TestSetCollectionNamingMode:
         settings_persister.save_settings.assert_not_called()
 
 
+class TestGetSettingsResetNotice:
+    """The reset notice is read off the live settings dict and never consumed by reading."""
+
+    def test_clean_boot_is_not_pending(self, service, settings):
+        settings["romm_url"] = "http://romm.local"
+        assert service.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+
+    def test_a_marker_is_pending_with_its_backup(self, service, settings):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-1781697600"}
+        assert service.get_settings_reset_notice() == {
+            "pending": True,
+            "backed_up_to": "settings.json.corrupt-1781697600",
+        }
+
+    def test_repeated_reads_stay_pending_and_write_nothing(self, service, settings, settings_persister):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
+        first = service.get_settings_reset_notice()
+        second = service.get_settings_reset_notice()
+        assert first == {"pending": True, "backed_up_to": "settings.json.corrupt-42"}
+        assert second == first
+        assert settings["_settings_reset_notice"] == {"backed_up_to": "settings.json.corrupt-42"}
+        settings_persister.save_settings.assert_not_called()
+
+    def test_a_marker_without_its_backup_is_pending_with_none(self, service, settings):
+        settings["_settings_reset_notice"] = {}
+        assert service.get_settings_reset_notice() == {"pending": True, "backed_up_to": None}
+
+    def test_after_a_dismissal_it_is_no_longer_pending(self, service, settings):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
+        service.dismiss_settings_reset_notice()
+        assert service.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+
+
 class TestDismissSettingsResetNotice:
     def test_pops_marker_and_persists(self, service, settings, settings_persister):
         settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
