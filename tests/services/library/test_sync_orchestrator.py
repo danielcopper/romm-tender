@@ -4625,6 +4625,71 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         assert n64_row["remove_count"] == 1
 
 
+class TestPlatformTurnedOffAndBackOn:
+    """A platform whose sync is turned off and back on gets all its shortcuts back (#2094).
+
+    While the platform is off, the stale-removal scan unbinds its games except the
+    ones an enabled collection lists, and nothing clears its completion stamp. Once
+    it is back on, the games the collection held are still bound and the unbound
+    ones still carry the stamp's generation, so every count the skip reads matches.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="#2094")
+    @pytest.mark.asyncio
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1])
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_n64_game(unit, event):
+            event.set()
+            return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
+
+        # Run 1: N64 and the collection are on.
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-1")
+        assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+        with library.uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert (stamp.rom_count, stamp.fetch_id) == (3, "run-1")
+
+        # Run 2: N64 is off; the collection keeps its one game bound.
+        library.settings["enabled_platforms"] = {"1": False}
+        await complete_a_run("run-2")
+        assert bindings() == {1: 5001, 2: None, 3: None}
+        with library.uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert stamp.fetch_id == "run-1"
+
+        # Run 3: N64 is back on and nothing changed on RomM.
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-3")
+        assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+
+
 class TestRegression738CacheCorruption:
     """Regression for #738 — delta sync must not erase populated metadata.
 
