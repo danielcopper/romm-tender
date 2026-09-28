@@ -10,8 +10,9 @@ name: SonarCloud fork PRs
 # Nothing the fork wrote is executed here — no install, build, test, script or
 # action from its checkout. A value taken from its run (the PR number, the
 # branch name) reaches a shell only through `env:` and becomes a scanner
-# argument only after a regex check; its tree and the coverage reports reach
-# the scanner as the data it analyses.
+# argument only after a regex check — the branch name once its other characters
+# are replaced; its tree and the coverage reports reach the scanner as the data
+# it analyses.
 
 on:
   workflow_run:
@@ -61,12 +62,14 @@ jobs:
 
       # `workflow_run.pull_requests` is empty for a run whose head is in a fork,
       # so the PR number comes from the artifact — which the fork's own copy of
-      # ci.yml produced. It is trusted only once the API confirms that PR comes
-      # from the repository GitHub reports for the run, and the base branch is
-      # taken from that API answer. A PR whose head has moved on since this CI
-      # run is not scanned and not failed: the CI run for its new head starts a
-      # scan of its own. The branch name is only a label in SonarCloud, so a
-      # character outside the regex is replaced rather than refused.
+      # ci.yml produced. It is used only once the API confirms that PR comes
+      # from the run's repository and still has the run's head commit, and the
+      # base branch is taken from that API answer. A PR whose head differs is
+      # not scanned; it counts as superseded — the run ends green, and the CI
+      # run for the new head scans it once that run succeeds — only if it is
+      # open and on the run's branch. Anything else fails. The branch name is
+      # only a label in SonarCloud, so a character outside the regex is
+      # replaced rather than refused.
       - name: Resolve the pull request
         id: pr
         env:
@@ -90,12 +93,18 @@ jobs:
           pr_json=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number")
           api_head_sha=$(jq -r '.head.sha' <<<"$pr_json")
           api_head_repo=$(jq -r '.head.repo.full_name' <<<"$pr_json")
+          api_head_ref=$(jq -r '.head.ref' <<<"$pr_json")
+          api_state=$(jq -r '.state' <<<"$pr_json")
           base_ref=$(jq -r '.base.ref' <<<"$pr_json")
           [[ "$api_head_repo" == "$HEAD_REPO" ]] || { echo "::error::PR #$pr_number does not come from $HEAD_REPO"; exit 1; }
           if [[ "$api_head_sha" != "$HEAD_SHA" ]]; then
-            echo "::notice::PR #$pr_number has moved on from $HEAD_SHA; not scanning a superseded head"
-            echo "scan=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            if [[ "$api_state" == "open" && "$api_head_ref" == "$HEAD_BRANCH" ]]; then
+              echo "::notice::PR #$pr_number (open, branch $branch_label) now has a different head than $HEAD_SHA; not scanning a superseded head"
+              echo "scan=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::PR #$pr_number's head is not $HEAD_SHA, and it is not an open PR on branch $branch_label"
+            exit 1
           fi
           [[ "$base_ref" =~ $ref_re ]] || { echo "::error::Invalid base branch"; exit 1; }
 

@@ -441,14 +441,11 @@ coverage artifacts.
     scans the fork's head in this repository's context, following
     [SonarSource's pattern for pull requests from forks](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud):
     it takes the coverage reports CI uploaded and `main`'s `sonar-project.properties`, and executes nothing from the
-    fork. A run whose PR has moved to a newer commit since ends without a scan, because the newer commit's CI run starts
-    its own; and the branch name reaches SonarCloud with every character outside `A-Za-z0-9/_.-` replaced by `-`. Both
-    the coverage and the CI success that starts the scan come from the fork's own copy of `ci.yml`, so the coverage can
-    be forged: on a fork's PR the Sonar verdict informs the review; it does not replace it.
-
-  On every analysed PR the SonarCloud app posts its own check, `SonarCloud Code Analysis`. On a branch PR `sonar-gate`
-  carries the same verdict; on a fork's PR the app check is the only check that carries it, so it is the one `main`'s
-  ruleset has to require for a fork's PR to block on the quality gate.
+    fork. Both the coverage and the CI success that starts the scan come from the fork's own copy of `ci.yml`, so the
+    coverage can be forged: on a fork's PR the Sonar verdict informs the review; it does not replace it.
+  - **Which check blocks** — on every analysed PR the SonarCloud app posts its own check, `SonarCloud Code Analysis`. On
+    a branch PR `sonar-gate` carries the same verdict; on a fork's PR the app check is the only check that carries it,
+    so it is the one `main`'s ruleset has to require for a fork's PR to block on the quality gate.
 - **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
