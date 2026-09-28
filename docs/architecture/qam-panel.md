@@ -692,15 +692,17 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
 plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                   | On Main                                  | Home                                                                                      |
-| ------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Settings were reset                         | text, backup path, Dismiss               | none — the card is the whole of it                                                        |
-| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss      | Settings › Connections, where the accounts are                                            |
-| RetroDECK paths missing or unreadable       | warning card, no action                  | none — the fix is outside the plugin                                                      |
-| Steam answers for no notifications          | warning card, no action                  | none — the fix is outside the plugin                                                      |
-| RetroArch `input_driver` is wrong           | text, **Open Controller**                | Settings › Controller, which holds the Fix button                                         |
-| Sync paused on the session budget           | text, **Open Sync**                      | Sync, which holds Restart Steam now and Resume                                            |
-| A newer Tender release is out               | both versions, **Open Updates**, Dismiss | Settings › Updates, which states both versions and holds the check's switch and Check now |
+| Condition                                   | On Main                                                       | Home                                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Settings were reset                         | text, backup path, Dismiss                                    | none — the card is the whole of it                                                        |
+| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss                           | Settings › Connections, where the accounts are                                            |
+| RetroDECK paths missing or unreadable       | warning card, no action                                       | none — the fix is outside the plugin                                                      |
+| Steam answers for no notifications          | warning card, no action                                       | none — the fix is outside the plugin                                                      |
+| RetroArch `input_driver` is wrong           | text, **Open Controller**                                     | Settings › Controller, which holds the Fix button                                         |
+| Sync paused on the session budget           | text, **Open Sync**                                           | Sync, which holds Restart Steam now and Resume                                            |
+| An update was rolled back                   | both versions, where the reason is, **Open Updates**, Dismiss | Settings › Updates, which states the same fact whether or not the card was dismissed      |
+| A newer Tender release is out               | both versions, **Open Updates**, Dismiss                      | Settings › Updates, which states both versions and holds the check's switch and Check now |
+| Tender was updated                          | a toast, once — no card                                       | none — the toast is the whole of it                                                       |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -718,29 +720,48 @@ full-width ones: Main is the narrow page, and a notice costing three rows pushes
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-The update notice is the other one with two buttons, side by side for the same reason, with no horizontal padding so
-each label fits on one line, as the Platforms tab's Enable all pair does. Its Dismiss is **per version**: it records the
-version the card names (`update_notice_dismissed_version`), so the next release raises the card again, and **Check now**
-in its home forgets it. The home states the versions and holds the check's switch and Check now; it installs nothing,
-and to a run from a checkout it shows a line naming this a development build. The card's condition is `available` on the
-backend's answer and nothing else — a newer release with its tarball, a valid digest and its checksum file attached, not
-the dismissed version, the check switched on. The answer is fetched at panel load by a detached call nothing awaits (the
-store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
+The update notice and the rolled-back notice are the other two with two buttons, side by side for the same reason, with
+no horizontal padding so each label fits on one line, as the Platforms tab's Enable all pair does. The update notice's
+Dismiss is **per version**: it records the version the card names (`update_notice_dismissed_version`), so the next
+release raises the card again, and **Check now** in its home forgets it. The home states the versions and holds the
+check's switch and Check now; it installs nothing, and to a run from a checkout it shows a line naming this a
+development build. The card's condition is `available` on the backend's answer and nothing else — a newer release with
+its tarball, a valid digest and its checksum file attached, not the dismissed version, the check switched on. The answer
+is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by
+Dismiss, the switch and Check now.
 
-Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
-`input_driver` fix and the session budget — so the absence is ordinary.
+The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is — the
+installer's output, in the terminal it ran in or the journal, and Tender's log — because both hold part of it, and where
+the installer's output went depends on how it was run. It stands while the installer's record does and its Dismiss is
+**per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it
+again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
+states the same sentence whether or not it was dismissed. It **takes the place of the update notice** for the version
+that update tried: after a rollback that version is still newer than the running one, and the two cards side by side
+would call a release available and failed at once. So for as long as the record stands, that version raises no "is
+available" card, dismissed or not; a newer release raises one as usual (`failureTakesThePlaceOf` in
+`utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at panel load by a detached call,
+like the update notice's.
+
+The update announcement is the one condition shown as a toast rather than a card: **Tender updated to X**, raised once
+from that same read. The backend owes it once per process and the panel acknowledges it after raising it, so a Steam
+restart that reloads the panel does not raise it again
+([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)).
+
+Four of the conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the `input_driver`
+fix and the session budget — so the absence is ordinary; the update announcement has none either, because a toast goes
+by itself.
 
 ## Main
 
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
 everything else; the status block — the RetroDECK warning and, where Steam answers for no notifications, the warning
 that says so, then Connection, Last sync, Library, then the conditional slot and, while a run is going, Cancel Sync,
-then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the
-three notices that carry a button (the RetroArch input driver, a run paused on the session budget, a newer release); the
-download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync, Library, Settings,
-Data Management. **Those last three blocks carry no section title at all** — what separates one from the next is a
-hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The layout study it
-was chosen from is [main-layouts.html](../assets/main-layouts.html).
+then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the four
+notices that carry a button (the RetroArch input driver, a run paused on the session budget, an update that was rolled
+back, a newer release); the download summary (up to two rows, an overflow count, a completed count, View All); the menu
+— Sync, Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates
+one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole
+row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

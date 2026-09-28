@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     )
 
     from domain.prune import BundleReadmeContext
+    from domain.update_outcome import UpdateFailure
 
 
 class DirectoryFileListerFn(Protocol):
@@ -43,6 +44,17 @@ class DirectoryFileListerFn(Protocol):
     """
 
     def __call__(self, directory: str) -> list[str]: ...
+
+
+class UpdateFailureFn(Protocol):
+    """Read the installer's record of an update it rolled back, or answer that there is none.
+
+    Implementations never raise: a record that is missing, unreadable or
+    malformed all answer ``None``, because a start and a panel read have to go
+    on without it either way.
+    """
+
+    def __call__(self) -> UpdateFailure | None: ...
 
 
 class CoverArtFileStore(Protocol):

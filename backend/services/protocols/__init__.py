@@ -82,6 +82,7 @@ from services.protocols.files import (
     SaveFileStore,
     SgdbArtworkCache,
     SteamRecoveryStore,
+    UpdateFailureFn,
 )
 from services.protocols.infra import (
     ComputeSyncActionFn,
@@ -263,6 +264,7 @@ __all__ = [
     "SystemSupportedExtensionsFn",
     "UnitOfWork",
     "UnitOfWorkFactory",
+    "UpdateFailureFn",
     "UuidGen",
     "VersionSwitcherFn",
 ]

@@ -98,6 +98,7 @@ _BOUND_SERVICE_ATTRS = {
     "_startup_healing_service": "startup_healing_service",
     "_shortcut_relocation_service": "shortcut_relocation_service",
     "_update_check_service": "update_check_service",
+    "_update_outcome_service": "update_outcome_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",

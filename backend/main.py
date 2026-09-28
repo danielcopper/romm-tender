@@ -153,6 +153,7 @@ class Plugin:
         self._startup_healing_service = services.startup_healing_service
         self._shortcut_relocation_service = services.shortcut_relocation_service
         self._update_check_service = services.update_check_service
+        self._update_outcome_service = services.update_outcome_service
         self._launch_gate_service = services.launch_gate_service
         self._session_lifecycle_service = services.session_lifecycle_service
         self._game_process_service = services.game_process_service
@@ -161,9 +162,10 @@ class Plugin:
 
         # ── 5. Startup repairs ──────────────────────────────────────────────
         # Each runs through the reporting wrapper: these are repairs, not
-        # prerequisites, and six of the nine catch nothing themselves — hosted,
-        # one raising would end the process and a restart policy would loop.
+        # prerequisites, and most catch nothing themselves — hosted, one
+        # raising would end the process and a restart policy would loop.
         steps = StartupSteps(logger, status.record_failed_step)
+        steps.run("note_update_outcome", self._update_outcome_service.note_start)
         # The prune may run only after a SUCCESSFUL detection: it reads the
         # pending homes the detection writes, and without them it takes every
         # install under the home RetroDECK just left for orphaned.
@@ -940,6 +942,39 @@ class Plugin:
         value.
         """
         return self._update_check_service.set_update_check_enabled(enabled)
+
+    @route
+    async def get_update_outcome(self):
+        """Report what the panel owes the user about the last update.
+
+        Returns ``{"announce_version", "failure", "failure_dismissed"}``.
+        ``announce_version`` is the version this process was updated to, until
+        :meth:`acknowledge_update_announcement` says the panel announced it —
+        ``None`` on every other start. ``failure`` is the installer's record of
+        an update it rolled back, ``{"attempted_version", "restored_version",
+        "rolled_back_at"}``, read afresh so it goes when the installer removes
+        it; ``None`` where there is none. ``failure_dismissed`` says the user
+        waved away that exact record.
+        """
+        return await self._update_outcome_service.get_update_outcome()
+
+    @route
+    def acknowledge_update_announcement(self):
+        """Record that the panel announced this process's update, so a reloaded panel does not again.
+
+        Returns ``{"success": True}``.
+        """
+        return self._update_outcome_service.acknowledge_update_announcement()
+
+    @route
+    def dismiss_update_failure(self, rolled_back_at):
+        """Record that the user waved away the card for one rolled-back update.
+
+        Per record — named by its ``rolled_back_at`` — so the next rollback
+        raises the card again. Returns ``{"success": True}``, or the canonical
+        failure shape for a stamp that is not a non-empty string.
+        """
+        return self._update_outcome_service.dismiss_update_failure(rolled_back_at)
 
     @route
     async def get_shortcut_relocation(self):

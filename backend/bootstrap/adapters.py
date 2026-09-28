@@ -60,6 +60,7 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from adapters.update_failure import UpdateFailureFileAdapter
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
 from domain.user_data_location import launcher_in_bin_dir, launcher_path
@@ -113,6 +114,7 @@ if TYPE_CHECKING:
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
         UnitOfWorkFactory,
+        UpdateFailureFn,
         UuidGen,
     )
 
@@ -158,6 +160,7 @@ class AdapterBundle:
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
     latest_release: LatestReleaseFn
+    update_failure: UpdateFailureFn
 
 
 @dataclass(frozen=True)
@@ -411,6 +414,7 @@ def bootstrap(
         user_agent=user_agent,
         log_debug=debug_logger,
     )
+    update_failure = UpdateFailureFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
@@ -474,6 +478,7 @@ def bootstrap(
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
         latest_release=github_releases.get_latest_release,
+        update_failure=update_failure.read_update_failure,
     )
     stores = StateBundle(
         settings=settings,

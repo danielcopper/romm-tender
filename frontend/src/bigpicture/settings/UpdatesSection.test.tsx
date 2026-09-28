@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { UpdatesSection, NOT_INSTALLED_PROGRAM } from "./UpdatesSection";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
+import { UPDATE_FAILURE_REASON, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
 const STATE: UpdateNoticeState = {
   available: true,
@@ -12,12 +13,23 @@ const STATE: UpdateNoticeState = {
   installedProgram: true,
 };
 
-const renderSection = (over: Partial<UpdateNoticeState> = {}, props: { checking?: boolean; result?: string } = {}) => {
+const NO_OUTCOME: UpdateOutcomeState = { failure: null, failureDismissed: false };
+
+const ROLLED_BACK: UpdateOutcomeState = {
+  failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+  failureDismissed: false,
+};
+
+const renderSection = (
+  over: Partial<UpdateNoticeState> = {},
+  props: { checking?: boolean; result?: string; outcome?: UpdateOutcomeState } = {},
+) => {
   const onEnabledChange = vi.fn();
   const onCheckNow = vi.fn();
   const utils = render(
     <UpdatesSection
       update={{ ...STATE, ...over }}
+      outcome={props.outcome ?? NO_OUTCOME}
       checking={props.checking ?? false}
       result={props.result ?? ""}
       onEnabledChange={onEnabledChange}
@@ -89,6 +101,22 @@ describe("UpdatesSection", () => {
     expect(renderSection().queryByTestId("updates-result")).toBeNull();
     const { getByTestId } = renderSection({}, { result: "You have the newest release." });
     expect(getByTestId("updates-result").textContent).toBe("You have the newest release.");
+  });
+
+  it("states a rolled-back update and where its reason is", () => {
+    const { getByTestId, getByText } = renderSection({}, { outcome: ROLLED_BACK });
+    expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
+    expect(getByText(UPDATE_FAILURE_REASON)).toBeTruthy();
+  });
+
+  it("states it still once its notice on Main was dismissed", () => {
+    const { getByTestId } = renderSection({}, { outcome: { ...ROLLED_BACK, failureDismissed: true } });
+    expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
+  });
+
+  it("says nothing about a last update where no record stands", () => {
+    const { queryByTestId } = renderSection();
+    expect(queryByTestId("updates-last-update")).toBeNull();
   });
 
   it("offers no install button", () => {

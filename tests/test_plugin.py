@@ -674,6 +674,15 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "check_for_update_now",
     "dismiss_update_notice",
     "set_update_check_enabled",
+    # What the last update did: the read the panel makes at load, its
+    # acknowledgement of the one announcement, and the rolled-back card's
+    # per-record Dismiss. None touches RetroDECK state — the read is the
+    # installer's record in the state directory and this process's own memory,
+    # the writes are memory and a settings key — and the read is fired at panel
+    # load whatever page the panel is showing.
+    "get_update_outcome",
+    "acknowledge_update_announcement",
+    "dismiss_update_failure",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.
     # Touches no RetroDECK state and reads nothing from disk. It has to answer
@@ -950,6 +959,8 @@ class TestMainStartupOrdering:
         connection_service = MagicMock()
         connection_service.migrate_legacy_credentials = AsyncMock()
 
+        update_outcome_service = MagicMock()
+
         wired_services = ServicesBundle(
             prune_conflicts=_make_prune_conflicts(),
             save_sync_service=save_sync_service,
@@ -977,6 +988,7 @@ class TestMainStartupOrdering:
             startup_healing_service=startup_healing_service,
             shortcut_relocation_service=MagicMock(),
             update_check_service=MagicMock(),
+            update_outcome_service=update_outcome_service,
             launch_gate_service=MagicMock(),
             session_lifecycle_service=MagicMock(),
             game_process_service=MagicMock(),
@@ -1014,6 +1026,7 @@ class TestMainStartupOrdering:
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
                 latest_release=MagicMock(),
+                update_failure=MagicMock(return_value=None),
             ),
             stores=StateBundle(
                 settings={},
@@ -1079,3 +1092,5 @@ class TestMainStartupOrdering:
         events.delivers = True
         assert await service_emit("probe", {"n": 2}) is True
         assert events.events == [("probe", {"n": 1}), ("probe", {"n": 2})]
+        # A start compares its version with the last one's once, before the port.
+        update_outcome_service.note_start.assert_called_once_with()

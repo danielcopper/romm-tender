@@ -24,8 +24,8 @@ panel nothing.
 
 **What is fatal and what is not is decided here, and the two are not the same
 question.** Without the lock, the schema, the wiring or a port there is no
-backend, so those end the process. The start-up routines are repairs: six of the
-nine contain no exception handling at all, and under the plugin loader that was
+backend, so those end the process. The start-up routines are repairs: most
+contain no exception handling at all, and under the plugin loader that was
 harmless because the lifecycle hook was a detached task. Hosted, an unhandled
 failure in a cover-cache sweep would take the whole backend down — and with a
 service manager's restart policy, do it again on every start. So each routine

@@ -181,4 +181,5 @@ modules =
     services.startup_healing
     services.steamgrid
     services.update_check
+    services.update_outcome
     services.version_switch

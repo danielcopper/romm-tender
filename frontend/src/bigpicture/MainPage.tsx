@@ -34,6 +34,7 @@ import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { UpdateNotice } from "./UpdateNotice";
+import { UpdateFailureNotice } from "./UpdateFailureNotice";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
@@ -764,8 +765,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
-        {/* Last of the notices: nothing here is outstanding about this install,
-            a newer release simply exists. */}
+        {/* Last of the notices: an update that did not go through, then a
+            newer release that simply exists — nothing either says has to be
+            done before anything else here works. */}
+        <UpdateFailureNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
         <UpdateNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
         <BlockSeparator />
       </PanelSection>

@@ -57,6 +57,7 @@ import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
+import { resetUpdateOutcomeStoreForTests, setUpdateOutcomeState } from "../utils/updateOutcomeStore";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
@@ -346,6 +347,7 @@ describe("MainPage", () => {
     // after it.
     setPlaytimeScopeState({ pending: false });
     resetUpdateNoticeStoreForTests();
+    resetUpdateOutcomeStoreForTests();
 
     // Default backend mocks — tests override per case.
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
@@ -2590,6 +2592,30 @@ describe("MainPage", () => {
       const { container, getByTestId } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
       expect(getByTestId("update-notice").textContent).toContain("Tender 0.34.0 is available");
+      fireEvent.click(buttonByExactText(container, "Open Updates")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "updates" });
+    });
+
+    it("a rolled-back update's notice stands in the available one's place and lands on Settings › Updates", async () => {
+      setUpdateNoticeState({
+        available: true,
+        newer: true,
+        latestVersion: "0.34.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: true,
+      });
+      setUpdateOutcomeState({
+        failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+        failureDismissed: false,
+      });
+      const onNavigate = vi.fn();
+      const { container, getByTestId, queryByTestId } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+      expect(getByTestId("update-failure-notice").textContent).toContain(
+        "Update to 0.34.0 failed — you are still on 0.33.0.",
+      );
+      expect(queryByTestId("update-notice")).toBeNull();
       fireEvent.click(buttonByExactText(container, "Open Updates")!);
       expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "updates" });
     });

@@ -56,6 +56,7 @@ import {
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { fetchUpdateNotice } from "./utils/updateNoticeStore";
+import { fetchUpdateOutcome } from "./utils/updateOutcomeStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -562,6 +563,18 @@ const tender = definePlugin(() => {
         await fetchUpdateNotice();
       } catch (e) {
         logError(`Failed to check for a newer release: ${e}`);
+      }
+    })(),
+  );
+
+  // What the last update did: announce one that went through, and fill the
+  // store the rolled-back notice reads. Detached like the release check above.
+  detach(
+    (async () => {
+      try {
+        await fetchUpdateOutcome();
+      } catch (e) {
+        logError(`Failed to read what the last update did: ${e}`);
       }
     })(),
   );

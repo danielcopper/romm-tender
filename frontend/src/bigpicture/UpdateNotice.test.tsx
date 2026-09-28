@@ -10,6 +10,11 @@ import {
   setUpdateNoticeState,
   type UpdateNoticeState,
 } from "../utils/updateNoticeStore";
+import {
+  resetUpdateOutcomeStoreForTests,
+  setUpdateOutcomeState,
+  type UpdateOutcomeState,
+} from "../utils/updateOutcomeStore";
 
 const AVAILABLE: UpdateNoticeState = {
   available: true,
@@ -20,9 +25,15 @@ const AVAILABLE: UpdateNoticeState = {
   installedProgram: true,
 };
 
+const ROLLED_BACK: UpdateOutcomeState = {
+  failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+  failureDismissed: false,
+};
+
 describe("UpdateNotice", () => {
   beforeEach(() => {
     resetUpdateNoticeStoreForTests();
+    resetUpdateOutcomeStoreForTests();
     vi.mocked(dismissUpdateNotice).mockReset().mockResolvedValue({ success: true });
   });
 
@@ -91,6 +102,27 @@ describe("UpdateNotice", () => {
     expect(getByTestId("update-notice")).toBeInTheDocument();
     expect(getUpdateNoticeState().available).toBe(true);
     logError.mockRestore();
+  });
+
+  it("gives way to the rolled-back notice for the version that update tried", () => {
+    setUpdateNoticeState(AVAILABLE);
+    setUpdateOutcomeState(ROLLED_BACK);
+    const { queryByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
+    expect(queryByTestId("update-notice")).toBeNull();
+  });
+
+  it("stays away for that version once the rolled-back notice was dismissed", () => {
+    setUpdateNoticeState(AVAILABLE);
+    setUpdateOutcomeState({ ...ROLLED_BACK, failureDismissed: true });
+    const { queryByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
+    expect(queryByTestId("update-notice")).toBeNull();
+  });
+
+  it("comes back for a release newer than the one that was rolled back", () => {
+    setUpdateNoticeState({ ...AVAILABLE, latestVersion: "0.35.0" });
+    setUpdateOutcomeState(ROLLED_BACK);
+    const { getByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
+    expect(getByTestId("update-notice").textContent).toContain("Tender 0.35.0 is available");
   });
 
   it("the card itself is a focus stop, so the panel can scroll to it", () => {

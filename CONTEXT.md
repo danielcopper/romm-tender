@@ -295,9 +295,11 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording the
+(platform_slug → display_name cache), `save_directories_recorded`, the marker that the one-time pass recording the
 installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
-with no ROM failing. The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+with no ROM failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
+and `last_run_version`, the version the previous start ran as (see _Rolled-back update_ below). The schema version is
+**not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -1076,3 +1078,16 @@ only an available release that is strictly newer than the running version and no
 checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
 process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
 whether the notice shows. _Avoid_: "new version" for a release that is merely published.
+
+### Rolled-back update / update announcement
+
+A **rolled-back update** is an update whose new version did not answer, so the installer put the previous version and
+its data back. Its record is the installer's `update-failure.json` in the state directory — the version it tried, the
+version it went back to, and when — which the installer writes and removes and the backend only reads; the **rolled-back
+notice** on Main states it until the user dismisses that record or the next update that answers removes it, and for that
+long the update notice does not name the version it tried. The **update announcement** is the one toast a start after an
+update that went through owes the panel: the backend compares the running version with the one the previous start
+recorded (`last_run_version`), and a rollback is never announced. `domain/update_outcome.py` decides which version is
+announced; `services/update_outcome.py` keeps the announcement for its process and reads the record. _Avoid_: "failed
+update" for the record alone — an update can fail before anything is replaced, and then nothing is rolled back or
+recorded.

@@ -1205,6 +1205,36 @@ export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismi
 /** Switch the daily release check on or off. On by default. */
 export const setUpdateCheckEnabled = callable<[boolean], UpdateSettingWrite>("set_update_check_enabled");
 
+/** An update the installer rolled back, as its record states it. `rolled_back_at` is ISO-8601 UTC text. */
+export interface UpdateFailure {
+  attempted_version: string;
+  restored_version: string;
+  rolled_back_at: string;
+}
+
+/**
+ * What the panel owes the user about the last update.
+ *
+ * `announce_version` is the version this backend process was updated to and
+ * the panel has not yet acknowledged announcing — `null` on every other start.
+ * `failure` is the installer's record of an update it rolled back, read afresh
+ * on every call, so it is gone once the installer removes it.
+ * `failure_dismissed` says the user waved away that exact record.
+ */
+export interface UpdateOutcome {
+  announce_version: string | null;
+  failure: UpdateFailure | null;
+  failure_dismissed: boolean;
+}
+
+export const getUpdateOutcome = callable<[], UpdateOutcome>("get_update_outcome");
+
+/** Tell the backend the update was announced, so a reloaded panel does not announce it again. */
+export const acknowledgeUpdateAnnouncement = callable<[], { success: true }>("acknowledge_update_announcement");
+
+/** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */
+export const dismissUpdateFailure = callable<[string], UpdateSettingWrite>("dismiss_update_failure");
+
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
 // See SessionLifecycleService in backend/services/session_lifecycle.py.

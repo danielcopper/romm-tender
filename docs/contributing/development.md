@@ -281,7 +281,8 @@ file and renamed, with three keys:
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
 
-`rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file.
+`rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file. The backend reads it and
+never writes it ([UpdateOutcomeService notes](../architecture/backend-architecture.md#updateoutcomeservice-notes)).
 
 `~/.local/lib/romm-tender/install.sh --rollback` does the same restore by hand — the release tarball ships the
 installer, so every tree whose tarball ships `install.sh` carries one — and writes no record, because going back by

@@ -1732,6 +1732,16 @@ class TestAnUpdateThatDoesNotStart:
         assert record["restored_version"] == _VERSION
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["rolled_back_at"])
 
+    def test_the_record_is_one_the_backend_reads(self, machine):
+        """The backend shows this record on a card at its next start, so it has to read what was written."""
+        from adapters.update_failure import UpdateFailureFileAdapter
+
+        _before, _result = self._failed(machine)
+
+        failure = UpdateFailureFileAdapter(state_dir=str(machine.state), log_debug=print).read_update_failure()
+        assert failure is not None
+        assert (failure.attempted_version, failure.restored_version) == (_NEW, _VERSION)
+
     def test_it_never_tries_again_on_its_own(self, machine):
         """One start of the new tree, then the old one — the order a single attempt makes."""
         _before, _result = self._failed(machine)
@@ -2690,6 +2700,11 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         from domain.identity import PACKAGE_NAME
 
         assert f'SERVER_NAME="{PACKAGE_NAME}"' in _INSTALL.read_text(encoding="utf-8")
+
+    def test_the_record_of_a_rolled_back_update_matches_the_backend(self):
+        from domain.update_outcome import UPDATE_FAILURE_FILENAME
+
+        assert f'UPDATE_FAILURE="{UPDATE_FAILURE_FILENAME}"' in _INSTALL.read_text(encoding="utf-8")
 
 
 class TestHowTheRunLooks:

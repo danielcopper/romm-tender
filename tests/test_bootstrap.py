@@ -70,6 +70,7 @@ from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
+from services.update_outcome import UpdateOutcomeService
 from services.version_switch import VersionSwitchService
 
 _GAVEL = GavelNativeAdapter()
@@ -471,6 +472,7 @@ class TestWireServices:
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
             "latest_release": FakeLatestRelease(),
+            "update_failure": MagicMock(return_value=None),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -537,6 +539,7 @@ class TestWireServices:
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
                 latest_release=deps["latest_release"],
+                update_failure=deps["update_failure"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -620,7 +623,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 31
+        assert len(fields(result)) == 32
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -632,6 +635,7 @@ class TestWireServices:
         assert isinstance(result.game_process_service, GameProcessService)
         assert isinstance(result.update_check_service, UpdateCheckService)
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
+        assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
