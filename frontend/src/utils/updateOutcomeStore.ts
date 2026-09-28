@@ -37,7 +37,7 @@ export interface RolledBackUpdate {
 }
 
 export interface UpdateOutcomeState {
-  /** The installer's record of a rolled-back update. `null` where there is none, or before the backend answered. */
+  /** The installer's record of a rolled-back update. `null` where none stands, or before the backend answered. */
   failure: RolledBackUpdate | null;
   /** The user waved away the card for this exact record. */
   failureDismissed: boolean;
@@ -47,14 +47,11 @@ const INITIAL: UpdateOutcomeState = { failure: null, failureDismissed: false };
 
 /**
  * The line under a rolled-back update's sentence, on the card and in its home.
- *
- * Both places are named because either can hold the reason: the installer says
- * why it rolled back where it ran — a terminal for an update run by hand, the
- * journal for one run as a service — and the backend log holds what the
- * version that did not answer wrote before it was stopped.
+ * Why it names those two places: docs/architecture/qam-panel.md, "Notices and
+ * homes".
  */
 export const UPDATE_FAILURE_REASON =
-  "Why is in the installer's output — the terminal it ran in, or the journal — and in Tender's log, backend.log.";
+  "Tender's log, backend.log, says why — or the journal (journalctl --user -u romm-tender), if the new version failed before it could write to the log.";
 
 let _state: UpdateOutcomeState = INITIAL;
 let _listeners: Array<() => void> = [];
@@ -120,13 +117,8 @@ export function failureCardShows(state: UpdateOutcomeState): boolean {
 
 /**
  * Whether the rolled-back record takes the place of the "is available" card for
- * *latestVersion*.
- *
- * After a rollback the version that failed is still newer than the one running,
- * so both cards would otherwise stand at once — one calling a release available
- * and the other saying it just failed. For as long as the record stands, the
- * version it tried has no "is available" card, dismissed or not; a later
- * release raises that card again, because the record is not about it.
+ * *latestVersion*: true exactly when a record stands and names that version as
+ * the one it tried, whether or not its card was dismissed.
  */
 export function failureTakesThePlaceOf(latestVersion: string | null, state: UpdateOutcomeState): boolean {
   return state.failure !== null && state.failure.attemptedVersion === latestVersion;

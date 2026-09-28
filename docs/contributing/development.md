@@ -342,7 +342,8 @@ so `install.sh --version` reaches an older one too. With more than one tarball i
 latest: `mise run dev:fake-github -- --latest 1.3.0`. `--dir` serves another directory and `--port` listens on another
 port. Four flags make the latest release one an update has to refuse: `--no-digest` (the tarball's asset states no
 digest), `--no-tarball`, `--no-checksum-file`, and `--corrupt-tarball` (the bytes served do not match the digest; the
-update check still offers such a release, and only the download's check finds it). `--help` lists them.
+update check still offers such a release, and only the download's check finds it). `--corrupt-tarball` does so for every
+tag it serves, not only the latest, so `install.sh --version` fails on an older one too. `--help` lists them.
 
 **The installed service** reads `TENDER_RELEASE_API` from its unit. Add it in a drop-in rather than in the unit itself,
 which the installer writes again on every update:

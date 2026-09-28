@@ -87,7 +87,7 @@ class Plugin:
         self._debug_logger(msg)
 
     async def _main(self, *, directories, update_source, user_home, logger, emit: EventEmitter, status):
-        """Bring the backend up: adapters, services, then the start-up repairs.
+        """Bring the backend up: adapters, services, then the start-up steps.
 
         Everything here must be through before the port is bound, which is what
         makes the port file mean "ready". The one start-up step that talks to the
@@ -160,10 +160,10 @@ class Plugin:
         self._relaunch_options_resolver = services.relaunch_options_resolver
         self._leftover_tmp_cleanup_service = services.leftover_tmp_cleanup_service
 
-        # ── 5. Startup repairs ──────────────────────────────────────────────
-        # Each runs through the reporting wrapper: these are repairs, not
-        # prerequisites, and most catch nothing themselves — hosted, one
-        # raising would end the process and a restart policy would loop.
+        # ── 5. Startup steps ────────────────────────────────────────────────
+        # Each runs through the reporting wrapper: these are not prerequisites,
+        # and most catch nothing themselves — hosted, one raising would end the
+        # process and a restart policy would loop.
         steps = StartupSteps(logger, status.record_failed_step)
         steps.run("note_update_outcome", self._update_outcome_service.note_start)
         # The prune may run only after a SUCCESSFUL detection: it reads the
@@ -897,11 +897,11 @@ class Plugin:
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``available`` is the card itself: a
         newer release with its tarball and checksum file attached exists, the
-        user has not dismissed that exact version, and the check is switched on. ``newer`` is
-        the first of those alone, for the Settings section that states the
-        versions whether or not the card was dismissed. ``installed_program``
-        says whether this process is the installed program an update could
-        replace — False for a run from a checkout.
+        user has not dismissed that exact version, and the check is switched on.
+        ``newer`` is the first of those alone, for the Settings section that
+        states the versions whether or not the card was dismissed.
+        ``installed_program`` says whether this process is the installed program
+        an update could replace — False for a run from a checkout.
 
         GitHub is asked at most once a day and the answer is kept, so a reload
         inside that window shows the card without a request. Every failure is

@@ -355,9 +355,10 @@ fancy_marks() {
 }
 
 # Whether the run may draw over what it has already written. Moving the cursor
-# is an escape sequence like any other, so a run that may write none prints each
-# row once as it finishes instead: NO_COLOR asks for a plain transcript, not for
-# a coloured one with the colour left out.
+# is an escape sequence like any other, so a run that may write none writes each
+# row as a new line instead — as it starts, as its detail changes, and as it
+# finishes: NO_COLOR asks for a plain transcript, not for a coloured one with
+# the colour left out.
 may_animate() {
     [ "$ANIMATE" = "yes" ]
 }

@@ -730,17 +730,20 @@ its tarball, a valid digest and its checksum file attached, not the dismissed ve
 is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by
 Dismiss, the switch and Check now.
 
-The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is — the
-installer's output, in the terminal it ran in or the journal, and Tender's log — because both hold part of it, and where
-the installer's output went depends on how it was run. It stands while the installer's record does and its Dismiss is
-**per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it
-again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
-states the same sentence whether or not it was dismissed. It **takes the place of the update notice** for the version
-that update tried: after a rollback that version is still newer than the running one, and the two cards side by side
-would call a release available and failed at once. So for as long as the record stands, that version raises no "is
-available" card, dismissed or not; a newer release raises one as usual (`failureTakesThePlaceOf` in
-`utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at panel load by a detached call,
-like the update notice's.
+The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is:
+Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was stopped is
+there; or the journal (`journalctl --user -u romm-tender`), for a new version that failed before it could write to the
+log (`UPDATE_FAILURE_REASON` in `utils/updateOutcomeStore.ts`). The installer's own output says no more than that the
+new version did not answer in time, and points at the same two places. The notice stands while the installer's record
+does — which the backend reports only while the running version is the one the record restored
+([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is **per record**:
+it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it again, and the
+record going away — the next update whose new version answers removes it — takes it down too. Its home states the same
+sentence whether or not it was dismissed. It **takes the place of the update notice** for the version that update tried:
+after a rollback that version is still newer than the running one, and the two cards side by side would call a release
+available and failed at once. So for as long as the record stands, that version raises no "is available" card, dismissed
+or not; a newer release raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's
+answer (`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
 
 The update announcement is the one condition shown as a toast rather than a card: **Tender updated to X**, raised once
 from that same read. The backend owes it once per process and the panel acknowledges it after raising it, so a Steam

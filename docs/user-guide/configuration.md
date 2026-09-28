@@ -288,13 +288,13 @@ notice on the main panel says **Tender X is available** and names the version yo
 After an update, the first time the panel loads it says **Tender updated to X** in a message that goes by itself. It
 says it once: reopening the panel, or restarting Steam, does not bring it back.
 
-If an update did not start and the installer went back to the version you had, a notice on the main panel says **Update
-to X failed — you are still on Y.**, and under it that the reason is in the installer's output — the terminal you ran it
-in, or the journal — and in Tender's log, `backend.log`. **Open Updates** takes you to **Settings › Updates**, and
-**Dismiss** puts the notice away for that failed update only; another one brings it back. It also goes away by itself
-once an update does start. While it is there, the main panel does not also call X available — you have just seen it fail
-— although a newer release than X brings the **Tender X is available** notice back.
-[Troubleshooting](troubleshooting.md#an-update-was-rolled-back) says what to look at.
+If the new version did not start after an update, and the installer went back to the version you had, a notice on the
+main panel says **Update to X failed — you are still on Y.**, and under it where the reason is.
+[Troubleshooting](troubleshooting.md#an-update-was-rolled-back) says what to look at there. **Open Updates** takes you
+to **Settings › Updates**, and **Dismiss** puts the notice away for that failed update only; another one brings it back.
+It also goes away by itself once a later update goes through. While it is there, the main panel does not also call X
+available — you have just seen it fail — although a release newer than X brings back an **is available** notice for that
+release.
 
 **Settings › Updates** shows:
 
@@ -302,7 +302,7 @@ once an update does start. While it is there, the main panel does not also call 
 - **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
   yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
 - **Update to X failed — you are still on Y.**, with where the reason is under it, while the installer's note of a
-  rolled-back update is there — whether or not you dismissed the notice on the main panel.
+  rolled-back update is there and you are still on Y — whether or not you dismissed the notice on the main panel.
 - **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
   press **Check now**.
 - **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
@@ -312,7 +312,7 @@ once an update does start. While it is there, the main panel does not also call 
 A release counts as out only once its download is attached together with GitHub's checksum for it and the checksum file
 the installer verifies it against, which happens a few minutes after the release is published; until then Tender says
 nothing about it. A release whose download comes without a valid checksum, or without that file, does not count as out
-while it lacks one, because it could not be verified.
+while either is missing, because it could not be verified.
 
 **What the check sends where.** When Steam loads Tender and a day has passed since the last check, and whenever you
 press **Check now**, Tender asks GitHub's public API for the newest release of `danielcopper/romm-tender`. The request

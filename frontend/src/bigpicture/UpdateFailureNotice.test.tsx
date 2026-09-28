@@ -42,9 +42,9 @@ describe("UpdateFailureNotice", () => {
     expect(text).toContain(UPDATE_FAILURE_REASON);
   });
 
-  it("names both the installer's output and the backend log as where the reason is", () => {
+  it("names the backend log as where the reason is, and the journal for a version that failed before it", () => {
     expect(UPDATE_FAILURE_REASON).toBe(
-      "Why is in the installer's output — the terminal it ran in, or the journal — and in Tender's log, backend.log.",
+      "Tender's log, backend.log, says why — or the journal (journalctl --user -u romm-tender), if the new version failed before it could write to the log.",
     );
   });
 
