@@ -7,6 +7,7 @@
 
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
+import { AMBER } from "../layout/pane";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import { UPDATE_FAILURE_REASON, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
@@ -56,7 +57,11 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
     {outcome.failure !== null && (
       <PanelSectionRow>
         <Field
-          label={<span data-testid="updates-last-update">{updateFailureSentence(outcome.failure)}</span>}
+          label={
+            <span data-testid="updates-last-update" style={{ color: AMBER }}>
+              {updateFailureSentence(outcome.failure)}
+            </span>
+          }
           description={UPDATE_FAILURE_REASON}
           focusable={true}
         />

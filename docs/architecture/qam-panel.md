@@ -739,11 +739,12 @@ does — which the backend reports only while the running version is the one the
 ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is **per record**:
 it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it again, and the
 record going away — the next update whose new version answers removes it — takes it down too. Its home states the same
-sentence whether or not it was dismissed. It **takes the place of the update notice** for the version that update tried:
-after a rollback that version is still newer than the running one, and the two cards side by side would call a release
-available and failed at once. So for as long as the record stands, that version raises no "is available" card, dismissed
-or not; a newer release raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's
-answer (`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
+sentence, in the card's warning colour (`AMBER`, `bigpicture/layout/pane.tsx`), whether or not it was dismissed. It
+**takes the place of the update notice** for the version that update tried: after a rollback that version is still newer
+than the running one, and the two cards side by side would call a release available and failed at once. So for as long
+as the record stands, that version raises no "is available" card, dismissed or not; a newer release raises one as usual
+(`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at
+panel load by a detached call, like the update notice's.
 
 The update announcement is the one condition shown twice over, as a toast and as a card, both from that same read. The
 **toast** says **Tender updated to X** after an update, **Tender is back on X** after a return to an earlier release.

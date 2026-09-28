@@ -1,8 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { UpdatesSection, NOT_INSTALLED_PROGRAM } from "./UpdatesSection";
+import { UpdateFailureNotice } from "../UpdateFailureNotice";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
-import { UPDATE_FAILURE_REASON, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
+import {
+  UPDATE_FAILURE_REASON,
+  resetUpdateOutcomeStoreForTests,
+  setUpdateOutcomeState,
+  type UpdateOutcomeState,
+} from "../../utils/updateOutcomeStore";
 
 const STATE: UpdateNoticeState = {
   available: true,
@@ -41,6 +47,10 @@ const renderSection = (
 };
 
 describe("UpdatesSection", () => {
+  beforeEach(() => {
+    resetUpdateOutcomeStoreForTests();
+  });
+
   it("states the installed and the available version", () => {
     const { getByTestId } = renderSection();
     expect(getByTestId("updates-installed").textContent).toBe("0.33.0");
@@ -108,6 +118,16 @@ describe("UpdatesSection", () => {
     const { getByTestId, getByText } = renderSection({}, { outcome: ROLLED_BACK });
     expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
     expect(getByText(UPDATE_FAILURE_REASON)).toBeTruthy();
+  });
+
+  it("words a rolled-back update in the warning colour its card on Main uses", () => {
+    const row = renderSection({}, { outcome: ROLLED_BACK }).getByTestId("updates-last-update");
+    setUpdateOutcomeState(ROLLED_BACK);
+    const card = render(<UpdateFailureNotice onOpenUpdates={vi.fn()} />).getByTestId("update-failure-notice")
+      .firstElementChild as HTMLElement;
+
+    expect(row.style.color).toBe("#d4a72c");
+    expect(card.style.color).toBe(row.style.color);
   });
 
   it("states it still once its notice on Main was dismissed", () => {
