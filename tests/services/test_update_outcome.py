@@ -298,4 +298,7 @@ class TestDismissingTheCard:
     async def test_a_dismissal_stored_as_something_else_does_not_hide_the_card(self, logger):
         service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE), settings={FAILURE_DISMISSED_KEY: 7})
 
-        assert (await service.get_update_outcome())["failure_dismissed"] is False
+        outcome = await service.get_update_outcome()
+
+        assert outcome["failure"] is not None
+        assert outcome["failure_dismissed"] is False
