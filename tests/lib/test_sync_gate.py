@@ -20,7 +20,7 @@ from lib.sync_gate import sync_active_blocked
 _EXPECTED_BLOCKED_DICT = {
     "success": False,
     "reason": "sync_active",
-    "message": "A library sync is in progress — wait for it to finish or cancel it before removing shortcuts or ROMs.",
+    "message": "A library sync is in progress — wait for it to finish or cancel it first.",
 }
 
 

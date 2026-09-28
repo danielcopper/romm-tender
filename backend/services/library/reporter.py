@@ -32,6 +32,7 @@ from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, should_include_in_platform_collection
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
+from services.library._leased_emit import emit_under_lease
 
 if TYPE_CHECKING:
     import asyncio
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ArtworkManager,
         Clock,
+        ConflictRules,
         EventEmitter,
         SteamConfigStore,
         UnitOfWork,
@@ -79,8 +81,9 @@ class SyncReporterConfig:
     the pending-sync dicts staged by :class:`ChunkDispatcher`; the run-lifecycle
     reset is owned by the orchestrator's terminal ``finally``, not here), an
     orchestrator-supplied ``emit_progress`` callback for the terminal "done"
-    event, and the
-    ``ArtworkManager`` peer used for cover-path finalisation.
+    event, the
+    ``ArtworkManager`` peer used for cover-path finalisation, and the
+    ``ConflictRules`` the ``sync_complete`` event's lease is taken through.
     """
 
     steam_config: SteamConfigStore
@@ -93,6 +96,7 @@ class SyncReporterConfig:
     sync_state_box: LibrarySyncStateBox
     emit_progress: EmitProgressFn
     artwork: ArtworkManager
+    conflict_rules: ConflictRules
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,7 @@ class SyncReporter:
         self._sync_state = config.sync_state_box
         self._emit_progress = config.emit_progress
         self._artwork = config.artwork
+        self._rules = config.conflict_rules
 
     # ── Report sync results (frontend callback) ──────────────────
 
@@ -432,7 +437,11 @@ class SyncReporter:
                 complete_payload["interrupt_reason"] = interrupt_reason
         elif restart_recommended:
             complete_payload["restart_recommended"] = True
-        await self._emit("sync_complete", complete_payload)
+        await emit_under_lease(
+            self._rules,
+            "sync_complete",
+            lambda token: self._emit("sync_complete", {**complete_payload, "prune_lease_token": token}),
+        )
 
         if cancelled:
             await self._emit_cancelled_frame(total_games=total_games, interrupt_reason=interrupt_reason)

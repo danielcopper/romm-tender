@@ -83,6 +83,7 @@ def plugin(tmp_path, emit, logger, home):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -114,7 +115,7 @@ def plugin(tmp_path, emit, logger, home):
             log_debug=p._log_debug,
             emit=AsyncMock(),
             is_retrodeck_migration_pending=lambda: False,
-            conflict_rules=_make_conflict_rules(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
             uow_factory=FakeUnitOfWorkFactory(),
         ),
     )

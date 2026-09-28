@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -172,6 +172,7 @@ def plugin(emit, logger, home):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     retrodeck_paths = FakeRetroDeckPaths(
@@ -252,6 +253,7 @@ def plugin(emit, logger, home):
             ),
             download_queue_cleanup=p._download_service,
             uow_factory=FakeUnitOfWorkFactory(p._uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     return p

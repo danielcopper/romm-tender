@@ -14,8 +14,8 @@ finalisation and the ``roms``-derived callable queries,
 :class:`CoverPreparer` for a unit's covers, :class:`SyncRunRecorder` for the
 run's own ``SyncRun`` row, :class:`LocalLibraryReader` for what
 this device already recorded about the library. The façade itself only wires the
-pieces together and delegates — anything that touches RomM or mutates in-flight
-sync state belongs in a sub-service.
+pieces together, checks each use case's conflict rules and delegates — anything
+that touches RomM or mutates in-flight sync state belongs in a sub-service.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
         ActiveCoreReader,
         ArtworkManager,
         Clock,
+        ConflictRules,
         DebugLogger,
         DiscResolver,
         EventEmitter,
@@ -75,7 +76,9 @@ class LibraryServiceConfig:
     sync). The ``renderer_rss`` / ``renderer_gc`` seams feed the session-budget
     gate: the RSS reader measures the Steam renderer's heap and the GC trigger
     settles it before a reading, so the apply can pause before Steam's per-session
-    budget is exhausted.
+    budget is exhausted. ``conflict_rules`` are what a library use case checks at
+    its entry, under its endpoint's name, and what the ``sync_stale`` /
+    ``sync_complete`` events take their leases through.
     """
 
     romm_api: RommLibraryApi
@@ -96,6 +99,7 @@ class LibraryServiceConfig:
     disc_resolver: DiscResolver
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
+    conflict_rules: ConflictRules
 
 
 class LibraryService:
@@ -113,13 +117,17 @@ class LibraryService:
     closed at its outcome), and
     :class:`LocalLibraryReader` (this device's own record of the library, read
     back out of SQLite) over a single shared :class:`LibrarySyncStateBox`. The
-    façade itself owns the box and exposes the callable surface; every
-    implementation method lives on one of the sub-services.
+    façade itself owns the box and exposes the use cases the endpoints call;
+    every implementation method lives on one of the sub-services. A use case an
+    endpoint calls checks its conflict rules at its entry, under that endpoint's
+    name, and answers the canonical refusal when one holds (CONTEXT.md →
+    Conflict rules).
     """
 
     def __init__(self, *, config: LibraryServiceConfig) -> None:
         self._config = config
         self._logger = config.logger
+        self._rules = config.conflict_rules
         self._box = LibrarySyncStateBox()
 
         # Sub-service: LocalLibraryReader — the fetcher's inward pair, reading
@@ -241,6 +249,7 @@ class LibraryService:
                 chunk_dispatcher=self._chunk_dispatcher,
                 cover_preparer=self._cover_preparer,
                 sync_run_recorder=self._sync_run_recorder,
+                conflict_rules=config.conflict_rules,
             )
         )
 
@@ -256,6 +265,7 @@ class LibraryService:
                 sync_state_box=self._box,
                 emit_progress=self._emit_progress_proxy,
                 artwork=config.artwork,
+                conflict_rules=config.conflict_rules,
             )
         )
         reporter_binding.set(lambda: self._reporter)
@@ -357,7 +367,7 @@ class LibraryService:
     def _settings(self) -> dict[str, Any]:
         return self._config.settings
 
-    # ── Public callable surface ──────────────────────────────────
+    # ── Use cases the endpoints call ─────────────────────────────
 
     def shutdown(self) -> None:
         """Request graceful shutdown — cancels sync if running."""
@@ -367,25 +377,40 @@ class LibraryService:
     async def get_platforms(self):
         return await self._fetcher.get_platforms()
 
-    def save_platform_sync(self, platform_id, enabled):
-        return self._fetcher.save_platform_sync(platform_id, enabled)
+    async def save_platform_sync(self, platform_id, enabled):
+        async with self._rules.hold("save_platform_sync", migration=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._fetcher.save_platform_sync(platform_id, enabled)
 
     async def set_all_platforms_sync(self, enabled):
-        return await self._fetcher.set_all_platforms_sync(enabled)
+        async with self._rules.hold("set_all_platforms_sync", migration=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._fetcher.set_all_platforms_sync(enabled)
 
     # Collection metadata
     async def get_collections(self):
         return await self._fetcher.get_collections()
 
-    def save_collection_sync(self, collection_id, kind, enabled):
-        return self._fetcher.save_collection_sync(collection_id, kind, enabled)
+    async def save_collection_sync(self, collection_id, kind, enabled):
+        async with self._rules.hold("save_collection_sync", migration=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._fetcher.save_collection_sync(collection_id, kind, enabled)
 
-    def save_collections_sync(self, collection_ids, kind, enabled):
-        return self._fetcher.save_collections_sync(collection_ids, kind, enabled)
+    async def save_collections_sync(self, collection_ids, kind, enabled):
+        async with self._rules.hold("save_collections_sync", migration=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._fetcher.save_collections_sync(collection_ids, kind, enabled)
 
     # Sync control
-    def start_sync(self):
-        return self._orchestrator.start_sync()
+    async def start_sync(self):
+        async with self._rules.hold("start_sync", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._orchestrator.start_sync()
 
     def cancel_sync(self, run_id=None):
         return self._orchestrator.cancel_sync(run_id)
@@ -395,10 +420,16 @@ class LibraryService:
 
     # Preview / apply
     async def sync_preview(self):
-        return await self._orchestrator.sync_preview()
+        async with self._rules.hold("sync_preview", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._orchestrator.sync_preview()
 
     async def sync_apply_delta(self, preview_id):
-        return await self._orchestrator.sync_apply_delta(preview_id)
+        async with self._rules.hold("sync_apply_delta", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._orchestrator.sync_apply_delta(preview_id)
 
     def sync_cancel_preview(self):
         return self._orchestrator.sync_cancel_preview()
@@ -414,14 +445,20 @@ class LibraryService:
 
     # Reporting
     async def report_unit_results(self, rom_id_to_app_id, run_id, unit_id, chunk_index):
-        return await self._reporter.report_unit_results(rom_id_to_app_id, run_id, unit_id, chunk_index)
+        async with self._rules.hold("report_unit_results", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._reporter.report_unit_results(rom_id_to_app_id, run_id, unit_id, chunk_index)
 
     # ``roms``-derived queries
     def get_registry_platforms(self):
         return self._reporter.get_registry_platforms()
 
-    def clear_sync_cache(self):
-        return self._reporter.clear_sync_cache()
+    async def clear_sync_cache(self):
+        async with self._rules.hold("clear_sync_cache", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._reporter.clear_sync_cache()
 
     def get_sync_stats(self):
         return self._reporter.get_sync_stats()

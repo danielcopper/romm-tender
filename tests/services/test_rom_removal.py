@@ -7,6 +7,7 @@ import shutil
 import sys
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
@@ -52,8 +53,9 @@ class RecordingEmitter:
     def __init__(self) -> None:
         self.events: list[tuple[str, object]] = []
 
-    async def __call__(self, event: str, payload: object, /) -> None:
+    async def __call__(self, event: str, payload: object, /) -> bool:
         self.events.append((event, payload))
+        return True
 
     def payloads(self, event: str) -> list[object]:
         return [payload for name, payload in self.events if name == event]
@@ -76,6 +78,7 @@ def service(logger, queue_cleanup, rom_files, uow, emitter):
             retrodeck_paths=FakeRetroDeckPaths(roms=_ROMS_BASE),
             download_queue_cleanup=queue_cleanup,
             uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 
@@ -262,6 +265,7 @@ class TestDeleteRomFiles:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
 
@@ -288,6 +292,7 @@ class TestDeleteRomFiles:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
         writer = os.open(rom_path, os.O_WRONLY)
@@ -333,6 +338,7 @@ class TestDeleteRomFiles:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
 
@@ -377,6 +383,7 @@ class TestDeleteRomFiles:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
 
@@ -423,6 +430,7 @@ class TestDeleteRomFiles:
                 retrodeck_paths=FakeRetroDeckPaths(roms=linked_roms),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
 
@@ -912,6 +920,7 @@ class TestDownloadQueueCleanup:
                 retrodeck_paths=FakeRetroDeckPaths(roms=_ROMS_BASE),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             ),
         )
 
@@ -1025,6 +1034,7 @@ class TestClaimDiscipline:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
         original = descriptor_paths._sha256_fd
@@ -1055,6 +1065,7 @@ class TestInterruptedStagingRecovery:
                 retrodeck_paths=FakeRetroDeckPaths(roms=str(roms)),
                 download_queue_cleanup=None,
                 uow_factory=FakeUnitOfWorkFactory(uow),
+                conflict_rules=_make_conflict_rules(),
             )
         )
 

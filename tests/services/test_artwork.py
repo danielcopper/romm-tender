@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -172,6 +173,7 @@ def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, 
             logger=logger,
             get_pending_sync=lambda: pending_sync_data,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 

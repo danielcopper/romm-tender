@@ -16,7 +16,7 @@ _MIGRATION_REFUSAL = {
 _SYNC_REFUSAL = {
     "success": False,
     "reason": "sync_active",
-    "message": "A library sync is in progress — wait for it to finish or cancel it before removing shortcuts or ROMs.",
+    "message": "A library sync is in progress — wait for it to finish or cancel it first.",
 }
 _PRUNE_REFUSAL = {
     "success": False,

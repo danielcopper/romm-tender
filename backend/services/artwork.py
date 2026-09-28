@@ -90,6 +90,7 @@ if TYPE_CHECKING:
     from models.state import ShortcutRegistryEntry
 
     from services.protocols import (
+        ConflictRules,
         CoverArtFileStore,
         PendingSyncReader,
         RommRomReader,
@@ -105,7 +106,8 @@ class ArtworkServiceConfig:
     Holds the Protocol-typed adapters, runtime infrastructure, the read seam
     ArtworkService uses to consult the in-flight sync's pending cover paths, and
     ``cover_cache_dir`` — the plugin-owned per-ROM cover cache directory (built
-    in bootstrap, never the shared Steam grid dir).
+    in bootstrap, never the shared Steam grid dir) — and the ``ConflictRules`` a
+    use case an endpoint calls checks at its entry, under that endpoint's name.
     """
 
     romm_api: RommRomReader
@@ -116,10 +118,17 @@ class ArtworkServiceConfig:
     logger: logging.Logger
     get_pending_sync: PendingSyncReader
     uow_factory: UnitOfWorkFactory
+    conflict_rules: ConflictRules
 
 
 class ArtworkService:
-    """Manages artwork downloading, caching, grid publishing, and cleanup."""
+    """Manages artwork downloading, caching, grid publishing, and cleanup.
+
+    A use case an endpoint calls checks its conflict rules at its entry, under
+    that endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules). The library sync's own cover work reaches
+    this service through ``ArtworkManager`` and checks no rule.
+    """
 
     def __init__(self, *, config: ArtworkServiceConfig) -> None:
         self._romm_api = config.romm_api
@@ -130,6 +139,7 @@ class ArtworkService:
         self._logger = config.logger
         self._get_pending_sync = config.get_pending_sync
         self._uow_factory = config.uow_factory
+        self._rules = config.conflict_rules
 
     def _cache_path(self, rom_id: int | str) -> str:
         """Return the per-ROM cover cache path for *rom_id*."""
@@ -755,37 +765,40 @@ class ArtworkService:
         ROM's cover from RomM into the cache and returns the fresh bytes. Works
         for a group version that has no local ``roms`` row (the picker lists
         not-yet-synced siblings). Every failure — server unreachable, no cover,
-        read error — returns ``{"base64": None}`` silently; a data callable, not
-        a ``{success, reason, message}`` result. Never re-downloads a cached
-        cover.
+        read error — returns ``{"base64": None}`` silently; a data endpoint, not
+        a ``{success, reason, message}`` result, except for the refusal of a call
+        made while a cleanup is running. Never re-downloads a cached cover.
         """
-        rom_id = int(rom_id)
-        cache_path = self._cache_path(rom_id)
-        if self._cover_art_file_store.exists(cache_path):
+        async with self._rules.hold("fetch_cover_base64", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            rom_id = int(rom_id)
+            cache_path = self._cache_path(rom_id)
+            if self._cover_art_file_store.exists(cache_path):
+                return {"base64": await self._read_base64(cache_path)}
+
+            try:
+                rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+            except Exception as e:
+                self._logger.warning(f"fetch_cover: failed to fetch rom {rom_id}: {e}")
+                return {"base64": None}
+            if not rom:
+                return {"base64": None}
+
+            cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
+            if not cover_url:
+                return {"base64": None}
+
+            self._cover_art_file_store.make_dirs(self._cover_cache_dir)
+            try:
+                await self._loop.run_in_executor(
+                    None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
+                )
+            except Exception as e:
+                self._logger.warning(f"fetch_cover: failed to download cover for rom {rom_id}: {e}")
+                return {"base64": None}
+
             return {"base64": await self._read_base64(cache_path)}
-
-        try:
-            rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-        except Exception as e:
-            self._logger.warning(f"fetch_cover: failed to fetch rom {rom_id}: {e}")
-            return {"base64": None}
-        if not rom:
-            return {"base64": None}
-
-        cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
-        if not cover_url:
-            return {"base64": None}
-
-        self._cover_art_file_store.make_dirs(self._cover_cache_dir)
-        try:
-            await self._loop.run_in_executor(
-                None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
-            )
-        except Exception as e:
-            self._logger.warning(f"fetch_cover: failed to download cover for rom {rom_id}: {e}")
-            return {"base64": None}
-
-        return {"base64": await self._read_base64(cache_path)}
 
     # ── Cover refresh (single-ROM repair) ──────────────────────────────────
 
@@ -803,74 +816,77 @@ class ArtworkService:
         the canonical ``{success, reason, message}`` failure shape on every
         failure branch — see ``lib/list_result.py``.
         """
-        app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
-        if app_id is None:
-            return {
-                "success": False,
-                "reason": "not_synced",
-                "message": "ROM is not synced to Steam",
-            }
+        async with self._rules.hold("refresh_cover_artwork", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
+            if app_id is None:
+                return {
+                    "success": False,
+                    "reason": "not_synced",
+                    "message": "ROM is not synced to Steam",
+                }
 
-        grid = self._steam_config.grid_dir()
-        if not grid:
-            return {
-                "success": False,
-                "reason": "no_grid_dir",
-                "message": "Steam grid directory not found",
-            }
+            grid = self._steam_config.grid_dir()
+            if not grid:
+                return {
+                    "success": False,
+                    "reason": "no_grid_dir",
+                    "message": "Steam grid directory not found",
+                }
 
-        try:
-            rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-        except Exception as e:
-            self._logger.warning(f"refresh_cover: failed to fetch rom {rom_id}: {e}")
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                # Already true for both branches (the ROM is gone / the server
-                # is down), and more specific than the classifier's generic
-                # string — only the routing slug was ever wrong here.
-                "message": "Could not fetch ROM from server",
-            }
-        if not rom:
-            return {
-                "success": False,
-                "reason": ErrorCode.NOT_FOUND.value,
-                "message": "Could not fetch ROM from server",
-            }
+            try:
+                rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+            except Exception as e:
+                self._logger.warning(f"refresh_cover: failed to fetch rom {rom_id}: {e}")
+                reason, _message = classify_error(e)
+                return {
+                    "success": False,
+                    "reason": reason,
+                    # Already true for both branches (the ROM is gone / the server
+                    # is down), and more specific than the classifier's generic
+                    # string — only the routing slug was ever wrong here.
+                    "message": "Could not fetch ROM from server",
+                }
+            if not rom:
+                return {
+                    "success": False,
+                    "reason": ErrorCode.NOT_FOUND.value,
+                    "message": "Could not fetch ROM from server",
+                }
 
-        cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
-        if not cover_url:
+            cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
+            if not cover_url:
+                return {
+                    "success": False,
+                    "reason": "no_cover",
+                    "message": "ROM has no cover artwork",
+                }
+
+            cache_path = self._cache_path(rom_id)
+            self._cover_art_file_store.make_dirs(self._cover_cache_dir)
+            try:
+                # A manual repair forces a fresh download (stored_source=None never
+                # matches, so it never revalidates), but still seeds the validator.
+                result = await self._loop.run_in_executor(
+                    None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
+                )
+            except Exception as e:
+                self._logger.warning(f"refresh_cover: failed to download cover for rom {rom_id}: {e}")
+                return {
+                    "success": False,
+                    "reason": "download_failed",
+                    "message": str(e),
+                }
+
+            self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
+            await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
+
             return {
-                "success": False,
-                "reason": "no_cover",
-                "message": "ROM has no cover artwork",
+                "success": True,
+                "message": "Cover refreshed",
+                "cover_path": cache_path,
             }
-
-        cache_path = self._cache_path(rom_id)
-        self._cover_art_file_store.make_dirs(self._cover_cache_dir)
-        try:
-            # A manual repair forces a fresh download (stored_source=None never
-            # matches, so it never revalidates), but still seeds the validator.
-            result = await self._loop.run_in_executor(
-                None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
-            )
-        except Exception as e:
-            self._logger.warning(f"refresh_cover: failed to download cover for rom {rom_id}: {e}")
-            return {
-                "success": False,
-                "reason": "download_failed",
-                "message": str(e),
-            }
-
-        self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
-        await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
-
-        return {
-            "success": True,
-            "message": "Cover refreshed",
-            "cover_path": cache_path,
-        }
 
     def _read_bound_app_id(self, rom_id: int) -> int | None:
         """Return the ROM's ``shortcut_app_id``, or ``None`` when unsynced/unbound."""
@@ -1013,15 +1029,18 @@ class ArtworkService:
         from the one the dry run answered; any shortfall of ``removed_count``
         below it is candidates whose unlink failed, which are still on disk.
         """
-        grid = self._steam_config.grid_dir()
-        if not grid or not self._cover_art_file_store.is_dir(grid):
-            return {
-                "success": False,
-                "reason": "no_grid_dir",
-                "message": "Steam grid directory not found",
-            }
-        live = {int(app_id) for app_id in live_app_ids}
-        return await self._loop.run_in_executor(None, self._cleanup_orphaned_grid_images_io, grid, live, dry_run)
+        async with self._rules.hold("cleanup_orphaned_grid_images", migration=True, sync=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            grid = self._steam_config.grid_dir()
+            if not grid or not self._cover_art_file_store.is_dir(grid):
+                return {
+                    "success": False,
+                    "reason": "no_grid_dir",
+                    "message": "Steam grid directory not found",
+                }
+            live = {int(app_id) for app_id in live_app_ids}
+            return await self._loop.run_in_executor(None, self._cleanup_orphaned_grid_images_io, grid, live, dry_run)
 
     def _cleanup_orphaned_grid_images_io(self, grid: str, live: set[int], dry_run: bool) -> dict[str, Any]:
         """Sync worker: sanity-check the live set, scan the grid dir, delete orphans.

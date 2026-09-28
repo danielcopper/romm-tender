@@ -875,14 +875,14 @@ class TestGetPendingPreview:
 class TestSyncControl:
     """Tests for start_sync, cancel_sync, sync_heartbeat."""
 
-    def test_start_sync_when_idle(self, plugin):
-        result = plugin._sync_service.start_sync()
+    async def test_start_sync_when_idle(self, plugin):
+        result = await plugin._sync_service.start_sync()
         assert result["success"] is True
         assert plugin._sync_service._sync_state == SyncState.RUNNING
 
-    def test_start_sync_rejects_when_running(self, plugin):
+    async def test_start_sync_rejects_when_running(self, plugin):
         plugin._sync_service._box.sync_state = SyncState.RUNNING
-        result = plugin._sync_service.start_sync()
+        result = await plugin._sync_service.start_sync()
         assert result["success"] is False
         assert "already in progress" in result["message"]
 
@@ -1107,11 +1107,11 @@ class TestRunKindOnTheWire:
     def _frames(self, emit):
         return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"]
 
-    def test_start_sync_claims_the_slot_as_an_apply_run(self, plugin):
+    async def test_start_sync_claims_the_slot_as_an_apply_run(self, plugin):
         plugin.loop = running_loop()
         plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
 
-        assert plugin._sync_service.start_sync()["success"] is True
+        assert (await plugin._sync_service.start_sync())["success"] is True
 
         assert plugin._sync_service._box.run_kind is SyncRunKind.APPLY
 
@@ -1907,7 +1907,7 @@ class TestDoSyncPerUnit:
         # Frontend was told to remove rom_id 99, carrying its bound app_id
         # captured before the finalize unbind NULLed the binding.
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
-        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
+        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
 
         # rom 99 was unbound (NULL app_id) but its row survives; only the
         # synced ROM is still bound.
@@ -1951,7 +1951,7 @@ class TestDoSyncPerUnit:
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # Only the bound stale ROM (99) is emitted; the unbound leftover (77) is excluded.
-        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
+        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
 
     @pytest.mark.asyncio
     async def test_appid_reuse_collision_excluded_from_sync_stale(self, plugin, fake_romm_api, emit):
@@ -2043,7 +2043,7 @@ class TestDoSyncPerUnit:
 
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # rom 99 (app 9900) is removed; the colliding app 5000 is excluded.
-        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
+        assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}], "prune_lease_token": "sync_stale:1"}]
 
     @pytest.mark.asyncio
     async def test_group_emits_one_shortcut_per_sibling_group(self, plugin, fake_romm_api, emit):
@@ -2397,7 +2397,7 @@ class TestDoSyncPerUnit:
 
         # rom 10 is stale-removed by the normal path (its platform is gone).
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
-        assert stale_events == [{"remove": [{"rom_id": 10, "app_id": 5000}]}]
+        assert stale_events == [{"remove": [{"rom_id": 10, "app_id": 5000}], "prune_lease_token": "sync_stale:1"}]
 
         # The collection did NOT rebind onto the freed appId — no rebind entry, no
         # shortcut for the unbound sibling.

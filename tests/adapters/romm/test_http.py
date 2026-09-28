@@ -10,7 +10,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
-from _factories import _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -103,6 +103,7 @@ def plugin(emit, logger, home, project_root):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

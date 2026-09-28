@@ -29,9 +29,7 @@ import functools
 import inspect
 from typing import Any
 
-_BLOCKED_MESSAGE = (
-    "A library sync is in progress — wait for it to finish or cancel it before removing shortcuts or ROMs."
-)
+_BLOCKED_MESSAGE = "A library sync is in progress — wait for it to finish or cancel it first."
 
 
 def sync_refusal() -> dict[str, Any]:

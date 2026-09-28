@@ -127,8 +127,8 @@ def _rom(rom_id: int, *, app_id: int | None = None) -> Rom:
     )
 
 
-async def _noop_emit(*_args: Any, **_kwargs: Any) -> None:
-    return None
+async def _noop_emit(*_args: Any, **_kwargs: Any) -> bool:
+    return True
 
 
 class Fixture:

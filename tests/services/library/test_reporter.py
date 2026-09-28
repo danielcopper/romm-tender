@@ -1341,7 +1341,7 @@ class TestClearSyncCache:
     and the recorded launch options but PRESERVES the run history, so the Last-sync
     display stays truthful (#1318)."""
 
-    def test_preserves_completed_run_so_last_sync_survives(self, plugin):
+    async def test_preserves_completed_run_so_last_sync_survives(self, plugin):
         """After clear, the completed run remains → get_latest_completed is set and last_sync still reads its time."""
         from domain.sync_run import SyncRun
 
@@ -1351,7 +1351,7 @@ class TestClearSyncCache:
         with uow:
             uow.sync_runs.save(run)
 
-        result = plugin._sync_service.clear_sync_cache()
+        result = await plugin._sync_service.clear_sync_cache()
 
         assert result["success"] is True
         with uow:
@@ -1360,7 +1360,7 @@ class TestClearSyncCache:
         stats = plugin._sync_service.get_sync_stats()
         assert stats["last_sync"] == "2025-01-01T00:10:00"
 
-    def test_leaves_run_history_untouched(self, plugin):
+    async def test_leaves_run_history_untouched(self, plugin):
         """Force Full Sync deletes no runs — a completed run AND a running run both
         survive the reset (it clears stamps + recorded launch options only)."""
         from domain.sync_run import SyncRun
@@ -1373,13 +1373,13 @@ class TestClearSyncCache:
             uow.sync_runs.save(completed)
             uow.sync_runs.save(running)
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         with uow:
             assert uow.sync_runs.get("run-done") is not None
             assert uow.sync_runs.get_running() is not None
 
-    def test_resets_recorded_launch_options_so_the_next_apply_skips_nothing(self, plugin):
+    async def test_resets_recorded_launch_options_so_the_next_apply_skips_nothing(self, plugin):
         """Force Full Sync must force past the per-item delta skip (ADR-0025).
 
         The recorded launch command is the skip's evidence; resetting it to NULL
@@ -1391,12 +1391,12 @@ class TestClearSyncCache:
         with uow:
             uow.roms.set_applied_launch_options(7, "flatpak run app 'x.zip'")
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         with uow:
             assert uow.roms.get(7).applied_launch_options is None
 
-    def test_preserves_last_sync_and_a_newer_cancelled_attempt(self, plugin):
+    async def test_preserves_last_sync_and_a_newer_cancelled_attempt(self, plugin):
         """After Force Full Sync, BOTH a completed run's last_sync AND a newer
         cancelled run's last-attempt hint survive (#1318).
 
@@ -1416,13 +1416,13 @@ class TestClearSyncCache:
             uow.sync_runs.save(completed)
             uow.sync_runs.save(cancelled)
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         stats = plugin._sync_service.get_sync_stats()
         assert stats["last_sync"] == "2025-01-01T00:10:00"
         assert stats["last_attempt"] == {"finished_at": "2025-01-01T01:05:00", "status": "cancelled"}
 
-    def test_preserves_a_lone_failed_attempt_across_the_reset(self, plugin):
+    async def test_preserves_a_lone_failed_attempt_across_the_reset(self, plugin):
         """The #1318 core case: with only a non-completed run (a resume situation),
         Force Full Sync no longer blanks the display to "Never" — the interrupted
         attempt survives so last_attempt still surfaces it.
@@ -1435,13 +1435,13 @@ class TestClearSyncCache:
         with uow:
             uow.sync_runs.save(interrupted)
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         stats = plugin._sync_service.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-01-01T00:05:00", "status": "interrupted"}
 
-    def test_clears_platform_completion_stamps(self, plugin):
+    async def test_clears_platform_completion_stamps(self, plugin):
         """Force Full Sync also drops the per-platform completion stamps (ADR-0023).
 
         Each stamp is its own effective ``last_sync``; leaving them would let an
@@ -1458,13 +1458,13 @@ class TestClearSyncCache:
                 PlatformSyncState.stamp(platform_slug="snes", at="2025-01-01T00:00:00", rom_count=200)
             )
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         with uow:
             assert uow.platform_sync_state.get("n64") is None
             assert uow.platform_sync_state.get("snes") is None
 
-    def test_clears_collection_completion_stamps(self, plugin):
+    async def test_clears_collection_completion_stamps(self, plugin):
         """Force Full Sync also drops the per-collection completion stamps (#742).
 
         Each collection stamp is its own effective ``last_sync``; leaving them would
@@ -1496,7 +1496,7 @@ class TestClearSyncCache:
                 )
             )
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is None
@@ -1688,7 +1688,7 @@ class TestGetSyncStatsResumeInputs:
         assert before["resumable_games"] == 1
         assert before["has_completion_stamp"] is True
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         after = plugin.get_sync_stats()
         assert after["resumable_games"] == 0

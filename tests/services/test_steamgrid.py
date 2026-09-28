@@ -3,7 +3,7 @@ import http.client
 import os
 
 import pytest
-from _factories import _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -81,6 +81,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emit, 
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -969,6 +970,7 @@ class TestDebugLoggerProtocolSeam:
                 disc_resolver=FakeDiscResolver(),
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
+                conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
             ),
         )
 

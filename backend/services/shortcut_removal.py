@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
     from services.protocols import (
         ArtworkRemover,
+        ConflictRules,
         SteamConfigStore,
         UnitOfWorkFactory,
     )
@@ -45,9 +46,11 @@ class ShortcutRemovalServiceConfig:
     """Frozen wiring bundle handed to ``ShortcutRemovalService.__init__``.
 
     Holds the Protocol-typed Steam-config adapter, runtime infrastructure, the
-    artwork remover peer, and the SQLite Unit-of-Work factory (the transactional
+    artwork remover peer, the SQLite Unit-of-Work factory (the transactional
     seam over the ``roms`` / ``kv_config`` repositories ShortcutRemovalService
-    reads and unbinds).
+    reads and unbinds), and the ``ConflictRules`` each use case checks at its
+    entry under its endpoint's name, and takes and releases the removal's
+    lease through.
     """
 
     steam_config: SteamConfigStore
@@ -55,10 +58,16 @@ class ShortcutRemovalServiceConfig:
     logger: logging.Logger
     artwork_remover: ArtworkRemover
     uow_factory: UnitOfWorkFactory
+    conflict_rules: ConflictRules
 
 
 class ShortcutRemovalService:
-    """Resolves shortcut removal sets and unbinds the affected ROMs in SQLite."""
+    """Resolves shortcut removal sets and unbinds the affected ROMs in SQLite.
+
+    A use case an endpoint calls checks its conflict rules at its entry, under
+    that endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: ShortcutRemovalServiceConfig) -> None:
         self._steam_config = config.steam_config
@@ -66,41 +75,65 @@ class ShortcutRemovalService:
         self._logger = config.logger
         self._artwork_remover = config.artwork_remover
         self._uow_factory = config.uow_factory
+        self._rules = config.conflict_rules
 
     # ── Removal queries ────────────────────────────────────────────────────
 
-    def remove_all_shortcuts(self) -> dict[str, Any]:
+    async def remove_all_shortcuts(self) -> dict[str, Any]:
         """Return app_ids and rom_ids for the frontend to remove via SteamClient.
 
         Bound ROMs contribute their ``shortcut_app_id``; every ROM contributes
         its ``rom_id`` (the frontend reports back the full removed set). Unbound
         rows (NULL ``shortcut_app_id``) have no Steam shortcut, so they carry no
-        ``app_id``.
+        ``app_id``. When there is a shortcut to remove, the answer carries a
+        ``shortcut_removal`` lease in ``prune_lease_token`` for the frontend's
+        Steam writes.
         """
-        with self._uow_factory() as uow:
-            roms = list(uow.roms.iter_all())
-        app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
-        rom_ids = [str(rom.rom_id) for rom in roms]
-        return {"success": True, "app_ids": app_ids, "rom_ids": rom_ids}
+        async with self._rules.hold("remove_all_shortcuts", migration=True, sync=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            with self._uow_factory() as uow:
+                roms = list(uow.roms.iter_all())
+            app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
+            rom_ids = [str(rom.rom_id) for rom in roms]
+            result: dict[str, Any] = {"success": True, "app_ids": app_ids, "rom_ids": rom_ids}
+            return await self._with_removal_lease(result)
 
     async def remove_platform_shortcuts(self, platform_slug: str) -> dict[str, Any]:
         """Return app_ids and rom_ids for a platform for the frontend to remove via SteamClient.
 
         Filters ``uow.roms`` by ``platform_slug`` directly; the display name in
         the response is resolved from the offline ``kv_config`` cache, falling
-        back to the slug when RomM has never been seen for it.
+        back to the slug when RomM has never been seen for it. When there is a
+        shortcut to remove, the answer carries a ``shortcut_removal`` lease in
+        ``prune_lease_token`` for the frontend's Steam writes.
         """
-        try:
-            return await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
-        except Exception as e:
-            self._logger.error(f"Failed to get platform shortcuts: {e}")
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "message": f"Failed: {e}",
-                "app_ids": [],
-                "rom_ids": [],
-            }
+        async with self._rules.hold("remove_platform_shortcuts", migration=True, sync=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            try:
+                result = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
+            except Exception as e:
+                self._logger.error(f"Failed to get platform shortcuts: {e}")
+                return {
+                    "success": False,
+                    "reason": ErrorCode.UNKNOWN.value,
+                    "message": f"Failed: {e}",
+                    "app_ids": [],
+                    "rom_ids": [],
+                }
+            return await self._with_removal_lease(result)
+
+    async def _with_removal_lease(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Add a ``shortcut_removal`` lease to a removal set that succeeded and names a shortcut.
+
+        Called inside the use case's ``hold(..., prune=True)`` block, so no
+        cleanup starts between the call's operation and the lease; the frontend
+        releases it through ``report_removal_results``.
+        """
+        if result.get("success") and result.get("app_ids"):
+            result["prune_lease_token"] = await self._rules.acquire_lease("shortcut_removal")
+        return result
 
     def _remove_platform_shortcuts_io(self, platform_slug: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -192,10 +225,22 @@ class ShortcutRemovalService:
             entry["app_id"] = rom.shortcut_app_id
         return entry  # type: ignore[return-value]
 
-    async def report_removal_results(self, removed_rom_ids: list[int | str]) -> dict[str, Any]:
-        """Called by frontend after removing shortcuts via SteamClient."""
-        await self._loop.run_in_executor(None, self._report_removal_results_io, removed_rom_ids)
-        return {"success": True, "message": f"Removed {len(removed_rom_ids)} shortcuts"}
+    async def report_removal_results(self, removed_rom_ids: list[int | str], lease_token: str | None) -> dict[str, Any]:
+        """Called by frontend after removing shortcuts via SteamClient.
+
+        Releases the removal's lease *lease_token* however the unbind ends; a
+        call that sends no token releases nothing. A refused call releases
+        nothing either.
+        """
+        async with self._rules.hold("report_removal_results", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            try:
+                await self._loop.run_in_executor(None, self._report_removal_results_io, removed_rom_ids)
+                return {"success": True, "message": f"Removed {len(removed_rom_ids)} shortcuts"}
+            finally:
+                if lease_token is not None:
+                    await self._rules.release_lease(str(lease_token))
 
     # ── Live-shortcut reconcile ────────────────────────────────────────────
 
@@ -257,15 +302,18 @@ class ShortcutRemovalService:
         MUST only call this when its scan actually ran (Steam's store was
         readable), never on a scan it could not perform.
         """
-        try:
-            unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)
-        except Exception as e:
-            self._logger.error(f"Failed to reconcile live shortcuts: {e}")
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "message": f"Reconcile failed: {e}",
-            }
+        async with self._rules.hold("reconcile_shortcuts", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            try:
+                unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)
+            except Exception as e:
+                self._logger.error(f"Failed to reconcile live shortcuts: {e}")
+                return {
+                    "success": False,
+                    "reason": ErrorCode.UNKNOWN.value,
+                    "message": f"Reconcile failed: {e}",
+                }
         if unbound:
             self._logger.info(f"Reconcile: unbound {unbound} stale Steam shortcut(s)")
         return {"success": True, "unbound_count": unbound, "message": f"Unbound {unbound} stale shortcut(s)"}

@@ -5,6 +5,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
@@ -89,6 +90,7 @@ def svc(steam_config, artwork_remover_mock, uow_factory, logger):
             logger=logger,
             artwork_remover=artwork_remover_mock,
             uow_factory=uow_factory,
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 
@@ -102,26 +104,29 @@ async def _set_event_loop(svc):
 
 
 class TestRemoveAllShortcuts:
-    def test_returns_app_ids_and_rom_ids(self, svc, uow):
+    @pytest.mark.asyncio
+    async def test_returns_app_ids_and_rom_ids(self, svc, uow):
         _seed_rom(uow, 10, app_id=1001, name="Game A")
         _seed_rom(uow, 20, app_id=1002, name="Game B")
         _seed_rom(uow, 30, app_id=None, name="Game C")  # unbound — no Steam app
 
-        result = svc.remove_all_shortcuts()
+        result = await svc.remove_all_shortcuts()
         assert result["success"] is True
         assert set(result["app_ids"]) == {1001, 1002}
         assert set(result["rom_ids"]) == {"10", "20", "30"}
 
-    def test_empty_registry(self, svc):
-        result = svc.remove_all_shortcuts()
+    @pytest.mark.asyncio
+    async def test_empty_registry(self, svc):
+        result = await svc.remove_all_shortcuts()
         assert result["success"] is True
         assert result["app_ids"] == []
         assert result["rom_ids"] == []
 
-    def test_does_not_unbind_roms(self, svc, uow):
+    @pytest.mark.asyncio
+    async def test_does_not_unbind_roms(self, svc, uow):
         """remove_all_shortcuts just returns data; unbinding happens in report_removal_results."""
         _seed_rom(uow, 10, app_id=1001, name="Game A")
-        svc.remove_all_shortcuts()
+        await svc.remove_all_shortcuts()
         with uow:
             assert uow.roms.get(10).shortcut_app_id == 1001
 
@@ -221,7 +226,7 @@ class TestReportRemovalResults:
         _seed_rom(uow, 10, app_id=1001, name="Game A")
         _seed_rom(uow, 20, app_id=1002, name="Game B")
 
-        result = await svc.report_removal_results([10, 20])
+        result = await svc.report_removal_results([10, 20], None)
         assert result["success"] is True
         with uow:
             rom10 = uow.roms.get(10)
@@ -236,7 +241,7 @@ class TestReportRemovalResults:
         _seed_rom(uow, 10, app_id=1001, name="Game A")
         _seed_rom(uow, 20, app_id=1002, name="Game B")
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         with uow:
             assert uow.roms.get(10).shortcut_app_id is None
             assert uow.roms.get(20).shortcut_app_id == 1002
@@ -246,7 +251,7 @@ class TestReportRemovalResults:
         """A NULL-app_id row is left untouched (no Steam Input reset, no re-save)."""
         _seed_rom(uow, 10, app_id=None, name="Already Unbound")
 
-        result = await svc.report_removal_results([10])
+        result = await svc.report_removal_results([10], None)
         assert result["success"] is True
         with uow:
             assert uow.roms.get(10).shortcut_app_id is None
@@ -256,7 +261,7 @@ class TestReportRemovalResults:
         """A rom_id with no row in SQLite is ignored, not an error."""
         _seed_rom(uow, 10, app_id=1001, name="Game A")
 
-        result = await svc.report_removal_results([99])
+        result = await svc.report_removal_results([99], None)
         assert result["success"] is True
         with uow:
             assert uow.roms.get(10).shortcut_app_id == 1001
@@ -268,7 +273,7 @@ class TestReportRemovalResults:
         steam_config.grid_dir = lambda: str(grid_dir)
         _seed_rom(uow, 10, app_id=1001, name="Game A", cover_path="/covers/10.png")
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         artwork_remover_mock.remove_artwork_files.assert_called_once()
         call = artwork_remover_mock.remove_artwork_files.call_args
         assert call.args[0] == str(grid_dir)
@@ -404,7 +409,7 @@ class TestRemovalCleansUpArtwork:
         steam_config.grid_dir = lambda: str(grid_dir)
 
         svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         assert not art_file.exists()
 
     @pytest.mark.asyncio
@@ -418,7 +423,7 @@ class TestRemovalCleansUpArtwork:
         steam_config.grid_dir = lambda: str(grid_dir)
 
         svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         assert not staging.exists()
 
 
@@ -439,6 +444,7 @@ def _artwork_integration_service(uow, steam_config, tmp_path, logger) -> Shortcu
             logger=logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
     svc = ShortcutRemovalService(
@@ -448,6 +454,7 @@ def _artwork_integration_service(uow, steam_config, tmp_path, logger) -> Shortcu
             logger=logger,
             artwork_remover=artwork_svc,
             uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
     svc._loop = asyncio.get_running_loop()
@@ -472,7 +479,7 @@ class TestReportRemovalInvalidatesStamps:
         _seed_stamp(uow, "snes")
         _seed_stamp(uow, "gba")  # no ROM removed for gba
 
-        await svc.report_removal_results([10, 20])
+        await svc.report_removal_results([10, 20], None)
         with uow:
             assert uow.platform_sync_state.get("n64") is None
             assert uow.platform_sync_state.get("snes") is None
@@ -488,7 +495,7 @@ class TestReportRemovalInvalidatesStamps:
         _seed_stamp(uow, "n64")
         _seed_stamp(uow, "snes")
 
-        await svc.report_removal_results([10, 11])
+        await svc.report_removal_results([10, 11], None)
         with uow:
             assert uow.platform_sync_state.get("n64") is None
             assert uow.platform_sync_state.get("snes") is not None
@@ -501,7 +508,7 @@ class TestReportRemovalInvalidatesStamps:
         _seed_rom(uow, 10, app_id=None, platform_slug="n64")
         _seed_stamp(uow, "n64")
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         with uow:
             assert uow.platform_sync_state.get("n64") is None
 
@@ -510,7 +517,7 @@ class TestReportRemovalInvalidatesStamps:
         """A rom_id with no row contributes no platform, so no stamp is invalidated."""
         _seed_stamp(uow, "n64")
 
-        await svc.report_removal_results([99])
+        await svc.report_removal_results([99], None)
         with uow:
             assert uow.platform_sync_state.get("n64") is not None
 
@@ -560,7 +567,7 @@ class TestRemovalInvalidatesCollectionStamps:
         _seed_collection_stamp(uow, "7", "standard", member_rom_ids=(10, 99))
         _seed_collection_stamp(uow, "8", "smart", member_rom_ids=(20, 30))
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is None
             assert uow.collection_sync_state.get("8", "smart") is not None
@@ -570,7 +577,7 @@ class TestRemovalInvalidatesCollectionStamps:
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _seed_collection_stamp(uow, "7", "standard", member_rom_ids=(50, 51))
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is not None
 
@@ -581,7 +588,7 @@ class TestRemovalInvalidatesCollectionStamps:
         _seed_rom(uow, 10, app_id=None, platform_slug="n64")
         _seed_collection_stamp(uow, "7", "standard", member_rom_ids=(10,))
 
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is None
 
@@ -617,7 +624,7 @@ class TestReportRemovalSteamInputCleanup:
         _seed_rom(uow, 10, app_id=1001, name="Game A")
 
         steam_config.set_steam_input_config = MagicMock()
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         steam_config.set_steam_input_config.assert_called_once_with([1001], mode="default")
 
     @pytest.mark.asyncio
@@ -627,7 +634,7 @@ class TestReportRemovalSteamInputCleanup:
         _seed_rom(uow, 10, app_id=None, name="Unbound")
 
         steam_config.set_steam_input_config = MagicMock()
-        await svc.report_removal_results([10])
+        await svc.report_removal_results([10], None)
         steam_config.set_steam_input_config.assert_not_called()
 
     @pytest.mark.asyncio
@@ -638,7 +645,7 @@ class TestReportRemovalSteamInputCleanup:
         steam_config.set_steam_input_config = MagicMock(side_effect=Exception("VDF write failed"))
 
         # Should not raise, and the ROM is still unbound despite the cleanup failure.
-        result = await svc.report_removal_results([10])
+        result = await svc.report_removal_results([10], None)
         assert result["success"] is True
         with uow:
             assert uow.roms.get(10).shortcut_app_id is None

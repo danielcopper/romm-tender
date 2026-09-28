@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from services.protocols import (
         Clock,
+        ConflictRules,
         DownloadQueueCleanup,
         EventEmitter,
         RetroDeckPaths,
@@ -42,10 +43,12 @@ class RomRemovalServiceConfig:
 
     Holds the runtime infrastructure, the Protocol-typed filesystem
     adapter, the RetroDECK paths bundle, the ``DownloadQueueCleanup``
-    eviction seam (``None`` when no download cleanup is wired), and the
+    eviction seam (``None`` when no download cleanup is wired), the
     SQLite Unit-of-Work factory (the transactional seam over the
-    ``rom_installs`` repository). Decomposes the ctor so a new dependency
-    does not push past the S107 parameter-count limit.
+    ``rom_installs`` repository), and the ``ConflictRules`` a use case an
+    endpoint calls checks at its entry and takes its lease through.
+    Decomposes the ctor so a new dependency does not push past the S107
+    parameter-count limit.
     """
 
     logger: logging.Logger
@@ -56,10 +59,17 @@ class RomRemovalServiceConfig:
     retrodeck_paths: RetroDeckPaths
     download_queue_cleanup: DownloadQueueCleanup | None
     uow_factory: UnitOfWorkFactory
+    conflict_rules: ConflictRules
 
 
 class RomRemovalService:
-    """Handles physical deletion of installed ROM files and ``rom_installs`` cleanup."""
+    """Handles physical deletion of installed ROM files and ``rom_installs`` cleanup.
+
+    A use case an endpoint calls checks its conflict rules at its entry, under
+    that endpoint's name, and answers the canonical refusal when one holds; a
+    peer service that calls one calls its ``<verb>_unchecked`` twin instead
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(
         self,
@@ -74,6 +84,7 @@ class RomRemovalService:
         self._retrodeck_paths = config.retrodeck_paths
         self._download_queue_cleanup = config.download_queue_cleanup
         self._uow_factory = config.uow_factory
+        self._rules = config.conflict_rules
         # Read and written only on the loop thread — every mutation brackets a
         # ``run_in_executor`` call rather than happening inside one — so both
         # removal entry points share it without a lock, which `services/` may
@@ -231,7 +242,27 @@ class RomRemovalService:
                 uow.roms.set_applied_launch_options(rom_id, rom.applied_launch_options)
 
     async def remove_rom(self, rom_id: int | str) -> dict[str, Any]:
+        """Remove a single installed ROM for the ``remove_rom`` endpoint.
+
+        :meth:`remove_rom_unchecked` under the endpoint's conflict rules. A
+        removal that succeeded carries a ``rom_uninstall`` lease in
+        ``prune_lease_token`` for the frontend's Steam writes.
+        """
+        async with self._rules.hold("remove_rom", migration=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self.remove_rom_unchecked(rom_id)
+            if result.get("success"):
+                result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
+            return result
+
+    async def remove_rom_unchecked(self, rom_id: int | str) -> dict[str, Any]:
         """Remove a single installed ROM: delete files and drop the install record.
+
+        :meth:`remove_rom` without its conflict rules or its lease, for the
+        download service's sibling supersede, which removes a sibling from
+        inside a download that answered for its own rules; the caller writes
+        nothing to Steam for it.
 
         Refused while any removal that owns this ROM's tree is running — its own
         earlier press, or a bulk uninstall, which claims every ROM it is about
@@ -330,7 +361,22 @@ class RomRemovalService:
         one single removal must never work the same tree. The refusal carries no
         removal payload, which is how the frontend already tells a refusal from
         a partial failure.
+
+        A removal that ran and reports bound ``app_ids`` carries a
+        ``bulk_uninstall`` lease in ``prune_lease_token`` for the frontend's
+        launch-options reset, a partial failure included: those ROMs' files are
+        gone whether or not every other deletion succeeded. A refusal, this
+        method's own included, carries neither ``app_ids`` nor a lease.
         """
+        async with self._rules.hold("uninstall_all_roms", migration=True, sync=True, prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._uninstall_all_roms()
+            if result.get("app_ids"):
+                result["prune_lease_token"] = await self._rules.acquire_lease("bulk_uninstall")
+            return result
+
+    async def _uninstall_all_roms(self) -> dict[str, Any]:
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
         claimed = {install.rom_id for install in installs}

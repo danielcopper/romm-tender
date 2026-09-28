@@ -180,7 +180,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # Accessing ``.get()`` before ``.set()`` raises RuntimeError instead of
     # the NameError a bare forward-ref lambda would produce.
     pending_sync_binding: LateBinding[dict[int, dict[str, Any]]] = LateBinding("pending_sync")
-    # DownloadService needs RomRemovalService.remove_rom for the #1298 sibling
+    # DownloadService needs RomRemovalService.remove_rom_unchecked for the #1298 sibling
     # supersede, but RomRemovalService needs DownloadService's queue-cleanup seam —
     # a construction cycle. Bind the remover after both services exist.
     rom_remover_binding: LateBinding[InstalledRomRemoverFn] = LateBinding("rom_remover")
@@ -313,6 +313,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             get_pending_sync=pending_sync_binding.get,
             uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -323,6 +324,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             artwork_remover=artwork_service,
             uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -346,6 +348,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             disc_resolver=disc_launch_resolver,
             renderer_rss=cfg.adapters.renderer_rss,
             renderer_gc=cfg.adapters.renderer_gc,
+            conflict_rules=conflict_rules,
         ),
     )
     pending_sync_binding.set(lambda: sync_service.pending_sync)
@@ -415,11 +418,12 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             retrodeck_paths=cfg.callbacks.retrodeck_paths,
             download_queue_cleanup=download_service,
             uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
         ),
     )
     # Close the download↔removal cycle: DownloadService's sibling supersede now
     # resolves the live remover through this binding (#1298).
-    rom_remover_binding.set(lambda: rom_removal_service.remove_rom)
+    rom_remover_binding.set(lambda: rom_removal_service.remove_rom_unchecked)
     sibling_supersede_binding.set(lambda: download_service.supersede_sibling_installs)
 
     firmware_service = FirmwareService(

@@ -2087,7 +2087,7 @@ class TestPlanEstimates:
         assert before["N64"].collapsed_count == 1
         assert before["Faves"].bound_count == 1
 
-        plugin._sync_service.clear_sync_cache()
+        await plugin._sync_service.clear_sync_cache()
 
         after = {u.name: u for u in await plugin._sync_service._fetcher.build_work_queue()}
         assert after["N64"].predicted_skip is False

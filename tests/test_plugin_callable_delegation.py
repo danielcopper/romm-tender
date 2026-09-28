@@ -303,9 +303,9 @@ class TestLibrarySyncCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_save_platform_sync_delegates(self, plugin):
-        plugin._sync_service.save_platform_sync.return_value = {"ok": True}
+        plugin._sync_service.save_platform_sync = AsyncMock(return_value={"ok": True})
         result = await plugin.save_platform_sync(1, True)
-        plugin._sync_service.save_platform_sync.assert_called_once_with(1, True)
+        plugin._sync_service.save_platform_sync.assert_awaited_once_with(1, True)
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
@@ -324,23 +324,23 @@ class TestLibrarySyncCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_save_collection_sync_delegates(self, plugin):
-        plugin._sync_service.save_collection_sync.return_value = {"ok": True}
+        plugin._sync_service.save_collection_sync = AsyncMock(return_value={"ok": True})
         result = await plugin.save_collection_sync(2, "standard", False)
-        plugin._sync_service.save_collection_sync.assert_called_once_with(2, "standard", False)
+        plugin._sync_service.save_collection_sync.assert_awaited_once_with(2, "standard", False)
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
     async def test_save_collections_sync_delegates(self, plugin):
-        plugin._sync_service.save_collections_sync.return_value = {"success": True}
+        plugin._sync_service.save_collections_sync = AsyncMock(return_value={"success": True})
         result = await plugin.save_collections_sync(["1", "2"], "standard", True)
-        plugin._sync_service.save_collections_sync.assert_called_once_with(["1", "2"], "standard", True)
+        plugin._sync_service.save_collections_sync.assert_awaited_once_with(["1", "2"], "standard", True)
         assert result == {"success": True}
 
     @pytest.mark.asyncio
     async def test_start_sync_delegates(self, plugin):
-        plugin._sync_service.start_sync.return_value = {"started": True}
+        plugin._sync_service.start_sync = AsyncMock(return_value={"started": True})
         result = await plugin.start_sync()
-        plugin._sync_service.start_sync.assert_called_once_with()
+        plugin._sync_service.start_sync.assert_awaited_once_with()
         assert result == {"started": True}
 
     @pytest.mark.asyncio
@@ -387,9 +387,9 @@ class TestLibrarySyncCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_clear_sync_cache_delegates(self, plugin):
-        plugin._sync_service.clear_sync_cache.return_value = {"ok": True}
+        plugin._sync_service.clear_sync_cache = AsyncMock(return_value={"ok": True})
         result = await plugin.clear_sync_cache()
-        plugin._sync_service.clear_sync_cache.assert_called_once_with()
+        plugin._sync_service.clear_sync_cache.assert_awaited_once_with()
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
@@ -410,16 +410,16 @@ class TestShortcutRemovalCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_remove_all_shortcuts_delegates(self, plugin):
-        plugin._shortcut_removal_service.remove_all_shortcuts.return_value = {"removed": 10}
+        plugin._shortcut_removal_service.remove_all_shortcuts = AsyncMock(return_value={"removed": 10})
         result = await plugin.remove_all_shortcuts()
-        plugin._shortcut_removal_service.remove_all_shortcuts.assert_called_once_with()
+        plugin._shortcut_removal_service.remove_all_shortcuts.assert_awaited_once_with()
         assert result == {"removed": 10}
 
     @pytest.mark.asyncio
     async def test_report_removal_results_delegates(self, plugin):
         plugin._shortcut_removal_service.report_removal_results = AsyncMock(return_value={"ok": True})
-        result = await plugin.report_removal_results([1, 2], None)
-        plugin._shortcut_removal_service.report_removal_results.assert_awaited_once_with([1, 2])
+        result = await plugin.report_removal_results([1, 2], "shortcut_removal:1")
+        plugin._shortcut_removal_service.report_removal_results.assert_awaited_once_with([1, 2], "shortcut_removal:1")
         assert result == {"ok": True}
 
 
@@ -536,20 +536,19 @@ class TestDownloadCallableDelegation:
 class TestRomRemovalCallableDelegation:
     @pytest.mark.asyncio
     async def test_remove_rom_delegates(self, plugin):
-        plugin._rom_removal_service.remove_rom = AsyncMock(return_value={"success": True})
+        answer = {"success": True, "prune_lease_token": "rom_uninstall:1"}
+        plugin._rom_removal_service.remove_rom = AsyncMock(return_value=answer)
         result = await plugin.remove_rom(42)
         plugin._rom_removal_service.remove_rom.assert_awaited_once_with(42)
-        assert result["success"] is True
-        assert result["prune_lease_token"].startswith("rom_uninstall:")
+        assert result == answer
 
     @pytest.mark.asyncio
     async def test_uninstall_all_roms_delegates(self, plugin):
-        plugin._rom_removal_service.uninstall_all_roms = AsyncMock(return_value={"success": True, "app_ids": [42]})
+        answer = {"success": True, "app_ids": [42], "prune_lease_token": "bulk_uninstall:1"}
+        plugin._rom_removal_service.uninstall_all_roms = AsyncMock(return_value=answer)
         result = await plugin.uninstall_all_roms()
         plugin._rom_removal_service.uninstall_all_roms.assert_awaited_once_with()
-        assert result["success"] is True
-        assert result["app_ids"] == [42]
-        assert result["prune_lease_token"].startswith("bulk_uninstall:")
+        assert result == answer
 
 
 # ── Saves callables ───────────────────────────────────────────────────

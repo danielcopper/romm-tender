@@ -221,9 +221,10 @@ class EventSink:
     def __init__(self) -> None:
         self.events: list[tuple[str, dict[str, Any]]] = []
 
-    async def __call__(self, event: str, payload: object, /) -> None:
+    async def __call__(self, event: str, payload: object, /) -> bool:
         assert isinstance(payload, dict)
         self.events.append((event, cast("dict[str, Any]", payload)))
+        return True
 
 
 @dataclass

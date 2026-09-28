@@ -348,7 +348,9 @@ class ReachabilityProbeFn(Protocol):
 class InstalledRomRemoverFn(Protocol):
     """Installed-ROM removal consumed by DownloadService (sibling supersede, #1298).
 
-    The composition root satisfies this with ``RomRemovalService.remove_rom``.
+    The composition root satisfies this with ``RomRemovalService.remove_rom_unchecked``:
+    the removal runs inside a download that has answered for its own conflict
+    rules, so it checks none of the ``remove_rom`` endpoint's.
     Before downloading a version whose sibling group already has another version
     on disk, DownloadService strips that install through this seam — reusing the
     canonical file-deletion + ``rom_installs`` cleanup rather than duplicating it.

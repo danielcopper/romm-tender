@@ -45,8 +45,8 @@ def _plan(*, rows: list[Rom], target_id: int | None = None, whole_game: bool = F
     )
 
 
-async def _noop_emit(*_args: Any, **_kwargs: Any) -> None:
-    return None
+async def _noop_emit(*_args: Any, **_kwargs: Any) -> bool:
+    return True
 
 
 def _runner(

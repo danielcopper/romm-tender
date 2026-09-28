@@ -13,7 +13,7 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -82,6 +82,7 @@ def plugin(tmp_path, emit, logger, home):
             logger=logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     p._artwork_service = artwork_service
@@ -130,6 +131,7 @@ def plugin(tmp_path, emit, logger, home):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=p._renderer_rss,
             renderer_gc=p._renderer_gc,
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -140,6 +142,7 @@ def plugin(tmp_path, emit, logger, home):
             logger=logger,
             artwork_remover=artwork_service,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     # Default migration service mock — no migration pending. Tests that need

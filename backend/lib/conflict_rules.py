@@ -79,3 +79,16 @@ class ConflictRuleSet:
         is released and no cleanup can start in between.
         """
         await self._prune_conflicts.retain(task, label)
+
+    async def acquire_lease(self, key: str) -> str:
+        """Take a lease under *key* for Steam writes the frontend makes after the call, and answer its token.
+
+        Checks no rule: call it inside the ``hold(..., prune=True)`` block of
+        the call whose answer carries the token, so no cleanup can start
+        between that call's operation and the lease.
+        """
+        return await self._prune_conflicts.acquire_lease(key)
+
+    async def release_lease(self, token: str) -> None:
+        """Release the lease *token* names; an unknown or expired token changes nothing."""
+        await self._prune_conflicts.release_lease(token)

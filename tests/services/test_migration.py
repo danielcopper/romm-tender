@@ -7,7 +7,7 @@ from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
@@ -46,8 +46,9 @@ class RecordingEmitter:
     def __init__(self) -> None:
         self.calls: list[tuple[str, object]] = []
 
-    async def __call__(self, event: str, payload: object, /) -> None:
+    async def __call__(self, event: str, payload: object, /) -> bool:
         self.calls.append((event, payload))
+        return True
 
 
 class RecordingSaveDirectories:
@@ -145,6 +146,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

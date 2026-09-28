@@ -145,14 +145,14 @@ class TestGetPlatforms:
 class TestSavePlatformSync:
     """Tests for save_platform_sync() — lines 120-123."""
 
-    def test_saves_enabled_setting(self, plugin):
-        result = plugin._sync_service.save_platform_sync(42, True)
+    async def test_saves_enabled_setting(self, plugin):
+        result = await plugin._sync_service.save_platform_sync(42, True)
         assert result["success"] is True
         assert plugin.settings["enabled_platforms"]["42"] is True
 
-    def test_saves_disabled_setting(self, plugin):
+    async def test_saves_disabled_setting(self, plugin):
         plugin.settings["enabled_platforms"]["42"] = True
-        result = plugin._sync_service.save_platform_sync(42, False)
+        result = await plugin._sync_service.save_platform_sync(42, False)
         assert result["success"] is True
         assert plugin.settings["enabled_platforms"]["42"] is False
 
@@ -624,28 +624,28 @@ class TestGetCollectionsOwnerUsername:
 
 
 class TestSaveCollectionSync:
-    """Tests for LibraryService.save_collection_sync() — synchronous method."""
+    """Tests for LibraryService.save_collection_sync()."""
 
-    def test_saves_enabled_standard(self, plugin):
+    async def test_saves_enabled_standard(self, plugin):
         """Enabling a standard collection stores True under enabled_collections.standard."""
-        plugin._sync_service.save_collection_sync("42", "standard", True)
+        await plugin._sync_service.save_collection_sync("42", "standard", True)
 
         assert plugin._sync_service._settings["enabled_collections"]["standard"]["42"] is True
 
-    def test_saves_enabled_smart(self, plugin):
+    async def test_saves_enabled_smart(self, plugin):
         """Enabling a smart collection stores True under enabled_collections.smart."""
-        plugin._sync_service.save_collection_sync("7", "smart", True)
+        await plugin._sync_service.save_collection_sync("7", "smart", True)
 
         assert plugin._sync_service._settings["enabled_collections"]["smart"]["7"] is True
 
-    def test_saves_enabled_virtual(self, plugin):
+    async def test_saves_enabled_virtual(self, plugin):
         """Enabling a virtual collection stores True under enabled_collections.virtual."""
         b64 = "eyJ0eXBlIjogImNvbGxlY3Rpb24ifQ=="
-        plugin._sync_service.save_collection_sync(b64, "virtual", True)
+        await plugin._sync_service.save_collection_sync(b64, "virtual", True)
 
         assert plugin._sync_service._settings["enabled_collections"]["virtual"][b64] is True
 
-    def test_saves_disabled(self, plugin):
+    async def test_saves_disabled(self, plugin):
         """Disabling a previously-enabled collection stores False in the right bucket."""
         plugin._sync_service._settings["enabled_collections"] = {
             "standard": {"42": True},
@@ -653,56 +653,56 @@ class TestSaveCollectionSync:
             "virtual": {},
         }
 
-        plugin._sync_service.save_collection_sync("42", "standard", False)
+        await plugin._sync_service.save_collection_sync("42", "standard", False)
 
         assert plugin._sync_service._settings["enabled_collections"]["standard"]["42"] is False
 
-    def test_returns_success(self, plugin):
-        result = plugin._sync_service.save_collection_sync("1", "standard", True)
+    async def test_returns_success(self, plugin):
+        result = await plugin._sync_service.save_collection_sync("1", "standard", True)
 
         assert result == {"success": True}
 
-    def test_rejects_invalid_kind(self, plugin):
+    async def test_rejects_invalid_kind(self, plugin):
         """Passing an unknown kind returns success=False without writing."""
-        result = plugin._sync_service.save_collection_sync("1", "bogus", True)
+        result = await plugin._sync_service.save_collection_sync("1", "bogus", True)
 
         assert result["success"] is False
         assert result["reason"] == "invalid_kind"
         assert "Invalid collection kind" in result["message"]
 
-    def test_string_id_stored_from_int(self, plugin):
+    async def test_string_id_stored_from_int(self, plugin):
         """Passing an integer id is coerced to a string key."""
-        plugin._sync_service.save_collection_sync(99, "standard", True)
+        await plugin._sync_service.save_collection_sync(99, "standard", True)
 
         assert "99" in plugin._sync_service._settings["enabled_collections"]["standard"]
         assert plugin._sync_service._settings["enabled_collections"]["standard"]["99"] is True
 
-    def test_creates_enabled_collections_key_if_absent(self, plugin):
+    async def test_creates_enabled_collections_key_if_absent(self, plugin):
         """enabled_collections is created with all three buckets if absent."""
         plugin._sync_service._settings.pop("enabled_collections", None)
 
-        plugin._sync_service.save_collection_sync("7", "smart", True)
+        await plugin._sync_service.save_collection_sync("7", "smart", True)
 
         ec = plugin._sync_service._settings["enabled_collections"]
         assert ec["smart"]["7"] is True
         assert ec["standard"] == {}
         assert ec["virtual"] == {}
 
-    def test_calls_save_settings(self, plugin):
+    async def test_calls_save_settings(self, plugin):
         """settings_persister is triggered after updating the setting."""
         recorder = FakeSettingsPersister()
         plugin._sync_service._fetcher._settings_persister = recorder
 
-        plugin._sync_service.save_collection_sync("1", "standard", True)
+        await plugin._sync_service.save_collection_sync("1", "standard", True)
 
         assert recorder.save_count == 1
 
-    def test_does_not_call_save_settings_on_invalid_kind(self, plugin):
+    async def test_does_not_call_save_settings_on_invalid_kind(self, plugin):
         """Invalid kind short-circuits before persistence."""
         recorder = FakeSettingsPersister()
         plugin._sync_service._fetcher._settings_persister = recorder
 
-        plugin._sync_service.save_collection_sync("1", "bogus", True)
+        await plugin._sync_service.save_collection_sync("1", "bogus", True)
 
         assert recorder.save_count == 0
 

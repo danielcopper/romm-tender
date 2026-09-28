@@ -57,6 +57,7 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import classify_error
 from lib.list_result import ErrorCode
+from services.library._leased_emit import emit_under_lease
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
@@ -75,6 +76,7 @@ if TYPE_CHECKING:
     from services.library.sync_run_recorder import SyncRunRecorder
     from services.protocols import (
         Clock,
+        ConflictRules,
         EventEmitter,
         UnitOfWorkFactory,
         UuidGen,
@@ -136,7 +138,8 @@ class SyncOrchestratorConfig:
     finalisation — between them, no ``ArtworkManager`` is owed here. The
     ``sync_run_recorder`` peer writes the run's ``SyncRun`` row: this module
     decides which terminal status a stopped run earns, and hands that decision
-    over as a method call.
+    over as a method call. The ``conflict_rules`` are what a ``sync_stale``
+    event that removes shortcuts takes its lease through.
     """
 
     settings: dict[str, Any]
@@ -156,6 +159,7 @@ class SyncOrchestratorConfig:
     chunk_dispatcher: ChunkDispatcher
     cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
+    conflict_rules: ConflictRules
 
 
 @dataclass(frozen=True)
@@ -197,6 +201,7 @@ class SyncOrchestrator:
         self._chunk_dispatcher = config.chunk_dispatcher
         self._cover_preparer = config.cover_preparer
         self._sync_run_recorder = config.sync_run_recorder
+        self._rules = config.conflict_rules
 
     # ── Sync control ─────────────────────────────────────────────
 
@@ -1222,10 +1227,15 @@ class SyncOrchestrator:
             )
         else:
             stale = []
-        await self._emit(
-            "sync_stale",
-            {"remove": [{"rom_id": rom_id, "app_id": app_id} for rom_id, app_id in stale]},
-        )
+        remove = [{"rom_id": rom_id, "app_id": app_id} for rom_id, app_id in stale]
+        if remove:
+            await emit_under_lease(
+                self._rules,
+                "sync_stale",
+                lambda token: self._emit("sync_stale", {"remove": remove, "prune_lease_token": token}),
+            )
+        else:
+            await self._emit("sync_stale", {"remove": remove})
 
         # Session-budget surfacing (#1383): a budget pause carries its distinct
         # reason into the terminal payload; a CLEAN run recommends a Steam restart

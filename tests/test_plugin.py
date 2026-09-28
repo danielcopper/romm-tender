@@ -5,7 +5,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from _gate_rules import endpoints_with_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -41,8 +41,6 @@ from services.steamgrid import SteamGridService, SteamGridServiceConfig
 @pytest.mark.parametrize(
     ("event", "payload"),
     [
-        ("sync_complete", {"total_games": 1}),
-        ("sync_stale", {"remove": [{"rom_id": 1, "app_id": 42}]}),
         ("download_complete", {"app_id": 42, "launch_options": "launch"}),
         ("migration_relaunch_options", {"items": [{"app_id": 42, "launch_options": "launch"}]}),
     ],
@@ -57,6 +55,31 @@ async def test_continuation_events_hold_a_renewable_prune_lease(plugin, event, p
     assert (await plugin.renew_prune_conflict_lease(token))["success"] is True
     assert (await plugin.release_prune_conflict_lease(token))["success"] is True
     assert plugin._prune_conflicts.conflicting_operations == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event", "payload"),
+    [
+        ("sync_complete", {"total_games": 1}),
+        ("sync_stale", {"remove": [{"rom_id": 1, "app_id": 42}]}),
+    ],
+)
+async def test_the_funnel_leaves_the_library_sync_events_to_the_library(plugin, event, payload):
+    """The library service leases these two itself; a second lease here would never be released."""
+    await plugin._emit_with_prune_continuation(event, payload)
+
+    assert plugin._event_sink.last_payload == payload
+    assert plugin._prune_conflicts.conflicting_operations == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delivers", [True, False])
+async def test_the_funnel_answers_whether_anybody_heard_the_event(plugin, delivers):
+    """A service that leases its own event releases the lease on this answer."""
+    plugin._event_sink.delivers = delivers
+
+    assert await plugin._emit_with_prune_continuation("sync_complete", {"total_games": 1}) is delivers
 
 
 @pytest.mark.asyncio
@@ -145,10 +168,9 @@ def plugin(logger, home, data_dir):
             loop=running_loop(),
             logger=logger,
             launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            # The service seam is fire-and-forget (``EventEmitter`` answers
-            # ``None``); the plugin's own sink answers whether anybody heard.
-            # Two seams, deliberately not one.
-            emit=AsyncMock(),
+            # The service's own seam rather than the plugin's sink, answering
+            # that every event was heard.
+            emit=AsyncMock(return_value=True),
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -160,6 +182,7 @@ def plugin(logger, home, data_dir):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 

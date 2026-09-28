@@ -95,8 +95,8 @@ def _planner(
     return planner, liveness
 
 
-async def _noop_emit(*_args: Any, **_kwargs: Any) -> None:
-    return None
+async def _noop_emit(*_args: Any, **_kwargs: Any) -> bool:
+    return True
 
 
 class _StubProbe:

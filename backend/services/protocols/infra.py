@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 
 
 class EventEmitter(Protocol):
-    """Emit a named event carrying one payload to the frontend."""
+    """Emit a named event carrying one payload to the frontend; answers whether anybody heard it."""
 
-    async def __call__(self, event: str, payload: object, /) -> None: ...
+    async def __call__(self, event: str, payload: object, /) -> bool: ...
 
 
 class ResolveUploadConflictFn(Protocol):
@@ -272,8 +272,10 @@ class ConflictRules(Protocol):
     ``prune`` the block runs under an operation named *label*. *label* is the
     endpoint's name. ``retain`` holds an operation named *label* for detached
     work until *task* ends; it checks no rule, so it is called inside the
-    ``hold(..., prune=True)`` block that started *task*. CONTEXT.md → Conflict
-    rules.
+    ``hold(..., prune=True)`` block that started *task*. ``acquire_lease``
+    takes a lease under *key* for Steam writes the frontend makes after the
+    call and answers its token; ``release_lease`` gives one back by token.
+    CONTEXT.md → Conflict rules, Prune conflicts.
     """
 
     def hold(
@@ -281,3 +283,7 @@ class ConflictRules(Protocol):
     ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
 
     async def retain(self, task: asyncio.Task[Any], label: str) -> None: ...
+
+    async def acquire_lease(self, key: str) -> str: ...
+
+    async def release_lease(self, token: str) -> None: ...

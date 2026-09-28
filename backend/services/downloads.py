@@ -123,7 +123,7 @@ class DownloadServiceConfig:
     target_gate: DownloadTargetGateFn
     m3u_support: SystemM3uSupportFn
     uow_factory: UnitOfWorkFactory
-    # Deferred access to RomRemovalService.remove_rom — the two services form a
+    # Deferred access to RomRemovalService.remove_rom_unchecked — the two services form a
     # construction cycle, so the composition root binds it after both exist
     # (#1298 sibling supersede).
     rom_remover: RomRemoverProvider
@@ -273,7 +273,7 @@ class DownloadService:
         rule below. The group's members are snapshotted in one short read UoW,
         closed before the removal seam runs — the removal opens its own UoW, which
         must not nest (ADR-0006). Each superseded install is removed through the
-        canonical ``RomRemovalService.remove_rom`` (files + ``rom_installs`` row;
+        canonical ``RomRemovalService.remove_rom_unchecked`` (files + ``rom_installs`` row;
         saves untouched per ADR-0007) rather than duplicating its deletion logic.
         Every attempt is logged with both rom ids so a failure is attributable (S7).
         A removal that reports ``not_installed`` raced clean and is skipped; any

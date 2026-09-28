@@ -66,10 +66,9 @@ def plugin(tmp_path, logger, home, project_root):
             loop=running_loop(),
             logger=logger,
             launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            # The service seam is fire-and-forget (``EventEmitter`` answers
-            # ``None``); the plugin's own sink answers whether anybody heard.
-            # Two seams, deliberately not one.
-            emit=AsyncMock(),
+            # The service's own seam rather than the plugin's sink, answering
+            # that every event was heard.
+            emit=AsyncMock(return_value=True),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -81,6 +80,7 @@ def plugin(tmp_path, logger, home, project_root):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
 
@@ -119,7 +119,7 @@ def plugin(tmp_path, logger, home, project_root):
             log_debug=p._log_debug,
             emit=AsyncMock(),
             is_retrodeck_migration_pending=lambda: False,
-            conflict_rules=_make_conflict_rules(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
             uow_factory=p._uow_factory,
         ),
     )

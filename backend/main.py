@@ -110,13 +110,15 @@ class Plugin:
         """
         self._debug_logger(msg)
 
-    async def _emit_with_prune_continuation(self, event: str, payload: object, /) -> None:
-        """Attach a prune lease to events whose Steam writes outlive backend work."""
+    async def _emit_with_prune_continuation(self, event: str, payload: object, /) -> bool:
+        """Attach a prune lease to events whose Steam writes outlive backend work; answer whether anybody heard it.
+
+        The library service leases ``sync_complete`` and ``sync_stale`` itself
+        when it emits them, so neither is leased here.
+        """
         fields = cast("dict[str, Any]", payload) if isinstance(payload, dict) else None
         needs_lease = fields is not None and (
-            event == "sync_complete"
-            or (event == "sync_stale" and bool(fields.get("remove")))
-            or (event == "prune_complete" and fields.get("final") is not False and fields.get("publication_required"))
+            (event == "prune_complete" and fields.get("final") is not False and fields.get("publication_required"))
             or (event == "download_complete" and fields.get("app_id") is not None)
             or (event == "migration_relaunch_options" and bool(fields.get("items")))
         )
@@ -134,6 +136,7 @@ class Plugin:
             raise
         if lease_token is not None and not delivered:
             await self._prune_conflicts.release_lease(lease_token)
+        return delivered
 
     async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
@@ -582,12 +585,10 @@ class Plugin:
         return await self._sync_service.get_platforms()
 
     @route
-    @migration_blocked
     async def save_platform_sync(self, platform_id, enabled):
-        return self._sync_service.save_platform_sync(platform_id, enabled)
+        return await self._sync_service.save_platform_sync(platform_id, enabled)
 
     @route
-    @migration_blocked
     async def set_all_platforms_sync(self, enabled):
         return await self._sync_service.set_all_platforms_sync(enabled)
 
@@ -596,14 +597,12 @@ class Plugin:
         return await self._sync_service.get_collections()
 
     @route
-    @migration_blocked
     async def save_collection_sync(self, collection_id, kind, enabled):
-        return self._sync_service.save_collection_sync(collection_id, kind, enabled)
+        return await self._sync_service.save_collection_sync(collection_id, kind, enabled)
 
     @route
-    @migration_blocked
     async def save_collections_sync(self, collection_ids, kind, enabled):
-        return self._sync_service.save_collections_sync(collection_ids, kind, enabled)
+        return await self._sync_service.save_collections_sync(collection_ids, kind, enabled)
 
     @route
     def save_collection_platform_groups(self, enabled):
@@ -618,10 +617,8 @@ class Plugin:
         return self._settings_service.set_collection_naming_mode(mode)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def start_sync(self):
-        return self._sync_service.start_sync()
+        return await self._sync_service.start_sync()
 
     @route
     def cancel_sync(self, run_id):
@@ -632,14 +629,10 @@ class Plugin:
         return self._sync_service.sync_heartbeat()
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def sync_preview(self):
         return await self._sync_service.sync_preview()
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def sync_apply_delta(self, preview_id):
         return await self._sync_service.sync_apply_delta(preview_id)
 
@@ -660,7 +653,6 @@ class Plugin:
         return await self._sync_service.get_session_budget_status()
 
     @route
-    @prune_active_blocked
     async def report_unit_results(self, rom_id_to_app_id, run_id, unit_id, chunk_index):
         return await self._sync_service.report_unit_results(rom_id_to_app_id, run_id, unit_id, chunk_index)
 
@@ -669,35 +661,18 @@ class Plugin:
         return self._sync_service.get_registry_platforms()
 
     @route
-    @migration_blocked
-    @sync_active_blocked
-    @prune_active_blocked
     async def remove_platform_shortcuts(self, platform_slug):
-        result = await self._shortcut_removal_service.remove_platform_shortcuts(platform_slug)
-        if result.get("success") and result.get("app_ids"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("shortcut_removal")
-        return result
+        return await self._shortcut_removal_service.remove_platform_shortcuts(platform_slug)
 
     @route
-    @migration_blocked
-    @sync_active_blocked
-    @prune_active_blocked
     async def remove_all_shortcuts(self):
-        result = self._shortcut_removal_service.remove_all_shortcuts()
-        if result.get("success") and result.get("app_ids"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("shortcut_removal")
-        return result
+        return await self._shortcut_removal_service.remove_all_shortcuts()
 
     @route
-    @prune_active_blocked
     async def report_removal_results(self, removed_rom_ids, lease_token):
-        try:
-            return await self._shortcut_removal_service.report_removal_results(removed_rom_ids)
-        finally:
-            await self._prune_conflicts.release_lease(str(lease_token))
+        return await self._shortcut_removal_service.report_removal_results(removed_rom_ids, lease_token)
 
     @route
-    @prune_active_blocked
     async def reconcile_shortcuts(self, live_app_ids):
         return await self._shortcut_removal_service.reconcile_live_shortcuts(live_app_ids)
 
@@ -706,28 +681,20 @@ class Plugin:
         return await self._artwork_service.get_artwork_base64(rom_id)
 
     @route
-    @prune_active_blocked
     async def fetch_cover_base64(self, rom_id):
         return await self._artwork_service.fetch_cover_base64(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def refresh_cover_artwork(self, rom_id):
         return await self._artwork_service.refresh_cover(int(rom_id))
 
     @route
-    @migration_blocked
-    @sync_active_blocked
-    @prune_active_blocked
     async def cleanup_orphaned_grid_images(self, live_app_ids, dry_run):
         return await self._artwork_service.cleanup_orphaned_grid_images(live_app_ids, dry_run)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def clear_sync_cache(self):
-        return self._sync_service.clear_sync_cache()
+        return await self._sync_service.clear_sync_cache()
 
     @route
     def get_sync_stats(self):
@@ -881,23 +848,12 @@ class Plugin:
         return self._download_service.get_installed_rom(rom_id)
 
     @route
-    @migration_blocked
-    @prune_active_blocked
     async def remove_rom(self, rom_id):
-        result = await self._rom_removal_service.remove_rom(rom_id)
-        if result.get("success"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("rom_uninstall")
-        return result
+        return await self._rom_removal_service.remove_rom(rom_id)
 
     @route
-    @migration_blocked
-    @sync_active_blocked
-    @prune_active_blocked
     async def uninstall_all_roms(self):
-        result = await self._rom_removal_service.uninstall_all_roms()
-        if result.get("app_ids"):
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("bulk_uninstall")
-        return result
+        return await self._rom_removal_service.uninstall_all_roms()
 
     # ── Save Sync / Playtime delegation to services ──────────
 
