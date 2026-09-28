@@ -1087,11 +1087,11 @@ version it went back to, and when — which the installer writes and removes and
 **stands** only while the running version is the one it went back to; one that outlived that is a leftover and is shown
 nowhere. The **rolled-back notice** on Main states a standing record until the user dismisses it or the next update that
 answers removes it, and for that long the update notice does not name the version it tried. The **update announcement**
-is the one toast a start after an update that went through owes the panel: the backend compares the running version with
-the one the previous start recorded (`last_run_version`), and a rollback is never announced. `domain/update_outcome.py`
-decides which version is announced; `services/update_outcome.py` keeps the announcement for its process and reads the
-record. _Avoid_: "failed update" for the record alone — an update can fail before anything is replaced, and then nothing
-is rolled back or recorded. The exception is the installer's fixed filename, `update-failure.json`, and the code names
-that follow it (`UpdateFailure`, `read_update_failure`, `dismiss_update_failure`, `UpdateFailureNotice`, the answer's
-`failure` key): each of those means the record of a rolled-back update, never an update that failed before anything was
-replaced.
+is the one toast a start on a version that moved owes the panel — an update, or a return to an earlier release: the
+backend compares the running version with the one the previous start recorded (`last_run_version`), and a rollback is
+never announced. `domain/update_outcome.py` decides which version is announced and which way it moved;
+`services/update_outcome.py` keeps the announcement for its process and reads the record. _Avoid_: "failed update" for
+the record alone — an update can fail before anything is replaced, and then nothing is rolled back or recorded. The
+exception is the installer's fixed filename, `update-failure.json`, and the code names that follow it (`UpdateFailure`,
+`read_update_failure`, `dismiss_update_failure`, `UpdateFailureNotice`, the answer's `failure` key): each of those means
+the record of a rolled-back update, never an update that failed before anything was replaced.

@@ -19,7 +19,7 @@ from services.update_outcome import (
 )
 
 _FAILURE = UpdateFailure(attempted_version="1.3.0", restored_version="1.2.3", rolled_back_at="2026-09-25T10:15:00Z")
-_OUTCOME_KEYS = {"announce_version", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {"announce_version", "announce_direction", "failure", "failure_dismissed"}
 
 
 class _Record:
@@ -76,13 +76,14 @@ def _lines(caplog: pytest.LogCaptureFixture, logger: logging.Logger, level: int)
 
 
 class TestAStartAfterAnUpdate:
-    async def test_announces_the_new_version_once_and_logs_where_it_came_from(self, logger, caplog):
+    async def test_announces_the_new_version_as_updated_and_logs_where_it_came_from(self, logger, caplog):
         service, factory, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
 
         with caplog.at_level(logging.INFO, logger=logger.name):
             service.note_start()
 
-        assert (await service.get_update_outcome())["announce_version"] == "1.3.0"
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == ("1.3.0", "updated")
         assert _lines(caplog, logger, logging.INFO) == ["updated from 1.2.3 to 1.3.0"]
         assert _last_run(factory) == "1.3.0"
 
@@ -92,7 +93,8 @@ class TestAStartAfterAnUpdate:
 
         assert service.acknowledge_update_announcement() == {"success": True}
 
-        assert (await service.get_update_outcome())["announce_version"] is None
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
 
     async def test_acknowledging_twice_is_harmless(self, logger):
         service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
@@ -113,6 +115,41 @@ class TestAStartAfterAnUpdate:
 
         assert (await again.get_update_outcome())["announce_version"] is None
         assert _lines(caplog, logger, logging.INFO) == []
+
+
+class TestAStartOnAnEarlierVersion:
+    async def test_announces_it_as_back_and_logs_what_it_came_back_from(self, logger, caplog):
+        service, factory, _, _ = _make(logger, running="1.2.3", last_run="1.3.0")
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            service.note_start()
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == ("1.2.3", "back")
+        assert _lines(caplog, logger, logging.INFO) == ["back on 1.2.3 after 1.3.0"]
+        assert _last_run(factory) == "1.2.3"
+
+    async def test_is_gone_once_acknowledged(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3", last_run="1.3.0")
+        service.note_start()
+
+        service.acknowledge_update_announcement()
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
+
+
+class TestAStartOnAVersionNeitherSideOfWhichIsTheLater:
+    async def test_announces_nothing_logs_nothing_and_still_records_the_version(self, logger, caplog):
+        service, factory, _, _ = _make(logger, running="1.3.0", last_run="development")
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            service.note_start()
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
+        assert _lines(caplog, logger, logging.INFO) == []
+        assert _last_run(factory) == "1.3.0"
 
 
 class TestAStartOnTheSameVersion:
@@ -205,7 +242,12 @@ class TestARecordThatNoLongerStands:
 
         assert _lines(caplog, logger, logging.WARNING) == []
         assert _lines(caplog, logger, logging.INFO) == ["updated from 1.2.3 to 1.3.0"]
-        assert outcome == {"announce_version": "1.3.0", "failure": None, "failure_dismissed": False}
+        assert outcome == {
+            "announce_version": "1.3.0",
+            "announce_direction": "updated",
+            "failure": None,
+            "failure_dismissed": False,
+        }
 
     async def test_a_record_whose_restored_version_is_not_running_is_ignored(self, logger, caplog):
         service, _, _, _ = _make(logger, running="1.4.0", last_run="1.4.0", record=_Record(_FAILURE))
@@ -242,6 +284,7 @@ class TestTheRecord:
 
         assert (await service.get_update_outcome()) == {
             "announce_version": None,
+            "announce_direction": None,
             "failure": None,
             "failure_dismissed": False,
         }

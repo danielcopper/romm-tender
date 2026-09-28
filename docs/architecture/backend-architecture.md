@@ -1659,16 +1659,22 @@ shows the card like any other, and the Settings section shows a line naming this
 
 The service tells the user what the last update did, in one of two ways, and never touches the installer's files.
 
-- **An update that went through is announced once.** At every start (`note_start`, a start-up step ahead of the others)
-  the running `VERSION` is compared with `last_run_version` in `kv_config`, which is then set to the running version. A
-  stored version that differs is logged at INFO (`updated from <old> to <new>`) and owed to the panel, in this process's
-  memory only: the panel reads it at load (`get_update_outcome`'s `announce_version`), raises one toast, and
-  acknowledges it (`acknowledge_update_announcement`), so a panel a Steam restart reloads does not raise it again, and
-  the next start compares equal and owes nothing. The first start that records a version announces nothing.
-- **A rollback is never announced as an update.** The installer restores the database `last_run_version` lives in, so a
-  rolled-back start normally finds its own version stored already. The record below is the second witness:
+- **A version that moved is announced once, with the way it moved.** At every start (`note_start`, a start-up step ahead
+  of the others) the running `VERSION` is compared with `last_run_version` in `kv_config`, which is then set to the
+  running version. A stored version the running one is later than is an update — logged at INFO as
+  `updated from <old> to <new>`, `announce_direction` `"updated"` — and one it is earlier than is a return to that
+  release — `back on <new> after <old>`, `"back"`; which is later is `domain/version.py::is_newer_version`'s answer. The
+  announcement is owed to the panel in this process's memory only: the panel reads it at load (`get_update_outcome`'s
+  `announce_version` and `announce_direction`), raises one toast, and acknowledges it
+  (`acknowledge_update_announcement`), so a panel a Steam restart reloads does not raise it again, and the next start
+  compares equal and owes nothing. The first start that records a version announces nothing, and so does a stored
+  version that differs while neither is the later — one of them unreadable, or two pre-releases of one release, which
+  `is_newer_version` does not rank: the version is still recorded, and nothing is logged or announced rather than a
+  direction nobody established.
+- **A rollback is never announced, not even as `back`.** The installer restores the database `last_run_version` lives
+  in, so a rolled-back start normally finds its own version stored already. The record below is the second witness:
   `domain/update_outcome.py::announced_update` also announces nothing where the record says this start is back on the
-  running version after trying the stored one.
+  running version after trying the stored one — the rolled-back notice tells that start's story.
 - **A rolled-back update is the installer's record, read, never written.** `update-failure.json` in the state root
   (`adapters/update_failure.py`) is read at start — one WARNING,
   `the update to <X> was rolled back at <T>; back on <Y> — what <X> logged when it tried to start is earlier in this log, or in journalctl --user -u romm-tender if it failed before logging`

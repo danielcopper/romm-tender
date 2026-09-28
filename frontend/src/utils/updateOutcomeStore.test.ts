@@ -18,10 +18,18 @@ import {
   type UpdateOutcomeState,
 } from "./updateOutcomeStore";
 
-const NOTHING: UpdateOutcome = { announce_version: null, failure: null, failure_dismissed: false };
+const NOTHING: UpdateOutcome = {
+  announce_version: null,
+  announce_direction: null,
+  failure: null,
+  failure_dismissed: false,
+};
+const UPDATED: UpdateOutcome = { ...NOTHING, announce_version: "1.3.0", announce_direction: "updated" };
+const BACK: UpdateOutcome = { ...NOTHING, announce_version: "1.2.3", announce_direction: "back" };
 
 const ROLLED_BACK_WIRE: UpdateOutcome = {
   announce_version: null,
+  announce_direction: null,
   failure: { attempted_version: "1.3.0", restored_version: "1.2.3", rolled_back_at: "2026-09-25T10:15:00Z" },
   failure_dismissed: false,
 };
@@ -64,9 +72,9 @@ describe("updateOutcomeStore", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  describe("an update that went through", () => {
-    it("is announced in one toast, then acknowledged", async () => {
-      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...NOTHING, announce_version: "1.3.0" });
+  describe("a version that moved", () => {
+    it("to a later release is announced as an update in one toast, then acknowledged", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue(UPDATED);
 
       await fetchUpdateOutcome();
 
@@ -76,6 +84,16 @@ describe("updateOutcomeStore", () => {
       expect(vi.mocked(toaster.toast).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(acknowledgeUpdateAnnouncement).mock.invocationCallOrder[0]!,
       );
+    });
+
+    it("back to an earlier release is announced as being back on it", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue(BACK);
+
+      await fetchUpdateOutcome();
+
+      expect(toaster.toast).toHaveBeenCalledTimes(1);
+      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender is back on 1.2.3" });
+      expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
     });
 
     it("nothing owed raises no toast and acknowledges nothing", async () => {
@@ -88,7 +106,7 @@ describe("updateOutcomeStore", () => {
     });
 
     it("an acknowledgement that failed rejects, so the caller's log names it", async () => {
-      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...NOTHING, announce_version: "1.3.0" });
+      vi.mocked(getUpdateOutcome).mockResolvedValue(UPDATED);
       vi.mocked(acknowledgeUpdateAnnouncement).mockRejectedValue(new Error("socket closed"));
 
       await expect(fetchUpdateOutcome()).rejects.toThrow("socket closed");

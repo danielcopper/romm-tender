@@ -947,10 +947,13 @@ class Plugin:
     async def get_update_outcome(self):
         """Report what the panel owes the user about the last update.
 
-        Returns ``{"announce_version", "failure", "failure_dismissed"}``.
-        ``announce_version`` is the version this process was updated to, until
-        :meth:`acknowledge_update_announcement` says the panel announced it —
-        ``None`` on every other start. ``failure`` is the installer's record of
+        Returns ``{"announce_version", "announce_direction", "failure",
+        "failure_dismissed"}``. ``announce_version`` is the version this process
+        moved to, until :meth:`acknowledge_update_announcement` says the panel
+        announced it — ``None`` on every other start — and
+        ``announce_direction`` which way it moved: ``"updated"`` to a later
+        release, ``"back"`` to an earlier one, ``None`` exactly when
+        ``announce_version`` is. ``failure`` is the installer's record of
         an update it rolled back, ``{"attempted_version", "restored_version",
         "rolled_back_at"}``, read afresh so it goes when the installer removes
         it; ``None`` where there is none, or where the running version is not
@@ -961,7 +964,7 @@ class Plugin:
 
     @route
     def acknowledge_update_announcement(self):
-        """Record that the panel announced this process's update, so a reloaded panel does not announce it again.
+        """Record that the panel raised this process's announcement, so a reloaded panel does not raise it again.
 
         Returns ``{"success": True}``.
         """

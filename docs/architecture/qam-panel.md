@@ -702,7 +702,7 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Sync paused on the session budget           | text, **Open Sync**                                           | Sync, which holds Restart Steam now and Resume                                            |
 | An update was rolled back                   | both versions, where the reason is, **Open Updates**, Dismiss | Settings › Updates, which states the same fact whether or not the card was dismissed      |
 | A newer Tender release is out               | both versions, **Open Updates**, Dismiss                      | Settings › Updates, which states both versions and holds the check's switch and Check now |
-| Tender was updated                          | a toast, once — no card                                       | none — the toast is the whole of it                                                       |
+| Tender was updated, or went back            | a toast, once — no card                                       | none — the toast is the whole of it                                                       |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -745,10 +745,10 @@ available and failed at once. So for as long as the record stands, that version 
 or not; a newer release raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's
 answer (`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
 
-The update announcement is the one condition shown as a toast rather than a card: **Tender updated to X**, raised once
-from that same read. The backend owes it once per process and the panel acknowledges it after raising it, so a Steam
-restart that reloads the panel does not raise it again
-([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)).
+The update announcement is the one condition shown as a toast rather than a card: **Tender updated to X** after an
+update, **Tender is back on X** after a return to an earlier release, raised once from that same read. The backend owes
+it once per process and the panel acknowledges it after raising it, so a Steam restart that reloads the panel does not
+raise it again ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)).
 
 Four of the conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the `input_driver`
 fix and the session budget — so the absence is ordinary; the update announcement has none either, because a toast goes

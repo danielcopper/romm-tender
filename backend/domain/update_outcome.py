@@ -2,8 +2,8 @@
 
 Contract: everything pure about an update's outcome — the record the installer
 leaves when it rolled an update back (its filename, how it is read, and whether
-it still stands), and which version, if any, a start owes the user an
-announcement of. Reading the
+it still stands), and which announcement, if any, a start owes the user: the
+version running now and which way it moved. Reading the
 record stays in the adapter; the version a start remembers stays in the service.
 """
 
@@ -11,7 +11,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TypeGuard
+from typing import Literal, TypeGuard
+
+from domain.version import is_newer_version
+
+# Which way the version moved since the previous start: to a later release is
+# ``updated``, to an earlier one ``back``.
+UpdateDirection = Literal["updated", "back"]
 
 # The installer writes it into its state directory (``UPDATE_FAILURE`` in
 # ``install.sh``, which ``tests/scripts/test_install_sh.py`` holds equal to this
@@ -68,24 +74,41 @@ def standing_update_failure(failure: UpdateFailure | None, running: str) -> Upda
     return failure
 
 
-def announced_update(last_run: str | None, running: str, failure: UpdateFailure | None) -> str | None:
-    """The version a start owes the user an announcement of, or ``None``.
+@dataclass(frozen=True)
+class UpdateAnnouncement:
+    """The one announcement a start owes: the version running now, and which way it moved to get there."""
+
+    version: str
+    direction: UpdateDirection
+
+
+def announced_update(last_run: str | None, running: str, failure: UpdateFailure | None) -> UpdateAnnouncement | None:
+    """The announcement a start owes the user, or ``None``.
 
     *running* is announced when *last_run* — the version the previous start
-    recorded — exists and differs from it. With no *last_run* this is the first
-    start that records one, and there is nothing to compare it with.
+    recorded — exists and differs from it: as ``updated`` where *running* is the
+    later release, as ``back`` where it is the earlier one. With no *last_run*
+    this is the first start that records one, and there is nothing to compare it
+    with. Two versions that differ while neither is the later — one of them
+    unreadable, or two pre-releases of one release, which
+    :func:`domain.version.is_newer_version` does not rank — announce nothing
+    rather than a direction nothing established.
 
     A start the installer's record calls a rollback — back on *running* after
     trying *last_run* — announces nothing. The installer restores the database
     the recorded version lives in, so *last_run* is normally the restored version
     already; the record is the second witness, and a rollback is never
-    announced as an update.
+    announced, not even as ``back``: the rolled-back notice is what tells it.
     """
     if last_run is None or last_run == running:
         return None
     if failure is not None and failure.restored_version == running and failure.attempted_version == last_run:
         return None
-    return running
+    if is_newer_version(running, last_run):
+        return UpdateAnnouncement(version=running, direction="updated")
+    if is_newer_version(last_run, running):
+        return UpdateAnnouncement(version=running, direction="back")
+    return None
 
 
 def _is_text(value: object) -> TypeGuard[str]:

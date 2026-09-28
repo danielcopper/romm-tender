@@ -285,8 +285,9 @@ Each time Steam loads Tender, it asks GitHub whether a newer release is out — 
 notice on the main panel says **Tender X is available** and names the version you have; **Open Updates** takes you to
 **Settings › Updates**, and **Dismiss** puts the notice away for that version only — the next release brings it back.
 
-After an update, the first time the panel loads it says **Tender updated to X** in a message that goes by itself. It
-says it once: reopening the panel, or restarting Steam, does not bring it back.
+After an update, the first time the panel loads it says **Tender updated to X** in a message that goes by itself; after
+installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or
+restarting Steam, does not bring it back.
 
 If the new version did not start after an update, and the installer went back to the version you had, a notice on the
 main panel says **Update to X failed — you are still on Y.**, and under it where the reason is.

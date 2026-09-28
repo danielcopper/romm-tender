@@ -3,7 +3,7 @@
  *
  * Updated by:
  *   - panel load in index.tsx (fetchUpdateOutcome), detached — which is also
- *     where an update that went through is announced, once
+ *     where a version that moved is announced, once
  *   - the rolled-back card's Dismiss (dismissUpdateFailureRecord), after the
  *     backend persisted it
  *
@@ -23,6 +23,7 @@ import {
   acknowledgeUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
+  type UpdateDirection,
   type UpdateFailure,
   type UpdateOutcome,
 } from "../api/backend";
@@ -110,6 +111,11 @@ export function updateFailureSentence(failure: RolledBackUpdate): string {
   return `Update to ${failure.attemptedVersion} failed — you are still on ${failure.restoredVersion}.`;
 }
 
+/** The one sentence the update announcement is raised in, for each way the version can have moved. */
+function updateAnnouncementSentence(version: string, direction: UpdateDirection): string {
+  return direction === "updated" ? `Tender updated to ${version}` : `Tender is back on ${version}`;
+}
+
 /** Whether the rolled-back card is up: a record stands and was not dismissed. */
 export function failureCardShows(state: UpdateOutcomeState): boolean {
   return state.failure !== null && !state.failureDismissed;
@@ -125,8 +131,8 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
 }
 
 /**
- * Ask the backend what the last update did, fill the store, and announce an
- * update that went through.
+ * Ask the backend what the last update did, fill the store, and announce a
+ * version that moved — to a later release, or back to an earlier one.
  *
  * The announcement is one toast, and it is acknowledged only after it was
  * raised: the backend owes it once per process, so a panel reloaded by a Steam
@@ -138,7 +144,7 @@ export async function fetchUpdateOutcome(): Promise<void> {
   const outcome = await getUpdateOutcome();
   if (seq === _seq) setUpdateOutcomeState(stateFromOutcome(outcome));
   if (outcome.announce_version !== null) {
-    showToast(`Tender updated to ${outcome.announce_version}`);
+    showToast(updateAnnouncementSentence(outcome.announce_version, outcome.announce_direction));
     await acknowledgeUpdateAnnouncement();
   }
 }

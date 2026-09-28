@@ -19,7 +19,7 @@ from typing import Any
 
 from domain.identity import VERSION
 
-_OUTCOME_KEYS = {"announce_version", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {"announce_version", "announce_direction", "failure", "failure_dismissed"}
 _STAMP = "2026-09-25T10:15:00Z"
 
 
@@ -52,7 +52,27 @@ async def test_a_start_after_an_update_owes_one_announcement(harness):
     outcome = await harness.plugin.get_update_outcome()
 
     assert set(outcome) == _OUTCOME_KEYS
-    assert outcome == {"announce_version": VERSION, "failure": None, "failure_dismissed": False}
+    assert outcome == {
+        "announce_version": VERSION,
+        "announce_direction": "updated",
+        "failure": None,
+        "failure_dismissed": False,
+    }
+    assert _last_run(harness) == VERSION
+
+
+async def test_a_start_after_a_return_to_an_earlier_release_owes_one_announcement_of_it(harness):
+    _last_run(harness, "99.0.0")
+    harness.plugin._update_outcome_service.note_start()
+
+    outcome = await harness.plugin.get_update_outcome()
+
+    assert outcome == {
+        "announce_version": VERSION,
+        "announce_direction": "back",
+        "failure": None,
+        "failure_dismissed": False,
+    }
     assert _last_run(harness) == VERSION
 
 
@@ -62,7 +82,8 @@ async def test_an_acknowledged_announcement_is_not_owed_again(harness):
 
     assert harness.plugin.acknowledge_update_announcement() == {"success": True}
 
-    assert (await harness.plugin.get_update_outcome())["announce_version"] is None
+    outcome = await harness.plugin.get_update_outcome()
+    assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
 
 
 async def test_the_first_start_records_its_version_and_owes_nothing(harness):
@@ -82,6 +103,7 @@ async def test_a_start_after_a_rollback_announces_nothing_and_reports_the_record
 
     assert outcome == {
         "announce_version": None,
+        "announce_direction": None,
         "failure": {"attempted_version": "99.0.0", "restored_version": VERSION, "rolled_back_at": _STAMP},
         "failure_dismissed": False,
     }
@@ -95,7 +117,12 @@ async def test_a_record_left_behind_by_an_update_that_went_through_is_no_record(
 
     outcome = await harness.plugin.get_update_outcome()
 
-    assert outcome == {"announce_version": VERSION, "failure": None, "failure_dismissed": False}
+    assert outcome == {
+        "announce_version": VERSION,
+        "announce_direction": "updated",
+        "failure": None,
+        "failure_dismissed": False,
+    }
 
 
 async def test_the_record_goes_when_the_installer_removes_it(harness):

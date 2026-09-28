@@ -1212,25 +1212,31 @@ export interface UpdateFailure {
   rolled_back_at: string;
 }
 
+/** Which way the version moved: to a later release, or back to an earlier one. */
+export type UpdateDirection = "updated" | "back";
+
 /**
  * What the panel owes the user about the last update.
  *
- * `announce_version` is the version this backend process was updated to and
- * the panel has not yet acknowledged announcing — `null` on every other start.
+ * `announce_version` is the version this backend process moved to and the
+ * panel has not yet acknowledged announcing — `null` on every other start — and
+ * `announce_direction` which way it moved, `null` exactly when the version is.
  * `failure` is the installer's record of an update it rolled back, read afresh
  * on every call, so it is gone once the installer removes it, and `null` too
  * where the running version is not the one it restored.
  * `failure_dismissed` says the user waved away that exact record.
  */
-export interface UpdateOutcome {
-  announce_version: string | null;
+export type UpdateOutcome = (
+  | { announce_version: null; announce_direction: null }
+  | { announce_version: string; announce_direction: UpdateDirection }
+) & {
   failure: UpdateFailure | null;
   failure_dismissed: boolean;
-}
+};
 
 export const getUpdateOutcome = callable<[], UpdateOutcome>("get_update_outcome");
 
-/** Tell the backend the update was announced, so a reloaded panel does not announce it again. */
+/** Tell the backend the announcement was raised, so a reloaded panel does not raise it again. */
 export const acknowledgeUpdateAnnouncement = callable<[], { success: true }>("acknowledge_update_announcement");
 
 /** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */

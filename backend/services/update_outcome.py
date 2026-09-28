@@ -1,11 +1,11 @@
 """UpdateOutcomeService — what the last update did, told once where the user will see it.
 
-Owns the two outcomes a start can find: an update that went through, which the
-panel announces once per process, and an update the installer rolled back,
-which the panel shows until the user dismisses that record or the installer
-removes it. Which version is announced, how the installer's record is read, and
-whether it still stands live in ``domain/update_outcome.py``; the record itself
-is behind a seam.
+Owns the two outcomes a start can find: a version that moved — an update that
+went through, or a return to an earlier release — which the panel announces once
+per process, and an update the installer rolled back, which the panel shows
+until the user dismisses that record or the installer removes it. What is
+announced, how the installer's record is read, and whether it still stands live
+in ``domain/update_outcome.py``; the record itself is behind a seam.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     import logging
     from typing import Any
 
-    from domain.update_outcome import UpdateFailure
+    from domain.update_outcome import UpdateAnnouncement, UpdateFailure
     from services.protocols import SettingsPersister, UnitOfWorkFactory, UpdateFailureFn
 
 # The version the previous start ran as, in kv_config: observed state kept only
@@ -69,16 +69,17 @@ class UpdateOutcomeService:
         # that asks again must not announce the same update a second time, while
         # the next start compares against the version recorded below and owes
         # nothing.
-        self._announcement: str | None = None
+        self._announcement: UpdateAnnouncement | None = None
 
     def note_start(self) -> None:
         """Compare the running version with the one the previous start recorded, and record it.
 
-        Runs once, at start. An update that went through is logged at INFO and
-        owed to the panel as one announcement; a record of a rolled-back update
-        is logged at WARNING whether or not it has been dismissed, because the
-        log is where the reason is looked for — but only while it stands. The
-        first start that records a version announces nothing.
+        Runs once, at start. A version that moved — to a later release, or back
+        to an earlier one — is logged at INFO and owed to the panel as one
+        announcement; a record of a rolled-back update is logged at WARNING
+        whether or not it has been dismissed, because the log is where the
+        reason is looked for — but only while it stands. The first start that
+        records a version announces nothing.
         """
         failure = self._standing_failure_io()
         with self._uow_factory() as uow:
@@ -87,7 +88,11 @@ class UpdateOutcomeService:
                 uow.kv_config.set(LAST_RUN_KEY, self._current_version)
         self._announcement = announced_update(last_run, self._current_version, failure)
         if self._announcement is not None:
-            self._logger.info(f"updated from {last_run} to {self._current_version}")
+            self._logger.info(
+                f"updated from {last_run} to {self._current_version}"
+                if self._announcement.direction == "updated"
+                else f"back on {self._current_version} after {last_run}"
+            )
         if failure is not None:
             self._logger.warning(
                 f"the update to {failure.attempted_version} was rolled back at {failure.rolled_back_at}; "
@@ -98,9 +103,11 @@ class UpdateOutcomeService:
     async def get_update_outcome(self) -> dict[str, Any]:
         """Report what the panel owes the user about the last update.
 
-        Returns ``{"announce_version", "failure", "failure_dismissed"}``.
-        ``announce_version`` is the version this process was updated to and has
-        not yet been acknowledged for, ``None`` otherwise. ``failure`` is the
+        Returns ``{"announce_version", "announce_direction", "failure",
+        "failure_dismissed"}``. ``announce_version`` is the version this process
+        moved to and has not yet been acknowledged for, ``None`` otherwise, and
+        ``announce_direction`` which way it moved — ``"updated"`` or ``"back"``,
+        ``None`` exactly when ``announce_version`` is. ``failure`` is the
         installer's record of a rolled-back update as
         ``{"attempted_version", "restored_version", "rolled_back_at"}``, read
         afresh on every call so it goes when the installer removes it, and
@@ -109,13 +116,14 @@ class UpdateOutcomeService:
         """
         failure = await self._loop.run_in_executor(None, self._standing_failure_io)
         return {
-            "announce_version": self._announcement,
+            "announce_version": self._announcement.version if self._announcement is not None else None,
+            "announce_direction": self._announcement.direction if self._announcement is not None else None,
             "failure": _failure_payload(failure) if failure is not None else None,
             "failure_dismissed": failure is not None and failure.rolled_back_at == self._dismissed_at(),
         }
 
     def acknowledge_update_announcement(self) -> dict[str, Any]:
-        """Record that the panel announced the update, so a reloaded panel does not announce it again.
+        """Record that the panel raised the announcement, so a reloaded panel does not raise it again.
 
         Idempotent. Returns ``{"success": True}``.
         """
