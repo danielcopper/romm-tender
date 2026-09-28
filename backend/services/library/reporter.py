@@ -818,11 +818,12 @@ class SyncReporter:
         Two counts per platform, and they answer different questions.
         ``count`` is bound ROMs — how many Steam shortcuts exist, which is
         what the Remove group acts on. ``reachable_count`` is how many of
-        the platform's ROMs a reader can get to through one of those
-        shortcuts (:func:`_reachable_row_count`), which is what the header
-        line states beside RomM's own total. Display names come from the
-        ``platform_names`` cache refreshed each sync, degrading to the slug
-        when a name is absent (RomM never seen for that slug).
+        the platform's ROMs are reachable through one of those shortcuts,
+        less the ones RomM no longer serves (:func:`_reachable_row_count`),
+        which is what the header line states beside RomM's own total.
+        Display names come from the ``platform_names`` cache refreshed each
+        sync, degrading to the slug when a name is absent (RomM never seen
+        for that slug).
 
         A platform with no bound row is omitted entirely, as it always has
         been. Nothing is lost with it: no group there holds a binding, so
@@ -1057,16 +1058,15 @@ class SyncReporter:
 
 
 def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
-    """How many of *rows* a reader can reach from Steam.
+    """How many of *rows* the platform count states: the reachable ones, less *dropped*.
 
     What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
     *dropped* is the rows the last completed fetch of their platform did not
-    return, and they are not reachable: **the picker refuses a switch to one**
-    (``VersionPicker``'s ``handleSwitch``). It is a refusal rather than a
-    disabling — such a row still renders enabled, so it can open the cleanup
-    that removes it. They are excluded from the count
-    and not from the GROUPING, because the group's membership and its binding
-    are facts about every row: a group whose binding sits on a dropped row
-    still reaches its surviving versions through that shortcut.
+    return (:func:`domain.fetch_generation.prune_candidate_ids`). They stay
+    reachable and are left out because RomM no longer serves them — the rule and
+    its edges are ``docs/architecture/qam-panel.md``'s. They are excluded from
+    the count and not from the GROUPING, because the group's membership and its
+    binding are facts about every row: a group whose binding sits on a dropped
+    row still reaches its surviving versions through that shortcut.
     """
     return len(reachable_rom_ids(rows) - dropped)
