@@ -9,11 +9,12 @@ all statements about *now* — a sync finished, a download failed, a path change
 — and "sync finished" delivered three hours later is worse than never: it lands
 in a session that never started one.
 
-Dropping is exactly why the answer is returned. One caller acts on it: the
-funnel in ``main.py`` that attaches a prune claim to the events whose Steam-side
-work outlives the backend's. A claim handed to a panel that is not there is held
-against every later operation until it expires, so the funnel releases it the
-moment the sink says nobody heard.
+Dropping is exactly why the answer is returned. Whoever attached a prune claim
+to an event whose Steam-side work outlives the backend's acts on it: the funnel
+in ``main.py`` for the events it leases, and the library service for
+``sync_complete`` and ``sync_stale``. A claim handed to a panel that is not
+there holds off every removed-game cleanup until it expires, so the side that
+attached it releases it the moment the sink says nobody heard.
 """
 
 from __future__ import annotations

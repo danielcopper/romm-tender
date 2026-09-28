@@ -54,7 +54,8 @@ policy built from the wish refuses every request there is.
 emitted, and two callers act on it for a prune claim on an event whose Steam-side work outlives the backend's: the
 funnel for the claims it attaches itself, and the library service for the ones it attaches to `sync_complete` and
 `sync_stale`. Each can only act on it if the emit was **awaited**. Scheduled as a task, the answer arrives after the
-claim has already been handed out, and a claim nobody can discharge blocks every later operation until it expires.
+claim has already been handed out, and a claim nobody can discharge holds off every removed-game cleanup until it
+expires.
 
 ## 5. The size cap is judged before the payload is buffered
 

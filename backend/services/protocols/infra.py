@@ -274,7 +274,7 @@ class ConflictRules(Protocol):
     work until *task* ends; it checks no rule, so it is called inside the
     ``hold(..., prune=True)`` block that started *task*. ``acquire_lease``
     takes a lease under *key* for Steam writes the frontend makes after the
-    call and answers its token; ``release_lease`` gives one back by token.
+    call or the event and answers its token; ``release_lease`` gives one back by token.
     CONTEXT.md → Conflict rules, Prune conflicts.
     """
 

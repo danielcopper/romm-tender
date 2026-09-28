@@ -31,14 +31,10 @@ def plugin():
 
     ``_migration_service.is_retrodeck_migration_pending`` returns False
     so ``@migration_blocked`` callables fall through to the wrapped
-    method instead of returning the blocked sentinel. Likewise
-    ``_sync_service.is_sync_in_flight`` returns False so
-    ``@sync_active_blocked`` callables fall through (a bare ``MagicMock``
-    would return a truthy mock and falsely trigger the guard).
+    method instead of returning the blocked sentinel.
     """
     p = _make_testable_plugin()
     p._sync_service = MagicMock()
-    p._sync_service.is_sync_in_flight.return_value = False
     p._download_service = MagicMock()
     p._rom_removal_service = MagicMock()
     p._firmware_service = MagicMock()

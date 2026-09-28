@@ -361,7 +361,7 @@ shortcuts, deleting its save files, deleting its BIOS files — live in
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
 unavailable — the buttons are disabled with a short hint, and the backend refuses the request too. Wait for the sync to
-finish, or cancel it, before removing shortcuts or ROMs. Save-file and BIOS deletions are not affected.
+finish or cancel it first. Save-file and BIOS deletions are not affected.
 
 ### Gone from RomM
 

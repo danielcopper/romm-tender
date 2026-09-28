@@ -1,9 +1,11 @@
 """Emitting a library-sync event whose Steam writes outlive the run (CONTEXT.md → Prune conflicts).
 
-The frontend applies ``sync_stale`` removals and ``sync_complete``'s collection
-writes after the backend's part of the run is over, so each of those events
-carries a lease that holds off a removed-game cleanup until the frontend
-releases it.
+The frontend acts on ``sync_complete``, and on a ``sync_stale`` that names
+shortcuts to remove, after the backend's part of the run is over, so each such
+event carries a lease that holds off a removed-game cleanup until the frontend
+releases it. What the frontend does under each lease is
+``docs/architecture/steam-non-steam-shortcuts.md``'s (§ Explicit cleanup of
+vanished versions).
 """
 
 from __future__ import annotations

@@ -567,7 +567,7 @@ describe("DataManagementPage", () => {
       expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     });
 
-    it("surfaces a gate refusal and removes nothing", async () => {
+    it("surfaces a refusal and removes nothing", async () => {
       vi.mocked(backend.getDataInventory).mockResolvedValue(inventory({ installed_roms: 1 }));
       vi.mocked(backend.uninstallAllRoms).mockResolvedValue({
         success: false,
@@ -704,7 +704,7 @@ describe("DataManagementPage", () => {
       warnSpy.mockRestore();
     });
 
-    it("surfaces a gate refusal and removes nothing", async () => {
+    it("surfaces a refusal and removes nothing", async () => {
       vi.mocked(backend.getSyncStats).mockResolvedValue(stats({ total_shortcuts: 3 }));
       vi.mocked(backend.removeAllShortcuts).mockResolvedValue({
         success: false,
@@ -1230,7 +1230,7 @@ describe("DataManagementPage", () => {
       );
     });
 
-    it("surfaces a gate refusal on the scan", async () => {
+    it("surfaces a refusal on the scan", async () => {
       vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({
         success: false,
         reason: "sync_active",

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 class ConflictRuleSet:
-    """Checks the conflict rules a use case names, in their pinned order."""
+    """Checks the conflict rules a use case names, in their pinned order, and takes and gives back its leases."""
 
     def __init__(
         self,
@@ -81,11 +81,14 @@ class ConflictRuleSet:
         await self._prune_conflicts.retain(task, label)
 
     async def acquire_lease(self, key: str) -> str:
-        """Take a lease under *key* for Steam writes the frontend makes after the call, and answer its token.
+        """Take a lease under *key* for Steam writes the frontend makes after the call or the event; answer its token.
 
-        Checks no rule: call it inside the ``hold(..., prune=True)`` block of
-        the call whose answer carries the token, so no cleanup can start
-        between that call's operation and the lease.
+        Checks no rule, so call it where no cleanup can start before the lease
+        is held: inside the ``hold(..., prune=True)`` block of the call whose
+        answer carries the token, or, for an event, while something else still
+        refuses a cleanup's start — the library sync emits ``sync_complete``
+        and ``sync_stale`` before its run ends, and the sync rule refuses
+        ``start_prune`` until then.
         """
         return await self._prune_conflicts.acquire_lease(key)
 

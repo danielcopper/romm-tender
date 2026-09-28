@@ -180,7 +180,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # Accessing ``.get()`` before ``.set()`` raises RuntimeError instead of
     # the NameError a bare forward-ref lambda would produce.
     pending_sync_binding: LateBinding[dict[int, dict[str, Any]]] = LateBinding("pending_sync")
-    # DownloadService needs RomRemovalService.remove_rom_unchecked for the #1298 sibling
+    # DownloadService needs RomRemovalService.remove_rom_unchecked for the sibling
     # supersede, but RomRemovalService needs DownloadService's queue-cleanup seam —
     # a construction cycle. Bind the remover after both services exist.
     rom_remover_binding: LateBinding[InstalledRomRemoverFn] = LateBinding("rom_remover")

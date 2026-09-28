@@ -959,13 +959,13 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
       )}
       {/* The hint was a ButtonItem `description`, attached to the one button it
           was about; under a row it has nowhere to hang, so it names that button
-          instead. Only the shortcut removal is sync-gated — the
+          instead. Only the shortcut removal is refused during a sync — the
           `remove_platform_shortcuts` use case names the sync rule and
           `delete_platform_saves` deliberately does not — so an unscoped sentence
           claims a restriction the backend does not impose. Scoping the sentence
-          rather than gating the delete: the gate is the authority on what a sync
-          blocks, and widening it to make a line true would be the tail wagging
-          the dog. */}
+          rather than refusing the delete too: the sync rule is the authority on
+          what a sync blocks, and widening it to make a line true would be the
+          tail wagging the dog. */}
       {syncRunning && <Muted>{`Removing shortcuts: ${SYNC_RUNNING_HINT}`}</Muted>}
       <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="remove" />
     </>

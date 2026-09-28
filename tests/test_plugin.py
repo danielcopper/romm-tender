@@ -94,7 +94,7 @@ async def test_rejected_continuation_event_releases_its_unreachable_lease(plugin
 
 @pytest.mark.asyncio
 async def test_a_continuation_event_nobody_heard_releases_its_lease(plugin):
-    """A claim the panel cannot discharge blocks every later operation until it expires."""
+    """A claim the panel cannot discharge holds off every removed-game cleanup until it expires."""
     plugin._event_sink.delivers = False
 
     await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})

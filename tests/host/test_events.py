@@ -54,7 +54,7 @@ class TestWithAPanelAttached:
 
 class TestWithNoPanel:
     async def test_it_reports_that_nobody_heard(self, sink):
-        """One caller acts on this: the funnel releases a claim nobody can discharge."""
+        """A caller that attached a prune claim gives it back on this answer."""
         assert await sink.emit("sync_complete", {"total_games": 3}) is False
 
     async def test_the_drop_is_counted(self, sink):
