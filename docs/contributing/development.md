@@ -276,7 +276,10 @@ restores the backup — deleting any of those database and settings files the ba
 `~/.local/state/romm-tender/update-failure.json`, through a temporary file and renamed, and only after that starts the
 previous version, so the record is there when that version logs the rollback at its start. It waits for it the same way,
 says `update to <new> failed; back on <previous>` and exits non-zero, and never tries again on its own. A restore that
-fails ends the run before either: no record, and nothing started. The record has three keys:
+fails ends the run before either: no record, and nothing started. A record that cannot be written — a full disk, a state
+directory it may not write to — does not stop the start: the run says
+`could not record the rolled-back update in <path>; Tender will not show it`, starts the previous version anyway and
+ends as any rollback does, and Tender shows no notice of that rollback. The record has three keys:
 
 ```json
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }

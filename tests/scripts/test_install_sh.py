@@ -103,7 +103,9 @@ printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
 # it found, and with STUB_RECORD_SEEN_LOG every start also notes whether the
 # installer's record of a rolled-back update was already there. A broken
 # version run with STUB_UNREADABLE_BACKUP leaves the backup's settings.json
-# unreadable, so putting the data back fails.
+# unreadable, so putting the data back fails, and one run with
+# STUB_UNWRITABLE_STATE leaves the state directory unwritable, so the record of
+# the rollback cannot be written.
 unit_value() {
     sed -n "s/^Environment=$1=//p" "$HOME/.config/systemd/user/romm-tender.service" 2> /dev/null
 }
@@ -148,6 +150,10 @@ backend_start() {
             printf 'shm of %s\\n' "$version" > "$data/romm_sync.db-shm"
             printf '{"written_by": "%s"}\\n' "$version" > "$config/settings.json"
             [ -z "${STUB_UNREADABLE_BACKUP:-}" ] || chmod 000 "$data/update-backup/settings.json"
+            if [ -n "${STUB_UNWRITABLE_STATE:-}" ]; then
+                mkdir -p "$(unit_value TENDER_STATE_DIR)"
+                chmod 555 "$(unit_value TENDER_STATE_DIR)"
+            fi
             return 0
             ;;
     esac
@@ -1790,6 +1796,36 @@ class TestAnUpdateThatDoesNotStart:
         assert _refusals(result.stderr) == [f"install.sh: could not put your data back from {machine.backup}"]
         assert not machine.failure_record.exists()
         assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}", f"stop {_NEW}"]
+
+    def test_a_record_that_cannot_be_written_is_said_and_the_restored_version_still_starts(self, machine):
+        """Without the record Tender shows no notice of the rollback, which costs less than a stopped service."""
+        _installed(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+
+        try:
+            result = machine.run(
+                "--from",
+                str(_build_tarball(machine.tmp_path, _NEW)),
+                "--yes",
+                STUB_BACKEND="up",
+                STUB_BROKEN_VERSIONS=_NEW,
+                STUB_UNWRITABLE_STATE="1",
+            )
+        finally:
+            machine.state.chmod(0o755)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: could not record the rolled-back update in {machine.failure_record}; Tender will not show it",
+            f"install.sh: update to {_NEW} failed; back on {_VERSION}",
+        ]
+        assert "could not record the rolled-back update; Tender will not show it" in (
+            line.strip() for line in result.stdout.splitlines()
+        )
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}", f"stop {_NEW}", f"start {_VERSION}"]
+        assert _tree_version(machine.code) == _VERSION
+        assert not machine.failure_record.exists()
+        assert not Path(f"{machine.failure_record}.tmp").exists()
 
     def test_it_never_tries_again_on_its_own(self, machine):
         """One start of the new tree, then the old one — the order a single attempt makes."""

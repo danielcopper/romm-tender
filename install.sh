@@ -1696,13 +1696,18 @@ start_the_reverted_unit() {
 
 # Written through a temporary file and renamed, so a reader never sees half of
 # it. The versions come off tree_version, so the only characters JSON needs
-# escaped in them are the quote and the backslash.
+# escaped in them are the quote and the backslash. Non-zero where the record
+# could not be written. The steps are chained by hand because `set -e` does not
+# reach into a function whose status its caller tests.
 record_update_failure() {
     local record="$STATE/$UPDATE_FAILURE"
-    mkdir -p "$STATE"
-    printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
-        "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$record.tmp"
-    mv "$record.tmp" "$record"
+    mkdir -p "$STATE" &&
+        printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
+            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$record.tmp" &&
+        mv "$record.tmp" "$record" &&
+        return 0
+    rm -f "$record.tmp"
+    return 1
 }
 
 json_text() {
@@ -1993,8 +1998,12 @@ roll_back_the_update() {
     fi
     revert_to_previous
     # Before the start rather than after it: the restored version logs the
-    # rollback only as it starts, from the record it finds then.
-    record_update_failure "$new" "$previous"
+    # rollback only as it starts, from the record it finds then. A record that
+    # cannot be written costs the notice and never the service.
+    if ! record_update_failure "$new" "$previous"; then
+        row_sub "$SERVICE" "could not record the rolled-back update; Tender will not show it" fail
+        echo "install.sh: could not record the rolled-back update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2
+    fi
     start_the_reverted_unit
     if ! wait_for_version "$previous"; then
         abort "update to $new failed, and $previous has not answered since the rollback either" \
