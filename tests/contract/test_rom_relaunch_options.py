@@ -1,8 +1,8 @@
 """Contract test for ``get_rom_relaunch_options`` over the real nesting.
 
 ``Plugin.get_rom_relaunch_options(rom_id)`` is the single-ROM re-confirm seam
-the Play-button funnel pulls just before launch to heal mid-session
-``launch_options`` drift (#1150). It resolves through the real
+both launch funnels — the Play button and Steam's direct-launch watcher — pull
+just before a launch to heal mid-session ``launch_options`` drift (#1150). It resolves through the real
 :class:`RelaunchOptionsResolver`, whose ``active_core_for_rom`` opens its **own**
 Unit of Work — the same non-reentrant ``BEGIN IMMEDIATE`` write-lock nesting the
 batch path guards against (#1154). The unit tests inject a fake UoW; this tier
