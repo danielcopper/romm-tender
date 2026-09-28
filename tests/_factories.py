@@ -16,6 +16,8 @@ import logging
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from lib.conflict_rules import ConflictRuleSet
 from lib.prune_gate import PruneConflicts
 
@@ -38,6 +40,19 @@ def _make_retry():
 def _make_prune_conflicts() -> PruneConflicts:
     """The real prune conflict gate, logging nowhere a test would look."""
     return PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+
+
+def _record_operations_at_lease(prune_conflicts: PruneConflicts, monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Record, at every lease taken on *prune_conflicts*, the labels of the operations registered at that moment."""
+    seen: list[list[str]] = []
+    acquire = prune_conflicts.acquire_lease
+
+    async def _recording_acquire(key: str) -> str:
+        seen.append(sorted(holder.label for holder in prune_conflicts._operations.values()))
+        return await acquire(key)
+
+    monkeypatch.setattr(prune_conflicts, "acquire_lease", _recording_acquire)
+    return seen
 
 
 def _make_conflict_rules(

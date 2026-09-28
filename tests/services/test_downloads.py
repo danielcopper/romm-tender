@@ -238,7 +238,7 @@ def plugin(emit, logger, home):
             uow_factory=FakeUnitOfWorkFactory(p._uow),
             # Late-bound remover for the #1298 sibling supersede — resolved at call
             # time, by which point ``p._rom_removal_service`` is constructed below.
-            rom_remover=lambda: p._rom_removal_service.remove_rom,
+            rom_remover=lambda: p._rom_removal_service.remove_rom_unchecked,
         ),
     )
     p._rom_removal_service = RomRemovalService(

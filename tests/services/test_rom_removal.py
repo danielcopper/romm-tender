@@ -7,7 +7,7 @@ import shutil
 import sys
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
@@ -1375,6 +1375,17 @@ class TestTheRemoveRomLease:
         assert result["prune_lease_token"].startswith("rom_uninstall:")
         assert prune_conflicts.conflicting_operations == 1
 
+    async def test_the_lease_is_taken_while_the_removals_operation_still_holds(
+        self, service, uow, rom_files, prune_conflicts, monkeypatch
+    ):
+        """No cleanup can start between the removal's operation and the lease that outlasts it."""
+        _seed_installed_file(uow, rom_files, 42)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        await service.remove_rom(42)
+
+        assert seen == [["remove_rom"]]
+
     async def test_a_removal_that_failed_carries_none(self, service, prune_conflicts):
         result = await service.remove_rom(42)
 
@@ -1432,6 +1443,17 @@ class TestTheBulkUninstallLease:
         assert result["app_ids"] == [1001]
         assert result["prune_lease_token"].startswith("bulk_uninstall:")
         assert prune_conflicts.conflicting_operations == 1
+
+    async def test_the_lease_is_taken_while_the_runs_operation_still_holds(
+        self, service, uow, rom_files, prune_conflicts, monkeypatch
+    ):
+        """No cleanup can start between the run's operation and the lease that outlasts it."""
+        _seed_installed_file(uow, rom_files, 1)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        await service.uninstall_all_roms()
+
+        assert seen == [["uninstall_all_roms"]]
 
     async def test_a_partial_failure_that_reports_bound_app_ids_carries_a_lease(
         self, service, uow, rom_files, prune_conflicts

@@ -5,7 +5,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
@@ -680,6 +680,24 @@ class TestTheRemovalLease:
 
         assert result["prune_lease_token"].startswith("shortcut_removal:")
         assert prune_conflicts.conflicting_operations == 1
+
+    @pytest.mark.parametrize(
+        ("endpoint", "call"),
+        [
+            ("remove_all_shortcuts", lambda svc: svc.remove_all_shortcuts()),
+            ("remove_platform_shortcuts", lambda svc: svc.remove_platform_shortcuts("n64")),
+        ],
+    )
+    async def test_the_lease_is_taken_while_the_removals_operation_still_holds(
+        self, svc, uow, prune_conflicts, monkeypatch, endpoint, call
+    ):
+        """No cleanup can start between the removal's operation and the lease that outlasts it."""
+        _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        await call(svc)
+
+        assert seen == [[endpoint]]
 
     async def test_a_removal_set_naming_no_shortcut_carries_none(self, svc, uow, prune_conflicts):
         _seed_rom(uow, 10, app_id=None)

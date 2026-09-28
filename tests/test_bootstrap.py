@@ -685,7 +685,6 @@ class TestWireServices:
         deps["loop"].close()
 
     async def test_the_sync_rule_reads_the_library_sync_the_wiring_built(self, tmp_path):
-        """No use case names the sync rule, so nothing else shows the rule set's sync condition is bound."""
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
         rules = result.save_sync_service._rules
