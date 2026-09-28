@@ -60,10 +60,6 @@ class Plugin:
     # regression remains green).
     _persistence: Any
     _settings_persister: Any
-    # Where events leave this process. Wired by ``_main``; annotated rather than
-    # defaulted so a bare ``Plugin()`` that emits without setting one raises
-    # instead of dropping every event into a no-op nobody would notice.
-    _event_sink: PluginEventSink
     # What the process hosting this backend knows about its own run. Set by the
     # entry point once the build is through, for the one callable that reads it.
     _host_status: HostStatus
@@ -105,9 +101,6 @@ class Plugin:
         network is deliberately not here — see :meth:`_open_network`.
         """
         self.loop = asyncio.get_running_loop()
-        # Before anything can emit: start-up routines below send events, and
-        # wiring passes the sink's emit to every service.
-        self._event_sink = events
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
         # Bootstrap loads + migrates settings as part of adapter construction
@@ -136,7 +129,7 @@ class Plugin:
                 runtime=RuntimeBundle(
                     loop=self.loop,
                     logger=logger,
-                    emit=self._event_sink.emit,
+                    emit=events.emit,
                     clock=result.runtime_adapters.clock,
                     uuid_gen=result.runtime_adapters.uuid_gen,
                     sleeper=result.runtime_adapters.sleeper,

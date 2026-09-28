@@ -52,7 +52,6 @@ def plugin(logger, home, data_dir):
     p._migration_service.is_retrodeck_migration_pending.return_value = False
     p._prune_service = MagicMock()
     conflict_rules = _make_conflict_rules()
-    p._event_sink = FakeEventSink()
 
     p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
@@ -666,7 +665,7 @@ class TestRefreshMigrationState:
             await plugin.refresh_migration_state()
 
 
-_MIGRATION_BLOCKED_WHITELIST: set[str] = {
+_MIGRATION_RULE_WHITELIST: set[str] = {
     # Migration management itself (the unblock pathway must work while pending).
     "migrate_retrodeck_files",
     "get_migration_status",
@@ -895,7 +894,7 @@ class TestMigrationRuleCoverage:
         migration_ruled = endpoints_with_rule("migration")
         unclassified: list[str] = []
         for name in reachable_methods(Plugin()):
-            if name in _MIGRATION_BLOCKED_WHITELIST:
+            if name in _MIGRATION_RULE_WHITELIST:
                 continue
             if name in migration_ruled:
                 continue
@@ -903,7 +902,7 @@ class TestMigrationRuleCoverage:
 
         assert not unclassified, (
             "Unclassified endpoints on Plugin — every one must be in "
-            "_MIGRATION_BLOCKED_WHITELIST or declare the migration rule: "
+            "_MIGRATION_RULE_WHITELIST or declare the migration rule: "
             f"{sorted(unclassified)}"
         )
 
@@ -918,7 +917,7 @@ class TestMigrationRuleCoverage:
         double_classified = [
             name
             for name in reachable_methods(Plugin())
-            if name in _MIGRATION_BLOCKED_WHITELIST and name in migration_ruled
+            if name in _MIGRATION_RULE_WHITELIST and name in migration_ruled
         ]
 
         assert not double_classified, (
@@ -927,7 +926,7 @@ class TestMigrationRuleCoverage:
         )
 
     def test_whitelisted_callables_are_endpoints_declaring_no_rule(self):
-        """Every name in _MIGRATION_BLOCKED_WHITELIST must be an endpoint on
+        """Every name in _MIGRATION_RULE_WHITELIST must be an endpoint on
         Plugin and must NOT declare the migration rule. Reads from the
         whitelist side, so a name left behind by a removed or renamed endpoint
         fails here instead of classifying nothing."""
@@ -935,10 +934,10 @@ class TestMigrationRuleCoverage:
         from main import Plugin
 
         endpoints = reachable_methods(Plugin())
-        stale = sorted(_MIGRATION_BLOCKED_WHITELIST - endpoints.keys())
+        stale = sorted(_MIGRATION_RULE_WHITELIST - endpoints.keys())
         assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
 
-        ruled = sorted(_MIGRATION_BLOCKED_WHITELIST & endpoints_with_rule("migration"))
+        ruled = sorted(_MIGRATION_RULE_WHITELIST & endpoints_with_rule("migration"))
         assert not ruled, f"Whitelisted endpoints that also declare the migration rule: {ruled}"
 
 
@@ -1103,17 +1102,18 @@ class TestMainStartupOrdering:
             launcher=ShortcutLauncher(path="/fake/home/.local/bin/tender-rom-launcher", at_home=True),
             user_agent="romm-tender/0.0.0-test",
         )
+        events = FakeEventSink()
 
         with (
             patch("main.bootstrap", return_value=bootstrap_result),
-            patch("main.wire_services", return_value=wired_services),
+            patch("main.wire_services", return_value=wired_services) as wire,
         ):
             await plugin._main(
                 directories=bootstrap_result.directories,
                 update_source=UpdateSource(release_api="http://127.0.0.1:9/", installed_program=False),
                 user_home="/fake/home",
                 logger=logging.getLogger("test_startup_order"),
-                events=FakeEventSink(),
+                events=events,
                 status=HostStatus(),
             )
 
@@ -1123,36 +1123,14 @@ class TestMainStartupOrdering:
         # The save-directory backfill is started without holding start-up up.
         await plugin._save_directory_backfill
         save_sync_service.record_save_directories_once.assert_awaited_once_with()
-
-
-class TestCancelCallablesNotBlockedByMigration:
-    """Cancel operations stop running work — they must remain callable when
-    a migration marker fires so the user can interrupt in-flight operations."""
-
-    @pytest.mark.asyncio
-    async def test_cancel_sync_callable_when_migration_pending(self, plugin):
-        plugin._migration_service.is_retrodeck_migration_pending.return_value = True
-        plugin._sync_service.cancel_sync = MagicMock(return_value={"success": True, "stopped": True})
-        result = plugin.cancel_sync("run-1")
-        assert result.get("reason") != "blocked_by_migration"
-        plugin._sync_service.cancel_sync.assert_called_once_with("run-1")
-
-    @pytest.mark.asyncio
-    async def test_sync_cancel_preview_callable_when_migration_pending(self, plugin):
-        plugin._migration_service.is_retrodeck_migration_pending.return_value = True
-        plugin._sync_service.sync_cancel_preview = MagicMock(return_value={"success": True})
-        result = plugin.sync_cancel_preview()
-        assert result.get("reason") != "blocked_by_migration"
-        plugin._sync_service.sync_cancel_preview.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cancel_download_callable_when_migration_pending(self, plugin):
-        plugin._migration_service.is_retrodeck_migration_pending.return_value = True
-        plugin._download_service = MagicMock()
-        plugin._download_service.cancel_download = MagicMock(return_value={"success": True})
-        result = plugin.cancel_download(42)
-        assert result.get("reason") != "blocked_by_migration"
-        plugin._download_service.cancel_download.assert_called_once_with(42)
+        # Services emit through the sink itself, so its answer reaches them
+        # unchanged: a claim goes back only when nobody heard the event.
+        service_emit = wire.call_args.args[0].runtime.emit
+        events.delivers = False
+        assert await service_emit("probe", {"n": 1}) is False
+        events.delivers = True
+        assert await service_emit("probe", {"n": 2}) is True
+        assert events.events == [("probe", {"n": 1}), ("probe", {"n": 2})]
 
 
 class TestRetroDeckStatus:

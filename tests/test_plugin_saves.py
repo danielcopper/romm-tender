@@ -7,7 +7,6 @@ import pytest
 from _factories import _make_conflict_rules, _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
-from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -53,7 +52,6 @@ def plugin(tmp_path, logger, home, project_root):
         log_debug=lambda _msg: None,
     )
     p._romm_api = MagicMock()
-    p._event_sink = FakeEventSink()
 
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
