@@ -138,22 +138,36 @@ _WRITING_CALLS = frozenset(
 )
 
 
-def _open_mode(call: ast.Call) -> object:
-    for keyword in call.keywords:
-        if keyword.arg == "mode":
-            return keyword.value.value if isinstance(keyword.value, ast.Constant) else keyword.value
-    if len(call.args) >= 2:
-        mode = call.args[1]
-        return mode.value if isinstance(mode, ast.Constant) else mode
-    return "r"
+# Every character ``open`` accepts in a mode, and the ones that make it a write.
+# A string made only of the first set is read as a mode wherever it stands:
+# ``open(path, "w")`` carries it second and ``Path(path).open("w")`` first.
+_MODE_CHARACTERS = frozenset("rwxabt+")
+_WRITING_MODE_CHARACTERS = frozenset("wax+")
+
+
+def _opens_for_writing(call: ast.Call) -> bool:
+    candidates = [*call.args, *(keyword.value for keyword in call.keywords if keyword.arg == "mode")]
+    return any(
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value != ""
+        and set(node.value) <= _MODE_CHARACTERS
+        and not _WRITING_MODE_CHARACTERS.isdisjoint(node.value)
+        for node in candidates
+    )
 
 
 class TestOnlyTheInstallerWritesTheRecord:
     """The backend reads ``update-failure.json`` and never writes or removes it.
 
-    Read off the syntax tree, so what these see is a name and a call: a record
-    path assembled from pieces, one handed in from elsewhere, a write through
-    a helper in another module, ``getattr`` and a subprocess all pass.
+    Read off the syntax tree, so what these see is a name and a call. Two
+    modules may name the record, and only the adapter's calls are read:
+    ``domain/update_outcome.py``, the constant's home, is not. A call is judged
+    by the name it is reached through, and an ``open`` by a mode written as a
+    string constant. All of these pass: a write under a name not in the list,
+    a mode computed at runtime, a record path assembled from pieces or handed
+    in from elsewhere, a write through a helper in another module, ``getattr``
+    and a subprocess.
     """
 
     def test_no_backend_module_but_the_adapter_and_the_constant_s_home_names_the_record(self):
@@ -176,4 +190,4 @@ class TestOnlyTheInstallerWritesTheRecord:
         opens = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and _called_name(node) == "open"]
 
         assert opens, "the adapter reads the record, so it opens it"
-        assert [_open_mode(call) for call in opens if _open_mode(call) not in ("r", "rb", "rt")] == []
+        assert [ast.unparse(call) for call in opens if _opens_for_writing(call)] == []
