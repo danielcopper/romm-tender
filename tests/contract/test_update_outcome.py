@@ -1,8 +1,8 @@
 """Contract tests for the update-outcome callables over the real wiring.
 
-Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateOutcome``
-and ``acknowledgeUpdateAnnouncement`` take nothing, ``dismissUpdateFailure`` the
-record's ``rolled_back_at`` string. The real ``bootstrap()`` is what makes it
+Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateOutcome``,
+``acknowledgeUpdateToast`` and ``dismissUpdateAnnouncement`` take nothing,
+``dismissUpdateFailure`` the record's ``rolled_back_at`` string. The real ``bootstrap()`` is what makes it
 worth having: the record is read by the real adapter from the state directory
 the run was told about, the last-run version really is stored in SQLite, and the
 dismissal really reaches ``settings.json``.
@@ -19,7 +19,7 @@ from typing import Any
 
 from domain.identity import VERSION
 
-_OUTCOME_KEYS = {"announce_version", "announce_direction", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failure", "failure_dismissed"}
 _STAMP = "2026-09-25T10:15:00Z"
 
 
@@ -55,6 +55,7 @@ async def test_a_start_after_an_update_owes_one_announcement(harness):
     assert outcome == {
         "announce_version": VERSION,
         "announce_direction": "updated",
+        "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
     }
@@ -70,20 +71,40 @@ async def test_a_start_after_a_return_to_an_earlier_release_owes_one_announcemen
     assert outcome == {
         "announce_version": VERSION,
         "announce_direction": "back",
+        "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
     }
     assert _last_run(harness) == VERSION
 
 
-async def test_an_acknowledged_announcement_is_not_owed_again(harness):
+async def test_a_raised_toast_is_not_owed_again_and_the_card_stays_until_dismissed(harness):
     _last_run(harness, "0.0.1")
     harness.plugin._update_outcome_service.note_start()
 
-    assert harness.plugin.acknowledge_update_announcement() == {"success": True}
+    assert harness.plugin.acknowledge_update_toast() == {"success": True}
 
     outcome = await harness.plugin.get_update_outcome()
-    assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
+    assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+        VERSION,
+        "updated",
+        False,
+    )
+
+    assert harness.plugin.dismiss_update_announcement() == {"success": True}
+
+    outcome = await harness.plugin.get_update_outcome()
+    assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (None, None, False)
+
+
+async def test_a_card_dismissed_before_its_toast_owes_no_toast(harness):
+    _last_run(harness, "0.0.1")
+    harness.plugin._update_outcome_service.note_start()
+
+    assert harness.plugin.dismiss_update_announcement() == {"success": True}
+
+    outcome = await harness.plugin.get_update_outcome()
+    assert (outcome["announce_version"], outcome["toast_owed"]) == (None, False)
 
 
 async def test_the_first_start_records_its_version_and_owes_nothing(harness):
@@ -104,6 +125,7 @@ async def test_a_start_after_a_rollback_announces_nothing_and_reports_the_record
     assert outcome == {
         "announce_version": None,
         "announce_direction": None,
+        "toast_owed": False,
         "failure": {"attempted_version": "99.0.0", "restored_version": VERSION, "rolled_back_at": _STAMP},
         "failure_dismissed": False,
     }
@@ -120,6 +142,7 @@ async def test_a_record_left_behind_by_an_update_that_went_through_is_no_record(
     assert outcome == {
         "announce_version": VERSION,
         "announce_direction": "updated",
+        "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
     }

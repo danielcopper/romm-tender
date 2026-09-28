@@ -21,7 +21,7 @@ import {
   getSettingsResetNotice,
   getUpdateNotice,
   getUpdateOutcome,
-  acknowledgeUpdateAnnouncement,
+  acknowledgeUpdateToast,
   getAllPlaytime,
   getAppIdRomIdMap,
   getInstalledRelaunchOptions,
@@ -1526,7 +1526,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     logError.mockClear();
     vi.mocked(toaster.toast).mockClear();
     vi.mocked(getUpdateOutcome).mockReset();
-    vi.mocked(acknowledgeUpdateAnnouncement).mockReset().mockResolvedValue({ success: true });
+    vi.mocked(acknowledgeUpdateToast).mockReset().mockResolvedValue({ success: true });
     resetUpdateOutcomeStoreForTests();
   });
 
@@ -1534,6 +1534,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     vi.mocked(getUpdateOutcome).mockResolvedValue({
       announce_version: "1.3.0",
       announce_direction: "updated",
+      toast_owed: true,
       failure: null,
       failure_dismissed: false,
     });
@@ -1543,7 +1544,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     expect(getUpdateOutcome).toHaveBeenCalledTimes(1);
     expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
     expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(1);
-    expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
+    expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
     plugin.onDismount();
   });
 
@@ -1551,6 +1552,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     vi.mocked(getUpdateOutcome).mockResolvedValue({
       announce_version: null,
       announce_direction: null,
+      toast_owed: false,
       failure: { attempted_version: "1.3.0", restored_version: "1.2.3", rolled_back_at: "2026-09-25T10:15:00Z" },
       failure_dismissed: false,
     });
@@ -1558,7 +1560,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     await flush();
 
     expect(getUpdateOutcomeState().failure?.attemptedVersion).toBe("1.3.0");
-    expect(acknowledgeUpdateAnnouncement).not.toHaveBeenCalled();
+    expect(acknowledgeUpdateToast).not.toHaveBeenCalled();
     plugin.onDismount();
   });
 

@@ -1659,15 +1659,19 @@ shows the card like any other, and the Settings section shows a line naming this
 
 The service tells the user what the last update did, in one of two ways, and never touches the installer's files.
 
-- **A version that moved is announced once, with the way it moved.** At every start (`note_start`, a start-up step ahead
-  of the others) the running `VERSION` is compared with `last_run_version` in `kv_config`, which is then set to the
-  running version. A stored version the running one is later than is an update — logged at INFO as
-  `updated from <old> to <new>`, `announce_direction` `"updated"` — and one it is earlier than is a return to that
-  release — `back on <new> after <old>`, `"back"`; which is later is `domain/version.py::is_newer_version`'s answer. The
-  announcement is owed to the panel in this process's memory only: the panel reads it at load (`get_update_outcome`'s
-  `announce_version` and `announce_direction`), raises one toast, and acknowledges it
-  (`acknowledge_update_announcement`), so a panel a Steam restart reloads does not raise it again, and the next start
-  compares equal and owes nothing. The first start that records a version announces nothing, and so does a stored
+- **A version that moved is announced, with the way it moved — one toast, and a card until dismissed.** At every start
+  (`note_start`, a start-up step ahead of the others) the running `VERSION` is compared with `last_run_version` in
+  `kv_config`, which is then set to the running version. A stored version the running one is later than is an update —
+  logged at INFO as `updated from <old> to <new>`, `announce_direction` `"updated"` — and one it is earlier than is a
+  return to that release — `back on <new> after <old>`, `"back"`; which is later is
+  `domain/version.py::is_newer_version`'s answer. The announcement is owed to the panel in this process's memory only,
+  as two things held apart: a toast and a card. The panel reads it at load (`get_update_outcome`'s `announce_version`,
+  `announce_direction` and `toast_owed`), raises the toast while `toast_owed` is true and acknowledges it
+  (`acknowledge_update_toast`), so a panel a Steam restart reloads does not raise it again — the acknowledgement leaves
+  the announcement itself standing, and the card with it. The card goes when the user dismisses it
+  (`dismiss_update_announcement`), which drops the announcement for the rest of the process, so `toast_owed` is false
+  from then on too. The next start compares equal and owes neither, so a backend restart on the same version takes a
+  card nobody dismissed down as well. The first start that records a version announces nothing, and so does a stored
   version that differs while neither is the later — one of them unreadable, or two pre-releases of one release, which
   `is_newer_version` does not rank: the version is still recorded, and nothing is logged or announced rather than a
   direction nobody established.

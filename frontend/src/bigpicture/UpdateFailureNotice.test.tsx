@@ -13,6 +13,7 @@ import {
 } from "../utils/updateOutcomeStore";
 
 const ROLLED_BACK: UpdateOutcomeState = {
+  announcement: null,
   failure: { attemptedVersion: "1.3.0", restoredVersion: "1.2.3", rolledBackAt: "2026-09-25T10:15:00Z" },
   failureDismissed: false,
 };

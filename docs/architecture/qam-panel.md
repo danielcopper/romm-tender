@@ -702,7 +702,7 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Sync paused on the session budget           | text, **Open Sync**                                           | Sync, which holds Restart Steam now and Resume                                            |
 | An update was rolled back                   | both versions, where the reason is, **Open Updates**, Dismiss | Settings › Updates, which states the same fact whether or not the card was dismissed      |
 | A newer Tender release is out               | both versions, **Open Updates**, Dismiss                      | Settings › Updates, which states both versions and holds the check's switch and Check now |
-| Tender was updated, or went back            | a toast, once — no card                                       | none — the toast is the whole of it                                                       |
+| Tender was updated, or went back            | the version, Dismiss — and a toast, once                      | none — the card is the whole of it                                                        |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -745,29 +745,42 @@ available and failed at once. So for as long as the record stands, that version 
 or not; a newer release raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's
 answer (`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
 
-The update announcement is the one condition shown as a toast rather than a card: **Tender updated to X** after an
-update, **Tender is back on X** after a return to an earlier release, raised once from that same read. The backend owes
-it once per process and the panel acknowledges it after raising it, so a Steam restart that reloads the panel does not
-raise it again ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)). It is the one toast
-that **waits until Steam can show it**; past a deadline it is raised anyway, and either way it is acknowledged only once
-raised. What it waits for, how long at most, and why: `utils/steamReadyForToasts.ts`. The store is filled before the
-wait, so the rolled-back card is never held back by it.
+The update announcement is the one condition shown twice over, as a toast and as a card, both from that same read. The
+**toast** says **Tender updated to X** after an update, **Tender is back on X** after a return to an earlier release.
+The backend owes it once per process (`toast_owed`) and the panel acknowledges it after raising it, so a Steam restart
+that reloads the panel does not raise it again. It is the one toast that **waits until Steam can show it**; past a
+deadline it is raised anyway, and either way it is acknowledged only once raised. What it waits for, how long at most,
+and why: `utils/steamReadyForToasts.ts`. The **card** is there because a toast raised as Steam comes up can be gone
+before it is seen: in windowed Big Picture on the desktop the toast's popup is laid out again with the rebuilt window
+after the JavaScript context reloads, and may show for a second or two or not at all. It says **Tender was updated to
+X.** or **Tender is back on X.** and carries Dismiss and no jump, since the announcement has no home. It stands until
+Dismiss, which the backend records, so a reloaded panel shows it again until then; raising the toast does not take it
+down, and dismissing it before the toast was raised does not stop a toast already waiting. Both live in the backend
+process's memory ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)): a backend restart
+on the same version owes neither, so the card is gone then too. The store is filled before the toast's wait, so neither
+card is held back by it.
+
+The three update notices stack in one order: the announcement card, then the rolled-back card, then the "is available"
+card — what this start runs on, then an update that did not go through, then a release still to be had. The announcement
+and the rolled-back card can stand together — a record the installer did not remove stands again once the version moves
+back onto the one it restored — and then the announcement names the running version, which for a standing record is the
+one it restored, while the rolled-back card names the version the update tried.
 
 Four of the conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the `input_driver`
-fix and the session budget — so the absence is ordinary; the update announcement has none either, because a toast goes
-by itself.
+fix and the session budget — so the absence is ordinary.
 
 ## Main
 
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
 everything else; the status block — the RetroDECK warning and, where Steam answers for no notifications, the warning
 that says so, then Connection, Last sync, Library, then the conditional slot and, while a run is going, Cancel Sync,
-then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the four
-notices that carry a button (the RetroArch input driver, a run paused on the session budget, an update that was rolled
-back, a newer release); the download summary (up to two rows, an overflow count, a completed count, View All); the menu
-— Sync, Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates
-one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole
-row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the five
+notices that carry a button (the RetroArch input driver, a run paused on the session budget, the version this start runs
+on, an update that was rolled back, a newer release); the download summary (up to two rows, an overflow count, a
+completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks carry no
+section title at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one pixel of
+height where a heading would cost a whole row. The layout study it was chosen from is
+[main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

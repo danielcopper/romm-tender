@@ -1218,17 +1218,18 @@ export type UpdateDirection = "updated" | "back";
 /**
  * What the panel owes the user about the last update.
  *
- * `announce_version` is the version this backend process moved to and the
- * panel has not yet acknowledged announcing — `null` on every other start — and
+ * `announce_version` is the version this backend process moved to, until the
+ * user dismissed its card — `null` on every other start — and
  * `announce_direction` which way it moved, `null` exactly when the version is.
- * `failure` is the installer's record of an update it rolled back, read afresh
+ * `toast_owed` says its toast has not been raised yet, and is `false` whenever
+ * there is no version to name. `failure` is the installer's record of an update it rolled back, read afresh
  * on every call, so it is gone once the installer removes it, and `null` too
  * where the running version is not the one it restored.
  * `failure_dismissed` says the user waved away that exact record.
  */
 export type UpdateOutcome = (
-  | { announce_version: null; announce_direction: null }
-  | { announce_version: string; announce_direction: UpdateDirection }
+  | { announce_version: null; announce_direction: null; toast_owed: false }
+  | { announce_version: string; announce_direction: UpdateDirection; toast_owed: boolean }
 ) & {
   failure: UpdateFailure | null;
   failure_dismissed: boolean;
@@ -1236,8 +1237,11 @@ export type UpdateOutcome = (
 
 export const getUpdateOutcome = callable<[], UpdateOutcome>("get_update_outcome");
 
-/** Tell the backend the announcement was raised, so a reloaded panel does not raise it again. */
-export const acknowledgeUpdateAnnouncement = callable<[], { success: true }>("acknowledge_update_announcement");
+/** Tell the backend the announcement's toast was raised, so a reloaded panel does not raise it again. */
+export const acknowledgeUpdateToast = callable<[], { success: true }>("acknowledge_update_toast");
+
+/** Wave the announcement's card away for the rest of this backend process. */
+export const dismissUpdateAnnouncement = callable<[], { success: true }>("dismiss_update_announcement");
 
 /** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */
 export const dismissUpdateFailure = callable<[string], UpdateSettingWrite>("dismiss_update_failure");

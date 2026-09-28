@@ -287,7 +287,9 @@ notice on the main panel says **Tender X is available** and names the version yo
 
 After an update, once Steam has finished starting, it says **Tender updated to X** in a message that goes by itself;
 after installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or
-restarting Steam, does not bring it back.
+restarting Steam, does not bring it back. The main panel also shows a notice, **Tender was updated to X.** or **Tender
+is back on X.**, which stays — above the other update notices — until you press **Dismiss**, or until Tender itself
+restarts without its version changing.
 
 If the new version did not start after an update, and the installer went back to the version you had, a notice on the
 main panel says **Update to X failed — you are still on Y.**, and under it where the reason is.

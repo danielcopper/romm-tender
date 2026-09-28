@@ -675,13 +675,15 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "dismiss_update_notice",
     "set_update_check_enabled",
     # What the last update did: the read the panel makes at load, its
-    # acknowledgement of the one announcement, and the rolled-back card's
-    # per-record Dismiss. None touches RetroDECK state — the read is the
-    # installer's record in the state directory and this process's own memory,
-    # the writes are memory and a settings key — and the read is fired at panel
-    # load whatever page the panel is showing.
+    # acknowledgement of the announcement's one toast, the announcement card's
+    # Dismiss, and the rolled-back card's per-record Dismiss. None touches
+    # RetroDECK state — the read is the installer's record in the state
+    # directory and this process's own memory, the writes are memory and a
+    # settings key — and the read is fired at panel load whatever page the
+    # panel is showing.
     "get_update_outcome",
-    "acknowledge_update_announcement",
+    "acknowledge_update_toast",
+    "dismiss_update_announcement",
     "dismiss_update_failure",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.

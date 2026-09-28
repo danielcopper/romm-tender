@@ -13,9 +13,10 @@ const STATE: UpdateNoticeState = {
   installedProgram: true,
 };
 
-const NO_OUTCOME: UpdateOutcomeState = { failure: null, failureDismissed: false };
+const NO_OUTCOME: UpdateOutcomeState = { announcement: null, failure: null, failureDismissed: false };
 
 const ROLLED_BACK: UpdateOutcomeState = {
+  announcement: null,
   failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
   failureDismissed: false,
 };

@@ -2606,6 +2606,7 @@ describe("MainPage", () => {
         installedProgram: true,
       });
       setUpdateOutcomeState({
+        announcement: null,
         failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
         failureDismissed: false,
       });
@@ -2618,6 +2619,33 @@ describe("MainPage", () => {
       expect(queryByTestId("update-notice")).toBeNull();
       fireEvent.click(buttonByExactText(container, "Open Updates")!);
       expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "updates" });
+    });
+
+    it("stacks the three update notices as the version this start runs on, the rolled-back update, then the newer release", async () => {
+      // All three can stand at once: a record the installer did not remove stands again once the version moves back
+      // onto the one it restored.
+      setUpdateNoticeState({
+        available: true,
+        newer: true,
+        latestVersion: "0.35.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: true,
+      });
+      setUpdateOutcomeState({
+        announcement: { version: "0.33.0", direction: "back" },
+        failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+        failureDismissed: false,
+      });
+      const { getByTestId } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      const announcement = getByTestId("update-announcement-notice");
+      const failure = getByTestId("update-failure-notice");
+      const available = getByTestId("update-notice");
+      expect(announcement.textContent).toBe("Tender is back on 0.33.0.");
+      expect(announcement.compareDocumentPosition(failure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(failure.compareDocumentPosition(available) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it("shows no update notice while none is available", async () => {

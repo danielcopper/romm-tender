@@ -3,11 +3,15 @@
  *
  * Updated by:
  *   - panel load in index.tsx (fetchUpdateOutcome), detached — which is also
- *     where a version that moved is announced, once
+ *     where the toast for a version that moved is raised, once
+ *   - the announcement card's Dismiss (dismissUpdateAnnouncementCard), after
+ *     the backend recorded it
  *   - the rolled-back card's Dismiss (dismissUpdateFailureRecord), after the
  *     backend persisted it
  *
  * Read by:
+ *   - bigpicture/UpdateAnnouncementNotice.tsx, the card on Main for a version
+ *     that moved
  *   - bigpicture/UpdateFailureNotice.tsx, the rolled-back card on Main
  *   - bigpicture/UpdateNotice.tsx, which gives way to that card (see
  *     {@link failureTakesThePlaceOf})
@@ -20,7 +24,8 @@
 
 import { useSyncExternalStore } from "react";
 import {
-  acknowledgeUpdateAnnouncement,
+  acknowledgeUpdateToast,
+  dismissUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
   logWarn,
@@ -39,14 +44,22 @@ export interface RolledBackUpdate {
   rolledBackAt: string;
 }
 
+/** A version this backend process moved to, and which way it moved. */
+export interface UpdateAnnouncement {
+  version: string;
+  direction: UpdateDirection;
+}
+
 export interface UpdateOutcomeState {
+  /** The version that moved, until its card was dismissed. `null` where none, or before the backend answered. */
+  announcement: UpdateAnnouncement | null;
   /** The installer's record of a rolled-back update. `null` where none stands, or before the backend answered. */
   failure: RolledBackUpdate | null;
   /** The user waved away the card for this exact record. */
   failureDismissed: boolean;
 }
 
-const INITIAL: UpdateOutcomeState = { failure: null, failureDismissed: false };
+const INITIAL: UpdateOutcomeState = { announcement: null, failure: null, failureDismissed: false };
 
 /**
  * The line under a rolled-back update's sentence, on the card and in its home.
@@ -61,10 +74,10 @@ let _listeners: Array<() => void> = [];
 
 /**
  * Ordering fence for the read: it takes the number before its `await` and
- * writes nothing if the number moved meanwhile. Dismiss moves it, so a read that
- * was in flight when Dismiss was pressed cannot put the card back up. Dismiss
- * itself is not fenced — once the backend persisted it, the record is dismissed
- * whatever was read around it.
+ * writes nothing if the number moved meanwhile. Either Dismiss moves it, so a
+ * read that was in flight when Dismiss was pressed cannot put a card back up.
+ * Dismiss itself is not fenced — once the backend recorded it, the card is
+ * dismissed whatever was read around it.
  */
 let _seq = 0;
 
@@ -105,7 +118,14 @@ function failureFromWire(failure: UpdateFailure | null): RolledBackUpdate | null
 }
 
 function stateFromOutcome(outcome: UpdateOutcome): UpdateOutcomeState {
-  return { failure: failureFromWire(outcome.failure), failureDismissed: outcome.failure_dismissed };
+  return {
+    announcement:
+      outcome.announce_version === null
+        ? null
+        : { version: outcome.announce_version, direction: outcome.announce_direction },
+    failure: failureFromWire(outcome.failure),
+    failureDismissed: outcome.failure_dismissed,
+  };
 }
 
 /** The one sentence a rolled-back update is stated in, wherever it is stated. */
@@ -113,9 +133,16 @@ export function updateFailureSentence(failure: RolledBackUpdate): string {
   return `Update to ${failure.attemptedVersion} failed — you are still on ${failure.restoredVersion}.`;
 }
 
-/** The one sentence the update announcement is raised in, for each way the version can have moved. */
-function updateAnnouncementSentence(version: string, direction: UpdateDirection): string {
+/** The toast the update announcement is raised in, for each way the version can have moved. */
+function updateAnnouncementToast(version: string, direction: UpdateDirection): string {
   return direction === "updated" ? `Tender updated to ${version}` : `Tender is back on ${version}`;
+}
+
+/** The title of the announcement's card on Main, for each way the version can have moved. */
+export function updateAnnouncementSentence(announcement: UpdateAnnouncement): string {
+  return announcement.direction === "updated"
+    ? `Tender was updated to ${announcement.version}.`
+    : `Tender is back on ${announcement.version}.`;
 }
 
 /** Whether the rolled-back card is up: a record stands and was not dismissed. */
@@ -133,30 +160,42 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
 }
 
 /**
- * Ask the backend what the last update did, fill the store, and announce a
- * version that moved — to a later release, or back to an earlier one.
+ * Ask the backend what the last update did, fill the store — the announcement's
+ * card among it — and raise the toast for a version that moved, to a later
+ * release or back to an earlier one, where the backend still owes it.
  *
- * The announcement is one toast. It waits until Steam can show it (what it
- * waits for, how long at most, and why: `steamReadyForToasts.ts`). It is
- * acknowledged only after it was raised: the backend owes it once per
- * process, so a panel reloaded by a Steam restart does not raise it a second
- * time. An acknowledgement that fails leaves it owed, and the next panel load
- * says it again — a repeat rather than a loss.
+ * The toast waits until Steam can show it (what it waits for, how long at most,
+ * and why: `steamReadyForToasts.ts`). It is acknowledged only after it was
+ * raised: the backend owes it once per process, so a panel reloaded by a Steam
+ * restart shows the card again but does not raise the toast a second time. An
+ * acknowledgement that fails leaves it owed, and the next panel load raises it
+ * again — a repeat rather than a loss.
  */
 export async function fetchUpdateOutcome(): Promise<void> {
   const seq = ++_seq;
   const outcome = await getUpdateOutcome();
   if (seq === _seq) setUpdateOutcomeState(stateFromOutcome(outcome));
-  if (outcome.announce_version !== null) {
+  if (outcome.toast_owed) {
     const readiness = await waitUntilSteamCanShowToasts();
     if (!readiness.inTime) {
       logWarn(
         `Steam was not ready for a toast after ${TOAST_READINESS_DEADLINE_MS / 1000} s (still waiting for ${readiness.unmet.join(", ")}); raising the update announcement anyway`,
       );
     }
-    showToast(updateAnnouncementSentence(outcome.announce_version, outcome.announce_direction));
-    await acknowledgeUpdateAnnouncement();
+    showToast(updateAnnouncementToast(outcome.announce_version, outcome.announce_direction));
+    await acknowledgeUpdateToast();
   }
+}
+
+/**
+ * Wave the announcement's card away, then take it down here — only once the
+ * backend answered that it recorded that. A failed call rejects and leaves the
+ * card up.
+ */
+export async function dismissUpdateAnnouncementCard(): Promise<void> {
+  ++_seq;
+  await dismissUpdateAnnouncement();
+  setUpdateOutcomeState({ ..._state, announcement: null });
 }
 
 /**

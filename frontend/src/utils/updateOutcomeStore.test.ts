@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { toaster } from "../api/host";
 import {
-  acknowledgeUpdateAnnouncement,
+  acknowledgeUpdateToast,
+  dismissUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
   logWarn,
@@ -9,6 +10,7 @@ import {
 } from "../api/backend";
 import { TOAST_READINESS_DEADLINE_MS, TOAST_READINESS_POLL_MS } from "./steamReadyForToasts";
 import {
+  dismissUpdateAnnouncementCard,
   dismissUpdateFailureRecord,
   failureCardShows,
   failureTakesThePlaceOf,
@@ -16,6 +18,7 @@ import {
   getUpdateOutcomeState,
   onUpdateOutcomeChange,
   resetUpdateOutcomeStoreForTests,
+  updateAnnouncementSentence,
   updateFailureSentence,
   type UpdateOutcomeState,
 } from "./updateOutcomeStore";
@@ -23,20 +26,30 @@ import {
 const NOTHING: UpdateOutcome = {
   announce_version: null,
   announce_direction: null,
+  toast_owed: false,
   failure: null,
   failure_dismissed: false,
 };
-const UPDATED: UpdateOutcome = { ...NOTHING, announce_version: "1.3.0", announce_direction: "updated" };
-const BACK: UpdateOutcome = { ...NOTHING, announce_version: "1.2.3", announce_direction: "back" };
+const UPDATED: UpdateOutcome = {
+  ...NOTHING,
+  announce_version: "1.3.0",
+  announce_direction: "updated",
+  toast_owed: true,
+};
+const BACK: UpdateOutcome = { ...NOTHING, announce_version: "1.2.3", announce_direction: "back", toast_owed: true };
+/** What a panel reloaded in the same backend process reads once the toast was raised. */
+const UPDATED_TOASTED: UpdateOutcome = { ...UPDATED, toast_owed: false };
 
 const ROLLED_BACK_WIRE: UpdateOutcome = {
   announce_version: null,
   announce_direction: null,
+  toast_owed: false,
   failure: { attempted_version: "1.3.0", restored_version: "1.2.3", rolled_back_at: "2026-09-25T10:15:00Z" },
   failure_dismissed: false,
 };
 
 const ROLLED_BACK: UpdateOutcomeState = {
+  announcement: null,
   failure: { attemptedVersion: "1.3.0", restoredVersion: "1.2.3", rolledBackAt: "2026-09-25T10:15:00Z" },
   failureDismissed: false,
 };
@@ -84,13 +97,14 @@ describe("updateOutcomeStore", () => {
     vi.mocked(logWarn).mockClear();
     resetUpdateOutcomeStoreForTests();
     vi.mocked(getUpdateOutcome).mockReset();
-    vi.mocked(acknowledgeUpdateAnnouncement).mockReset().mockResolvedValue({ success: true });
+    vi.mocked(acknowledgeUpdateToast).mockReset().mockResolvedValue({ success: true });
+    vi.mocked(dismissUpdateAnnouncement).mockReset().mockResolvedValue({ success: true });
     vi.mocked(dismissUpdateFailure).mockReset().mockResolvedValue({ success: true });
     vi.mocked(toaster.toast).mockClear();
   });
 
   it("starts with no record", () => {
-    expect(getUpdateOutcomeState()).toEqual({ failure: null, failureDismissed: false });
+    expect(getUpdateOutcomeState()).toEqual({ announcement: null, failure: null, failureDismissed: false });
   });
 
   it("maps the backend's record onto the store and notifies", async () => {
@@ -110,11 +124,12 @@ describe("updateOutcomeStore", () => {
 
       await fetchUpdateOutcome();
 
+      expect(getUpdateOutcomeState().announcement).toEqual({ version: "1.3.0", direction: "updated" });
       expect(toaster.toast).toHaveBeenCalledTimes(1);
       expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
-      expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
+      expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
       expect(vi.mocked(toaster.toast).mock.invocationCallOrder[0]).toBeLessThan(
-        vi.mocked(acknowledgeUpdateAnnouncement).mock.invocationCallOrder[0]!,
+        vi.mocked(acknowledgeUpdateToast).mock.invocationCallOrder[0]!,
       );
     });
 
@@ -123,9 +138,22 @@ describe("updateOutcomeStore", () => {
 
       await fetchUpdateOutcome();
 
+      expect(getUpdateOutcomeState().announcement).toEqual({ version: "1.2.3", direction: "back" });
       expect(toaster.toast).toHaveBeenCalledTimes(1);
       expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender is back on 1.2.3" });
-      expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
+      expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
+    });
+
+    it("a panel reloaded in the same backend process shows the card again and raises no second toast", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValueOnce(UPDATED).mockResolvedValueOnce(UPDATED_TOASTED);
+      await fetchUpdateOutcome();
+      resetUpdateOutcomeStoreForTests();
+
+      await fetchUpdateOutcome();
+
+      expect(getUpdateOutcomeState().announcement).toEqual({ version: "1.3.0", direction: "updated" });
+      expect(toaster.toast).toHaveBeenCalledTimes(1);
+      expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
     });
 
     it("nothing owed raises no toast and acknowledges nothing", async () => {
@@ -134,12 +162,12 @@ describe("updateOutcomeStore", () => {
       await fetchUpdateOutcome();
 
       expect(toaster.toast).not.toHaveBeenCalled();
-      expect(acknowledgeUpdateAnnouncement).not.toHaveBeenCalled();
+      expect(acknowledgeUpdateToast).not.toHaveBeenCalled();
     });
 
     it("an acknowledgement that failed rejects, so the caller's log names it", async () => {
       vi.mocked(getUpdateOutcome).mockResolvedValue(UPDATED);
-      vi.mocked(acknowledgeUpdateAnnouncement).mockRejectedValue(new Error("socket closed"));
+      vi.mocked(acknowledgeUpdateToast).mockRejectedValue(new Error("socket closed"));
 
       await expect(fetchUpdateOutcome()).rejects.toThrow("socket closed");
       expect(toaster.toast).toHaveBeenCalledTimes(1);
@@ -166,7 +194,7 @@ describe("updateOutcomeStore", () => {
       await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS * 8);
 
       expect(toaster.toast).not.toHaveBeenCalled();
-      expect(acknowledgeUpdateAnnouncement).not.toHaveBeenCalled();
+      expect(acknowledgeUpdateToast).not.toHaveBeenCalled();
 
       Object.assign(steam, { services: true, locked: false, bigPicture: "visible" });
       await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
@@ -175,7 +203,7 @@ describe("updateOutcomeStore", () => {
       expect(toaster.toast).toHaveBeenCalledTimes(1);
       expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
       expect(vi.mocked(toaster.toast).mock.invocationCallOrder[0]).toBeLessThan(
-        vi.mocked(acknowledgeUpdateAnnouncement).mock.invocationCallOrder[0]!,
+        vi.mocked(acknowledgeUpdateToast).mock.invocationCallOrder[0]!,
       );
       expect(logWarn).not.toHaveBeenCalled();
     });
@@ -190,19 +218,22 @@ describe("updateOutcomeStore", () => {
       await pending;
 
       expect(toaster.toast).toHaveBeenCalledTimes(1);
-      expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
+      expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
       expect(logWarn).toHaveBeenCalledWith(
         "Steam was not ready for a toast after 30 s (still waiting for services_initialized); raising the update announcement anyway",
       );
     });
 
-    it("fills the store before it waits, so the rolled-back card is not held back by a toast", async () => {
+    it("fills the store before it waits, so neither card is held back by the toast", async () => {
       steam.services = false;
       vi.mocked(getUpdateOutcome).mockResolvedValue({ ...UPDATED, failure: ROLLED_BACK_WIRE.failure });
       const pending = fetchUpdateOutcome();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(getUpdateOutcomeState()).toEqual(ROLLED_BACK);
+      expect(getUpdateOutcomeState()).toEqual({
+        ...ROLLED_BACK,
+        announcement: { version: "1.3.0", direction: "updated" },
+      });
       expect(toaster.toast).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(TOAST_READINESS_DEADLINE_MS + TOAST_READINESS_POLL_MS);
@@ -247,7 +278,47 @@ describe("updateOutcomeStore", () => {
     });
   });
 
-  describe("the rules the two cards are drawn by", () => {
+  describe("Dismiss on the announcement's card", () => {
+    it("tells the backend first, then takes the card down and leaves the rolled-back record alone", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...UPDATED_TOASTED, failure: ROLLED_BACK_WIRE.failure });
+      await fetchUpdateOutcome();
+
+      await dismissUpdateAnnouncementCard();
+
+      expect(dismissUpdateAnnouncement).toHaveBeenCalledTimes(1);
+      expect(getUpdateOutcomeState()).toEqual(ROLLED_BACK);
+    });
+
+    it("a failed call rejects and leaves the card up", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue(UPDATED_TOASTED);
+      await fetchUpdateOutcome();
+      vi.mocked(dismissUpdateAnnouncement).mockRejectedValue(new Error("socket closed"));
+
+      await expect(dismissUpdateAnnouncementCard()).rejects.toThrow("socket closed");
+      expect(getUpdateOutcomeState().announcement).toEqual({ version: "1.3.0", direction: "updated" });
+    });
+
+    it("a read that was in flight when it landed writes nothing over it", async () => {
+      const read = deferred<UpdateOutcome>();
+      vi.mocked(getUpdateOutcome).mockReturnValue(read.promise);
+      const pending = fetchUpdateOutcome();
+
+      await dismissUpdateAnnouncementCard();
+      read.resolve(UPDATED_TOASTED);
+      await pending;
+
+      expect(getUpdateOutcomeState().announcement).toBeNull();
+    });
+  });
+
+  describe("the rules the cards are drawn by", () => {
+    it("words a version that moved, one title for each way", () => {
+      expect(updateAnnouncementSentence({ version: "1.3.0", direction: "updated" })).toBe(
+        "Tender was updated to 1.3.0.",
+      );
+      expect(updateAnnouncementSentence({ version: "1.2.3", direction: "back" })).toBe("Tender is back on 1.2.3.");
+    });
+
     it("words a rolled-back update in one sentence", () => {
       expect(updateFailureSentence(ROLLED_BACK.failure!)).toBe("Update to 1.3.0 failed — you are still on 1.2.3.");
     });
@@ -255,7 +326,7 @@ describe("updateOutcomeStore", () => {
     it("the rolled-back card stands while a record does and was not dismissed", () => {
       expect(failureCardShows(ROLLED_BACK)).toBe(true);
       expect(failureCardShows({ ...ROLLED_BACK, failureDismissed: true })).toBe(false);
-      expect(failureCardShows({ failure: null, failureDismissed: false })).toBe(false);
+      expect(failureCardShows({ announcement: null, failure: null, failureDismissed: false })).toBe(false);
     });
 
     it("the record takes the place of the available card for the version it tried, dismissed or not", () => {
@@ -266,7 +337,9 @@ describe("updateOutcomeStore", () => {
     it("and of no other version's", () => {
       expect(failureTakesThePlaceOf("1.4.0", ROLLED_BACK)).toBe(false);
       expect(failureTakesThePlaceOf(null, ROLLED_BACK)).toBe(false);
-      expect(failureTakesThePlaceOf("1.3.0", { failure: null, failureDismissed: false })).toBe(false);
+      expect(failureTakesThePlaceOf("1.3.0", { announcement: null, failure: null, failureDismissed: false })).toBe(
+        false,
+      );
     });
   });
 });

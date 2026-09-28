@@ -19,7 +19,7 @@ from services.update_outcome import (
 )
 
 _FAILURE = UpdateFailure(attempted_version="1.3.0", restored_version="1.2.3", rolled_back_at="2026-09-25T10:15:00Z")
-_OUTCOME_KEYS = {"announce_version", "announce_direction", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failure", "failure_dismissed"}
 
 
 class _Record:
@@ -83,25 +83,67 @@ class TestAStartAfterAnUpdate:
             service.note_start()
 
         outcome = await service.get_update_outcome()
-        assert (outcome["announce_version"], outcome["announce_direction"]) == ("1.3.0", "updated")
+        assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+            "1.3.0",
+            "updated",
+            True,
+        )
         assert _lines(caplog, logger, logging.INFO) == ["updated from 1.2.3 to 1.3.0"]
         assert _last_run(factory) == "1.3.0"
 
-    async def test_the_announcement_is_gone_once_acknowledged(self, logger):
+    async def test_a_raised_toast_is_owed_no_more_and_leaves_the_card_standing(self, logger):
         service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
         service.note_start()
 
-        assert service.acknowledge_update_announcement() == {"success": True}
+        assert service.acknowledge_update_toast() == {"success": True}
 
         outcome = await service.get_update_outcome()
-        assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
+        assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+            "1.3.0",
+            "updated",
+            False,
+        )
 
-    async def test_acknowledging_twice_is_harmless(self, logger):
+    async def test_acknowledging_the_toast_twice_is_harmless(self, logger):
         service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
         service.note_start()
-        service.acknowledge_update_announcement()
+        service.acknowledge_update_toast()
 
-        assert service.acknowledge_update_announcement() == {"success": True}
+        assert service.acknowledge_update_toast() == {"success": True}
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["toast_owed"]) == ("1.3.0", False)
+
+    async def test_a_dismissed_card_takes_the_announcement_away(self, logger):
+        service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
+        service.note_start()
+        service.acknowledge_update_toast()
+
+        assert service.dismiss_update_announcement() == {"success": True}
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+            None,
+            None,
+            False,
+        )
+
+    async def test_a_card_dismissed_before_its_toast_was_raised_owes_no_toast(self, logger):
+        """Nothing is left to announce: the wire never owes a toast without a version to name."""
+        service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
+        service.note_start()
+
+        service.dismiss_update_announcement()
+
+        assert (await service.get_update_outcome())["toast_owed"] is False
+        assert service.acknowledge_update_toast() == {"success": True}
+        assert (await service.get_update_outcome())["announce_version"] is None
+
+    async def test_dismissing_twice_is_harmless(self, logger):
+        service, _, _, _ = _make(logger, running="1.3.0", last_run="1.2.3")
+        service.note_start()
+        service.dismiss_update_announcement()
+
+        assert service.dismiss_update_announcement() == {"success": True}
         assert (await service.get_update_outcome())["announce_version"] is None
 
     async def test_the_next_start_owes_nothing(self, logger, caplog):
@@ -125,16 +167,22 @@ class TestAStartOnAnEarlierVersion:
             service.note_start()
 
         outcome = await service.get_update_outcome()
-        assert (outcome["announce_version"], outcome["announce_direction"]) == ("1.2.3", "back")
+        assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+            "1.2.3",
+            "back",
+            True,
+        )
         assert _lines(caplog, logger, logging.INFO) == ["back on 1.2.3 after 1.3.0"]
         assert _last_run(factory) == "1.2.3"
 
-    async def test_is_gone_once_acknowledged(self, logger):
+    async def test_its_card_stands_past_the_toast_and_goes_once_dismissed(self, logger):
         service, _, _, _ = _make(logger, running="1.2.3", last_run="1.3.0")
         service.note_start()
 
-        service.acknowledge_update_announcement()
+        service.acknowledge_update_toast()
+        assert (await service.get_update_outcome())["announce_version"] == "1.2.3"
 
+        service.dismiss_update_announcement()
         outcome = await service.get_update_outcome()
         assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
 
@@ -147,7 +195,11 @@ class TestAStartOnAVersionNeitherSideOfWhichIsTheLater:
             service.note_start()
 
         outcome = await service.get_update_outcome()
-        assert (outcome["announce_version"], outcome["announce_direction"]) == (None, None)
+        assert (outcome["announce_version"], outcome["announce_direction"], outcome["toast_owed"]) == (
+            None,
+            None,
+            False,
+        )
         assert _lines(caplog, logger, logging.INFO) == []
         assert _last_run(factory) == "1.3.0"
 
@@ -229,6 +281,31 @@ class TestAStartAfterARollback:
         assert _lines(caplog, logger, logging.WARNING) == []
 
 
+class TestAnAnnouncementBesideAStandingRecord:
+    """Both can stand at once: the announcement names the running version, which a standing record says it restored."""
+
+    @pytest.mark.parametrize(
+        ("last_run", "direction"),
+        [
+            # The installer's removal did not happen, 1.3.1 went through, and the reader went back to 1.2.3.
+            ("1.3.1", "back"),
+            # The same leftover, and the reader came up to 1.2.3 from an earlier release.
+            ("1.2.0", "updated"),
+        ],
+    )
+    async def test_a_version_that_moved_onto_the_restored_one_is_announced_beside_the_record(
+        self, logger, last_run, direction
+    ):
+        service, _, _, _ = _make(logger, running="1.2.3", last_run=last_run, record=_Record(_FAILURE))
+
+        service.note_start()
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["announce_version"], outcome["announce_direction"]) == ("1.2.3", direction)
+        assert outcome["failure"] is not None
+        assert outcome["failure"]["attempted_version"] == "1.3.0"
+
+
 class TestARecordThatNoLongerStands:
     """A record stands only while the running version is the one it restored; any other is a leftover."""
 
@@ -245,6 +322,7 @@ class TestARecordThatNoLongerStands:
         assert outcome == {
             "announce_version": "1.3.0",
             "announce_direction": "updated",
+            "toast_owed": True,
             "failure": None,
             "failure_dismissed": False,
         }
@@ -285,6 +363,7 @@ class TestTheRecord:
         assert (await service.get_update_outcome()) == {
             "announce_version": None,
             "announce_direction": None,
+            "toast_owed": False,
             "failure": None,
             "failure_dismissed": False,
         }

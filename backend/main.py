@@ -947,13 +947,15 @@ class Plugin:
     async def get_update_outcome(self):
         """Report what the panel owes the user about the last update.
 
-        Returns ``{"announce_version", "announce_direction", "failure",
-        "failure_dismissed"}``. ``announce_version`` is the version this process
-        moved to, until :meth:`acknowledge_update_announcement` says the panel
-        announced it — ``None`` on every other start — and
+        Returns ``{"announce_version", "announce_direction", "toast_owed",
+        "failure", "failure_dismissed"}``. ``announce_version`` is the version
+        this process moved to, until :meth:`dismiss_update_announcement` says
+        the user waved its card away — ``None`` on every other start — and
         ``announce_direction`` which way it moved: ``"updated"`` to a later
         release, ``"back"`` to an earlier one, ``None`` exactly when
-        ``announce_version`` is. ``failure`` is the installer's record of
+        ``announce_version`` is. ``toast_owed`` is true until
+        :meth:`acknowledge_update_toast` says the panel raised its toast, and
+        false whenever ``announce_version`` is ``None``. ``failure`` is the installer's record of
         an update it rolled back, ``{"attempted_version", "restored_version",
         "rolled_back_at"}``, read afresh so it goes when the installer removes
         it; ``None`` where there is none, or where the running version is not
@@ -963,12 +965,20 @@ class Plugin:
         return await self._update_outcome_service.get_update_outcome()
 
     @route
-    def acknowledge_update_announcement(self):
-        """Record that the panel raised this process's announcement, so a reloaded panel does not raise it again.
+    def acknowledge_update_toast(self):
+        """Record that the panel raised the announcement's toast, so a reloaded panel does not raise it again.
+
+        The card stays. Returns ``{"success": True}``.
+        """
+        return self._update_outcome_service.acknowledge_update_toast()
+
+    @route
+    def dismiss_update_announcement(self):
+        """Record that the user waved away the announcement's card, for the rest of this process.
 
         Returns ``{"success": True}``.
         """
-        return self._update_outcome_service.acknowledge_update_announcement()
+        return self._update_outcome_service.dismiss_update_announcement()
 
     @route
     def dismiss_update_failure(self, rolled_back_at):
