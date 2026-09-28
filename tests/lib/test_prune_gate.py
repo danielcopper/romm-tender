@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from lib.prune_gate import PruneConflicts, prune_active_blocked, prune_exclusive_start
+from lib.prune_gate import _LEASE_SECONDS, PruneConflicts, prune_active_blocked, prune_exclusive_start
 
 
 class _RecordingLogger:
@@ -14,6 +14,23 @@ class _RecordingLogger:
 
     def info(self, message: str) -> None:
         self.info_lines.append(message)
+
+
+class _LoopClock:
+    """The running loop's clock, which the gate reads its lease deadlines from, held still until advanced.
+
+    A test that sleeps through a lease measures the machine's load along with
+    the lease. Nothing a test using this awaits may sleep: a timer on a clock
+    that does not move never fires.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        loop = asyncio.get_running_loop()
+        self._now = loop.time()
+        monkeypatch.setattr(loop, "time", lambda: self._now)
+
+    def advance(self, seconds: float) -> None:
+        self._now += seconds
 
 
 def _conflicts() -> tuple[PruneConflicts, _RecordingLogger, list[str]]:
@@ -468,14 +485,14 @@ async def test_abandoned_multicall_lease_expires_before_prune_start(monkeypatch)
 @pytest.mark.asyncio
 async def test_renewed_frontend_lease_cannot_expire_while_heartbeats_continue(monkeypatch) -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
-    monkeypatch.setattr("lib.prune_gate._LEASE_SECONDS", 0.05)
+    clock = _LoopClock(monkeypatch)
     token = await conflicts.acquire_lease("long_rebake")
-    await asyncio.sleep(0.03)
+    clock.advance(0.6 * _LEASE_SECONDS)
 
     assert await conflicts.renew_lease(token) is True
-    await asyncio.sleep(0.03)
+    clock.advance(0.6 * _LEASE_SECONDS)
     assert (await endpoints.start_prune())["reason"] == "operation_active"
 
-    await asyncio.sleep(0.03)
+    clock.advance(0.6 * _LEASE_SECONDS)
     assert await endpoints.start_prune() == {"success": True}
     assert await conflicts.renew_lease(token) is False
