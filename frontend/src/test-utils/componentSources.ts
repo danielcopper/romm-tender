@@ -44,9 +44,20 @@ export interface ComponentSource {
 // empty set.
 const SRC_DIR = `${process.cwd()}/src/`;
 
-// Directories an eslint test plants and removes while the suite runs — see the
-// note on `componentSources` below.
-const FIXTURE_DIRS = ["__eslint_fixtures__", "__eslint_surface_fixtures__"];
+const FIXTURE_DIRS = new Set(["__eslint_fixtures__", "__eslint_surface_fixtures__"]);
+
+/**
+ * Whether a path relative to `src/` lies in a directory that
+ * `eslintQamFocusable.test.ts` or `eslintBoundaries.test.ts` plants while it
+ * runs and removes afterwards. A sweep over `src/` that runs inside the suite
+ * must skip these, and not for tidiness: a sweep racing either test sees the
+ * fixtures on one run and not the next, so its searched set, and any test cases
+ * built from it, changes with no source change; and a sweep that globs a
+ * fixture and reads it after the removal fails on a file that is gone.
+ */
+export function isLintFixture(relative: string): boolean {
+  return relative.split(/[\\/]/).some((segment) => FIXTURE_DIRS.has(segment));
+}
 
 /**
  * Every component source a lock should search, sorted so the report is stable.
@@ -55,21 +66,13 @@ const FIXTURE_DIRS = ["__eslint_fixtures__", "__eslint_surface_fixtures__"];
  * set passes every `not.toContain` there is, which is the same vacuous green the
  * locks' own "searches for something" cases exist to refuse. A moved directory
  * or a broken glob then fails loudly instead of silently retiring both locks.
- *
- * A lint fixture is not a component, and skipping those directories is a
- * correctness fix rather than tidiness. `eslintQamFocusable.test.ts` PLANTS
- * `.tsx` fixtures into an `__eslint_fixtures__` directory while it runs and
- * removes them afterwards, so a sweep racing it either saw them or did not: the
- * suite reported 3706 tests on one run and 3698 on the next with no source
- * change between them. A lock whose searched set depends on another test's
- * timing is a lock nobody can read. `__eslint_surface_fixtures__` is the
- * sibling `eslintBoundaries.test.ts` plants the same way; it writes only `.ts`
- * today, and naming it here costs a word rather than a second incident.
+ * A lint fixture is not a component, and {@link isLintFixture} says why skipping
+ * one is not optional.
  */
 export function componentSources(): ComponentSource[] {
   const files = globSync("bigpicture/**/*.tsx", { cwd: SRC_DIR })
     .filter((relative) => !relative.endsWith(".test.tsx"))
-    .filter((relative) => !FIXTURE_DIRS.some((dir) => relative.split(/[\\/]/).includes(dir)))
+    .filter((relative) => !isLintFixture(relative))
     .map((relative) => relative.split(/[\\/]/).join("/"))
     .sort();
   if (files.length === 0) {
