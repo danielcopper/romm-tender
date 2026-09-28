@@ -1102,9 +1102,9 @@ return raises the shortcut count without raising the header, so a pane can read 
 `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, in the gap before that run's stale-removal
 scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
 leaves out a row RomM still serves — and both heal at a sync that applies that platform: the second at the platform's
-commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs
-skip the unchanged platform, so after a stop the first waits until the platform is fetched and applied again (for
-instance when RomM changes it, or after Force Full Sync). The direction is a conservative under-count, which is why it
+commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs do
+not skip a platform that still holds such a bound row — they full-fetch it — so after a stop the first heals at the
+stale-removal scan of the first later run that completes. The direction is a conservative under-count, which is why it
 is recorded rather than guarded.
 
 **The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a

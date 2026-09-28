@@ -858,9 +858,25 @@ shortcuts. No stamp means a full fetch — including, once, every platform's fir
 reporter writes the stamp when a platform work unit's **last** apply chunk commits — atomically in the same write UoW as
 the chunk's `roms` upserts — so a platform that fully synced inside a run the user later cancelled/crashed still skips
 on the next run instead of re-walking every already-applied game through CEF. All the existing guards still gate the
-skip (zero-bound-rows, the `sibling_group_key` backfill for rows carrying the stamp's generation, the `updated_after`
-server-delta check, the persisted-row count match); additionally the stamp's `rom_count` must still equal the server's
-platform `rom_count` — a server-side count change invalidates it.
+skip (zero-bound-rows, the `sibling_group_key` backfill for rows carrying the stamp's generation, no bound row the
+stamp's fetch did not return, the `updated_after` server-delta check, the persisted-row count match); additionally the
+stamp's `rom_count` must still equal the server's platform `rom_count` — a server-side count change invalidates it.
+
+**A bound row the stamp's fetch did not return forces a full fetch.** The skip rebuilds its unit from every bound row,
+and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. The count guards catch a ROM
+RomM drops **after** the stamp's fetch, because the drop moves RomM's `rom_count` away from the stamp's. They cannot
+catch one dropped **before** it: the stamp recorded RomM's count without it, and the rows carrying the stamp's
+generation match that count. Such a row stays bound when the run that wrote the stamp stopped before its end —
+cancelled, interrupted, paused by the session budget, or failed — because the stale-removal scan runs only for a run
+that was not stopped. The gate therefore refuses the skip while any bound row on the platform does not carry the stamp's
+generation, a NULL one included (`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches instead. The
+full fetch returns every ROM RomM still serves, so only the rows RomM dropped stay unreturned: the preview lists them as
+removals, and the stale-removal scan of the first later run that completes unbinds them. A run that stops again leaves
+the platform full-fetching until one completes; once the row is unbound, the platform skips again. The other fix —
+leaving such rows out of the rebuilt unit — was rejected because the generation records the last completed fetch rather
+than what RomM serves now: a collection-added row on an already-stamped platform commits with no generation while RomM
+still serves it, and leaving it out would remove a shortcut RomM still backs. A stamp with no generation predates the
+contract and cannot say what its fetch returned, so it skips as before.
 
 The stamp's contract is **stamp exists ⟺ the platform's most recent apply attempt ran to completion**, so a stale stamp
 can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a platform's persisted-row
@@ -871,11 +887,13 @@ chunk) and only the final chunk re-writes it, so an apply interrupted by a crash
 final chunk leaves none; and the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
 `report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) — delete the touched
 platforms' stamps in the same write UoW as the unbind. The reporter's server-side stale removal is the deliberate
-exception (it leaves the stamp, since a server-dropped ROM lowers RomM's `rom_count` and the count guard catches it).
-"Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
-which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The
-`sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync"
-display, so deleting it forced nothing and only blanked the panel to "Never" right after a reset.
+exception: it leaves the stamp, because a row it unbinds is one no unit of that completed run returned. A platform the
+run skipped holds no such row, and on a platform the run fetched the row does not carry the generation of the stamp that
+run wrote, so the skip never counted it. "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the
+recorded `applied_launch_options` to NULL), which is the entire full-re-fetch + full-re-apply arm — the stamps are the
+fetcher's sole skip authority. The `sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and
+is the source of the "Last sync" display, so deleting it forced nothing and only blanked the panel to "Never" right
+after a reset.
 
 That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
 history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that
@@ -1046,31 +1064,32 @@ plan (per-unit weights + planned totals, via `sync_plan`) and the applying frame
   whether the wholesale incremental-skip gate is expected to skip the platform, replaying the gate's **local**
   conditions only (completion stamp present, the stamped count and the count of rows carrying the stamp's fetch
   generation both match the server's `rom_count`, bound rows exist, no sibling-group-key backfill pending for a row of
-  that generation; the gate's `list_roms_updated_after` server check is deliberately not replayed — no network at plan
-  time) — and `collapsed_count`, the persisted post-collapse shortcut count, mirroring the collapse's lane selection
-  (ADR-0021): `max(1, bound rows)` per sibling group — so a grandfathered legacy group with multiple independently-bound
-  duplicates (§5) prices one shortcut per bound sibling, not one per group — plus one per keyless row. Both of **those
-  two** ride the `sync_plan` payload conditionally-present (absent on collections, never-synced platforms, and failed
-  reads); `collapsed_count` is additionally **gated on the platform's completion stamp** (#1412) — a never-synced
-  platform holds only PARTIAL collection-sibling rows (ADR-0021), so an ungated count would weight the ETA below the
-  true work, and without a stamp the frontend falls back to the raw `rom_count`. The payload's `total_roms` stays the
-  raw pre-collapse total (backward compat); an additive `total_estimated_items` sums `0` for predicted skips, else
-  `collapsed_count ?? rom_count`. A third rider, `bound_count` (#1511), counts the unit's known ROMs that already carry
-  a `shortcut_app_id`, and is the one rider that rides **both** unit kinds. On a **platform** it counts the persisted
-  rows, read in the same short UoW the skip prediction already needed that count for, and is **not** stamp-gated: a
-  bound row genuinely has a Steam shortcut whether or not the mirror is complete, and zero persisted rows honestly means
-  "every planned item is a create". On a **collection** it counts the bound members of the completion stamp's stored
-  `member_rom_ids` (the same member set the skip replays), in one short read UoW covering every collection unit — no ROM
-  fetch. The two sides are deliberately **asymmetric** on the empty case: a platform reports `0`, an unstamped or
-  virtual collection is **omitted**. A collection's membership exists only in its stamp, and virtual collections are
-  never stampable (`CollectionSyncState.stamp` accepts only `standard`/`smart`), so `0` there would claim knowledge that
-  does not exist. Absent and `0` price identically today; the distinction keeps the field honest for later consumers, so
-  do not collapse it into consistency. A collection's stored member set may be **stale** if membership changed since the
-  stamp — accepted and bounded, since this is estimate-only and a freshness probe would mean network I/O at plan time. A
-  fourth rider, `new_shortcut_count` (#1517), is the create-side complement of `collapsed_count`: the shortcuts the next
-  apply must **mint** rather than update — sibling groups with no binding anywhere, unbound keyless rows, and every
-  server ROM the local mirror holds no row for (`rom_count − persisted rows`, clamped at zero). It is **platform-only**
-  — a collection's rows belong to their platform's unit, so counting creates on a collection too would price the same
+  that generation, no bound row the stamp's fetch did not return; the gate's `list_roms_updated_after` server check is
+  deliberately not replayed — no network at plan time) — and `collapsed_count`, the persisted post-collapse shortcut
+  count, mirroring the collapse's lane selection (ADR-0021): `max(1, bound rows)` per sibling group — so a grandfathered
+  legacy group with multiple independently-bound duplicates (§5) prices one shortcut per bound sibling, not one per
+  group — plus one per keyless row. Both of **those two** ride the `sync_plan` payload conditionally-present (absent on
+  collections, never-synced platforms, and failed reads); `collapsed_count` is additionally **gated on the platform's
+  completion stamp** (#1412) — a never-synced platform holds only PARTIAL collection-sibling rows (ADR-0021), so an
+  ungated count would weight the ETA below the true work, and without a stamp the frontend falls back to the raw
+  `rom_count`. The payload's `total_roms` stays the raw pre-collapse total (backward compat); an additive
+  `total_estimated_items` sums `0` for predicted skips, else `collapsed_count ?? rom_count`. A third rider,
+  `bound_count` (#1511), counts the unit's known ROMs that already carry a `shortcut_app_id`, and is the one rider that
+  rides **both** unit kinds. On a **platform** it counts the persisted rows, read in the same short UoW the skip
+  prediction already needed that count for, and is **not** stamp-gated: a bound row genuinely has a Steam shortcut
+  whether or not the mirror is complete, and zero persisted rows honestly means "every planned item is a create". On a
+  **collection** it counts the bound members of the completion stamp's stored `member_rom_ids` (the same member set the
+  skip replays), in one short read UoW covering every collection unit — no ROM fetch. The two sides are deliberately
+  **asymmetric** on the empty case: a platform reports `0`, an unstamped or virtual collection is **omitted**. A
+  collection's membership exists only in its stamp, and virtual collections are never stampable
+  (`CollectionSyncState.stamp` accepts only `standard`/`smart`), so `0` there would claim knowledge that does not exist.
+  Absent and `0` price identically today; the distinction keeps the field honest for later consumers, so do not collapse
+  it into consistency. A collection's stored member set may be **stale** if membership changed since the stamp —
+  accepted and bounded, since this is estimate-only and a freshness probe would mean network I/O at plan time. A fourth
+  rider, `new_shortcut_count` (#1517), is the create-side complement of `collapsed_count`: the shortcuts the next apply
+  must **mint** rather than update — sibling groups with no binding anywhere, unbound keyless rows, and every server ROM
+  the local mirror holds no row for (`rom_count − persisted rows`, clamped at zero). It is **platform-only** — a
+  collection's rows belong to their platform's unit, so counting creates on a collection too would price the same
   shortcuts twice — and like `bound_count` it is **not** stamp-gated: an unbound group genuinely has no shortcut and a
   ROM with no local row genuinely has to be created, whether or not the mirror is complete. The frontend takes it as its
   create term directly instead of deriving creates by subtracting `bound_count` from the unit's weight (see the
