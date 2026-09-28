@@ -65,6 +65,14 @@ markdown_extensions:
       anchor_linenums: true
   - pymdownx.superfences
   - pymdownx.details
+  # `deno fmt` indents list content by two spaces (three under `1. `), and
+  # Python-Markdown on its own nests only at four, so without this extension a
+  # nested list renders flat and an indented paragraph ends its list.
+  # `truly_sane: false` because the default (`true`) starts a new list at every
+  # blank line between two bullet items.
+  - mdx_truly_sane_lists:
+      nested_indent: 2
+      truly_sane: false
 
 nav:
   - Home: index.md
