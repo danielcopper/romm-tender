@@ -63,13 +63,14 @@ jobs:
       # `workflow_run.pull_requests` is empty for a run whose head is in a fork,
       # so the PR number comes from the artifact — which the fork's own copy of
       # ci.yml produced. It is used only once the API confirms that PR comes
-      # from the run's repository and still has the run's head commit, and the
-      # base branch is taken from that API answer. A PR whose head differs is
-      # not scanned; it counts as superseded — the run ends green, and the CI
-      # run for the new head scans it once that run succeeds — only if it is
-      # open and on the run's branch. Anything else fails. The branch name is
-      # only a label in SonarCloud, so a character outside the regex is
-      # replaced rather than refused.
+      # from the run's repository and still has the run's head commit; the base
+      # branch is taken from that API answer and must be the default branch. A
+      # PR whose head differs is not scanned; it counts as superseded — the run
+      # ends green, and once the CI run for the new head succeeds, it starts
+      # this workflow again for that head — only if it is open and on the run's
+      # branch. Anything else fails. The branch name is only a label in
+      # SonarCloud, so a character outside the regex is replaced rather than
+      # refused.
       - name: Resolve the pull request
         id: pr
         env:
@@ -78,6 +79,7 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           ref_re='^[A-Za-z0-9/_.-]+$'
@@ -97,6 +99,7 @@ jobs:
           api_state=$(jq -r '.state' <<<"$pr_json")
           base_ref=$(jq -r '.base.ref' <<<"$pr_json")
           [[ "$api_head_repo" == "$HEAD_REPO" ]] || { echo "::error::PR #$pr_number does not come from $HEAD_REPO"; exit 1; }
+          [[ "$base_ref" =~ $ref_re && "$base_ref" == "$DEFAULT_BRANCH" ]] || { echo "::error::PR #$pr_number does not target $DEFAULT_BRANCH"; exit 1; }
           if [[ "$api_head_sha" != "$HEAD_SHA" ]]; then
             if [[ "$api_state" == "open" && "$api_head_ref" == "$HEAD_BRANCH" ]]; then
               echo "::notice::PR #$pr_number (open, branch $branch_label) now has a different head than $HEAD_SHA; not scanning a superseded head"
@@ -106,7 +109,6 @@ jobs:
             echo "::error::PR #$pr_number's head is not $HEAD_SHA, and it is not an open PR on branch $branch_label"
             exit 1
           fi
-          [[ "$base_ref" =~ $ref_re ]] || { echo "::error::Invalid base branch"; exit 1; }
 
           {
             echo "scan=true"
