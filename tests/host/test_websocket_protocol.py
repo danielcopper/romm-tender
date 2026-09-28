@@ -34,6 +34,17 @@ from lib.websocket_frames import (
 from tests.host.ws_client import WsTestClient, http_get
 
 
+async def _until_no_panel(running_host) -> None:
+    """Wait for the host to have detached the panel, with a bound that is only a hang guard.
+
+    The detach is the server noticing a socket that went away, which takes as
+    long as the machine's load says it does.
+    """
+    async with asyncio.timeout(5):
+        while running_host.events.connected:
+            await asyncio.sleep(0.01)
+
+
 def _close_payload(code: int) -> bytes:
     """A close frame's body: the two-byte code, and nothing after it."""
     return code.to_bytes(2, "big")
@@ -316,7 +327,7 @@ class TestUnknownMessages:
         await first.send_json({"type": "greeting"})
         await first.call(1, "echo", ["settle"])
         await first.close()
-        await asyncio.sleep(0.05)
+        await _until_no_panel(running_host)
 
         second = await WsTestClient.connect(running_host.port, running_host.token, session="panel-2")
         try:
@@ -436,15 +447,23 @@ class TestNewestConnectionWins:
         assert delivered is True
         assert frame["name"] == "sync_complete"
 
-    async def test_the_displaced_connections_teardown_does_not_silence_events(self, running_host):
+    async def test_the_displaced_connections_teardown_does_not_silence_events(self, running_host, monkeypatch):
         """The older socket tears down after its replacement has attached."""
+        first_torn_down = asyncio.Event()
+        detach = running_host.events.detach
+
+        def signalled_detach(sender):
+            detach(sender)
+            first_torn_down.set()
+
+        monkeypatch.setattr(running_host.events, "detach", signalled_detach)
         first = await WsTestClient.connect(running_host.port, running_host.token, session="panel-1")
         await first.call(1, "echo", ["settle"])
         second = await WsTestClient.connect(running_host.port, running_host.token, session="panel-2")
         try:
             await second.call(2, "echo", ["settle"])
             await first.close()
-            await asyncio.sleep(0.05)
+            await asyncio.wait_for(first_torn_down.wait(), 5)
             delivered = await running_host.events.emit("sync_complete", {"total_games": 1})
         finally:
             await second.close()
@@ -476,7 +495,7 @@ class TestConnectionLoss:
         finally:
             await client.close()
 
-        await asyncio.sleep(0.05)
+        await _until_no_panel(running_host)
         again = asyncio.ensure_future(running_host.server.wait_connected())
         await asyncio.sleep(0.05)
         assert not again.done()
@@ -489,7 +508,7 @@ class TestConnectionLoss:
         await client.call(1, "echo", ["settle"])
 
         await client.close()
-        await asyncio.sleep(0.05)
+        await _until_no_panel(running_host)
 
         assert not running_host.server.connected
         assert await running_host.events.emit("sync_complete", {}) is False
