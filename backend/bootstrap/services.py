@@ -32,6 +32,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.launch_gate import LaunchGateService, LaunchGateServiceConfig
+from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -129,6 +130,7 @@ class ServicesBundle:
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
     relaunch_options_resolver: RelaunchOptionsResolver
+    leftover_tmp_cleanup_service: LeftoverTmpCleanupService
 
 
 def wire_services(cfg: WiringConfig) -> ServicesBundle:
@@ -405,6 +407,14 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             m3u_support=cfg.callbacks.m3u_support,
             uow_factory=cfg.callbacks.uow_factory,
             rom_remover=rom_remover_binding.get,
+        ),
+    )
+
+    leftover_tmp_cleanup_service = LeftoverTmpCleanupService(
+        config=LeftoverTmpCleanupServiceConfig(
+            logger=cfg.runtime.logger,
+            download_file_store=cfg.adapters.download_file_store,
+            retrodeck_paths=cfg.callbacks.retrodeck_paths,
         ),
     )
 
@@ -691,4 +701,5 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,
         relaunch_options_resolver=relaunch_options_resolver,
+        leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
     )

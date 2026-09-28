@@ -222,6 +222,7 @@ class Plugin:
         self._session_lifecycle_service = services.session_lifecycle_service
         self._game_process_service = services.game_process_service
         self._relaunch_options_resolver = services.relaunch_options_resolver
+        self._leftover_tmp_cleanup_service = services.leftover_tmp_cleanup_service
 
         # ── 5. Startup repairs ──────────────────────────────────────────────
         # Each runs through the reporting wrapper: these are repairs, not
@@ -239,7 +240,7 @@ class Plugin:
         steps.run("prune_orphaned_artwork_cache", self._sgdb_service.prune_orphaned_artwork_cache)
         steps.run("prune_orphaned_staging_artwork", self._artwork_service.prune_orphaned_staging_artwork)
         steps.run("prune_orphaned_cover_cache", self._artwork_service.prune_orphaned_cover_cache)
-        steps.run("cleanup_leftover_tmp_files", self._download_service.cleanup_leftover_tmp_files)
+        steps.run("cleanup_leftover_tmp_files", self._leftover_tmp_cleanup_service.cleanup_leftover_tmp_files)
 
         # ── 6. Background tasks ─────────────────────────────────────────────
         steps.run("record_save_directories", self._start_save_directory_backfill)

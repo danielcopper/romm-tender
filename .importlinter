@@ -162,6 +162,7 @@ modules =
     services.game_detail
     services.game_process
     services.launch_gate
+    services.leftover_tmp_cleanup
     services.library
     services.metadata
     services.migration

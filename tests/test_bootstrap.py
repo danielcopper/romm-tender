@@ -61,6 +61,7 @@ from services.disc import DiscService
 from services.downloads import DownloadService
 from services.firmware import FirmwareService
 from services.game_process import GameProcessService
+from services.leftover_tmp_cleanup import LeftoverTmpCleanupService
 from services.library import LibraryService
 from services.metadata import MetadataService
 from services.playtime import PlaytimeService
@@ -618,7 +619,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 29
+        assert len(fields(result)) == 30
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -628,6 +629,7 @@ class TestWireServices:
         assert isinstance(result.data_inventory_service, DataInventoryService)
         assert isinstance(result.game_process_service, GameProcessService)
         assert isinstance(result.update_check_service, UpdateCheckService)
+        assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):

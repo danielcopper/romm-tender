@@ -1080,7 +1080,9 @@ class TestMainStartupOrdering:
         artwork_service.prune_orphaned_staging_artwork = MagicMock()
 
         download_service = MagicMock()
-        download_service.cleanup_leftover_tmp_files = MagicMock()
+
+        leftover_tmp_cleanup_service = MagicMock()
+        leftover_tmp_cleanup_service.cleanup_leftover_tmp_files = MagicMock()
 
         firmware_service = MagicMock()
 
@@ -1125,6 +1127,7 @@ class TestMainStartupOrdering:
             session_lifecycle_service=MagicMock(),
             game_process_service=MagicMock(),
             relaunch_options_resolver=MagicMock(),
+            leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
         )
 
         bootstrap_result = BootstrapResult(
