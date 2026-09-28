@@ -279,11 +279,8 @@ export interface RegistryPlatform {
    * out because RomM no longer serves them. It need not equal `count` in either
    * direction: a pane can read fewer here than it has shortcuts
    * (`docs/architecture/qam-panel.md`, § Library, has the rule and its edges).
-   *
-   * Absent on older backends; a reader falls back to `count`, which is the
-   * pre-#1815 wording and understates rather than inventing a number.
    */
-  reachable_count?: number;
+  reachable_count: number;
 }
 
 export interface SyncAddItem {

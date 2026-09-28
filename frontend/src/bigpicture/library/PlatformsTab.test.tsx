@@ -332,7 +332,9 @@ describe("Library › Platforms", () => {
     vi.resetAllMocks();
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform()] });
     mockFirmware([firmwarePlatform()]);
-    vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [{ slug: "gba", name: "GBA", count: 9 }] });
+    vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
+      platforms: [{ slug: "gba", name: "GBA", count: 9, reachable_count: 9 }],
+    });
     vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo());
     vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 3 });
     vi.mocked(backend.savePlatformSync).mockResolvedValue({ success: true, message: "" });
@@ -1009,8 +1011,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9 },
-          { slug: "n64", name: "N64", count: 4 },
+          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: boolean; message: string; downloaded: number }) => void = () => {};
@@ -1082,18 +1084,6 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain("12 on RomM · 3 in Steam");
-    });
-
-    it("reads an older backend's answer as its shortcut count rather than inventing one", async () => {
-      // No `reachable_count` on the wire: the pre-#1815 number understates the
-      // reachable set, which is the safe direction to be wrong in.
-      vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
-        platforms: [{ slug: "gba", name: "GBA", count: 7 }],
-      });
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      expect(container.textContent).toContain("12 on RomM · 7 in Steam");
     });
 
     it("names the active core in the header and greys it when it is the default", async () => {
@@ -1702,8 +1692,8 @@ describe("Library › Platforms", () => {
       // on a platform with nothing in Steam for a reason of its own.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9 },
-          { slug: "n64", name: "N64", count: 4 },
+          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: boolean; rebake_items: never[] }) => void = () => {};
@@ -2726,8 +2716,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
-          { slug: "gba", name: "GBA", count: 9 },
-          { slug: "n64", name: "N64", count: 4 },
+          { slug: "gba", name: "GBA", count: 9, reachable_count: 9 },
+          { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
       let finish: (v: { success: boolean; message: string; downloaded: number }) => void = () => {};

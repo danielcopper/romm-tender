@@ -423,9 +423,7 @@ export function usePlatformsPage(): PlatformsPageState {
     try {
       const result = await getRegistryPlatforms();
       setShortcutCounts(
-        Object.fromEntries(
-          result.platforms.map((p) => [p.slug, { bound: p.count, reachable: p.reachable_count ?? p.count }]),
-        ),
+        Object.fromEntries(result.platforms.map((p) => [p.slug, { bound: p.count, reachable: p.reachable_count }])),
       );
       setShortcutCountsFailed(false);
     } catch (e) {
