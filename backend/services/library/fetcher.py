@@ -822,8 +822,8 @@ class LibraryFetcher:
             self._logger.info(f"Per-unit fetch {platform_name}: a bound row the last fetch did not return — full fetch")
             return None
 
-        # Stamp-count guard (ADR-0023): the server ROM count captured at stamp
-        # time must still equal the unit's current ``rom_count``. A server-side
+        # Stamp-count guard (ADR-0023): the server ROM count the stamping run
+        # planned with must still equal the unit's current ``rom_count``. A server-side
         # count change since the stamp invalidates it — the platform must
         # re-fetch to reconcile.
         if stamp_rom_count != unit.rom_count:

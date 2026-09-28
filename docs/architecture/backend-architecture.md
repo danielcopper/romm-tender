@@ -890,7 +890,7 @@ platforms' stamps in the same write UoW as the unbind. The reporter's server-sid
 exception: it leaves every stamp. On a platform the run processed, nothing the skip reads changes: a skipped platform's
 rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was stamped by
 that run with a generation no stale row carries. A platform the run did not process (sync turned off for it) keeps its
-stamp too, and the rows unbound on it still carry that stamp's generation and still count towards its skip. "Force Full
+stamp too, and those rows unbound on it that carry that stamp's generation still count towards its skip. "Force Full
 Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL), which is the
 entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is
 deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting it

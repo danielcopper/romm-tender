@@ -8,8 +8,8 @@ committed every chunk of platforms A, B, C but was cancelled during platform D
 never completes, so ``last_sync`` stays put and the next sync re-walks A, B, C
 from zero. This stamp is the per-platform checkpoint that survives that
 cancellation: the skip reads ``completed_at`` as the platform's own effective
-``last_sync`` and ``rom_count`` as the server count captured at completion (a
-later server-side count change invalidates the stamp).
+``last_sync`` and ``rom_count`` as the server count the completing run planned
+with (a later server-side count change invalidates the stamp).
 
 Keyed by ``platform_slug``. A thin record built whole and upserted — never a
 partial field mutation — so it carries a single ``stamp`` constructor and no
@@ -41,9 +41,9 @@ class PlatformSyncState:
     def stamp(cls, *, platform_slug: str, at: str, rom_count: int, fetch_id: str | None = None) -> PlatformSyncState:
         """Record that ``platform_slug`` fully synced at ISO timestamp ``at``.
 
-        ``rom_count`` is the server's platform ROM count as of completion — the
-        skip re-checks it against the live count and invalidates the stamp on any
-        change.
+        ``rom_count`` is the server's platform ROM count the completing run
+        planned with — the skip re-checks it against the live count and
+        invalidates the stamp on any change.
 
         ``fetch_id`` is the generation marker every row of that completing fetch
         carries (``Rom.record_fetch_generation``), so the skip can count exactly

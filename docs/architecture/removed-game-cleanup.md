@@ -122,14 +122,15 @@ option, because `selected_prune_ids` returns a non-candidate only under that opt
 describe an outcome that cannot occur, so the dialog hides them and drops any installed-content selection they carried;
 every page is still fetched, and the completeness gate before confirmation is unchanged.
 
-Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp. It does not need to. A
-row it removes that the stamp's fetch did not return was never counted by the incremental skip, and while it was bound
-it made the skip full-fetch the platform instead
+Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp. It does not need to.
+Under a stamp that records its fetch generation, a row it removes that the stamp's fetch did not return was never
+counted by the incremental skip, and while it was bound it made the skip full-fetch the platform instead
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"), so
 removing it can only let the platform skip again. A row it removes that the fetch did return is one RomM dropped
 afterwards, which moves RomM's `rom_count` away from the stamp's, and the fetcher's stamp-count guard forces the
-re-fetch. Clearing the stamp would cost the platform its incremental skip and disable further bulk discovery until a new
-complete fetch landed.
+re-fetch. Under a stamp with no generation every row counts, so removing one RomM no longer serves can only bring that
+count back to RomM's. Clearing the stamp would cost the platform its incremental skip and disable further bulk discovery
+until a new complete fetch landed.
 
 ## Prune conflicts
 
