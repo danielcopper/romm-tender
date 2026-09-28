@@ -1445,13 +1445,18 @@ class TestRommRequestErrors:
         _setup_plugin(plugin)
         with (
             patch("urllib.request.urlopen", side_effect=ConnectionRefusedError("refused")),
+            patch("time.sleep"),
             pytest.raises(RommConnectionError),
         ):
             plugin._http_adapter.request("/api/test")
 
     def test_timeout_raises_timeout_error(self, plugin):
         _setup_plugin(plugin)
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")), pytest.raises(RommTimeoutError):
+        with (
+            patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")),
+            patch("time.sleep"),
+            pytest.raises(RommTimeoutError),
+        ):
             plugin._http_adapter.request("/api/test")
 
     def test_500_raises_server_error(self, plugin):
@@ -1459,14 +1464,22 @@ class TestRommRequestErrors:
         exc = urllib.error.HTTPError(
             "http://romm.local/api/test", 500, "Internal Server Error", http.client.HTTPMessage(), None
         )
-        with patch("urllib.request.urlopen", side_effect=exc), pytest.raises(RommServerError) as exc_info:
+        with (
+            patch("urllib.request.urlopen", side_effect=exc),
+            patch("time.sleep"),
+            pytest.raises(RommServerError) as exc_info,
+        ):
             plugin._http_adapter.request("/api/test")
         assert exc_info.value.status_code == 500
 
     def test_preserves_cause_chain(self, plugin):
         _setup_plugin(plugin)
         original = ConnectionRefusedError("refused")
-        with patch("urllib.request.urlopen", side_effect=original), pytest.raises(RommConnectionError) as exc_info:
+        with (
+            patch("urllib.request.urlopen", side_effect=original),
+            patch("time.sleep"),
+            pytest.raises(RommConnectionError) as exc_info,
+        ):
             plugin._http_adapter.request("/api/test")
         assert exc_info.value.__cause__ is original
 
@@ -1501,7 +1514,11 @@ class TestRommJsonRequestErrors:
 
     def test_timeout_raises_timeout_error(self, plugin):
         _setup_plugin(plugin)
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")), pytest.raises(RommTimeoutError):
+        with (
+            patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")),
+            patch("time.sleep"),
+            pytest.raises(RommTimeoutError),
+        ):
             plugin._http_adapter.put_json("/api/saves/1", {"data": 1})
 
 
@@ -2159,6 +2176,7 @@ class TestDownloadTimeout:
 
         with (
             patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("time.sleep"),
             pytest.raises(RommTimeoutError, match="stalled") as exc_info,
         ):
             adapter.download("/roms/big.zip", dest)
@@ -2237,6 +2255,7 @@ class TestDownloadTimeout:
 
         with (
             patch("urllib.request.urlopen", side_effect=TimeoutError("connection timed out")),
+            patch("time.sleep"),
             pytest.raises(RommTimeoutError),
         ):
             adapter.download("/roms/game.zip", dest)
@@ -2247,6 +2266,7 @@ class TestDownloadTimeout:
         dest = str(tmp_path / "rom.zip")
         with (
             patch("urllib.request.urlopen", side_effect=urllib.error.URLError(TimeoutError("connection timed out"))),
+            patch("time.sleep"),
             pytest.raises(RommTimeoutError),
         ):
             adapter.download("/roms/game.zip", dest)
