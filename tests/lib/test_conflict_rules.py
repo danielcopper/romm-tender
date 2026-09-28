@@ -150,12 +150,16 @@ async def test_the_prune_rule_holds_an_operation_named_after_the_endpoint_for_th
     assert rules.conflicts.conflicting_operations == 0
 
 
+async def _raise_inside_a_prune_block(rules: _Rules) -> None:
+    async with rules.rules.hold("the_endpoint", prune=True):
+        raise RuntimeError("boom")
+
+
 async def test_the_operation_is_released_when_the_block_raises():
     rules = _Rules()
 
     with pytest.raises(RuntimeError, match="boom"):
-        async with rules.rules.hold("the_endpoint", prune=True):
-            raise RuntimeError("boom")
+        await _raise_inside_a_prune_block(rules)
 
     assert rules.conflicts.conflicting_operations == 0
 
