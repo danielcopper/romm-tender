@@ -145,16 +145,38 @@ _MODE_CHARACTERS = frozenset("rwxabt+")
 _WRITING_MODE_CHARACTERS = frozenset("wax+")
 
 
-def _opens_for_writing(call: ast.Call) -> bool:
-    candidates = [*call.args, *(keyword.value for keyword in call.keywords if keyword.arg == "mode")]
-    return any(
+def _is_writing_mode(node: ast.expr) -> bool:
+    return (
         isinstance(node, ast.Constant)
         and isinstance(node.value, str)
         and node.value != ""
         and set(node.value) <= _MODE_CHARACTERS
         and not _WRITING_MODE_CHARACTERS.isdisjoint(node.value)
-        for node in candidates
     )
+
+
+def _opens_for_writing(call: ast.Call) -> bool:
+    """Whether *call* may open for writing, judged closed where its mode cannot be read.
+
+    From the second argument on, anything but a constant counts, and so does a
+    constant second argument that is not a string: that is where ``open`` takes
+    its mode and ``os.open`` its flags (``os.O_WRONLY | os.O_CREAT``, or the
+    integer they add up to). A ``mode=`` that is not a constant, any
+    ``flags=``, and an argument unpacked with ``*`` or ``**`` count too.
+    """
+    for index, node in enumerate(call.args):
+        if isinstance(node, ast.Starred) or _is_writing_mode(node):
+            return True
+        if index >= 1 and not isinstance(node, ast.Constant):
+            return True
+        if index == 1 and isinstance(node, ast.Constant) and not isinstance(node.value, str):
+            return True
+    for keyword in call.keywords:
+        if keyword.arg is None or keyword.arg == "flags":
+            return True
+        if keyword.arg == "mode" and (not isinstance(keyword.value, ast.Constant) or _is_writing_mode(keyword.value)):
+            return True
+    return False
 
 
 class TestOnlyTheInstallerWritesTheRecord:
@@ -163,11 +185,12 @@ class TestOnlyTheInstallerWritesTheRecord:
     Read off the syntax tree, so what these see is a name and a call. Two
     modules may name the record, and only the adapter's calls are read:
     ``domain/update_outcome.py``, the constant's home, is not. A call is judged
-    by the name it is reached through, and an ``open`` by a mode written as a
-    string constant. All of these pass: a write under a name not in the list,
-    a mode computed at runtime, a record path assembled from pieces or handed
-    in from elsewhere, a write through a helper in another module, ``getattr``
-    and a subprocess.
+    by the name it is reached through, and an ``open`` by its mode and flags,
+    counted as a write wherever they cannot be read off the call. All of these
+    pass: a write under a name not in the list, a runtime mode passed as
+    ``Path.open``'s first argument, a record path assembled from pieces or
+    handed in from elsewhere, a write through a helper in another module,
+    ``getattr`` and a subprocess.
     """
 
     def test_no_backend_module_but_the_adapter_and_the_constant_s_home_names_the_record(self):
@@ -179,7 +202,7 @@ class TestOnlyTheInstallerWritesTheRecord:
 
         assert naming == {"adapters/update_failure.py", "domain/update_outcome.py"}
 
-    def test_the_adapter_calls_nothing_that_writes_moves_or_removes_a_file(self):
+    def test_the_adapter_calls_nothing_named_like_a_write_move_or_removal(self):
         tree = ast.parse(_ADAPTER.read_text(encoding="utf-8"))
         calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
 

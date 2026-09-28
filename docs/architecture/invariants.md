@@ -42,12 +42,14 @@ Format: **invariant** — tier — enforced by.
   name `UPDATE_FAILURE_FILENAME`, by name, attribute or import, or carry the literal outside a docstring; and the
   adapter may call nothing named like a write, move or removal (`write`, `unlink`, `remove`, `rename`, `replace`, …) and
   may `open` nothing with a mode string that holds `w`, `a`, `x` or `+` — read wherever it stands, since `open` takes
-  the mode second and `Path.open` first, or as `mode=`. It sees names, calls and string constants, so it misses a call
-  in `domain/update_outcome.py`, which may name the record and whose calls it does not read, a write under a name not on
-  its list, a mode computed at runtime, a record path assembled from pieces or handed in from elsewhere, a write through
-  a helper in another module, a call reached through `getattr`, and a subprocess. The installer's half — the write on a
-  rollback, before the restored version starts, and the removal once a later update's new version answered — is pinned
-  by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
+  the mode second and `Path.open` first, or as `mode=`. What it cannot read counts as a write: anything but a constant
+  from the second argument on, a constant second argument that is not a string (`os.open`'s flags), a `mode=` that is
+  not a constant, any `flags=`, and an argument unpacked with `*` or `**`. It sees names, calls and constants, so it
+  misses a call in `domain/update_outcome.py`, which may name the record and whose calls it does not read, a write under
+  a name not on its list, a runtime mode passed as `Path.open`'s first argument, a record path assembled from pieces or
+  handed in from elsewhere, a write through a helper in another module, a call reached through `getattr`, and a
+  subprocess. The installer's half — the write on a rollback, before the restored version starts, and the removal once a
+  later update's new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
