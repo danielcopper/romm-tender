@@ -1721,6 +1721,10 @@ class TestAnUpdateThatDoesNotStart:
         assert _refusals(result.stderr) == [
             f"install.sh: update to {_NEW} failed, and {_VERSION} has not answered since the rollback either"
         ]
+        assert (
+            f"  what both logged is in {machine.state}/backend.log, "
+            "and a start that failed early only in journalctl --user -u romm-tender"
+        ) in result.stderr.splitlines()
         assert _tree_version(machine.code) == _VERSION
         assert machine.failure_record.is_file()
 
@@ -1980,6 +1984,20 @@ class TestRollingBackByHand:
         assert _tree_version(machine.old) == _VERSION
         assert not machine.backup.exists()
         assert {entry.name: entry.read_bytes() for entry in aside.iterdir()} == kept
+
+    def test_a_previous_version_that_does_not_answer_says_where_to_look(self, machine):
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        result = machine.run("--rollback", STUB_BACKEND="up", STUB_BROKEN_VERSIONS=_VERSION)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: {_VERSION} has not answered since the rollback"]
+        assert (
+            f"  what it logged is in {machine.state}/backend.log, "
+            "and a start that failed early only in journalctl --user -u romm-tender"
+        ) in result.stderr.splitlines()
+        assert _tree_version(machine.code) == _VERSION
 
     def test_it_records_no_failure(self, machine):
         """Going back by hand is a choice, not an update that failed."""

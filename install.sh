@@ -1967,7 +1967,7 @@ roll_back_the_update() {
     record_update_failure "$new" "$previous"
     if ! wait_for_version "$previous"; then
         abort "update to $new failed, and $previous has not answered since the rollback either" \
-            "what both logged is in $(tilde "$STATE/backend.log")"
+            "what both logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME"
     fi
     ANSWERED="yes"
     ROLLED_BACK="yes"
@@ -2030,7 +2030,7 @@ do_rollback() {
     row_start "$SERVICE"
     row_detail "$SERVICE" "waiting for $previous to answer"
     wait_for_version "$previous" ||
-        abort "$previous has not answered since the rollback" "what it logged is in $(tilde "$STATE/backend.log")"
+        abort "$previous has not answered since the rollback" "what it logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME"
     ANSWERED="yes"
     row_detail "$SERVICE" "$(service_state)"
     row_end "$SERVICE" ok
