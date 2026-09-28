@@ -32,7 +32,7 @@ _HEX = "ab34" * 16
 
 def _release(version: str, digest: str = _HEX) -> LatestRelease:
     url = f"https://x.test/releases/download/tender-v{version}/romm-tender-{version}.tar.gz"
-    return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest=digest))
+    return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest=digest, checksum_url=f"{url}.sha256"))
 
 
 def _untarred(version: str) -> LatestRelease:
@@ -127,6 +127,9 @@ class TestWhetherAnUpdateIsAvailable:
         stored = _stored(uow_factory)
         assert stored["tarball_url"] == "https://x.test/releases/download/tender-v0.34.0/romm-tender-0.34.0.tar.gz"
         assert stored["digest"] == _HEX
+        assert stored["checksum_url"] == (
+            "https://x.test/releases/download/tender-v0.34.0/romm-tender-0.34.0.tar.gz.sha256"
+        )
 
 
 class TestAReleaseWithoutItsTarball:
@@ -179,7 +182,13 @@ class TestTheDigest:
             uow.kv_config.set(
                 LAST_CHECK_KEY,
                 json.dumps(
-                    {"checked_at": clock.time(), "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX}
+                    {
+                        "checked_at": clock.time(),
+                        "version": "0.34.0",
+                        "tarball_url": "https://x.test/t",
+                        "digest": _HEX,
+                        "checksum_url": "https://x.test/t.sha256",
+                    }
                 ),
             )
         service, releases, _, _ = _make(latest=None, clock=clock, uow_factory=uow_factory)
@@ -188,6 +197,28 @@ class TestTheDigest:
 
         assert releases.calls == 0
         assert notice["available"] is True
+
+    async def test_a_release_stored_without_its_checksum_address_raises_no_card_until_the_next_check(self):
+        """Stored before the checksum file was required: the stamp still holds the next read off."""
+        uow_factory = FakeUnitOfWorkFactory()
+        clock = FakeClock()
+        with uow_factory() as uow:
+            uow.kv_config.set(
+                LAST_CHECK_KEY,
+                json.dumps(
+                    {"checked_at": clock.time(), "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX}
+                ),
+            )
+        service, releases, _, _ = _make(latest=_release("0.34.0"), clock=clock, uow_factory=uow_factory)
+
+        notice = await service.get_update_notice()
+
+        assert releases.calls == 0
+        assert notice["available"] is False
+        assert notice["latest_version"] is None
+
+        clock.advance(_A_DAY)
+        assert (await service.get_update_notice())["available"] is True
 
     async def test_a_stored_release_without_a_valid_digest_raises_no_card(self):
         uow_factory = FakeUnitOfWorkFactory()

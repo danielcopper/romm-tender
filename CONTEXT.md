@@ -1067,11 +1067,12 @@ warning, alert.
 ### Available release / installed program
 
 An **available release** is a Tender release a user could install: GitHub calls it latest, its tag is
-`tender-v<version>`, and its `romm-tender-<version>.tar.gz` is attached with a valid sha256 `digest`. A release
-published without the tarball yet — the assets job uploads it minutes later — is not available, and neither is one whose
-tarball carries no valid digest, since it could not be verified. The **update notice** on Main names only an available
-release that is strictly newer than the running version and not the version the user dismissed. The **installed
-program** is the process the installed service runs, the one an update can replace; a run from a checkout checks and
-shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which process is
-the installed program; `services/update_check.py` keeps the last available release a check saw and decides whether the
-notice shows. _Avoid_: "new version" for a release that is merely published.
+`tender-v<version>`, its `romm-tender-<version>.tar.gz` is attached with a valid sha256 `digest`, and the
+`romm-tender-<version>.tar.gz.sha256` file the installer verifies against is attached beside it. A release published
+without those files yet — the assets job uploads them minutes later — is not available, and neither is one whose tarball
+carries no valid digest or has no checksum file, since it could not be verified. The **update notice** on Main names
+only an available release that is strictly newer than the running version and not the version the user dismissed. The
+**installed program** is the process the installed service runs, the one an update can replace; a run from a checkout
+checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
+process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
+whether the notice shows. _Avoid_: "new version" for a release that is merely published.

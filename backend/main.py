@@ -894,8 +894,8 @@ class Plugin:
 
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``available`` is the card itself: a
-        newer release with its tarball attached exists, the user has not
-        dismissed that exact version, and the check is switched on. ``newer`` is
+        newer release with its tarball and checksum file attached exists, the
+        user has not dismissed that exact version, and the check is switched on. ``newer`` is
         the first of those alone, for the Settings section that states the
         versions whether or not the card was dismissed. ``installed_program``
         says whether this process is the installed program an update could

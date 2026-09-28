@@ -1168,10 +1168,11 @@ export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_pl
 /**
  * What the backend knows about a newer release of this program.
  *
- * `available` is the card on Main: a newer release with its tarball attached
- * exists, this exact version was not dismissed, and the check is switched on.
- * `newer` is the first of those alone, for the Settings section, which states
- * the versions whether or not the card was dismissed. Every failure is silent.
+ * `available` is the card on Main: a newer release with its tarball and
+ * checksum file attached exists, this exact version was not dismissed, and the
+ * check is switched on. `newer` is the first of those alone, for the Settings
+ * section, which states the versions whether or not the card was dismissed.
+ * Every failure is silent.
  */
 export interface UpdateNotice {
   available: boolean;

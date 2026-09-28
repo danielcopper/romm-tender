@@ -127,8 +127,13 @@ class TestSha256Hex:
 
 _RELEASE = LatestRelease(
     version="0.34.0",
-    tarball=ReleaseTarball(url="https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz", digest=_HEX),
+    tarball=ReleaseTarball(
+        url="https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz",
+        digest=_HEX,
+        checksum_url="https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz.sha256",
+    ),
 )
+_SUM = "https://x.test/t.sha256"
 
 
 class TestStoredCheck:
@@ -137,12 +142,42 @@ class TestStoredCheck:
         assert decode_update_check(encode_update_check(check)) == check
 
     def test_a_stored_release_with_a_valid_digest_reads_back_available(self):
-        raw = json.dumps({"checked_at": 1.0, "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX})
+        raw = json.dumps(
+            {
+                "checked_at": 1.0,
+                "version": "0.34.0",
+                "tarball_url": "https://x.test/t",
+                "digest": _HEX,
+                "checksum_url": _SUM,
+            }
+        )
         decoded = decode_update_check(raw)
         assert decoded is not None
         assert decoded.release == LatestRelease(
-            version="0.34.0", tarball=ReleaseTarball(url="https://x.test/t", digest=_HEX)
+            version="0.34.0", tarball=ReleaseTarball(url="https://x.test/t", digest=_HEX, checksum_url=_SUM)
         )
+
+    def test_the_checksum_address_is_stored_beside_the_tarball_s(self):
+        stored = json.loads(encode_update_check(UpdateCheck(checked_at=1.0, release=_RELEASE)))
+        assert stored["checksum_url"] == "https://x.test/tender-v0.34.0/romm-tender-0.34.0.tar.gz.sha256"
+
+    @pytest.mark.parametrize("checksum_url", [None, "", 7, ["https://x.test/t.sha256"]])
+    def test_a_stored_release_without_a_checksum_address_is_dropped_but_the_timestamp_stands(self, checksum_url):
+        raw = json.dumps(
+            {
+                "checked_at": 1.0,
+                "version": "0.34.0",
+                "tarball_url": "https://x.test/t",
+                "digest": _HEX,
+                "checksum_url": checksum_url,
+            }
+        )
+        assert decode_update_check(raw) == UpdateCheck(checked_at=1.0, release=None)
+
+    def test_a_value_stored_before_the_checksum_address_was_kept_reads_as_no_release(self):
+        """It names no file to verify against, so the next check has to find one before a card may show."""
+        raw = json.dumps({"checked_at": 1.0, "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": _HEX})
+        assert decode_update_check(raw) == UpdateCheck(checked_at=1.0, release=None)
 
     def test_round_trips_a_check_that_never_found_one(self):
         check = UpdateCheck(checked_at=1757500000.0, release=None)
@@ -180,10 +215,18 @@ class TestStoredCheck:
         ],
     )
     def test_a_release_with_nothing_to_download_is_dropped_but_the_timestamp_stands(self, stored):
-        decoded = decode_update_check(json.dumps({"checked_at": 1757500000.0, **stored}))
+        decoded = decode_update_check(json.dumps({"checked_at": 1757500000.0, "checksum_url": _SUM, **stored}))
         assert decoded == UpdateCheck(checked_at=1757500000.0, release=None)
 
     @pytest.mark.parametrize("digest", ["", 7, None, "ab34cd", _HEX.upper(), f"sha256:{_HEX}", _HEX + "0"])
     def test_a_stored_release_without_a_valid_digest_is_dropped_but_the_timestamp_stands(self, digest):
-        raw = json.dumps({"checked_at": 1.0, "version": "0.34.0", "tarball_url": "https://x.test/t", "digest": digest})
+        raw = json.dumps(
+            {
+                "checked_at": 1.0,
+                "version": "0.34.0",
+                "tarball_url": "https://x.test/t",
+                "digest": digest,
+                "checksum_url": _SUM,
+            }
+        )
         assert decode_update_check(raw) == UpdateCheck(checked_at=1.0, release=None)

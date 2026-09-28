@@ -76,11 +76,15 @@ class ReleaseTarball:
 
     ``url`` names one release rather than whatever is newest, so it stays paired
     with ``digest``, the lowercase sha256 hex GitHub stated for that same asset.
-    A tarball with no such digest cannot be verified, so it is not one.
+    ``checksum_url`` is where that release's ``<tarball>.sha256`` asset is
+    downloaded from — the file the installer verifies against. A tarball with no
+    such digest, or with no such file beside it, cannot be verified, so it is
+    not one.
     """
 
     url: str
     digest: str
+    checksum_url: str
 
 
 @dataclass(frozen=True)
@@ -88,8 +92,8 @@ class LatestRelease:
     """The release GitHub calls latest, in this program's vocabulary.
 
     ``tarball`` is ``None`` while the release carries no tarball with a sha256
-    digest — the tarball is attached minutes after the release is published —
-    and such a release is not available to anyone.
+    digest and its ``.sha256`` file beside it — both are attached minutes after
+    the release is published — and such a release is not available to anyone.
     """
 
     version: str
@@ -148,6 +152,10 @@ def _is_sha256_hex(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and _SHA256_HEX_RE.fullmatch(value) is not None
 
 
+def _is_nonempty_str(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and bool(value)
+
+
 def encode_update_check(check: UpdateCheck) -> str:
     """Render *check* as the JSON text the ``kv_config`` row holds."""
     release = check.release
@@ -158,6 +166,7 @@ def encode_update_check(check: UpdateCheck) -> str:
             "version": release.version if release is not None else None,
             "tarball_url": tarball.url if tarball is not None else None,
             "digest": tarball.digest if tarball is not None else None,
+            "checksum_url": tarball.checksum_url if tarball is not None else None,
         }
     )
 
@@ -168,9 +177,10 @@ def decode_update_check(raw: str | None) -> UpdateCheck | None:
     ``None`` means "no check has run", so every unusable value — absent, empty,
     not JSON, not an object, no numeric ``checked_at`` — collapses onto it and
     the next call simply checks again. A stored release lacking a version, a
-    tarball address or a sha256 digest is dropped on its own: the timestamp is
-    still a true statement about when the last check ran, and a release with
-    nothing to download and verify is not an available one.
+    tarball address, a sha256 digest or a checksum address is dropped on its
+    own: the timestamp is still a true statement about when the last check ran,
+    and a release with nothing to download and verify is not an available one.
+    That includes a value stored before the checksum address was recorded.
     """
     if not raw:
         return None
@@ -186,7 +196,15 @@ def decode_update_check(raw: str | None) -> UpdateCheck | None:
     version = decoded.get("version")
     url = decoded.get("tarball_url")
     digest = decoded.get("digest")
+    checksum_url = decoded.get("checksum_url")
     release = None
-    if isinstance(version, str) and version and isinstance(url, str) and url and _is_sha256_hex(digest):
-        release = LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest=digest))
+    if (
+        _is_nonempty_str(version)
+        and _is_nonempty_str(url)
+        and _is_sha256_hex(digest)
+        and _is_nonempty_str(checksum_url)
+    ):
+        release = LatestRelease(
+            version=version, tarball=ReleaseTarball(url=url, digest=digest, checksum_url=checksum_url)
+        )
     return UpdateCheck(checked_at=float(checked_at), release=release)

@@ -1624,16 +1624,18 @@ identity survive. This heals drift from every cause at the next plugin load.
 The service answers one question — is a newer Tender release out — and stays silent whenever it cannot say. It asks
 through `LatestReleaseFn`, whose adapter reads GitHub's "latest release" route: drafts and pre-releases are excluded by
 that route, a tag other than `tender-v<version>` is not a Tender release, and the release counts as **available** only
-once its `romm-tender-<V>.tar.gz` asset is attached AND GitHub states a valid sha256 `digest` for it (64 hex digits
-after `sha256:`): a tarball that cannot be verified before an install makes the release not available, and a stored
-answer without a valid digest is dropped when it is read back. The assets job uploads the tarball minutes after the
-release is published, so for that window the release is read, answered and passed over: the last available release the
-checks found stays standing, and a check that reached nothing at all does the same.
+once its `romm-tender-<V>.tar.gz` asset is attached, GitHub states a valid sha256 `digest` for it (64 hex digits after
+`sha256:`), AND the `romm-tender-<V>.tar.gz.sha256` asset the installer verifies against is attached beside it: a
+tarball that cannot be verified before an install makes the release not available, and a stored answer without a valid
+digest or without the checksum file's address is dropped when it is read back. The assets job uploads both files minutes
+after the release is published, so for that window the release is read, answered and passed over: the last available
+release the checks found stays standing, and a check that reached nothing at all does the same.
 
 - **At most once a day, when the panel loads.** The last answer lives in `kv_config` under `update_check_last_seen` —
-  its version, the tarball's `browser_download_url` and the lowercase sha256 hex of its `digest`, which name one release
-  and stay paired, plus the time of the last attempt. The stamp records the ATTEMPT, so an offline start does not pay
-  the ten-second timeout at every panel load; a stamp dated in the future is due at once.
+  its version, the tarball's `browser_download_url`, the lowercase sha256 hex of its `digest` and the checksum file's
+  `browser_download_url` (`checksum_url`), which name one release and stay together, plus the time of the last attempt.
+  The stamp records the ATTEMPT, so an offline start does not pay the ten-second timeout at every panel load; a stamp
+  dated in the future is due at once.
 - **The user's two keys** are in `settings.json` and are written only through the `SettingsPersister`:
   `update_check_enabled` (absent means on) and `update_notice_dismissed_version`, which holds a version rather than a
   flag so the next release raises the card again. With the switch off nothing is requested — not by the daily check and
@@ -1664,7 +1666,7 @@ through a seam. Selected adapters:
 | `romm/romm_api.py`                                                         | `RommApiAdapter` — RomM REST surface (saves, ROMs, platforms, firmware, devices, play-sessions) over the HTTP transport                                                                                                                                                                                                                                                                                                                        |
 | `steam_config.py`                                                          | `SteamConfigAdapter` — Steam VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                                                                                                                 |
 | `steamgriddb.py`                                                           | `SteamGridDbAdapter` — SteamGridDB REST client                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `github_releases.py`                                                       | `GithubReleaseAdapter` — `LatestReleaseFn`: GitHub's "latest release" route, the `tender-v` tag and the release's `romm-tender-<V>.tar.gz` asset with its `digest`; every failure answers `None`                                                                                                                                                                                                                                               |
+| `github_releases.py`                                                       | `GithubReleaseAdapter` — `LatestReleaseFn`: GitHub's "latest release" route, the `tender-v` tag and the release's `romm-tender-<V>.tar.gz` asset with its `digest` and its `.sha256` asset; every failure answers `None`                                                                                                                                                                                                                       |
 | `sgdb_artwork_cache.py`                                                    | `SgdbArtworkCacheAdapter` — on-disk SGDB artwork cache                                                                                                                                                                                                                                                                                                                                                                                         |
 | `cover_art_file_store.py`                                                  | `CoverArtFileStoreAdapter` — RomM cover art I/O across the per-ROM cover cache and the Steam grid dir (download, `copy_file` publish/seed, read, prune)                                                                                                                                                                                                                                                                                        |
 | `persistence.py`                                                           | `PersistenceAdapter` + per-domain persister adapters — `settings.json` read/write plus the one-time legacy `save_sync_state.json` read that feeds the bootstrap settings fold                                                                                                                                                                                                                                                                  |
