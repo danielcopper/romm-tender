@@ -250,9 +250,10 @@ async def test_an_event_nobody_heard_gives_its_lease_back():
 
 async def test_an_event_whose_emit_raises_gives_its_lease_back():
     rules = _Rules()
+    emit = _Emit(raises=RuntimeError("transport rejected event"))
 
     with pytest.raises(RuntimeError, match="transport rejected event"):
-        await rules.rules.emit_under_lease("download_complete", _Emit(raises=RuntimeError("transport rejected event")))
+        await rules.rules.emit_under_lease("download_complete", emit)
 
     assert rules.conflicts.conflicting_operations == 0
 
