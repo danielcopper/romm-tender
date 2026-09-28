@@ -81,21 +81,7 @@ def _make_testable_plugin():
     from main import Plugin
 
     class TestablePlugin(Plugin):
-        """Plugin subclass that declares test-only attributes for type safety.
-
-        Genuinely test-fixture-only attributes live here: ``_fake_api``,
-        ``_resolve_system``, ``_save_settings``, plus the Unit-of-Work
-        handles tests seed and assert against (``_uow``, ``_uow_factory``),
-        the prune conflicts the services a test wires share
-        (``_prune_conflicts``) and the per-test ``_tmp_path`` scratch dir.
-        Test-fixture handles shared with production wiring (``_state``,
-        ``_http_adapter``, ...) are declared on ``Plugin`` itself as
-        ``Any``-typed annotation slots so test-only construction paths
-        type-check uniformly.
-        ``_save_settings`` is a test-only handle for the settings dict tests
-        thread into ``SaveService`` / ``PlaytimeService``; production threads
-        its settings store as ``self.settings``, never under this name.
-        """
+        """Plugin subclass that declares test-only attributes for type safety."""
 
         _fake_api: Any
         _resolve_system: Any

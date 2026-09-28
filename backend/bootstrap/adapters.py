@@ -224,11 +224,7 @@ class RuntimeAdaptersBundle:
 
 @dataclass(frozen=True)
 class BootstrapHandles:
-    """Bootstrap outputs ``main.py`` binds on ``Plugin`` itself rather than handing to a service.
-
-    The bundles cover everything passed to ``wire_services``; what is here is
-    the debug logger ``Plugin._log_debug`` forwards to.
-    """
+    """Bootstrap outputs ``main.py`` binds on ``Plugin`` itself rather than handing to a service."""
 
     debug_logger: DebugLogger
 
@@ -237,18 +233,14 @@ class BootstrapHandles:
 class BootstrapResult:
     """Typed return shape for :func:`bootstrap`.
 
-    The four bundles carry every Protocol-typed seam and live state
-    dict that services need; :attr:`handles` carries the small set of
-    raw outputs only ``main.py`` itself binds (debug logger);
-    :attr:`directories` is the set this run was handed, passed back so
-    every consumer reads the same six fields rather than composing any
-    of them again; :attr:`launcher` says where the shortcut launcher
-    lives beneath the data root and whether this start got it there;
-    and :attr:`user_agent` is ``<package name>/<version>``, composed once,
-    which the outgoing User-Agent and the host's own identity both are. Together
-    they replace the historical untyped
-    ``dict`` return so every consumer is caught by basedpyright
-    instead of failing silently at runtime on a typo.
+    The four bundles carry every Protocol-typed seam and live state dict that
+    services need; :attr:`handles` carries what ``main.py`` binds on ``Plugin``
+    itself; :attr:`directories` is the set this run was handed, passed back so
+    every consumer reads the same seven fields rather than composing any of them
+    again; :attr:`launcher` is the launcher a shortcut built this run names, and
+    whether that is its home in the bin root; and :attr:`user_agent` is
+    ``<package name>/<version>``, composed once and used both as the outgoing
+    User-Agent and as the identity the host answers under.
     """
 
     adapters: AdapterBundle
@@ -258,10 +250,6 @@ class BootstrapResult:
     handles: BootstrapHandles
     directories: AppDirectories
     launcher: ShortcutLauncher
-    # ``<package name>/<version>`` from ``domain/identity.py``, the same string
-    # every outgoing request carries as its User-Agent. The host answers under
-    # it, so composing it again in the entry point would be a second spelling of
-    # the program's identity, free to drift from the one every request carries.
     user_agent: str
 
 
@@ -300,9 +288,8 @@ def bootstrap(
     -------
     :class:`BootstrapResult`
         Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``, ``directories``) plus the small set of
-        Plugin-only handles ``main.py`` itself binds
-        (``handles.debug_logger``).
+        ``stores``, ``callbacks``, ``directories``) plus the ``handles``
+        ``main.py`` binds on ``Plugin`` itself.
     """
     # SystemClock is dependency-free; construct it first so the single shared
     # instance threads into PersistenceAdapter (corrupt-settings backup stamp)

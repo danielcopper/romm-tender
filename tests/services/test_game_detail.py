@@ -403,9 +403,8 @@ class TestGetCachedGameDetailFound:
 
 
 class TestGetCachedGameDetailLeavesTheLoopThread:
-    """Every game page opens this read, and it is neither trivial nor bounded — a
-    UoW, a stat and a directory listing. Run on the loop thread, it stalls
-    everything else the backend is doing for as long as the storage takes to answer."""
+    """The read runs on a worker, never on the loop thread; why is on
+    ``GameDetailService.get_cached_game_detail``."""
 
     @pytest.mark.asyncio
     async def test_the_read_runs_on_a_worker_thread(self, plugin, game_detail_service):

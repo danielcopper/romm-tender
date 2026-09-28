@@ -1,4 +1,4 @@
-"""A recording event sink whose ``emit`` is the ``EventEmitter`` plugin tests hand ``_main``."""
+"""A recording event sink; its ``emit`` is the ``EventEmitter`` a test hands ``Plugin._main``."""
 
 from __future__ import annotations
 

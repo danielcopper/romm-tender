@@ -44,12 +44,13 @@ from services.protocols import EventEmitter
 class Plugin:
     loop: asyncio.AbstractEventLoop
     # What the process hosting this backend knows about its own run. Set by the
-    # entry point once the build is through, for the one callable that reads it.
+    # entry point once the build is through, for the one endpoint that reads it
+    # (``get_host_status``).
     _host_status: HostStatus
 
     # Test-only attribute slots — production never sets or reads these. The
     # test suite constructs ``Plugin()`` bare and holds its own handles on it.
-    # Annotated because tests pass real adapters, ``MagicMock``s, or fakes
+    # Most are ``Any`` because tests pass real adapters, ``MagicMock``s, or fakes
     # interchangeably. Annotations alone do not create the attribute, so bare
     # access still raises ``AttributeError``.
     settings: dict[str, Any]
@@ -885,12 +886,6 @@ class Plugin:
 
     @route
     def dismiss_settings_reset_notice(self):
-        """Acknowledge the corrupt-settings reset, clearing the persistent marker.
-
-        The user's explicit ack in the QAM — pops ``_settings_reset_notice`` and
-        persists, so the banner and game-detail cards stay down across reloads.
-        Returns ``{"success": True}``.
-        """
         return self._settings_service.dismiss_settings_reset_notice()
 
     @route

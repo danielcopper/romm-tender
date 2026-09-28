@@ -424,14 +424,10 @@ class SettingsService:
     def get_settings_reset_notice(self) -> dict[str, Any]:
         """Report whether a corrupt ``settings.json`` was reset at boot.
 
-        Reads the persistent ``_settings_reset_notice`` marker from the live
-        settings dict (written by bootstrap when ``load_settings`` quarantined an
-        unparseable file). Returns ``{"pending": bool, "backed_up_to": str |
-        None}``. Non-consuming — the marker survives a plugin reload and is
-        cleared only by an explicit user acknowledgement in the QAM
-        (``dismiss_settings_reset_notice``), so the frontend banner + game-detail
-        cards stay up until the user dismisses. A clean boot returns
-        ``{"pending": False, "backed_up_to": None}``.
+        Returns ``{"pending": bool, "backed_up_to": str | None}`` from the
+        persistent ``_settings_reset_notice`` marker; a clean boot answers
+        ``{"pending": False, "backed_up_to": None}``. Non-consuming: only
+        ``dismiss_settings_reset_notice`` clears the marker.
         """
         notice = self._settings.get("_settings_reset_notice")
         return {"pending": notice is not None, "backed_up_to": (notice or {}).get("backed_up_to")}

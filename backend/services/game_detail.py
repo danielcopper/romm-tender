@@ -1,12 +1,12 @@
 """GameDetailService — game detail page data aggregation.
 
 Aggregates the synced-ROM registry, install record, cached save-sync state,
-firmware cache, cached ROM metadata, and achievement progress into a single
-response payload for the frontend game detail page. Reads the relational state
-from SQLite through the Unit of Work; the platform display name comes from the
-offline ``kv_config`` cache (not stored on the ROM — see ADR-0003). Cross-service
-reads (BIOS, achievements) go through callback-injected Protocols so the service
-stays independent of other service modules.
+cached ROM metadata, and achievement progress into a single response payload
+for the frontend game detail page. Reads the relational state from SQLite
+through the Unit of Work; the platform display name comes from the offline
+``kv_config`` cache (not stored on the ROM — see ADR-0003). Cross-service reads
+(BIOS, achievements) go through callback-injected Protocols so the service stays
+independent of other service modules.
 """
 
 from __future__ import annotations
@@ -57,13 +57,13 @@ class GameDetailServiceConfig:
     """Frozen wiring bundle handed to ``GameDetailService.__init__``.
 
     Holds the live settings dict, the loop the page's read is offloaded to,
-    runtime infrastructure, the clock seam, the SQLite Unit-of-Work factory (the read seam over the ``roms`` /
-    ``rom_installs`` / ``rom_save_sync_states`` / ``rom_metadata`` / ``kv_config``
-    aggregates), and the Protocol-typed reader adapters (``BiosChecker``,
-    ``AchievementsReader``, ``ActiveCoreReader``) GameDetailService consults to
-    assemble the game-detail payload. The active-core resolver answers "which
-    ``.so`` will this ROM launch with?" so the core-aware BIOS filter keys off
-    the per-game pin, not a platform default. ``path_exists`` /
+    runtime infrastructure, the clock seam, the SQLite Unit-of-Work factory (the
+    read seam over the ``roms`` / ``rom_installs`` / ``rom_save_sync_states`` /
+    ``rom_metadata`` / ``kv_config`` aggregates), and the Protocol-typed reader
+    adapters. ``AchievementsReader`` feeds the game-detail payload;
+    ``BiosChecker`` and ``ActiveCoreReader`` answer the page's separate BIOS
+    question, the latter naming the emulator this ROM launches with so the BIOS
+    filter keys off the per-game pin, not a platform default. ``path_exists`` /
     ``retrodeck_paths`` / ``resolve_system`` are the single ``stat`` the page
     runs on an uninstalled ROM's target path; ``candidate_probe`` is the one
     ``readdir`` beside it, answering whether the same game is in the folder under
