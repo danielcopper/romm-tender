@@ -19,6 +19,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -262,3 +263,35 @@ class TestWhereItListens:
     def test_a_missing_directory_is_refused_before_anything_is_bound(self, tmp_path):
         with pytest.raises(SystemExit, match="mise run package"):
             fake_github.main(["--dir", str(tmp_path / "nowhere"), "--port", "0"])
+
+
+class TestStopping:
+    """A Ctrl-C in a terminal reaches the server twice under ``mise run``.
+
+    The terminal signals the whole foreground process group, and mise forwards
+    the SIGINT it received to its child as well; a SIGTERM reaches it from mise
+    or from ``kill``. Every one of those is the way this server is meant to end.
+    """
+
+    @pytest.mark.parametrize(
+        "signals",
+        [(signal.SIGINT,), (signal.SIGINT, signal.SIGINT), (signal.SIGTERM,), (signal.SIGTERM, signal.SIGINT)],
+        ids=["sigint", "sigint-twice", "sigterm", "sigterm-then-sigint"],
+    )
+    def test_a_stop_signal_ends_it_cleanly(self, build, signals):
+        process = subprocess.Popen(
+            [sys.executable, str(_SCRIPT), "--dir", str(build), "--latest", _NEW, "--port", "0"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert process.stdout is not None
+            assert process.stdout.readline().startswith("Serving ")
+            for signum in signals:
+                process.send_signal(signum)
+            _, stderr = process.communicate(timeout=10)
+        finally:
+            process.kill()
+
+        assert (process.returncode, stderr) == (0, "")

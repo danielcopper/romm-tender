@@ -39,6 +39,7 @@ import hashlib
 import json
 import pathlib
 import re
+import signal
 import sys
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -203,6 +204,27 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
 
+class _Stopped(Exception):
+    """A stop signal arrived: the way this server is meant to end, not a failure."""
+
+
+def _stop(signum: int, frame: object) -> None:
+    # Under ``mise run`` one Ctrl-C arrives twice — the terminal signals the
+    # whole process group and mise forwards the SIGINT it got to its child — so
+    # every later signal is swallowed before the first one unwinds, or the
+    # second lands inside ``server_close`` and the process dies of it with a
+    # traceback. Swallowed by a handler rather than ``SIG_IGN``: a signal that
+    # already arrived and is dispatched after the switch finds no callable and
+    # CPython prints "ignored due to race condition" to stderr.
+    signal.signal(signal.SIGINT, _swallow)
+    signal.signal(signal.SIGTERM, _swallow)
+    raise _Stopped
+
+
+def _swallow(signum: int, frame: object) -> None:
+    """A stop signal after the first: the stop is under way already."""
+
+
 def build_server(directory: pathlib.Path, latest: str | None, port: int, faults: Faults) -> FakeGithubServer:
     """A server over *directory*, bound but not yet serving; port 0 takes a free one."""
     versions = find_versions(directory)
@@ -238,9 +260,11 @@ def main(argv: list[str] | None = None) -> int:
     for key, value in server.environment().items():
         print(f"  {key}={value}")
     sys.stdout.flush()
+    signal.signal(signal.SIGINT, _stop)
+    signal.signal(signal.SIGTERM, _stop)
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
+    except _Stopped:
         pass
     finally:
         server.server_close()
