@@ -272,10 +272,11 @@ marked `[..]`, before the line it ends on; so a log holds the whole run, the wai
 `waiting for 1.3.0 to answer` — rather than only how each row ended.
 
 When the answer does not come, the installer stops the unit, puts the kept tree back and deletes the failed one, and
-restores the backup — deleting any of those database and settings files the backup does not hold. It then starts the
-previous version, waits for it the same way, says `update to <new> failed; back on <previous>` and exits non-zero. It
-never tries again on its own. It leaves `~/.local/state/romm-tender/update-failure.json`, written through a temporary
-file and renamed, with three keys:
+restores the backup — deleting any of those database and settings files the backup does not hold. It then writes
+`~/.local/state/romm-tender/update-failure.json`, through a temporary file and renamed, and only after that starts the
+previous version, so the record is there when that version logs the rollback at its start. It waits for it the same way,
+says `update to <new> failed; back on <previous>` and exits non-zero, and never tries again on its own. A restore that
+fails ends the run before either: no record, and nothing started. The record has three keys:
 
 ```json
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }

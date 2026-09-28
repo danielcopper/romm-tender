@@ -1673,9 +1673,8 @@ restore_file() {
     fi
 }
 
-# The failed tree goes and the one it replaced comes back, with the data it had,
-# and the unit is started on it. The caller has stopped the unit; waiting for it
-# to answer is the caller's too.
+# The failed tree goes and the one it replaced comes back, with the data it had.
+# The caller has stopped the unit, and starting it again is the caller's too.
 revert_to_previous() {
     rm -rf "$CODE.new"
     [ ! -d "$CODE" ] || mv "$CODE" "$CODE.new"
@@ -1685,6 +1684,11 @@ revert_to_previous() {
         abort "could not put your data back from $(tilde "$BACKUP")" \
             "the earlier version is at $(tilde "$CODE") and the backup is untouched; copy its files back before starting $UNIT_NAME"
     fi
+}
+
+# Starts the unit on the tree revert_to_previous put back, with the unit file it
+# put back read in again. Waiting for it to answer is the caller's.
+start_the_reverted_unit() {
     systemctl --user daemon-reload || true
     systemctl --user start "$UNIT_NAME" || true
 }
@@ -1987,7 +1991,10 @@ roll_back_the_update() {
             "stop it with systemctl --user stop $UNIT_NAME, then run $(tilde "$CODE")/install.sh --rollback"
     fi
     revert_to_previous
+    # Before the start rather than after it: the restored version logs the
+    # rollback only as it starts, from the record it finds then.
     record_update_failure "$new" "$previous"
+    start_the_reverted_unit
     if ! wait_for_version "$previous"; then
         abort "update to $new failed, and $previous has not answered since the rollback either" \
             "what both logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME"
@@ -2045,6 +2052,7 @@ do_rollback() {
         abort "could not copy your data to $(tilde "$ROLLBACK_BACKUP")" "nothing was changed"
     fi
     revert_to_previous
+    start_the_reverted_unit
     UPDATE_STAGE=""
     row_detail "$INSTALLING" "$previous $ARROW $(tilde "$CODE")"
     row_sub "$INSTALLING" "your data from before the rollback is in $(tilde "$ROLLBACK_BACKUP")"

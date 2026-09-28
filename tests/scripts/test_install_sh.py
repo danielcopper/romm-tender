@@ -100,7 +100,10 @@ printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
 # STUB_ANSWERS_AS=<tree>=<answer> has a tree's backend answer as another
 # version. While the backend is up the unit is active, unless STUB_UNIT_ACTIVE
 # says otherwise. Every start and stop is logged with the version of the tree
-# it found.
+# it found, and with STUB_RECORD_SEEN_LOG every start also notes whether the
+# installer's record of a rolled-back update was already there. A broken
+# version run with STUB_UNREADABLE_BACKUP leaves the backup's settings.json
+# unreadable, so putting the data back fails.
 unit_value() {
     sed -n "s/^Environment=$1=//p" "$HOME/.config/systemd/user/romm-tender.service" 2> /dev/null
 }
@@ -124,6 +127,13 @@ backend_start() {
     local version
     version="$(tree_version)"
     printf 'start %s\\n' "$version" >> "$STUB_BACKEND_LOG"
+    if [ -n "${STUB_RECORD_SEEN_LOG:-}" ]; then
+        if [ -e "$(unit_value TENDER_STATE_DIR)/update-failure.json" ]; then
+            printf 'start %s with the record\\n' "$version" >> "$STUB_RECORD_SEEN_LOG"
+        else
+            printf 'start %s without it\\n' "$version" >> "$STUB_RECORD_SEEN_LOG"
+        fi
+    fi
     case " ${STUB_BROKEN_VERSIONS:-} " in
         *" $version "*)
             # As far as the data and no further: the database written to, a WAL
@@ -137,6 +147,7 @@ backend_start() {
             printf 'wal of %s\\n' "$version" > "$data/romm_sync.db-wal"
             printf 'shm of %s\\n' "$version" > "$data/romm_sync.db-shm"
             printf '{"written_by": "%s"}\\n' "$version" > "$config/settings.json"
+            [ -z "${STUB_UNREADABLE_BACKUP:-}" ] || chmod 000 "$data/update-backup/settings.json"
             return 0
             ;;
     esac
@@ -1741,6 +1752,44 @@ class TestAnUpdateThatDoesNotStart:
         failure = UpdateFailureFileAdapter(state_dir=str(machine.state), log_debug=print).read_update_failure()
         assert failure is not None
         assert (failure.attempted_version, failure.restored_version) == (_NEW, _VERSION)
+
+    def test_the_record_is_there_before_the_restored_version_starts(self, machine):
+        """The restored version logs the rollback as it starts, from the record it finds then."""
+        seen = machine.tmp_path / "record-seen.log"
+        _installed(machine)
+        machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+            STUB_RECORD_SEEN_LOG=str(seen),
+        )
+
+        assert seen.read_text(encoding="utf-8").splitlines() == [
+            f"start {_NEW} without it",
+            f"start {_VERSION} with the record",
+        ]
+
+    def test_a_restore_that_fails_records_nothing_and_starts_nothing(self, machine):
+        """The record says the update was rolled back; with the data not put back, it was not."""
+        _installed(machine)
+        _seed_data(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+            STUB_UNREADABLE_BACKUP="1",
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not put your data back from {machine.backup}"]
+        assert not machine.failure_record.exists()
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}", f"stop {_NEW}"]
 
     def test_it_never_tries_again_on_its_own(self, machine):
         """One start of the new tree, then the old one — the order a single attempt makes."""
