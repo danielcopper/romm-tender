@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 
+from ._harness import hold_migration_pending, hold_prune_active
 from ._seed import seed_group_member
 
 _GROUP = "igdb:100:99"
@@ -77,3 +78,23 @@ async def test_start_download_keeps_grandfathered_sibling(harness):
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(1) is not None  # grandfathered kept
         assert uow.rom_installs.get(2) is not None
+
+
+async def test_the_supersede_removes_a_sibling_while_the_remove_rom_endpoints_rules_hold(harness):
+    """The supersede removes through ``remove_rom_unchecked``, which no rule refuses.
+
+    The download that supersedes has answered for its own rules at its entry;
+    the removal inside it is part of that call, not a second one to be checked.
+    Driven on the service directly, with a migration pending and a cleanup's run
+    claim held, so only the removal's own rules could refuse.
+    """
+    seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=None, installed=True, file_name="old.gba")
+    seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=_APP_ID)
+    hold_migration_pending(harness)
+    hold_prune_active(harness)
+
+    refusal = await harness.plugin._download_service.supersede_sibling_installs(2)
+
+    assert refusal is None
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(1) is None

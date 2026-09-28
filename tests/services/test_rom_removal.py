@@ -7,7 +7,7 @@ import shutil
 import sys
 
 import pytest
-from _factories import _make_conflict_rules
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
@@ -67,7 +67,12 @@ def emitter() -> RecordingEmitter:
 
 
 @pytest.fixture
-def service(logger, queue_cleanup, rom_files, uow, emitter):
+def prune_conflicts():
+    return _make_prune_conflicts()
+
+
+@pytest.fixture
+def service(logger, queue_cleanup, rom_files, uow, emitter, prune_conflicts):
     return RomRemovalService(
         config=RomRemovalServiceConfig(
             logger=logger,
@@ -78,7 +83,7 @@ def service(logger, queue_cleanup, rom_files, uow, emitter):
             retrodeck_paths=FakeRetroDeckPaths(roms=_ROMS_BASE),
             download_queue_cleanup=queue_cleanup,
             uow_factory=FakeUnitOfWorkFactory(uow),
-            conflict_rules=_make_conflict_rules(),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
@@ -1344,3 +1349,145 @@ class TestRemovalProgressFrames:
         await asyncio.sleep(0)
 
         assert emitter.payloads("uninstall_progress") == []
+
+
+# ── The removal leases and the unchecked twin ─────────────────────────────────
+
+
+def _seed_installed_file(uow: FakeUnitOfWork, rom_files: FakeRomFileStore, rom_id: int, *, bound: bool = True) -> str:
+    rom_path = f"{_ROMS_BASE}/n64/game_{rom_id}.z64"
+    rom_files.files[rom_path] = b"rom"
+    with uow:
+        uow.roms.save(_make_rom(rom_id, bound=bound))
+        uow.rom_installs.save(_make_install(rom_id, file_path=rom_path))
+    return rom_path
+
+
+class TestTheRemoveRomLease:
+    """A removal that succeeded carries a ``rom_uninstall`` lease for the frontend's launch-options reset."""
+
+    async def test_a_removal_that_succeeded_carries_a_lease(self, service, uow, rom_files, prune_conflicts):
+        _seed_installed_file(uow, rom_files, 42)
+
+        result = await service.remove_rom(42)
+
+        assert result["success"] is True
+        assert result["prune_lease_token"].startswith("rom_uninstall:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    async def test_a_removal_that_failed_carries_none(self, service, prune_conflicts):
+        result = await service.remove_rom(42)
+
+        assert result["reason"] == "not_installed"
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_a_refused_removal_removes_nothing_and_carries_none(self, service, uow, rom_files, prune_conflicts):
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+        prune_conflicts.register_run("held-run")
+
+        result = await service.remove_rom(42)
+
+        assert result["reason"] == "prune_active"
+        assert "prune_lease_token" not in result
+        assert rom_path in rom_files.files
+        assert prune_conflicts.conflicting_operations == 0
+
+
+class TestRemoveRomUnchecked:
+    """The download service's sibling supersede removes through the twin, which no rule refuses."""
+
+    async def test_it_removes_while_every_rule_of_the_endpoint_holds(self, service, uow, rom_files, prune_conflicts):
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+        prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=True)
+
+        result = await service.remove_rom_unchecked(42)
+
+        assert result["success"] is True
+        assert rom_path not in rom_files.files
+
+    async def test_it_takes_no_lease(self, service, uow, rom_files, prune_conflicts):
+        _seed_installed_file(uow, rom_files, 42)
+
+        result = await service.remove_rom_unchecked(42)
+
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+
+class TestTheBulkUninstallLease:
+    """A bulk uninstall that ran and reports bound ``app_ids`` carries a ``bulk_uninstall`` lease.
+
+    The condition is ``app_ids``, not ``success``: a partial failure still
+    reports the ROMs whose files are gone, and the frontend resets their
+    launch commands under this lease.
+    """
+
+    async def test_a_run_that_reports_bound_app_ids_carries_a_lease(self, service, uow, rom_files, prune_conflicts):
+        _seed_installed_file(uow, rom_files, 1)
+
+        result = await service.uninstall_all_roms()
+
+        assert result["app_ids"] == [1001]
+        assert result["prune_lease_token"].startswith("bulk_uninstall:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    async def test_a_partial_failure_that_reports_bound_app_ids_carries_a_lease(
+        self, service, uow, rom_files, prune_conflicts
+    ):
+        _seed_installed_file(uow, rom_files, 1)
+        failing = _seed_installed_file(uow, rom_files, 2)
+        rom_files.remove_file_failures.add(failing)
+
+        result = await service.uninstall_all_roms()
+
+        assert result["success"] is False
+        assert result["app_ids"] == [1001]
+        assert result["prune_lease_token"].startswith("bulk_uninstall:")
+
+    async def test_a_run_that_reports_no_bound_app_id_carries_none(self, service, uow, rom_files, prune_conflicts):
+        _seed_installed_file(uow, rom_files, 1, bound=False)
+
+        result = await service.uninstall_all_roms()
+
+        assert result["success"] is True
+        assert result["app_ids"] == []
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_the_services_own_refusal_carries_none(self, service, uow, rom_files, prune_conflicts):
+        _seed_installed_file(uow, rom_files, 1)
+        service._removals_in_flight.add(1)
+
+        result = await service.uninstall_all_roms()
+
+        assert result["reason"] == "in_progress"
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("migration_pending", "sync_in_flight", "cleanup_running", "reason"),
+        [
+            (True, False, False, "blocked_by_migration"),
+            (False, True, False, "sync_active"),
+            (False, False, True, "prune_active"),
+        ],
+    )
+    async def test_a_refused_run_removes_nothing_and_carries_none(
+        self, service, uow, rom_files, prune_conflicts, migration_pending, sync_in_flight, cleanup_running, reason
+    ):
+        rom_path = _seed_installed_file(uow, rom_files, 1)
+        if cleanup_running:
+            prune_conflicts.register_run("held-run")
+        service._rules = _make_conflict_rules(
+            prune_conflicts=prune_conflicts, migration_pending=migration_pending, sync_in_flight=sync_in_flight
+        )
+
+        result = await service.uninstall_all_roms()
+
+        assert result["reason"] == reason
+        assert "app_ids" not in result
+        assert "prune_lease_token" not in result
+        assert rom_path in rom_files.files
+        assert prune_conflicts.conflicting_operations == 0

@@ -184,3 +184,26 @@ async def test_retain_holds_an_operation_until_the_detached_task_ends():
     await task
     await asyncio.gather(*rules.conflicts._release_tasks)
     assert rules.conflicts.conflicting_operations == 0
+
+
+async def test_a_lease_holds_off_a_cleanup_until_it_is_released_by_its_token():
+    rules = _Rules()
+
+    token = await rules.rules.acquire_lease("shortcut_removal")
+
+    assert token.startswith("shortcut_removal:")
+    assert await rules.conflicts.reserve_start() is not None
+    await rules.rules.release_lease(token)
+    assert rules.conflicts.conflicting_operations == 0
+    assert await rules.conflicts.reserve_start() is None
+
+
+async def test_a_lease_checks_no_rule():
+    """The lease is taken inside the call's own ``hold``, which has already answered."""
+    rules = _Rules(migration=True, sync=True, cleanup=True)
+
+    await rules.rules.acquire_lease("shortcut_removal")
+
+    assert rules.conflicts.conflicting_operations == 1
+    assert rules.migration.asked == 0
+    assert rules.sync.asked == 0
