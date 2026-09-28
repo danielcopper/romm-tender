@@ -141,16 +141,11 @@ def plugin(logger, home, data_dir):
     return p
 
 
-class TestPersistenceAttributeIsLoud:
-    """Regression for #350: dropped the lazy-property fallback.
-
-    Pre-``_main()`` access to ``self._persistence`` must raise
-    ``AttributeError`` instead of silently constructing a second
-    ``PersistenceAdapter`` instance.
-    """
+class TestUnsetSlotsAreLoud:
+    """A test-only slot on ``Plugin`` is an annotation, not an attribute: bare access raises."""
 
     def test_settings_persister_missing_on_bare_plugin(self):
-        """``_settings_persister`` is bound only by ``_main()``; bare access raises."""
+        """``_settings_persister`` is never set by production; bare access raises."""
         from main import Plugin
 
         bare = Plugin()
