@@ -136,10 +136,9 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
  * Ask the backend what the last update did, fill the store, and announce a
  * version that moved — to a later release, or back to an earlier one.
  *
- * The announcement is one toast. It waits until Steam can show it, because a
- * panel loaded straight after Steam restarted its JS context runs before then
- * (what it waits for, and for how long at most: `steamReadyForToasts.ts`). It
- * is acknowledged only after it was raised: the backend owes it once per
+ * The announcement is one toast. It waits until Steam can show it (what it
+ * waits for, how long at most, and why: `steamReadyForToasts.ts`). It is
+ * acknowledged only after it was raised: the backend owes it once per
  * process, so a panel reloaded by a Steam restart does not raise it a second
  * time. An acknowledgement that fails leaves it owed, and the next panel load
  * says it again — a repeat rather than a loss.

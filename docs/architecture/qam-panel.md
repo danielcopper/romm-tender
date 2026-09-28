@@ -749,10 +749,9 @@ The update announcement is the one condition shown as a toast rather than a card
 update, **Tender is back on X** after a return to an earlier release, raised once from that same read. The backend owes
 it once per process and the panel acknowledges it after raising it, so a Steam restart that reloads the panel does not
 raise it again ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)). It is the one toast
-that **waits until Steam can show it**, because the backend loads the panel into a restarted Steam's JS context before
-Steam's interface would show a toast, and one pushed then is lost without a word; past a deadline it is raised anyway,
-and either way it is acknowledged only once raised. What it waits for, how long at most, and why:
-`utils/steamReadyForToasts.ts`. The store is filled before the wait, so the rolled-back card is never held back by it.
+that **waits until Steam can show it**; past a deadline it is raised anyway, and either way it is acknowledged only once
+raised. What it waits for, how long at most, and why: `utils/steamReadyForToasts.ts`. The store is filled before the
+wait, so the rolled-back card is never held back by it.
 
 Four of the conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the `input_driver`
 fix and the session budget — so the absence is ordinary; the update announcement has none either, because a toast goes
