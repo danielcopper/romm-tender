@@ -379,7 +379,7 @@ def fw(plugin):
 
 
 # What the façade holds. Everything else the service needs lives on a sub-service.
-_FACADE_ATTRIBUTES = frozenset({"_config", "_listing", "_demand", "_status", "_downloads", "_deletion"})
+_FACADE_ATTRIBUTES = frozenset({"_config", "_rules", "_listing", "_demand", "_status", "_downloads", "_deletion"})
 
 
 @pytest.fixture(autouse=True)

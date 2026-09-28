@@ -887,7 +887,7 @@ class Plugin:
 
     @route
     async def reconcile_playtime(self, rom_id):
-        return await self._playtime_service.reconcile_playtime(int(rom_id))
+        return await self._playtime_service.reconcile_playtime(rom_id)
 
     @route
     def get_playtime_scope_notice(self):
