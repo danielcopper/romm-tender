@@ -72,6 +72,9 @@ markdown_extensions:
   # list. `nested_indent: 2` covers the first two widths; under a two-digit
   # numbered item, paragraphs and code blocks stay in the item, but a sub-list
   # renders as literal text.
+  # Python-Markdown never lets a list item interrupt a paragraph, so a sibling
+  # item after an item's continuation paragraph needs a blank line before it, or
+  # it renders as literal text; `deno fmt` does not add one.
   # `truly_sane: false` because the default (`true`) starts a new list at every
   # blank line between two bullet items (the sibling merge in
   # `TrulySaneOListProcessor.run`).
