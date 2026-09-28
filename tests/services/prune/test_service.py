@@ -1364,13 +1364,26 @@ async def _run_a_repoint_to_its_end(harness: Harness) -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_a_completion_that_needs_publication_is_leased_while_the_run_claim_still_holds(harness, monkeypatch):
     """No cleanup can start between the run's claim and the lease its publication runs under."""
+    registered: set[str] = set()
     runs_at_lease: list[tuple[str, set[str]]] = []
+    register_run = harness.conflicts.register_run
+    release_run = harness.conflicts.release_run
     acquire = harness.conflicts.acquire_lease
 
+    def recording_register_run(run_id: str) -> None:
+        registered.add(run_id)
+        register_run(run_id)
+
+    def recording_release_run(run_id: str) -> None:
+        registered.discard(run_id)
+        release_run(run_id)
+
     async def recording_acquire(key: str) -> str:
-        runs_at_lease.append((key, set(harness.conflicts._runs)))
+        runs_at_lease.append((key, set(registered)))
         return await acquire(key)
 
+    monkeypatch.setattr(harness.conflicts, "register_run", recording_register_run)
+    monkeypatch.setattr(harness.conflicts, "release_run", recording_release_run)
     monkeypatch.setattr(harness.conflicts, "acquire_lease", recording_acquire)
 
     complete = await _run_a_repoint_to_its_end(harness)
