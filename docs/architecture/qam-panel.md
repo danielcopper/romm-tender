@@ -1087,15 +1087,15 @@ empty fetch — it names nothing and every row counts, so the exclusion's worst 
 **That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
 at once, while its row, where its group holds a binding, still carries the generation the stamp recorded and so still
 counts on the right. Short of removing the platform's shortcuts, which takes the platform out of the payload, only a
-sync that **applies** that platform closes the window: the stamp and the rows' generation are written only by an apply's
-commit ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
-skip", and `domain/fetch_generation.py`), and a preview writes neither. So the window survives a sync that ends at
-"Everything is up to date.", and such a sync is possible: an unbound version deleted from a group that still holds a
-binding changes no shortcut, and the preview's removals count bound rows only. An apply that stops inside the platform
-(cancelled, interrupted or paused) leaves it open too, and wider: it deletes the stamp at its start, and with no stamp
-every reachable version RomM no longer serves counts again. Closing it without a sync would need a live server call,
-which this read deliberately does not make — `get_registry_platforms` answers offline, and that is what keeps the pane
-useful with RomM unreachable.
+sync that **applies** that platform closes the window: the stamp and the rows' generation are recorded only by an
+apply's commit ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+"Incremental skip", and `domain/fetch_generation.py`), and a preview writes neither. So the window survives a sync that
+ends at "Everything is up to date.", and such a sync is possible: an unbound version deleted from a group that still
+holds a binding changes no shortcut, and the preview's removals count bound rows only. An apply that stops inside the
+platform, however it stops, leaves it open too, and wider: it deletes the stamp at its start, and with no stamp every
+reachable version RomM no longer serves counts again. Closing it without a sync would need a live server call, which
+this read deliberately does not make — `get_registry_platforms` answers offline, and that is what keeps the pane useful
+with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
@@ -1103,9 +1103,9 @@ return raises the shortcut count without raising the header, so a pane can read 
 scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
 leaves out a row RomM still serves — and both heal at a sync that applies that platform: the second at the platform's
 commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs
-skip the unchanged platform, so after a stop the first waits until the platform is fetched and applied again (RomM
-changes it, or Force Full Sync). The direction is a conservative under-count, which is why it is recorded rather than
-guarded.
+skip the unchanged platform, so after a stop the first waits until the platform is fetched and applied again (for
+instance when RomM changes it, or after Force Full Sync). The direction is a conservative under-count, which is why it
+is recorded rather than guarded.
 
 **The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a
 long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
