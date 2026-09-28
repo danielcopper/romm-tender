@@ -321,14 +321,15 @@ class SyncReporter:
         refresh + reads commit atomically.
         """
         with self._uow_factory() as uow:
-            # Stale removal only UNBINDS the row (ADR-0007 keeps it), and the
-            # platform's completion stamp (ADR-0023) is deliberately NOT
-            # invalidated here: nothing it vouches for changes. A platform this
-            # run skipped holds no stale row, because the skip gate refuses a
-            # platform with a bound row its stamp's fetch did not return, so
-            # every row the skip rebuilt was returned. A platform this run fetched
-            # was stamped by this run, and a stale row does not carry that stamp's
-            # generation, so the skip never counted it.
+            # Stale removal only UNBINDS the row (ADR-0007 keeps it) and
+            # deliberately leaves every completion stamp (ADR-0023) in place. On a
+            # platform this run processed, nothing the skip reads changes: a
+            # skipped platform's rebuilt rows are all in ``synced_rom_ids``, so
+            # none of them is stale, and a fetched platform was stamped by this
+            # run with a generation no stale row carries. A platform the run did
+            # not process (sync turned off for it) keeps its stamp too, and the
+            # rows unbound on it still carry that stamp's generation and still
+            # count towards its skip.
             for rid in stale_rom_ids or []:
                 rom = uow.roms.get(rid)
                 if rom is None or rom.shortcut_app_id is None:

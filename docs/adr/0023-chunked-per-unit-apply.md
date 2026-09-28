@@ -111,6 +111,15 @@ mid-unit failure forfeits only the in-flight chunk.**
   silently drop the un-recreated games (the #1025 gap). The server-side stale removal in the reporter is the deliberate
   exception — it does **not** invalidate the stamp, because a ROM the server dropped lowers RomM's platform `rom_count`,
   which the stamp's `rom_count` guard already catches on the next skip.
+
+  > **Amendment (2026-09-28, #2084).** The `rom_count` guard catches a server drop only when the stamp is older than the
+  > drop. A version RomM dropped before the run that wrote the stamp read its count is absent from both the stamp's
+  > count and RomM's. If that run stopped before its stale-removal scan, the version stayed bound, and the skip rebuilt
+  > it as returned on later runs. A platform holding a bound row its stamp's fetch did not return is now fully fetched
+  > instead of skipped. The current rule is in
+  > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  > "Incremental skip".
+
 - **The row-count condition counts by fetch generation, not by every persisted row (#1504).** The skip requires RomM's
   platform `rom_count` to equal the local row count, and that count originally included every `roms` row for the
   platform. Rows outlive the server ids they came from: when RomM re-creates a ROM under a new id (re-import, file move,

@@ -863,20 +863,20 @@ stamp's fetch did not return, the `updated_after` server-delta check, the persis
 stamp's `rom_count` must still equal the server's platform `rom_count` — a server-side count change invalidates it.
 
 **A bound row the stamp's fetch did not return forces a full fetch.** The skip rebuilds its unit from every bound row,
-and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. The count guards catch a ROM
-RomM drops **after** the stamp's fetch, because the drop moves RomM's `rom_count` away from the stamp's. They cannot
-catch one dropped **before** it: the stamp recorded RomM's count without it, and the rows carrying the stamp's
-generation match that count. Such a row stays bound when the run that wrote the stamp stopped before its end —
-cancelled, interrupted, paused by the session budget, or failed — because the stale-removal scan runs only for a run
-that was not stopped. The gate therefore refuses the skip while any bound row on the platform does not carry the stamp's
-generation, a NULL one included (`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches instead. The
-full fetch returns every ROM RomM still serves, so only the rows RomM dropped stay unreturned: the preview lists them as
-removals, and the stale-removal scan of the first later run that completes unbinds them. A run that stops again leaves
-the platform full-fetching until one completes; once the row is unbound, the platform skips again. The other fix —
-leaving such rows out of the rebuilt unit — was rejected because the generation records the last completed fetch rather
-than what RomM serves now: a collection-added row on an already-stamped platform commits with no generation while RomM
-still serves it, and leaving it out would remove a shortcut RomM still backs. A stamp with no generation predates the
-contract and cannot say what its fetch returned, so it skips as before.
+and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. The stamp's `rom_count` is the
+count RomM reported when the run that wrote it planned its work. The count guards catch a ROM RomM drops **after** that
+read, because the drop moves RomM's `rom_count` away from the stamp's. They cannot catch one dropped **before** it: the
+stamp's `rom_count` already leaves it out, and the rows carrying the stamp's generation match that count. Such a row
+stays bound when the run that wrote the stamp stopped before its end — cancelled, interrupted, paused by the session
+budget, or failed — because the stale-removal scan runs only for a run that was not stopped. The gate therefore refuses
+the skip while any bound row on the platform does not carry the stamp's generation, a NULL one included
+(`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches instead. The full fetch returns every ROM RomM
+still serves, so only the rows RomM dropped stay unreturned: the preview lists them as removals, and the stale-removal
+scan of the first later run that completes unbinds them. A run that stops again leaves the platform full-fetching until
+one completes; once the row is unbound, this guard stops holding the skip off. Leaving such rows out of the rebuilt unit
+instead would unbind on a stored marker rather than on RomM's answer: the generation records the last completed fetch,
+not what RomM serves now, and a full fetch lets the stale-removal scan decide from a fresh listing. A stamp with no
+generation predates the contract and cannot say what its fetch returned, so it skips as before.
 
 The stamp's contract is **stamp exists ⟺ the platform's most recent apply attempt ran to completion**, so a stale stamp
 can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a platform's persisted-row
@@ -887,13 +887,14 @@ chunk) and only the final chunk re-writes it, so an apply interrupted by a crash
 final chunk leaves none; and the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
 `report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) — delete the touched
 platforms' stamps in the same write UoW as the unbind. The reporter's server-side stale removal is the deliberate
-exception: it leaves the stamp, because a row it unbinds is one no unit of that completed run returned. A platform the
-run skipped holds no such row, and on a platform the run fetched the row does not carry the generation of the stamp that
-run wrote, so the skip never counted it. "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the
-recorded `applied_launch_options` to NULL), which is the entire full-re-fetch + full-re-apply arm — the stamps are the
-fetcher's sole skip authority. The `sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and
-is the source of the "Last sync" display, so deleting it forced nothing and only blanked the panel to "Never" right
-after a reset.
+exception: it leaves every stamp. On a platform the run processed, nothing the skip reads changes: a skipped platform's
+rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was stamped by
+that run with a generation no stale row carries. A platform the run did not process (sync turned off for it) keeps its
+stamp too, and the rows unbound on it still carry that stamp's generation and still count towards its skip. "Force Full
+Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL), which is the
+entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is
+deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting it
+forced nothing and only blanked the panel to "Never" right after a reset.
 
 That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
 history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that

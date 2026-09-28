@@ -4637,8 +4637,9 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
     rebuilding the version from the bound rows as if RomM had returned it.
     """
 
-    @pytest.mark.asyncio
-    async def test_next_completed_run_removes_a_version_a_stopped_run_left_bound(self, plugin, fake_romm_api, emit):
+    @staticmethod
+    async def _stop_after_applying_n64(plugin, fake_romm_api):
+        """Run 1: apply N64 in full, whose fetch no longer returns the bound V, then cancel inside GBA."""
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -4659,7 +4660,6 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         box = plugin._sync_service._box
 
-        # Run 1 applies N64 in full, then the user cancels inside GBA.
         async def cancel_inside_gba(unit, event):
             if unit.slug == "gba":
                 box.sync_state = SyncState.CANCELLING
@@ -4678,6 +4678,11 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         assert stamp is not None
         assert (stamp.rom_count, stamp.fetch_id) == (2, "run-1")
 
+    @pytest.mark.asyncio
+    async def test_next_completed_run_removes_a_version_a_stopped_run_left_bound(self, plugin, fake_romm_api, emit):
+        await self._stop_after_applying_n64(plugin, fake_romm_api)
+        box = plugin._sync_service._box
+
         # Run 2 completes.
         run_2_starts_at = len(emit.call_args_list)
         plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -4693,6 +4698,21 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         with plugin._uow as uow:
             assert uow.roms.get(3).shortcut_app_id is None
             assert uow.roms.get(1).shortcut_app_id == 5001
+
+    @pytest.mark.asyncio
+    async def test_preview_after_the_stop_lists_the_version_as_a_removal(self, plugin, fake_romm_api):
+        """The preview full-fetches N64 too, so the change table offers the removal
+        and the apply that heals the platform is not blocked on "no changes"."""
+        await self._stop_after_applying_n64(plugin, fake_romm_api)
+        fake_romm_api.call_log.clear()
+
+        result = await plugin.sync_preview()
+
+        assert result["success"] is True
+        assert ("list_roms", (1,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+        assert result["summary"]["remove_count"] == 1
+        n64_row = next(row for row in result["summary"]["platform_breakdown"] if row["slug"] == "n64")
+        assert n64_row["remove_count"] == 1
 
 
 class TestRegression738CacheCorruption:

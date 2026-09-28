@@ -1,12 +1,9 @@
-"""How many locally persisted rows the platform incremental skip may count.
+"""Which of a platform's persisted rows its completion stamp's fetch returned.
 
 The generation marker's read side: given a platform's ``roms`` rows and the
-generation its completion stamp recorded, decide the row count the skip's
-"local mirror matches the server" condition compares against RomM's platform ROM
-count, and which rows the stamped fetch did not return. Anything that decides
-whether to skip belongs to the fetcher, and
-anything that writes a generation belongs to the reporter; this module only
-decides which rows still count.
+generation its completion stamp recorded, answer which rows that fetch returned
+and which it did not. Anything that decides whether to skip belongs to the
+fetcher, and anything that writes a generation belongs to the reporter.
 """
 
 from __future__ import annotations
@@ -72,18 +69,14 @@ def backfill_needed(rows: Sequence[Rom], fetch_id: str | None) -> bool:
 def bound_row_not_returned(rows: Sequence[Rom], fetch_id: str | None) -> bool:
     """Whether a bound row among *rows* is one the stamp's fetch did not return.
 
-    The skip rebuilds its unit from every bound row, and a rebuilt row counts as
-    returned, so the run's stale-removal scan can never name it. A bound row the
-    stamped fetch did not return — a version deleted on RomM whose stale-removal
-    scan never ran because the run that stamped the platform stopped first — would
-    keep its shortcut for as long as the platform keeps skipping. Such a row forces
-    a full fetch instead, which returns every ROM RomM still serves and leaves only
-    the dropped ones for the next completed run's stale-removal scan. A row whose
-    generation is NULL did not ride the stamped fetch either, so it forces one too.
+    True when a row carrying a ``shortcut_app_id`` has a ``last_fetch_id`` other
+    than *fetch_id*, a NULL one included. Why the incremental skip must not
+    rebuild such a row is in ``docs/architecture/backend-architecture.md``,
+    "Incremental skip".
 
     A stamp with **no** generation (``fetch_id`` falsy) predates the contract and
-    cannot say what its fetch saw, so no row forces the fetch — the same legacy
-    path :func:`count_rows_for_skip` takes.
+    cannot say what its fetch saw, so the answer is False — the same legacy path
+    :func:`count_rows_for_skip` takes.
     """
     if not fetch_id:
         return False

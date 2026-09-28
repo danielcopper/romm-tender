@@ -41,14 +41,14 @@ def predict_unit_skip(
     is pending, no bound row is one the stamp's fetch did not return
     (``domain/fetch_generation.bound_row_not_returned``), and the count of
     rows carrying the stamp's fetch generation matches the server count.
-    ``fetched_count`` is that generation-filtered
-    count (``domain/fetch_generation.count_rows_for_skip``), not every
-    persisted row: a row for a rom_id the server dropped is retained
-    (ADR-0007) but does not count (#1504). The
-    gate's server-delta check (``list_roms_updated_after``) is deliberately
-    NOT replayed — no network at plan time — so a platform whose rows
-    changed server-side since the stamp may be predicted as a skip that the
-    fetch then refuses; the estimate reads short, the apply stays correct.
+    ``fetched_count`` is that generation-filtered count
+    (``domain/fetch_generation.count_rows_for_skip``), not every persisted
+    row: a row for a rom_id the server dropped is retained (ADR-0007) but
+    does not count (#1504). The gate's server-delta check
+    (``list_roms_updated_after``) is deliberately NOT replayed — no network
+    at plan time — so a platform whose rows changed server-side since the
+    stamp may be predicted as a skip that the fetch then refuses; the
+    estimate reads short, the apply stays correct.
 
     A Force Full Sync needs no special case: ``clear_sync_cache`` deletes
     every stamp before the run starts, so ``stamp_completed_at`` reads

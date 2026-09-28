@@ -79,12 +79,9 @@ class _SkipBaseline(NamedTuple):
     """One platform's locally persisted inputs to the incremental-skip gate.
 
     Every field that judges the local mirror against the server
-    (``fetched_count``, ``needs_backfill``, ``bound_row_not_returned``) is
-    scoped to the completion stamp's fetch generation. A row the server has
-    dropped can neither be re-counted nor re-fetched, so it may never hold the
-    platform's skip off forever (#1504); ``bound_row_not_returned`` holds it off
-    only while such a row stays bound, and the next completed run's
-    stale-removal scan unbinds it.
+    (``fetched_count``, ``needs_backfill``) is scoped to the completion stamp's
+    fetch generation: a row the server has dropped can neither be re-counted nor
+    re-fetched, so it may never hold the platform's skip off forever (#1504).
     """
 
     stamp_completed_at: str | None
@@ -589,11 +586,10 @@ class LibraryFetcher:
         Per unit slug: replay the wholesale-skip gate's LOCAL conditions
         (``predict_unit_skip`` — stamp present, the stamped count and the count
         of rows carrying the stamp's fetch generation both match the server
-        count, bound rows exist, no group-key backfill pending, no bound row
-        the stamp's fetch did not return) and derive the persisted
-        post-collapse shortcut count
-        (``collapsed_shortcut_count`` over the rows' sibling-group keys +
-        bound flags). The collapsed count is emitted ONLY for slugs that carry
+        count, bound rows exist, no group-key backfill pending, no bound row the
+        stamp's fetch did not return) and derive the persisted post-collapse
+        shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group
+        keys + bound flags). The collapsed count is emitted ONLY for slugs that carry
         a ``PlatformSyncState`` completion stamp (#1412): the stamp exists iff
         the local mirror is complete, so without it a never-synced platform's
         PARTIAL rows
@@ -697,10 +693,8 @@ class LibraryFetcher:
           returned again, so no fetch can ever backfill it. Falls back to every
           row for a stamp written before the generation contract.
         * ``bound_row_not_returned`` — a bound row does not carry the stamp's
-          generation, so the stamped fetch did not return it
-          (``bound_row_not_returned``). The skip would rebuild it as returned and
-          hide it from the stale-removal scan, so the platform must full-fetch.
-          False for a stamp written before the generation contract.
+          generation, a NULL one included (``bound_row_not_returned``). False for
+          a stamp written before the generation contract.
 
         Only one short read UoW is opened.
         """
@@ -824,11 +818,6 @@ class LibraryFetcher:
             self._logger.info(f"Per-unit fetch {platform_name}: version-metadata backfill needed — full fetch")
             return None
 
-        # The skip counts every row it rebuilds as returned, so the run's
-        # stale-removal scan could never name a bound row the stamped fetch did
-        # not return. That scan runs only for a run that was not stopped, so a
-        # stopped run can leave such a row behind under a stamp whose counts
-        # still match the server.
         if baseline.bound_row_not_returned:
             self._logger.info(f"Per-unit fetch {platform_name}: a bound row the last fetch did not return — full fetch")
             return None
