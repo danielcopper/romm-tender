@@ -430,7 +430,7 @@ tests start only once the backend tests are done (`[tasks."gate:frontend-test"]`
 step to fail stops the others: its output ends in `ERROR task failed` under the task's name, and the gate exits
 non-zero. It is slow — the two test suites one after the other, with a production frontend build beside them — so it is
 a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are the Sonar jobs —
-`pr-metadata`, `sonarcloud` and `sonar-gate` — which need a pull request, `SONAR_TOKEN` or the CI coverage artifacts.
+`pr-metadata` and `sonarcloud` — which need a pull request, `SONAR_TOKEN` or the CI coverage artifacts.
 
 ## Code Quality
 
@@ -438,19 +438,19 @@ a pre-push check, not something to run on every save. The only CI jobs it can't 
   on new code, 0 bugs, 0 vulnerabilities. The scanner waits for the gate (`sonar.qualitygate.wait`), so a failed gate
   fails the job that ran the scan. Which job that is depends on where the PR comes from:
   - **A branch of this repository** — own branches, Renovate, release-please and Dependabot's security updates alike,
-    and every push to `main` — is scanned by the `sonarcloud` job in `ci.yml`, and the required check `sonar-gate`
-    reports its verdict. A Dependabot PR's run reads `SONAR_TOKEN` from the repository's Dependabot secrets rather than
-    its Actions secrets, so the token is stored in both.
-  - **A fork** gets no secrets in its CI run (only a read-only `GITHUB_TOKEN`), so `sonarcloud` skips it and
-    `sonar-gate` passes without an analysis. Once that CI run has succeeded, `.github/workflows/sonarcloud-fork-pr.yml`
-    scans the fork's head in this repository's context, following
+    and every push to `main` — is scanned by the `sonarcloud` job in `ci.yml`. A Dependabot PR's run reads `SONAR_TOKEN`
+    from the repository's Dependabot secrets rather than its Actions secrets, so the token is stored in both.
+  - **A fork** gets no secrets in its CI run (only a read-only `GITHUB_TOKEN`), so `sonarcloud` skips it. Once that CI
+    run has succeeded, `.github/workflows/sonarcloud-fork-pr.yml` scans the fork's head in this repository's context,
+    following
     [SonarSource's pattern for pull requests from forks](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/ci-based-analysis/github-actions-for-sonarcloud):
     it takes the coverage reports CI uploaded and `main`'s `sonar-project.properties`, and executes nothing from the
     fork. Both the coverage and the CI success that starts the scan come from the fork's own copy of `ci.yml`, so the
     coverage can be forged: on a fork's PR the Sonar verdict informs the review; it does not replace it.
-  - **Which check blocks** — on every analysed PR the SonarCloud app posts its own check, `SonarCloud Code Analysis`. On
-    a branch PR `sonar-gate` carries the same verdict; on a fork's PR the app check is the only check that carries it,
-    so it is the one `main`'s ruleset has to require for a fork's PR to block on the quality gate.
+  - **Which check blocks** — on every analysed PR, a branch's or a fork's, the SonarCloud app posts its own check,
+    `SonarCloud Code Analysis`, and `main`'s ruleset requires it, so a failed quality gate blocks the merge. The app
+    posts it only once an analysis has run: a scan that fails before analysing — a scanner download refused with a 403,
+    say — leaves the check "Expected", which blocks as well, and on a branch PR the `sonarcloud` job is red beside it.
 - **Ruff** — Python linting in CI. The enabled rules are the `select` list under `[tool.ruff.lint]` in `pyproject.toml`.
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).

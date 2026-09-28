@@ -318,25 +318,6 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # The required check that carries the `sonarcloud` job's verdict. On a fork's
-  # PR `sonarcloud` is skipped, so this gate says nothing about the analysis
-  # there; see "Code Quality" in docs/contributing/development.md.
-  sonar-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [sonarcloud]
-    if: always()
-    steps:
-      - name: Require SonarCloud to pass (SonarCloud is skipped on a fork's PR)
-        env:
-          SONAR_RESULT: ${{ needs.sonarcloud.result }}
-        run: |
-          echo "SonarCloud job result: $SONAR_RESULT"
-          if [ "$SONAR_RESULT" = "failure" ] || [ "$SONAR_RESULT" = "cancelled" ]; then
-            echo "::error::SonarCloud did not pass"
-            exit 1
-          fi
-
   markdownlint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
