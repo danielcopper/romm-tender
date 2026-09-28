@@ -224,18 +224,13 @@ class RuntimeAdaptersBundle:
 
 @dataclass(frozen=True)
 class BootstrapHandles:
-    """Bootstrap outputs ``main.py`` needs that don't fit the wiring bundles.
+    """Bootstrap outputs ``main.py`` binds on ``Plugin`` itself rather than handing to a service.
 
-    Anything ``Plugin`` itself binds (not the services) lives here:
-    the debug logger forwarded by ``Plugin._log_debug`` and the
-    persistence adapter ``Plugin`` holds for disk-touching callable paths
-    that bypass a service. The bundles already cover everything passed to
-    ``wire_services``; this struct keeps those Plugin-only handles typed
-    instead of returning them via the untyped dict shape of yore.
+    The bundles cover everything passed to ``wire_services``; what is here is
+    the debug logger ``Plugin._log_debug`` forwards to.
     """
 
     debug_logger: DebugLogger
-    persistence: PersistenceAdapter
 
 
 @dataclass(frozen=True)
@@ -516,7 +511,7 @@ def bootstrap(
         hostname_provider=hostname_provider,
         machine_id_provider=machine_id_provider,
     )
-    handles = BootstrapHandles(debug_logger=debug_logger, persistence=persistence)
+    handles = BootstrapHandles(debug_logger=debug_logger)
 
     return BootstrapResult(
         adapters=adapters,

@@ -108,9 +108,6 @@ class Plugin:
         )
         self.settings = result.stores.settings
         self._debug_logger = result.handles.debug_logger
-        # Persistence adapter — held directly for the disk-touching callable
-        # paths that read/write settings without routing through a service.
-        self._persistence = result.handles.persistence
         # RetroDECK path resolver — held directly so the get_retrodeck_status
         # callable can read the resolution health without routing through a
         # service (it's a pure adapter read, no orchestration).

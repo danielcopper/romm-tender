@@ -1051,7 +1051,7 @@ class TestMainStartupOrdering:
                 hostname_provider=MagicMock(),
                 machine_id_provider=MagicMock(),
             ),
-            handles=BootstrapHandles(debug_logger=MagicMock(), persistence=MagicMock()),
+            handles=BootstrapHandles(debug_logger=MagicMock()),
             directories=AppDirectories(
                 config_dir="/fake/config",
                 data_dir="/fake/data",
