@@ -291,8 +291,9 @@ where you enable or disable them.
 1. From the main page, tap **Library**; the **Platforms** tab opens first (L1/R1 switch tabs)
 2. The list holds every platform your server reports with at least one ROM, in two groups: **Synced** above
    **Available**
-3. Each row carries the platform's name, its BIOS requirement as a number, and its sync toggle. Press A on the row to
-   toggle it
+3. Each row carries a coloured dot, the platform's name and its sync toggle. The dot is the platform's BIOS state at a
+   glance; the **BIOS files** section of the pane on the right says it in words, and
+   [Library › Platforms](bios-management.md#library-platforms) explains the colours. Press A on the row to toggle it
 4. **Enable all** / **Disable all** sit above the groups
 5. Only enabled platforms are included in the next sync
 
