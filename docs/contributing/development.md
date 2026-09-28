@@ -324,6 +324,45 @@ The refusal names the holder where it can find one — its pid, command line and
 where you started it with Ctrl-C, or `kill <pid>`, then install again. `--uninstall` and `--disable` do not ask, because
 neither starts a backend.
 
+### Trying an update against a fake GitHub
+
+`mise run dev:fake-github` serves the release tarballs in `build/` — what `mise run package` writes — as a GitHub of its
+own on `127.0.0.1:8765`, bound to that address only, and prints the two variables that point Tender at it:
+
+```text
+TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest
+TENDER_DOWNLOAD_BASE=http://127.0.0.1:8765/download
+```
+
+The first answers the way GitHub's latest-release route does, with the tarball's `digest` and the `.sha256` file among
+its assets; under the second, every tarball in the directory is served under its own tag with its `.sha256` beside it,
+so `install.sh --version` reaches an older one too. With more than one tarball in the directory, name the one to call
+latest: `mise run dev:fake-github -- --latest 1.3.0`. `--dir` serves another directory and `--port` listens on another
+port. Four flags make the latest release one an update has to refuse: `--no-digest` (the tarball's asset states no
+digest), `--no-tarball`, `--no-checksum-file`, and `--corrupt-tarball` (the bytes served do not match the digest; the
+update check still offers such a release, and only the download's check finds it). `--help` lists them.
+
+**The installed service** reads `TENDER_RELEASE_API` from its unit. Add it in a drop-in rather than in the unit itself,
+which the installer writes again on every update:
+
+```bash
+mkdir -p ~/.config/systemd/user/romm-tender.service.d
+printf '[Service]\nEnvironment=TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest\n' \
+    > ~/.config/systemd/user/romm-tender.service.d/fake-github.conf
+systemctl --user daemon-reload
+systemctl --user restart romm-tender
+```
+
+The check asks at most once a day, so press **Check now** in Settings › Updates to ask at once. To point the service
+back at GitHub, remove `fake-github.conf`, then `daemon-reload` and restart again.
+
+**`install.sh`** reads both variables from its own environment:
+
+```bash
+TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest \
+    TENDER_DOWNLOAD_BASE=http://127.0.0.1:8765/download bash install.sh
+```
+
 ## Linting
 
 ```bash
