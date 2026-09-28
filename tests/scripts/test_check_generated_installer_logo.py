@@ -21,14 +21,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
     from types import ModuleType
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# What one half-block cell is: its character, and the colour of each half — None
-# where that half is left to the terminal's own background.
-_Colour = tuple[int, int, int] | None
-_Cell = tuple[str, _Colour, _Colour]
 _CHECK_PATH = _REPO_ROOT / "scripts" / "check_generated_installer_logo.py"
 _INSTALL = _REPO_ROOT / "install.sh"
 
@@ -44,25 +41,29 @@ def _load(path: Path, name: str) -> ModuleType:
 
 
 @pytest.fixture(scope="module")
-def generator() -> ModuleType:
-    sys.path.insert(0, str(_REPO_ROOT / "scripts" / "logo"))
-    return _load(_REPO_ROOT / "scripts" / "logo" / "terminal.py", "terminal")
+def generator() -> Iterator[ModuleType]:
+    """The generator, with its three drawings made once per test process.
 
-
-@functools.lru_cache(maxsize=1)
-def _icon(module: ModuleType) -> tuple[tuple[_Cell, ...], ...]:
-    """The icon's cells, drawn once for the whole file.
-
-    Cached because every case below wants the same drawing and making it is an
-    rsvg-convert run plus a megapixel of box filtering.
+    Every case below, the check's own runs included, wants the same drawings,
+    and each one is rsvg-convert output decoded and box-filtered in pure Python.
+    The check reaches them through this module, so each of its runs still
+    compares the committed art against what the generator draws today — it only
+    does not draw it again. Each caller gets rows of its own, so no case can edit
+    the drawing the next one reads. The drawings are fixed at the first draw: a
+    case that changes the generator's inputs and expects a new drawing needs a
+    fixture of its own.
     """
-    return tuple(tuple(row) for row in module.icon_cells())
+    sys.path.insert(0, str(_REPO_ROOT / "scripts" / "logo"))
+    module = _load(_REPO_ROOT / "scripts" / "logo" / "terminal.py", "terminal")
+    with pytest.MonkeyPatch.context() as patch:
+        for name in ("icon_cells", "ascii_cells", "wordmark_cells"):
+            patch.setattr(module, name, _drawn_once(getattr(module, name)))
+        yield module
 
 
-@functools.lru_cache(maxsize=1)
-def _drawing(module: ModuleType) -> tuple[tuple[tuple[str, str], ...], ...]:
-    """The ASCII drawing's cells, drawn once for the whole file."""
-    return tuple(tuple(row) for row in module.ascii_cells())
+def _drawn_once[Cell](draw: Callable[[], list[list[Cell]]]) -> Callable[[], list[list[Cell]]]:
+    drawn = functools.cache(lambda: tuple(tuple(row) for row in draw()))
+    return lambda: [list(row) for row in drawn()]
 
 
 @pytest.fixture
@@ -141,21 +142,21 @@ class TestTheIcon:
     """Half-blocks, where the two colours of a cell ARE the picture."""
 
     def test_it_is_the_size_it_says_it_is(self, generator):
-        icon = _icon(generator)
+        icon = generator.icon_cells()
 
         assert len(icon) == generator.icon_rows()
         assert all(len(row) == generator.ICON_COLUMNS for row in icon)
 
     def test_every_cell_is_a_half_block_or_a_space(self, generator):
         """Nothing is drawn in glyph shapes, so there are only three characters."""
-        drawn = {character for row in _icon(generator) for character, _fg, _bg in row}
+        drawn = {character for row in generator.icon_cells() for character, _fg, _bg in row}
 
         assert drawn <= {generator.UPPER_HALF, generator.LOWER_HALF, " "}
 
     def test_a_space_is_left_to_the_terminal(self, generator):
         """Painting a box the colour of a GUESS at the background is the one thing
         that looks wrong on the terminal the guess was wrong about."""
-        for row in _icon(generator):
+        for row in generator.icon_cells():
             for character, foreground, background in row:
                 if character == " ":
                     assert foreground is None
@@ -165,7 +166,7 @@ class TestTheIcon:
         """The real mark, not a silhouette: the warm buttons and the navy ink are in it."""
         colours = [
             colour
-            for row in _icon(generator)
+            for row in generator.icon_cells()
             for _character, upper, lower in row
             for colour in (upper, lower)
             if colour
@@ -177,7 +178,7 @@ class TestTheIcon:
 
     def test_the_rows_it_emits_are_padded_to_one_width(self, generator):
         """A caller puts a text block beside it, and cannot measure a string with escapes in it."""
-        for row in _icon(generator):
+        for row in generator.icon_cells():
             printable = generator.block_row(row, "truecolor", generator.ICON_COLUMNS)
             stripped = re.sub(r"\\033\[[0-9;]*m", "", printable)
 
@@ -185,7 +186,7 @@ class TestTheIcon:
 
     def test_the_256_colour_form_writes_no_24_bit_escape(self, generator):
         """A terminal that did not say it takes 24-bit colour is not given any."""
-        for row in _icon(generator):
+        for row in generator.icon_cells():
             assert "38;2;" not in generator.block_row(row, "256", generator.ICON_COLUMNS)
 
 
@@ -193,14 +194,14 @@ class TestTheAsciiDrawing:
     """The other technique, for the terminal that cannot show the first one."""
 
     def test_it_is_the_size_it_says_it_is(self, generator):
-        drawing = _drawing(generator)
+        drawing = generator.ascii_cells()
 
         assert len(drawing) == generator.ASCII_COLUMNS // 2
         assert all(len(row) == generator.ASCII_COLUMNS for row in drawing)
 
     def test_it_is_drawn_in_weights_not_in_blocks(self, generator):
         """Without colour the only thing left to carry the mark is glyph weight."""
-        drawn = {character for row in _drawing(generator) for character, _colour in row}
+        drawn = {character for row in generator.ascii_cells() for character, _colour in row}
 
         assert drawn <= set("O#+:. ")
         assert "O" in drawn, "the buttons are not drawn"
@@ -208,7 +209,7 @@ class TestTheAsciiDrawing:
 
     def test_a_run_is_one_colour_and_the_runs_cover_the_row(self, generator):
         """The installer splits runs and prints them; it never counts columns."""
-        for row in _drawing(generator):
+        for row in generator.ascii_cells():
             encoded = generator.runs(list(row), generator.ASCII_COLUMNS)
             runs = encoded.split(generator.RUN_SEPARATOR)
             rebuilt = "".join(run.split(":", 1)[1] for run in runs)
