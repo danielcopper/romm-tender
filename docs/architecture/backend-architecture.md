@@ -75,10 +75,10 @@ socket. Breaking the second rejects every call in flight, which is why one overs
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
 
-**Events leave through a seam `main.py` is handed, never a module-level call.** `Plugin._event_sink` is a
-`PluginEventSink` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered: an event with
-no panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and
-"sync finished" delivered three hours later lands in a session that never started one.
+**Events leave through a seam `main.py` is handed, never a module-level call.** The `events` sink `Plugin._main` is
+handed is a `PluginEventSink` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered:
+an event with no panel attached is dropped with a log line, because every event this backend sends is a statement about
+_now_ and "sync finished" delivered three hours later lands in a session that never started one.
 
 The answer is what a prune claim on an event needs. Five events carry one, because their Steam-side work outlives the
 backend's, and the service that emits each takes it when it emits, through `ConflictRules.emit_under_lease`: the library

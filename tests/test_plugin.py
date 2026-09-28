@@ -67,8 +67,7 @@ def plugin(logger, home, data_dir):
             loop=running_loop(),
             logger=logger,
             launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            # The service's own seam rather than the plugin's sink, answering
-            # that every event was heard.
+            # An emit that answers every event as heard.
             emit=AsyncMock(return_value=True),
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),

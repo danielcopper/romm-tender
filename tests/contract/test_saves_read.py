@@ -14,10 +14,10 @@ server-unreachable transport error) is therefore fast to inject.
 This module covers the read surface only; the mutating save callables have
 their own modules beside it (``test_saves_slot_choice.py``,
 ``test_saves_destructive.py``, ``test_saves_upload_409.py`` and the other
-``test_saves_*.py``). Still reached at this tier only by the conflict-rule refusals in
-``test_conflict_refusals.py``: ``sync_all_saves``, ``update_save_sync_settings``,
-``delete_local_saves``, ``copy_save_to_slot`` and
-``saves_rollback_to_version``; ``switch_slot`` is exercised only for its
+``test_saves_*.py``). Still reached at this tier only by the conflict-rule
+refusals in ``test_conflict_refusals.py``: ``sync_all_saves``,
+``update_save_sync_settings``, ``delete_local_saves``, ``copy_save_to_slot``
+and ``saves_rollback_to_version``; ``switch_slot`` is exercised only for its
 legacy-bucket refusal.
 """
 

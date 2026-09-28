@@ -121,7 +121,7 @@ async def test_a_save_kept_by_skip_is_neither_replaced_nor_backed_up(harness):
 
 async def test_a_status_read_during_a_running_migration_moves_nothing(harness):
     # While a run is in flight — its markers already cleared, its re-record not
-    # finished — the gate still reports the migration, and the follow holds off.
+    # finished — the migration still reads as pending, and the follow holds off.
     old_saves = os.path.join(str(harness.tmp_path / "old"), "saves", "gba")
     new_saves = os.path.join(str(harness.tmp_path / "new"), "saves", "gba")
     _write(os.path.join(old_saves, "pokemon.srm"), b"old home", 1_000)
