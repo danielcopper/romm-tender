@@ -158,7 +158,7 @@ class TestTheSessionStartFlush:
         await started.wait()
         (task,) = tuple(svc._flush_tasks)
 
-        await svc.shutdown()
+        await asyncio.wait_for(svc.shutdown(), 1)
 
         assert task.cancelled()
 
