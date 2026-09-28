@@ -235,9 +235,10 @@ own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-relea
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
 **An install over an existing one is an update, and an update whose new version does not answer is rolled back.** It
-does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes`: a machine
-with a tree at the code root already is not coming from it. Whenever `install.sh` installs over a tree already at
-`~/.local/lib/romm-tender/`, the run goes in this order:
+does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes` or run after
+the question's end date (`TENDER_ACK_UNTIL`, set in `install.sh`): a machine with a tree at the code root already is not
+coming from it. Whenever `install.sh` installs over a tree already at `~/.local/lib/romm-tender/`, the run goes in this
+order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The unit is stopped.
@@ -292,8 +293,8 @@ one left
 ([A panel an earlier backend left behind](../architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind))
 closes by saying the panel comes back by itself once no game is running, and to restart Steam only if it has not after a
 few minutes; its Steam row is marked done, with the line under it saying the backend now running replaces the earlier
-panel. Going back to a release from before that replacement asks for the restart instead, and marks that row as not
-done.
+panel. Going back to a release from before that replacement asks for the restart instead, and leaves that row a warning
+that the earlier panel is still loaded.
 
 Every step that runs once per machine — the covers' move above, a backend backfill behind a `kv_config` marker, a rung
 of either version ladder — stays safe to run again and stays in every later release, because an update jumps from
