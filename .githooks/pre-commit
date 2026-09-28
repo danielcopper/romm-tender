@@ -16,12 +16,10 @@
 # everywhere else would be off in exactly one place. Running it first, and
 # adopting its refusal, keeps that from happening. A developer with no global
 # hook notices nothing.
-global_hooks=$(git config --global --get core.hooksPath)
-if [ -n "${global_hooks:-}" ]; then
-    global_hooks=${global_hooks/#\~/$HOME}
-    if [ -x "$global_hooks/pre-commit" ]; then
-        "$global_hooks/pre-commit" || exit 1
-    fi
+global_hooks=$(git config --global --type=path --get core.hooksPath)
+if [ -n "${global_hooks:-}" ] && [ -x "$global_hooks/pre-commit" ] &&
+    ! [ "$global_hooks/pre-commit" -ef "$0" ]; then
+    "$global_hooks/pre-commit" || exit 1
 fi
 
 # Re-stage the files a formatter may have rewritten — but only those that had
