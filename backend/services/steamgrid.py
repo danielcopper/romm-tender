@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     import logging
 
     from services.protocols import (
+        ConflictRules,
         DebugLogger,
         PendingSyncReader,
         RommRomReader,
@@ -51,8 +52,10 @@ class SteamGridServiceConfig:
     ``steam_config``, ``sgdb_artwork_cache``), the live settings dict,
     runtime infrastructure, the ``settings.json`` persister, the SQLite
     Unit-of-Work factory (the ``sgdb_id`` cross-ref is persisted onto the
-    ``roms`` aggregate via the UoW), the pending-sync read seam, and the
-    debug-logger seam SteamGridService needs at construction time.
+    ``roms`` aggregate via the UoW), the pending-sync read seam, the
+    debug-logger seam SteamGridService needs at construction time, and the
+    ``ConflictRules`` the artwork, icon and resolution use cases check at their
+    entry and take the ``sgdb_artwork`` lease through.
     """
 
     sgdb_api: SteamGridDbApi
@@ -66,10 +69,16 @@ class SteamGridServiceConfig:
     get_pending_sync: PendingSyncReader
     log_debug: DebugLogger
     uow_factory: UnitOfWorkFactory
+    conflict_rules: ConflictRules
 
 
 class SteamGridService:
-    """SteamGridDB orchestration: API key flow, artwork fetch/cache, icon save."""
+    """SteamGridDB orchestration: API key flow, artwork fetch/cache, icon save.
+
+    The artwork fetch, the icon save, the resolution and the manual pick check
+    their endpoint's conflict rules at their entry, under that endpoint's name,
+    and answer the canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: SteamGridServiceConfig) -> None:
         self._sgdb_api = config.sgdb_api
@@ -83,6 +92,7 @@ class SteamGridService:
         self._get_pending_sync = config.get_pending_sync
         self._log_debug = config.log_debug
         self._uow_factory = config.uow_factory
+        self._rules = config.conflict_rules
 
     # -- SGDB lookup -------------------------------------------------------
 
@@ -216,6 +226,12 @@ class SteamGridService:
         - ``{"decision": "needs_pick", "candidates": [...]}`` — nothing
           resolved automatically; offer a manual name-search picker.
         """
+        async with self._rules.hold("get_sgdb_resolution", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._get_sgdb_resolution(rom_id)
+
+    async def _get_sgdb_resolution(self, rom_id):
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
         if not self._settings.get("steamgriddb_api_key"):
@@ -302,6 +318,12 @@ class SteamGridService:
         the picker, giving the user a free re-pick. The previously
         applied art stays visible until replaced.
         """
+        async with self._rules.hold("apply_sgdb_game_id", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._apply_sgdb_game_id(rom_id, sgdb_id)
+
+    async def _apply_sgdb_game_id(self, rom_id, sgdb_id):
         rom_id = int(rom_id)
         sgdb_id = int(sgdb_id)
 
@@ -329,6 +351,20 @@ class SteamGridService:
                     self._logger.warning(f"Failed to clear cached artwork {path}: {e}")
 
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
+        """Serve one SteamGridDB asset for *rom_id* as base64, from the cache first.
+
+        An answer that carries an image also carries an ``sgdb_artwork`` lease
+        in ``prune_lease_token`` for the frontend's Steam write.
+        """
+        async with self._rules.hold("get_sgdb_artwork_base64", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            result = await self._get_sgdb_artwork_base64(rom_id, asset_type_num)
+            if result.get("base64") is not None:
+                result["prune_lease_token"] = await self._rules.acquire_lease("sgdb_artwork")
+            return result
+
+    async def _get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         rom_id = int(rom_id)
         asset_type_num = int(asset_type_num)
         asset_type = asset_type_name(asset_type_num)
@@ -467,6 +503,12 @@ class SteamGridService:
         point the shortcut at it via ``SteamClient.Apps.SetShortcutIcon``;
         failures use the canonical ``{success, reason, message}`` shape.
         """
+        async with self._rules.hold("save_shortcut_icon", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._save_shortcut_icon(app_id, icon_base64)
+
+    async def _save_shortcut_icon(self, app_id, icon_base64):
         app_id = int(app_id)
         try:
             icon_bytes = base64.b64decode(icon_base64)

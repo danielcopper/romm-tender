@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -151,7 +152,9 @@ class Fixture:
             config=GroupFinalizerConfig(
                 loop=loop,
                 logger=logging.getLogger("test"),
-                results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
+                results=PruneResultReporter(
+                    config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
+                ),
                 liveness=cast("Any", _FakeLiveness(statuses)),
                 save_locks=SaveLockCoordinator(
                     config=SaveLockCoordinatorConfig(loop=loop, save_coordinator=cast("Any", self.saves))

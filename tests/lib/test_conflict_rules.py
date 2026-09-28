@@ -5,8 +5,14 @@ from typing import Any
 
 import pytest
 
-from lib.conflict_rules import ConflictRuleSet
-from lib.prune_gate import PruneConflicts
+from lib.conflict_rules import (
+    ConflictRuleSet,
+    migration_refusal,
+    operation_active_refusal,
+    prune_active_refusal,
+    sync_refusal,
+)
+from lib.prune_conflicts import PruneConflicts
 
 _MIGRATION_REFUSAL = {
     "success": False,
@@ -63,6 +69,20 @@ class _Rules:
 async def _refusal(rules: ConflictRuleSet, **named: bool) -> dict[str, Any] | None:
     async with rules.hold("the_endpoint", **named) as refusal:
         return refusal
+
+
+# ── The refusals ─────────────────────────────────────────────────────────────
+
+
+def test_each_refusal_is_the_canonical_failure_shape():
+    assert migration_refusal() == _MIGRATION_REFUSAL
+    assert sync_refusal() == _SYNC_REFUSAL
+    assert prune_active_refusal() == _PRUNE_REFUSAL
+    assert operation_active_refusal("held by someone") == {
+        "success": False,
+        "reason": "operation_active",
+        "message": "held by someone",
+    }
 
 
 # ── Each rule on its own ─────────────────────────────────────────────────────
@@ -144,7 +164,7 @@ async def test_the_prune_rule_holds_an_operation_named_after_the_endpoint_for_th
     async with rules.rules.hold("the_endpoint", prune=True) as refusal:
         assert refusal is None
         assert rules.conflicts.conflicting_operations == 1
-        assert await rules.conflicts.reserve_start() is not None
+        assert await rules.conflicts.reserve_start("start_prune") is not None
         assert "the_endpoint (operation" in rules.logger.info_lines[-1]
 
     assert rules.conflicts.conflicting_operations == 0
@@ -192,10 +212,10 @@ async def test_a_lease_holds_off_a_cleanup_until_it_is_released_by_its_token():
     token = await rules.rules.acquire_lease("shortcut_removal")
 
     assert token.startswith("shortcut_removal:")
-    assert await rules.conflicts.reserve_start() is not None
+    assert await rules.conflicts.reserve_start("start_prune") is not None
     await rules.rules.release_lease(token)
     assert rules.conflicts.conflicting_operations == 0
-    assert await rules.conflicts.reserve_start() is None
+    assert await rules.conflicts.reserve_start("start_prune") is None
 
 
 async def test_a_lease_checks_no_rule():
@@ -267,3 +287,148 @@ async def test_an_event_under_a_lease_checks_no_rule():
     assert rules.conflicts.conflicting_operations == 1
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
+
+
+# ── A cleanup's exclusive start ──────────────────────────────────────────────
+
+
+async def _start_refusal(rules: ConflictRuleSet, **named: bool) -> dict[str, Any] | None:
+    async with rules.hold_start("start_prune", **named) as refusal:
+        return refusal
+
+
+async def test_a_held_operation_refuses_the_start_naming_its_holder():
+    rules = _Rules()
+    await rules.rules.acquire_lease("launch_reconfirm")
+
+    refusal = await _start_refusal(rules.rules, migration=True, sync=True)
+
+    assert refusal == {
+        "success": False,
+        "reason": "operation_active",
+        "message": (
+            "Another local-data operation is in progress (checking a game's launch settings); wait for it to "
+            "finish before starting cleanup."
+        ),
+    }
+    assert rules.conflicts.cleanup_running is False
+
+
+async def test_the_reservation_is_asked_before_the_migration_and_the_sync_rule():
+    rules = _Rules(migration=True, sync=True)
+    await rules.rules.acquire_lease("launch_reconfirm")
+
+    refusal = await _start_refusal(rules.rules, migration=True, sync=True)
+
+    assert refusal is not None
+    assert refusal["reason"] == "operation_active"
+    assert rules.migration.asked == 0
+    assert rules.sync.asked == 0
+
+
+async def test_the_rules_are_asked_while_the_reservation_is_held():
+    """Nothing can start between the sync rule's answer and the reservation: the reservation came first."""
+    rules = _Rules()
+    seen: list[bool] = []
+
+    def sync_in_flight() -> bool:
+        seen.append(rules.conflicts.cleanup_running)
+        return False
+
+    rules.rules = ConflictRuleSet(
+        prune_conflicts=rules.conflicts, migration_pending=rules.migration, sync_in_flight=sync_in_flight
+    )
+
+    assert await _start_refusal(rules.rules, sync=True) is None
+
+    assert seen == [True]
+
+
+async def test_a_pending_migration_answers_the_start_before_a_sync_in_flight():
+    rules = _Rules(migration=True, sync=True)
+
+    assert await _start_refusal(rules.rules, migration=True, sync=True) == _MIGRATION_REFUSAL
+    assert rules.sync.asked == 0
+
+
+async def test_a_sync_in_flight_refuses_the_start():
+    assert await _start_refusal(_Rules(sync=True).rules, migration=True, sync=True) == _SYNC_REFUSAL
+
+
+@pytest.mark.parametrize("condition", [{"migration": True}, {"sync": True}])
+async def test_a_refused_start_gives_its_reservation_back_before_it_answers(condition):
+    rules = _Rules(**condition)
+
+    async with rules.rules.hold_start("start_prune", migration=True, sync=True) as refusal:
+        assert refusal is not None
+        assert rules.conflicts.cleanup_running is False
+
+    assert rules.conflicts.cleanup_running is False
+    assert await _refusal(rules.rules, prune=True) is None
+
+
+async def test_the_start_holds_its_reservation_for_the_whole_block():
+    rules = _Rules()
+
+    async with rules.rules.hold_start("start_prune", migration=True, sync=True) as refusal:
+        assert refusal is None
+        assert rules.conflicts.cleanup_running is True
+        assert await _refusal(rules.rules, prune=True) == _PRUNE_REFUSAL
+
+    assert rules.conflicts.cleanup_running is False
+
+
+async def _raise_inside_a_start_block(rules: _Rules) -> None:
+    async with rules.rules.hold_start("start_prune"):
+        raise RuntimeError("boom")
+
+
+async def test_the_reservation_is_given_back_when_the_block_raises():
+    rules = _Rules()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await _raise_inside_a_start_block(rules)
+
+    assert rules.conflicts.cleanup_running is False
+
+
+async def test_a_rule_that_raises_gives_the_reservation_back():
+    rules = _Rules()
+
+    def migration_pending() -> bool:
+        raise RuntimeError("database locked")
+
+    rules.rules = ConflictRuleSet(
+        prune_conflicts=rules.conflicts, migration_pending=migration_pending, sync_in_flight=rules.sync
+    )
+
+    with pytest.raises(RuntimeError, match="database locked"):
+        await _start_refusal(rules.rules, migration=True)
+
+    assert rules.conflicts.cleanup_running is False
+
+
+async def test_a_run_claim_does_not_refuse_the_start():
+    """The prune service refuses a second start itself."""
+    assert await _start_refusal(_Rules(cleanup=True).rules, migration=True, sync=True) is None
+
+
+# ── Leases the frontend renews and disowns ───────────────────────────────────
+
+
+async def test_a_live_lease_renews_and_an_unknown_one_does_not():
+    rules = _Rules()
+    token = await rules.rules.acquire_lease("sgdb_artwork")
+
+    assert await rules.rules.renew_lease(token) is True
+    await rules.rules.release_lease(token)
+    assert await rules.rules.renew_lease(token) is False
+
+
+async def test_disowning_drops_every_lease_and_counts_them():
+    rules = _Rules()
+    await rules.rules.acquire_lease("sgdb_artwork")
+    await rules.rules.acquire_lease("installed_reconcile")
+
+    assert await rules.rules.release_orphaned_leases() == 2
+    assert rules.conflicts.conflicting_operations == 0

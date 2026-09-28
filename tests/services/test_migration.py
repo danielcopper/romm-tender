@@ -7,7 +7,7 @@ from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin, _record_operations_at_lease
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
@@ -179,6 +179,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             relaunch_options=relaunch_options,
             save_directories=p._save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     return p
@@ -1711,7 +1712,9 @@ class TestMigrationFailureInjection:
         }
         defaults.update(overrides)
         return MigrationService(
-            config=MigrationServiceConfig(migration_file_store=fake_files, **defaults),
+            config=MigrationServiceConfig(
+                migration_file_store=fake_files, **defaults, conflict_rules=_make_conflict_rules()
+            ),
         )
 
     def test_move_failure_records_error_and_continues(self):
@@ -1993,6 +1996,102 @@ class TestChainedPathChangeDetection:
             previous, hops = _read_pending(uow)
         assert previous == a
         assert hops == [c]
+
+
+class TestTheMigrationsConflictRules:
+    """The migration checks its prune rule, and leases the relaunch items it emits inside it."""
+
+    @staticmethod
+    def _stage_one_relocation(plugin, tmp_path, *, app_id: int | None = 4242) -> None:
+        old_home = str(tmp_path / "old")
+        new_home = str(tmp_path / "new")
+        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
+        os.makedirs(os.path.dirname(old_rom))
+        with open(old_rom, "w") as f:
+            f.write("rom data")
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=app_id)
+
+    @staticmethod
+    def _relaunch_emit(plugin):
+        return next(
+            payload for event, payload in plugin._migration_service._emit.calls if event == "migration_relaunch_options"
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_relaunch_items_carry_a_lease_taken_inside_the_migrations_operation(
+        self, plugin, tmp_path, logger, monkeypatch
+    ):
+        """No cleanup can start between the migration's operation and the lease its Steam writes run under."""
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        self._stage_one_relocation(plugin, tmp_path)
+        seen = _record_operations_at_lease(plugin._prune_conflicts, monkeypatch)
+
+        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+
+        assert seen == [["migrate_retrodeck_files"]]
+        token = self._relaunch_emit(plugin)["prune_lease_token"]
+        assert token.startswith("migration_relaunch_options:")
+        assert plugin._prune_conflicts.conflicting_operations == 1
+        await plugin._prune_conflicts.release_lease(token)
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    async def test_no_relaunch_items_carry_no_lease(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        self._stage_one_relocation(plugin, tmp_path, app_id=None)
+
+        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+
+        assert self._relaunch_emit(plugin) == {"items": []}
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    async def test_relaunch_items_nobody_heard_give_their_lease_back(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        self._stage_one_relocation(plugin, tmp_path)
+        heard: list[str] = []
+
+        async def unheard(event: str, payload: object, /) -> bool:
+            heard.append(event)
+            return False
+
+        plugin._migration_service._emit = unheard
+
+        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+
+        assert heard == ["migration_relaunch_options"]
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    async def test_relaunch_items_whose_emit_raises_give_their_lease_back(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        self._stage_one_relocation(plugin, tmp_path)
+
+        async def rejected(event: str, payload: object, /) -> bool:
+            raise RuntimeError("transport rejected event")
+
+        plugin._migration_service._emit = rejected
+
+        with pytest.raises(RuntimeError, match="transport rejected event"):
+            await plugin._migration_service.migrate_retrodeck_files()
+
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    async def test_a_running_cleanup_refuses_the_migration_and_moves_nothing(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        self._stage_one_relocation(plugin, tmp_path)
+        plugin._prune_conflicts.register_run("held-run")
+
+        result = await plugin._migration_service.migrate_retrodeck_files()
+
+        assert result["reason"] == "prune_active"
+        assert os.path.exists(os.path.join(str(tmp_path / "old"), "roms", "n64", "zelda.z64"))
+        assert plugin._migration_service._emit.calls == []
+        assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 class TestChainedMigration:

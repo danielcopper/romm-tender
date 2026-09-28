@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ActiveDownloadRomIdsFn,
         Clock,
+        ConflictRules,
         EventEmitter,
         InstalledRomFilesRemoverFn,
         PruneArtifactStore,
@@ -43,7 +44,13 @@ _RELEASE_TIMEOUT_SECONDS = 5.0
 
 @dataclass(frozen=True)
 class PruneServiceConfig:
-    """Frozen composition-root wiring for explicit vanished-ROM cleanup."""
+    """Frozen composition-root wiring for explicit vanished-ROM cleanup.
+
+    ``conflict_rules`` are what the preview and the start check at their entry
+    — the start through its exclusive reservation — and what the final
+    completion frame is leased through; ``run_claim`` is where a started run
+    holds its claim.
+    """
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
@@ -63,6 +70,7 @@ class PruneServiceConfig:
     switch_version: VersionSwitcherFn
     settings: dict[str, Any]
     run_claim: PruneRunClaim
+    conflict_rules: ConflictRules
 
 
 def _invalid_action_report(request: dict[str, Any], pending: PendingAction) -> tuple[str, str] | None:
@@ -94,7 +102,12 @@ def _invalid_action_report(request: dict[str, Any], pending: PendingAction) -> t
 
 
 class PruneService:
-    """Own preview consumption, one run claim, and frontend action leases."""
+    """Own preview consumption, one run claim, and frontend action leases.
+
+    Only the preview and the start check conflict rules. Cancelling, answering
+    and waiting on a run check none: they must stay reachable while its run
+    claim is held.
+    """
 
     def __init__(self, *, config: PruneServiceConfig) -> None:
         self._loop = config.loop
@@ -104,6 +117,7 @@ class PruneService:
         self._emit = config.emit
         self._settings = config.settings
         self._run_claim = config.run_claim
+        self._rules = config.conflict_rules
         self._recovery_store = config.recovery_store
         self._preview_builder = PreviewBuilder(
             config=PreviewBuilderConfig(
@@ -130,6 +144,7 @@ class PruneService:
                 loop=config.loop,
                 logger=config.logger,
                 emit=config.emit,
+                conflict_rules=config.conflict_rules,
                 romm_api=config.romm_api,
                 recovery_store=config.recovery_store,
                 prune_artifacts=config.prune_artifacts,
@@ -169,7 +184,17 @@ class PruneService:
         return self._starting or self._run_id is not None
 
     async def get_prune_preview(self, request: object) -> dict[str, Any]:
-        """Create or page an ephemeral local-only candidate preview."""
+        """Create or page an ephemeral local-only candidate preview.
+
+        Checks its endpoint's conflict rules at its entry and answers the
+        canonical refusal when one holds (CONTEXT.md → Conflict rules).
+        """
+        async with self._rules.hold("get_prune_preview", migration=True, sync=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._get_prune_preview(request)
+
+    async def _get_prune_preview(self, request: object) -> dict[str, Any]:
         parsed = parse_preview_request(request)
         if isinstance(parsed, dict):
             return parsed
@@ -237,7 +262,20 @@ class PruneService:
             }
 
     async def start_prune(self, request: object) -> dict[str, Any]:
-        """Atomically consume a preview and start one explicit cleanup run."""
+        """Atomically consume a preview and start one explicit cleanup run.
+
+        The whole start runs under the cleanup's exclusive reservation, taken
+        before the migration and sync rules are asked, and answers their
+        canonical refusal when one holds (CONTEXT.md → Conflict rules, Prune
+        conflicts). A run that starts registers its run claim before the
+        reservation is given back, so the two overlap.
+        """
+        async with self._rules.hold_start("start_prune", migration=True, sync=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._start_prune(request)
+
+    async def _start_prune(self, request: object) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("confirmed") is not True:
             return self._failure("confirmation_required", "Explicit confirmation is required before cleanup.")
         selected = self._finalized_selection(request)

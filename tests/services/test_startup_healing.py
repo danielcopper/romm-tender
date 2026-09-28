@@ -22,7 +22,7 @@ from domain.sync_run import SyncRun
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 
 if TYPE_CHECKING:
-    from lib.prune_gate import PruneConflicts
+    from lib.prune_conflicts import PruneConflicts
 
 _RETRODECK_HOME = "/run/media/deck/Emulation/retrodeck"
 

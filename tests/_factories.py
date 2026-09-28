@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from lib.conflict_rules import ConflictRuleSet
-from lib.prune_gate import PruneConflicts
+from lib.prune_conflicts import PruneConflicts
 
 
 def _no_retry(fn, *a, **kw):
@@ -38,7 +38,7 @@ def _make_retry():
 
 
 def _make_prune_conflicts() -> PruneConflicts:
-    """The real prune conflict gate, logging nowhere a test would look."""
+    """The real prune conflicts, logging nowhere a test would look."""
     return PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
 
 
@@ -72,13 +72,7 @@ def _make_conflict_rules(
 def _make_testable_plugin():
     """Return a TestablePlugin instance with test-only attributes declared.
 
-    Pre-populates ``_migration_service`` with a non-pending MagicMock so the
-    ``@migration_blocked`` decorator passes through (it requires the service and
-    raises RuntimeError if it is unwired) in tests that don't otherwise wire
-    migration state. Tests that exercise the block can override
-    ``is_retrodeck_migration_pending`` per-test.
-
-    Also pre-wires a no-op ``_debug_logger`` so any service that consumes
+    Pre-wires a no-op ``_debug_logger`` so any service that consumes
     ``Plugin._log_debug`` (which forwards through ``_debug_logger``) works
     out of the box. Tests that want to assert on debug-log behaviour can
     override ``_debug_logger`` after construction (e.g. with the real
@@ -91,8 +85,9 @@ def _make_testable_plugin():
 
         Genuinely test-fixture-only attributes live here: ``_fake_api``,
         ``_resolve_system``, ``_save_settings``, plus the Unit-of-Work
-        handles tests seed and assert against (``_uow``, ``_uow_factory``)
-        and the per-test ``_tmp_path`` scratch dir. Test-fixture handles
+        handles tests seed and assert against (``_uow``, ``_uow_factory``),
+        the prune conflicts the services a test wires share
+        (``_prune_conflicts``) and the per-test ``_tmp_path`` scratch dir. Test-fixture handles
         shared with production wiring (``_state``, ``_http_adapter``, ...)
         are declared on ``Plugin`` itself as ``Any``-typed annotation slots
         so test-only construction paths type-check uniformly.
@@ -106,6 +101,7 @@ def _make_testable_plugin():
         _save_settings: Any
         _uow: Any
         _uow_factory: Any
+        _prune_conflicts: Any
         _tmp_path: Any
         _core_info: Any
         _platform_core_reader: Any
@@ -118,9 +114,6 @@ def _make_testable_plugin():
         _save_directories: Any
 
     instance = TestablePlugin()
-    instance._migration_service = MagicMock()
-    instance._migration_service.is_retrodeck_migration_pending.return_value = False
-    instance._prune_service = MagicMock()
     instance._prune_conflicts = _make_prune_conflicts()
     instance._debug_logger = lambda msg: None
     return instance

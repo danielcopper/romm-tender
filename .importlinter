@@ -168,6 +168,7 @@ modules =
     services.migration
     services.playtime
     services.prune
+    services.prune_leases
     services.relaunch_options_resolver
     services.rom_adoption
     services.rom_install_recorder

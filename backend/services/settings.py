@@ -29,7 +29,7 @@ from lib.list_result import ErrorCode
 from lib.url_host import is_valid_server_url
 
 if TYPE_CHECKING:
-    from services.protocols import SettingsPersister, SteamConfigStore, UnitOfWorkFactory
+    from services.protocols import ConflictRules, SettingsPersister, SteamConfigStore, UnitOfWorkFactory
 
 
 _MASK_PLACEHOLDER = "••••"
@@ -93,8 +93,9 @@ class SettingsServiceConfig:
     Carries the live settings dict, the SQLite Unit-of-Work factory (the
     read seam over the ``roms`` aggregate for the bound-shortcut app_ids
     ``apply_steam_input_setting`` re-skins), plus the runtime
-    infrastructure (logger, settings persister, steam-config adapter).
-    Bundled here so the ctor stays within the S107 parameter budget.
+    infrastructure (logger, settings persister, steam-config adapter), and the
+    ``ConflictRules`` the server-URL, custom-header and Steam Input writes check
+    at their entry. Bundled here so the ctor stays within the S107 parameter budget.
     """
 
     settings: dict[str, Any]
@@ -102,10 +103,16 @@ class SettingsServiceConfig:
     logger: logging.Logger
     settings_persister: SettingsPersister
     steam_config: SteamConfigStore
+    conflict_rules: ConflictRules
 
 
 class SettingsService:
-    """User-facing settings reads/writes, masking, and frontend-log routing."""
+    """User-facing settings reads/writes, masking, and frontend-log routing.
+
+    The server-URL, custom-header and Steam Input writes check their endpoint's
+    conflict rules at their entry, under that endpoint's name, and answer the
+    canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    """
 
     LOG_LEVELS: ClassVar[dict[str, int]] = {"debug": 0, "info": 1, "warn": 2, "error": 3}
 
@@ -133,10 +140,11 @@ class SettingsService:
         self._frontend_logger.setLevel(logging.DEBUG)
         self._settings_persister = config.settings_persister
         self._steam_config = config.steam_config
+        self._rules = config.conflict_rules
 
     # ── Server connection settings ───────────────────────────────────────
 
-    def save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
+    async def save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         """Persist the trimmed server URL and optional SSL flag.
 
         Rejects a blank or non-http(s) URL without writing anything.
@@ -150,6 +158,12 @@ class SettingsService:
         ``config_error`` until the user signs in again (the intended #1039
         behavior for the no-sign-in URL-change path).
         """
+        async with self._rules.hold("save_server_url", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._save_server_url(romm_url, allow_insecure_ssl)
+
+    def _save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
             return {"success": False, "reason": "config_error", "message": "Enter a valid http(s):// server URL"}
@@ -163,7 +177,7 @@ class SettingsService:
             self._logger.error(f"Failed to save settings: {e}")
             return {"success": False, "reason": "save_failed", "message": f"Save failed: {e}"}
 
-    def save_custom_headers(self, headers: object) -> dict[str, Any]:
+    async def save_custom_headers(self, headers: object) -> dict[str, Any]:
         """Validate and persist the extra headers sent to the RomM origin.
 
         Whole-list replace: the list handed in IS the new configuration, so a row
@@ -173,6 +187,12 @@ class SettingsService:
         be echoed back. The whole list is refused on the first problem, and the
         refusal names the offending header, never its value.
         """
+        async with self._rules.hold("save_custom_headers", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._save_custom_headers(headers)
+
+    def _save_custom_headers(self, headers: object) -> dict[str, Any]:
         stored = stored_custom_headers(self._settings.get("romm_custom_headers"))
         resolved = resolve_custom_headers(headers, stored)
         if isinstance(resolved, HeaderRefusal):
@@ -300,8 +320,14 @@ class SettingsService:
         self._settings_persister.save_settings()
         return {"success": True}
 
-    def apply_steam_input_setting(self) -> dict[str, Any]:
+    async def apply_steam_input_setting(self) -> dict[str, Any]:
         """Apply the current Steam Input mode to every bound ROM shortcut."""
+        async with self._rules.hold("apply_steam_input_setting", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._apply_steam_input_setting()
+
+    def _apply_steam_input_setting(self) -> dict[str, Any]:
         mode = self._settings.get("steam_input_mode", "default")
         with self._uow_factory() as uow:
             app_ids = [rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None]

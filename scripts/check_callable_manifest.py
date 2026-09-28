@@ -376,7 +376,7 @@ def find_misplaced_routes(main_py: Path) -> list[str]:
         decorators = node.decorator_list
         if any(_is_route(decorator) for decorator in decorators[1:]):
             findings.append(
-                f"{node.name}: @route is not its first decorator — move it to the top, above every gate, "
+                f"{node.name}: @route is not its first decorator — move it to the top, above every other decorator, "
                 f"so this check counts it."
             )
         if node.name.startswith("_") and any(_is_route(decorator) for decorator in decorators):

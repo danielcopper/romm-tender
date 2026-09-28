@@ -10,7 +10,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -78,7 +78,7 @@ def plugin(emit, logger, home, project_root):
         p.settings, project_root, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
     )
     p._romm_api = MagicMock()
-    p._prune_conflicts = _make_prune_conflicts()
+    conflict_rules = _make_conflict_rules()
 
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
@@ -103,7 +103,7 @@ def plugin(emit, logger, home, project_root):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -117,6 +117,7 @@ def plugin(emit, logger, home, project_root):
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),
+            conflict_rules=conflict_rules,
         ),
     )
     return p
@@ -1205,6 +1206,7 @@ def _setup_plugin(plugin):
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
 

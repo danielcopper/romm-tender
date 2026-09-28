@@ -169,7 +169,7 @@ class StateBundle:
 
 @dataclass(frozen=True)
 class RuntimeBundle:
-    """Process-level runtime infrastructure (event loop, logger, event funnel, time/UUID/sleep seams).
+    """Process-level runtime infrastructure (event loop, logger, the event sink's emit, time/UUID/sleep seams).
 
     It carries no directory. Where anything lives is the ``AppDirectories`` the
     entry point resolved, which reaches a service as ``WiringConfig.directories``
@@ -210,7 +210,7 @@ class RuntimeAdaptersBundle:
 
     Bootstrap owns adapter instantiation, but the ``RuntimeBundle``
     handed to ``wire_services`` also needs runtime-only state ``main.py``
-    introduces (the ``asyncio`` loop, the event funnel). This sub-bundle
+    introduces (the ``asyncio`` loop, the event sink's emit). This sub-bundle
     carries the seams bootstrap builds so ``main.py`` can compose the
     final ``RuntimeBundle`` without instantiating any adapters itself.
     """

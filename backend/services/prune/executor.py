@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from domain.rom import Rom
     from services.protocols import (
         ActiveDownloadRomIdsFn,
+        ConflictRules,
         EventEmitter,
         InstalledRomFilesRemoverFn,
         PruneArtifactStore,
@@ -70,6 +71,7 @@ class PruneExecutorConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     emit: EventEmitter
+    conflict_rules: ConflictRules
     romm_api: RommLivenessApi
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
@@ -91,7 +93,9 @@ class PruneExecutor:
     def __init__(self, *, config: PruneExecutorConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
-        self._results = PruneResultReporter(config=PruneResultReporterConfig(emit=config.emit))
+        self._results = PruneResultReporter(
+            config=PruneResultReporterConfig(emit=config.emit, conflict_rules=config.conflict_rules)
+        )
         self._recovery_store = config.recovery_store
         self._steam_recovery = config.steam_recovery
         self._active_downloads = config.active_downloads

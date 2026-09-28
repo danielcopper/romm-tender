@@ -11,25 +11,26 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 
 ## Where the code lives
 
-| Module                            | Responsibility                                                          |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| `services/prune/service.py`       | Callable facade and the ephemeral per-run state                         |
-| `services/prune/preview.py`       | Builds the candidate preview (sizes, groups, warnings)                  |
-| `services/prune/registry.py`      | Discovers candidates from local rows and fetch generations              |
-| `services/prune/recovery.py`      | Sequences bundle creation and sealing                                   |
-| `services/prune/executor.py`      | Sequences a confirmed group's phases and arms its recovery bundle       |
-| `services/prune/planning.py`      | Decides what a group would do, or the reason it is refused              |
-| `services/prune/liveness.py`      | Namespace-bound exact-ID proof — the only deletion authority            |
-| `services/prune/steam_actions.py` | Requests the frontend's Steam mutations and reads their outcome         |
-| `services/prune/finalize.py`      | Revalidates every proof, then runs the irreversible cascade             |
-| `services/prune/save_locks.py`    | Holds save locks over an ownership set proven stable under them         |
-| `services/prune/results.py`       | Shapes progress/completion frames and terminal group results            |
-| `services/prune/requests.py`      | Parses and validates the wire payloads                                  |
-| `lib/prune_gate.py`               | The conflict gate — its operations, leases, reservations and run claims |
-| `lib/conflict_rules.py`           | The conflict rules a use case checks; holds its operation and leases    |
-| `adapters/recovery_bundle.py`     | Writes, checksums, seals and publishes a recovery bundle                |
-| `adapters/steam_recovery.py`      | Captures Steam-only state; edits the controller value in `localconfig`  |
-| `adapters/descriptor_paths.py`    | Descriptor-relative, no-follow claim capture and claimed mutation       |
+| Module                            | Responsibility                                                         |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| `services/prune/service.py`       | Callable facade and the ephemeral per-run state                        |
+| `services/prune/preview.py`       | Builds the candidate preview (sizes, groups, warnings)                 |
+| `services/prune/registry.py`      | Discovers candidates from local rows and fetch generations             |
+| `services/prune/recovery.py`      | Sequences bundle creation and sealing                                  |
+| `services/prune/executor.py`      | Sequences a confirmed group's phases and arms its recovery bundle      |
+| `services/prune/planning.py`      | Decides what a group would do, or the reason it is refused             |
+| `services/prune/liveness.py`      | Namespace-bound exact-ID proof — the only deletion authority           |
+| `services/prune/steam_actions.py` | Requests the frontend's Steam mutations and reads their outcome        |
+| `services/prune/finalize.py`      | Revalidates every proof, then runs the irreversible cascade            |
+| `services/prune/save_locks.py`    | Holds save locks over an ownership set proven stable under them        |
+| `services/prune/results.py`       | Shapes progress/completion frames and terminal group results           |
+| `services/prune/requests.py`      | Parses and validates the wire payloads                                 |
+| `services/prune_leases.py`        | Renews, releases and disowns the leases the frontend holds             |
+| `lib/prune_conflicts.py`          | The prune conflicts — operations, leases, reservations and run claims  |
+| `lib/conflict_rules.py`           | The conflict rules a use case checks; holds its operation and leases   |
+| `adapters/recovery_bundle.py`     | Writes, checksums, seals and publishes a recovery bundle               |
+| `adapters/steam_recovery.py`      | Captures Steam-only state; edits the controller value in `localconfig` |
+| `adapters/descriptor_paths.py`    | Descriptor-relative, no-follow claim capture and claimed mutation      |
 
 ## Deletion authority
 
@@ -140,27 +141,30 @@ conflicts). The composition root builds it before any service and hands it on. T
 there. The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
 there, retain one for detached work it starts — a background save-status check, a download, the outbox flush a play
 session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
-uninstall's, a core, disc or version change's, an adoption's, the pre-launch re-confirm's and the start-up reconcile's,
-and the ones `sync_complete`, `sync_stale` and `download_complete` carry. `Plugin` reads it for the two decorators, the
-event funnel, and every endpoint that takes, renews or releases a lease itself. The reservation lasts from the moment a
-start gets past the gate until the start returns; the run claim, from the moment the revalidated preview becomes a run
-until that run ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done
-callback. The run is registered before the reservation is given back, so the two overlap and a conflicting endpoint
-finds no gap between them.
+uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
+start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `prune_complete` and
+`migration_relaunch_options` carry. The lease service (`services/prune_leases.py`) renews and releases a lease by its
+token, and disowns the ones a gone frontend left behind; `Plugin` reads none of it. The prune service takes the start's
+reservation through the rules' `hold_start`, before it asks the migration and sync rules, and holds it around the whole
+start. The reservation lasts from the moment a start gets its reservation until the start returns; the run claim, from
+the moment the revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run task
+cancelled before it first ran, in the task's done callback. The run is registered before the reservation is given back,
+so the two overlap and a conflicting endpoint finds no gap between them.
 
-The start is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any operation or
+The start is atomic in the part that matters: `hold_start` takes the prune conflicts' lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the
 reservation. The start then continues **without** the lock. The reservation alone already refuses every conflicting
 endpoint, and holding the lock across the start's preview rebuild would make Play, save status, and downloads wait for
 that rebuild rather than learning their verdict immediately.
 
-Every operation and lease on the gate is **named**. An operation carries its endpoint's own name, detached work carries
-the name of the endpoint that spawned it, and a lease carries its acquisition key plus the time it was taken. A refusal
-logs the complete holder inventory at INFO — label, kind, age, and a lease's remaining time — and names the holder in
-the refused message itself when its key has a user-facing name, falling back to the generic text rather than putting an
-internal token in front of the user. Acquire, renew and release are logged at debug; a lease that reaches its deadline
-is logged at INFO instead, because an expiry means its owner never released it. Without this a refused start is
-indistinguishable from a backend that has stopped answering, and the holder cannot be identified after the fact.
+Every operation and lease on the prune conflicts is **named**. An operation carries its endpoint's own name, detached
+work carries the name of the endpoint that spawned it, and a lease carries its acquisition key plus the time it was
+taken. A refusal logs the complete holder inventory at INFO — label, kind, age, and a lease's remaining time — and names
+the holder in the refused message itself when its key has a user-facing name, falling back to the generic text rather
+than putting an internal token in front of the user. Acquire, renew and release are logged at debug; a lease that
+reaches its deadline is logged at INFO instead, because an expiry means its owner never released it. Without this a
+refused start is indistinguishable from a backend that has stopped answering, and the holder cannot be identified after
+the fact.
 
 The count of live operations and leases is derived from the holder registry rather than tracked beside it: a counter
 that can drift from the registry leaves a refusal with no holder to name.
@@ -175,16 +179,16 @@ promises settle.
 
 A frontend that has just mounted disowns every lease outstanding at that moment, once, before anything else can acquire
 one. A continuation whose JS context is torn down mid-call — the double mount at plugin load does this — never reaches
-its release and never renews either, so its lease pins the gate for a full TTL with nobody behind it. A fresh mount is
-the proof that no earlier continuation survives, which makes it the one moment such an orphan is provably safe to drop;
-run claims, reservations and operations are untouched, because only the frontend's own leases are the frontend's to
-disown. Each one released this way is logged at INFO, since it means a leak happened.
+its release and never renews either, so its lease holds off every cleanup for a full TTL with nobody behind it. A fresh
+mount is the proof that no earlier continuation survives, which makes it the one moment such an orphan is provably safe
+to drop; run claims, reservations and operations are untouched, because only the frontend's own leases are the
+frontend's to disown. Each one released this way is logged at INFO, since it means a leak happened.
 
 A lease is the frontend's to release, so every path that receives one must give it back — including the paths that do no
 work. A terminal completion frame carries a publication lease whenever the run committed a repoint; when the frame turns
-out to have nothing to publish, the listener releases it immediately rather than letting it pin the gate until its TTL.
-The TTL remains the backstop for the one case the frontend cannot cover: a response lost in transit carries a token the
-frontend never learned, and the expiry log is what makes that visible.
+out to have nothing to publish, the listener releases it immediately rather than letting it hold off every cleanup until
+its TTL. The TTL remains the backstop for the one case the frontend cannot cover: a response lost in transit carries a
+token the frontend never learned, and the expiry log is what makes that visible.
 
 ## Actions and frames
 

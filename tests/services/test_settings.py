@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -60,7 +61,12 @@ def logger() -> logging.Logger:
 
 
 @pytest.fixture
-def service(settings, uow, logger, settings_persister, steam_config) -> SettingsService:
+def prune_conflicts():
+    return _make_prune_conflicts()
+
+
+@pytest.fixture
+def service(settings, uow, logger, settings_persister, steam_config, prune_conflicts) -> SettingsService:
     return SettingsService(
         config=SettingsServiceConfig(
             settings=settings,
@@ -68,56 +74,105 @@ def service(settings, uow, logger, settings_persister, steam_config) -> Settings
             logger=logger,
             settings_persister=settings_persister,
             steam_config=steam_config,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
+
+
+# ── The conflict rules ─────────────────────────────────────────────────
+
+
+_SETTINGS_WRITES = [
+    ("save_server_url", ("http://romm.local",)),
+    ("save_custom_headers", ([],)),
+    ("apply_steam_input_setting", ()),
+]
+
+
+class TestConflictRulesAtTheUseCase:
+    """Each settings write an endpoint gates checks its prune rule and holds an operation named after it."""
+
+    @pytest.mark.parametrize(("use_case", "args"), _SETTINGS_WRITES)
+    async def test_a_running_cleanup_refuses_the_write_and_changes_nothing(
+        self, service, settings, settings_persister, steam_config, uow, prune_conflicts, use_case, args
+    ):
+        _seed_rom(uow, 1, app_id=1001)
+        prune_conflicts.register_run("held-run")
+        before = dict(settings)
+
+        result = await getattr(service, use_case)(*args)
+
+        assert result["reason"] == "prune_active"
+        assert settings == before
+        settings_persister.save_settings.assert_not_called()
+        steam_config.set_steam_input_config.assert_not_called()
+        assert prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(("use_case", "args"), _SETTINGS_WRITES)
+    async def test_the_write_runs_under_an_operation_named_after_its_endpoint(
+        self, service, settings_persister, steam_config, uow, prune_conflicts, use_case, args
+    ):
+        _seed_rom(uow, 1, app_id=1001)
+        seen: list[list[str]] = []
+
+        def record(*_args, **_kwargs) -> None:
+            seen.append(sorted(holder.label for holder in prune_conflicts._operations.values()))
+
+        settings_persister.save_settings.side_effect = record
+        steam_config.set_steam_input_config.side_effect = record
+
+        await getattr(service, use_case)(*args)
+
+        assert seen == [[use_case]]
+        assert prune_conflicts.conflicting_operations == 0
 
 
 # ── save_server_url ────────────────────────────────────────────────────
 
 
 class TestSaveServerUrl:
-    def test_persists_url(self, service, settings, settings_persister):
-        result = service.save_server_url("http://romm.local")
+    async def test_persists_url(self, service, settings, settings_persister):
+        result = await service.save_server_url("http://romm.local")
         assert result == {"success": True, "message": "Settings saved"}
         assert settings["romm_url"] == "http://romm.local"
         settings_persister.save_settings.assert_called_once_with()
 
-    def test_does_not_touch_token_or_credentials(self, service, settings):
+    async def test_does_not_touch_token_or_credentials(self, service, settings):
         settings["romm_api_token"] = "rmm_keep"
         settings["romm_api_token_id"] = 7
-        service.save_server_url("http://romm.local")
+        await service.save_server_url("http://romm.local")
         assert settings["romm_api_token"] == "rmm_keep"
         assert settings["romm_api_token_id"] == 7
 
-    def test_allow_insecure_ssl_none_does_not_touch_setting(self, service, settings):
+    async def test_allow_insecure_ssl_none_does_not_touch_setting(self, service, settings):
         settings["romm_allow_insecure_ssl"] = True
-        service.save_server_url("http://romm.local", None)
+        await service.save_server_url("http://romm.local", None)
         assert settings["romm_allow_insecure_ssl"] is True
 
-    def test_allow_insecure_ssl_true(self, service, settings):
-        service.save_server_url("http://romm.local", True)
+    async def test_allow_insecure_ssl_true(self, service, settings):
+        await service.save_server_url("http://romm.local", True)
         assert settings["romm_allow_insecure_ssl"] is True
 
-    def test_allow_insecure_ssl_false_overrides_true(self, service, settings):
+    async def test_allow_insecure_ssl_false_overrides_true(self, service, settings):
         settings["romm_allow_insecure_ssl"] = True
-        service.save_server_url("http://romm.local", False)
+        await service.save_server_url("http://romm.local", False)
         assert settings["romm_allow_insecure_ssl"] is False
 
-    def test_persistence_failure_returns_error(self, service, settings_persister):
+    async def test_persistence_failure_returns_error(self, service, settings_persister):
         settings_persister.save_settings.side_effect = OSError("disk full")
-        result = service.save_server_url("http://romm.local")
+        result = await service.save_server_url("http://romm.local")
         assert result["success"] is False
         assert "disk full" in result["message"]
 
-    def test_trims_url_before_persisting(self, service, settings, settings_persister):
-        result = service.save_server_url("  https://romm.local  ")
+    async def test_trims_url_before_persisting(self, service, settings, settings_persister):
+        result = await service.save_server_url("  https://romm.local  ")
         assert result["success"] is True
         assert settings["romm_url"] == "https://romm.local"
         settings_persister.save_settings.assert_called_once_with()
 
     @pytest.mark.parametrize("bad_url", ["", "   ", "romm.local", "ftp://romm.local", "https://"])
-    def test_invalid_url_rejected_without_writing(self, service, settings, settings_persister, bad_url):
-        result = service.save_server_url(bad_url)
+    async def test_invalid_url_rejected_without_writing(self, service, settings, settings_persister, bad_url):
+        result = await service.save_server_url(bad_url)
         assert result == {
             "success": False,
             "reason": "config_error",
@@ -139,8 +194,10 @@ class TestSaveCustomHeaders:
     def _keep(self, name: str) -> dict[str, str]:
         return {"name": name, "value_action": "keep"}
 
-    def test_persists_the_list_in_order(self, service, settings, settings_persister):
-        result = service.save_custom_headers([self._set("P-Access-Token", "tok"), self._set("P-Access-Token-Id", "id")])
+    async def test_persists_the_list_in_order(self, service, settings, settings_persister):
+        result = await service.save_custom_headers(
+            [self._set("P-Access-Token", "tok"), self._set("P-Access-Token-Id", "id")]
+        )
         assert result == {"success": True}
         assert settings["romm_custom_headers"] == [
             {"name": "P-Access-Token", "value": "tok"},
@@ -148,36 +205,36 @@ class TestSaveCustomHeaders:
         ]
         settings_persister.save_settings.assert_called_once_with()
 
-    def test_keep_preserves_the_stored_value(self, service, settings):
+    async def test_keep_preserves_the_stored_value(self, service, settings):
         settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
-        result = service.save_custom_headers([self._keep("X-Token")])
+        result = await service.save_custom_headers([self._keep("X-Token")])
         assert result == {"success": True}
         assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
 
-    def test_keep_for_an_unknown_name_fails_without_writing(self, service, settings, settings_persister):
+    async def test_keep_for_an_unknown_name_fails_without_writing(self, service, settings, settings_persister):
         settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
-        result = service.save_custom_headers([self._keep("X-Other")])
+        result = await service.save_custom_headers([self._keep("X-Other")])
         assert result["success"] is False
         assert result["reason"] == "no_stored_header_value"
         assert "X-Other" in result["message"]
         assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
         settings_persister.save_settings.assert_not_called()
 
-    def test_a_whole_list_replace_drops_a_removed_row(self, service, settings):
+    async def test_a_whole_list_replace_drops_a_removed_row(self, service, settings):
         settings["romm_custom_headers"] = [
             {"name": "X-Keep", "value": "a"},
             {"name": "X-Drop", "value": "b"},
         ]
-        service.save_custom_headers([self._keep("X-Keep")])
+        await service.save_custom_headers([self._keep("X-Keep")])
         assert settings["romm_custom_headers"] == [{"name": "X-Keep", "value": "a"}]
 
-    def test_an_empty_list_clears_every_header(self, service, settings):
+    async def test_an_empty_list_clears_every_header(self, service, settings):
         settings["romm_custom_headers"] = [{"name": "X-Token", "value": "a"}]
-        assert service.save_custom_headers([]) == {"success": True}
+        assert await service.save_custom_headers([]) == {"success": True}
         assert settings["romm_custom_headers"] == []
 
-    def test_authorization_is_refused_with_its_own_message(self, service, settings):
-        result = service.save_custom_headers([self._set("Authorization", "Basic abc")])
+    async def test_authorization_is_refused_with_its_own_message(self, service, settings):
+        result = await service.save_custom_headers([self._set("Authorization", "Basic abc")])
         assert result["success"] is False
         assert result["reason"] == "authorization_reserved"
         assert "RomM API token" in result["message"]
@@ -197,18 +254,18 @@ class TestSaveCustomHeaders:
             ([{"name": "X-Token", "value_action": "set", "value": ""}], "empty_header_value"),
         ],
     )
-    def test_garbage_from_the_wire_is_rejected_without_writing(
+    async def test_garbage_from_the_wire_is_rejected_without_writing(
         self, service, settings, settings_persister, entries, reason
     ):
-        result = service.save_custom_headers(entries)
+        result = await service.save_custom_headers(entries)
         assert result["success"] is False
         assert result["reason"] == reason
         assert result["message"]
         assert "romm_custom_headers" not in settings
         settings_persister.save_settings.assert_not_called()
 
-    def test_a_refusal_never_carries_the_value(self, service):
-        result = service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
+    async def test_a_refusal_never_carries_the_value(self, service):
+        result = await service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
         assert result["success"] is False
         assert "s3cret" not in result["message"]
 
@@ -521,6 +578,7 @@ class TestAFrontendDebugLineIsWrittenRatherThanDropped:
                 logger=root,
                 settings_persister=settings_persister,
                 steam_config=steam_config,
+                conflict_rules=_make_conflict_rules(),
             ),
         )
         settings["log_level"] = "debug"
@@ -571,49 +629,49 @@ class TestSaveSteamInputSetting:
 
 
 class TestApplySteamInputSetting:
-    def test_applies_to_bound_shortcuts(self, service, settings, uow, steam_config):
+    async def test_applies_to_bound_shortcuts(self, service, settings, uow, steam_config):
         settings["steam_input_mode"] = "force_on"
         _seed_rom(uow, rom_id=1, app_id=111)
         _seed_rom(uow, rom_id=2, app_id=222)
-        result = service.apply_steam_input_setting()
+        result = await service.apply_steam_input_setting()
         assert result["success"] is True
         assert "force_on" in result["message"]
         assert "2 shortcuts" in result["message"]
         steam_config.set_steam_input_config.assert_called_once_with([111, 222], mode="force_on")
 
-    def test_skips_unbound_roms(self, service, settings, uow, steam_config):
+    async def test_skips_unbound_roms(self, service, settings, uow, steam_config):
         """ROMs with NULL shortcut_app_id (unbound) are excluded from the apply set."""
         settings["steam_input_mode"] = "force_off"
         _seed_rom(uow, rom_id=1, app_id=111)
         _seed_rom(uow, rom_id=2, app_id=None)  # unbound — must be skipped
-        result = service.apply_steam_input_setting()
+        result = await service.apply_steam_input_setting()
         assert result["success"] is True
         assert "1 shortcuts" in result["message"]
         steam_config.set_steam_input_config.assert_called_once_with([111], mode="force_off")
 
-    def test_empty_registry_returns_noop(self, service, steam_config):
-        result = service.apply_steam_input_setting()
+    async def test_empty_registry_returns_noop(self, service, steam_config):
+        result = await service.apply_steam_input_setting()
         assert result == {"success": True, "message": "No shortcuts to update"}
         steam_config.set_steam_input_config.assert_not_called()
 
-    def test_all_roms_unbound(self, service, uow, steam_config):
+    async def test_all_roms_unbound(self, service, uow, steam_config):
         _seed_rom(uow, rom_id=1, app_id=None)
         _seed_rom(uow, rom_id=2, app_id=None)
-        result = service.apply_steam_input_setting()
+        result = await service.apply_steam_input_setting()
         assert result["success"] is True
         assert "No shortcuts" in result["message"]
         steam_config.set_steam_input_config.assert_not_called()
 
-    def test_default_mode_when_unset(self, service, uow, steam_config):
+    async def test_default_mode_when_unset(self, service, uow, steam_config):
         _seed_rom(uow, rom_id=1, app_id=1)
-        result = service.apply_steam_input_setting()
+        result = await service.apply_steam_input_setting()
         assert result["success"] is True
         steam_config.set_steam_input_config.assert_called_once_with([1], mode="default")
 
-    def test_adapter_failure_returns_error(self, service, uow, steam_config):
+    async def test_adapter_failure_returns_error(self, service, uow, steam_config):
         _seed_rom(uow, rom_id=1, app_id=1)
         steam_config.set_steam_input_config.side_effect = OSError("boom")
-        result = service.apply_steam_input_setting()
+        result = await service.apply_steam_input_setting()
         assert result["success"] is False
         assert result["message"] == "Operation failed"
 

@@ -470,7 +470,7 @@ class TestConflictRulesAtTheUseCase:
 
         assert await svc.refresh_save_status(42) == {"success": True}
         assert conflicts.conflicting_operations == 1
-        assert await conflicts.reserve_start() is not None
+        assert await conflicts.reserve_start("start_prune") is not None
 
         release.set()
         await asyncio.gather(*(task for task in asyncio.all_tasks() if task is not asyncio.current_task()))

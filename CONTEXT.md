@@ -874,8 +874,8 @@ non-authoritative and cannot mutate Steam.
 
 ### Prune conflicts: operation / lease / reservation / run claim
 
-The one record of every claim that conflicts with a removed-game cleanup (`PruneConflicts`, `lib/prune_gate.py`). Four
-kinds of claim:
+The one record of every claim that conflicts with a removed-game cleanup (`PruneConflicts`, `lib/prune_conflicts.py`).
+Four kinds of claim:
 
 - **Operation** — a conflicting endpoint's claim, held for the one call, or **retained** for the detached work that call
   started (a download, a background save-status check) until that work ends.
@@ -887,8 +887,8 @@ kinds of claim:
   ends.
 
 A cleanup is **running** while a reservation or a run claim is held, and every conflicting endpoint is refused for that
-long. A start is refused while any operation or lease is held. _Avoid_: **admission** for this gate — that word already
-names the host's check of a connection's Host, Origin and token, and other guards in this program.
+long. A start is refused while any operation or lease is held. _Avoid_: **admission** for these claims — that word
+already names the host's check of a connection's Host, Origin and token, and other guards in this program.
 
 ### Conflict rules
 
@@ -901,7 +901,8 @@ and they are asked in this order:
    **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
 The first named rule that holds answers with its refusal, and a refused call holds nothing. A cleanup's exclusive start
-is asked before all three.
+is asked before all three. A use case asks its endpoint's rules at its entry, through `ConflictRules` —
+`hold("<endpoint>", …)`, or `hold_start("<endpoint>", …)` for the cleanup's start — so the endpoint only calls it.
 
 **`<verb>_unchecked`** — the service method an endpoint calls, without that endpoint's rules, for a peer service that
 calls it from inside a call that has already answered for its own. _Avoid_: **`do_<verb>`** for it — that names a

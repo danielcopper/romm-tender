@@ -20,6 +20,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer
+from lib.conflict_rules import migration_refusal
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -679,6 +680,20 @@ class TestMigrationPendingGuards:
             "synced": 0,
         }
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
+
+
+class TestTheEnginesMigrationRefusalIsTheSharedOne:
+    """Both engine refusals are the conflict rules' own migration refusal, plus the count of files synced."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync"])
+    async def test_the_refusal_is_the_shared_migration_refusal_with_nothing_synced(self, tmp_path, entry):
+        svc, _fake = make_service(tmp_path, is_retrodeck_migration_pending=lambda: True)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        assert await getattr(svc, entry)(42) == {**migration_refusal(), "synced": 0}
 
 
 class TestPostExitServerOfflineGuard:

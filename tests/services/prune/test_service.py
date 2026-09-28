@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 import pytest_asyncio
+from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
@@ -24,7 +25,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from lib.errors import OperationAbortedError, RommConnectionError, RommNotFoundError
-from lib.prune_gate import PruneConflicts
+from lib.prune_conflicts import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import cancellation_state
 from services.prune.results import GroupOutcome
@@ -363,6 +364,7 @@ async def harness() -> Harness:
             switch_version=switch_version,
             settings={"preferred_region": "USA"},
             run_claim=conflicts,
+            conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
         )
     )
     return Harness(
@@ -860,9 +862,20 @@ async def test_a_started_run_holds_its_claim_on_the_gate_until_it_ends(harness):
 
 @pytest.mark.asyncio
 async def test_the_run_is_registered_once_validation_passes_and_not_before(harness, monkeypatch):
-    """What covers the validation phase is the start's reservation, taken outside this service."""
+    """The start's reservation, taken by the service itself, covers the validation phase.
+
+    The run claim follows only once validation passes.
+    """
     _seed(harness.uow, _rom(1, fetch="old"))
     preview = await _preview(harness)
+    registered: list[str] = []
+    register_run = harness.conflicts.register_run
+
+    def recording_register_run(run_id: str) -> None:
+        registered.append(run_id)
+        register_run(run_id)
+
+    monkeypatch.setattr(harness.conflicts, "register_run", recording_register_run)
     entered = threading.Event()
     release = threading.Event()
     original = harness.service._preview_builder.build
@@ -878,11 +891,30 @@ async def test_the_run_is_registered_once_validation_passes_and_not_before(harne
     assert await asyncio.get_running_loop().run_in_executor(None, entered.wait, 5)
 
     assert harness.service.is_active() is True
-    assert harness.conflicts.cleanup_running is False
+    assert registered == []
+    assert harness.conflicts.cleanup_running is True
 
     release.set()
-    assert (await start)["success"] is True
+    started = await start
+    assert started["success"] is True
+    assert registered == [started["run_id"]]
     assert harness.conflicts.cleanup_running is True
+    await _finish(harness)
+
+
+@pytest.mark.asyncio
+async def test_a_held_lease_refuses_the_start_before_it_consumes_the_preview(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    preview = await _preview(harness)
+    token = await harness.conflicts.acquire_lease("launch_reconfirm")
+
+    started = await _start(harness, preview["preview_id"])
+
+    assert started["reason"] == "operation_active"
+    assert "checking a game's launch settings" in started["message"]
+    assert harness.conflicts.cleanup_running is False
+    await harness.conflicts.release_lease(token)
+    assert (await _start(harness, preview["preview_id"]))["success"] is True
     await _finish(harness)
 
 
@@ -1303,6 +1335,96 @@ async def test_bound_live_group_repoints_then_deletes_old_row(harness):
     assert complete["removed_rom_ids"] == [1]
     assert harness.uow.roms.get(1) is None
     assert harness.uow.roms.get(2).shortcut_app_id == app_id
+
+
+async def _run_a_repoint_to_its_end_without_its_completion(harness: Harness) -> None:
+    app_id = 0x80000001
+    _seed(
+        harness.uow,
+        _rom(1, fetch="old", group="g", app_id=app_id),
+        _rom(2, fetch="new", group="g"),
+    )
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    harness.romm.outcomes[2] = [{"id": 2}] * 3
+    preview = await _preview(harness)
+    await _start(harness, preview["preview_id"])
+    action = await _wait_action(harness, "repoint_shortcut")
+    assert (await _claim_action(harness, action))["success"] is True
+    assert (await _complete_action(harness, action))["success"] is True
+    task = harness.service._task
+    assert task is not None
+    await task
+
+
+async def _run_a_repoint_to_its_end(harness: Harness) -> dict[str, Any]:
+    await _run_a_repoint_to_its_end_without_its_completion(harness)
+    return [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
+
+
+@pytest.mark.asyncio
+async def test_a_completion_that_needs_publication_is_leased_while_the_run_claim_still_holds(harness, monkeypatch):
+    """No cleanup can start between the run's claim and the lease its publication runs under."""
+    runs_at_lease: list[tuple[str, set[str]]] = []
+    acquire = harness.conflicts.acquire_lease
+
+    async def recording_acquire(key: str) -> str:
+        runs_at_lease.append((key, set(harness.conflicts._runs)))
+        return await acquire(key)
+
+    monkeypatch.setattr(harness.conflicts, "acquire_lease", recording_acquire)
+
+    complete = await _run_a_repoint_to_its_end(harness)
+
+    assert complete["publication_required"] is True
+    assert runs_at_lease == [("prune_complete", {complete["run_id"]})]
+    assert complete["prune_lease_token"].startswith("prune_complete:")
+    assert harness.conflicts.cleanup_running is False
+    assert harness.conflicts.conflicting_operations == 1
+    assert (await _start(harness, "no-such-preview"))["reason"] == "operation_active"
+    await harness.conflicts.release_lease(complete["prune_lease_token"])
+    assert harness.conflicts.conflicting_operations == 0
+    assert (await _start(harness, "no-such-preview"))["reason"] == "stale_preview"
+
+
+@pytest.mark.asyncio
+async def test_a_completion_nobody_heard_gives_its_lease_back(harness):
+    async def unheard(event: str, payload: object, /) -> bool:
+        return await harness.events(event, payload) and event != "prune_complete"
+
+    harness.service._executor._results._emit = unheard
+
+    complete = await _run_a_repoint_to_its_end(harness)
+
+    assert complete["prune_lease_token"].startswith("prune_complete:")
+    assert harness.conflicts.conflicting_operations == 0
+
+
+@pytest.mark.asyncio
+async def test_a_completion_whose_emit_raises_gives_its_lease_back(harness):
+    async def rejected(event: str, payload: object, /) -> bool:
+        if event == "prune_complete":
+            raise RuntimeError("transport rejected event")
+        return await harness.events(event, payload)
+
+    harness.service._executor._results._emit = rejected
+
+    await _run_a_repoint_to_its_end_without_its_completion(harness)
+
+    assert harness.conflicts.conflicting_operations == 0
+
+
+@pytest.mark.asyncio
+async def test_a_completion_that_needs_no_publication_carries_no_lease(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    preview = await _preview(harness)
+    await _start(harness, preview["preview_id"])
+
+    complete = await _finish(harness)
+
+    assert "publication_required" not in complete
+    assert "prune_lease_token" not in complete
+    assert harness.conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio

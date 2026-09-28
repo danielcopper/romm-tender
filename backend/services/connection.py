@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     import logging
 
     from services.protocols import (
+        ConflictRules,
         DeviceForgetFn,
         PlaytimeScopeNoticeClearFn,
         RommConnectionApi,
@@ -109,8 +110,9 @@ class ConnectionServiceConfig:
     Carries the live settings dict, the RomM API Protocol, the settings
     persister, the runtime infrastructure (event loop, logger), the
     minimum-version policy tuple, the device-forget callback fired on a
-    server-origin change, and the playtime scope-notice clear callback fired on
-    a fresh sign-in. Bundled here so the ctor stays within the S107 parameter
+    server-origin change, the playtime scope-notice clear callback fired on
+    a fresh sign-in, and the ``ConflictRules`` the sign-in, sign-out and
+    connection-test use cases check at their entry. Bundled here so the ctor stays within the S107 parameter
     budget and so the version constant stays declared once at the plugin
     entrypoint.
     """
@@ -123,10 +125,16 @@ class ConnectionServiceConfig:
     min_required_version: tuple[int, ...]
     forget_device: DeviceForgetFn
     clear_playtime_scope_notice: PlaytimeScopeNoticeClearFn
+    conflict_rules: ConflictRules
 
 
 class ConnectionService:
-    """Heartbeat, version gate, auth probe, and Client API Token lifecycle."""
+    """Heartbeat, version gate, auth probe, and Client API Token lifecycle.
+
+    The connection test, the three sign-ins and the sign-out each check their
+    endpoint's conflict rules at their entry, under that endpoint's name, and
+    answer the canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: ConnectionServiceConfig) -> None:
         self._settings = config.settings
@@ -137,6 +145,7 @@ class ConnectionService:
         self._min_required_version = config.min_required_version
         self._forget_device = config.forget_device
         self._clear_playtime_scope_notice = config.clear_playtime_scope_notice
+        self._rules = config.conflict_rules
 
     async def test_connection(self) -> dict[str, Any]:
         """Probe the configured server and return a frontend-shaped result dict.
@@ -149,6 +158,12 @@ class ConnectionService:
         failure, ``romm_version`` carries the detected server version when
         the heartbeat exposed one.
         """
+        async with self._rules.hold("test_connection", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._test_connection()
+
+    async def _test_connection(self) -> dict[str, Any]:
         if not self._settings.get("romm_url"):
             return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
 
@@ -225,6 +240,18 @@ class ConnectionService:
         404 against the new server's negotiate. Returns the same ``success`` /
         ``reason`` / ``message`` shape as :meth:`test_connection`.
         """
+        async with self._rules.hold("connect_with_credentials", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
+
+    async def _establish_token(
+        self,
+        romm_url: str,
+        username: str,
+        password: str,
+        allow_insecure_ssl: bool | None = None,
+    ) -> dict[str, Any]:
         if not romm_url:
             return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
         trimmed = romm_url.strip()
@@ -341,6 +368,17 @@ class ConnectionService:
         required scope. The token value is never logged. Returns the same
         ``success`` / ``reason`` / ``message`` shape as :meth:`test_connection`.
         """
+        async with self._rules.hold("connect_with_token", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._establish_user_token(romm_url, token, allow_insecure_ssl)
+
+    async def _establish_user_token(
+        self,
+        romm_url: str,
+        token: str,
+        allow_insecure_ssl: bool | None = None,
+    ) -> dict[str, Any]:
         if not romm_url:
             return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
         trimmed = romm_url.strip()
@@ -416,6 +454,17 @@ class ConnectionService:
         logged. Returns the same ``success`` / ``reason`` / ``message`` shape as
         :meth:`test_connection`.
         """
+        async with self._rules.hold("connect_with_pairing_code", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._establish_paired_token(romm_url, code, allow_insecure_ssl)
+
+    async def _establish_paired_token(
+        self,
+        romm_url: str,
+        code: str,
+        allow_insecure_ssl: bool | None = None,
+    ) -> dict[str, Any]:
         if not romm_url:
             return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
         trimmed = romm_url.strip()
@@ -684,7 +733,7 @@ class ConnectionService:
             return
         self._logger.info("Migrated legacy credentials to a Client API Token")
 
-    def sign_out(self) -> dict[str, Any]:
+    async def sign_out(self) -> dict[str, Any]:
         """Forget the stored Client API Token on this device — local only.
 
         Clears the token, its server-side id, its minting origin, and its
@@ -704,6 +753,12 @@ class ConnectionService:
         Returns the canonical success shape on success, the canonical failure
         shape on a persist error.
         """
+        async with self._rules.hold("sign_out", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return self._sign_out()
+
+    def _sign_out(self) -> dict[str, Any]:
         snapshot = self._snapshot_auth_state()
         self._settings["romm_api_token"] = None
         self._settings["romm_api_token_id"] = None

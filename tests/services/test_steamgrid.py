@@ -3,7 +3,7 @@ import http.client
 import os
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin
+from _factories import _make_conflict_rules, _make_testable_plugin, _record_operations_at_lease
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -102,6 +102,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emit, 
             get_pending_sync=lambda: p._sync_service._pending_sync,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
         ),
     )
     p._uow = uow
@@ -356,6 +357,56 @@ class TestGetSgdbArtworkBase64:
         # The artwork request must use the cached sgdb_id (9999), not 7777.
         assert any("/grids/game/9999" in p for p in fake_steamgrid_db_api.requested_paths)
         assert result["base64"] is not None
+
+
+class TestConflictRulesAtTheUseCase:
+    """Each SteamGridDB use case checks its endpoint's prune rule, and the artwork answer's lease is taken inside it."""
+
+    @pytest.mark.asyncio
+    async def test_an_image_carries_a_lease_taken_inside_the_use_cases_operation(
+        self, plugin, sgdb_artwork_cache, monkeypatch
+    ):
+        """No cleanup can start between the fetch's operation and the lease that outlasts it."""
+        plugin.settings["steamgriddb_api_key"] = "some-key"
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "hero")] = b"fake png data"
+        seen = _record_operations_at_lease(plugin._prune_conflicts, monkeypatch)
+
+        result = await plugin._sgdb_service.get_sgdb_artwork_base64(42, 1)
+
+        assert seen == [["get_sgdb_artwork_base64"]]
+        assert result["prune_lease_token"].startswith("sgdb_artwork:")
+        assert plugin._prune_conflicts.conflicting_operations == 1
+        await plugin._prune_conflicts.release_lease(result["prune_lease_token"])
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    async def test_an_answer_without_an_image_carries_no_lease(self, plugin):
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
+
+        result = await plugin._sgdb_service.get_sgdb_artwork_base64(42, 1)
+
+        assert result == {"base64": None, "no_api_key": True}
+        assert plugin._prune_conflicts.conflicting_operations == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("use_case", "args"),
+        [
+            ("get_sgdb_artwork_base64", (42, 1)),
+            ("save_shortcut_icon", (42, "")),
+            ("get_sgdb_resolution", (42,)),
+            ("apply_sgdb_game_id", (42, 7)),
+        ],
+    )
+    async def test_a_running_cleanup_refuses_the_use_case(self, plugin, use_case, args):
+        plugin._prune_conflicts.register_run("held-run")
+
+        result = await getattr(plugin._sgdb_service, use_case)(*args)
+
+        assert result["reason"] == "prune_active"
+        assert "prune_lease_token" not in result
+        assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 class TestGetSgdbResolution:
@@ -988,6 +1039,7 @@ class TestDebugLoggerProtocolSeam:
                 get_pending_sync=lambda: p._sync_service._pending_sync,
                 log_debug=capture,
                 uow_factory=FakeUnitOfWorkFactory(),
+                conflict_rules=_make_conflict_rules(),
             ),
         )
         return p, captured

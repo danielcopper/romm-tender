@@ -2,7 +2,7 @@
 
 Service construction is separated from adapter construction because it
 needs runtime state only ``main.py`` can supply (the event loop, the event
-funnel) plus plugin state that exists once ``bootstrap()`` has
+sink's emit) plus plugin state that exists once ``bootstrap()`` has
 run. Services never reach each other by import: every cross-service
 reference is threaded through a ``*ServiceConfig`` here, or deferred
 through a ``LateBinding`` when the two constructors form a cycle.
@@ -18,7 +18,7 @@ from domain.identity import VERSION
 from domain.shortcut_data import RETRODECK_APP_ID
 from lib.conflict_rules import ConflictRuleSet
 from lib.late_binding import LateBinding
-from lib.prune_gate import PruneConflicts
+from lib.prune_conflicts import PruneConflicts
 from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.artwork import ArtworkService, ArtworkServiceConfig
@@ -38,6 +38,7 @@ from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
+from services.prune_leases import PruneLeaseService, PruneLeaseServiceConfig
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
@@ -99,7 +100,7 @@ class WiringConfig:
 
 @dataclass(frozen=True)
 class ServicesBundle:
-    """Every wired service, and the prune conflict gate, as ``wire_services`` hands them to ``Plugin._main()``."""
+    """Every wired service, and the prune conflicts they share, as ``wire_services`` hands them out."""
 
     prune_conflicts: PruneConflicts
     save_sync_service: SaveService
@@ -109,6 +110,7 @@ class ServicesBundle:
     rom_adoption_service: RomAdoptionService
     rom_removal_service: RomRemovalService
     prune_service: PruneService
+    prune_lease_service: PruneLeaseService
     data_inventory_service: DataInventoryService
     firmware_service: FirmwareService
     sgdb_service: SteamGridService
@@ -255,6 +257,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             relaunch_options=relaunch_options_resolver,
             save_directories=save_directories_binding.get,
             uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
         ),
     )
     migration_pending_binding.set(migration_service.is_retrodeck_migration_pending)
@@ -472,6 +475,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             get_pending_sync=pending_sync_binding.get,
             log_debug=cfg.callbacks.log_debug,
             uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -509,6 +513,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
             settings_persister=cfg.callbacks.settings_persister,
             steam_config=cfg.adapters.steam_config,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -548,6 +553,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             min_required_version=cfg.min_required_version,
             forget_device=save_sync_service.forget_device,
             clear_playtime_scope_notice=playtime_service.clear_scope_notice,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -667,8 +673,11 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             switch_version=version_switch_service.switch_version_unchecked,
             settings=cfg.stores.settings,
             run_claim=prune_conflicts,
+            conflict_rules=conflict_rules,
         )
     )
+
+    prune_lease_service = PruneLeaseService(config=PruneLeaseServiceConfig(conflict_rules=conflict_rules))
 
     update_check_service = UpdateCheckService(
         config=UpdateCheckServiceConfig(
@@ -693,6 +702,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         rom_adoption_service=rom_adoption_service,
         rom_removal_service=rom_removal_service,
         prune_service=prune_service,
+        prune_lease_service=prune_lease_service,
         data_inventory_service=data_inventory_service,
         firmware_service=firmware_service,
         sgdb_service=sgdb_service,

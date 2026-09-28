@@ -51,8 +51,8 @@ from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
-from lib.prune_gate import PruneConflicts
-from lib.sync_gate import sync_refusal
+from lib.conflict_rules import sync_refusal
+from lib.prune_conflicts import PruneConflicts
 from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -66,6 +66,7 @@ from services.library import LibraryService
 from services.metadata import MetadataService
 from services.playtime import PlaytimeService
 from services.prune import PruneService
+from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
@@ -619,13 +620,14 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 30
+        assert len(fields(result)) == 31
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
         assert isinstance(result.disc_service, DiscService)
         assert isinstance(result.version_switch_service, VersionSwitchService)
         assert isinstance(result.prune_service, PruneService)
+        assert isinstance(result.prune_lease_service, PruneLeaseService)
         assert isinstance(result.data_inventory_service, DataInventoryService)
         assert isinstance(result.game_process_service, GameProcessService)
         assert isinstance(result.update_check_service, UpdateCheckService)

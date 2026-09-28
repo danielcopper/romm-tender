@@ -5,8 +5,8 @@ import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _conflict_rules import endpoints_with_rule
 from _factories import _make_conflict_rules, _make_prune_conflicts
-from _gate_rules import endpoints_with_rule
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
@@ -36,102 +36,6 @@ from services.settings import SettingsService, SettingsServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
-_RELAUNCH_ITEMS = {"items": [{"app_id": 42, "launch_options": "launch"}]}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("event", "payload"),
-    [
-        ("migration_relaunch_options", {"items": [{"app_id": 42, "launch_options": "launch"}]}),
-    ],
-)
-async def test_continuation_events_hold_a_renewable_prune_lease(plugin, event, payload):
-    await plugin._emit_with_prune_continuation(event, payload)
-
-    token = plugin._event_sink.last_payload["prune_lease_token"]
-    assert token.startswith(f"{event}:")
-    assert "prune_lease_token" not in payload
-    assert plugin._prune_conflicts.conflicting_operations == 1
-    assert (await plugin.renew_prune_conflict_lease(token))["success"] is True
-    assert (await plugin.release_prune_conflict_lease(token))["success"] is True
-    assert plugin._prune_conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("event", "payload"),
-    [
-        ("sync_complete", {"total_games": 1}),
-        ("sync_stale", {"remove": [{"rom_id": 1, "app_id": 42}]}),
-        ("download_complete", {"app_id": 42, "launch_options": "launch"}),
-    ],
-)
-async def test_the_funnel_leaves_the_events_their_services_lease_themselves(plugin, event, payload):
-    """The library service leases the two sync events and the download service ``download_complete``.
-
-    A second lease here would never be released.
-    """
-    await plugin._emit_with_prune_continuation(event, payload)
-
-    assert plugin._event_sink.last_payload == payload
-    assert plugin._prune_conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("delivers", [True, False])
-async def test_the_funnel_answers_whether_anybody_heard_the_event(plugin, delivers):
-    """A service that leases its own event releases the lease on this answer."""
-    plugin._event_sink.delivers = delivers
-
-    assert await plugin._emit_with_prune_continuation("sync_complete", {"total_games": 1}) is delivers
-
-
-@pytest.mark.asyncio
-async def test_rejected_continuation_event_releases_its_unreachable_lease(plugin):
-    plugin._event_sink.raises = RuntimeError("transport rejected event")
-
-    with pytest.raises(RuntimeError, match="transport rejected event"):
-        await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
-
-    assert plugin._prune_conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-async def test_a_continuation_event_nobody_heard_releases_its_lease(plugin):
-    """A claim the panel cannot discharge holds off every removed-game cleanup until it expires."""
-    plugin._event_sink.delivers = False
-
-    await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
-
-    assert plugin._event_sink.last_payload["prune_lease_token"].startswith("migration_relaunch_options:")
-    assert plugin._prune_conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-async def test_a_delivered_continuation_event_keeps_its_lease(plugin):
-    """The control for the case above — the release must follow the answer, not the send."""
-    await plugin._emit_with_prune_continuation("migration_relaunch_options", _RELAUNCH_ITEMS)
-
-    assert plugin._prune_conflicts.conflicting_operations == 1
-
-
-@pytest.mark.asyncio
-async def test_terminal_prune_completion_holds_publication_lease_before_release_wait(plugin):
-    plugin._prune_service.start_prune = AsyncMock(return_value={"success": True, "run_id": "next"})
-
-    await plugin._emit_with_prune_continuation(
-        "prune_complete",
-        {"run_id": "run-1", "final": True, "publication_required": True},
-    )
-
-    token = plugin._event_sink.last_payload["prune_lease_token"]
-    assert token.startswith("prune_complete:")
-    blocked = await plugin.start_prune({"confirmed": True})
-    assert blocked["reason"] == "operation_active"
-    assert (await plugin.release_prune_conflict_lease(token))["success"] is True
-    assert await plugin.start_prune({"confirmed": True}) == {"success": True, "run_id": "next"}
-
 
 @pytest.fixture
 def plugin(logger, home, data_dir):
@@ -143,12 +47,11 @@ def plugin(logger, home, data_dir):
     # don't override it. Tests exercising the guard rebuild this with a
     # non-existent path or empty string.
     p._retrodeck_paths = FakeRetroDeckPaths(home="/tmp")
-    # Default migration service mock — no migration pending. Tests that need
-    # to exercise the @migration_blocked gate override this.
+    # Default migration service mock — no migration pending.
     p._migration_service = MagicMock()
     p._migration_service.is_retrodeck_migration_pending.return_value = False
     p._prune_service = MagicMock()
-    p._prune_conflicts = _make_prune_conflicts()
+    conflict_rules = _make_conflict_rules()
     p._event_sink = FakeEventSink()
 
     p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
@@ -179,7 +82,7 @@ def plugin(logger, home, data_dir):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -196,6 +99,7 @@ def plugin(logger, home, data_dir):
             get_pending_sync=lambda: p._sync_service._pending_sync,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(),
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -206,6 +110,7 @@ def plugin(logger, home, data_dir):
             logger=logger,
             settings_persister=p._settings_persister,
             steam_config=steam_config,
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -219,6 +124,7 @@ def plugin(logger, home, data_dir):
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),
+            conflict_rules=conflict_rules,
         ),
     )
 
@@ -232,7 +138,7 @@ def plugin(logger, home, data_dir):
             uow_factory=FakeUnitOfWorkFactory(),
             relaunch_options=FakeRelaunchOptionsResolver(),
             loop=running_loop(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=conflict_rules,
         ),
     )
     return p
@@ -315,6 +221,7 @@ class TestConnection:
                 min_required_version=Plugin._MIN_REQUIRED_VERSION,
                 forget_device=MagicMock(),
                 clear_playtime_scope_notice=MagicMock(),
+                conflict_rules=_make_conflict_rules(),
             ),
         )
         result = await plugin.test_connection()
@@ -862,9 +769,9 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "get_platform_core_info",
     "get_system_core_info",
     "count_platform_saves",
-    # Read-only disc-picker state query (the pin-write select_disc IS decorated).
+    # Read-only disc-picker state query (the pin-write select_disc names the rule).
     "get_disc_selection",
-    # Read-only version-picker state query (the binding-move switch_version IS decorated).
+    # Read-only version-picker state query (the binding-move switch_version names the rule).
     "get_version_list",
     "get_platforms",
     "get_collections",
@@ -973,15 +880,15 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
 }
 
 
-class TestMigrationBlockedDecoratorCoverage:
+class TestMigrationRuleCoverage:
     """Every endpoint on Plugin must be classified: either explicitly
     whitelisted (read-only / unblock pathway / non-retrodeck) or declaring the
-    migration rule — ``@migration_blocked``, or a
-    ``hold("<endpoint>", migration=True)`` at the entry of the use case it
-    calls. Prevents a new endpoint from being silently unguarded against
+    migration rule — a ``hold("<endpoint>", migration=True)`` or
+    ``hold_start("<endpoint>", migration=True)`` at the entry of the use case
+    it calls. Prevents a new endpoint from being silently unguarded against
     pending migration corruption."""
 
-    def test_all_callables_either_whitelisted_or_decorated(self):
+    def test_all_callables_either_whitelisted_or_declaring_the_rule(self):
         from host.dispatch import reachable_methods
         from main import Plugin
 
@@ -1000,7 +907,7 @@ class TestMigrationBlockedDecoratorCoverage:
             f"{sorted(unclassified)}"
         )
 
-    def test_no_callable_is_both_decorated_and_whitelisted(self):
+    def test_no_callable_both_declares_the_rule_and_is_whitelisted(self):
         """An endpoint that both declares the migration rule AND is whitelisted
         is silently passing the coverage check — likely a misclassification.
         Catch it."""
@@ -1019,7 +926,7 @@ class TestMigrationBlockedDecoratorCoverage:
             f"remove from one: {sorted(double_classified)}"
         )
 
-    def test_whitelisted_callables_are_endpoints_and_not_decorated(self):
+    def test_whitelisted_callables_are_endpoints_declaring_no_rule(self):
         """Every name in _MIGRATION_BLOCKED_WHITELIST must be an endpoint on
         Plugin and must NOT declare the migration rule. Reads from the
         whitelist side, so a name left behind by a removed or renamed endpoint
@@ -1117,6 +1024,7 @@ class TestMainStartupOrdering:
             disc_service=MagicMock(),
             version_switch_service=MagicMock(),
             prune_service=MagicMock(shutdown=AsyncMock()),
+            prune_lease_service=MagicMock(),
             data_inventory_service=MagicMock(),
             connection_service=connection_service,
             startup_healing_service=startup_healing_service,

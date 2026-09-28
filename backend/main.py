@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from dataclasses import asdict
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
@@ -38,9 +38,6 @@ from host import (
     route,
     run_backend,
 )
-from lib.migration_gate import migration_blocked
-from lib.prune_gate import PruneConflicts, prune_active_blocked, prune_exclusive_start
-from lib.sync_gate import sync_active_blocked
 
 
 class PluginEventSink(Protocol):
@@ -70,9 +67,6 @@ class Plugin:
     # What the process hosting this backend knows about its own run. Set by the
     # entry point once the build is through, for the one callable that reads it.
     _host_status: HostStatus
-    # Every claim that conflicts with a removed-game cleanup; bound by ``_main``
-    # from the instance the composition root builds.
-    _prune_conflicts: PruneConflicts
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -103,34 +97,6 @@ class Plugin:
         """
         self._debug_logger(msg)
 
-    async def _emit_with_prune_continuation(self, event: str, payload: object, /) -> bool:
-        """Attach a prune lease to events whose Steam writes outlive backend work; answer whether anybody heard it.
-
-        The library service leases ``sync_complete`` and ``sync_stale`` itself
-        when it emits them, and the download service ``download_complete``, so
-        none of the three is leased here.
-        """
-        fields = cast("dict[str, Any]", payload) if isinstance(payload, dict) else None
-        needs_lease = fields is not None and (
-            (event == "prune_complete" and fields.get("final") is not False and fields.get("publication_required"))
-            or (event == "migration_relaunch_options" and bool(fields.get("items")))
-        )
-        lease_token = None
-        if needs_lease and fields is not None:
-            fields = dict(fields)
-            lease_token = await self._prune_conflicts.acquire_lease(event)
-            fields["prune_lease_token"] = lease_token
-            payload = fields
-        try:
-            delivered = await self._event_sink.emit(event, payload)
-        except BaseException:
-            if lease_token is not None:
-                await self._prune_conflicts.release_lease(lease_token)
-            raise
-        if lease_token is not None and not delivered:
-            await self._prune_conflicts.release_lease(lease_token)
-        return delivered
-
     async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
 
@@ -140,7 +106,7 @@ class Plugin:
         """
         self.loop = asyncio.get_running_loop()
         # Before anything can emit: start-up routines below send events, and
-        # wiring passes the funnel to every service.
+        # wiring passes the sink's emit to every service.
         self._event_sink = events
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
@@ -170,7 +136,7 @@ class Plugin:
                 runtime=RuntimeBundle(
                     loop=self.loop,
                     logger=logger,
-                    emit=self._emit_with_prune_continuation,
+                    emit=self._event_sink.emit,
                     clock=result.runtime_adapters.clock,
                     uuid_gen=result.runtime_adapters.uuid_gen,
                     sleeper=result.runtime_adapters.sleeper,
@@ -184,9 +150,6 @@ class Plugin:
                 update_source=update_source,
             )
         )
-        # Bound before anything below can emit: the event funnel every service
-        # was handed reads it on the first continuation event.
-        self._prune_conflicts = services.prune_conflicts
         self._save_sync_service = services.save_sync_service
         self._playtime_service = services.playtime_service
         self._sync_service = services.sync_service
@@ -206,6 +169,7 @@ class Plugin:
         self._disc_service = services.disc_service
         self._version_switch_service = services.version_switch_service
         self._prune_service = services.prune_service
+        self._prune_lease_service = services.prune_lease_service
         self._data_inventory_service = services.data_inventory_service
         self._connection_service = services.connection_service
         self._startup_healing_service = services.startup_healing_service
@@ -275,39 +239,32 @@ class Plugin:
     # ── Endpoints ──────────────────────────────────────────────────────
 
     @route
-    @prune_active_blocked
     async def test_connection(self):
         return await self._connection_service.test_connection()
 
     @route
-    @prune_active_blocked
     async def connect_with_credentials(self, romm_url, username, password, allow_insecure_ssl=None):
         return await self._connection_service.establish_token(romm_url, username, password, allow_insecure_ssl)
 
     @route
-    @prune_active_blocked
     async def connect_with_token(self, romm_url, token, allow_insecure_ssl=None):
         return await self._connection_service.establish_user_token(romm_url, token, allow_insecure_ssl)
 
     @route
-    @prune_active_blocked
     async def connect_with_pairing_code(self, romm_url, code, allow_insecure_ssl=None):
         return await self._connection_service.establish_paired_token(romm_url, code, allow_insecure_ssl)
 
     @route
-    @prune_active_blocked
     async def sign_out(self):
-        return self._connection_service.sign_out()
+        return await self._connection_service.sign_out()
 
     @route
-    @prune_active_blocked
     async def save_server_url(self, romm_url, allow_insecure_ssl=None):
-        return self._settings_service.save_server_url(romm_url, allow_insecure_ssl)
+        return await self._settings_service.save_server_url(romm_url, allow_insecure_ssl)
 
     @route
-    @prune_active_blocked
     async def save_custom_headers(self, headers):
-        return self._settings_service.save_custom_headers(headers)
+        return await self._settings_service.save_custom_headers(headers)
 
     @route
     def frontend_log(self, level, message):
@@ -338,9 +295,8 @@ class Plugin:
         return self._settings_service.get_known_regions()
 
     @route
-    @prune_active_blocked
     async def apply_steam_input_setting(self):
-        return self._settings_service.apply_steam_input_setting()
+        return await self._settings_service.apply_steam_input_setting()
 
     @route
     def fix_retroarch_input_driver(self):
@@ -426,8 +382,6 @@ class Plugin:
         return await self._version_switch_service.switch_version(app_id, target_rom_id, allow_stranded)
 
     @route
-    @migration_blocked
-    @sync_active_blocked
     async def get_prune_preview(self, request):
         return await self._prune_service.get_prune_preview(request)
 
@@ -436,22 +390,13 @@ class Plugin:
         return await self._prune_service.stage_prune_installed_selection(request)
 
     @route
-    @prune_exclusive_start
-    @migration_blocked
-    @sync_active_blocked
     async def start_prune(self, request):
         return await self._prune_service.start_prune(request)
 
-    # Deliberately undecorated, like cancel_prune: a frontend that just mounted
-    # has to be able to disown leases stranded by the context before it, and a
-    # stranded lease is exactly what would otherwise refuse this call.
     @route
     async def release_orphaned_prune_leases(self):
-        released = await self._prune_conflicts.release_orphaned_leases()
-        return {"success": True, "released": released}
+        return await self._prune_lease_service.release_orphaned_prune_leases()
 
-    # Deliberately undecorated: the endpoints that stop, answer or wait on a run
-    # must stay reachable while its run claim is held.
     @route
     async def cancel_prune(self, run_id):
         return await self._prune_service.cancel_prune(run_id)
@@ -466,19 +411,11 @@ class Plugin:
 
     @route
     async def release_prune_conflict_lease(self, lease_token):
-        await self._prune_conflicts.release_lease(str(lease_token))
-        return {"success": True, "message": "Operation lease released."}
+        return await self._prune_lease_service.release_prune_conflict_lease(lease_token)
 
     @route
     async def renew_prune_conflict_lease(self, lease_token):
-        renewed = await self._prune_conflicts.renew_lease(str(lease_token))
-        if not renewed:
-            return {
-                "success": False,
-                "reason": "stale_lease",
-                "message": "Operation lease is no longer active.",
-            }
-        return {"success": True, "message": "Operation lease renewed."}
+        return await self._prune_lease_service.renew_prune_conflict_lease(lease_token)
 
     # ── Firmware delegation to FirmwareService ──────────────
 
@@ -907,12 +844,8 @@ class Plugin:
     # ── SGDB delegation to SteamGridService ───────────────────────
 
     @route
-    @prune_active_blocked
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
-        result = await self._sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
-        if result.get("base64") is not None:
-            result["prune_lease_token"] = await self._prune_conflicts.acquire_lease("sgdb_artwork")
-        return result
+        return await self._sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
 
     @route
     async def verify_sgdb_api_key(self, api_key=None):
@@ -923,12 +856,10 @@ class Plugin:
         return self._sgdb_service.save_sgdb_api_key(api_key)
 
     @route
-    @prune_active_blocked
     async def save_shortcut_icon(self, app_id, icon_base64):
         return await self._sgdb_service.save_shortcut_icon(app_id, icon_base64)
 
     @route
-    @prune_active_blocked
     async def get_sgdb_resolution(self, rom_id):
         return await self._sgdb_service.get_sgdb_resolution(rom_id)
 
@@ -937,7 +868,6 @@ class Plugin:
         return await self._sgdb_service.search_sgdb_games(term)
 
     @route
-    @prune_active_blocked
     async def apply_sgdb_game_id(self, rom_id, sgdb_id):
         return await self._sgdb_service.apply_sgdb_game_id(rom_id, sgdb_id)
 
@@ -976,7 +906,6 @@ class Plugin:
     # ── Migration delegation to MigrationService ──────────────
 
     @route
-    @prune_active_blocked
     async def migrate_retrodeck_files(self, conflict_strategy=None):
         return await self._migration_service.migrate_retrodeck_files(conflict_strategy)
 

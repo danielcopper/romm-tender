@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from services.protocols import (
+        ConflictRules,
         EventEmitter,
         FirmwareResolver,
         MigrationFileStore,
@@ -64,7 +65,9 @@ class MigrationServiceConfig:
     moves those and leaves everything else alone. ``save_directories`` records
     the installed ROMs' answered save directories afresh once the files are moved.
     Relational migration state (ROM installs, BIOS records, change markers) is
-    read through the injected ``uow_factory``.
+    read through the injected ``uow_factory``. ``conflict_rules`` are what the
+    migration checks at its entry and emits its relaunch items under a lease
+    through.
     """
 
     migration_file_store: MigrationFileStore
@@ -78,10 +81,16 @@ class MigrationServiceConfig:
     relaunch_options: RelaunchOptionsReader
     save_directories: SaveDirectoriesRecorderProvider
     uow_factory: UnitOfWorkFactory
+    conflict_rules: ConflictRules
 
 
 class MigrationService:
-    """Handles RetroDECK path change detection and file migration."""
+    """Handles RetroDECK path change detection and file migration.
+
+    The migration checks its endpoint's conflict rules at its entry, under that
+    endpoint's name, and answers the canonical refusal when one holds
+    (CONTEXT.md → Conflict rules).
+    """
 
     def __init__(self, *, config: MigrationServiceConfig) -> None:
         self._migration_file_store = config.migration_file_store
@@ -95,6 +104,7 @@ class MigrationService:
         self._relaunch_options = config.relaunch_options
         self._save_directories = config.save_directories
         self._uow_factory = config.uow_factory
+        self._rules = config.conflict_rules
         self._mover = FileMover(file_store=config.migration_file_store, logger=config.logger)
         # Strong refs to in-flight background tasks. ``loop.create_task``
         # alone is not enough — without a strong ref, the loop is free to
@@ -664,6 +674,12 @@ class MigrationService:
                 replace existing destination files, "skip" to keep existing files
                 and just update state paths.
         """
+        async with self._rules.hold("migrate_retrodeck_files", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._migrate_retrodeck_files(conflict_strategy)
+
+    async def _migrate_retrodeck_files(self, conflict_strategy=None):
         with self._uow_factory() as uow:
             stored_pending = self._read_pending_homes(uow)
             stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
@@ -696,7 +712,7 @@ class MigrationService:
         # has already committed, so the items carry the persisted new paths.
         relaunch_items = result.pop("_relaunch_items", None)
         if relaunch_items is not None:
-            await self._emit("migration_relaunch_options", {"items": relaunch_items})
+            await self._emit_relaunch_items(relaunch_items)
             # Record each re-baked command as the shortcut's applied state (the
             # value the frontend confirm-sets onto the relocated shortcut), so the
             # next sync skips the now-correct shortcut instead of re-touching it
@@ -704,6 +720,23 @@ class MigrationService:
             await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
             await self._rerecord_save_directories()
         return result
+
+    async def _emit_relaunch_items(self, items: list[dict[str, Any]]) -> None:
+        """Emit the re-baked launch commands, under a ``migration_relaunch_options`` lease when there are any.
+
+        The frontend writes them onto Steam's shortcuts once the event
+        arrives, which can outlast this call, so the lease holds off a cleanup
+        until it has. Taken inside the migration's own prune operation, which
+        refuses a cleanup's start until then. An empty list gives the frontend
+        nothing to write.
+        """
+        if items:
+            await self._rules.emit_under_lease(
+                "migration_relaunch_options",
+                lambda token: self._emit("migration_relaunch_options", {"items": items, "prune_lease_token": token}),
+            )
+        else:
+            await self._emit("migration_relaunch_options", {"items": items})
 
     async def _rerecord_save_directories(self) -> None:
         """Record the installed ROMs' save directories afresh, as the new home answers them.

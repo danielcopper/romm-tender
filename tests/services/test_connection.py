@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+from _factories import _make_conflict_rules, _make_prune_conflicts
 
 from lib.errors import (
     PairingCodeInvalidError,
@@ -25,6 +26,9 @@ from services.connection import (
     ConnectionService,
     ConnectionServiceConfig,
 )
+
+if TYPE_CHECKING:
+    from lib.conflict_rules import ConflictRuleSet
 
 _MIN_VERSION = (5, 3, 0)
 
@@ -66,6 +70,7 @@ def _make_service(
     min_required_version: tuple[int, ...] = _MIN_VERSION,
     forget_device: MagicMock | None = None,
     clear_playtime_scope_notice: MagicMock | None = None,
+    conflict_rules: ConflictRuleSet | None = None,
 ) -> ConnectionService:
     return ConnectionService(
         config=ConnectionServiceConfig(
@@ -79,6 +84,7 @@ def _make_service(
             clear_playtime_scope_notice=(
                 clear_playtime_scope_notice if clear_playtime_scope_notice is not None else MagicMock()
             ),
+            conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
         ),
     )
 
@@ -1608,7 +1614,7 @@ class TestSignOut:
             settings_persister=settings_persister,
         )
 
-        result = service.sign_out()
+        result = event_loop.run_until_complete(service.sign_out())
 
         assert result["success"] is True
         assert "Signed out" in result["message"]
@@ -1629,7 +1635,7 @@ class TestSignOut:
         settings["romm_api_token_source"] = "minted"
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
-        service.sign_out()
+        event_loop.run_until_complete(service.sign_out())
 
         romm_api.delete_client_token.assert_not_called()
 
@@ -1644,7 +1650,7 @@ class TestSignOut:
             settings_persister=settings_persister,
         )
 
-        result = service.sign_out()
+        result = event_loop.run_until_complete(service.sign_out())
 
         assert result["success"] is True
         assert settings["romm_api_token"] is None
@@ -1657,7 +1663,7 @@ class TestSignOut:
         settings = _working_settings()
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
-        service.sign_out()
+        event_loop.run_until_complete(service.sign_out())
 
         assert service._settings is settings
 
@@ -1676,7 +1682,7 @@ class TestSignOut:
             settings_persister=settings_persister,
         )
 
-        result = service.sign_out()
+        result = event_loop.run_until_complete(service.sign_out())
 
         # Canonical failure shape (reason + message both present).
         assert result["success"] is False
@@ -1875,7 +1881,7 @@ class TestUserIdentityStamping:
             settings_persister=settings_persister,
         )
 
-        service.sign_out()
+        event_loop.run_until_complete(service.sign_out())
 
         assert settings["romm_user_id"] is None
         # Still exactly one atomic save — identity clears alongside the token quad.
@@ -1936,3 +1942,79 @@ class TestUserIdentityStamping:
         assert result["success"] is True
         assert settings.get("romm_user_id") is None
         settings_persister.save_settings.assert_not_called()
+
+
+_CONNECTION_USE_CASES = [
+    ("test_connection", ()),
+    ("establish_token", ("https://new.server", "user", "pass")),
+    ("establish_user_token", ("https://new.server", "rmm_pasted")),
+    ("establish_paired_token", ("https://new.server", "ABCD-1234")),
+    ("sign_out", ()),
+]
+
+
+class TestConflictRulesAtTheUseCase:
+    """Each connection use case checks its endpoint's prune rule and holds an operation named after it."""
+
+    @pytest.mark.parametrize(("use_case", "args"), _CONNECTION_USE_CASES)
+    def test_a_running_cleanup_refuses_the_use_case_and_changes_nothing(
+        self, event_loop, romm_api, logger, settings_persister, use_case, args
+    ):
+        conflicts = _make_prune_conflicts()
+        conflicts.register_run("held-run")
+        settings = _working_settings()
+        before = dict(settings)
+        service = _make_service(
+            settings=settings,
+            romm_api=romm_api,
+            loop=event_loop,
+            logger=logger,
+            settings_persister=settings_persister,
+            conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
+        )
+
+        result = event_loop.run_until_complete(getattr(service, use_case)(*args))
+
+        assert result["reason"] == "prune_active"
+        assert settings == before
+        settings_persister.save_settings.assert_not_called()
+        romm_api.heartbeat.assert_not_called()
+        assert conflicts.conflicting_operations == 0
+
+    @pytest.mark.parametrize(
+        ("use_case", "args", "label"),
+        [
+            ("test_connection", (), "test_connection"),
+            ("establish_token", ("https://new.server", "user", "pass"), "connect_with_credentials"),
+            ("establish_user_token", ("https://new.server", "rmm_pasted"), "connect_with_token"),
+            ("establish_paired_token", ("https://new.server", "ABCD-1234"), "connect_with_pairing_code"),
+            ("sign_out", (), "sign_out"),
+        ],
+    )
+    def test_the_use_case_runs_under_an_operation_named_after_its_endpoint(
+        self, event_loop, romm_api, logger, use_case, args, label
+    ):
+        conflicts = _make_prune_conflicts()
+        seen: list[list[str]] = []
+        persister = MagicMock()
+        persister.save_settings.side_effect = lambda: seen.append(
+            sorted(holder.label for holder in conflicts._operations.values())
+        )
+        romm_api.heartbeat.side_effect = lambda: (
+            seen.append(sorted(holder.label for holder in conflicts._operations.values()))
+            or {"SYSTEM": {"VERSION": "5.3.0"}}
+        )
+        service = _make_service(
+            settings=_working_settings(),
+            romm_api=romm_api,
+            loop=event_loop,
+            logger=logger,
+            settings_persister=persister,
+            conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
+        )
+
+        event_loop.run_until_complete(getattr(service, use_case)(*args))
+
+        assert seen
+        assert all(labels == [label] for labels in seen)
+        assert conflicts.conflicting_operations == 0

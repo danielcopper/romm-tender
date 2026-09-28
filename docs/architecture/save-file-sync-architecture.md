@@ -901,7 +901,7 @@ live reading the caller already took, before the caller looks at any local file:
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It also does nothing while a RetroDECK home
 migration is pending or still running, its re-record included: `follow_save_directory` checks that itself, so the gate
-holds for every caller — the status and count reads among them, which the migration gate does not otherwise stop — and
+holds for every caller — the status and count reads among them, which the migration rule does not otherwise stop — and
 the files stay the migration's to move until it has finished. (Other things move save files regardless of the setting:
 the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is logged and
 leaves the record as it was; the operation that called it goes on. Against the record:
@@ -945,7 +945,7 @@ home's saves root rather than any game's answer. Once it has run, including with
 each installed ROM's record with the resolver's answer from the new home, and drops the record where that answer is one
 the follow does not act on (`SaveService.rerecord_save_directories`, reached through a late binding). So the follow
 finds the record equal to the answer, or finds none and records a first sight: with `skip`, the copy left in the old
-home stays there and is never carried over the one the user kept. The migration gate and `get_migration_status` report
+home stays there and is never carried over the one the user kept. The migration rule and `get_migration_status` report
 the migration as still pending until that re-record has finished, although the run clears its markers before it, so no
 sync meets a record still naming the old home. Two limits: while no emulator installation is detected the re-record
 leaves every record as it was, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are

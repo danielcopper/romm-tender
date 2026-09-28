@@ -2,8 +2,8 @@
 
 Narrow callable seams that don't belong to a specific I/O surface or
 external system: frontend event emission, debug logging, generic
-filesystem existence probes, the prune conflict gate as the prune
-service sees it, the conflict rules a use case checks at its entry, and the
+filesystem existence probes, the prune conflicts as the prune
+service sees them, the conflict rules a use case checks at its entry, and the
 small cross-service read/cleanup hooks (LibraryService pending-sync map,
 download queue cleanup) that would otherwise require service-to-service
 concrete imports.
@@ -278,6 +278,10 @@ class ConflictRules(Protocol):
     call or the event and answers its token; ``release_lease`` gives one back by token.
     ``emit_under_lease`` emits an event through *emit_with* under a lease it
     takes, and gives the lease back when the emit raises or nobody heard it.
+    ``hold_start(label, migration=…, sync=…)`` is a cleanup's exclusive start:
+    it reserves the start first, then checks the named rules, and holds the
+    reservation for the block. ``renew_lease`` extends a live lease by token,
+    and ``release_orphaned_leases`` drops every lease and answers how many.
     CONTEXT.md → Conflict rules, Prune conflicts.
     """
 
@@ -285,10 +289,18 @@ class ConflictRules(Protocol):
         self, label: str, *, migration: bool = False, sync: bool = False, prune: bool = False
     ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
 
+    def hold_start(
+        self, label: str, *, migration: bool = False, sync: bool = False
+    ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
+
     async def retain(self, task: asyncio.Task[Any], label: str) -> None: ...
 
     async def acquire_lease(self, key: str) -> str: ...
 
     async def release_lease(self, token: str) -> None: ...
+
+    async def renew_lease(self, token: str) -> bool: ...
+
+    async def release_orphaned_leases(self) -> int: ...
 
     async def emit_under_lease(self, key: str, emit_with: Callable[[str], Awaitable[bool]]) -> None: ...

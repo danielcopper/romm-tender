@@ -231,7 +231,7 @@ async def test_cancel_prune_stops_the_running_run_over_the_real_wire(harness):
     # The claim is released, so cleanup is reachable again immediately and
     # nothing it conflicts with is refused any longer.
     assert harness.plugin._prune_service.is_active() is False
-    assert harness.plugin._prune_conflicts.cleanup_running is False
+    assert harness.prune_conflicts.cleanup_running is False
 
 
 async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end(harness, monkeypatch):

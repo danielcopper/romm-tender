@@ -187,9 +187,9 @@ locally with `mise run docs`.
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
-  `Plugin` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any gate — the one placement
-  `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public method as such:
-  the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so those
+  `Plugin` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the one
+  placement `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public method
+  as such: the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so those
   declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
   `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
@@ -683,17 +683,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`forceFullSync`) clear the store and tell the backend; a cancel landing just after a preview was staged discards
   server-side. Every answer path lives on the Sync page, where the change table is; Main answers no preview. Nothing
   mechanical can tell that a handler is an answer path
-- **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic gate hold (the
-  preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
-  every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry
-  matrix; new conflicting entry points are prompt-only
-- **A removed-game cleanup's run claim is registered on the prune conflict gate before the start's reservation is given
+- **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic hold of the prune
+  conflicts' lock (the preview rebuild does not), and frontend-owned Steam work holds a heartbeated,
+  generation-tombstoned lease through every continuation's final write** — test + prompt-only — prune service and prune
+  conflicts race tests + contract callable-entry matrix; new conflicting entry points are prompt-only
+- **A removed-game cleanup's run claim is registered on the prune conflicts before the start's reservation is given
   back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
   `tests/services/prune/test_service.py::test_a_started_run_holds_its_claim_on_the_gate_until_it_ends` (registered by
   the time `start_prune` returns) and
   `tests/contract/test_prune.py::test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end` (refused across
-  a real start); prompt-only: `PruneService.start_prune` is reached only through the endpoint marked
-  `@prune_exclusive_start`
+  a real start); the reservation is taken by `hold_start` in `PruneService.start_prune`, around the whole start.
+  Prompt-only: the start's body is reached only through that `hold_start`
 - **A prune frontend action mutates Steam only after atomically claiming its exact run/token/discriminant/binding;
   repeats are idempotent and an outcome lost in transit is ambiguous, never success** — test + prompt-only — prune
   service claim tests + `frontend/src/utils/pruneActions.test.ts`; new action kinds are prompt-only

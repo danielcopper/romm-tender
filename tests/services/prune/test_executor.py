@@ -14,6 +14,7 @@ import logging
 from typing import Any, cast
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -108,6 +109,7 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
             recovery=cast("Any", _Unusable()),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             request_action=unusable_request,
+            conflict_rules=_make_conflict_rules(),
         )
     )
 

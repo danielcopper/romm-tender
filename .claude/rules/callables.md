@@ -25,12 +25,13 @@ Full convention paragraph: the `lib/list_result.py` module docstring.
 Two adjacent rules that bite when adding or changing a callable:
 
 - **An endpoint is a public method on `Plugin` marked `@route`**, placed topmost — `def` or `async def` alike. An
-  endpoint whose body never awaits is a `def`, unless it sits under a gate, which awaits what it wraps and refuses a
-  `def`; nothing mechanical checks that such an endpoint is a `def`. `host.dispatch.reachable_methods` resolves the set
-  off the loaded class, `scripts/check_callable_manifest.py` derives the same set from the source (and fails on a
-  `@route` below another decorator or on an underscored name), and `tests/host/test_dispatch.py` asserts the two are
-  equal. A method without `@route` is not reachable at all, and one with it is reachable whether or not that was
-  intended; the parity check below is what notices either.
+  endpoint whose body never awaits is a `def`; nothing mechanical checks that. Its conflict rules are not the
+  endpoint's: the use case it calls checks them (CONTEXT.md → Conflict rules), which is why a use case that checks any
+  is `async`. `host.dispatch.reachable_methods` resolves the set off the loaded class,
+  `scripts/check_callable_manifest.py` derives the same set from the source (and fails on a `@route` below another
+  decorator or on an underscored name), and `tests/host/test_dispatch.py` asserts the two are equal. A method without
+  `@route` is not reachable at all, and one with it is reachable whether or not that was intended; the parity check
+  below is what notices either.
 - **Frontend↔backend parity** (name + arity) is enforced by `scripts/check_callable_manifest.py`, which derives the
   frontend surface from every `callable<[Args], Return>("name")` in `frontend/src/**/*.ts`. A rename lands on both sides
   or not at all.

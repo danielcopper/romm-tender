@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -81,7 +82,9 @@ def _runner(
     runner = SteamActionRunner(
         config=SteamActionRunnerConfig(
             loop=asyncio.get_running_loop(),
-            results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
+            results=PruneResultReporter(
+                config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
+            ),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             switch_version=switch_version,
             request_action=request_action,

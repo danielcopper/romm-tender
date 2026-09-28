@@ -47,7 +47,7 @@ class TestSyncComplete:
         (payload,) = _payloads(emit, "sync_complete")
         assert payload["prune_lease_token"].startswith("sync_complete:")
         assert plugin._prune_conflicts.conflicting_operations == 1
-        assert await plugin._prune_conflicts.reserve_start() is not None
+        assert await plugin._prune_conflicts.reserve_start("start_prune") is not None
 
     async def test_one_nobody_heard_gives_its_lease_back(self, plugin, emit):
         emit.return_value = False

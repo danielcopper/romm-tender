@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
+from lib.conflict_rules import migration_refusal
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._messages import (
@@ -763,12 +764,7 @@ class SyncEngine:
                 # case's entry or carries a guard of its own; this one is
                 # pre_launch_sync's.
                 if self._is_retrodeck_migration_pending():
-                    return {
-                        "success": False,
-                        "reason": "blocked_by_migration",
-                        "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
-                        "synced": 0,
-                    }
+                    return {**migration_refusal(), "synced": 0}
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
@@ -845,12 +841,7 @@ class SyncEngine:
                 # that check.
                 if self._is_retrodeck_migration_pending():
                     self._logger.info("post_exit_sync skipped: retrodeck migration pending")
-                    return {
-                        "success": False,
-                        "reason": "blocked_by_migration",
-                        "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
-                        "synced": 0,
-                    }
+                    return {**migration_refusal(), "synced": 0}
 
                 if not sync_after_exit(self._settings):
                     self._logger.info("post_exit_sync skipped: sync_after_exit disabled")

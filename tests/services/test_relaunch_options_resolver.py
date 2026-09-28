@@ -26,7 +26,7 @@ from domain.rom_install import RomInstall
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 
 if TYPE_CHECKING:
-    from lib.prune_gate import PruneConflicts
+    from lib.prune_conflicts import PruneConflicts
 
 
 def _make_rom(rom_id: int, *, shortcut_app_id: int | None) -> Rom:

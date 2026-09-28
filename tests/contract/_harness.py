@@ -66,13 +66,14 @@ from domain.update_release import UpdateSource
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from lib.prune_conflicts import PruneConflicts
+
 # The wired attributes ``main.py:_main`` binds onto ``Plugin`` — every service
-# and the prune conflict gate. The harness binds the same set; the loud-failure
+# it calls. The harness binds the same set; the loud-failure
 # assert below checks every one is present so a wiring drift (a renamed/added
 # service field) fails the fixture instead of surfacing as a confusing
 # ``AttributeError`` mid-test.
 _BOUND_SERVICE_ATTRS = {
-    "_prune_conflicts": "prune_conflicts",
     "_save_sync_service": "save_sync_service",
     "_playtime_service": "playtime_service",
     "_sync_service": "sync_service",
@@ -92,6 +93,7 @@ _BOUND_SERVICE_ATTRS = {
     "_disc_service": "disc_service",
     "_version_switch_service": "version_switch_service",
     "_prune_service": "prune_service",
+    "_prune_lease_service": "prune_lease_service",
     "_data_inventory_service": "data_inventory_service",
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
@@ -147,6 +149,9 @@ class ContractHarness:
     data_dir: str
     cache_dir: str
     bin_dir: str
+    # The record of every claim that conflicts with a removed-game cleanup, as the
+    # composition root built it. ``Plugin`` holds none: the services it calls do.
+    prune_conflicts: PruneConflicts
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -313,6 +318,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         data_dir=result.directories.data_dir,
         cache_dir=result.directories.cache_dir,
         bin_dir=result.directories.bin_dir,
+        prune_conflicts=services.prune_conflicts,
     )
 
 
@@ -354,14 +360,14 @@ _HELD_PRUNE_RUN = "held-prune-run"
 def hold_prune_active(harness: ContractHarness) -> None:
     """Leave a removed-game cleanup holding its run claim.
 
-    Registered on the prune conflict gate the way the prune service registers a
+    Registered on the prune conflicts the way the prune service registers a
     run it starts, without starting one: holding a real run open takes a seeded
     candidate, a preview and a run parked on a Steam action it waits for the
     frontend to claim.
     """
-    harness.plugin._prune_conflicts.register_run(_HELD_PRUNE_RUN)
+    harness.prune_conflicts.register_run(_HELD_PRUNE_RUN)
 
 
 def release_prune_active(harness: ContractHarness) -> None:
     """Let go of the run claim ``hold_prune_active`` registered, the way a run's end releases it."""
-    harness.plugin._prune_conflicts.release_run(_HELD_PRUNE_RUN)
+    harness.prune_conflicts.release_run(_HELD_PRUNE_RUN)

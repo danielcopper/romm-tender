@@ -139,7 +139,7 @@ class TestTheSessionStartFlush:
         await svc.record_session_start(7)
 
         assert sorted(holder.label for holder in prune_conflicts._operations.values()) == ["record_session_start"]
-        assert await prune_conflicts.reserve_start() is not None
+        assert await prune_conflicts.reserve_start("start_prune") is not None
         release.set()
         await asyncio.gather(*svc._flush_tasks)
         await asyncio.gather(*prune_conflicts._release_tasks)

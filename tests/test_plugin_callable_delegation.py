@@ -22,17 +22,12 @@ import threading
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_prune_conflicts, _make_testable_plugin
+from _factories import _make_testable_plugin
 
 
 @pytest.fixture
 def plugin():
-    """Bare ``Plugin`` with every service replaced by a ``MagicMock``.
-
-    ``_migration_service.is_retrodeck_migration_pending`` returns False
-    so ``@migration_blocked`` callables fall through to the wrapped
-    method instead of returning the blocked sentinel.
-    """
+    """Bare ``Plugin`` with every service replaced by a ``MagicMock``."""
     p = _make_testable_plugin()
     p._sync_service = MagicMock()
     p._download_service = MagicMock()
@@ -53,7 +48,8 @@ def plugin():
     p._session_lifecycle_service = MagicMock()
     p._game_process_service = MagicMock()
     p._prune_service = MagicMock()
-    p._prune_conflicts = _make_prune_conflicts()
+    p._prune_lease_service = MagicMock()
+    p._migration_service = MagicMock()
     return p
 
 
@@ -70,9 +66,16 @@ class TestSettingsCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_save_server_url_delegates(self, plugin):
-        plugin._settings_service.save_server_url.return_value = {"success": True}
+        plugin._settings_service.save_server_url = AsyncMock(return_value={"success": True})
         result = await plugin.save_server_url("http://x", True)
-        plugin._settings_service.save_server_url.assert_called_once_with("http://x", True)
+        plugin._settings_service.save_server_url.assert_awaited_once_with("http://x", True)
+        assert result == {"success": True}
+
+    @pytest.mark.asyncio
+    async def test_save_custom_headers_delegates(self, plugin):
+        plugin._settings_service.save_custom_headers = AsyncMock(return_value={"success": True})
+        result = await plugin.save_custom_headers([])
+        plugin._settings_service.save_custom_headers.assert_awaited_once_with([])
         assert result == {"success": True}
 
     @pytest.mark.asyncio
@@ -96,9 +99,9 @@ class TestSettingsCallableDelegation:
 
     @pytest.mark.asyncio
     async def test_apply_steam_input_setting_delegates(self, plugin):
-        plugin._settings_service.apply_steam_input_setting.return_value = {"ok": True}
+        plugin._settings_service.apply_steam_input_setting = AsyncMock(return_value={"ok": True})
         result = await plugin.apply_steam_input_setting()
-        plugin._settings_service.apply_steam_input_setting.assert_called_once_with()
+        plugin._settings_service.apply_steam_input_setting.assert_awaited_once_with()
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
@@ -156,6 +159,43 @@ class TestConnectionCallableDelegation:
         result = await plugin.test_connection()
         plugin._connection_service.test_connection.assert_awaited_once_with()
         assert result == {"success": True}
+
+    @pytest.mark.asyncio
+    async def test_sign_out_delegates(self, plugin):
+        plugin._connection_service.sign_out = AsyncMock(return_value={"success": True})
+        result = await plugin.sign_out()
+        plugin._connection_service.sign_out.assert_awaited_once_with()
+        assert result == {"success": True}
+
+
+# ── Prune lease callables ──────────────────────────────────────────────
+
+
+class TestPruneLeaseCallableDelegation:
+    @pytest.mark.asyncio
+    async def test_release_prune_conflict_lease_delegates(self, plugin):
+        answer = {"success": True, "message": "Operation lease released."}
+        plugin._prune_lease_service.release_prune_conflict_lease = AsyncMock(return_value=answer)
+        result = await plugin.release_prune_conflict_lease("sgdb_artwork:1")
+        plugin._prune_lease_service.release_prune_conflict_lease.assert_awaited_once_with("sgdb_artwork:1")
+        assert result == answer
+
+    @pytest.mark.asyncio
+    async def test_renew_prune_conflict_lease_delegates(self, plugin):
+        answer = {"success": True, "message": "Operation lease renewed."}
+        plugin._prune_lease_service.renew_prune_conflict_lease = AsyncMock(return_value=answer)
+        result = await plugin.renew_prune_conflict_lease("sgdb_artwork:1")
+        plugin._prune_lease_service.renew_prune_conflict_lease.assert_awaited_once_with("sgdb_artwork:1")
+        assert result == answer
+
+    @pytest.mark.asyncio
+    async def test_release_orphaned_prune_leases_delegates(self, plugin):
+        plugin._prune_lease_service.release_orphaned_prune_leases = AsyncMock(
+            return_value={"success": True, "released": 2}
+        )
+        result = await plugin.release_orphaned_prune_leases()
+        plugin._prune_lease_service.release_orphaned_prune_leases.assert_awaited_once_with()
+        assert result == {"success": True, "released": 2}
 
 
 # ── Migration callables ────────────────────────────────────────────────
@@ -645,22 +685,11 @@ class TestSavesCallableDelegation:
 class TestSgdbCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_sgdb_artwork_base64_delegates(self, plugin):
-        plugin._sgdb_service.get_sgdb_artwork_base64 = AsyncMock(return_value={"base64": "data"})
+        answer = {"base64": "data", "prune_lease_token": "sgdb_artwork:1"}
+        plugin._sgdb_service.get_sgdb_artwork_base64 = AsyncMock(return_value=answer)
         result = await plugin.get_sgdb_artwork_base64(42, 1)
         plugin._sgdb_service.get_sgdb_artwork_base64.assert_awaited_once_with(42, 1)
-        token = result.pop("prune_lease_token")
-        assert token.startswith("sgdb_artwork:")
-        assert result == {"base64": "data"}
-        assert (await plugin.release_prune_conflict_lease(token))["success"] is True
-
-    @pytest.mark.asyncio
-    async def test_get_sgdb_artwork_without_image_creates_no_continuation_lease(self, plugin):
-        plugin._sgdb_service.get_sgdb_artwork_base64 = AsyncMock(return_value={"base64": None})
-
-        result = await plugin.get_sgdb_artwork_base64(42, 1)
-
-        assert result == {"base64": None}
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert result == answer
 
     @pytest.mark.asyncio
     async def test_verify_sgdb_api_key_delegates(self, plugin):

@@ -187,8 +187,8 @@ class TestParserHardening:
               [string],
               {
                 success: boolean;
-                // The success path returns success/app_ids/rom_ids; the
-                // @migration_blocked gate short-circuits, so it's path-dependent.
+                // The success path returns success/app_ids/rom_ids; a refusal
+                // by the migration rule answers without them, so it's path-dependent.
                 app_ids?: number[];
                 rom_ids?: (string | number)[];
                 message?: string;
@@ -333,7 +333,7 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
-                @migration_blocked
+                @other_decorator
                 @route
                 async def start_sync(self):
                     ...
@@ -380,7 +380,7 @@ class TestFindMisplacedRoutes:
             """\
             class Plugin:
                 @route
-                @migration_blocked
+                @other_decorator
                 async def start_sync(self):
                     ...
                 @route
@@ -390,11 +390,11 @@ class TestFindMisplacedRoutes:
         )
         assert check.find_misplaced_routes(_write_main(tmp_path, body)) == []
 
-    def test_route_below_a_gate_is_a_finding(self, tmp_path: Path):
+    def test_route_below_another_decorator_is_a_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
             class Plugin:
-                @migration_blocked
+                @other_decorator
                 @route
                 async def start_sync(self):
                     ...

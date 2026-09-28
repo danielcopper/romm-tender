@@ -10,7 +10,7 @@ from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
     from domain.rom import Rom
-    from services.protocols import EventEmitter
+    from services.protocols import ConflictRules, EventEmitter
     from services.prune._models import RecoveryHandle
 
 _COMPLETION_IDS_PER_GROUP = 50
@@ -103,9 +103,10 @@ def _needs_publication(result: dict[str, Any]) -> bool:
 
 @dataclass(frozen=True)
 class PruneResultReporterConfig:
-    """Event dependency for one cleanup run's published frames."""
+    """The emit one cleanup run's frames go out through, and the rules its final frame is leased through."""
 
     emit: EventEmitter
+    conflict_rules: ConflictRules
 
 
 class PruneResultReporter:
@@ -113,6 +114,7 @@ class PruneResultReporter:
 
     def __init__(self, *, config: PruneResultReporterConfig) -> None:
         self._emit = config.emit
+        self._rules = config.conflict_rules
         self._run_preview_id: str | None = None
 
     def bind_run(self, preview_id: str) -> None:
@@ -187,11 +189,12 @@ class PruneResultReporter:
                 current = candidate
         chunks.append(current)
         for chunk_index, chunk in enumerate(chunks):
+            final = chunk_index == len(chunks) - 1
             payload = self._completion_payload(
                 run_id,
                 chunk,
                 chunk_index=chunk_index,
-                final=chunk_index == len(chunks) - 1,
+                final=final,
                 success=not failures and not cancelled and reason is None,
                 partial=partial,
                 removed_count=removed_count,
@@ -200,7 +203,22 @@ class PruneResultReporter:
                 message=bounded_message,
                 publication_required=publication_required,
             )
-            await self._emit("prune_complete", payload)
+            if final and publication_required:
+                await self._emit_leased_completion(payload)
+            else:
+                await self._emit("prune_complete", payload)
+
+    async def _emit_leased_completion(self, payload: dict[str, Any]) -> None:
+        """Emit the final completion frame under a ``prune_complete`` lease.
+
+        The frontend publishes the repointed shortcuts after the run has let go
+        of its claim, so the lease holds off the next cleanup until it has.
+        Emitted while the run claim still refuses a cleanup's start.
+        """
+        await self._rules.emit_under_lease(
+            "prune_complete",
+            lambda token: self._emit("prune_complete", {**payload, "prune_lease_token": token}),
+        )
 
     def _completion_payload(
         self,

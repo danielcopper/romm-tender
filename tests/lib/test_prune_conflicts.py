@@ -5,7 +5,8 @@ from typing import Any
 
 import pytest
 
-from lib.prune_gate import _LEASE_SECONDS, PruneConflicts, prune_active_blocked, prune_exclusive_start
+from lib.conflict_rules import ConflictRuleSet
+from lib.prune_conflicts import _LEASE_SECONDS, PruneConflicts
 
 
 class _RecordingLogger:
@@ -17,7 +18,7 @@ class _RecordingLogger:
 
 
 class _LoopClock:
-    """The running loop's clock, which the gate reads its lease deadlines from, held still until advanced.
+    """The running loop's clock, which the prune conflicts read their lease deadlines from, held still until advanced.
 
     A test that sleeps through a lease measures the machine's load along with
     the lease. Nothing a test using this awaits may sleep: a timer on a clock
@@ -40,34 +41,35 @@ def _conflicts() -> tuple[PruneConflicts, _RecordingLogger, list[str]]:
 
 
 class _Endpoints:
-    """The two decorators over one injected gate, as ``Plugin`` carries them."""
+    """Two use cases over one prune conflicts record, each checking its rule the way a service does."""
 
     def __init__(self, conflicts: PruneConflicts) -> None:
         self._prune_conflicts = conflicts
+        self._rules = ConflictRuleSet(
+            prune_conflicts=conflicts, migration_pending=lambda: False, sync_in_flight=lambda: False
+        )
         self.called = False
 
-    @prune_active_blocked
     async def mutate(self) -> dict[str, Any]:
-        self.called = True
-        return {"success": True}
+        async with self._rules.hold("mutate", prune=True) as refusal:
+            if refusal is not None:
+                return refusal
+            self.called = True
+            return {"success": True}
 
-    @prune_exclusive_start
     async def start_prune(self) -> dict[str, Any]:
+        async with self._rules.hold_start("start_prune") as refusal:
+            if refusal is not None:
+                return refusal
+            return await self._start()
+
+    async def _start(self) -> dict[str, Any]:
         return {"success": True}
 
 
 def _endpoints() -> tuple[_Endpoints, PruneConflicts, _RecordingLogger, list[str]]:
     conflicts, logger, debug_lines = _conflicts()
     return _Endpoints(conflicts), conflicts, logger, debug_lines
-
-
-@pytest.mark.parametrize("gate", [prune_active_blocked, prune_exclusive_start])
-def test_a_gate_refuses_a_synchronous_method_when_it_decorates_it(gate) -> None:
-    def synchronous(self):
-        return {"success": True}
-
-    with pytest.raises(TypeError, match="must be async def"):
-        gate(synchronous)
 
 
 @pytest.mark.asyncio
@@ -134,22 +136,9 @@ async def test_a_registered_run_does_not_refuse_the_exclusive_start() -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
     conflicts.register_run("run-1")
 
-    # The cleanup's owner refuses a second start itself; the gate's start check
+    # The cleanup's owner refuses a second start itself; the reservation's check
     # is about the operations and leases a cleanup would run over.
     assert await endpoints.start_prune() == {"success": True}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("decorator", [prune_active_blocked, prune_exclusive_start])
-async def test_missing_gate_wiring_fails_loud(decorator) -> None:
-    class Unwired:
-        @decorator
-        async def mutate(self):
-            return {"success": True}
-
-    unwired = Unwired()
-    with pytest.raises(RuntimeError, match="_prune_conflicts is unwired"):
-        await unwired.mutate()
 
 
 @pytest.mark.asyncio
@@ -158,11 +147,12 @@ async def test_prune_start_refuses_operation_that_entered_before_it() -> None:
     release = asyncio.Event()
 
     class Endpoints(_Endpoints):
-        @prune_active_blocked
         async def slow_mutation(self):
-            entered.set()
-            await release.wait()
-            return {"success": True}
+            async with self._rules.hold("slow_mutation", prune=True) as refusal:
+                assert refusal is None
+                entered.set()
+                await release.wait()
+                return {"success": True}
 
     conflicts, _logger, _debug = _conflicts()
     endpoints = Endpoints(conflicts)
@@ -182,8 +172,7 @@ async def test_conflicting_operation_is_refused_without_awaiting_a_slow_prune_st
     order: list[str] = []
 
     class Endpoints(_Endpoints):
-        @prune_exclusive_start
-        async def start_prune(self):
+        async def _start(self):
             starting.set()
             await finish_start.wait()
             order.append("start")
@@ -213,8 +202,7 @@ async def test_a_run_registered_inside_the_reservation_keeps_refusing_after_the_
     observed: list[str] = []
 
     class Endpoints(_Endpoints):
-        @prune_exclusive_start
-        async def start_prune(self):
+        async def _start(self):
             observed.append((await self.mutate())["reason"])
             self._prune_conflicts.register_run("run-1")
             observed.append((await self.mutate())["reason"])
@@ -235,8 +223,7 @@ async def test_a_run_registered_inside_the_reservation_keeps_refusing_after_the_
 @pytest.mark.parametrize("outcome", ["refused", "raised"])
 async def test_reservation_is_released_when_the_start_begins_no_run(outcome) -> None:
     class Endpoints(_Endpoints):
-        @prune_exclusive_start
-        async def start_prune(self):
+        async def _start(self):
             if outcome == "raised":
                 raise RuntimeError("start blew up")
             return {"success": False, "reason": "stale_preview", "message": "stale"}
@@ -268,7 +255,7 @@ async def test_detached_task_retains_conflict_claim_for_its_full_lifetime() -> N
 
 
 @pytest.mark.asyncio
-async def test_a_retained_claims_release_is_held_by_the_gate_until_it_finishes() -> None:
+async def test_a_retained_claims_release_is_held_by_the_prune_conflicts_until_it_finishes() -> None:
     """The loop holds a task only weakly, so an unowned release could be collected before it runs."""
     conflicts, _logger, _debug = _conflicts()
     release = asyncio.Event()
@@ -298,6 +285,7 @@ async def test_refusal_logs_the_holder_that_is_actually_blocking() -> None:
 
     assert result["reason"] == "operation_active"
     refusal = next(line for line in logger.info_lines if "start refused" in line)
+    assert "refused for start_prune" in refusal
     assert "launch_reconfirm" in refusal
     assert "lease launch_reconfirm:1" in refusal
     assert "held 0s" in refusal
@@ -337,11 +325,12 @@ async def test_refusal_names_a_blocking_callable_registration() -> None:
     release = asyncio.Event()
 
     class Endpoints(_Endpoints):
-        @prune_active_blocked
         async def set_game_core(self):
-            entered.set()
-            await release.wait()
-            return {"success": True}
+            async with self._rules.hold("set_game_core", prune=True) as refusal:
+                assert refusal is None
+                entered.set()
+                await release.wait()
+                return {"success": True}
 
     conflicts, logger, _debug = _conflicts()
     endpoints = Endpoints(conflicts)
@@ -375,7 +364,7 @@ async def test_lease_lifecycle_is_traceable_at_debug() -> None:
 @pytest.mark.asyncio
 async def test_expired_lease_is_reported_at_info_as_never_released(monkeypatch) -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
-    monkeypatch.setattr("lib.prune_gate._LEASE_SECONDS", 0.0)
+    monkeypatch.setattr("lib.prune_conflicts._LEASE_SECONDS", 0.0)
     await conflicts.acquire_lease("installed_reconcile")
 
     assert await endpoints.start_prune() == {"success": True}
@@ -427,11 +416,12 @@ async def test_disowning_leaves_callable_registrations_and_run_claims_alone() ->
     release = asyncio.Event()
 
     class Endpoints(_Endpoints):
-        @prune_active_blocked
         async def set_game_core(self):
-            entered.set()
-            await release.wait()
-            return {"success": True}
+            async with self._rules.hold("set_game_core", prune=True) as refusal:
+                assert refusal is None
+                entered.set()
+                await release.wait()
+                return {"success": True}
 
     conflicts, _logger, _debug = _conflicts()
     endpoints = Endpoints(conflicts)
@@ -439,7 +429,7 @@ async def test_disowning_leaves_callable_registrations_and_run_claims_alone() ->
     await entered.wait()
 
     # Only the frontend's own leases are the frontend's to disown; a live
-    # endpoint still holds the gate on its own account.
+    # endpoint still holds off a cleanup on its own account.
     assert await conflicts.release_orphaned_leases() == 0
     assert (await endpoints.start_prune())["reason"] == "operation_active"
 
@@ -452,7 +442,7 @@ async def test_disowning_leaves_callable_registrations_and_run_claims_alone() ->
 
 
 @pytest.mark.asyncio
-async def test_disowning_an_empty_gate_is_a_silent_no_op() -> None:
+async def test_disowning_when_no_lease_is_held_is_a_silent_no_op() -> None:
     conflicts, logger, _debug = _conflicts()
 
     assert await conflicts.release_orphaned_leases() == 0
@@ -476,7 +466,7 @@ async def test_concurrent_multicall_leases_are_reference_counted() -> None:
 @pytest.mark.asyncio
 async def test_abandoned_multicall_lease_expires_before_prune_start(monkeypatch) -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
-    monkeypatch.setattr("lib.prune_gate._LEASE_SECONDS", 0.0)
+    monkeypatch.setattr("lib.prune_conflicts._LEASE_SECONDS", 0.0)
     await conflicts.acquire_lease("shortcut_removal")
 
     assert await endpoints.start_prune() == {"success": True}
