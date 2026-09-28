@@ -1064,21 +1064,21 @@ and the list's two header buttons act on every row at once — so it opens with 
 the platform's name, `N on RomM · M in Steam · <core name>`, and the core picker's icon button, right-aligned.
 
 **Both counts on that line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is `reachable_count` —
-how many of the platform's ROMs are reachable through a shortcut, which is every member of a sibling group that holds a
-binding, because one shortcut serves the group (ADR-0021 §2) and the game's page switches versions across it, less the
-versions RomM no longer serves (below). `M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind
-458 shortcuts reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207 games as missing when none
-was. The number of shortcuts is `count` on the same payload, and it is what the Remove group says and acts on — the two
-must not be folded, or the button offers to remove more shortcuts than exist. Where a whole game never reached Steam the
-two halves genuinely differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is
-the line doing its job.
+the platform's reachable ROMs (every member of a sibling group that holds a binding, because one shortcut serves the
+group (ADR-0021 §2) and the game's page switches versions across it), less the versions RomM no longer serves (below).
+`M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind 458 shortcuts reads `665 · 665`, where
+counting bindings read `665 · 458` and so reported 207 games as missing when none was. The number of shortcuts is
+`count` on the same payload, and it is what the Remove group says and acts on — the two must not be folded, or the
+button offers to remove more shortcuts than exist. Where a whole game never reached Steam the two halves genuinely
+differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is the line doing its
+job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
 outstanding as of the last sync" rather than a fresh server-side proof. And **a version RomM no longer serves is
 reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as an identity anchor and only the
 removed-game cleanup removes one — and its group's shortcut still reaches it (CONTEXT.md → Reachable), but the right
-half does not state as in Steam a version RomM has stopped serving. `reachable_count` is the reachable rows less those
+half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less those
 the platform's last completed fetch did not return, which `domain/fetch_generation.py::prune_candidate_ids` already
 answers for the cleanup's own discovery: every row not carrying the fetch generation the platform's completion stamp
 recorded, a row carrying none included. Where no usable stamp exists — none, one with no generation, or one recording an

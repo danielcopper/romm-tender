@@ -342,17 +342,19 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   respected read-only as a preselect, never written back.
 - **Switch version** — the user-facing control (named after RomM's) that changes the active version within a group;
   rendered only when the group has more than one version (#1297/#1298).
-- **Reachable** — a version a reader can get to from Steam: any member of a group that holds a binding, since the
-  group's one shortcut opens the game's page and **Switch version** reaches the rest from there. Distinct from
-  **bound**, which is the active version alone. A count of reachable ROMs is what a surface states about how much of a
-  platform or of a collection arrived in Steam; a count of bindings is what it states about shortcuts (a platform states
-  both, and they need not agree); a group with no binding raises neither (`reachable_count` vs. `count`,
-  `services/library/reporter.py`). Reachable is structural and says nothing about the server: a version RomM no longer
-  serves is still reachable while its group holds a binding. The platform count (`reachable_count`) is the reachable
-  versions less those the platform's last completed fetch did not return, which it leaves out because RomM no longer
-  serves them (the exact rule: [qam-panel.md](docs/architecture/qam-panel.md), § Library); the collection count
-  (`in_steam_count`) is the reachable versions as the sync's collection filing resolves them, with no such exclusion.
-  Both start from one computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
+- **Reachable** — a version in Steam through its group: any member of a group that holds a binding. The whole group
+  counts because its one shortcut opens the game's page and **Switch version** moves across the group from there.
+  Reachable is structural — membership of a group under a binding, not what the picker will switch to — and says nothing
+  about the server: a version RomM no longer serves is still reachable while its group holds a binding, although the
+  picker refuses a switch to one it knows is gone. Distinct from **bound**, which is the active version alone. A count
+  of reachable ROMs is what a surface states about how much of a platform or of a collection arrived in Steam; a count
+  of bindings is what it states about shortcuts (a platform states both, and they need not agree); a group with no
+  binding raises neither (`reachable_count` vs. `count`, `services/library/reporter.py`). The platform count
+  (`reachable_count`) is the reachable versions less those the platform's last completed fetch did not return, which it
+  leaves out because RomM no longer serves them (the exact rule:
+  [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is the
+  reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
+  computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where
 that release shipped; `(En,Fr,De,Es)` → the languages contained in that one dump. A multi-language version is still one

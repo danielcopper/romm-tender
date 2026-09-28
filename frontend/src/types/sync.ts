@@ -274,15 +274,11 @@ export interface RegistryPlatform {
    *  group acts on, and never what the header line states. */
   count: number;
   /**
-   * How many of the platform's ROMs are reachable from Steam: every member of a
-   * sibling group that holds a binding, because one shortcut serves the whole
-   * group and the game's page switches versions across it. It need not equal
-   * `count`, and a group with no binding raises neither. The versions the
-   * platform's last completed fetch did not return stay reachable but are left
-   * out, because RomM no longer serves them (the exact rule is
-   * `docs/architecture/qam-panel.md`'s). It is therefore not bounded below by
-   * `count` — a BOUND row the fetch did not return raises `count` without
-   * raising this, so a pane can read fewer here than it has shortcuts.
+   * How many of the platform's ROMs are reachable from Steam (CONTEXT.md →
+   * Reachable), less the versions its last completed fetch did not return, left
+   * out because RomM no longer serves them. It need not equal `count` in either
+   * direction: a pane can read fewer here than it has shortcuts
+   * (`docs/architecture/qam-panel.md`, § Library, has the rule and its edges).
    *
    * Absent on older backends; a reader falls back to `count`, which is the
    * pre-#1815 wording and understates rather than inventing a number.

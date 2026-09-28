@@ -143,19 +143,14 @@ export interface PlatformRow {
    *  This is the count of SHORTCUTS, so it is what the Remove group says and acts
    *  on. The header line states `reachableCount` instead. */
   shortcutCount: number | null;
-  /** How many of the platform's ROMs are reachable from Steam — every version in
-   *  a sibling group that holds a binding, since one shortcut serves the group
-   *  and the game's page switches versions across it. This is what the header
-   *  line states; `null` (the same read failure as `shortcutCount`) drops that
-   *  half of the line rather than printing a zero nothing established.
+  /** How many of the platform's ROMs are reachable from Steam (CONTEXT.md →
+   *  Reachable), less the versions RomM no longer serves
+   *  (`RegistryPlatform.reachable_count`). This is what the header line states;
+   *  `null` (the same read failure as `shortcutCount`) drops that half of the
+   *  line rather than printing a zero nothing established.
    *
-   *  A version RomM no longer serves keeps its row and stays reachable, but is
-   *  not counted (`RegistryPlatform.reachable_count`). What the backend can establish
-   *  is what the platform's last completed fetch returned, which leaves one
-   *  window open — a version dropped from RomM since that fetch is already gone
-   *  from `romCount` while still counted here, so the line can read right >
-   *  left until the next sync of that platform. Closing it would need a server
-   *  call this read deliberately does not make. */
+   *  The line can read right > left for one window
+   *  (`docs/architecture/qam-panel.md`, § Library). */
   reachableCount: number | null;
 }
 
