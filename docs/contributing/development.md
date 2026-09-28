@@ -418,13 +418,15 @@ See [Backend Architecture](../architecture/backend-architecture.md) for details.
 mise run gate         # run every PR check from .github/workflows/ci.yml, locally
 ```
 
-`mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`) and the
-architecture/lint gates (`mise run lint`), then adds the rest of what CI enforces: `ruff check` + `ruff format --check`,
+`mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`), the
+architecture/lint gates (`mise run lint`) and the rest of what CI enforces: `ruff check` + `ruff format --check`,
 `basedpyright`, the frontend `eslint` / `prettier --check` / build / `tsc` typecheck / bundle-size budget, the frontend
-tests (`pnpm -C frontend test`), and `deno fmt --check` for Markdown. It is slow — a full pytest run plus a production
-frontend build — so it is a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are
-the Sonar jobs — `pr-metadata`, `sonarcloud` and `sonar-gate` — which need a pull request, `SONAR_TOKEN` or the CI
-coverage artifacts.
+tests (`pnpm -C frontend test`), and `deno fmt --check` for Markdown. These run side by side, except that the frontend
+tests start only once the backend tests are done (`[tasks."gate:frontend-test"]` in `mise.toml` says why). The first
+step to fail stops the others: its output ends in `ERROR task failed` under the task's name, and the gate exits
+non-zero. It is slow — the two test suites one after the other, with a production frontend build beside them — so it is
+a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are the Sonar jobs —
+`pr-metadata`, `sonarcloud` and `sonar-gate` — which need a pull request, `SONAR_TOKEN` or the CI coverage artifacts.
 
 ## Code Quality
 
