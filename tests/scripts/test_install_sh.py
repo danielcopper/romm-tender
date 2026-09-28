@@ -1826,7 +1826,8 @@ class TestRollingBackByHand:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
         assert (
-            f"  {machine.old} is an unrecorded version and the backup holds the data of {_NEW}. Nothing was changed; "
+            f"  {machine.old} is an unrecorded version and the backup holds the data of {_NEW}. "
+            "Your installed version and your data are as they were; "
             "start the service if it is not running: systemctl --user start romm-tender"
         ) in result.stderr.splitlines()
         assert machine.systemctl_calls() == []
@@ -1848,7 +1849,8 @@ class TestRollingBackByHand:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
         assert (
-            f"  {machine.old} is {_VERSION} and the backup holds the data of 1.4.0. Nothing was changed; "
+            f"  {machine.old} is {_VERSION} and the backup holds the data of 1.4.0. "
+            "Your installed version and your data are as they were; "
             "start the service if it is not running: systemctl --user start romm-tender"
         ) in result.stderr.splitlines()
         assert machine.systemctl_calls() == []
@@ -1872,7 +1874,8 @@ class TestRollingBackByHand:
         assert _refusals(result.stderr) == ["install.sh: the kept version and the backup do not belong together"]
         assert (
             f"  {machine.old} is {_VERSION} and the backup holds the data of an unrecorded version. "
-            "Nothing was changed; start the service if it is not running: systemctl --user start romm-tender"
+            "Your installed version and your data are as they were; "
+            "start the service if it is not running: systemctl --user start romm-tender"
         ) in result.stderr.splitlines()
         assert machine.systemctl_calls() == []
         assert _tree_version(machine.code) == _NEW

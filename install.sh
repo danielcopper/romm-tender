@@ -1963,12 +1963,11 @@ roll_back_the_update() {
 }
 
 # Puts back the tree and the data the last update replaced, by hand. Nothing is
-# asked or changed before both are known to be there and to belong together —
+# asked or changed before both are known to be there and to belong together,
 # except that a backup an interrupted update left as `.prev` is moved back under
-# its name, which is what lets it be found — and the data it replaces is copied
-# aside first — without a prompt, because
-# the copy is what makes the question unnecessary. A copy that cannot be made
-# refuses the rollback.
+# its name so it can be found. The data it replaces is copied aside first, and
+# without a prompt, because the copy is what makes the question unnecessary; a
+# copy that cannot be made refuses the rollback.
 do_rollback() {
     [ -d "$CODE.old" ] ||
         abort "there is no earlier version to go back to" "an update keeps the one it replaced at $(tilde "$CODE.old"), and there is none"
@@ -1981,7 +1980,7 @@ do_rollback() {
     belongs="$(backup_version)" || belongs=""
     if [ -z "$previous" ] || [ "$previous" != "$belongs" ]; then
         abort "the kept version and the backup do not belong together" \
-            "$(tilde "$CODE.old") is ${previous:-an unrecorded version} and the backup holds the data of ${belongs:-an unrecorded version}. Nothing was changed; start the service if it is not running: systemctl --user start $UNIT_NAME"
+            "$(tilde "$CODE.old") is ${previous:-an unrecorded version} and the backup holds the data of ${belongs:-an unrecorded version}. Your installed version and your data are as they were; start the service if it is not running: systemctl --user start $UNIT_NAME"
     fi
     made="$(backup_date)" || made=""
     greeter mode_lines "Putting back the version the last update replaced, and your data as it was on ${made:-an unrecorded date}."
