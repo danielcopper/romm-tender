@@ -6,6 +6,7 @@
 // Both surface through the rendered <Field label={migrateResult} /> — the
 // catch tests below assert that label text.
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";

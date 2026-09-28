@@ -5,6 +5,7 @@
 // call) are exempt — and even then, prefer dropping the test over keeping
 // one with zero expects.
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";

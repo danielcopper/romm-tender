@@ -1,10 +1,30 @@
 // coverage-exempt: the harness every suite runs inside — global mocks and
 // teardown only, so it has no behaviour of its own a test could assert.
-import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, vi } from "vitest";
-import { cleanup } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { resetHostEventBus } from "./test-utils/host-event-bus";
+
+// Vitest evaluates this file anew for every test file, so a second evaluation in
+// the same global means test files are sharing one context. The vm pool does
+// that on a single worker: vm pools force `isolate: false`, `groupSpecs`
+// then hands every file to one task when maxWorkers is 1, and `runVmTests`
+// creates one context per task (vitest's `dist/chunks/cli-api.*.js` and
+// `dist/chunks/vm.*.js`). Module state and the DOM then carry from file to file,
+// and RTL registers its cleanup only in the first, so the suite fails far from
+// the cause. maxWorkers is 1 under `--maxWorkers=1` (or `VITEST_MAX_WORKERS=1`),
+// under `--no-file-parallelism` (which `--inspect` requires), and by default on a
+// machine with two CPUs or fewer, three in watch mode; with more than one worker
+// every file is a task of its own.
+const EVALUATED_IN_THIS_CONTEXT = Symbol.for("tender.test-setup.evaluated");
+if ((globalThis as Record<symbol, unknown>)[EVALUATED_IN_THIS_CONTEXT]) {
+  throw new Error(
+    "Test files are sharing one context — Vitest ran more than one in the same global, which leaks module " +
+      "state and the DOM between them. Under this suite's vm pool that is any single-worker run " +
+      "(--maxWorkers=1, --no-file-parallelism, or two CPUs or fewer); --isolate=false does it under any pool. " +
+      "To run on one worker, use --pool=forks and leave isolation on.",
+  );
+}
+(globalThis as Record<symbol, unknown>)[EVALUATED_IN_THIS_CONTEXT] = true;
 
 // A React `act(...)` warning is a defect, but Vitest's default reporter prints no
 // console output for a *passing* test — so a suite that emits stays green, and any
@@ -50,12 +70,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  cleanup();
   vi.unstubAllGlobals();
   resetHostEventBus();
 
   // Drained before the throw so one emitting test cannot fail its successors.
-  // Checked after cleanup(), so an unmount-time warning counts too.
+  // An unmount-time warning counts too: RTL registers its own afterEach(cleanup)
+  // when its module is first evaluated in a test file's context, finding
+  // `afterEach` through the global that `globals: true` provides. That is later
+  // than this hook, and Vitest runs afterEach hooks in reverse order of
+  // registration (`sequence.hooks: "stack"`, its default) — so the tree is
+  // unmounted before this reads the buffer.
   const emitted = emittedConsoleErrors;
   emittedConsoleErrors = [];
   if (emitted.length > 0) {

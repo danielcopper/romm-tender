@@ -9,6 +9,7 @@
  * device round is what pins it.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { CSSProperties, FC, FocusEventHandler, ReactNode } from "react";

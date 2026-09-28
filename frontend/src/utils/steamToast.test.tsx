@@ -5,6 +5,7 @@
 // is which layout is chosen and which of Steam's classes each element carries,
 // because those are what decide it.
 
+import "@testing-library/jest-dom/vitest";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 

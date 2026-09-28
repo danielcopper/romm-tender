@@ -27,7 +27,7 @@
     "exactOptionalPropertyTypes": true,
     "strict": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom/vitest", "node"]
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]

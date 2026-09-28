@@ -11,6 +11,7 @@
  * is pinned here is that this frame is what engages them.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import type { FC, ReactNode } from "react";

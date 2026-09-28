@@ -15,6 +15,7 @@
  * shape. The bus is reset between tests by `frontend/src/test-setup.ts`.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor, act, within } from "@testing-library/react";
 import { toaster } from "../api/host";

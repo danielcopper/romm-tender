@@ -7,6 +7,7 @@
  * need to see the regions load a copy of the component with a stub in its place.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { CSSProperties, FC, ReactNode } from "react";

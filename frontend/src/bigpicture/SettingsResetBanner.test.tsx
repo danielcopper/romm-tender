@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { SettingsResetBanner, settingsResetMessage, SETTINGS_RESET_TITLE } from "./SettingsResetBanner";

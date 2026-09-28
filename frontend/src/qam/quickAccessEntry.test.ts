@@ -15,6 +15,7 @@
  * faked those out would be asserting against a tree it wrote itself.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";

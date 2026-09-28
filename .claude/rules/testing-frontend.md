@@ -20,6 +20,17 @@ extracting listener bodies into `frontend/src/utils/*.ts` purely for testability
 the fallback return value, the toast body, the `debugLog` message, the surfaced status. Asserting only that the
 rejecting call was invoked is vacuous: it passes with or without the `.catch`.
 
+**jest-dom is not part of the shared setup: a test file that uses one of its matchers imports
+`@testing-library/jest-dom/vitest` itself.** Every test file runs in a context of its own, and `toBeInTheDocument`,
+`toHaveAttribute`, `toHaveFocus` and the package's other matchers exist in that context only once the file has imported
+the package; without the import the assertion fails with `Invalid Chai property`. The typecheck cannot catch the
+omission — the package's types augment `vitest` for the whole program as soon as any one file imports it — so that
+failing run is the check. Unmounting needs no import of its own: RTL's own `afterEach(cleanup)` does it, and the
+`afterEach` in `test-setup.ts` says why an unmount-time warning still fails its test.
+
+**A run on one worker needs `--pool=forks`** (`pnpm -C frontend test --maxWorkers=1 --pool=forks`). `test-setup.ts`
+refuses a single-worker run under the suite's vm pool from its second file on, and says why.
+
 **`api/host` is stubbed for the whole suite, so no socket is ever opened in it.** `test-setup.ts` replaces the module
 wholesale: `callable` is a `vi.fn()` resolving to `undefined`, and the event pair routes through the harness. **No line
 of `frontend/src/api/hostSocket.ts` runs through any of that** — framing, call numbering, the outbox, the reconnection

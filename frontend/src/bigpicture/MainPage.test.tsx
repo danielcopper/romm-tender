@@ -33,6 +33,7 @@
 //      Field label would render as the empty string instead of the failure
 //      message.
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, useSyncExternalStore } from "react";

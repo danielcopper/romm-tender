@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, waitFor, act } from "@testing-library/react";
 import { createElement } from "react";

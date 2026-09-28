@@ -7,6 +7,7 @@
  * then sees the focus ring is the device round's to settle.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach } from "vitest";
 import { ENTRY_STOP_ATTR, firstBodyStop, pageEntryStop, placeEntryFocus } from "./entryFocus";
 

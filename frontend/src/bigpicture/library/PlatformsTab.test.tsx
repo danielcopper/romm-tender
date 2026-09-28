@@ -16,6 +16,7 @@
 // Steam's navigation does; the @decky/ui stub in `frontend/src/test-setup.ts`
 // forwards `onFocus` on a Focusable for exactly that reason.
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act, within } from "@testing-library/react";
 import type { ReactElement } from "react";

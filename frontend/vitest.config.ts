@@ -14,6 +14,18 @@ export default defineConfig({
     },
   },
   test: {
+    // With more than one worker, every test file still starts in a context of
+    // its own — a new happy-dom Window, in which each module is evaluated anew —
+    // but inside a worker process that outlives it, so the process, happy-dom's
+    // own module and the text of the externalised dependency files the worker
+    // has read are reused rather than paid for again per file (`runVmTests` and
+    // its `FileMap`, vitest's `dist/chunks/vm.*.js`). What a file leaves behind
+    // at process level, `process.env` included, reaches the next file in that
+    // worker. On one worker this pool runs every file in a single context
+    // instead, and `src/test-setup.ts` refuses that run. Every file stays on
+    // happy-dom: a `node` environment beside it under this pool makes the
+    // coverage totals differ from run to run.
+    pool: "vmForks",
     environment: "happy-dom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],

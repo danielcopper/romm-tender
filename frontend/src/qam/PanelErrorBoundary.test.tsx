@@ -8,6 +8,7 @@
  * under test.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState, type FC } from "react";

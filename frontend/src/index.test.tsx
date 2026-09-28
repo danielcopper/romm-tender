@@ -11,6 +11,7 @@
  * post-catch side effect (the surfaced error message) is observable.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";

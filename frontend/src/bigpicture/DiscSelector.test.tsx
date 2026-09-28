@@ -8,6 +8,7 @@
  * option set + drive a selection exactly as a real menu click would.
  */
 
+import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, waitFor, act, fireEvent, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
