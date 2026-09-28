@@ -261,6 +261,7 @@ and says plainly whether the two are the same size. From there you have three ch
   server did not list ignored as usual. An archive in a format the plugin cannot open, such as `.7z` or `.rar`, is never
   reported as differing; it simply cannot be confirmed. One case still works outside a zip: if you unpacked a
   single-game archive yourself, the loose file is compared against the game it came from.
+
 - **Download Instead** — replaces what is there. This deletes your files first, so it asks a second time and names what
   will be removed. If the file is your own dump, a translation patch or a romhack, the server cannot give it back.
 

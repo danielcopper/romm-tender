@@ -65,6 +65,7 @@ The **Connections** section manages your RomM server connection.
 
   Once you are signed in, this button reads **Sign in again** and a **Sign out** button appears below it (see
   [Sign out](#sign-out)).
+
 - **Custom headers** — extra HTTP headers sent with every request to your RomM server. Shows how many are configured, or
   **(none)**. Only needed when your server sits behind a proxy that authenticates requests itself — see
   [Custom headers for an authenticating proxy](#custom-headers-for-an-authenticating-proxy) below.

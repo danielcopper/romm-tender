@@ -1174,6 +1174,7 @@ it, for the focused platform:
   acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line
   back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch
   either committed or never ran and there is no pane left to report to either way.
+
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds all seven
   states and answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note
   beside `BIOS FILES`, the `sentence` under it, with the library's own `(d/t RomM library files)` ratio behind the
@@ -1401,6 +1402,7 @@ it, for the focused platform:
   — the machine-wide reading is deliberately unverified, #1803 is what will ask it, and until then the dash must not
   come to mean "asked, and nothing found". The section appears whenever the firmware read speaks for the platform,
   synced or not — there is nothing to say about one it does not cover.
+
 - **Remove** — Remove _N_ shortcuts and Delete _N_ save files on one row, the actions the Data Management platform modal
   used to offer, without Delete BIOS (it is one group up). Red, last, each behind a confirmation, and with **no heading
   over them**: both buttons name what they remove and are drawn in red, so a title says nothing they do not. **Both

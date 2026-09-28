@@ -38,6 +38,10 @@ Python dependencies are installed from `requirements-dev.lock` — fully-pinned 
 `requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
 pin, run `mise run lock-update` to regenerate the locks.
 
+MkDocs is not in `requirements-dev.lock`: the docs site builds from `docs/requirements.lock`, as
+`.github/workflows/docs.yml` does, and `mise run setup` does not install that lock, so run
+`uv pip install -r docs/requirements.lock` before previewing the site with `mise run docs`.
+
 ### Automated dependency updates
 
 Update PRs are managed by [Renovate](https://docs.renovatebot.com/) (`renovate.json`) across pip, npm, and GitHub
