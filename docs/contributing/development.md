@@ -266,6 +266,11 @@ order:
    takes the version off the `Server: romm-tender/<version>` field the refusal carries. A missing or stale note and a
    port nobody answers on mean "not yet". The answer costs one `refused GET /: no token` WARNING in `backend.log`.
 
+On a terminal the run is four rows redrawn in place. Where nothing may be redrawn — output piped into a file or the
+journal, or `NO_COLOR` set — each row is a line of its own when it starts and again each time what it is doing changes,
+marked `[..]`, before the line it ends on; so a log holds the whole run, the wait above included — the Service row's
+`waiting for 1.3.0 to answer` — rather than only how each row ended.
+
 When the answer does not come, the installer stops the unit, puts the kept tree back and deletes the failed one, and
 restores the backup — deleting any of those database and settings files the backup does not hold. It then starts the
 previous version, waits for it the same way, says `update to <new> failed; back on <previous>` and exits non-zero. It

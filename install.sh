@@ -625,7 +625,11 @@ greeter() {
 # The run is four rows that stand for the whole of it, drawn once and then
 # rewritten in place: the plan and the progress report are the same four lines.
 # What a row says while it runs is its sub-steps as they finish, which is the
-# only honest thing a phase of no measurable length can report.
+# only honest thing a phase of no measurable length can report. Where nothing
+# may be redrawn, the same progress is a line of its own each time a row starts
+# or its detail changes, ahead of the line it ends on: a run nobody watches —
+# one whose output goes to the journal — would otherwise hold only how each row
+# ended, and a wait of a minute would be a gap with no line saying what it was.
 #
 # **A spinner is a process of its own.** It cannot see a variable this shell
 # sets after it was forked, so the rows go through a file: while a row is
@@ -735,6 +739,7 @@ row_start() {
     ROW_STATE[$1]="running"
     flush_rows
     spinner_start
+    say_progress "$1"
 }
 
 # A sub-step finished: its name joins the ones before it on the row.
@@ -745,13 +750,29 @@ row_add() {
         ROW_DETAIL[$1]="${ROW_DETAIL[$1]}$DOT_SEPARATOR$2"
     fi
     flush_rows
+    say_progress "$1"
 }
 
 # The whole detail, for a step that supersedes what it was doing rather than
-# adding to it.
+# adding to it. Saying the same detail again is not progress, so it prints
+# nothing new.
 row_detail() {
+    [ "${ROW_DETAIL[$1]}" != "$2" ] || return 0
     ROW_DETAIL[$1]="$2"
     flush_rows
+    say_progress "$1"
+}
+
+# A running row as one plain line, where the rows are not redrawn. Trailing
+# blanks are dropped: a row that has only just started has no detail yet, and
+# its label is padded for one.
+say_progress() {
+    if may_animate; then
+        return 0
+    fi
+    local line
+    line="$(print_row "$1" progress "${ROW_DETAIL[$1]}" "" "" "")"
+    printf '%s\n' "${line%"${line##*[![:space:]]}"}"
 }
 
 # One line under a row, for the thing that happened once and has to be said.
@@ -870,12 +891,14 @@ clear_line() {
 
 # The four states a row can be in. `warn` is not an error and is not red: Steam
 # not having answered yet is the ordinary case on a machine that has just been
-# installed onto.
+# installed onto. `progress` is not a state but the mark on a line
+# say_progress writes, which only a run with no fancy marks ever does.
 row_mark() {
     if ! fancy_marks; then
         case "$1" in
             ok) printf '[ok]' ;;
             fail) printf '[!!]' ;;
+            progress) printf '[..]' ;;
             *) printf '[--]' ;;
         esac
         return 0

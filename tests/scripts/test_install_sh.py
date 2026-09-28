@@ -826,6 +826,32 @@ class TestAFreshInstall:
         assert b"\x1b" not in result.stdout
         assert f"[ok] Installing   {_ARCHIVE}".encode() in result.stdout
 
+    def test_a_piped_run_says_each_row_as_it_starts_and_as_its_detail_changes(self, machine):
+        """The journal of a run nobody watches holds the whole run, not only how each row ended."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        checking = [line for line in lines if " Checking" in line]
+        assert checking == [
+            "[..] Checking",
+            "[..] Checking     python 3.13",
+            "[..] Checking     python 3.13 - systemd",
+            "[..] Checking     python 3.13 - systemd - Steam",
+            "[..] Checking     python 3.13 - systemd - Steam - no Tender plugin in Decky",
+            "[ok] Checking     python 3.13 - systemd - Steam - no Tender plugin in Decky",
+        ]
+        assert lines.index("[..] Service      starting romm-tender") < lines.index(
+            "[ok] Service      romm-tender.service enabled and started"
+        )
+
+    def test_a_progress_line_carries_no_trailing_blanks(self, machine):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        progress = [line for line in result.stdout.splitlines() if line.startswith("[..]")]
+        assert progress
+        assert all(line == line.rstrip() for line in progress)
+
     def test_the_closing_summary_is_one_aligned_block(self, machine):
         """A blank line, then two labelled rows on one column, then what to do next.
 
@@ -1019,6 +1045,26 @@ class TestTheAcknowledgement:
 
         assert "\033[" not in output
         assert "Coming from the Decky plugin?" in _screen(output)
+
+    def test_a_terminal_that_is_redrawn_gets_no_progress_lines(self, machine):
+        """The rows are rewritten in place there, so a progress line would be a second copy of one.
+
+        Colour without UTF-8 is the one look that redraws AND marks rows with
+        text rather than glyphs, which is where a progress line's `[..]` could
+        reach a terminal at all.
+        """
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", LANG="C")
+
+        assert code == 0, output
+        assert "[..]" not in output
+        assert "[ok] Service" in _screen(output)
+
+    def test_no_color_on_a_terminal_is_the_plain_transcript_with_its_progress(self, machine):
+        """NO_COLOR asks for the transcript a log gets, and that includes each step as it happens."""
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", NO_COLOR="1")
+
+        assert code == 0, output
+        assert "[..] Service      starting romm-tender" in output
 
     def test_an_empty_no_color_says_nothing(self, machine):
         """The other half of the convention, and the one a `-n` test gets wrong."""
@@ -1586,6 +1632,19 @@ class TestAnUpdateThatStarts:
             in result.stderr.splitlines()
         )
 
+    def test_a_piped_update_says_it_is_waiting_before_the_service_row_ends(self, machine):
+        """The wait is the longest step of an update, and in the journal it has to be a line rather than a gap."""
+        _installed(machine)
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        waiting = f"[..] Service      waiting for {_NEW} to answer"
+        ended = next(index for index, line in enumerate(lines) if line.startswith("[ok] Service"))
+        assert waiting in lines
+        assert lines.index(waiting) < ended
+
     def test_a_first_install_keeps_nothing_and_waits_for_nothing(self, machine):
         """A first install keeps no tree, makes no backup and knocks on nothing."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up")
@@ -1655,6 +1714,14 @@ class TestAnUpdateThatDoesNotStart:
         assert f"[!!] Service      update to {_NEW} failed; back on {_VERSION}" in result.stdout
         assert "Rolled back in" in result.stdout
         assert "Done in" not in result.stdout
+
+    def test_a_piped_run_says_it_is_going_back_before_the_service_row_ends(self, machine):
+        _before, result = self._failed(machine)
+
+        lines = result.stdout.splitlines()
+        ended = lines.index(f"[!!] Service      update to {_NEW} failed; back on {_VERSION}")
+        assert lines.index(f"[..] Service      waiting for {_NEW} to answer") < ended
+        assert lines.index(f"[..] Service      {_NEW} did not answer, going back to {_VERSION}") < ended
 
     def test_it_records_the_failure(self, machine):
         _before, _result = self._failed(machine)
