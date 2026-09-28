@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from domain import firmware_paths
 from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_platform_option
+from domain.rom_files import TMP_EXT
 from lib.errors import error_response
 from lib.path_safety import PathTraversalError
 
@@ -150,7 +151,7 @@ class FirmwareDownloader:
                 "reason": "path_traversal",
                 "message": "Server sent an unsafe firmware file name — download aborted",
             }
-        tmp_path = dest + ".tmp"
+        tmp_path = dest + TMP_EXT
 
         try:
             await self._loop.run_in_executor(None, self._firmware_file_store.make_dirs, os.path.dirname(dest))

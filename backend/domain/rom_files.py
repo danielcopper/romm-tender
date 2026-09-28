@@ -10,8 +10,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-# The suffix a single-file download is written under until it is whole, and the
-# one a download RomM serves as a ZIP is written under before it is extracted.
+# The suffix a single-file download — a ROM's or a firmware file's — is written
+# under until it is whole, and the one a download RomM serves as a ZIP is written
+# under before it is extracted.
 TMP_EXT = ".tmp"
 ZIP_TMP_EXT = ".zip.tmp"
 
