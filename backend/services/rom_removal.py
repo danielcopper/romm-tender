@@ -260,9 +260,9 @@ class RomRemovalService:
         """Remove a single installed ROM: delete files and drop the install record.
 
         :meth:`remove_rom` without its conflict rules or its lease, for the
-        download service's sibling supersede, which removes a sibling from
-        inside a download that answered for its own rules; the caller writes
-        nothing to Steam for it.
+        download service's sibling supersede, which a download or an adoption
+        runs from inside its own call once that call has answered for its own
+        rules.
 
         Refused while any removal that owns this ROM's tree is running — its own
         earlier press, or a bulk uninstall, which claims every ROM it is about
