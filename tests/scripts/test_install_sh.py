@@ -2806,6 +2806,29 @@ class TestHowTheRunLooks:
         assert not [line for line in lines if line.startswith("✗ Steam")]
         assert "\033[33m✗" not in output, "a row is drawn in the warn colour"
 
+    def test_a_rollback_by_hand_greets_like_an_install(self, machine):
+        """The icon with the name and the four keys beside it, and what the run does under them."""
+        _installed(machine)
+        machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+        (machine.backup / "backed-up-at").write_text("2026-09-25T10:15:00Z\n", encoding="utf-8")
+
+        _code, output = machine.on_a_terminal("--rollback", COLUMNS="160", COLORTERM="truecolor", STUB_BACKEND="up")
+
+        assert not _stacked(output), "the text block is under the drawing, not beside it"
+        screen = _screen(output)
+        lines = screen.splitlines()
+        drawn = _icon_rows()
+        beside = [line for line in lines if line.startswith(drawn[3])]
+        assert beside[0].rstrip().endswith("TENDER  ·  RomM library in Steam")
+        assert f"Install to   {machine.code}" in screen
+        assert "Runs as      a systemd user service, starts with your session" in screen
+        assert "Needs        no sudo" in screen
+        assert "Keeps        a copy of your data as it is now" in screen
+        sentence = "Putting back the version the last update replaced, and your data as it was on 2026-09-25T10:15:00Z."
+        at = lines.index(sentence)
+        assert lines[at - 1] == "", "the sentence does not stand apart from the block above it"
+        assert at > next(index for index, line in enumerate(lines) if line.startswith(drawn[-1]))
+
     def test_the_four_rows_end_in_one_mark_each(self, machine):
         _code, output = machine.on_a_terminal(
             "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLORTERM="truecolor"

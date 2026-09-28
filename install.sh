@@ -470,7 +470,8 @@ print_ascii_row() {
 
 # What the greeter says beside the icon: what this run will do, in the order a
 # reader asks it. The paths are this run's own rather than literals, so a hand
-# install into another tree describes that tree.
+# install into another tree describes that tree. A rollback by hand says the
+# same, except that what it keeps is the copy it makes of the data it replaces.
 #
 # The name and the four keys are the bold things here, so the bold means
 # something. Written here rather than by the caller because in the first line it
@@ -492,7 +493,11 @@ greeting_lines() {
     else
         greeting_key "Needs" "one Steam restart, no sudo"
     fi
-    greeting_key "Keeps" "your settings, library and shortcuts"
+    if [ "$MODE" = "rollback" ]; then
+        greeting_key "Keeps" "a copy of your data as it is now"
+    else
+        greeting_key "Keeps" "your settings, library and shortcuts"
+    fi
 }
 
 greeting_key() {
@@ -1991,7 +1996,11 @@ do_rollback() {
             "$(tilde "$CODE.old") is ${previous:-an unrecorded version} and the backup holds the data of ${belongs:-an unrecorded version}. Your installed version and your data are as they were; start the service if it is not running: systemctl --user start $UNIT_NAME"
     fi
     made="$(backup_date)" || made=""
-    greeter mode_lines "Putting back the version the last update replaced, and your data as it was on ${made:-an unrecorded date}."
+    # Under the block rather than in it: beside the icon, a line this long
+    # needs a terminal about 130 columns wide, and on a narrower one the whole
+    # block goes under the icon.
+    greeter greeting_lines
+    printf '%s\n\n' "Putting back the version the last update replaced, and your data as it was on ${made:-an unrecorded date}."
     rows_begin
 
     row_start "$CHECKING"
