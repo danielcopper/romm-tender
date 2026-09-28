@@ -292,7 +292,7 @@ where you enable or disable them.
 2. The list holds every platform your server reports with at least one ROM, in two groups: **Synced** above
    **Available**
 3. Each row carries a coloured dot, the platform's name and its sync toggle. The dot is the platform's BIOS state at a
-   glance; the **BIOS files** section of the pane on the right says it in words, and
+   glance; the **BIOS files** section of the pane on the right says it in words for the row you are on, and
    [Library › Platforms](bios-management.md#library-platforms) explains the colours. Press A on the row to toggle it
 4. **Enable all** / **Disable all** sit above the groups
 5. Only enabled platforms are included in the next sync

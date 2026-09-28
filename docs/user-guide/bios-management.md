@@ -242,14 +242,14 @@ and the row you focus is the one the right-hand pane describes.
 1. From the main QAM page, tap **Library**, then move to the **Platforms** tab with L1/R1
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green
    ready, amber partly there, red missing, grey where there is nothing to say — and the numbers behind it are on the
-   right-hand pane, which also states them in full. With a mouse, hovering the row gives you the pane's own sentence,
-   word for word, so you are never told two different things about one platform
+   right-hand pane, which also states them in full. With a mouse, hovering the row states it in a sentence — once the
+   platform has been read, the same sentence the pane shows
 3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
    pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
    **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey
-   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet". Checking one platform takes a
-   tenth to half a second on a Steam Deck, so a library of thirty is done in a few seconds, and leaving the page stops
-   the work
+   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet" (a read that failed says so in the
+   pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a library of thirty is done in a few
+   seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
 5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
    launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.
