@@ -14,9 +14,6 @@ import pytest
 
 from adapters.es_find_rules import EsFindRulesAdapter, emulator_token
 
-# main.py adds backend to sys.path (provides lib, domain, _vendor, …).
-from main import Plugin  # noqa: F401
-
 _TEST_LOGGER = logging.getLogger("test_es_find_rules")
 
 # Mixes the shapes the probe must reason about: a RetroDECK component with both a

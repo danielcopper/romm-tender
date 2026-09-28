@@ -300,8 +300,8 @@ and the migration-blocked page renders `old_path` and `new_path`, both of which 
 Silently operating on the wrong root is the failure mode [#948](https://github.com/danielcopper/romm-tender/issues/948)
 addresses. The fix keeps the getters silent-and-best-effort but pairs them with a loud health signal that the frontend
 surfaces as a QAM banner. `RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum
-(`backend/lib/retrodeck_health.py` — placed in `lib/` because the adapter, the `RetroDeckPaths` Protocol, and `main.py`
-all import it, and import-linter forbids the adapter↔service directions). The four states:
+(`backend/lib/retrodeck_health.py` — placed in `lib/` because the adapter and the `RetroDeckPaths` Protocol both import
+it, and import-linter forbids the adapter↔service directions). The four states:
 
 | State          | When                                                                                         | Loud? | Rationale                                                                                                                                                                     |
 | -------------- | -------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -315,11 +315,11 @@ file read — and tracks the last load outcome so it can distinguish `absent` fr
 conflate them). The `root_missing` disk probe (`os.path.isdir`) only runs when the config read OK; it never runs for
 `absent`, so a fresh install stays quiet.
 
-`main.py` exposes this via the `get_retrodeck_status()` callable, a discriminated-status union
-(`{status, config_path, resolved_home}`) — the [Callable response shapes](backend-architecture.md) carve-out for >2
-outcomes. The backend returns only the discriminant plus the probed paths; the frontend owns the human-readable copy
-(`frontend/src/utils/retrodeckHealth.ts`) and renders the shared `WarningCard` in the QAM Status panel for the two loud
-states. `ok` and `absent` render no banner.
+`MigrationService.get_retrodeck_status()` answers it to the `get_retrodeck_status` endpoint, a discriminated-status
+union (`{status, config_path, resolved_home}`) — the [Callable response shapes](backend-architecture.md) carve-out for
+more than two outcomes. The backend returns only the discriminant plus the probed paths; the frontend owns the
+human-readable copy (`frontend/src/utils/retrodeckHealth.ts`) and renders the shared `WarningCard` in the QAM Status
+panel for the two loud states. `ok` and `absent` render no banner.
 
 ## Known consumer gaps
 

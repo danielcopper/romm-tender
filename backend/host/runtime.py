@@ -60,9 +60,9 @@ if TYPE_CHECKING:
 class BackendBuild:
     """What building the backend produced that the host itself needs.
 
-    The identity comes from here rather than from the caller because it is read
-    off the package manifest during the build, and reading that file a second
-    time in the entry point would be a second spelling of the program's name,
+    The identity comes from here rather than from the caller because the build
+    composes it once for the outgoing User-Agent, and composing it a second time
+    in the entry point would be a second spelling of the program's identity,
     free to drift from the one every outgoing request already carries.
     """
 
@@ -99,7 +99,7 @@ async def run_backend(
     *build* performs the schema migration, the wiring and the start-up routines
     and answers with the dispatcher for the object calls reach, plus the identity
     this server answers under. *token* is this process's admission token, created
-    by the caller because the logging filter that keeps it out of the log file
+    by the caller because the logging formatter that keeps it out of the log file
     has to exist before the first line is written. *after_bind* is
     the network-touching start-up step, run once the port has been announced.
     *injection* is what the panel is loaded into Steam with, or ``None`` to serve

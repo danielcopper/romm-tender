@@ -1075,7 +1075,7 @@ class TestMainStartupOrdering:
                 update_source=UpdateSource(release_api="http://127.0.0.1:9/", installed_program=False),
                 user_home="/fake/home",
                 logger=logging.getLogger("test_startup_order"),
-                events=events,
+                emit=events.emit,
                 status=HostStatus(),
             )
 

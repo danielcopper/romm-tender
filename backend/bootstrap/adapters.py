@@ -249,8 +249,8 @@ class BootstrapResult:
     every consumer reads the same six fields rather than composing any
     of them again; :attr:`launcher` says where the shortcut launcher
     lives beneath the data root and whether this start got it there;
-    and :attr:`user_agent` is the one manifest read, which the outgoing
-    User-Agent and the host's own identity both come from. Together
+    and :attr:`user_agent` is ``<package name>/<version>``, composed once,
+    which the outgoing User-Agent and the host's own identity both are. Together
     they replace the historical untyped
     ``dict`` return so every consumer is caught by basedpyright
     instead of failing silently at runtime on a typo.
@@ -263,10 +263,10 @@ class BootstrapResult:
     handles: BootstrapHandles
     directories: AppDirectories
     launcher: ShortcutLauncher
-    # ``<package name>/<version>``, from the one read of the manifest that also
-    # produces the outgoing User-Agent. The host answers under it, so a second
-    # read in the entry point would be a second spelling of the program's name,
-    # free to drift from the one every request already carries.
+    # ``<package name>/<version>`` from ``domain/identity.py``, the same string
+    # every outgoing request carries as its User-Agent. The host answers under
+    # it, so composing it again in the entry point would be a second spelling of
+    # the program's identity, free to drift from the one every request carries.
     user_agent: str
 
 

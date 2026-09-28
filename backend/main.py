@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from dataclasses import asdict
-from typing import Any, Protocol
+from typing import Any
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
@@ -10,7 +10,7 @@ sys.path.insert(0, backend_dir)
 # Where the program sits, used only when nothing in the environment says. The
 # installed case always says — the installer resolves the directories once and
 # writes them into the unit — so this answers for a start by hand from a
-# checkout, where the manifest and the shipped launcher sit one level up.
+# checkout, where the built panel and the shipped launcher sit one level up.
 _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import (
@@ -38,12 +38,7 @@ from host import (
     route,
     run_backend,
 )
-
-
-class PluginEventSink(Protocol):
-    """Where an event leaves this process; answers whether anybody heard it."""
-
-    async def emit(self, name: str, payload: object, /) -> bool: ...
+from services.protocols import EventEmitter
 
 
 class Plugin:
@@ -93,7 +88,7 @@ class Plugin:
         """
         self._debug_logger(msg)
 
-    async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
+    async def _main(self, *, directories, update_source, user_home, logger, emit: EventEmitter, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
 
         Everything here must be through before the port is bound, which is what
@@ -129,7 +124,7 @@ class Plugin:
                 runtime=RuntimeBundle(
                     loop=self.loop,
                     logger=logger,
-                    emit=events.emit,
+                    emit=emit,
                     clock=result.runtime_adapters.clock,
                     uuid_gen=result.runtime_adapters.uuid_gen,
                     sleeper=result.runtime_adapters.sleeper,
@@ -1036,7 +1031,7 @@ class Plugin:
                 update_source=update_source,
                 user_home=user_home,
                 logger=logger,
-                events=events,
+                emit=events.emit,
                 status=status,
             )
             plugin._host_status = status
