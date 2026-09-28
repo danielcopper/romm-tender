@@ -287,11 +287,13 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     )
     services = wire_services(cfg)
 
-    # 4. Construct the real Plugin and bind exactly as main.py:_main does.
+    # 4. Construct the real Plugin and bind exactly as main.py:_main does —
+    # plus the two handles main.py never sets, which contract tests read to
+    # seed and inspect the live settings dict and the RetroDECK paths.
     plugin = Plugin()
     plugin.loop = loop
-    plugin.settings = result.stores.settings
     plugin._debug_logger = result.handles.debug_logger
+    plugin.settings = result.stores.settings
     plugin._retrodeck_paths = result.callbacks.retrodeck_paths
     for attr, field in _BOUND_SERVICE_ATTRS.items():
         setattr(plugin, attr, getattr(services, field))

@@ -42,22 +42,19 @@ from services.protocols import EventEmitter
 
 
 class Plugin:
-    settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
-
-    # Test-only attribute slots — production ``Plugin`` does not read
-    # these after ``_main`` (the wired services own them), but the
-    # test suite constructs ``Plugin()`` bare and pokes the same handles
-    # the production wiring would set. Annotated as ``Any`` because
-    # tests pass real adapters, ``MagicMock``s, or fakes interchangeably.
-    # Annotations alone do not create the attribute, so bare access still
-    # raises ``AttributeError`` (the ``TestPersistenceAttributeIsLoud``
-    # regression remains green).
-    _persistence: Any
-    _settings_persister: Any
     # What the process hosting this backend knows about its own run. Set by the
     # entry point once the build is through, for the one callable that reads it.
     _host_status: HostStatus
+
+    # Test-only attribute slots — production never sets or reads these. The
+    # test suite constructs ``Plugin()`` bare and holds its own handles on it.
+    # Annotated because tests pass real adapters, ``MagicMock``s, or fakes
+    # interchangeably. Annotations alone do not create the attribute, so bare
+    # access still raises ``AttributeError``.
+    settings: dict[str, Any]
+    _persistence: Any
+    _settings_persister: Any
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -106,12 +103,7 @@ class Plugin:
             user_home=user_home,
             logger=logger,
         )
-        self.settings = result.stores.settings
         self._debug_logger = result.handles.debug_logger
-        # RetroDECK path resolver — held directly so the get_retrodeck_status
-        # callable can read the resolution health without routing through a
-        # service (it's a pure adapter read, no orchestration).
-        self._retrodeck_paths = result.callbacks.retrodeck_paths
 
         # ── 4. Wire services ────────────────────────────────────────────────
         services = wire_services(

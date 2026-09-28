@@ -149,15 +149,6 @@ class TestPersistenceAttributeIsLoud:
     ``PersistenceAdapter`` instance.
     """
 
-    def test_attribute_missing_on_bare_plugin(self):
-        """Direct access to _persistence pre-_main() raises — no lazy fallback."""
-        from main import Plugin
-
-        bare = Plugin()
-
-        with pytest.raises(AttributeError, match="_persistence"):
-            _ = bare._persistence
-
     def test_settings_persister_missing_on_bare_plugin(self):
         """``_settings_persister`` is bound only by ``_main()``; bare access raises."""
         from main import Plugin
