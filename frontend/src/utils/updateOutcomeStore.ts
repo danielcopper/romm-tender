@@ -23,10 +23,12 @@ import {
   acknowledgeUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
+  logWarn,
   type UpdateDirection,
   type UpdateFailure,
   type UpdateOutcome,
 } from "../api/backend";
+import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamCanShowToasts } from "./steamReadyForToasts";
 import { showToast } from "./toast";
 
 /** An update the installer rolled back, in this store's spelling. */
@@ -134,16 +136,25 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
  * Ask the backend what the last update did, fill the store, and announce a
  * version that moved — to a later release, or back to an earlier one.
  *
- * The announcement is one toast, and it is acknowledged only after it was
- * raised: the backend owes it once per process, so a panel reloaded by a Steam
- * restart does not raise it a second time. An acknowledgement that fails leaves
- * it owed, and the next panel load says it again — a repeat rather than a loss.
+ * The announcement is one toast. It waits until Steam can show it, because a
+ * panel loaded straight after Steam restarted its JS context runs before then
+ * (what it waits for, and for how long at most: `steamReadyForToasts.ts`). It
+ * is acknowledged only after it was raised: the backend owes it once per
+ * process, so a panel reloaded by a Steam restart does not raise it a second
+ * time. An acknowledgement that fails leaves it owed, and the next panel load
+ * says it again — a repeat rather than a loss.
  */
 export async function fetchUpdateOutcome(): Promise<void> {
   const seq = ++_seq;
   const outcome = await getUpdateOutcome();
   if (seq === _seq) setUpdateOutcomeState(stateFromOutcome(outcome));
   if (outcome.announce_version !== null) {
+    const readiness = await waitUntilSteamCanShowToasts();
+    if (!readiness.inTime) {
+      logWarn(
+        `Steam was not ready for a toast after ${TOAST_READINESS_DEADLINE_MS / 1000} s (still waiting for ${readiness.unmet.join(", ")}); raising the update announcement anyway`,
+      );
+    }
     showToast(updateAnnouncementSentence(outcome.announce_version, outcome.announce_direction));
     await acknowledgeUpdateAnnouncement();
   }

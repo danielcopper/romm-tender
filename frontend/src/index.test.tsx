@@ -145,6 +145,13 @@ vi.mock("./utils/steamShortcuts", () => ({
   setLaunchOptionsConfirmed: (...args: unknown[]) => setLaunchOptionsConfirmed(...args),
 }));
 
+// Steam's globals the update announcement waits on are not stubbed here, so
+// the wait answers at once; what it waits for is tested beside the store.
+vi.mock("./utils/steamReadyForToasts", async () => {
+  const actual = await vi.importActual<typeof import("./utils/steamReadyForToasts")>("./utils/steamReadyForToasts");
+  return { ...actual, waitUntilSteamCanShowToasts: vi.fn().mockResolvedValue({ inTime: true, unmet: [] }) };
+});
+
 // Observe the surfaced error message (post-catch side effect).
 const logError = vi.fn();
 vi.mock("./api/backend", async () => {

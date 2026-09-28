@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { toaster } from "../api/host";
 import {
   acknowledgeUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
+  logWarn,
   type UpdateOutcome,
 } from "../api/backend";
+import { TOAST_READINESS_DEADLINE_MS, TOAST_READINESS_POLL_MS } from "./steamReadyForToasts";
 import {
   dismissUpdateFailureRecord,
   failureCardShows,
@@ -39,6 +41,31 @@ const ROLLED_BACK: UpdateOutcomeState = {
   failureDismissed: false,
 };
 
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  logWarn: vi.fn(),
+}));
+
+/** Steam as the toast's readiness wait reads it; a test changes a field to move it along. */
+interface SteamState {
+  services: boolean;
+  locked: boolean;
+  bigPicture: "none" | "hidden" | "visible";
+}
+
+function stubSteam(state: SteamState): void {
+  vi.stubGlobal("App", { GetServicesInitialized: () => state.services });
+  vi.stubGlobal("securitystore", { IsLockScreenActive: () => state.locked });
+  vi.stubGlobal("SteamUIStore", {
+    WindowStore: {
+      get GamepadUIMainWindowInstance() {
+        if (state.bigPicture === "none") return null;
+        return { BrowserWindow: { document: { visibilityState: state.bigPicture } } };
+      },
+    },
+  });
+}
+
 /** A promise the test resolves by hand, to hold a call in flight. */
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -49,7 +76,12 @@ function deferred<T>() {
 }
 
 describe("updateOutcomeStore", () => {
+  let steam: SteamState;
+
   beforeEach(() => {
+    steam = { services: true, locked: false, bigPicture: "visible" };
+    stubSteam(steam);
+    vi.mocked(logWarn).mockClear();
     resetUpdateOutcomeStoreForTests();
     vi.mocked(getUpdateOutcome).mockReset();
     vi.mocked(acknowledgeUpdateAnnouncement).mockReset().mockResolvedValue({ success: true });
@@ -111,6 +143,70 @@ describe("updateOutcomeStore", () => {
 
       await expect(fetchUpdateOutcome()).rejects.toThrow("socket closed");
       expect(toaster.toast).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("the announcement waits until Steam can show it", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.mocked(getUpdateOutcome).mockResolvedValue(UPDATED);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it.each<[string, Partial<SteamState>]>([
+      ["Steam's services are not initialised", { services: false }],
+      ["the lock screen is up", { locked: true }],
+      ["Big Picture's window is hidden", { bigPicture: "hidden" }],
+    ])("is not raised while %s, and is raised, then acknowledged, once it can be", async (_case, notYet) => {
+      Object.assign(steam, notYet);
+      const pending = fetchUpdateOutcome();
+      await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS * 8);
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(acknowledgeUpdateAnnouncement).not.toHaveBeenCalled();
+
+      Object.assign(steam, { services: true, locked: false, bigPicture: "visible" });
+      await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
+      await pending;
+
+      expect(toaster.toast).toHaveBeenCalledTimes(1);
+      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
+      expect(vi.mocked(toaster.toast).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(acknowledgeUpdateAnnouncement).mock.invocationCallOrder[0]!,
+      );
+      expect(logWarn).not.toHaveBeenCalled();
+    });
+
+    it("is raised at the deadline if Steam never gets there, and the log says what it was still waiting for", async () => {
+      steam.services = false;
+      const pending = fetchUpdateOutcome();
+      await vi.advanceTimersByTimeAsync(TOAST_READINESS_DEADLINE_MS - 1);
+      expect(toaster.toast).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
+      await pending;
+
+      expect(toaster.toast).toHaveBeenCalledTimes(1);
+      expect(acknowledgeUpdateAnnouncement).toHaveBeenCalledTimes(1);
+      expect(logWarn).toHaveBeenCalledWith(
+        "Steam was not ready for a toast after 30 s (still waiting for services_initialized); raising the update announcement anyway",
+      );
+    });
+
+    it("fills the store before it waits, so the rolled-back card is not held back by a toast", async () => {
+      steam.services = false;
+      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...UPDATED, failure: ROLLED_BACK_WIRE.failure });
+      const pending = fetchUpdateOutcome();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(getUpdateOutcomeState()).toEqual(ROLLED_BACK);
+      expect(toaster.toast).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(TOAST_READINESS_DEADLINE_MS + TOAST_READINESS_POLL_MS);
+      await pending;
     });
   });
 
