@@ -30,6 +30,22 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
+- **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
+  automatic rollback and removes it after an update whose new version answered** — test + prompt-only — the record is
+  the installer's statement that it rolled an update back, and the rolled-back notice, the row under Settings › Updates
+  and the start-up WARNING all rest on that. A backend that removed it would take the notice down before the user saw
+  it, with nothing on disk saying a rollback happened; one that wrote it would claim a rollback the installer never did.
+  So a record the backend finds no longer standing — its `restored_version` is not the running version
+  (`domain/update_outcome.py::standing_update_failure`) — is ignored rather than cleaned up.
+  `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord` reads the syntax tree of every backend
+  module outside `_vendor/`: only `adapters/update_failure.py` and `domain/update_outcome.py` (the constant's home) may
+  name `UPDATE_FAILURE_FILENAME`, by name, attribute or import, or carry the literal outside a docstring; and the
+  adapter may call nothing named like a write, move or removal (`write`, `unlink`, `remove`, `rename`, `replace`, …) and
+  may `open` only for reading. It sees names and calls, so it misses a record path assembled from pieces or handed in
+  from elsewhere, a write through a helper in another module, a call reached through `getattr`, and a subprocess. The
+  installer's half — the write on a rollback, before the restored version starts, and the removal once a later update's
+  new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
+  `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
   defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `Plugin.run`
