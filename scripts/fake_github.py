@@ -277,6 +277,9 @@ def main(argv: list[str] | None = None) -> int:
         pass
     finally:
         server.server_close()
+    # Interpreter shutdown puts every Python handler but SIG_IGN back on SIG_DFL, where a late signal kills the process.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     return 0
 
 
