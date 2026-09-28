@@ -294,7 +294,7 @@ it("disowns leases stranded by a previous frontend context on mount", async () =
   await Promise.resolve();
 
   // A context torn down mid-call never released its lease and never renews it,
-  // so nothing but a fresh mount can free the gate before the TTL.
+  // so nothing but a fresh mount lets a cleanup start before the TTL.
   expect(releaseOrphanedPruneLeases).toHaveBeenCalled();
   expect(logError).toHaveBeenCalledWith(expect.stringContaining("disowned 1 lease(s) stranded"));
 });

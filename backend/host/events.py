@@ -13,9 +13,9 @@ Dropping is exactly why the answer is returned. Whoever attached a prune claim
 to an event whose Steam-side work outlives the backend's acts on it: the library
 service for ``sync_complete`` and ``sync_stale``, the download service for
 ``download_complete``, the prune service for ``prune_complete`` and the
-migration service for ``migration_relaunch_options``. A claim handed to a panel that is not there holds off
-every removed-game cleanup until it expires, so the side that attached it
-releases it the moment the sink says nobody heard.
+migration service for ``migration_relaunch_options``. A claim handed to a panel
+that is not there holds off every removed-game cleanup until it expires, so the
+side that attached it releases it the moment the sink says nobody heard.
 """
 
 from __future__ import annotations

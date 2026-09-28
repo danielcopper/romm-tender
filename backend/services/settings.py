@@ -95,7 +95,8 @@ class SettingsServiceConfig:
     ``apply_steam_input_setting`` re-skins), plus the runtime
     infrastructure (logger, settings persister, steam-config adapter), and the
     ``ConflictRules`` the server-URL, custom-header and Steam Input writes check
-    at their entry. Bundled here so the ctor stays within the S107 parameter budget.
+    at their entry. Bundled here so the ctor stays within the S107 parameter
+    budget.
     """
 
     settings: dict[str, Any]

@@ -659,7 +659,7 @@ describe("Library › Platforms", () => {
     });
 
     it("puts the toggle back and carries the backend's words when the write is refused", async () => {
-      // A refusal resolves — the migration gate answers `{success: false, …}`
+      // A refusal resolves — the migration rule answers `{success: false, …}`
       // without throwing — so the reverted row is the only thing the reader
       // would otherwise see, and it is what a toggle that never moved looks
       // like.

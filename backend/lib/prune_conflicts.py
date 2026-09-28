@@ -6,7 +6,8 @@ conflicts. An operation is refused while a reservation or a run claim is held;
 a reservation is refused while an operation or a lease is held. A run claim
 does not refuse a reservation, because the prune service refuses a second
 start itself. Use cases reach it through the conflict rules
-(``lib/conflict_rules.py``), which check it at their entry.
+(``lib/conflict_rules.py``), which check it at their entry; the prune service
+registers and releases its run claim here directly.
 """
 
 from __future__ import annotations

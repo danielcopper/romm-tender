@@ -213,7 +213,8 @@ class PruneResultReporter:
 
         The frontend publishes the repointed shortcuts after the run has let go
         of its claim, so the lease holds off the next cleanup until it has.
-        Emitted while the run claim still refuses a cleanup's start.
+        Emitted before the run releases its claim, while the prune service
+        still refuses a second start.
         """
         await self._rules.emit_under_lease(
             "prune_complete",

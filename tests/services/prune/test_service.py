@@ -848,7 +848,7 @@ async def test_cancel_before_the_run_task_starts_still_releases_the_claim(harnes
 
 
 @pytest.mark.asyncio
-async def test_a_started_run_holds_its_claim_on_the_gate_until_it_ends(harness):
+async def test_a_started_run_holds_its_run_claim_until_it_ends(harness):
     _seed(harness.uow, _rom(1, fetch="old"))
     preview = await _preview(harness)
 

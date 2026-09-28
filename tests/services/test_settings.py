@@ -90,7 +90,7 @@ _SETTINGS_WRITES = [
 
 
 class TestConflictRulesAtTheUseCase:
-    """Each settings write an endpoint gates checks its prune rule and holds an operation named after it."""
+    """Each settings write checks its endpoint's prune rule and holds an operation named after it."""
 
     @pytest.mark.parametrize(("use_case", "args"), _SETTINGS_WRITES)
     async def test_a_running_cleanup_refuses_the_write_and_changes_nothing(

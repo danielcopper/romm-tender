@@ -112,9 +112,9 @@ class ConnectionServiceConfig:
     minimum-version policy tuple, the device-forget callback fired on a
     server-origin change, the playtime scope-notice clear callback fired on
     a fresh sign-in, and the ``ConflictRules`` the sign-in, sign-out and
-    connection-test use cases check at their entry. Bundled here so the ctor stays within the S107 parameter
-    budget and so the version constant stays declared once at the plugin
-    entrypoint.
+    connection-test use cases check at their entry. Bundled here so the ctor
+    stays within the S107 parameter budget and so the version constant stays
+    declared once at the plugin entrypoint.
     """
 
     settings: dict[str, Any]

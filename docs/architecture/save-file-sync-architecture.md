@@ -945,12 +945,12 @@ home's saves root rather than any game's answer. Once it has run, including with
 each installed ROM's record with the resolver's answer from the new home, and drops the record where that answer is one
 the follow does not act on (`SaveService.rerecord_save_directories`, reached through a late binding). So the follow
 finds the record equal to the answer, or finds none and records a first sight: with `skip`, the copy left in the old
-home stays there and is never carried over the one the user kept. The migration rule and `get_migration_status` report
-the migration as still pending until that re-record has finished, although the run clears its markers before it, so no
-sync meets a record still naming the old home. Two limits: while no emulator installation is detected the re-record
-leaves every record as it was, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are
-recorded), so for those ROMs the next path that follows can still carry the copy left in the old home. See
-[RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
+home stays there and is never carried over the one the user kept. The migration rule keeps refusing and
+`get_migration_status` reports the migration as still pending until that re-record has finished, although the run clears
+its markers before it, so no sync meets a record still naming the old home. Two limits: while no emulator installation
+is detected the re-record leaves every record as it was, and a ROM whose re-record fails keeps its old record (the
+failure is logged, the rest are recorded), so for those ROMs the next path that follows can still carry the copy left in
+the old home. See [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Detecting a home change
 

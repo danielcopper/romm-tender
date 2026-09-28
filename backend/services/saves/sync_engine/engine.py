@@ -2,7 +2,7 @@
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
 sequencing rules the public save-sync callables follow (save-sync
-enabled check, retrodeck migration gate, device-registration fallback,
+enabled check, retrodeck migration rule, device-registration fallback,
 dispatch into the matrix executor, persistence), plus following a moved
 save directory, which the sync entry points and ``resolve_sync_conflict`` do
 here and the other write paths and the delete, count and status paths of the

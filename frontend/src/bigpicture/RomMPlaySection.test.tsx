@@ -1728,7 +1728,7 @@ describe("RomMPlaySection", () => {
       expect(vi.mocked(updatePlaytimeDisplay)).not.toHaveBeenCalled();
     });
 
-    it("a resolved prune gate failure never writes a playtime payload", async () => {
+    it("a resolved prune refusal never writes a playtime payload", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 78 });
       vi.mocked(backend.reconcilePlaytime).mockResolvedValue({
         success: false,

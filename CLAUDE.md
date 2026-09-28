@@ -683,14 +683,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`forceFullSync`) clear the store and tell the backend; a cancel landing just after a preview was staged discards
   server-side. Every answer path lives on the Sync page, where the change table is; Main answers no preview. Nothing
   mechanical can tell that a handler is an answer path
-- **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic hold of the prune
+- **A prune run's claim reservation and its refusal of every conflicting endpoint happen in one atomic hold of the prune
   conflicts' lock (the preview rebuild does not), and frontend-owned Steam work holds a heartbeated,
   generation-tombstoned lease through every continuation's final write** — test + prompt-only — prune service and prune
-  conflicts race tests + contract callable-entry matrix; new conflicting entry points are prompt-only
+  conflicts race tests + contract endpoint-entry matrix (`tests/contract/test_conflict_refusals.py`); new conflicting
+  entry points are prompt-only
 - **A removed-game cleanup's run claim is registered on the prune conflicts before the start's reservation is given
   back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
-  `tests/services/prune/test_service.py::test_a_started_run_holds_its_claim_on_the_gate_until_it_ends` (registered by
-  the time `start_prune` returns) and
+  `tests/services/prune/test_service.py::test_a_started_run_holds_its_run_claim_until_it_ends` (registered by the time
+  `start_prune` returns) and
   `tests/contract/test_prune.py::test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end` (refused across
   a real start); the reservation is taken by `hold_start` in `PruneService.start_prune`, around the whole start.
   Prompt-only: the start's body is reached only through that `hold_start`

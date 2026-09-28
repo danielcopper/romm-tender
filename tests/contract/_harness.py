@@ -69,10 +69,9 @@ if TYPE_CHECKING:
     from lib.prune_conflicts import PruneConflicts
 
 # The wired attributes ``main.py:_main`` binds onto ``Plugin`` — every service
-# it calls. The harness binds the same set; the loud-failure
-# assert below checks every one is present so a wiring drift (a renamed/added
-# service field) fails the fixture instead of surfacing as a confusing
-# ``AttributeError`` mid-test.
+# it calls. The harness binds the same set; the loud-failure assert below checks
+# every one is present so a wiring drift (a renamed/added service field) fails
+# the fixture instead of surfacing as a confusing ``AttributeError`` mid-test.
 _BOUND_SERVICE_ATTRS = {
     "_save_sync_service": "save_sync_service",
     "_playtime_service": "playtime_service",
@@ -322,8 +321,8 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     )
 
 
-# The conditions a gated endpoint refuses on. A test that needs one to meet a
-# gate reaches it through the helper here, so moving where a condition lives
+# The conditions a conflict rule refuses on. A test that needs one to meet a
+# rule reaches it through the helper here, so moving where a condition lives
 # changes one helper rather than every test that needs the condition. Only the
 # cleanup's claim has a release, for a test that probes what a refusal left
 # behind once the claim is gone; the other two hold until the test ends, and

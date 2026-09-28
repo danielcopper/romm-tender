@@ -887,7 +887,7 @@ Four kinds of claim:
   ends.
 
 A cleanup is **running** while a reservation or a run claim is held, and every conflicting endpoint is refused for that
-long. A start is refused while any operation or lease is held. _Avoid_: **admission** for these claims — that word
+long. A start is refused while any operation or lease is held. _Avoid_: **admission** for this refusal — that word
 already names the host's check of a connection's Host, Origin and token, and other guards in this program.
 
 ### Conflict rules
@@ -901,8 +901,7 @@ and they are asked in this order:
    **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
 The first named rule that holds answers with its refusal, and a refused call holds nothing. A cleanup's exclusive start
-is asked before all three. A use case asks its endpoint's rules at its entry, through `ConflictRules` —
-`hold("<endpoint>", …)`, or `hold_start("<endpoint>", …)` for the cleanup's start — so the endpoint only calls it.
+is asked before all three. A use case asks its endpoint's rules at its entry, so the endpoint only calls it.
 
 **`<verb>_unchecked`** — the service method an endpoint calls, without that endpoint's rules, for a peer service that
 calls it from inside a call that has already answered for its own. _Avoid_: **`do_<verb>`** for it — that names a

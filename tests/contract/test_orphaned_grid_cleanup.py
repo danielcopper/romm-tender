@@ -7,7 +7,7 @@ Pins the dry-run/real success shapes (the real run answers its own
 ``candidate_count`` beside ``removed_count``),
 the ``incomplete_scan`` sanity-guard refusal (a bound ``roms.shortcut_app_id``
 missing from the submitted live set deletes nothing), and the
-``sync_active`` gate refusal while a library sync is in flight.
+sync rule's ``sync_active`` refusal while a library sync is in flight.
 """
 
 from __future__ import annotations

@@ -9,7 +9,8 @@ and corrupt the registry mid-run. At IDLE (which paused and completed runs
 reset the live state to) each callable answers with its normal shape.
 
 Driven through the real callables over the real wired plugin, frontend-shaped
-(positional args), asserting the response shape on both sides of the gate.
+(positional args), asserting the response shape with and without a sync in
+flight.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ _IN_FLIGHT_STATES = [SyncState.RUNNING, SyncState.CANCELLING]
 
 
 def _assert_sync_active_refusal(result):
-    """Pin the gate's canonical failure shape: exactly success/reason/message."""
+    """Pin the sync rule's canonical failure shape: exactly success/reason/message."""
     assert set(result) == {"success", "reason", "message"}
     assert result["success"] is False
     assert result["reason"] == "sync_active"

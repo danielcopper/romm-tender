@@ -113,7 +113,7 @@ class MigrationService:
         self._background_tasks: set[asyncio.Task[Any]] = set()
         # Migration runs in flight. A run clears the pending markers in the same
         # write as the relocations, before it re-records the save directories;
-        # the gate has to hold until that has finished.
+        # the migration rule has to keep refusing until that has finished.
         self._migrations_in_flight = 0
         # The status the latest run in flight started from — its move and its
         # counts — so the status can still answer with it once the markers are

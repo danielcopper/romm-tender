@@ -5,9 +5,11 @@ after a call or an event has answered (CONTEXT.md → Prune conflicts). The
 frontend renews the leases it holds, releases each once its writes are done,
 and on mount disowns every lease an earlier frontend context left behind.
 
-None of the three checks a conflict rule: each must stay reachable while a
-lease is stuck, and a stuck lease is exactly what the prune rule would refuse
-them on.
+None of the three checks a conflict rule: they change no local game data, only
+the record of claims, and the prune rule would refuse them while a cleanup
+runs — when the frontend may still renew or release the lease a run's final
+``prune_complete`` carries, or disown what an earlier context held after a
+remount.
 """
 
 from __future__ import annotations

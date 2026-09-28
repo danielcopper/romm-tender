@@ -54,8 +54,8 @@ class SteamGridServiceConfig:
     Unit-of-Work factory (the ``sgdb_id`` cross-ref is persisted onto the
     ``roms`` aggregate via the UoW), the pending-sync read seam, the
     debug-logger seam SteamGridService needs at construction time, and the
-    ``ConflictRules`` the artwork, icon and resolution use cases check at their
-    entry and take the ``sgdb_artwork`` lease through.
+    ``ConflictRules`` the artwork, icon, resolution and game-id use cases check
+    at their entry, and the artwork one takes the ``sgdb_artwork`` lease through.
     """
 
     sgdb_api: SteamGridDbApi
