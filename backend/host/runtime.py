@@ -63,7 +63,8 @@ class BackendBuild:
     The identity comes from here rather than from the caller because the build
     composes it once for the outgoing User-Agent, and composing it a second time
     in the entry point would be a second spelling of the program's identity,
-    free to drift from the one every outgoing request already carries.
+    free to drift from the one every request to a server off this machine
+    already carries.
     """
 
     dispatcher: CallDispatcher

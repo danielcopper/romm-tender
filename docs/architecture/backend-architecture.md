@@ -1839,7 +1839,7 @@ status.
   the backup rename itself fails (e.g. permissions), the error is logged and defaults are still returned so boot never
   crashes; a failed `chmod` is logged as well and leaves the backup and the flag standing. Bootstrap reads that
   transient flag after migration and — before the immediate save — folds it into the settings dict as a **persistent**
-  `_settings_reset_notice` marker (`{"backed_up_to": <basename>}`), so it survives a plugin reload. The frontend reads
+  `_settings_reset_notice` marker (`{"backed_up_to": <basename>}`), so it survives a backend restart. The frontend reads
   it via the non-consuming `get_settings_reset_notice` endpoint (`SettingsService`, as the dismissal is) and surfaces a
   persistent notice — a QAM `PanelSection` banner (with a **Dismiss** button) plus a game-detail `WarningCard`
   (informational; its copy points the user to the QAM to dismiss) — **not a toast** — telling the user their settings

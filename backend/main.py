@@ -796,7 +796,7 @@ class Plugin:
         cross-device playtime" banner. Non-consuming (mirrors
         ``get_settings_reset_notice``): the durable flag is cleared only by a
         later successful reconcile GET or a fresh sign-in, so the banner stays up
-        across reloads until the user re-authenticates.
+        across backend restarts until the user re-authenticates.
         """
         return self._playtime_service.get_scope_notice()
 

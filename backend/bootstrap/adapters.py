@@ -237,10 +237,9 @@ class BootstrapResult:
     services need; :attr:`handles` carries what ``main.py`` binds on ``Plugin``
     itself; :attr:`directories` is the set this run was handed, passed back so
     every consumer reads the same seven fields rather than composing any of them
-    again; :attr:`launcher` is the launcher a shortcut built this run names, and
-    whether that is its home in the bin root; and :attr:`user_agent` is
-    ``<package name>/<version>``, composed once and used both as the outgoing
-    User-Agent and as the identity the host answers under.
+    again; :attr:`launcher` is this start's :class:`ShortcutLauncher`; and
+    :attr:`user_agent` is ``<package name>/<version>``, composed once and used
+    both as the outgoing User-Agent and as the identity the host answers under.
     """
 
     adapters: AdapterBundle
