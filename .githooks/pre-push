@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# pre-push hook: run the developer's global pre-push, if they have one, with the
+# same arguments and stdin, and adopt its verdict. This repo's core.hooksPath
+# replaces the global one, so without this a global pre-push hook would silently
+# stop running here — the full rationale is in .githooks/pre-commit ("Chain the
+# developer's global pre-commit"). A developer with no global hook notices nothing.
+global_hooks=$(git config --global --get core.hooksPath)
+if [ -n "${global_hooks:-}" ]; then
+    global_hooks=${global_hooks/#\~/$HOME}
+    if [ -x "$global_hooks/pre-push" ]; then
+        exec "$global_hooks/pre-push" "$@"
+    fi
+fi

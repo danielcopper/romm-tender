@@ -30,8 +30,9 @@ npm packages.
 
 `mise run setup` also points `core.hooksPath` at `.githooks/`, so the repo's pre-commit hook formats staged files on
 every commit. Git allows only one hooks path, so that setting replaces a global one rather than adding to it: the hook
-therefore runs whatever global `pre-commit` you have installed first and aborts the commit if it refuses, which keeps a
-guard you rely on in your other repos working here too. If you have no global hook, nothing changes.
+therefore runs whatever global `pre-commit` you have installed first and aborts the commit if it refuses, and the repo's
+`commit-msg`, `pre-merge-commit` and `pre-push` hooks hand over to a global hook of the same name and adopt its verdict,
+which keeps a guard you rely on in your other repos working here too. If you have no global hook, nothing changes.
 
 Python dependencies are installed from `requirements-dev.lock` — fully-pinned versions compiled from
 `requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
