@@ -1,8 +1,9 @@
 """Contract tests for the update-outcome callables over the real wiring.
 
-Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateOutcome``,
-``acknowledgeUpdateToast`` and ``dismissUpdateAnnouncement`` take nothing,
-``dismissUpdateFailure`` the record's ``rolled_back_at`` string. The real ``bootstrap()`` is what makes it
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
+``getUpdateOutcome``, ``acknowledgeUpdateToast`` and
+``dismissUpdateAnnouncement`` take nothing, ``dismissUpdateFailure`` the
+record's ``rolled_back_at`` string. The real ``bootstrap()`` is what makes it
 worth having: the record is read by the real adapter from the state directory
 the run was told about, the last-run version really is stored in SQLite, and the
 dismissal really reaches ``settings.json``.

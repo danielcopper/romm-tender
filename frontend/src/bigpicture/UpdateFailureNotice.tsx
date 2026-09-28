@@ -8,7 +8,7 @@ import {
   useUpdateOutcomeState,
 } from "../utils/updateOutcomeStore";
 import { logError } from "../api/backend";
-import { AMBER } from "./layout/pane";
+import { AMBER, AMBER_WASH } from "./layout/pane";
 
 /**
  * The notice on Main that the installer rolled an update back.
@@ -39,7 +39,7 @@ export const UpdateFailureNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
             data-testid="update-failure-notice"
             style={{
               padding: "8px 12px",
-              backgroundColor: "rgba(212, 167, 44, 0.15)",
+              backgroundColor: AMBER_WASH,
               borderLeft: `3px solid ${AMBER}`,
               borderRadius: "4px",
               fontSize: "12px",

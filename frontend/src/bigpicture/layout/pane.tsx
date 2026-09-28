@@ -26,6 +26,9 @@ export const MUTED = "#8f98a0";
 export const RED = "#d94126";
 export const GREEN = "#5ba32b";
 export const AMBER = "#d4a72c";
+/** AMBER at 15% opacity (`0x26` of `0xff`): the fill behind a warning card's
+ *  amber edge. */
+export const AMBER_WASH = `${AMBER}26`;
 /** The BIOS table's verdict mark for a file that is present and that the core
  *  the platform launches with does not require — green's quieter twin, so
  *  "there and needed" and "there and spare" are one glance apart rather than one

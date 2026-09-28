@@ -33,6 +33,12 @@
  * store that answers, which is the desktop client's ordinary state.
  * That is also why the wait has a deadline: past it the caller raises the toast
  * anyway, since a toast that might be lost is better than one never raised.
+ *
+ * All three met in time still do not promise the toast is seen for its full
+ * duration: in windowed Big Picture on the desktop it may show only
+ * briefly, or not at all, after a JS-context reload, which is why the update
+ * announcement also stands as a card (`docs/architecture/qam-panel.md`,
+ * "Notices and homes").
  */
 
 import { delay } from "./pacedOps";

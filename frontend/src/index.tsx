@@ -567,8 +567,9 @@ const tender = definePlugin(() => {
     })(),
   );
 
-  // What the last update did: announce one that went through, and fill the
-  // store the rolled-back notice reads. Detached like the release check above.
+  // What the last update did: fill the store the announcement card and the
+  // rolled-back notice read, and raise the announcement's toast for a version
+  // that moved, up or back. Detached like the release check above.
   detach(
     (async () => {
       try {
