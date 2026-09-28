@@ -1,9 +1,10 @@
 import { copyFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
 
 import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
-import typescript from "@rollup/plugin-typescript";
 import externalGlobals from "rollup-plugin-external-globals";
+import ts from "typescript";
 
 // The three globals Steam's own React lives under. They are not Steam's doing —
 // Decky's loader installs them, and since #1899 so does `src/boot/steamGlobals.ts`,
@@ -128,8 +129,81 @@ const stampBundleKind = (kind) => ({
   load: (id) => (id === `\0${BUNDLE_KIND_MODULE}` ? `export const BUNDLE_KIND = ${JSON.stringify(kind)};` : null),
 });
 
-const plugins = () => [
-  typescript({ tsconfig: "./tsconfig.json" }),
+const DIAGNOSTIC_FORMAT = {
+  getCanonicalFileName: (fileName) => fileName,
+  getCurrentDirectory: ts.sys.getCurrentDirectory,
+  getNewLine: () => ts.sys.newLine,
+};
+
+const failOn = (diagnostics) => {
+  if (diagnostics.length > 0) throw new Error(ts.formatDiagnostics(diagnostics, DIAGNOSTIC_FORMAT));
+};
+
+const readCompilerOptions = () => {
+  const tsconfig = path.resolve("tsconfig.json");
+  const { config, error } = ts.readConfigFile(tsconfig, ts.sys.readFile);
+  failOn(error ? [error] : []);
+  const { options, errors } = ts.parseJsonConfigFileContent(config, ts.sys, path.dirname(tsconfig));
+  failOn(errors);
+  return options;
+};
+
+const COMPILER_OPTIONS = readCompilerOptions();
+
+const SOURCE_DIR = path.resolve("src") + path.sep;
+
+const isOurTypeScript = (id) => id.startsWith(SOURCE_DIR) && /\.tsx?$/.test(id) && !id.endsWith(".d.ts");
+
+/**
+ * TypeScript to JavaScript one file at a time. What fails the build and what
+ * checks types instead: `docs/contributing/development.md`, "Building".
+ *
+ * `ts.transpileModule` sees only the file it is handed, and that is the point.
+ * The obvious alternative, `@rollup/plugin-typescript`, compiles the whole
+ * program (parse, check, emit) through a watch program even for a one-shot
+ * build, and that compile is nearly all of every bundle's time — for a type
+ * check that plugin only prints as a warning.
+ *
+ * What only the whole program knows is out of its reach, and the one case that
+ * matters is not silent: a re-export of a name that is only a type stays in the
+ * output, and Rollup refuses it as a missing export. `export type { … }` says
+ * what a single file cannot know.
+ *
+ * Whether to emit a source map is decided here rather than read off
+ * `output.sourcemap`, because `transform` runs before any output exists — one
+ * build can be written to several outputs.
+ */
+const transpileTypeScript = ({ sourcemap }) => {
+  const compilerOptions = { ...COMPILER_OPTIONS, sourceMap: sourcemap };
+  return {
+    name: "transpile-typescript",
+    resolveId(importee, importer) {
+      if (!importer || !isOurTypeScript(importer)) return null;
+      const { resolvedModule } = ts.resolveModuleName(importee, importer, compilerOptions, ts.sys);
+      const resolved = resolvedModule && path.normalize(resolvedModule.resolvedFileName);
+      return resolved && isOurTypeScript(resolved) ? resolved : null;
+    },
+    transform(code, id) {
+      if (!isOurTypeScript(id)) return null;
+      const { outputText, sourceMapText, diagnostics } = ts.transpileModule(code, {
+        compilerOptions,
+        fileName: id,
+        reportDiagnostics: true,
+      });
+      const errors = diagnostics.filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
+      if (errors.length > 0) {
+        const message = errors
+          .map((error) => `TS${error.code}: ${ts.flattenDiagnosticMessageText(error.messageText, "\n")}`)
+          .join("\n");
+        this.error(message, errors[0].start);
+      }
+      return { code: outputText, map: sourceMapText ? JSON.parse(sourceMapText) : null };
+    },
+  };
+};
+
+const plugins = ({ sourcemap }) => [
+  transpileTypeScript({ sourcemap }),
   commonjs(),
   nodeResolve({ browser: true }),
   externalGlobals(STEAM_REACT_GLOBALS),
@@ -142,16 +216,17 @@ const plugins = () => [
 // `output.exports` is deliberately absent. `@decky/rollup` set it to "default",
 // which Rollup ignores for `format: "esm"` — it applies to cjs/amd/umd/iife
 // only — so carrying it over would have looked like a decision and been a no-op.
-const build = ({ input, file, external, bundleKind, extraPlugins = [] }) => ({
+const build = ({ input, file, external, bundleKind, extraPlugins = [], sourcemap }) => ({
   input,
   external,
   context: "window",
-  plugins: [...(bundleKind ? [stampBundleKind(bundleKind)] : []), ...plugins(), ...extraPlugins],
-  output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap: false },
+  plugins: [...(bundleKind ? [stampBundleKind(bundleKind)] : []), ...plugins({ sourcemap }), ...extraPlugins],
+  output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap },
 });
 
-// Four of the five dependencies `@decky/rollup` brought are not here, and each
-// absence was checked rather than assumed: no module under `src/` imports a
+// Four more of the Rollup plugins `@decky/rollup` brought are not here, beside
+// `@rollup/plugin-typescript` (which `transpileTypeScript` above replaces), and
+// each absence was checked rather than assumed: no module under `src/` imports a
 // `.json` file (`@rollup/plugin-json`) or an asset (`rollup-plugin-import-assets`,
 // which also pointed its public path at a `127.0.0.1:1337` plugin server that
 // serves nothing for us); no module under `src/`, in `@decky/ui` or in
@@ -159,7 +234,7 @@ const build = ({ input, file, external, bundleKind, extraPlugins = [] }) => ({
 // `rollup-plugin-delete` was aimed at `./dist/*`, which resolves against the
 // working directory and cleaned this package's own unused `dist` rather than the
 // real one.
-export default [
+export const configure = ({ sourcemap }) => [
   // The React bootstrap. Its own bundle, and that is load-bearing rather than
   // tidy: `@decky/ui`'s component half reads React internals while its modules
   // evaluate, so it cannot be in the import graph of the module that creates the
@@ -170,6 +245,7 @@ export default [
     input: "./src/boot/steamGlobals.ts",
     file: "globals.js",
     external: Object.keys(STEAM_REACT_GLOBALS),
+    sourcemap,
   }),
 
   // STANDALONE — `@decky/ui` bundled. What ships when Decky Loader is not
@@ -181,6 +257,7 @@ export default [
     external: Object.keys(STEAM_REACT_GLOBALS),
     bundleKind: "standalone",
     extraPlugins: [shipDeckyUiLicence()],
+    sourcemap,
   }),
 
   // COEXISTENCE — `@decky/ui` taken from Decky's already-loaded copy through the
@@ -206,5 +283,8 @@ export default [
     external: [...Object.keys(STEAM_REACT_GLOBALS), "@decky/ui"],
     bundleKind: "coexistence",
     extraPlugins: [externalGlobals({ "@decky/ui": "DFL" })],
+    sourcemap,
   }),
 ];
+
+export default configure({ sourcemap: false });

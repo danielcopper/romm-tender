@@ -122,9 +122,8 @@ locally with `mise run docs`.
   frontend's property: the backend serves it as `os.path.join(directories.code_dir, "dist")` (`backend/main.py`), and a
   host that located its own build output relative to `__file__` would be the only part of the backend that knew the
   repository's layout. Tidying `dist/` into the package it is built by would put the backend's reach inside the
-  frontend's internals. Two consequences worth knowing: `frontend/tsconfig.json`'s `outDir` and
-  `frontend/.size-limit.json`'s paths point up as well, and **emptying that directory is the `build` script's job**
-  (`rm -rf ../dist && rollup -c`) rather than any plugin's.
+  frontend's internals. Two consequences worth knowing: `frontend/.size-limit.json`'s paths point up as well, and
+  **emptying that directory is the `build` script's job** (`rm -rf ../dist && rollup -c`) rather than any plugin's.
 - **The build produces THREE files, and two of them are the same panel** — `dist/globals.js` (Steam's React installed by
   us), `dist/index.js` (the panel with `@decky/ui` bundled) and `dist/index-coexistence.js` (the panel taking it from
   Decky's `DFL` global). **Which panel bundle gets loaded is the injector's decision**

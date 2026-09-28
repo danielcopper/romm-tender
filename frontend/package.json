@@ -16,14 +16,12 @@
   "packageManager": "pnpm@10.29.3",
   "license": "GPL-3.0",
   "dependencies": {
-    "@decky/ui": "^4.11.6",
-    "tslib": "^2.7.0"
+    "@decky/ui": "^4.11.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@rollup/plugin-typescript": "^12.3.0",
     "@rollup/rollup-linux-x64-musl": "^4.62.2",
     "@size-limit/file": "^13.0.0",
     "@testing-library/jest-dom": "^7.0.0",

@@ -12,7 +12,8 @@ either can run.
 | `dist/index-coexistence.js`  | The panel, taking `@decky/ui` from Decky's `DFL` global — **coexistence** |
 | `dist/LICENSE-@decky-ui.txt` | `@decky/ui`'s LGPL-2.1 text, emitted beside the bundle that carries it    |
 
-They are three separate Rollup builds sharing no chunk, which is why the build takes about 40 s rather than 15 s.
+They are three separate Rollup builds sharing no chunk, so the panel's own modules are transpiled and bundled twice,
+once for each panel bundle.
 
 `dist/` sits at the repository root rather than under `frontend/`, because it is the seam between the two halves: the
 backend serves it as `<code_dir>/dist` and must not reach into the frontend's directory to find it.

@@ -67,6 +67,10 @@ bundled into it or taken from Decky Loader's own copy. The backend serves `dist/
 Steam itself — [How the panel gets into Steam](../architecture/loading-the-panel.md). What each file is and why there
 are two panels: [How the panel is built and loaded](../architecture/frontend-bundles.md).
 
+The build does **not** type-check. It turns each TypeScript file into JavaScript on its own, so a syntax error fails it
+and a type error builds cleanly. What fails on a type error is `pnpm -C frontend typecheck`, which the gate
+(`mise run gate`) and CI's build job both run.
+
 ## Testing
 
 ```bash
