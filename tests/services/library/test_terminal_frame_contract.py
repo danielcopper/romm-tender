@@ -50,11 +50,9 @@ name lands inert rather than as a false offender in a foreign API.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
+from typing import NamedTuple
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SERVICES_ROOT = _REPO_ROOT / "backend" / "services"
@@ -87,13 +85,13 @@ class _Site(NamedTuple):
         return self.where.rsplit(":", 1)[0]
 
 
-def _modules() -> Iterator[tuple[str, ast.Module]]:
-    """Every module under ``backend/services``, recursively."""
-    for path in sorted(_SERVICES_ROOT.rglob("*.py")):
-        yield (
-            path.relative_to(_SERVICES_ROOT.parent).as_posix(),
-            ast.parse(path.read_text(encoding="utf-8")),
-        )
+@functools.cache
+def _modules() -> tuple[tuple[str, ast.Module], ...]:
+    """Every module under ``backend/services``, recursively — parsed once, since every scan here walks all of them."""
+    return tuple(
+        (path.relative_to(_SERVICES_ROOT.parent).as_posix(), ast.parse(path.read_text(encoding="utf-8")))
+        for path in sorted(_SERVICES_ROOT.rglob("*.py"))
+    )
 
 
 def _keyword(call: ast.Call, name: str) -> ast.expr | None:
