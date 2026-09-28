@@ -1,7 +1,7 @@
 import { ESLint } from "eslint";
-import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import tseslint from "typescript-eslint";
 
 const QAM_FIXTURE_DIR = path.join(process.cwd(), "src", "bigpicture", "layout", "__eslint_fixtures__");
 const OFF_SCOPE_FIXTURE_DIR = path.join(process.cwd(), "src", "bigpicture", "__eslint_fixtures__");
@@ -115,6 +115,22 @@ export const Satisfies = () => <Focusable {...({ className: value } satisfies Re
   ],
 ];
 
+// The fixtures are linted at paths under the real `bigpicture/`, never written
+// there, and parsed without types, for the reasons `eslintBoundaries.test.ts`
+// gives; the rule is scoped by path, so the path is what puts a fixture inside or
+// outside its scope.
+const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
+
+const SOURCES = new Map(FIXTURES.map(([dir, name, source]) => [path.join(dir, name), source]));
+
+/** Throws on a path no fixture has, naming it. A `?? ""` fallback would lint an
+ *  empty text, which reports nothing and passes every `toEqual([])` below. */
+function fixtureSource(file: string): string {
+  const source = SOURCES.get(file);
+  if (source === undefined) throw new Error(`No lint fixture at ${file}`);
+  return source;
+}
+
 /**
  * Every message as `<rule>:<line>`. The line is part of it because a fixture holds
  * one shape per line: a bare list of rule ids passes when one shape stops
@@ -123,7 +139,7 @@ export const Satisfies = () => <Focusable {...({ className: value } satisfies Re
  * green on a `jsx-a11y` complaint standing in for ours.
  */
 async function ruleMessages(file: string): Promise<string[]> {
-  const results = await new ESLint({ cwd: process.cwd() }).lintFiles([file]);
+  const results = await eslint.lintText(fixtureSource(file), { filePath: file });
   return results.flatMap((result) =>
     result.messages.map((message) => `${message.ruleId ?? "<fatal>"}:${message.line}`),
   );
@@ -135,17 +151,6 @@ async function configuredRule(file: string): Promise<unknown> {
 }
 
 describe("QAM Focusable row rule", () => {
-  beforeAll(async () => {
-    await mkdir(QAM_FIXTURE_DIR, { recursive: true });
-    await mkdir(OFF_SCOPE_FIXTURE_DIR, { recursive: true });
-    await Promise.all(FIXTURES.map(([dir, name, source]) => writeFile(path.join(dir, name), source, "utf8")));
-  });
-
-  afterAll(async () => {
-    await rm(QAM_FIXTURE_DIR, { recursive: true, force: true });
-    await rm(OFF_SCOPE_FIXTURE_DIR, { recursive: true, force: true });
-  });
-
   it("reports a static row without a focus stop", async () => {
     expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "badRow.tsx"))).toEqual([`${RULE_ID}:2`]);
   });

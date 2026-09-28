@@ -404,12 +404,11 @@ judgment. What none of them catch is a helper imported by exactly one parent tha
 nothing on its own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not
 certify that a seam is right.
 
-Two settings in that config are load-bearing and neither is the plugin's default. `import-x/extensions` ships as
-`['.js']`, so until it names `.ts`/`.tsx` the plugin resolves an import but never opens the target file to read _its_
-imports — `no-cycle` then walks a graph one edge deep and reports nothing, on any codebase. `import-x/parsers` supplies
-the parser it needs for that reading. Because the failure mode is silence rather than noise,
-`frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the seven
-rules stops reporting. A green `pnpm -C frontend lint` on its own does not distinguish a working rule from an inert one.
+By default the plugin reads the imports of JavaScript files only, so until the config names `.ts`/`.tsx` for it,
+`no-cycle` finds no cycle among the frontend's modules; the comment at `import-x/extensions` in that file says which
+settings do that. Because the failure mode is silence rather than noise, `frontend/src/eslintBoundaries.test.ts` lints
+known-bad fixtures through the real config and fails if any of the seven rules stops reporting. A green
+`pnpm -C frontend lint` on its own does not distinguish a working rule from an inert one.
 
 See [Backend Architecture](../architecture/backend-architecture.md) for details.
 

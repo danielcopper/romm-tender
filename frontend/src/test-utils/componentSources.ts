@@ -44,21 +44,6 @@ export interface ComponentSource {
 // empty set.
 const SRC_DIR = `${process.cwd()}/src/`;
 
-const FIXTURE_DIRS = new Set(["__eslint_fixtures__", "__eslint_surface_fixtures__"]);
-
-/**
- * Whether a path relative to `src/` lies in a directory that
- * `eslintQamFocusable.test.ts` or `eslintBoundaries.test.ts` plants while it
- * runs and removes afterwards. A sweep over `src/` that runs inside the suite
- * must skip these, and not for tidiness: a sweep racing either test sees the
- * fixtures on one run and not the next, so its searched set, and any test cases
- * built from it, changes with no source change; and a sweep that globs a
- * fixture and reads it after the removal fails on a file that is gone.
- */
-export function isLintFixture(relative: string): boolean {
-  return relative.split(/[\\/]/).some((segment) => FIXTURE_DIRS.has(segment));
-}
-
 /**
  * Every component source a lock should search, sorted so the report is stable.
  *
@@ -66,13 +51,10 @@ export function isLintFixture(relative: string): boolean {
  * set passes every `not.toContain` there is, which is the same vacuous green the
  * locks' own "searches for something" cases exist to refuse. A moved directory
  * or a broken glob then fails loudly instead of silently retiring both locks.
- * A lint fixture is not a component, and {@link isLintFixture} says why skipping
- * one is not optional.
  */
 export function componentSources(): ComponentSource[] {
   const files = globSync("bigpicture/**/*.tsx", { cwd: SRC_DIR })
     .filter((relative) => !relative.endsWith(".test.tsx"))
-    .filter((relative) => !isLintFixture(relative))
     .map((relative) => relative.split(/[\\/]/).join("/"))
     .sort();
   if (files.length === 0) {

@@ -24,7 +24,6 @@ import { globSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { isLintFixture } from "../test-utils/componentSources";
 import { declaredFunctions, divisionSlashes } from "../test-utils/jsFunctionScanner";
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
 import {
@@ -52,8 +51,7 @@ const SRC_DIR = `${process.cwd()}/src/`;
  *
  * Tests, test utilities and the global test setup are excluded because they
  * import names to STUB them: a stub is a statement about the harness, not a
- * dependency the panel carries onto a device. Lint fixtures are excluded for the
- * reason {@link isLintFixture} gives.
+ * dependency the panel carries onto a device.
  *
  * Type-only members are excluded in both spellings — a whole `import type`, and
  * an inline `type X` inside a value import. They are erased before the bundle
@@ -63,8 +61,7 @@ function shippedSources(): string[] {
   const files = globSync("**/*.{ts,tsx}", { cwd: SRC_DIR })
     .map((relative) => relative.split(/[\\/]/).join("/"))
     .filter((relative) => !/\.(test|spec)\.tsx?$/.test(relative))
-    .filter((relative) => !relative.startsWith("test-utils/") && relative !== "test-setup.ts")
-    .filter((relative) => !isLintFixture(relative));
+    .filter((relative) => !relative.startsWith("test-utils/") && relative !== "test-setup.ts");
   if (files.length === 0) throw new Error(`No sources found under ${SRC_DIR} — a sweep over nothing passes always.`);
   return files;
 }

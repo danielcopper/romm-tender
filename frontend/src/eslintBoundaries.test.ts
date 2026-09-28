@@ -3,129 +3,126 @@
  *
  * No source twin on purpose: what this guards is the lint config, and
  * specifically that a boundary rule can be present, correctly configured, and
- * still completely inert. `import-x/extensions` ships as `['.js']` — until it
- * names `.ts`/`.tsx` the plugin resolves an import but never opens the target to
- * read ITS imports, so `no-cycle` walks a graph one edge deep and reports
- * nothing, on any codebase, forever. A green lint run is indistinguishable from
- * a working one; only a known-bad fixture tells the two apart.
+ * still completely inert. A green lint run is indistinguishable from a working
+ * one; only a known-bad fixture tells the two apart. How `no-cycle` goes inert
+ * is on the comment at `import-x/extensions` in `eslint.config.js`.
  *
- * Fixtures live under the very directories the rules name, because the rules are
- * scoped by path, and are removed again afterwards so `pnpm lint` never sees
- * them. Every fixture that reaches into `desktop/` comes with a module planted
- * there to import — from `bigpicture/`, from `utils/` and from `api/` — because
- * `no-restricted-paths` skips an import it cannot resolve, and that directory
- * holds no module of its own, so a fixture pointing at it would otherwise pass
- * for the wrong reason. The twin planted under `bigpicture/` is not needed for
- * that — that directory is full of real modules — but for symmetry: the two
- * sideways fixtures then import the same shape in both directions, and neither
- * result turns on which real module it happened to name.
+ * No fixture is written into `src/`, where every other sweep of the tree would
+ * race it. The restricted-path fixtures are linted as text at a path under the
+ * real `src/`, because the rules are scoped by path and `no-restricted-paths`
+ * resolves its zones against `process.cwd()`, not ESLint's `cwd` option
+ * (`lib/rules/no-restricted-paths.js` in eslint-plugin-import-x). What they
+ * import must exist, because `no-restricted-paths` skips an import it cannot
+ * resolve: `desktop/` holds no module, so the fixtures reaching into it import
+ * its README, the one file it does hold.
+ *
+ * `no-cycle` opens the imported file from disk to read ITS imports, so the cycle
+ * pair cannot be text. It is written into a throwaway project under the OS temp
+ * directory and linted there with this package's real config file.
+ *
+ * Type-aware parsing is off for every fixture, since the project service refuses
+ * a file its tsconfig does not hold — a text that is not on disk, or the cycle
+ * pair outside this package — and none of the rules under test reads a type.
  */
 
 import { ESLint } from "eslint";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { version as reactVersion } from "react";
+import tseslint from "typescript-eslint";
 
 const SRC = path.join(process.cwd(), "src");
-const UTILS_DIR = path.join(SRC, "utils", "__eslint_fixtures__");
-const API_DIR = path.join(SRC, "api", "__eslint_fixtures__");
-// Not `__eslint_fixtures__`: eslintQamFocusable.test.ts owns a directory of that
-// name directly under `bigpicture/`, and the two files run in parallel workers.
-const BIGPICTURE_DIR = path.join(SRC, "bigpicture", "__eslint_surface_fixtures__");
-const DESKTOP_DIR = path.join(SRC, "desktop", "__eslint_surface_fixtures__");
 
-const FIXTURE_DIRS = [UTILS_DIR, API_DIR, BIGPICTURE_DIR, DESKTOP_DIR];
+const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
 
-const FIXTURES: [dir: string, name: string, source: string][] = [
-  [
-    UTILS_DIR,
-    "reachesUp.ts",
-    'import { showCoreChangeModal } from "../../bigpicture/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n',
-  ],
-  [
-    API_DIR,
-    "reachesUp.ts",
-    'import { showCoreChangeModal } from "../../bigpicture/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n',
-  ],
-  [
-    UTILS_DIR,
-    "reachesDesktop.ts",
-    'import { surfaceProbe } from "../../desktop/__eslint_surface_fixtures__/surfaceModule";\nexport const probe = surfaceProbe;\n',
-  ],
-  [
-    API_DIR,
-    "reachesDesktop.ts",
-    'import { surfaceProbe } from "../../desktop/__eslint_surface_fixtures__/surfaceModule";\nexport const probe = surfaceProbe;\n',
-  ],
-  [UTILS_DIR, "cycleA.ts", 'import { bee } from "./cycleB";\nexport const ay = (): number => bee() + 1;\n'],
-  [
-    UTILS_DIR,
-    "cycleB.ts",
-    'import { ay } from "./cycleA";\nexport const bee = (): number => (Math.random() > 2 ? ay() : 0);\n',
-  ],
-  [BIGPICTURE_DIR, "surfaceModule.ts", "export const surfaceProbe = 1;\n"],
-  [DESKTOP_DIR, "surfaceModule.ts", "export const surfaceProbe = 1;\n"],
-  [
-    BIGPICTURE_DIR,
-    "reachesSideways.ts",
-    'import { surfaceProbe } from "../../desktop/__eslint_surface_fixtures__/surfaceModule";\nexport const probe = surfaceProbe;\n',
-  ],
-  [
-    DESKTOP_DIR,
-    "reachesSideways.ts",
-    'import { surfaceProbe } from "../../bigpicture/__eslint_surface_fixtures__/surfaceModule";\nexport const probe = surfaceProbe;\n',
-  ],
-];
+const REACHES_BIGPICTURE =
+  'import { showCoreChangeModal } from "../../bigpicture/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n';
+const REACHES_DESKTOP = 'import readme from "../../desktop/README.md";\nexport const probe = readme;\n';
 
-/** Rule IDs reported for `file`, using the repository's real ESLint config. */
-async function rulesReportedFor(file: string): Promise<string[]> {
-  const results = await new ESLint({ cwd: process.cwd() }).lintFiles([file]);
+function ruleIds(results: ESLint.LintResult[]): string[] {
   return results.flatMap((r) => r.messages.map((m) => m.ruleId ?? "<fatal>"));
 }
 
+/** Rule IDs reported for `source` linted as the file at `relative` under `src/`. */
+async function rulesReportedFor(relative: string, source: string): Promise<string[]> {
+  return ruleIds(await eslint.lintText(source, { filePath: path.join(SRC, relative) }));
+}
+
+/** Rule IDs reported for one half of a two-module cycle under a throwaway `src/utils/`. */
+async function rulesReportedForCycle(): Promise<string[]> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "tender-eslint-cycle-"));
+  try {
+    const utils = path.join(root, "src", "utils");
+    await mkdir(utils, { recursive: true });
+    await writeFile(
+      path.join(utils, "cycleA.ts"),
+      'import { bee } from "./cycleB";\nexport const ay = (): number => bee() + 1;\n',
+      "utf8",
+    );
+    await writeFile(
+      path.join(utils, "cycleB.ts"),
+      'import { ay } from "./cycleA";\nexport const bee = (): number => (Math.random() > 2 ? ay() : 0);\n',
+      "utf8",
+    );
+    // The config's `react.version: "detect"` resolves `react` from the linted
+    // file's directory (eslint-plugin-react `lib/util/version.js`), which this
+    // tmp dir cannot, and the plugin's warning would fail the test.
+    const cycleLinter = new ESLint({
+      cwd: root,
+      overrideConfigFile: path.join(process.cwd(), "eslint.config.js"),
+      overrideConfig: [tseslint.configs.disableTypeChecked, { settings: { react: { version: reactVersion } } }],
+    });
+    return ruleIds(await cycleLinter.lintFiles([path.join(utils, "cycleA.ts")]));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
 describe("frontend direction rules", () => {
-  beforeAll(async () => {
-    await Promise.all(FIXTURE_DIRS.map((dir) => mkdir(dir, { recursive: true })));
-    await Promise.all(FIXTURES.map(([dir, name, source]) => writeFile(path.join(dir, name), source, "utf8")));
-  });
-
-  afterAll(async () => {
-    await Promise.all(FIXTURE_DIRS.map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
   it("reports utils/ reaching up into bigpicture/", async () => {
-    expect(await rulesReportedFor(path.join(UTILS_DIR, "reachesUp.ts"))).toContain("import-x/no-restricted-paths");
+    expect(await rulesReportedFor("utils/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE)).toContain(
+      "import-x/no-restricted-paths",
+    );
   });
 
   it("reports utils/ reaching up into desktop/", async () => {
-    expect(await rulesReportedFor(path.join(UTILS_DIR, "reachesDesktop.ts"))).toContain("import-x/no-restricted-paths");
+    expect(await rulesReportedFor("utils/__eslint_fixtures__/reachesDesktop.ts", REACHES_DESKTOP)).toContain(
+      "import-x/no-restricted-paths",
+    );
   });
 
   it("reports api/ reaching into bigpicture/", async () => {
-    expect(await rulesReportedFor(path.join(API_DIR, "reachesUp.ts"))).toContain("import-x/no-restricted-paths");
+    expect(await rulesReportedFor("api/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE)).toContain(
+      "import-x/no-restricted-paths",
+    );
   });
 
   it("reports api/ reaching into desktop/", async () => {
-    expect(await rulesReportedFor(path.join(API_DIR, "reachesDesktop.ts"))).toContain("import-x/no-restricted-paths");
+    expect(await rulesReportedFor("api/__eslint_fixtures__/reachesDesktop.ts", REACHES_DESKTOP)).toContain(
+      "import-x/no-restricted-paths",
+    );
   });
 
   it("reports bigpicture/ reaching sideways into desktop/", async () => {
-    expect(await rulesReportedFor(path.join(BIGPICTURE_DIR, "reachesSideways.ts"))).toContain(
+    expect(await rulesReportedFor("bigpicture/__eslint_fixtures__/reachesSideways.ts", REACHES_DESKTOP)).toContain(
       "import-x/no-restricted-paths",
     );
   });
 
   it("reports desktop/ reaching sideways into bigpicture/", async () => {
-    expect(await rulesReportedFor(path.join(DESKTOP_DIR, "reachesSideways.ts"))).toContain(
+    expect(await rulesReportedFor("desktop/__eslint_fixtures__/reachesSideways.ts", REACHES_BIGPICTURE)).toContain(
       "import-x/no-restricted-paths",
     );
   });
 
   it("reports a dependency cycle between two .ts modules", async () => {
-    expect(await rulesReportedFor(path.join(UTILS_DIR, "cycleA.ts"))).toContain("import-x/no-cycle");
+    expect(await rulesReportedForCycle()).toContain("import-x/no-cycle");
   });
 
   it("leaves a compliant module alone", async () => {
-    expect(await rulesReportedFor(path.join(SRC, "utils", "detach.ts"))).toEqual([]);
+    const results = await new ESLint({ cwd: process.cwd() }).lintFiles([path.join(SRC, "utils", "detach.ts")]);
+    expect(ruleIds(results)).toEqual([]);
   });
 }, 60_000);

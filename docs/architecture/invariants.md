@@ -483,11 +483,11 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
   (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two
   share data and logic and almost nothing visual, so anything that turns out to belong to both moves DOWN into `api/`,
-  `utils/` or `types/`, never sideways. These rules go inert rather than loud when misconfigured: `import-x/extensions`
-  ships as `['.js']`, so until it names `.ts`/`.tsx` the plugin resolves an import but never opens the target to read
-  its imports, and `no-cycle` reports nothing on any codebase. `frontend/src/eslintBoundaries.test.ts` lints known-bad
-  fixtures through the real config and fails if any of the seven stops reporting — a green `pnpm lint` alone proves
-  nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
+  `utils/` or `types/`, never sideways. These rules go inert rather than loud when misconfigured: until the config names
+  `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
+  `import-x/extensions` in `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints
+  known-bad fixtures through the real config and fails if any of the seven stops reporting — a green `pnpm lint` alone
+  proves nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
   `utils/cachedGameDetailStore.ts` back-reference is not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and a callable's own failure never arrive in the same shape, on either end** — test +

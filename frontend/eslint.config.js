@@ -46,13 +46,14 @@ export default tseslint.config(
       // must not count as an edge. A resolver that misses imports would make the
       // rules quietly permissive.
       "import-x/resolver-next": [createTypeScriptImportResolver(), createNodeResolver()],
-      // Both of these are load-bearing and neither is the default. `extensions`
-      // ships as ['.js'], so without .ts/.tsx the plugin resolves an import but
-      // never opens the target to read ITS imports — `no-cycle` then walks a graph
-      // one edge deep and reports nothing, on any codebase, forever. `parsers`
-      // supplies the TS parser it needs to do that reading. A probe cycle is the
-      // only way to tell this apart from "no cycles exist"; see
-      // src/eslintBoundaries.test.ts for the one that stays.
+      // The files the plugin opens to read THEIR imports are those whose
+      // extension is in `extensions` or listed under `parsers`
+      // (`getFileExtensions`, eslint-plugin-import-x `lib/utils/ignore.js`), and
+      // the default is JavaScript only. With `.ts`/`.tsx` in neither, an import
+      // still resolves but its target is never read, and `no-cycle` finds no
+      // cycle among our modules. Either line alone is enough, so the probe cycle
+      // in src/eslintBoundaries.test.ts — the only thing that tells this apart
+      // from "no cycles exist" — goes red only once both are gone.
       "import-x/extensions": [".ts", ".tsx"],
       "import-x/parsers": { "@typescript-eslint/parser": [".ts", ".tsx"] },
     },
