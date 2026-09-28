@@ -269,6 +269,8 @@ def _rom(
 
 
 _CONTROL_ROM_ID = 900001
+_HANG_GUARD_SECONDS = 10.0
+_ACTION_TIMEOUT_PATH = "services.prune.service._ACTION_TIMEOUT_SECONDS"
 
 
 def _seed(uow: FakeUnitOfWork, *rows: Rom, stamp_count: int = 1, control: bool = True) -> None:
@@ -434,13 +436,21 @@ async def _assert_task_cancelled(task: asyncio.Task[None]) -> None:
         await task
 
 
-async def _wait_action(harness: Harness, action: str) -> dict[str, Any]:
-    for _ in range(100):
-        for name, payload in harness.events.events:
-            if name == "prune_action_required" and payload["action"] == action:
-                return payload
-        await asyncio.sleep(0.001)
-    raise AssertionError(f"action {action} was not emitted")
+async def _wait_action(harness: Harness, action: str, *, after: int = 0) -> dict[str, Any]:
+    """The first *action* request emitted at or past index *after* of the event log.
+
+    The bound is a hang guard only: a run reaches its request through executor
+    hops whose length is the machine's load, not the code under test.
+    """
+    try:
+        async with asyncio.timeout(_HANG_GUARD_SECONDS):
+            while True:
+                for name, payload in harness.events.events[after:]:
+                    if name == "prune_action_required" and payload["action"] == action:
+                        return payload
+                await asyncio.sleep(0.001)
+    except TimeoutError:
+        raise AssertionError(f"action {action} was not emitted") from None
 
 
 async def _claim_action(harness: Harness, action: dict[str, Any]) -> dict[str, Any]:
@@ -454,6 +464,17 @@ async def _claim_action(harness: Harness, action: dict[str, Any]) -> dict[str, A
             "target_rom_id": action.get("target_rom_id"),
         }
     )
+
+
+def _expire_the_claimed_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the service's wait for a claimed action's outcome time out at once.
+
+    Only after the claim has returned: the claim wait reads the same constant,
+    and shortened before it a busy machine expires the claim instead. The run
+    task the claim woke cannot resume before the calling test next yields, so
+    its outcome wait reads the shortened value.
+    """
+    monkeypatch.setattr(_ACTION_TIMEOUT_PATH, 0.01)
 
 
 async def _complete_action(
@@ -1771,7 +1792,7 @@ async def test_post_seal_database_drift_after_shortcut_removal_is_explicit_parti
 
 @pytest.mark.asyncio
 async def test_unclaimed_action_timeout_makes_late_claim_harmless(harness, monkeypatch):
-    monkeypatch.setattr("services.prune.service._ACTION_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(_ACTION_TIMEOUT_PATH, 0.01)
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")]
@@ -2028,7 +2049,6 @@ async def test_shutdown_cancels_admitted_preview_refresh_without_starting_run(ha
 
 @pytest.mark.asyncio
 async def test_shutdown_of_claimed_uncompleted_action_reports_ambiguity_and_halts_later_groups(harness, monkeypatch):
-    monkeypatch.setattr("services.prune.service._ACTION_TIMEOUT_SECONDS", 0.01)
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id), _rom(2, fetch="old"), stamp_count=2)
     harness.romm.outcomes[1] = [RommNotFoundError("gone")]
@@ -2037,6 +2057,7 @@ async def test_shutdown_of_claimed_uncompleted_action_reports_ambiguity_and_halt
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     action = await _wait_action(harness, "remove_shortcut")
     assert (await _claim_action(harness, action))["success"] is True
+    _expire_the_claimed_wait(monkeypatch)
 
     run_task = _active_run_task(harness)
     await harness.service.shutdown()
@@ -2383,15 +2404,16 @@ async def test_controller_state_drift_aborts_before_shortcut_removal(harness, mo
 
 @pytest.mark.asyncio
 async def test_claimed_removal_timeout_is_ambiguous_and_absent_retry_reconciles(harness, monkeypatch):
-    monkeypatch.setattr("services.prune.service._ACTION_TIMEOUT_SECONDS", 0.01)
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 6
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     first = await _wait_action(harness, "remove_shortcut")
-    await _claim_action(harness, first)
-    ambiguous = await _finish(harness)
+    assert (await _claim_action(harness, first))["success"] is True
+    with monkeypatch.context() as patch:
+        _expire_the_claimed_wait(patch)
+        ambiguous = await _finish(harness)
 
     assert ambiguous["results"][0]["reason"] == "action_ambiguous"
     assert ambiguous["results"][0]["action_ambiguous"] is True
@@ -2400,17 +2422,7 @@ async def test_claimed_removal_timeout_is_ambiguous_and_absent_retry_reconciles(
     previous_events = len(harness.events.events)
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
-    for _ in range(100):
-        actions = [
-            payload
-            for name, payload in harness.events.events[previous_events:]
-            if name == "prune_action_required" and payload["action"] == "remove_shortcut"
-        ]
-        if actions:
-            break
-        await asyncio.sleep(0.001)
-    assert actions
-    second = actions[-1]
+    second = await _wait_action(harness, "remove_shortcut", after=previous_events)
     await _claim_action(harness, second)
     accepted = await harness.service.report_prune_action(
         {
@@ -2430,7 +2442,6 @@ async def test_claimed_removal_timeout_is_ambiguous_and_absent_retry_reconciles(
 
 @pytest.mark.asyncio
 async def test_claimed_repoint_timeout_is_an_explicit_ambiguous_partial(harness, monkeypatch):
-    monkeypatch.setattr("services.prune.service._ACTION_TIMEOUT_SECONDS", 0.01)
     app_id = 0x80000001
     _seed(
         harness.uow,
@@ -2442,7 +2453,8 @@ async def test_claimed_repoint_timeout_is_an_explicit_ambiguous_partial(harness,
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"])
     action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
+    assert (await _claim_action(harness, action))["success"] is True
+    _expire_the_claimed_wait(monkeypatch)
 
     complete = await _finish(harness)
 
