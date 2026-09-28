@@ -1084,17 +1084,22 @@ answers for the cleanup's own discovery: every row not carrying the fetch genera
 recorded, a row carrying none included. Where no usable stamp exists — none, one with no generation, or one recording an
 empty fetch — it names nothing and every row counts, so the exclusion's worst case is the number printed before it.
 
-**That leaves one window in which the line can read right > left.** Between a ROM's deletion on RomM and the next
-completed fetch of its platform, the left number has already dropped while our rows still carry the previous generation,
-so the right can exceed it until that platform syncs again. Closing it would need a live server call, which this read
-deliberately does not make — `get_registry_platforms` answers offline, and that is what keeps the pane useful with RomM
-unreachable.
+**That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
+at once, while its row still carries the generation the stamp recorded and so still counts on the right. Only a sync
+that **applies** that platform closes the window: the stamp and the rows' generation are written by the apply's commit
+(`services/library/chunk_dispatcher.py`), and a preview writes neither. So a sync that ends at "Everything is up to
+date." leaves it open, and one can: an unbound version deleted from a group that still holds a binding changes no
+shortcut, and the preview's removals count bound rows only. An apply interrupted inside the platform leaves it open too,
+because it deletes the stamp at its start and no stamp leaves nothing out. Closing it without a sync would need a live
+server call, which this read deliberately does not make — `get_registry_platforms` answers offline, and that is what
+keeps the pane useful with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the last fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
 `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, in the gap before that run's stale-removal
 scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
-leaves out a row RomM still serves — and both heal on that platform's next complete sync. The direction is a
+leaves out a row RomM still serves — and both heal through the next sync that applies that platform: the second at the
+platform's commit, the first at that run's stale-removal scan, which a cancelled run skips. The direction is a
 conservative under-count, which is why it is recorded rather than guarded.
 
 **The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a
