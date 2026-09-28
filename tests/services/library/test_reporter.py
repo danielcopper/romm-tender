@@ -2414,6 +2414,71 @@ class TestFinalizePerUnitRun:
             assert uow.roms.get(2).shortcut_app_id == 1002
 
     @pytest.mark.asyncio
+    async def test_stale_unbind_deletes_the_stamp_of_a_platform_the_run_did_not_process(self, library, emit):
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
+        _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
+        _stamp_fetch(uow, "snes", rom_count=1, fetch_id="run-0", seen=[2])
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1},
+            platform_names={"n64": "Nintendo 64"},
+            stale_rom_ids=[2],
+        )
+
+        with uow:
+            assert uow.roms.get(2).shortcut_app_id is None
+            assert uow.platform_sync_state.get("snes") is None
+            assert uow.platform_sync_state.get("n64") is not None
+
+    @pytest.mark.asyncio
+    async def test_stale_unbind_keeps_the_stamp_of_a_platform_the_run_processed(self, library, emit):
+        """A row RomM dropped goes stale on a platform the run fetched and stamped."""
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="Dropped")
+        _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1},
+            platform_names={"n64": "Nintendo 64"},
+            stale_rom_ids=[2],
+        )
+
+        with uow:
+            assert uow.roms.get(2).shortcut_app_id is None
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert stamp.fetch_id == "run-1"
+
+    @pytest.mark.asyncio
+    async def test_a_platform_the_run_did_not_process_keeps_its_stamp_when_nothing_on_it_is_unbound(
+        self, library, emit
+    ):
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 5, app_id=None, platform_slug="snes", name="Already unbound")
+        _seed_rom(uow, 6, app_id=1006, platform_slug="gba", name="Not stale")
+        _stamp_fetch(uow, "n64", rom_count=1, fetch_id="run-1", seen=[1])
+        _stamp_fetch(uow, "snes", rom_count=1, fetch_id="run-0", seen=[5])
+        _stamp_fetch(uow, "gba", rom_count=1, fetch_id="run-0", seen=[6])
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1},
+            platform_names={"n64": "Nintendo 64"},
+            stale_rom_ids=[5],
+        )
+
+        with uow:
+            assert uow.platform_sync_state.get("snes") is not None
+            assert uow.platform_sync_state.get("gba") is not None
+            assert uow.roms.get(6).shortcut_app_id == 1006
+
+    @pytest.mark.asyncio
     async def test_get_sync_stats_reflects_unbound_count(self, library, emit):
         """After a normal finalize unbinds stale rows, get_sync_stats counts only bound ones."""
 

@@ -882,20 +882,24 @@ generation predates the contract and cannot say what its fetch returned, so it s
 The stamp's contract is **stamp exists ⟺ the platform's most recent apply attempt ran to completion**, so a stale stamp
 can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a platform's persisted-row
 count survives a partial re-apply or a local removal, so a surviving stamp with a matching `rom_count` would otherwise
-let the skip drop the un-recreated games (the #1025 silent gap). Two rules keep the contract true: the orchestrator
+let the skip drop the un-recreated games (the #1025 silent gap). Three rules keep the contract true: the orchestrator
 **clears the stamp at a platform unit's apply start** (once the fetch succeeded and the apply is about to emit its first
 chunk) and only the final chunk re-writes it, so an apply interrupted by a crash / cancel / heartbeat-timeout before the
-final chunk leaves none; and the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
+final chunk leaves none; the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
 `report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) — delete the touched
-platforms' stamps in the same write UoW as the unbind. The reporter's server-side stale removal is the deliberate
-exception: it leaves every stamp. On a platform the run processed, nothing the skip reads changes: a skipped platform's
-rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was stamped by
-that run with a generation no stale row carries. A platform the run did not process (sync turned off for it) keeps its
-stamp too, and those rows unbound on it that carry that stamp's generation still count towards its skip. "Force Full
-Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL), which is the
-entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history is
-deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting it
-forced nothing and only blanked the panel to "Never" right after a reset.
+platforms' stamps in the same write UoW as the unbind; and the reporter's server-side **stale removal deletes the stamp
+of a platform the run did not process** — one that was not among the run's platform units, because its sync is turned
+off — once it has unbound a row there, in the same write UoW as the unbind. Left in place, that stamp would let the
+platform skip once it is turned back on: the rows an enabled collection still holds keep the zero-bound guard quiet, and
+the unbound rows still carry the stamp's generation, so they still count towards the skip, which rebuilds the unit from
+the bound rows alone and never re-creates the unbound games' shortcuts. With the stamp gone the platform full-fetches
+once and gets them back. On a platform the run processed, skipped or fetched alike, the stale removal leaves the stamp,
+because nothing the skip reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so
+none of them is stale, and a fetched platform was stamped by that run with a generation no stale row carries. "Force
+Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL), which is
+the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history
+is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting
+it forced nothing and only blanked the panel to "Never" right after a reset.
 
 That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
 history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that

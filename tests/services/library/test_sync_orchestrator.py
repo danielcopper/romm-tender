@@ -4629,12 +4629,12 @@ class TestPlatformTurnedOffAndBackOn:
     """A platform whose sync is turned off and back on gets all its shortcuts back (#2094).
 
     While the platform is off, the stale-removal scan unbinds its games except the
-    ones an enabled collection lists, and nothing clears its completion stamp. Once
-    it is back on, the games the collection held are still bound and the unbound
-    ones still carry the stamp's generation, so every count the skip reads matches.
+    ones an enabled collection lists. Were its completion stamp left in place, the
+    game the collection held would stay bound, which keeps the zero-bound guard
+    quiet, and the unbound ones would still carry the stamp's generation, so every
+    count the skip reads would match.
     """
 
-    @pytest.mark.xfail(strict=True, reason="#2094")
     @pytest.mark.asyncio
     async def test_the_games_unbound_while_it_was_off_are_bound_again(self, library, fake_romm_api):
         _use_fake_romm(library, fake_romm_api)
@@ -4680,9 +4680,7 @@ class TestPlatformTurnedOffAndBackOn:
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
         with library.uow as uow:
-            stamp = uow.platform_sync_state.get("n64")
-        assert stamp is not None
-        assert stamp.fetch_id == "run-1"
+            assert uow.platform_sync_state.get("n64") is None
 
         # Run 3: N64 is back on and nothing changed on RomM.
         library.settings["enabled_platforms"] = {"1": True}
