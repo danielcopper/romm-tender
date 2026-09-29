@@ -4724,6 +4724,73 @@ class TestCollectionTurnedOffAndBackOn:
         assert (stamp.updated_at, stamp.member_rom_ids) == ("2025-02-01T00:00:00+00:00", (1,))
 
 
+class TestFailedCollectionListing:
+    """A collection listing that fails leaves the games only that collection brings in bound (#2112).
+
+    The games sit on a platform whose own sync is off, so no platform unit covers
+    them. When RomM cannot be reached for the listing, the run has no unit for the
+    collection; that must not read as "the collection holds nothing", which the
+    end-of-run stale removal would act on by unbinding its games.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="#2112: a failed collection listing unbinds the games only it brings in")
+    @pytest.mark.parametrize("kind", ["standard", "smart"])
+    @pytest.mark.asyncio
+    async def test_the_games_only_the_collection_brings_in_stay_bound(self, library, fake_romm_api, kind):
+        from lib.errors import RommConnectionError
+
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        entry = {"id": 7, "name": "Faves", "rom_count": 2, "updated_at": "2025-01-01T00:00:00+00:00"}
+        if kind == "standard":
+            fake_romm_api.collections.append(entry)
+        else:
+            fake_romm_api.smart_collections.append(entry)
+        membership_key = "collection_ids" if kind == "standard" else "smart_collection_ids"
+        for rom_id in (1, 2):
+            fake_romm_api.roms[rom_id].setdefault(membership_key, []).append(7)
+        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_collections"] = {kind: {"7": True}}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def run_to_its_end(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2)}
+
+        # Run 1: the listing answers and the collection binds both of its games.
+        await run_to_its_end("run-1")
+        assert bindings() == {1: 5001, 2: 5002}
+        with library.uow as uow:
+            assert uow.collection_sync_state.get("7", kind) is not None
+
+        # Run 2: RomM cannot be reached for the listing; nothing changed on RomM or in the settings.
+        failure = RommConnectionError("Connection refused")
+        if kind == "standard":
+            fake_romm_api.list_collections_side_effect = failure
+        else:
+            fake_romm_api.list_smart_collections_side_effect = failure
+        await run_to_its_end("run-2")
+        assert bindings() == {1: 5001, 2: 5002}
+        with library.uow as uow:
+            assert uow.collection_sync_state.get("7", kind) is not None
+
+
 class TestStoppedRunLeavesNoHiddenStaleRow:
     """A version deleted on RomM loses its shortcut at the next completed run (#2084).
 
