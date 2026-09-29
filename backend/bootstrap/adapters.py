@@ -1,7 +1,7 @@
 """Adapter half of the composition root — the only place adapters are constructed.
 
 Adapter construction lives here so ``main.py`` only deals with the
-process lifecycle and the callable surface. ``bootstrap()`` also loads
+process and the endpoints. ``bootstrap()`` also loads
 and migrates settings as part of adapter wiring so adapters that bind
 a live mutable settings dict (such as ``RommHttpAdapter``) bind the
 migrated dict in a single pass; that same dict is returned for the
@@ -212,9 +212,9 @@ class RuntimeAdaptersBundle:
     """Concrete adapters for the Clock/UuidGen/Sleeper/HostnameReader/MachineIdReader seams.
 
     Bootstrap owns adapter instantiation, but the ``RuntimeBundle``
-    handed to ``wire_services`` also needs runtime-only state ``main.py``
+    handed to ``wire_services`` also needs runtime-only state the entry point
     introduces (the ``asyncio`` loop, the event sink's emit). This sub-bundle
-    carries the seams bootstrap builds so ``main.py`` can compose the
+    carries the seams bootstrap builds so ``build_application`` can compose the
     final ``RuntimeBundle`` without instantiating any adapters itself.
     """
 
@@ -226,30 +226,22 @@ class RuntimeAdaptersBundle:
 
 
 @dataclass(frozen=True)
-class BootstrapHandles:
-    """Bootstrap outputs ``main.py`` binds on ``Plugin`` itself rather than handing to a service."""
-
-    debug_logger: DebugLogger
-
-
-@dataclass(frozen=True)
 class BootstrapResult:
     """Typed return shape for :func:`bootstrap`.
 
     The four bundles carry every Protocol-typed seam and live state dict that
-    services need; :attr:`handles` carries what ``main.py`` binds on ``Plugin``
-    itself; :attr:`directories` is the set this run was handed, passed back so
-    every consumer reads the same seven fields rather than composing any of them
-    again; :attr:`launcher` is this start's :class:`ShortcutLauncher`; and
-    :attr:`user_agent` is ``<package name>/<version>``, composed once and used
-    both as the outgoing User-Agent and as the identity the host answers under.
+    services need; :attr:`directories` is the set this run was handed, passed
+    back so every consumer reads the same seven fields rather than composing any
+    of them again; :attr:`launcher` is this start's :class:`ShortcutLauncher`;
+    and :attr:`user_agent` is ``<package name>/<version>``, composed once and
+    used both as the outgoing User-Agent and as the identity the host answers
+    under.
     """
 
     adapters: AdapterBundle
     stores: StateBundle
     callbacks: CallbackBundle
     runtime_adapters: RuntimeAdaptersBundle
-    handles: BootstrapHandles
     directories: AppDirectories
     launcher: ShortcutLauncher
     user_agent: str
@@ -262,7 +254,7 @@ def bootstrap(
     user_home: str,
     logger: logging.Logger,
 ) -> BootstrapResult:
-    """Build every adapter and bundle the composition root hands to ``main.py``.
+    """Build every adapter and bundle the composition root hands to ``wire_services``.
 
     Bootstrap owns adapter instantiation and is the only path that
     constructs ``PersistenceAdapter``. Settings are loaded + migrated
@@ -290,8 +282,7 @@ def bootstrap(
     -------
     :class:`BootstrapResult`
         Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``, ``directories``) plus the ``handles``
-        ``main.py`` binds on ``Plugin`` itself.
+        ``stores``, ``callbacks``, ``directories``).
     """
     # SystemClock is dependency-free; construct it first so the single shared
     # instance threads into PersistenceAdapter (corrupt-settings backup stamp)
@@ -502,14 +493,11 @@ def bootstrap(
         hostname_provider=hostname_provider,
         machine_id_provider=machine_id_provider,
     )
-    handles = BootstrapHandles(debug_logger=debug_logger)
-
     return BootstrapResult(
         adapters=adapters,
         stores=stores,
         callbacks=callbacks,
         runtime_adapters=runtime_adapters,
-        handles=handles,
         directories=directories,
         launcher=launcher,
         user_agent=user_agent,

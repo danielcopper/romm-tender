@@ -3,7 +3,7 @@
 
 Every endpoint is declared twice: once on the frontend as
 ``callable<[Args], Return>("wire_name")`` (TypeScript) and once on the backend
-as a public method on the ``Plugin`` class in ``main.py`` whose first decorator
+as a public method on the ``Endpoints`` class in ``main.py`` whose first decorator
 is ``@route`` — ``def`` or ``async def`` alike. Nothing ties the two together at
 build time — a renamed/added/removed endpoint on either side, or an arg-count
 change that the other side doesn't follow, only surfaces as a runtime "method
@@ -322,16 +322,16 @@ def _parse_text_into(text: str, result: dict[str, int]) -> None:
         i = end
 
 
-def _plugin_methods(main_py: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    """Every ``def`` and ``async def`` directly on the ``Plugin`` class in *main_py*."""
+def _endpoint_methods(main_py: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Every ``def`` and ``async def`` directly on the ``Endpoints`` class in *main_py*."""
     tree = ast.parse(main_py.read_text(encoding="utf-8"), filename=str(main_py))
-    plugin = next(
-        (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Plugin"),
+    endpoints = next(
+        (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Endpoints"),
         None,
     )
-    if plugin is None:
+    if endpoints is None:
         return []
-    return [node for node in plugin.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    return [node for node in endpoints.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
 
 
 def _is_route(decorator: ast.expr) -> bool:
@@ -339,10 +339,10 @@ def _is_route(decorator: ast.expr) -> bool:
 
 
 def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
-    """Parse the endpoints of the ``Plugin`` class in *main_py*.
+    """Parse the endpoints of the ``Endpoints`` class in *main_py*.
 
     Uses ``ast`` (never imports ``main.py``). Returns ``{method_name: arity}``
-    for every ``def`` or ``async def`` on ``Plugin`` whose FIRST decorator is
+    for every ``def`` or ``async def`` on ``Endpoints`` whose FIRST decorator is
     ``route`` and whose name does not start with ``_``. Arity counts positional
     parameters only — ``posonlyargs`` + ``args`` minus ``self``; a method with
     ``*args`` has variable arity, recorded as ``None`` (name still checked).
@@ -351,7 +351,7 @@ def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
     excluded by design (a non-occurring corner on this endpoint surface).
     """
     result: dict[str, int | None] = {}
-    for node in _plugin_methods(main_py):
+    for node in _endpoint_methods(main_py):
         if not node.decorator_list or not _is_route(node.decorator_list[0]) or node.name.startswith("_"):
             continue
         args = node.args
@@ -365,14 +365,14 @@ def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
 
 
 def find_misplaced_routes(main_py: Path) -> list[str]:
-    """One line per ``@route`` on ``Plugin`` that this gate would not count.
+    """One line per ``@route`` on ``Endpoints`` that this gate would not count.
 
     Two placements: ``route`` below another decorator, and ``route`` on a name
     with a leading underscore. Neither is in :func:`parse_backend_callables`'s
     surface, so without this each would be a marker the parity check never sees.
     """
     findings: list[str] = []
-    for node in _plugin_methods(main_py):
+    for node in _endpoint_methods(main_py):
         decorators = node.decorator_list
         if any(_is_route(decorator) for decorator in decorators[1:]):
             findings.append(
@@ -410,12 +410,12 @@ def find_discrepancies(
 
     findings.extend(
         f'{name}: frontend declares callable("{name}") but main.py has no public '
-        f"method {name} marked @route on Plugin — add the backend method, fix a rename, or "
+        f"method {name} marked @route on Endpoints — add the backend method, fix a rename, or "
         f"add it to EXEMPT in this script if it is intentionally frontend-only."
         for name in sorted(frontend_names - backend_names)
     )
     findings.extend(
-        f"{name}: main.py marks {name} on Plugin with @route but no frontend "
+        f"{name}: main.py marks {name} on Endpoints with @route but no frontend "
         f'callable("{name}") declares it — add the frontend declaration, fix a '
         f"rename, or add it to EXEMPT in this script if it is intentionally backend-only."
         for name in sorted(backend_names - frontend_names)
@@ -452,7 +452,7 @@ def main(argv: list[str]) -> int:
         print(
             "ERROR: an @route sits where this check cannot count it, or the frontend "
             "(frontend/src/**/*.ts callable declarations) and backend (@route endpoints "
-            "on Plugin in main.py) surfaces have drifted. Every endpoint must be declared "
+            "on Endpoints in main.py) surfaces have drifted. Every endpoint must be declared "
             "on both sides with matching arity (or be explicitly EXEMPT) so the "
             "frontend↔backend wire stays one source of truth."
         )

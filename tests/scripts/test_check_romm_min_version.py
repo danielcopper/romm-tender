@@ -4,12 +4,12 @@ The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path``. The per-claim cases copy the files the claims read into
 ``tmp_path`` and point ``ROOT`` there, so a drifted number can be planted in
 one claim at a time without touching the repository; ``SOURCE`` stays the real
-``main.py``, so the enforced floor is the one the plugin ships. Every claim is
-exercised in both directions — the real statement passes, the same statement
-with another number fails naming its file and label — because a regex that
-stopped matching would otherwise read as a claim that holds. One case runs
-against the real tree, so the stated floors are verified by ``mise run test``
-and not only by ``mise run lint``.
+``identity.py``, so the enforced floor is the one the program ships. Every
+claim is exercised in both directions — the real statement passes, the same
+statement with another number fails naming its file and label — because a
+regex that stopped matching would otherwise read as a claim that holds. One
+case runs against the real tree, so the stated floors are verified by
+``mise run test`` and not only by ``mise run lint``.
 """
 
 from __future__ import annotations
@@ -56,6 +56,21 @@ def _run(monkeypatch: pytest.MonkeyPatch, root: Path, *args: str) -> int:
     monkeypatch.setattr(check, "ROOT", root)
     monkeypatch.setattr(sys, "argv", ["check_romm_min_version.py", *args])
     return check.main()
+
+
+def test_the_floor_is_the_constant_the_program_enforces() -> None:
+    from domain.identity import MIN_ROMM_VERSION
+
+    assert check.enforced_version() == ".".join(str(part) for part in MIN_ROMM_VERSION)
+
+
+def test_a_source_without_the_constant_fails_naming_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "identity.py"
+    source.write_text('VERSION = "0.0.0"\n', encoding="utf-8")
+    monkeypatch.setattr(check, "SOURCE", source)
+
+    with pytest.raises(SystemExit, match=f"{check.CONSTANT} not found in identity.py"):
+        check.enforced_version()
 
 
 def test_the_real_tree_states_the_enforced_floor(

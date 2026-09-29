@@ -1,7 +1,7 @@
-"""The names this program goes by, and the release it is.
+"""The names this program goes by, the release it is, and the oldest RomM it works with.
 
-Contract: three values, each answering a different question about what to call
-this program.
+Contract: four values. Three answer a different question each about what to
+call this program; the fourth says which servers it will talk to at all.
 
 - :data:`DISPLAY_NAME` is what a HUMAN reads — a toast's sender, a token label
   on the user's own RomM server, the headline of a file they open by hand.
@@ -18,6 +18,11 @@ this program.
   injection's crash-record fingerprint (``main.py``). The first three are
   reached from ``bootstrap/``; the last two are not, which is why they are easy
   to miss when reading the composition root alone.
+- :data:`MIN_ROMM_VERSION` is the oldest RomM release this program accepts. It
+  has one consumer, ``ConnectionService``, which rejects a server below it, so
+  the program is inert until the server is updated. It is handed there by
+  ``bootstrap/``. Several documents restate the number for humans, and
+  ``scripts/check_romm_min_version.py`` holds each of them to this line.
 
 The identifier — ``romm-tender`` — is kept in three separate places rather than
 one, because it answers three questions that have to stay free to disagree:
@@ -43,8 +48,8 @@ silent: a library the program cannot find, a recovery folder that no longer
 matches the package that wrote it, a running game whose session is forgotten at
 the next reload.
 
-**Three constants in one module is not a fold.** They are three different
-values, so no edit to one can reproduce another by accident. The identically
+**Several constants in one module is not a fold.** They are different values,
+so no edit to one can reproduce another by accident. The identically
 SPELT pair is :data:`PACKAGE_NAME` against ``APP_DIR_NAME``, and that pair is
 exactly the one still standing in two modules — which is the whole of the rule
 above. What this module replaced was a manifest read, not a separation:
@@ -86,3 +91,8 @@ PACKAGE_NAME = "romm-tender"
 # noticing, and until it does, every consumer listed in the module docstring
 # claims a release that was never cut.
 VERSION = "0.33.0"  # x-release-please-version
+
+# A plain assignment, never an annotated one: ``scripts/check_romm_min_version.py``
+# reads it off this module's syntax tree, and an annotated assignment is a
+# different node it does not look for.
+MIN_ROMM_VERSION = (5, 3, 0)
