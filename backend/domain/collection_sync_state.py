@@ -33,7 +33,8 @@ stamped (they always full-fetch). A thin record built whole and upserted —
 never a partial field mutation — so it carries a single ``stamp`` constructor and
 no verb-named mutators. Unlike a platform stamp it has no revoked state and is
 deleted outright: the local destructive flows (shortcut removal / live-shortcut
-reconcile) drop any stamp whose member set intersects the removed ROMs, removed-game
+reconcile) drop any stamp whose member set intersects the removed ROMs, the
+end-of-run stale removal drops those intersecting the rows it unbinds, removed-game
 cleanup drops those intersecting the rows it deletes, and Force Full Sync clears
 every stamp wholesale.
 """

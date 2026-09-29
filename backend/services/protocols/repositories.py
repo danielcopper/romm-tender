@@ -468,7 +468,8 @@ class CollectionSyncStateRepository(Protocol):
         table records no collection membership, so the stored member sets are
         the only way to find the stamps. Called in the write UoW that unbinds or
         deletes those ROMs: the local destructive flows
-        (services/shortcut_removal.py) and removed-game cleanup's row delete
+        (services/shortcut_removal.py), the end-of-run stale removal
+        (library/reporter.py) and removed-game cleanup's row delete
         (prune/registry.py).
         """
         ...

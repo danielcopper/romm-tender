@@ -132,6 +132,14 @@ mid-unit failure forfeits only the in-flight chunk.**
   > collection-stamp bullet below says. The current rule is in
   > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
   > "Incremental skip".
+  >
+  > **Amendment (2026-09-29, #2106).** The stale removal now deletes collection stamps as well: every stamp whose member
+  > set holds a row it unbinds, the same rule the local flows and removed-game cleanup already applied. A collection
+  > whose games sat on a platform with its sync off lost their shortcuts to the stale removal while the collection was
+  > off, and once it was back on it skipped on its old stamp, whose replay passes over unbound members, so the shortcuts
+  > never came back. The current rule is in
+  > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  > "Incremental skip".
 
 - **The row-count condition counts by fetch generation, not by every persisted row (#1504).** The skip requires RomM's
   platform `rom_count` to equal the local row count, and that count originally included every `roms` row for the

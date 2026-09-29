@@ -916,6 +916,19 @@ final chunk's fresh stamp replaces the row, which clears the flag. The apply sta
 its chunks re-mark rows with the new run's generation and a kept stamp naming the old one would make discovery read
 every re-marked row as gone from RomM.
 
+**A collection stamp is deleted, not revoked, by an unbind or row delete that reaches one of its members.** A skipped
+standard or smart collection replays its `CollectionSyncState`'s `member_rom_ids` and passes over a member that is no
+longer bound, so a stamp standing over an unbound member lets the collection skip and never re-creates that member's
+shortcut. The local destructive flows, the reporter's stale removal and removed-game cleanup's row delete therefore
+delete every collection stamp whose member set holds one of the rows they unbind or delete, in the same write UoW
+(`CollectionSyncStateRepository.delete_intersecting`). Removed-game discovery, the reader a platform stamp is kept for,
+reads no collection stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the
+run processed, unlike its platform rule: a processed collection adds every member to the rows the run returned — every
+stamped member on a skip, every fetched one on a full fetch — so none of its current members is stale. A collection
+member the stale removal unbinds therefore belongs to a collection the run did not process, whose sync is turned off or
+which RomM no longer lists, and that collection full-fetches once it is processed again instead of skipping over the
+member.
+
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The
 `sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync"

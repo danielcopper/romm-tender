@@ -311,17 +311,19 @@ class SyncReporter:
         By the time this runs, every per-unit ``commit_unit_results``
         has already upserted its ROMs into ``uow.roms``, so we only need
         to: (1) unbind the stale ROMs (clear ``shortcut_app_id``, keeping
-        the row per ADR-0007 — never delete) and revoke the skip of the
-        platforms :meth:`finalize_per_unit_run` says to, (2) refresh the offline
+        the row per ADR-0007 — never delete), revoke the skip of the
+        platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
+        every collection holding an unbound ROM, (2) refresh the offline
         ``platform_slug → display_name`` cache from the live work-queue, and
         (3) build the cross-unit collection mappings. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
 
         Everything happens inside one write UoW so the unbind, the revocations,
-        the cache refresh and the reads commit atomically.
+        the stamp deletions, the cache refresh and the reads commit atomically.
         """
         with self._uow_factory() as uow:
+            unbound_rom_ids: set[int] = set()
             unprocessed_slugs_unbound: set[str] = set()
             for rid in stale_rom_ids or []:
                 rom = uow.roms.get(rid)
@@ -329,10 +331,12 @@ class SyncReporter:
                     continue
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
+                unbound_rom_ids.add(rom.rom_id)
                 if rom.platform_slug not in processed_platform_slugs:
                     unprocessed_slugs_unbound.add(rom.platform_slug)
             for slug in unprocessed_slugs_unbound:
                 uow.platform_sync_state.revoke_skip(slug)
+            uow.collection_sync_state.delete_intersecting(unbound_rom_ids)
 
             uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(platform_names))
 
@@ -366,9 +370,11 @@ class SyncReporter:
         ``processed_platform_slugs`` names the platform units this run
         processed, skipped and fetched alike. A stale unbind on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
-        revokes that platform's skip; a processed platform keeps its skip. Why,
-        and why the stamp itself stays, is in
-        docs/architecture/backend-architecture.md, "Incremental skip".
+        revokes that platform's skip; a processed platform keeps its skip. A
+        stale unbind also deletes the stamp of every collection holding the
+        unbound ROM, with no processed set to consult. Why, and why a platform's
+        stamp itself stays, is in docs/architecture/backend-architecture.md,
+        "Incremental skip".
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The

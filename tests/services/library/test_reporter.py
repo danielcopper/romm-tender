@@ -1524,7 +1524,9 @@ def _stamp_platform(uow, slug: str) -> None:
         )
 
 
-def _stamp_collection(uow, collection_id: str, kind: str = "standard") -> None:
+def _stamp_collection(
+    uow, collection_id: str, kind: str = "standard", *, member_rom_ids: tuple[int, ...] = (1,)
+) -> None:
     from domain.collection_sync_state import CollectionSyncState
 
     with uow:
@@ -1534,8 +1536,8 @@ def _stamp_collection(uow, collection_id: str, kind: str = "standard") -> None:
                 collection_kind=kind,
                 updated_at="2025-01-01T00:00:00",
                 completed_at="2025-01-01T00:05:00",
-                rom_count=1,
-                member_rom_ids=(1,),
+                rom_count=len(member_rom_ids),
+                member_rom_ids=member_rom_ids,
             )
         )
 
@@ -2558,6 +2560,48 @@ class TestFinalizePerUnitRun:
             snes = uow.platform_sync_state.get("snes")
         assert snes is not None
         assert snes.skip_revoked is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", ["standard", "smart"])
+    async def test_stale_unbind_deletes_the_stamp_of_a_collection_holding_an_unbound_game(self, library, emit, kind):
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
+        _stamp_collection(uow, "7", kind, member_rom_ids=(2, 3))
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1},
+            platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
+            stale_rom_ids=[2],
+        )
+
+        with uow:
+            assert uow.roms.get(2).shortcut_app_id is None
+            assert uow.collection_sync_state.get("7", kind) is None
+
+    @pytest.mark.asyncio
+    async def test_a_collection_holding_no_game_the_stale_removal_unbinds_keeps_its_stamp(self, library, emit):
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
+        _seed_rom(uow, 5, app_id=None, platform_slug="snes", name="Already unbound")
+        _stamp_collection(uow, "7", "standard", member_rom_ids=(1,))
+        _stamp_collection(uow, "8", "smart", member_rom_ids=(5,))
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1},
+            platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
+            stale_rom_ids=[2, 5],
+        )
+
+        with uow:
+            assert uow.roms.get(2).shortcut_app_id is None
+            assert uow.collection_sync_state.get("7", "standard") is not None
+            assert uow.collection_sync_state.get("8", "smart") is not None
 
     @pytest.mark.asyncio
     async def test_get_sync_stats_reflects_unbound_count(self, library, emit):
