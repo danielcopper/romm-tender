@@ -961,7 +961,7 @@ guard that exits when the home has not changed since the last call.
 
 | When             | Where (code location)                                                  | Why                                                                                    |
 | ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Backend start    | `_main()` in `main.py`, as a start-up step                             | Catches changes that occurred while the backend was not running                        |
+| Backend start    | `Application.run_startup_repairs` in `bootstrap/application.py`        | Catches changes that occurred while the backend was not running                        |
 | QAM open         | `MainPage.tsx` mount `useEffect`                                       | User navigating via QAM sees current state when Settings is one tap away               |
 | Game-detail open | `RomMGameInfoPanel.tsx` `useEffect([appId])`                           | Per-game navigation refreshes state when the user browses without launching            |
 | Pre-game-launch  | `launchInterceptor.ts`                                                 | Catches a home moved since the prior session, before the launch it would affect        |

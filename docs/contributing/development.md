@@ -125,7 +125,7 @@ is gitignored. See `.claude/rules/testing-backend.md` for the convention on pinn
 ### Contract tests
 
 `tests/contract/` is a tier that crosses the frontend↔backend wire. Where the unit tests check each side against its own
-mocked idea of the other, the contract tier builds the **real** `Plugin` through the **real** `bootstrap()` +
+mocked idea of the other, the contract tier builds the **real** `Endpoints` through the **real** `bootstrap()` +
 `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under `tmp_path`) and
 drives the actual `main.py` callables **exactly as the frontend does** — positional, JSON-shaped arguments with the arg
 types declared in `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`). The assertions pin the
@@ -394,11 +394,12 @@ without `--check` for a report-mode inventory.
 
 `mise run lint` (and CI) also runs `scripts/check_callable_manifest.py`, which pins the frontend↔backend callable
 surface to one source of truth: it derives the frontend names + arities from every `callable<[Args], Return>("name")` in
-`frontend/src/**/*.ts` and the backend surface from the endpoints on the `Plugin` class in `main.py` (the public methods
-whose first decorator is `@route`), then fails if they diverge: an endpoint declared on only one side (either direction)
-or a matching name whose arity (positional param count) differs. A `@route` below another decorator or on an underscored
-name fails on its own. Arg types stay out of scope (Python signatures carry no hints), so arity is the only mechanically
-checkable shape. The same checks are surfaced inside the pytest run by `tests/contract/test_callable_manifest.py`.
+`frontend/src/**/*.ts` and the backend surface from the endpoints on the `Endpoints` class in `main.py` (the public
+methods whose first decorator is `@route`), then fails if they diverge: an endpoint declared on only one side (either
+direction) or a matching name whose arity (positional param count) differs. A `@route` below another decorator or on an
+underscored name fails on its own. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
+mechanically checkable shape. The same checks are surfaced inside the pytest run by
+`tests/contract/test_callable_manifest.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_event_parity.py`, which fails if a backend `emit("name", ...)` event
 has no matching frontend `addEventListener("name", ...)` (or vice versa). The event names are bare string literals, so
@@ -553,10 +554,11 @@ tracked.
 
 ```text
 backend/
-  main.py                            # Plugin entry — lifecycle + endpoints
+  main.py                            # Process entry (run()) + Endpoints
   bootstrap/                         # Composition root — re-exported through __init__.py
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles
+    application.py                   # build_application() composes both into the Application
   services/                          # Orchestration / business logic (Protocol-typed deps via *ServiceConfig);
                                      #   every module is in Backend Architecture → Services
   adapters/                          # I/O boundaries — implement Protocols

@@ -53,7 +53,7 @@ Format: **invariant** — tier — enforced by.
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
-  defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `Plugin.run`
+  defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `main.run()`
   resolves it once and hands it to `bootstrap()`, which derives nothing, and `RuntimeBundle` carries no directory at all
   — it used to carry two, and that is how a question about a plugin loader's own layout came to sit beside a question
   about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
@@ -74,7 +74,7 @@ Format: **invariant** — tier — enforced by.
   binary in, which is why nothing under it may be treated as ours to remove. Nothing mechanical tells the seven apart:
   they are seven `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in
   whichever direction it happened to point. **One raw read of `TENDER_CODE_DIR` is deliberate and is not a directory
-  read**: `domain/update_release.py::resolve_update_source`, called once by `Plugin.run` beside `resolve_directories`,
+  read**: `domain/update_release.py::resolve_update_source`, called once by `main.run()` beside `resolve_directories`,
   asks whether the variable was SET and whether it names the directory this process's code sits in — which decides
   whether this is the installed program an update may replace. `AppDirectories.code_dir` cannot answer that, because the
   ladder has already folded "set" and "fell back to where the code sits" into one value; the function derives no
@@ -679,14 +679,14 @@ Format: **invariant** — tier — enforced by.
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
-- **Every RomM minimum stated for a reader matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
-  `scripts/check_romm_min_version.py`. The constant in `backend/main.py` is the floor `test_connection()` refuses a
-  server below; every other place the number appears is a restatement for a reader, and a restatement drifts. The check
-  holds exactly the statements its `CLAIMS` list names — each one a narrow regex that captures the version and nothing
-  around it, so `--fix` can rewrite it in place — and fails both when a named statement says another number and when it
-  no longer matches at all, because a regex that silently stopped matching would read as a claim that holds. **What it
-  cannot see is a restatement nobody added to that list**: a new page stating the floor is unchecked until its sentence
-  is listed there. The worked examples of the floor split three ways. The ones above the floor (`5.3.1-beta`,
+- **Every RomM minimum stated for a reader matches the enforced `MIN_ROMM_VERSION`** — check —
+  `scripts/check_romm_min_version.py`. The constant in `backend/domain/identity.py` is the floor `test_connection()`
+  refuses a server below; every other place the number appears is a restatement for a reader, and a restatement drifts.
+  The check holds exactly the statements its `CLAIMS` list names — each one a narrow regex that captures the version and
+  nothing around it, so `--fix` can rewrite it in place — and fails both when a named statement says another number and
+  when it no longer matches at all, because a regex that silently stopped matching would read as a claim that holds.
+  **What it cannot see is a restatement nobody added to that list**: a new page stating the floor is unchecked until its
+  sentence is listed there. The worked examples of the floor split three ways. The ones above the floor (`5.3.1-beta`,
   `5.4.0-alpha.1`) are unchecked, because no equality test fits them, and a floor raise makes them false, so they are
   rewritten by hand. The ones at the floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are listed and checked where a page calls
   them the floor's own tags, as both save-sync pages do. The conditional one in the ConnectionService notes of
