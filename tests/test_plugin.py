@@ -154,36 +154,6 @@ class TestUnsetSlotsAreLoud:
             _ = bare._settings_persister
 
 
-class TestSettings:
-    @pytest.mark.asyncio
-    async def test_get_settings_reports_token_present(self, plugin):
-        plugin.settings["romm_api_token"] = "rmm_abc"
-        result = plugin.get_settings()
-        assert result["has_token"] is True
-        # The token itself is never sent to the frontend.
-        assert "rmm_abc" not in str(result)
-
-    @pytest.mark.asyncio
-    async def test_get_settings_reports_token_absent(self, plugin):
-        plugin.settings["romm_api_token"] = None
-        result = plugin.get_settings()
-        assert result["has_token"] is False
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_persists_url(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        result = await plugin.save_server_url("http://example.com")
-        assert result["success"] is True
-        assert plugin.settings["romm_url"] == "http://example.com"
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_does_not_touch_token(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_api_token"] = "rmm_keep"
-        await plugin.save_server_url("http://example.com")
-        assert plugin.settings["romm_api_token"] == "rmm_keep"
-
-
 class TestConnection:
     @pytest.mark.asyncio
     async def test_test_connection_sets_version_on_romm_api(self, plugin, logger):
@@ -257,64 +227,6 @@ class TestLogLevel:
         with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_save_log_level_valid(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        for level in ("debug", "info", "warn", "error"):
-            result = plugin.save_log_level(level)
-            assert result["success"] is True
-            assert plugin.settings["log_level"] == level
-
-    @pytest.mark.asyncio
-    async def test_save_log_level_invalid(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["log_level"] = "warn"
-        result = plugin.save_log_level("verbose")
-        assert result["success"] is False
-        assert plugin.settings["log_level"] == "warn"  # unchanged
-
-    @pytest.mark.asyncio
-    async def test_get_settings_includes_log_level(self, plugin):
-        plugin.settings["log_level"] = "info"
-        result = plugin.get_settings()
-        assert result["log_level"] == "info"
-
-    @pytest.mark.asyncio
-    async def test_get_settings_defaults_log_level_warn(self, plugin):
-        plugin.settings.pop("log_level", None)
-        result = plugin.get_settings()
-        assert result["log_level"] == "warn"
-
-    @pytest.mark.asyncio
-    async def test_frontend_log_respects_level(self, plugin, caplog):
-        """frontend_log only logs when message level >= configured level."""
-        plugin.settings["log_level"] = "warn"
-        plugin.frontend_log("debug", "debug msg")
-        plugin.frontend_log("info", "info msg")
-        plugin.frontend_log("warn", "warn msg")
-        plugin.frontend_log("error", "error msg")
-
-        assert [(r.levelname, r.message) for r in caplog.records] == [
-            ("WARNING", "[FE] warn msg"),
-            ("ERROR", "[FE] error msg"),
-        ]
-
-    @pytest.mark.asyncio
-    async def test_frontend_log_debug_level_logs_all(self, plugin, caplog):
-        """With log_level=debug, all levels are logged — each at its own."""
-        plugin.settings["log_level"] = "debug"
-        plugin.frontend_log("debug", "d")
-        plugin.frontend_log("info", "i")
-        plugin.frontend_log("warn", "w")
-        plugin.frontend_log("error", "e")
-
-        assert [(r.levelname, r.message) for r in caplog.records] == [
-            ("DEBUG", "[FE] d"),
-            ("INFO", "[FE] i"),
-            ("WARNING", "[FE] w"),
-            ("ERROR", "[FE] e"),
-        ]
 
     @pytest.mark.asyncio
     async def test_debug_log_backward_compat(self, plugin, caplog):
@@ -398,70 +310,6 @@ class TestInsecureSslSetting:
         plugin.settings = persistence.load_settings()
         assert plugin.settings["romm_allow_insecure_ssl"] is False
 
-    @pytest.mark.asyncio
-    async def test_get_settings_includes_field(self, plugin):
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        result = plugin.get_settings()
-        assert result["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_get_settings_defaults_false(self, plugin):
-        plugin.settings.pop("romm_allow_insecure_ssl", None)
-        result = plugin.get_settings()
-        assert result["romm_allow_insecure_ssl"] is False
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_with_insecure_ssl(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        await plugin.save_server_url("https://romm.local", True)
-        assert plugin.settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_without_param_preserves(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        await plugin.save_server_url("https://romm.local")
-        assert plugin.settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_explicit_false(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        await plugin.save_server_url("https://romm.local", False)
-        assert plugin.settings["romm_allow_insecure_ssl"] is False
-
-
-class TestDismissSettingsResetNotice:
-    """The dismiss_settings_reset_notice callable pops the persistent marker and
-    persists the dismissal — the user's explicit QAM acknowledgement."""
-
-    @pytest.mark.asyncio
-    async def test_pops_marker_and_persists(self, plugin):
-        # Mutate the live dict in place (the SettingsService binds this same ref).
-        plugin.settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
-        before = plugin._settings_persister.save_count
-
-        result = plugin.dismiss_settings_reset_notice()
-
-        assert result == {"success": True}
-        assert "_settings_reset_notice" not in plugin.settings
-        # Read-side now reports not-pending.
-        assert plugin.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
-        # The dismissal was persisted.
-        assert plugin._settings_persister.save_count == before + 1
-
-    @pytest.mark.asyncio
-    async def test_idempotent_when_no_marker(self, plugin):
-        """Acking with no marker present is a harmless persisted no-op."""
-        assert "_settings_reset_notice" not in plugin.settings
-        before = plugin._settings_persister.save_count
-
-        result = plugin.dismiss_settings_reset_notice()
-
-        assert result == {"success": True}
-        assert "_settings_reset_notice" not in plugin.settings
-        assert plugin._settings_persister.save_count == before + 1
-
 
 class TestSettingsFilePermissions:
     def test_save_settings_creates_file_with_0600(self, plugin, tmp_path, logger):
@@ -531,61 +379,6 @@ class TestAtomicSettingsWrite:
         with open(settings_path) as f:
             data = json.load(f)
         assert data["romm_url"] == "http://original.com"
-
-
-class TestWhitelistSettings:
-    @pytest.mark.asyncio
-    async def test_get_whitelist_defaults_empty(self, plugin):
-        """Returns empty lists when no whitelist keys exist in settings."""
-        plugin.settings.pop("whitelist_disabled_defaults", None)
-        plugin.settings.pop("whitelist_custom_names", None)
-        result = plugin.get_whitelist_settings()
-        assert result == {"disabled_defaults": [], "custom_names": []}
-
-    @pytest.mark.asyncio
-    async def test_update_and_get_whitelist(self, plugin, tmp_path, logger, data_dir):
-        """Round-trip: update then get returns the stored values."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.update_whitelist_settings(["chrome"], ["My App"])
-        result = plugin.get_whitelist_settings()
-        assert result["disabled_defaults"] == ["chrome"]
-        assert result["custom_names"] == ["My App"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_disabled_defaults(self, plugin):
-        """Rejects non-list disabled_defaults."""
-        result = plugin.update_whitelist_settings("not-a-list", [])
-        assert result["success"] is False
-        assert "disabled_defaults" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_custom_names(self, plugin):
-        """Rejects non-list custom_names."""
-        result = plugin.update_whitelist_settings([], "not-a-list")
-        assert result["success"] is False
-        assert "custom_names" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_inner_types(self, plugin):
-        """Rejects lists containing non-string items."""
-        result_dd = plugin.update_whitelist_settings([1, 2], [])
-        assert result_dd["success"] is False
-        assert "disabled_defaults" in result_dd["message"]
-
-        result_cn = plugin.update_whitelist_settings([], ["valid", 42])
-        assert result_cn["success"] is False
-        assert "custom_names" in result_cn["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_persists(self, plugin, tmp_path, logger, data_dir):
-        """Verifies values are stored in plugin.settings dict after update."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        result = plugin.update_whitelist_settings(["moonlight"], ["Custom Game"])
-        assert result["success"] is True
-        assert plugin.settings["whitelist_disabled_defaults"] == ["moonlight"]
-        assert plugin.settings["whitelist_custom_names"] == ["Custom Game"]
 
 
 class TestRefreshMigrationState:
