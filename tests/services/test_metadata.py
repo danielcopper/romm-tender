@@ -1,7 +1,6 @@
 import asyncio
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -67,15 +66,13 @@ def uow() -> FakeUnitOfWork:
 
 @dataclass
 class MetadataHarness:
-    """The metadata service and what its tests seed or patch beside it.
+    """The metadata service and the settings its tests set beside it.
 
-    ``settings`` is the dict the service's debug logger reads ``log_level``
-    from. ``romm_api`` is a RomM API the service is not given.
+    ``settings`` is the dict the service's debug logger reads ``log_level`` from.
     """
 
     service: MetadataService
     settings: dict[str, Any]
-    romm_api: MagicMock
 
 
 @pytest.fixture
@@ -90,7 +87,7 @@ def metadata(uow, logger) -> MetadataHarness:
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
     )
-    return MetadataHarness(service=service, settings=settings, romm_api=MagicMock())
+    return MetadataHarness(service=service, settings=settings)
 
 
 @pytest.fixture(autouse=True)
@@ -163,18 +160,6 @@ class TestGetRomMetadata:
 
         assert result["summary"] == "Old summary"
         assert result["genres"] == ["Action"]
-
-    @pytest.mark.asyncio
-    async def test_no_api_call_on_cache_miss(self, metadata):
-        """Verify get_rom is never called — metadata comes only from SQLite."""
-        from unittest.mock import patch
-
-        metadata.settings["log_level"] = "warn"
-
-        with patch.object(metadata.romm_api, "get_rom") as mock_get_rom:
-            metadata.service.get_rom_metadata(42)
-
-        mock_get_rom.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_debug_logging_on_cache_hit(self, metadata, uow, logger):
