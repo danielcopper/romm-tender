@@ -4,6 +4,11 @@
  * Updated by:
  *   - the `update_install_progress` listener in index.tsx, one frame per step
  *     and a throttled one per stretch of downloaded bytes
+ *   - a press of Install (bigpicture/settings/useUpdateInstall.ts), which
+ *     clears the frame an earlier attempt left
+ *
+ * Read by:
+ *   - bigpicture/settings/useUpdateInstall.ts, beside the state it reads
  *
  * Holds only what the event carries: whether an install is offered and what it
  * waits for is a read (`getUpdateInstallState`), not a push.

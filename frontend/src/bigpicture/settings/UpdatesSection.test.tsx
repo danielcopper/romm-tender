@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { UpdatesSection, NOT_INSTALLED_PROGRAM } from "./UpdatesSection";
+import type { UpdateInstall } from "./useUpdateInstall";
+import type { UpdateInstallAttempt } from "../../api/backend";
+import { RESTARTING_LINE } from "../../utils/updateInstallView";
 import { UpdateFailureNotice } from "../UpdateFailureNotice";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import {
@@ -9,6 +12,34 @@ import {
   setUpdateOutcomeState,
   type UpdateOutcomeState,
 } from "../../utils/updateOutcomeStore";
+
+// The install's reads and press are `useUpdateInstall.test.ts`'s; here the
+// section is handed what the hook answers, so what it renders is all there is.
+const installView = vi.hoisted(() => ({ current: undefined as unknown as UpdateInstall }));
+vi.mock("./useUpdateInstall", () => ({ useUpdateInstall: () => installView.current }));
+
+const NOTHING_OFFERED: UpdateInstall = {
+  offered: false,
+  version: null,
+  waitReasons: [],
+  pausedDownloads: 0,
+  attempt: null,
+  tryAgain: false,
+  pressing: false,
+  refusal: "",
+  restarting: false,
+  install: () => undefined,
+};
+
+const OFFERED: UpdateInstall = { ...NOTHING_OFFERED, offered: true, version: "1.0.0" };
+
+const DOWNLOADING: UpdateInstallAttempt = {
+  version: "1.0.0",
+  step: "downloading",
+  bytes_done: 25,
+  bytes_total: 100,
+  failure: null,
+};
 
 const STATE: UpdateNoticeState = {
   available: true,
@@ -49,6 +80,7 @@ const renderSection = (
 describe("UpdatesSection", () => {
   beforeEach(() => {
     resetUpdateOutcomeStoreForTests();
+    installView.current = NOTHING_OFFERED;
   });
 
   it("states the installed and the available version", () => {
@@ -144,5 +176,144 @@ describe("UpdatesSection", () => {
     const { container } = renderSection();
     const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent);
     expect(buttons).toEqual(["Check now"]);
+  });
+
+  describe("the install", () => {
+    const withInstall = (over: Partial<UpdateInstall>) => {
+      installView.current = { ...OFFERED, ...over };
+      return renderSection();
+    };
+    const stepStatus = (utils: ReturnType<typeof renderSection>, id: string) =>
+      utils.getByTestId(`updates-step-${id}`).dataset.status;
+
+    it("offers the stored release by its version", () => {
+      const install = vi.fn();
+      const { getByText } = withInstall({ install });
+      const button = getByText("Install update 1.0.0") as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+
+      fireEvent.click(button);
+
+      expect(install).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers a version that already failed as Try again", () => {
+      const { getByText, queryByText } = withInstall({ tryAgain: true });
+      expect(getByText("Try again")).toBeTruthy();
+      expect(queryByText("Install update 1.0.0")).toBeNull();
+    });
+
+    it("holds the button back and names every reason it waits for", () => {
+      const { getByText, getByTestId, getAllByTestId } = withInstall({
+        waitReasons: [{ reason: "app_running", apps: ["Celeste"] }, { reason: "library_sync" }],
+      });
+
+      expect((getByText("Install update 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+      expect(getByText("Waiting for:")).toBeTruthy();
+      expect(getByTestId("updates-waiting")).toBeTruthy();
+      expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
+        "A game to close (Celeste)",
+        "Library sync",
+      ]);
+    });
+
+    it("names no wait while nothing holds the button back", () => {
+      expect(withInstall({}).queryByTestId("updates-waiting")).toBeNull();
+    });
+
+    it("holds the button back while a press waits for its answer", () => {
+      const { getByText } = withInstall({ pressing: true });
+      expect((getByText("Install update 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("says which paused downloads the restart cancels, and still lets the button run", () => {
+      const { getByTestId, getByText } = withInstall({ pausedDownloads: 2 });
+      expect(getByTestId("updates-paused-hint").textContent).toBe("2 paused downloads will be cancelled.");
+      expect((getByText("Install update 1.0.0") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("says nothing about paused downloads where there are none", () => {
+      expect(withInstall({}).queryByTestId("updates-paused-hint")).toBeNull();
+    });
+
+    it("shows what refused a press", () => {
+      const { getByTestId } = withInstall({ refusal: "The release offered is now 1.0.1" });
+      expect(getByTestId("updates-install-refusal").textContent).toBe("The release offered is now 1.0.1");
+    });
+
+    it("shows no step before a press", () => {
+      expect(withInstall({}).queryByTestId("updates-step-download")).toBeNull();
+    });
+
+    it("replaces the button with the steps while the download runs, its bar at the byte percentage", () => {
+      const utils = withInstall({ attempt: DOWNLOADING });
+
+      expect(utils.queryByText("Install update 1.0.0")).toBeNull();
+      expect(stepStatus(utils, "download")).toBe("current");
+      expect(utils.getByTestId("updates-step-download").textContent).toBe("25%");
+      expect(stepStatus(utils, "verify")).toBe("pending");
+      expect(stepStatus(utils, "installer")).toBe("pending");
+      expect(utils.getByTestId("progress-progress").textContent).toBe("25");
+      expect(utils.getByTestId("progress-indeterminate").textContent).toBe("false");
+    });
+
+    it("runs the bar indeterminate and counts bytes where the download announced no size", () => {
+      const utils = withInstall({ attempt: { ...DOWNLOADING, bytes_done: 2048, bytes_total: null } });
+      expect(utils.getByTestId("progress-indeterminate").textContent).toBe("true");
+      expect(utils.getByTestId("updates-step-download").textContent).toBe("2.0 KB");
+    });
+
+    it("drops the bar once the download is done", () => {
+      const utils = withInstall({ attempt: { ...DOWNLOADING, step: "verifying" } });
+      expect(stepStatus(utils, "download")).toBe("done");
+      expect(stepStatus(utils, "verify")).toBe("current");
+      expect(utils.queryByTestId("progress")).toBeNull();
+    });
+
+    it("says Tender is restarting once the installer started, and asks for no check meanwhile", () => {
+      const utils = withInstall({ attempt: { ...DOWNLOADING, step: "installer_started" }, restarting: true });
+
+      expect(stepStatus(utils, "installer")).toBe("done");
+      expect(utils.getByTestId("updates-restarting").textContent).toBe(RESTARTING_LINE);
+      expect(RESTARTING_LINE).toBe("Tender is restarting — Steam's interface will reload in a moment.");
+      expect((utils.getByText("Check now") as HTMLButtonElement).disabled).toBe(true);
+      expect(utils.queryByTestId("updates-install-failure")).toBeNull();
+    });
+
+    it("marks the step a failed attempt stopped at, says why, and offers Try again", () => {
+      const utils = withInstall({
+        attempt: { ...DOWNLOADING, step: "failed", failure: "checksum_mismatch" },
+        tryAgain: true,
+      });
+
+      expect(stepStatus(utils, "download")).toBe("done");
+      expect(stepStatus(utils, "verify")).toBe("failed");
+      expect(utils.getByTestId("updates-step-verify").textContent).toBe("Failed");
+      expect(utils.getByTestId("updates-install-failure").textContent).toBe(
+        "The download did not match its checksum — nothing was changed.",
+      );
+      expect(utils.getByText("Try again")).toBeTruthy();
+    });
+
+    it("makes every row it adds a focus stop", () => {
+      const utils = withInstall({
+        attempt: { ...DOWNLOADING, step: "failed", failure: "installer_stopped" },
+        tryAgain: true,
+        pausedDownloads: 1,
+        waitReasons: [{ reason: "save_sync" }],
+        refusal: "The release offered is now 1.0.1",
+      });
+      const rows = [
+        "updates-paused-hint",
+        "updates-waiting",
+        "updates-install-refusal",
+        "updates-step-download",
+        "updates-step-verify",
+        "updates-step-installer",
+        "updates-install-failure",
+      ].map((id) => utils.getByTestId(id).closest('[data-testid="field"]'));
+
+      expect(rows.every((row) => row?.getAttribute("tabindex") === "0")).toBe(true);
+    });
   });
 });

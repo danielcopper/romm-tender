@@ -1,13 +1,16 @@
 /**
  * Updates — the home of the two update notices on Main: the installed and the
- * available version, an update the installer rolled back, the daily-check
- * switch and Check now. Pure renderer: the page owns the store reads, the press
- * in flight and its result line.
+ * available version, an update the installer rolled back, the install, the
+ * daily-check switch and Check now. The page owns the notice and outcome reads,
+ * Check now's press and its result line; the install's state is read here,
+ * because it is polled only while this section is on screen.
  */
 
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
 import { AMBER } from "../layout/pane";
+import { UpdateInstallRows } from "./UpdateInstallRows";
+import { useUpdateInstall } from "./useUpdateInstall";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import { UPDATE_FAILURE_REASON, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
@@ -40,55 +43,61 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
   result,
   onEnabledChange,
   onCheckNow,
-}) => (
-  <PanelSection title="Updates">
-    <PanelSectionRow>
-      {/* Read-only rows are focusable for the reason every one on a wide pane
-          is: the region scrolls by moving focus. */}
-      <Field label="Installed" focusable={true}>
-        <span data-testid="updates-installed">{update.currentVersion || "—"}</span>
-      </Field>
-    </PanelSectionRow>
-    <PanelSectionRow>
-      <Field label="Available" focusable={true}>
-        <span data-testid="updates-available">{availableValue(update)}</span>
-      </Field>
-    </PanelSectionRow>
-    {outcome.failure !== null && (
+}) => {
+  const install = useUpdateInstall();
+  return (
+    <PanelSection title="Updates">
       <PanelSectionRow>
-        <Field
-          label={
-            <span data-testid="updates-last-update" style={{ color: AMBER }}>
-              {updateFailureSentence(outcome.failure)}
-            </span>
-          }
-          description={UPDATE_FAILURE_REASON}
-          focusable={true}
+        {/* Read-only rows are focusable for the reason every one on a wide pane
+            is: the region scrolls by moving focus. */}
+        <Field label="Installed" focusable={true}>
+          <span data-testid="updates-installed">{update.currentVersion || "—"}</span>
+        </Field>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <Field label="Available" focusable={true}>
+          <span data-testid="updates-available">{availableValue(update)}</span>
+        </Field>
+      </PanelSectionRow>
+      {outcome.failure !== null && (
+        <PanelSectionRow>
+          <Field
+            label={
+              <span data-testid="updates-last-update" style={{ color: AMBER }}>
+                {updateFailureSentence(outcome.failure)}
+              </span>
+            }
+            description={UPDATE_FAILURE_REASON}
+            focusable={true}
+          />
+        </PanelSectionRow>
+      )}
+      {!update.installedProgram && (
+        <PanelSectionRow>
+          <Field label={<span data-testid="updates-not-installed">{NOT_INSTALLED_PROGRAM}</span>} focusable={true} />
+        </PanelSectionRow>
+      )}
+      <UpdateInstallRows install={install} />
+      <PanelSectionRow>
+        <ToggleField
+          label="Check for updates daily"
+          description="Asks GitHub at most once a day whether a newer release is out."
+          checked={update.enabled}
+          onChange={onEnabledChange}
         />
       </PanelSectionRow>
-    )}
-    {!update.installedProgram && (
       <PanelSectionRow>
-        <Field label={<span data-testid="updates-not-installed">{NOT_INSTALLED_PROGRAM}</span>} focusable={true} />
+        {/* A check sent while the installer takes this backend down would fail
+            on the lost connection, which is what a successful install looks like. */}
+        <ButtonItem layout="below" onClick={onCheckNow} disabled={checking || install.restarting}>
+          {checking ? "Checking…" : "Check now"}
+        </ButtonItem>
       </PanelSectionRow>
-    )}
-    <PanelSectionRow>
-      <ToggleField
-        label="Check for updates daily"
-        description="Asks GitHub at most once a day, when Tender loads, whether a newer release is out."
-        checked={update.enabled}
-        onChange={onEnabledChange}
-      />
-    </PanelSectionRow>
-    <PanelSectionRow>
-      <ButtonItem layout="below" onClick={onCheckNow} disabled={checking}>
-        {checking ? "Checking…" : "Check now"}
-      </ButtonItem>
-    </PanelSectionRow>
-    {result && (
-      <PanelSectionRow>
-        <Field label={<span data-testid="updates-result">{result}</span>} focusable={true} />
-      </PanelSectionRow>
-    )}
-  </PanelSection>
-);
+      {result && (
+        <PanelSectionRow>
+          <Field label={<span data-testid="updates-result">{result}</span>} focusable={true} />
+        </PanelSectionRow>
+      )}
+    </PanelSection>
+  );
+};
