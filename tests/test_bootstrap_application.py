@@ -63,7 +63,11 @@ class _Recorded:
 
         async def backfill() -> None:
             self.backfill_started.set()
-            await self.backfill_release.wait()
+            try:
+                await self.backfill_release.wait()
+            except asyncio.CancelledError:
+                self.calls.append("backfill cancelled")
+                raise
             self.backfill_ran_to_the_end = True
 
         return backfill()
@@ -200,8 +204,7 @@ class TestShutdown:
 
         await asyncio.wait_for(app.shutdown(), 5)
 
-        assert recorded.backfill_ran_to_the_end is False
-        assert recorded.calls == _SHUTDOWNS
+        assert recorded.calls == ["backfill cancelled", *_SHUTDOWNS]
 
 
 _UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
