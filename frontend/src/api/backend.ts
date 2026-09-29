@@ -468,7 +468,7 @@ export const refreshCoverArtwork = callable<
 // dry_run flag. A dry run returns candidate_count without deleting; the real
 // run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound
 // shortcut is missing from the live set, no_grid_dir) and a refusal by the
-// migration, sync or prune rule answer success/reason/message with no count.
+// update, migration, sync or prune rule answer success/reason/message with no count.
 export const cleanupOrphanedGridImages = callable<
   [number[], boolean],
   {

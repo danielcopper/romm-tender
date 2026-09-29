@@ -229,7 +229,7 @@ styles: it uses neither React nor `@decky/ui`, because its own subject is that t
 It carries **one action** — stop trying until Tender restarts — which reaches the backend through a **debugger binding**
 and nothing else, and takes the card off the screen. The restart meant there is the **backend's own process**, the same
 way back the crash state has. Checking for an update is an address printed as text rather than an action, because
-nothing in this program updates itself yet.
+installing one is a panel action, and the panel is what did not load.
 
 **It is not the start-up check's fallback page** and the two are never called by the same name. The fallback page is a
 React component rendered INSIDE a panel that did mount, when a search into Steam's interface came back empty; this card
@@ -922,13 +922,15 @@ already names the host's check of a connection's Host, Origin and token, and oth
 The conditions under which an endpoint is refused before it does anything. An endpoint names the rules that apply to it,
 and they are asked in this order:
 
-1. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
-2. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
-3. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
+1. **Update** — an **install attempt** holds the update rule (`blocked_by_update`). Every endpoint that names the
+   migration rule names this one too.
+2. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
+3. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
+4. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
    **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
 The first named rule that holds answers with its refusal, and a refused call holds nothing. A cleanup's exclusive start
-is asked before all three. A use case asks its endpoint's rules at its entry, so the endpoint only calls it.
+is asked before all four. A use case asks its endpoint's rules at its entry, so the endpoint only calls it.
 
 **`<verb>_unchecked`** — the service method an endpoint calls, without that endpoint's rules, for a peer service that
 calls it from inside a call that has already answered for its own. _Avoid_: **`do_<verb>`** for it — that names a
@@ -1103,6 +1105,21 @@ only an available release that is strictly newer than the running version and no
 checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
 process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
 whether the notice shows. _Avoid_: "new version" for a release that is merely published.
+
+### Install attempt / wait reason
+
+An **install attempt** is one press of Install under Settings › Updates, for the available release the last check
+stored: from the press, through the download and its digest check, to the installer started as the transient unit
+`romm-tender-update` — after which the installer stops this process — or to a failure (`download_failed`,
+`checksum_mismatch`, `installer_not_started`, `installer_stopped`), which removes what it staged. From the press until
+it fails the attempt holds the **update rule** (see **Conflict rules**). Nothing retries an attempt by itself; a failed
+one, or one the installer rolled back, is offered again as **Try again**. A **wait reason** is one thing a press has to
+wait for because the restart would cut it short — a running app, a sync, a download, a cleanup, a migration that is
+moving files, the reload limit — and a running-apps reading that could not be taken is a wait reason of its own, never
+"nothing running". A **paused** ROM download is not one: the restart cancels it, and the panel says so.
+`domain/update_install.py` names the steps, failures and reasons; `services/update_install.py` runs the attempt.
+_Avoid_: "update" alone for the attempt — an update is what the installer does, and it can be rolled back after the
+attempt has ended.
 
 ### Rolled-back update / update announcement
 

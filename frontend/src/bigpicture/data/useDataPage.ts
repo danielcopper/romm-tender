@@ -400,7 +400,7 @@ export function useDataPage(): DataPageState {
       try {
         const result = await removeAllShortcuts();
         if (!result.success) {
-          // A refusal by the migration, sync or prune rule carries no
+          // A refusal by the update, migration, sync or prune rule carries no
           // app_ids/rom_ids — surface its message and remove nothing.
           setShortcutStatus(result.message ?? "Failed to remove shortcuts");
         } else {
@@ -479,7 +479,7 @@ export function useDataPage(): DataPageState {
         const admission = capturePruneLeaseAdmission(DATA_PAGE_LEASE_OWNER);
         const result = await uninstallAllRoms();
         if (!result.success && result.app_ids === undefined) {
-          // A refusal by the migration, sync or prune rule carries no removal
+          // A refusal by the update, migration, sync or prune rule carries no removal
           // payload — surface its message before touching app_ids. A PARTIAL
           // failure (success false WITH payload) still falls through to the
           // launch-options reset + count display below.

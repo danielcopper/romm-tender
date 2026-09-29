@@ -918,7 +918,7 @@ export function usePlatformsPage(): PlatformsPageState {
         (async () => {
           try {
             const result = await removePlatformShortcuts(row.slug);
-            // A refusal by the migration, sync or prune rule answers
+            // A refusal by the update, migration, sync or prune rule answers
             // { success: false, reason, message } with no app_ids/rom_ids —
             // surface that message instead of cosmetically reporting a removal.
             if (!result.success) {

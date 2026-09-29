@@ -51,6 +51,28 @@ Format: **invariant** — tier — enforced by.
   subprocess. The installer's half — the write on a rollback, before the restored version starts, and the removal once a
   later update's new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
+- **From the press that starts an install attempt until it fails, everything a pending RetroDECK migration refuses is
+  refused with `blocked_by_update`, asked ahead of every other rule — at every `hold` / `hold_start` call that names the
+  migration rule, and at every direct migration check outside the rules** — test + prompt-only — the installer stops
+  this process without waiting for anything, so work that starts after the press is cut short where it stands: a
+  download leaves a partial file the next start removes, a save sync leaves a run half done, a file move leaves a record
+  naming where the files no longer are. The press checks that nothing of that kind is in flight; this rule keeps
+  anything new from starting behind that check. The migration rule already names every endpoint that touches local game
+  data, so the update rule rides on it rather than keeping a list of its own, and it is asked first because an update in
+  progress is the answer the user can do nothing about but wait. Two source readers hold the two together:
+  `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
+  (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`), and
+  `functions_checking_migration_without_update` finds any function under `backend/services/` that reads the migration
+  check directly and not the update one — the save engine's pre-launch and post-exit backstops and its save-directory
+  follow, and the post-exit sync in `SessionLifecycleService` today
+  (`test_every_direct_migration_check_is_answered_by_the_update_rule_too`). Both read attribute names in the source, so
+  a check reached under another name, through a local alias or through a helper slips past them.
+  `test_an_update_in_progress_refuses_the_endpoint` and
+  `test_an_update_in_progress_answers_before_every_other_condition` drive every endpoint over the real wiring, and
+  `tests/lib/test_conflict_rules.py` pins the order. **Prompt-only**: the rule is taken in the same loop turn as the
+  press's last answer — an `await` between them would let work start in the gap — and it is given back only by an
+  attempt that failed while this process runs; a successful install ends it with the process
+  ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
   defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `main.run()`
