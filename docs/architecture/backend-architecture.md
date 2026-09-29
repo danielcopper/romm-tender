@@ -15,7 +15,8 @@ application. Code is split into layers with a strictly enforced dependency direc
 Services depend on **Protocols** (defined in `services/protocols/`), never on concrete adapter classes. Adapters
 implement those Protocols. `bootstrap/` is the composition root — the only place where concrete adapters meet services.
 `bootstrap/` also builds the `Application` — every wired service, the start-up repairs, the network step and the
-shutdown. `main.py` owns the process entry (`run()`) and the endpoints; it holds no business logic.
+shutdown. `main.py` owns the process entry (`run()` and `build_backend()`) and the endpoints; it holds no business
+logic.
 
 ```python
 class Endpoints:
@@ -119,7 +120,7 @@ down.
 ```text
 host/ (the process: lock, port, protocol, lifetime — imports none of the below)
     ↑ dispatches onto
-main.py (run() — the process; Endpoints — the endpoints; the only importer of host/)
+main.py (run(), build_backend() — the process; Endpoints — the endpoints; the only importer of host/)
     ↓ calls
 bootstrap/ (composition root: build_application() composes adapters.bootstrap() and services.wire_services() into an Application)
     ↓ creates
@@ -2353,7 +2354,7 @@ from the other layers.
 
 | File                 | Role                                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `main.py`            | `run()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint)                       |
+| `main.py`            | `run()` and `build_backend()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint) |
 | `bootstrap/`         | Composition root — `build_application()` composes `bootstrap()` and `wire_services()` into an `Application` |
 | `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                      |
 | `lib/list_result.py` | `ErrorCode` and the canonical callable failure shape                                                        |

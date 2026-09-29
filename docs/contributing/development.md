@@ -554,7 +554,7 @@ tracked.
 
 ```text
 backend/
-  main.py                            # Process entry (run()) + Endpoints
+  main.py                            # Process entry (run(), build_backend()) + Endpoints
   bootstrap/                         # Composition root — re-exported through __init__.py
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles

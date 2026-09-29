@@ -14,10 +14,10 @@ the network step and the shutdown when the entry point asks. `__init__.py` is na
 consumers write `from bootstrap import …` and never deep-import a submodule. Adapter instantiation never happens in
 `main.py` — a Protocol-wrapped persister is built in `bootstrap()` and passed through `CallbackBundle`.
 
-**Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the process entry point (`run()`) and
-`Endpoints` (one public method marked `@route` per endpoint), which takes the `Application` and the host's status record
-in its constructor and holds nothing else. `bootstrap/` owns adapter instantiation, service wiring and the
-`Application`. The split is binding — no endpoints in `bootstrap/`, no service wiring in `main.py`.
+**Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the process entry point (`run()` and
+`build_backend()`) and `Endpoints` (one public method marked `@route` per endpoint), which takes the `Application` and
+the host's status record in its constructor and holds nothing else. `bootstrap/` owns adapter instantiation, service
+wiring and the `Application`. The split is binding — no endpoints in `bootstrap/`, no service wiring in `main.py`.
 
 `main.py` is also the **only** module that may import `host/`, which is an `.importlinter` contract in both directions.
 Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the directories the
