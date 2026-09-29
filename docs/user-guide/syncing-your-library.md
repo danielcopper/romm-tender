@@ -379,6 +379,11 @@ away with the next change that works there.
 
 If the collection list cannot be read, the pane shows what went wrong. Leave the tab and come back to try again.
 
+If you have switched on any collection of a kind and RomM cannot list that kind, the sync stops with an error before it
+changes anything in Steam, rather than reading the kind as empty and removing the games only its collections brought in.
+A collection deleted in RomM is different: it is missing from a list RomM did give, so the sync removes its Steam
+collection, and the games only it brought in, as usual.
+
 The **Show collection games in platform groups** setting — whether games pulled in via a collection also get added to
 their platform's Steam group — lives on the **Settings** page under **Steam Library**, alongside the preferred-region
 preference. It applies to every sync, so it sits with the other set-and-forget preferences rather than on this tab.
@@ -402,11 +407,6 @@ Another user's public **favorites** collection is listed under **Collections** l
 as its owner. If more than one favorites collection counts as yours — which can happen before the plugin knows your
 account — the **Favorites** row is greyed out with "more than one, listed under Collections", and each of them has its
 own switch under **Collections**. If your account has no favorites collection, the row is greyed out with a dash.
-
-If RomM cannot list a kind of collection you sync any of, the sync stops with an error before it changes anything,
-rather than reading that kind as empty and removing the games only its collections brought in. A collection deleted in
-RomM is different: it is missing from a list RomM did give, so the sync removes it, and the games only it brought in, as
-usual.
 
 #### Collections that share a name
 
