@@ -696,7 +696,7 @@ class MigrationService:
                 replace existing destination files, "skip" to keep existing files
                 and just update state paths.
         """
-        async with self._rules.hold("migrate_retrodeck_files", prune=True) as refusal:
+        async with self._rules.hold("migrate_retrodeck_files", update=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._migrate_retrodeck_files(conflict_strategy)

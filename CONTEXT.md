@@ -923,7 +923,7 @@ The conditions under which an endpoint is refused before it does anything. An en
 and they are asked in this order:
 
 1. **Update** — an **install attempt** holds the update rule (`blocked_by_update`). Every endpoint that names the
-   migration rule names this one too.
+   migration rule names this one too, and so does the migration itself (`migrate_retrodeck_files`).
 2. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
 3. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
 4. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an

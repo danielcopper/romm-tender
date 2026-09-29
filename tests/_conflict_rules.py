@@ -84,6 +84,11 @@ def call_sites_with_rule(rule: str) -> set[tuple[str, str]]:
     return {site for site, rules in _call_sites().items() if rule in rules}
 
 
+def labels_with_rule_only_where_the_other_is_not(rule: str, other: str) -> set[str]:
+    """Every label of a ``hold`` or ``hold_start`` call that names *rule* and not *other*, one call at a time."""
+    return {label for (_where, label), rules in _call_sites().items() if rule in rules and other not in rules}
+
+
 def endpoints_with_rule(rule: str) -> set[str]:
     """Every label whose ``hold`` or ``hold_start`` names *rule*.
 

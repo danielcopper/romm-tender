@@ -1822,10 +1822,11 @@ swaps the tree and rolls back what does not answer
   is also true where the installer's record of a rolled-back update (read through `UpdateFailureFn`, never written)
   stands and names the offered version.
 - **The update rule.** From the press that starts an attempt until it fails, `is_update_in_progress` answers true, and
-  `ConflictRuleSet` refuses with `blocked_by_update` every use case that names the migration rule — ahead of every other
-  rule — as do the save engine's pre-launch and post-exit backstops, its save-directory follow, and the post-exit sync
-  in `SessionLifecycleService`, which ask the migration outside the rules. A successful install ends it with the
-  process. The rule and where it holds: [invariants](invariants.md).
+  `ConflictRuleSet` refuses with `blocked_by_update` every use case that names the migration rule, and the migration
+  itself (`migrate_retrodeck_files`) — ahead of every other rule — as do the save engine's pre-launch and post-exit
+  backstops, its save-directory follow, and the post-exit sync in `SessionLifecycleService`, which ask the migration
+  outside the rules. A successful install ends it with the process. The rule and where it holds:
+  [invariants](invariants.md).
 - **Leftovers.** The update directory is removed at every start (`remove_update_leftovers`); the installer never removes
   a tarball it was given.
 

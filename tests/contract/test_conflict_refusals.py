@@ -8,15 +8,16 @@ removed-game cleanup holding its run claim (``prune_active``), and — for
 lease (``operation_active``). Where more than one applies, they are asked in the
 order exclusive start, update, migration, sync, prune active.
 
-Every test here but the seven at the bottom drives ``harness.endpoints.<endpoint>``
+Every test here but the nine at the bottom drives ``harness.endpoints.<endpoint>``
 with frontend-shaped arguments and reads the answer, so it holds wherever the
-rules are enforced. Four of those seven, the ``test_*_names_every_endpoint_*``
+rules are enforced. Five of those nine, the ``test_*_names_every_endpoint_*``
 tests, read where each rule is declared instead, to keep each list from falling
 behind an endpoint that gains or loses a rule: the ``hold("<endpoint>", …)`` or
 ``hold_start("<endpoint>", …)`` call at the entry of the use case it calls
-(``tests/_conflict_rules.py``). Two more read the source the same way to keep
+(``tests/_conflict_rules.py``). Three more read the source the same way to keep
 the update rule wherever the migration rule is — at every call site, and at
-every direct migration check outside the rules. The last,
+every direct migration check outside the rules — and nowhere else without it
+but the sites ``UPDATE_ONLY`` pins. The last,
 ``test_every_endpoint_with_a_rule_has_its_arguments``, reads only the lists.
 Outside this module, ``tests/test_endpoints.py``'s ``TestMigrationRuleCoverage``
 reads the migration rule the same way.
@@ -30,7 +31,12 @@ import threading
 from typing import Any
 
 import pytest
-from _conflict_rules import call_sites_with_rule, endpoints_with_rule, functions_checking_migration_without_update
+from _conflict_rules import (
+    call_sites_with_rule,
+    endpoints_with_rule,
+    functions_checking_migration_without_update,
+    labels_with_rule_only_where_the_other_is_not,
+)
 
 from domain.sync_state import SyncState
 
@@ -252,10 +258,12 @@ SYNC_ACTIVE = (
 
 EXCLUSIVE_START = ("start_prune",)
 
-# Every endpoint a pending migration refuses is refused while an update is
-# being installed, and no other: the update stops this process as a migration
-# would be interrupted by it.
-UPDATE = MIGRATION
+# Refused while an update is being installed, beside every endpoint a pending
+# migration refuses: work that would start after the press. The migration
+# itself does not name the migration rule, and moving files is new work.
+UPDATE_ONLY = ("migrate_retrodeck_files",)
+
+UPDATE = (*MIGRATION, *UPDATE_ONLY)
 
 _IN_FLIGHT = [SyncState.RUNNING, SyncState.CANCELLING]
 
@@ -494,13 +502,17 @@ def test_the_update_matrix_names_every_endpoint_with_the_rule():
 
 
 def test_every_call_site_naming_the_migration_rule_names_the_update_rule():
-    """Holds the two rules to the same ``hold`` and ``hold_start`` calls, one call at a time.
+    """Holds every ``hold`` and ``hold_start`` call that names the migration rule to name the update rule too.
 
     Finer than the matrices: a use case with two calls under one label, only
     one of them naming the update rule, passes the label equality and fails
     here.
     """
-    assert call_sites_with_rule("migration") == call_sites_with_rule("update")
+    assert call_sites_with_rule("migration") <= call_sites_with_rule("update")
+
+
+def test_the_update_rule_stands_without_the_migration_rule_only_where_pinned():
+    assert labels_with_rule_only_where_the_other_is_not("update", "migration") == set(UPDATE_ONLY)
 
 
 def test_every_direct_migration_check_is_answered_by_the_update_rule_too():

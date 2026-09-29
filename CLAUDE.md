@@ -371,13 +371,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   argument; a record path assembled from pieces or handed in from elsewhere; a write through a helper in another module;
   a call reached through `getattr`; and a subprocess
 - **From the press that starts an install attempt until it fails, everything a pending RetroDECK migration refuses is
-  refused with `blocked_by_update`, asked ahead of every other rule — at every `hold` / `hold_start` call that names the
-  migration rule, and at every direct migration check outside the rules** — test + prompt-only —
-  `tests/contract/test_conflict_refusals.py` (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`,
+  refused with `blocked_by_update`, and so is the migration itself, asked ahead of every other rule — at every `hold` /
+  `hold_start` call that names the migration rule, at `migrate_retrodeck_files`, and at every direct migration check
+  outside the rules** — test + prompt-only — `tests/contract/test_conflict_refusals.py`
+  (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`,
+  `test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`,
   `test_every_direct_migration_check_is_answered_by_the_update_rule_too`,
   `test_an_update_in_progress_refuses_the_endpoint`, `test_an_update_in_progress_answers_before_every_other_condition`)
-  and `tests/lib/test_conflict_rules.py`. Unseen by the two source readers: a check reached under another name, through
-  an alias or a helper. Prompt-only: the rule is taken in the same loop turn as the press's last answer, and given back
+  and `tests/lib/test_conflict_rules.py`. Unseen by the source readers: a check reached under another name, through an
+  alias or a helper. Prompt-only: the rule is taken in the same loop turn as the press's last answer, and given back
   only by an attempt that failed while this process runs
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
