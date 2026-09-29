@@ -45,11 +45,9 @@ const started = (version: string): UpdateInstallAttempt => ({
 /**
  * Settings › Updates' install: the state read every
  * {@link UPDATE_INSTALL_POLL_MS} while the caller is mounted, the frames the
- * backend pushes, and the press.
- *
- * One read is in flight at a time: a call made while the connection is down
- * waits for it rather than failing (`api/hostSocket.ts`), so an interval that
- * kept issuing would queue a read per tick behind it.
+ * backend pushes, and the press. One read is in flight at a time; why, and how
+ * the reads and the frames are told apart, is `docs/architecture/qam-panel.md`,
+ * Settings.
  */
 export function useUpdateInstall(): UpdateInstall {
   const [reading, setReading] = useState<UpdateInstallState | null>(null);

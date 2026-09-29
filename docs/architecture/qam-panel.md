@@ -692,17 +692,17 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
 plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                   | On Main                                                       | Home                                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Settings were reset                         | text, backup path, Dismiss                                    | none — the card is the whole of it                                                        |
-| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss                           | Settings › Connections, where the accounts are                                            |
-| RetroDECK paths missing or unreadable       | warning card, no action                                       | none — the fix is outside the plugin                                                      |
-| Steam answers for no notifications          | warning card, no action                                       | none — the fix is outside the plugin                                                      |
-| RetroArch `input_driver` is wrong           | text, **Open Controller**                                     | Settings › Controller, which holds the Fix button                                         |
-| Sync paused on the session budget           | text, **Open Sync**                                           | Sync, which holds Restart Steam now and Resume                                            |
-| An update was rolled back                   | both versions, where the reason is, **Open Updates**, Dismiss | Settings › Updates, which states the same fact whether or not the card was dismissed      |
-| A newer Tender release is out               | both versions, **Open Updates**, Dismiss                      | Settings › Updates, which states both versions and holds the check's switch and Check now |
-| Tender was updated, or went back            | the version, Dismiss — and a toast, once                      | none — the card is the whole of it                                                        |
+| Condition                                   | On Main                                                       | Home                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Settings were reset                         | text, backup path, Dismiss                                    | none — the card is the whole of it                                                                     |
+| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss                           | Settings › Connections, where the accounts are                                                         |
+| RetroDECK paths missing or unreadable       | warning card, no action                                       | none — the fix is outside the plugin                                                                   |
+| Steam answers for no notifications          | warning card, no action                                       | none — the fix is outside the plugin                                                                   |
+| RetroArch `input_driver` is wrong           | text, **Open Controller**                                     | Settings › Controller, which holds the Fix button                                                      |
+| Sync paused on the session budget           | text, **Open Sync**                                           | Sync, which holds Restart Steam now and Resume                                                         |
+| An update was rolled back                   | both versions, where the reason is, **Open Updates**, Dismiss | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
+| A newer Tender release is out               | both versions, **Open Updates**, Dismiss                      | Settings › Updates, which states both versions and holds the install, the check's switch and Check now |
+| Tender was updated, or went back            | the version, Dismiss — and a toast, once                      | none — the card is the whole of it                                                                     |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -731,11 +731,12 @@ the playtime notice's sit in Steam's `Field` with its children below, because th
 `ButtonItem`, which is such a row: the space between card and buttons is then Steam's on all four of these cards. The
 update notice's Dismiss is **per version**: it records the version the card names (`update_notice_dismissed_version`),
 so the next release raises the card again, and **Check now** in its home forgets it. The home states the versions and
-holds the check's switch and Check now; it installs nothing, and to a run from a checkout it shows a line naming this a
-development build. The card's condition is `available` on the backend's answer and nothing else — a newer release with
-its tarball, a valid digest and its checksum file attached, not the dismissed version, the check switched on. The answer
-is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by
-Dismiss, the switch and Check now.
+holds the install, the check's switch and Check now, and to a run from a checkout it shows a line naming this a
+development build in place of the install. The card's condition is `available` on the backend's answer and nothing else
+— a newer release with its tarball, a valid digest and its checksum file attached, not the dismissed version, the check
+switched on. The answer is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says
+why), rewritten by Dismiss, the switch and Check now, and replaced by the notice the backend pushes (`update_notice`)
+when its own check while it runs finds a different answer, so the card and its home follow without a reload.
 
 The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is:
 Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was stopped is
@@ -1696,7 +1697,7 @@ its own save directory the next time the plugin touches its saves — and Update
 | Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                     |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Updates       | installed and available version, "Development build — install updates with the installer." where this is a run from a checkout, the daily-check switch, Check now and what it found. Home of the update notice.                                                                                         |
+| Updates       | installed and available version, the install (below), "Development build — install updates with the installer." where this is a run from a checkout, the daily-check switch, Check now and what it found. Home of the update notice.                                                                    |
 | Advanced      | log level                                                                                                                                                                                                                                                                                               |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
@@ -1716,6 +1717,23 @@ Two kinds of line are not, and for two different reasons. Content the region rev
 stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is why the migration card carries no handler.
 And the devices table's **column header** carries none under the Tables rule: the names accompany the rows below them
 and a stop there would be a step that leads nowhere.
+
+**The install under Updates** is the one part of the page that reads on a clock. While the section is on screen it reads
+`get_update_install_state` every three seconds, one read at a time — a call made while the connection is down waits for
+it rather than failing, so an interval that kept issuing would queue one read per tick behind it — and stops when the
+section unmounts (`bigpicture/settings/useUpdateInstall.ts`). The button is there only while the backend offers the
+stored release (`offered`) and no attempt is under way; it reads **Install update X**, or **Try again** where that
+version already failed here or was rolled back. It is disabled while any wait reason holds, and a **Waiting for:** row
+names each one; it comes back by itself once a read no longer names any. The backend answers in discriminants, and every
+sentence for them — the wait reasons, the paused-download hint, the steps, the four failures and the restarting line —
+is in `utils/updateInstallView.ts`. After a press the steps come from two sources, the `update_install_progress` frames
+(`utils/updateInstallStore.ts`) and the reads, and the one that got further wins, because a read can land after a frame
+it was issued before; a press clears the frame an earlier attempt left and fences off every read issued before it or
+before its answer, which is what makes the two describe the same attempt. The download's bar rides the step's field
+description, as Main's sync bar does, so the step and its bar are one focus stop; every other row the install adds is a
+focusable read-only field. **From `installer_started` on, a lost connection is the expected outcome** — the installer
+stops this backend — so a read it takes down is not logged, and Check now is disabled for the same reason: a check in
+flight at that moment would fail on the lost connection and say so.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

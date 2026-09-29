@@ -91,7 +91,8 @@ tail -n 100 ~/.local/state/romm-tender/backend.log
 journalctl --user -u romm-tender -n 100
 ```
 
-Include that when you report it. Running the installer again tries the update again.
+Include that when you report it. **Try again** in **Settings › Updates**, or running the installer again, tries the
+update again.
 
 ### Going back to the previous version by hand
 
@@ -111,6 +112,35 @@ It works once per update — afterwards there is no previous version left to go 
 anything when there is nothing to go back to. It also refuses when the previous version and the saved data do not belong
 together, which an update that was interrupted can leave behind: going back would run the older version over data a
 newer one wrote. Start Tender instead if it is not running, with `systemctl --user start romm-tender`.
+
+## An Update From Settings Did Not Go Through
+
+**Symptom**: After **Install update X** in **Settings › Updates**, one of the steps is marked **Failed**, a line under
+the steps says why, and the button is back as **Try again**.
+
+**Explanation**: Each of these ends the install before Tender was replaced, and Tender goes on running the version you
+have:
+
+- **The download failed — nothing was changed.** The release, or the checksum file beside it, could not be downloaded.
+- **The download did not match its checksum — nothing was changed.** What arrived is not the file GitHub lists for the
+  release, so Tender did not install it.
+- **The installer could not be started.** The installer could not be taken out of the download, or could not be started
+  — for example because an earlier one is still running.
+- **The installer stopped without updating.** The installer started, but ended before it replaced Tender — it refused,
+  or it failed.
+
+Nothing tries again by itself; what the attempt downloaded is removed.
+
+**Fix**: Tender's log names what went wrong, on its lines that say `update:`. For an installer that stopped, the
+installer's own output is in the journal:
+
+```bash
+grep "update:" ~/.local/state/romm-tender/backend.log | tail -n 20
+journalctl --user -u romm-tender-update
+```
+
+Then press **Try again**. A download that failed is often just the network; a checksum that did not match again, or an
+installer that stops each time, is worth reporting together with that output.
 
 ## Games Won't Launch
 
