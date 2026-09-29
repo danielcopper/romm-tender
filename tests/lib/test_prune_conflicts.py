@@ -489,3 +489,25 @@ async def test_renewed_frontend_lease_cannot_expire_while_heartbeats_continue(mo
     clock.advance(0.6 * _LEASE_SECONDS)
     assert await endpoints.start_prune() == {"success": True}
     assert await conflicts.renew_lease(token) is False
+
+
+async def test_held_claims_names_every_operation_and_lease() -> None:
+    conflicts, _logger, _debug = _conflicts()
+    registration = await conflicts.hold_operation("uninstall_all_roms")
+    assert registration is not None
+    await conflicts.acquire_lease("launch_reconfirm")
+
+    assert sorted(conflicts.held_claims()) == ["launch_reconfirm", "uninstall_all_roms"]
+
+    await conflicts.release_operation(registration)
+    assert conflicts.held_claims() == ("launch_reconfirm",)
+
+
+async def test_held_claims_sweeps_a_lease_past_its_deadline_first(monkeypatch) -> None:
+    clock = _LoopClock(monkeypatch)
+    conflicts, _logger, _debug = _conflicts()
+    await conflicts.acquire_lease("launch_reconfirm")
+    clock.advance(_LEASE_SECONDS + 1)
+
+    assert conflicts.held_claims() == ()
+    assert conflicts.conflicting_operations == 0

@@ -21,10 +21,11 @@ from fakes.fake_transient_units import FakeTransientUnits
 from fakes.system_time import FakeClock
 
 from adapters.update_staging import UpdateStagingAdapter
-from domain.update_install import INSTALLER_UNIT
+from domain.update_install import INSTALLER_UNIT, WaitReason, claims_named_by
 from domain.update_outcome import UpdateFailure
 from domain.update_release import LatestRelease, ReleaseTarball
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
+from tests._conflict_rules import call_sites_with_rule, claim_names_in_source
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -91,6 +92,7 @@ class _Work:
         self.save_directory_move = False
         self.cleanup = False
         self.migration_running = False
+        self.claims: list[str] = []
         self.queue: list[dict[str, Any]] = []
 
 
@@ -202,6 +204,7 @@ async def _rig(
             save_directory_move_in_flight=lambda: work.save_directory_move,
             cleanup_running=lambda: work.cleanup,
             migration_running=lambda: work.migration_running,
+            held_claims=lambda: tuple(work.claims),
             read_update_failure=lambda: failure_record,
             download_asset=downloads,
             staging=staging,
@@ -319,6 +322,7 @@ _WORK_REASONS = [
     ("save_directory_move", "save_directory_move", True),
     ("cleanup", "removed_games_cleanup", True),
     ("migration_running", "retrodeck_migration", True),
+    ("claims", "other_work", ["uninstall_all_roms"]),
 ]
 
 
@@ -367,8 +371,50 @@ class TestWaitReasons:
             "save_directory_move",
             "removed_games_cleanup",
             "retrodeck_migration",
+            "other_work",
             "interface_reload_limit",
         ]
+
+    @pytest.mark.parametrize(
+        ("claim", "reason"),
+        [
+            ("sync_rom_saves", "save_sync"),
+            ("switch_slot", "save_sync"),
+            ("finalize_game_session", "save_sync"),
+            ("start_download", "rom_downloads"),
+            ("download_complete", "rom_downloads"),
+            ("sync_complete", "library_sync"),
+            ("migrate_retrodeck_files", "retrodeck_migration"),
+            ("prune_complete", "removed_games_cleanup"),
+            ("remove_all_shortcuts", "other_work"),
+            ("launch_reconfirm", "other_work"),
+        ],
+    )
+    async def test_a_claim_on_the_prune_conflicts_is_named_by_the_reason_for_its_work(
+        self, rigs, tmp_path, claim, reason
+    ):
+        rig = await _built(rigs, tmp_path)
+        rig.work.claims = [claim]
+
+        assert (await rig.service.get_update_install_state())["wait_reasons"] == [{"reason": reason}]
+
+    async def test_a_save_operation_under_way_and_the_gate_it_holds_are_one_reason(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.work.claims = ["sync_all_saves", "remove_all_shortcuts", "switch_version"]
+        rig.work.save_sync = True
+
+        reasons = (await rig.service.get_update_install_state())["wait_reasons"]
+
+        assert reasons == [{"reason": "save_sync"}, {"reason": "other_work"}]
+
+    async def test_a_claim_refuses_the_press_too(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.work.claims = ["adopt_existing_rom"]
+
+        answer = await rig.service.install_update(_OFFERED)
+
+        assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "other_work"}])
+        assert rig.service.is_update_in_progress() is False
 
     async def test_paused_downloads_do_not_make_a_press_wait(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
@@ -882,3 +928,29 @@ class TestLeftoversAndShutdown:
         await rig.service.shutdown()
 
         assert rig.service.is_update_in_progress() is False
+
+
+# ── Which claims a reason names ──────────────────────────────────────────────
+
+
+class TestTheClaimsAReasonNames:
+    """Read from the source: the names are the endpoints' and the leases' own, spelled at their call sites."""
+
+    def test_every_claim_a_reason_names_is_one_the_source_takes(self):
+        named = set().union(*(claims_named_by(reason) for reason in WaitReason))
+
+        assert named - claim_names_in_source() == set()
+
+    def test_every_save_operation_the_update_rule_refuses_counts_as_the_save_sync(self):
+        """The save use cases outside the device gate: a restart would cut each short, and the panel calls it save sync.
+
+        Only a call that names the prune rule takes a claim at all.
+        """
+        save_operations = {
+            label
+            for where, label in call_sites_with_rule("update") & call_sites_with_rule("prune")
+            if where.startswith("services/saves/")
+        }
+
+        assert save_operations
+        assert save_operations - claims_named_by(WaitReason.SAVE_SYNC) == set()

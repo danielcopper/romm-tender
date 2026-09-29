@@ -25,6 +25,7 @@ from domain.update_install import (
     InstallStep,
     Wait,
     WaitReason,
+    claim_reasons,
     installer_command,
 )
 from domain.update_outcome import standing_update_failure
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
         DebugLogger,
         DownloadQueueFn,
         EventEmitter,
+        HeldClaimsFn,
         LastSeenReleaseReader,
         ReleaseAssetDownloadFn,
         Sleeper,
@@ -95,6 +97,7 @@ class UpdateInstallServiceConfig:
     save_directory_move_in_flight: WorkInFlightFn
     cleanup_running: WorkInFlightFn
     migration_running: WorkInFlightFn
+    held_claims: HeldClaimsFn
     read_update_failure: UpdateFailureFn
     download_asset: ReleaseAssetDownloadFn
     staging: UpdateStagingStore
@@ -124,6 +127,7 @@ class UpdateInstallService:
         self._save_directory_move_in_flight = config.save_directory_move_in_flight
         self._cleanup_running = config.cleanup_running
         self._migration_running = config.migration_running
+        self._held_claims = config.held_claims
         self._read_update_failure = config.read_update_failure
         self._download_asset = config.download_asset
         self._staging = config.staging
@@ -443,7 +447,13 @@ class UpdateInstallService:
         return [*_app_waits(apps), *self._work_waits(frees_at)]
 
     def _work_waits(self, frees_at: float | None) -> list[Wait]:
-        """Every reason but Steam's two readings, read from memory in one loop turn, then the reload limit."""
+        """Every reason but Steam's two readings, read from memory in one loop turn, then the reload limit.
+
+        A claim held on the prune conflicts counts towards the reason that
+        names its work, and every other one is ``other_work``: any work of
+        this process a restart would cut short makes a press wait.
+        """
+        claimed = claim_reasons(self._held_claims())
         waits = [
             Wait(reason)
             for reason, busy in (
@@ -454,8 +464,9 @@ class UpdateInstallService:
                 (WaitReason.SAVE_DIRECTORY_MOVE, self._save_directory_move_in_flight()),
                 (WaitReason.REMOVED_GAMES_CLEANUP, self._cleanup_running()),
                 (WaitReason.RETRODECK_MIGRATION, self._migration_running()),
+                (WaitReason.OTHER_WORK, False),
             )
-            if busy
+            if busy or reason in claimed
         ]
         if frees_at is not None:
             waits.append(Wait(WaitReason.INTERFACE_RELOAD_LIMIT, frees_at=frees_at))

@@ -87,6 +87,19 @@ class PruneConflicts:
         """
         return len(self._operations) + len(self._leases)
 
+    def held_claims(self) -> tuple[str, ...]:
+        """The name of every operation and lease held now, expired leases swept first.
+
+        Answers in one loop turn and takes no lock: the sweep and the read are
+        plain dictionary work, so no holder's critical section can be half done
+        underneath them.
+        """
+        self._expire_leases()
+        return (
+            *(holder.label for holder in self._operations.values()),
+            *(holder.label for holder, _deadline in self._leases.values()),
+        )
+
     @property
     def cleanup_running(self) -> bool:
         """Whether a reservation or a registered run is held."""

@@ -149,3 +149,38 @@ def _contains_outside_nested(node: ast.AST, target: ast.AST) -> bool:
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         return False
     return any(_contains_outside_nested(child, target) for child in ast.iter_child_nodes(node))
+
+
+# The calls that take a claim, and which positional argument names it. The
+# download's ``_retain_started_task`` hands its label on to ``retain``, so it is
+# read at its own call sites.
+_CLAIM_TAKERS = {
+    "hold": 0,
+    "hold_start": 0,
+    "retain": 1,
+    "acquire_lease": 0,
+    "emit_under_lease": 0,
+    "_retain_started_task": 2,
+}
+
+
+def claim_names_in_source() -> set[str]:
+    """Every claim name under ``backend/services/`` spelled as a literal where it is taken: a label or a lease's key.
+
+    Read at the call sites of the methods in ``_CLAIM_TAKERS``, by position.
+    Not seen: a name built at run time, passed by keyword, or handed through a
+    helper that is not in the list.
+    """
+    names: set[str] = set()
+    for path in sorted(_SERVICES.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            at = _CLAIM_TAKERS.get(node.func.attr)
+            if at is None or len(node.args) <= at:
+                continue
+            arg = node.args[at]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                names.add(arg.value)
+    return names

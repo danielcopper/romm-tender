@@ -34,6 +34,7 @@ const PLAIN_WAIT_LINES: Record<PlainWaitReason, string> = {
   save_directory_move: "A save directory move",
   removed_games_cleanup: "A removed-game cleanup",
   retrodeck_migration: "A RetroDECK migration",
+  other_work: "Other Tender work",
 };
 
 /** Local wall-clock `HH:MM` of an epoch-seconds instant. */

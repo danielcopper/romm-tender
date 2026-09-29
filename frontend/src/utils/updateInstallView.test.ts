@@ -32,6 +32,7 @@ describe("waitReasonLine", () => {
     [{ reason: "save_directory_move" }, "A save directory move"],
     [{ reason: "removed_games_cleanup" }, "A removed-game cleanup"],
     [{ reason: "retrodeck_migration" }, "A RetroDECK migration"],
+    [{ reason: "other_work" }, "Other Tender work"],
   ])("words %j", (wait, line) => {
     expect(waitReasonLine(wait)).toBe(line);
   });

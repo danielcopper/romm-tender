@@ -735,6 +735,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             save_directory_move_in_flight=save_sync_service.is_save_directory_move_in_flight,
             cleanup_running=prune_service.is_active,
             migration_running=migration_service.is_retrodeck_migration_running,
+            held_claims=prune_conflicts.held_claims,
             read_update_failure=cfg.adapters.update_failure,
             download_asset=cfg.adapters.download_release_asset,
             staging=cfg.adapters.update_staging,

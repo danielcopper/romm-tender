@@ -1783,20 +1783,26 @@ swaps the tree and rolls back what does not answer
 - **What a press waits for** is listed as `wait_reasons`, each a discriminant the panel words: an app Steam lists as
   running (`app_running`, with the names), a running-apps reading that could not be taken (`running_apps_unknown` —
   never read as "nothing running"; with `TENDER_INJECT=off` the injector never attaches, so no reading is ever taken), a
-  library sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included),
-  firmware downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration that is moving
-  files, and Steam's interface reload limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded
-  takedown leaves the window). A migration that is only **pending** does not wait: the stored question survives the
-  restart and is asked again. **Paused** ROM downloads do not wait either — they are counted as `paused_downloads`,
-  because the queue lives in memory and a start removes their partial files, so the restart cancels them. The running
-  apps and the reload limit are the host's (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector
-  exists); every other reader is the owning service's own.
+  library sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included, and
+  every save operation outside it — a conflict resolved, a slot switched or deleted, a save copied or rolled back, local
+  saves deleted), firmware downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration
+  that is moving files, any other claim held on the prune conflicts (`other_work` — an uninstall, a shortcut removal, a
+  version switch, an adoption, a lease the frontend holds for its Steam writes), and Steam's interface reload limit
+  (`interface_reload_limit`, with `frees_at`, when the oldest recorded takedown leaves the window). A migration that is
+  only **pending** does not wait: the stored question survives the restart and is asked again. **Paused** ROM downloads
+  do not wait either — they are counted as `paused_downloads`, because the queue lives in memory and a start removes
+  their partial files, so the restart cancels them. The running apps and the reload limit are the host's
+  (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector exists), and the claims are the prune
+  conflicts' (`HeldClaimsFn`, which sweeps expired leases first); every other reader is the owning service's own. A
+  claim counts toward the reason that already names its work — `domain/update_install.py` maps each endpoint and lease
+  key to one, the save use cases to the save sync among them — and every claim it does not map is `other_work`, so work
+  nobody listed still makes a press wait.
 - **The press** (`install_update`, naming the version it means) is refused while an attempt holds the rule
   (`update_in_progress`), where nothing is offered (`not_offered`), for a version that is not the stored one
   (`version_changed`), and while any reason holds (`update_waiting`, carrying `wait_reasons`). The reasons are asked
-  again at the press with one fresh reading of Steam's running apps, and the rule is taken in the same loop turn as the
-  answer that passed, so nothing starts between the two. Otherwise the answer is `{"success": True}` and the attempt
-  runs on by itself.
+  again at the press with one fresh reading of Steam's running apps and of the reload limit, taken first, and the rule
+  is taken in the same loop turn as the check that passed, so no work of this process starts between the two. Otherwise
+  the answer is `{"success": True}` and the attempt runs on by itself.
 - **The attempt**: `<cache root>/update/` is started afresh; the tarball is downloaded to `romm-tender-<V>.tar.gz` there
   (the name its checksum file names) with byte progress; its sha256 is compared with the `digest` GitHub stated; the
   `.sha256` file is downloaded beside it for the installer's own check; only `romm-tender/install.sh` is copied out of
@@ -2766,7 +2772,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 | **PruneLeaseService**       | `ConflictRules` (renews, releases and disowns the frontend's leases; checks no rule)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateCheckService**      | `LatestReleaseFn`, `Clock`, `Sleeper` + `EventEmitter` (the check while the backend runs), `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `update_check_last_seen`), the running `VERSION`, and whether this process is the installed program                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateOutcomeService**    | `UpdateFailureFn`, `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `last_run_version`), the running `VERSION`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `UpdateFailureFn`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitControl`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                                                                                    |
+| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `HeldClaimsFn` (the prune conflicts), `UpdateFailureFn`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitControl`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                                              |
 
 Most services also receive the `settings` dict (`StateBundle`'s only field), the runtime infrastructure (event loop,
 logger, the `DebugLogger` Protocol), and the `UnitOfWorkFactory` for relational state through their config. The old

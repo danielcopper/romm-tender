@@ -57,11 +57,14 @@ Format: **invariant** — tier — enforced by.
   outside the rules** — test + prompt-only — the installer stops this process without waiting for anything, so work that
   starts after the press is cut short where it stands: a download leaves a partial file the next start removes, a save
   sync leaves a run half done, a file move leaves a record naming where the files no longer are. The press checks that
-  nothing of that kind is in flight; this rule keeps anything new from starting behind that check. The migration rule
-  already names every endpoint that touches local game data, so the update rule rides on it rather than keeping a list
-  of its own, and it is asked first because an update in progress is the answer the user can do nothing about but wait.
-  The migration itself names no migration rule — it is what that rule waits for — yet starting it is new work, so it
-  names the update rule alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it as the one such site
+  no work of this process is in flight — each kind the panel names, and every claim held on the prune conflicts, which
+  covers every endpoint that names the prune rule and every lease a frontend still holds; this rule keeps anything new
+  from starting behind that check, and a use case that names both rules asks the update rule again once its operation is
+  registered, so a press that came while it waited to register cannot slip in between. The migration rule already names
+  every endpoint that touches local game data, so the update rule rides on it rather than keeping a list of its own, and
+  it is asked first because an update in progress is the answer the user can do nothing about but wait. The migration
+  itself names no migration rule — it is what that rule waits for — yet starting it is new work, so it names the update
+  rule alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it as the one such site
   (`test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`). Source readers hold the two together:
   `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
   (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`), and

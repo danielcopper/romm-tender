@@ -11,6 +11,8 @@ from domain.update_install import (
     InstallStep,
     Wait,
     WaitReason,
+    claim_reasons,
+    claims_named_by,
     installer_command,
     installer_environment,
 )
@@ -114,3 +116,18 @@ class TestAttemptOnTheWire:
         attempt = InstallAttempt(version="1.1.0", step=InstallStep.FAILED, failure=InstallFailure.CHECKSUM_MISMATCH)
 
         assert attempt.to_wire()["failure"] == "checksum_mismatch"
+
+
+class TestClaimReasons:
+    def test_a_claim_counts_toward_the_reason_that_names_its_work(self):
+        assert claim_reasons(["sync_rom_saves", "start_download"]) == {WaitReason.SAVE_SYNC, WaitReason.ROM_DOWNLOADS}
+
+    def test_a_claim_no_reason_names_is_other_work(self):
+        assert claim_reasons(["uninstall_all_roms", "launch_reconfirm"]) == {WaitReason.OTHER_WORK}
+
+    def test_no_claim_is_no_reason(self):
+        assert claim_reasons([]) == frozenset()
+
+    def test_other_work_names_no_claim_of_its_own(self):
+        """It is what is left over; a claim mapped onto it would read as named when it is not."""
+        assert claims_named_by(WaitReason.OTHER_WORK) == frozenset()

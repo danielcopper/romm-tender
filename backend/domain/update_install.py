@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from domain.app_directories import (
@@ -26,7 +27,7 @@ from domain.app_directories import (
 from domain.update_release import ENV_RELEASE_API
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from domain.app_directories import AppDirectories
 
@@ -66,7 +67,53 @@ class WaitReason(StrEnum):
     SAVE_DIRECTORY_MOVE = "save_directory_move"
     REMOVED_GAMES_CLEANUP = "removed_games_cleanup"
     RETRODECK_MIGRATION = "retrodeck_migration"
+    OTHER_WORK = "other_work"
     INTERFACE_RELOAD_LIMIT = "interface_reload_limit"
+
+
+# The claims on the prune conflicts — an operation named after its endpoint, or
+# a lease named after its key — whose work one of the reasons above already
+# names. Every other claim held is ``other_work``. The save operations outside
+# the device gate count as the save sync, the end of a session among them,
+# since its work is the post-exit sync.
+_CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
+    {
+        **dict.fromkeys(
+            ("start_sync", "sync_preview", "sync_apply_delta", "report_unit_results", "sync_complete", "sync_stale"),
+            WaitReason.LIBRARY_SYNC,
+        ),
+        **dict.fromkeys(("start_download", "resume_download", "download_complete"), WaitReason.ROM_DOWNLOADS),
+        **dict.fromkeys(
+            (
+                "pre_launch_sync",
+                "sync_rom_saves",
+                "sync_all_saves",
+                "resolve_sync_conflict",
+                "switch_slot",
+                "confirm_slot_choice",
+                "delete_slot",
+                "saves_rollback_to_version",
+                "copy_save_to_slot",
+                "delete_local_saves",
+                "delete_platform_saves",
+                "finalize_game_session",
+            ),
+            WaitReason.SAVE_SYNC,
+        ),
+        "prune_complete": WaitReason.REMOVED_GAMES_CLEANUP,
+        **dict.fromkeys(("migrate_retrodeck_files", "migration_relaunch_options"), WaitReason.RETRODECK_MIGRATION),
+    }
+)
+
+
+def claim_reasons(claims: Iterable[str]) -> frozenset[WaitReason]:
+    """The reasons the held *claims* stand for: the one that names each, and ``other_work`` for any none names."""
+    return frozenset(_CLAIMS_NAMED_BY_A_REASON.get(claim, WaitReason.OTHER_WORK) for claim in claims)
+
+
+def claims_named_by(reason: WaitReason) -> frozenset[str]:
+    """Every claim *reason* already names."""
+    return frozenset(claim for claim, named in _CLAIMS_NAMED_BY_A_REASON.items() if named is reason)
 
 
 class InstallStep(StrEnum):

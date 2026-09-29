@@ -1264,7 +1264,8 @@ export type UpdateWaitReason =
         | "firmware_downloads"
         | "save_directory_move"
         | "removed_games_cleanup"
-        | "retrodeck_migration";
+        | "retrodeck_migration"
+        | "other_work";
     };
 
 /** Where an install attempt is; after `installer_started` this backend is replaced, or the attempt fails. */

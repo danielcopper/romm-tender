@@ -103,6 +103,16 @@ async def test_a_running_app_makes_the_press_wait(installed):
     assert installed.units.starts == []
 
 
+async def test_a_lease_a_frontend_still_holds_makes_the_press_wait_as_other_work(installed):
+    token = await installed.prune_conflicts.acquire_lease("launch_reconfirm")
+
+    answer = await installed.endpoints.install_update(_OFFERED)
+
+    assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "other_work"}])
+    await installed.prune_conflicts.release_lease(token)
+    assert (await installed.endpoints.get_update_install_state())["wait_reasons"] == []
+
+
 async def test_a_press_installs_the_stored_release_through_the_real_cache_root(installed):
     assert await installed.endpoints.install_update(_OFFERED) == {"success": True}
 

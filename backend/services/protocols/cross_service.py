@@ -671,6 +671,17 @@ class WorkInFlightFn(Protocol):
     def __call__(self) -> bool: ...
 
 
+class HeldClaimsFn(Protocol):
+    """The name of every claim on the prune conflicts held now — each operation's endpoint, each lease's key.
+
+    The composition root satisfies this with ``PruneConflicts.held_claims``,
+    which sweeps expired leases first. Answered from memory, so it may be
+    asked on the loop.
+    """
+
+    def __call__(self) -> tuple[str, ...]: ...
+
+
 class DownloadQueueFn(Protocol):
     """The ROM download queue as the panel is shown it: ``{"downloads": [entry, ...]}``, each with a ``status``."""
 
