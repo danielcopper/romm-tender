@@ -153,6 +153,11 @@ class TestTheStartUpRepairs:
         await asyncio.wait_for(app.shutdown(), 5)
 
     async def test_the_prune_is_skipped_when_the_detection_fails(self):
+        """The prune reads the pending homes the detection writes.
+
+        Without them it deletes the row of every install under the home
+        RetroDECK just left whose files are no longer there.
+        """
         recorded = _Recorded(failing=frozenset({"detect_retrodeck_path_change"}))
         failures: list[str] = []
         app = _application(recorded)

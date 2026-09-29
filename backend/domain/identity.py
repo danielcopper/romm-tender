@@ -1,8 +1,7 @@
 """The names this program goes by, the release it is, and the oldest RomM it works with.
 
-Contract: three values answer a different question each about what to call
-this program; :data:`MIN_ROMM_VERSION` says which servers it will talk to at
-all.
+Contract: four values. Two name this program, one says which release it is,
+and the fourth says which servers it will talk to at all.
 
 - :data:`DISPLAY_NAME` is what a HUMAN reads — a toast's sender, a token label
   on the user's own RomM server, the headline of a file they open by hand.
