@@ -80,7 +80,10 @@ class ConflictRuleSet:
         the block may run.
         A refused call registers nothing. With ``prune`` the block runs under an
         operation named *label*, registered in the same lock hold as the check
-        and released when the block ends, however it ends.
+        and released when the block ends, however it ends. The update rule is
+        asked once more after the registration: an install pressed while it
+        waited for the lock saw no operation, and would otherwise stop this
+        process under the block.
         """
         refusal = self._first_refusal(update=update, migration=migration, sync=sync)
         if refusal is not None:
@@ -92,6 +95,10 @@ class ConflictRuleSet:
         registration = await self._prune_conflicts.hold_operation(label)
         if registration is None:
             yield prune_active_refusal()
+            return
+        if update and self._update_in_progress():
+            await self._prune_conflicts.release_operation(registration)
+            yield update_refusal()
             return
         try:
             yield None

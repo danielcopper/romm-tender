@@ -112,7 +112,17 @@ def functions_checking_migration_without_update() -> set[str]:
     ``run_in_executor(None, <x>._is_retrodeck_migration_pending)`` both count. A nested function is its own
     function. Not seen: a check reached under another name, through a local alias, or through a helper.
     """
-    found: set[str] = set()
+    return {where for where, names in _direct_checks().items() if not names & _DIRECT_UPDATE_CHECKS}
+
+
+def functions_checking_migration() -> set[str]:
+    """Every function the read above sees reading the migration check directly, the update one or not, by name."""
+    return {where.split(" ", 1)[1] for where in _direct_checks()}
+
+
+def _direct_checks() -> dict[str, set[str]]:
+    """``<file>:<line> <function>`` → every attribute name it reads, for each function reading the migration check."""
+    found: dict[str, set[str]] = {}
     for path in sorted(_SERVICES.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
@@ -123,8 +133,8 @@ def functions_checking_migration_without_update() -> set[str]:
                 for inner in ast.walk(node)
                 if isinstance(inner, ast.Attribute) and _enclosing_function(node, inner)
             }
-            if names & _DIRECT_MIGRATION_CHECKS and not names & _DIRECT_UPDATE_CHECKS:
-                found.add(f"{path.relative_to(_SERVICES.parent)}:{node.lineno} {node.name}")
+            if names & _DIRECT_MIGRATION_CHECKS:
+                found[f"{path.relative_to(_SERVICES.parent)}:{node.lineno} {node.name}"] = names
     return found
 
 

@@ -36,33 +36,33 @@ class SteamReadings:
 
     def __init__(self) -> None:
         self._running_apps: Callable[[], Awaitable[tuple[str, ...] | None]] | None = None
-        self._reload_frees_at: Callable[[], float | None] | None = None
+        self._reload_frees_at: Callable[[], Awaitable[float | None]] | None = None
 
     def attach(
         self,
         *,
         running_apps: Callable[[], Awaitable[tuple[str, ...] | None]],
-        reload_frees_at: Callable[[], float | None],
+        reload_frees_at: Callable[[], Awaitable[float | None]],
     ) -> None:
         """Answer from now on through the injector's own readings."""
         self._running_apps = running_apps
         self._reload_frees_at = reload_frees_at
 
     async def running_apps(self) -> tuple[str, ...] | None:
-        """Steam's running apps by name; ``None`` where no reading could be taken, as with no injector."""
+        """Steam's running apps by name; ``None`` where no reading could be taken, as before anything is attached."""
         if self._running_apps is None:
             return None
         return await self._running_apps()
 
-    def reload_frees_at(self) -> float | None:
+    async def reload_frees_at(self) -> float | None:
         """When Steam's interface may be taken down once more; ``None`` while it may be now.
 
-        With no injector nothing here takes the interface down, so nothing
-        waits on the limit.
+        Before anything is attached nothing here takes the interface down, so
+        nothing waits on the limit.
         """
         if self._reload_frees_at is None:
             return None
-        return self._reload_frees_at()
+        return await self._reload_frees_at()
 
 
 @dataclass

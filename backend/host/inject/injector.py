@@ -230,9 +230,12 @@ class PanelInjector:
         """Steam's running apps by name, one reading; ``None`` where it could not be taken."""
         return (await read_running_apps(self._evaluate_attached)).names
 
-    def reload_frees_at(self) -> float | None:
-        """When Steam's interface may be taken down once more; ``None`` while it may be now."""
-        return self._reload_limit.frees_at()
+    async def reload_frees_at(self) -> float | None:
+        """When Steam's interface may be taken down once more; ``None`` while it may be now.
+
+        The limit is a file, so it is read off the loop.
+        """
+        return await asyncio.get_running_loop().run_in_executor(None, self._reload_limit.frees_at)
 
     async def run(self) -> None:
         """Attach, inject, and stay attached until cancelled or stopped for cause."""

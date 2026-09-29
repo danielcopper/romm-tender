@@ -224,12 +224,12 @@ class TestWhatItReadsForTheApplication:
         with open(f"{running.setup.state_dir}/{RELOAD_LIMIT_FILENAME}", "w", encoding="utf-8") as handle:
             json.dump({"takedowns": [now - 30, now - 90]}, handle)
 
-        assert running.injector.reload_frees_at() == now - 90 + RELOAD_WINDOW_SECONDS
+        assert await running.injector.reload_frees_at() == now - 90 + RELOAD_WINDOW_SECONDS
 
     async def test_an_empty_reload_record_is_free_now(self, injecting):
         running = await injecting(override=INJECT_OFF)
 
-        assert running.injector.reload_frees_at() is None
+        assert await running.injector.reload_frees_at() is None
 
 
 class TestLoadingThePanel:

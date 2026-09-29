@@ -966,6 +966,28 @@ class TestFinalizeUpdateGate:
         assert migration.refresh_calls == 1
 
 
+class TestTheSkippedSyncIsLogged:
+    @pytest.mark.parametrize(
+        ("update_in_progress", "pending", "why"),
+        [(True, False, "an update is being installed"), (False, True, "a RetroDECK migration is pending")],
+    )
+    def test_the_log_names_what_held_the_sync_off(self, event_loop, logger, caplog, update_in_progress, pending, why):
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=FakePostExitSync(),
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(pending=pending),
+            logger=logger,
+            update_in_progress=update_in_progress,
+        )
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            event_loop.run_until_complete(service.finalize(99))
+            event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert f"post-exit sync skipped for rom_id=99: {why}" in caplog.text
+
+
 class TestFinalizeAchievementSync:
     def test_achievement_sync_runs_as_background_task(self, event_loop, logger):
         """Achievement sync is scheduled but not awaited by ``finalize``."""

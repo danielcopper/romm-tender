@@ -20,5 +20,5 @@ class FakeSteamInterface:
         self.readings += 1
         return self.apps
 
-    def reload_frees_at(self) -> float | None:
+    async def reload_frees_at(self) -> float | None:
         return self.frees_at

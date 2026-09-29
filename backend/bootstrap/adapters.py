@@ -118,7 +118,7 @@ if TYPE_CHECKING:
         SystemKnownFn,
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
-        TransientUnitRunner,
+        TransientUnitControl,
         UnitOfWorkFactory,
         UpdateFailureFn,
         UpdateStagingStore,
@@ -170,7 +170,7 @@ class AdapterBundle:
     update_failure: UpdateFailureFn
     download_release_asset: ReleaseAssetDownloadFn
     update_staging: UpdateStagingStore
-    transient_units: TransientUnitRunner
+    transient_units: TransientUnitControl
 
 
 @dataclass(frozen=True)

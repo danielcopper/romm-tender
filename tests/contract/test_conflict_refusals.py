@@ -34,6 +34,7 @@ import pytest
 from _conflict_rules import (
     call_sites_with_rule,
     endpoints_with_rule,
+    functions_checking_migration,
     functions_checking_migration_without_update,
     labels_with_rule_only_where_the_other_is_not,
 )
@@ -518,6 +519,16 @@ def test_the_update_rule_stands_without_the_migration_rule_only_where_pinned():
 def test_every_direct_migration_check_is_answered_by_the_update_rule_too():
     """The save engine's backstops and the post-exit sync ask the migration outside the rules; each asks both."""
     assert functions_checking_migration_without_update() == set()
+
+
+def test_the_read_behind_the_direct_check_sees_the_checks_it_is_about():
+    """Guards the equality above: a read that found no direct migration check at all would pass it vacuously."""
+    assert functions_checking_migration() >= {
+        "pre_launch_sync",
+        "post_exit_sync",
+        "follow_save_directory",
+        "_build_sync_result",
+    }
 
 
 def test_the_sync_active_matrix_names_every_endpoint_with_the_rule():

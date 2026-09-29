@@ -171,22 +171,25 @@ class UpdateCheckService:
         stamp decides whether GitHub is asked, so this asks at most once a day
         and a check that reached nothing is silent. A notice different from the
         one this loop saw last is emitted as ``update_notice``, carrying what
-        :meth:`get_update_notice` answers. Runs until cancelled; a round that
-        raises is logged and the next one comes as usual.
+        :meth:`get_update_notice` answers, unless the switch went off while it
+        was worked out: the panel would otherwise put the card back up beside a
+        switch that says off. Runs until cancelled; a round that raises, its
+        emit included, is logged and the next one comes as usual, pushing again
+        what did not go out.
         """
         last: dict[str, Any] | None = None
         while True:
             await self._sleeper.sleep(_DUE_POLL_SECONDS)
-            if not self.is_check_enabled():
-                continue
             try:
+                if not self.is_check_enabled():
+                    continue
                 notice = await self.get_update_notice()
+                if notice == last or not self.is_check_enabled():
+                    continue
+                await self._emit("update_notice", notice)
+                last = notice
             except Exception as e:
                 self._log_debug(f"[update] the running check failed: {e!r}")
-                continue
-            if notice != last:
-                last = notice
-                await self._emit("update_notice", notice)
 
     async def last_seen_release(self) -> LatestRelease | None:
         """The last available release a check stored, whatever the switch says; asks GitHub nothing."""

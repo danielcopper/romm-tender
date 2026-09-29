@@ -183,16 +183,18 @@ class SteamInterfaceReader(Protocol):
 
     async def running_apps(self) -> tuple[str, ...] | None: ...
 
-    def reload_frees_at(self) -> float | None: ...
+    async def reload_frees_at(self) -> float | None: ...
 
 
-class TransientUnitRunner(Protocol):
+class TransientUnitControl(Protocol):
     """Starts a command as a transient systemd user unit, and asks whether it still runs.
 
-    ``start`` answers ``None`` once the unit is running, or why it is not —
-    a name still in use among them — and never waits for the command to end.
-    ``is_active`` answers ``True`` while the unit runs, ``False`` once it has
-    ended or is unknown, and ``None`` where the user manager could not be asked.
+    ``start`` answers ``None`` once the unit is started, or why it was not —
+    a name still in use among them — and never waits for the command to end;
+    it raises ``TimeoutError`` where no answer came, since the unit may have
+    started all the same. ``is_active`` answers ``True`` while the unit runs,
+    ``False`` once it has ended or is unknown, and ``None`` where no answer
+    says either — the user manager could not be asked, or named another state.
     """
 
     def start(self, unit: str, command: Sequence[str], environment: Sequence[tuple[str, str]]) -> str | None: ...

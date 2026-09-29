@@ -498,13 +498,19 @@ class SyncEngine:
         choice. A failure is logged and leaves the record as it was, so the
         caller goes on and the next caller tries again.
         """
-        if answer is None or not self.is_save_sync_enabled() or self._is_update_in_progress():
+        if answer is None or not self.is_save_sync_enabled():
             return
-        if await self._loop.run_in_executor(None, self._is_retrodeck_migration_pending):
-            self._log_debug(f"follow_save_directory: rom {rom_id}: a home migration is pending; not following")
+        if self._is_update_in_progress():
+            self._log_debug(f"follow_save_directory: rom {rom_id}: an update is being installed; not following")
             return
+        # Counted from the same loop turn as the update check above, so a
+        # press that comes while the migration is asked below finds the move
+        # under way rather than nothing.
         self._follows_in_flight += 1
         try:
+            if await self._loop.run_in_executor(None, self._is_retrodeck_migration_pending):
+                self._log_debug(f"follow_save_directory: rom {rom_id}: a home migration is pending; not following")
+                return
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
         except Exception:
             self._logger.exception("Following the save directory of rom %d failed; its record stays", rom_id)
@@ -947,6 +953,10 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
+                # The use case asked the update rule before this waited for the
+                # gate, and an install pressed meanwhile saw no run holding it.
+                if self._is_update_in_progress():
+                    return {**update_refusal(), "synced": 0}
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
@@ -1053,6 +1063,9 @@ class SyncEngine:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
             # sweep; each ROM still takes its own rom_lock inside the loop.
             async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
+                # As in sync_rom_saves: asked again once the gate is held.
+                if self._is_update_in_progress():
+                    return {**update_refusal(), "synced": 0, "conflicts": 0}
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure

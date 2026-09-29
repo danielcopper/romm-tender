@@ -37,13 +37,14 @@ if TYPE_CHECKING:
     from services.protocols import (
         ActiveDownloadRomIdsFn,
         Clock,
+        DebugLogger,
         DownloadQueueFn,
         EventEmitter,
         LastSeenReleaseReader,
         ReleaseAssetDownloadFn,
         Sleeper,
         SteamInterfaceReader,
-        TransientUnitRunner,
+        TransientUnitControl,
         UpdateFailureFn,
         UpdateStagingStore,
         WorkInFlightFn,
@@ -64,6 +65,10 @@ class _AttemptFailedError(Exception):
     def __init__(self, failure: InstallFailure) -> None:
         super().__init__(failure.value)
         self.failure = failure
+
+
+class _ShuttingDownError(Exception):
+    """Raised on the download's thread once this process is shutting down, which ends the download there."""
 
 
 @dataclass(frozen=True)
@@ -93,13 +98,14 @@ class UpdateInstallServiceConfig:
     read_update_failure: UpdateFailureFn
     download_asset: ReleaseAssetDownloadFn
     staging: UpdateStagingStore
-    units: TransientUnitRunner
+    units: TransientUnitControl
     installer_environment: tuple[tuple[str, str], ...]
     emit: EventEmitter
     clock: Clock
     sleeper: Sleeper
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+    log_debug: DebugLogger
 
 
 class UpdateInstallService:
@@ -128,11 +134,22 @@ class UpdateInstallService:
         self._sleeper = config.sleeper
         self._loop = config.loop
         self._logger = config.logger
+        self._log_debug = config.log_debug
         self._attempt: InstallAttempt | None = None
         self._task: asyncio.Task[None] | None = None
         # Set in the same loop turn as the check a press passes, and cleared
         # only by an attempt that failed while this process still runs.
         self._holding = False
+        # From the moment the installer is asked to start: an attempt that
+        # fails in an unforeseen way after that keeps the rule, because the
+        # installer may be running.
+        self._installer_may_run = False
+        # The download runs on a thread that cancelling the attempt does not
+        # stop; its progress callback ends it once this is set.
+        self._stopping = False
+        # The frames the download's thread hands the loop, held so the loop
+        # cannot collect one before it is sent.
+        self._frames: set[asyncio.Task[None]] = set()
         self._last_progress_emit: float | None = None
         # Every tick's count, throttled or not: the frames the worker hands the
         # loop can land after the download's own completion has been seen, and
@@ -148,7 +165,8 @@ class UpdateInstallService:
         self._staging.remove_all()
 
     async def shutdown(self) -> None:
-        """Stop the attempt's task, if one runs; the hold ends with the process."""
+        """Stop the attempt's task and a download still running on its thread; the hold ends with the process."""
+        self._stopping = True
         task = self._task
         if task is not None and not task.done():
             task.cancel()
@@ -207,11 +225,12 @@ class UpdateInstallService:
                 "message": f"The release offered is now {release.version}",
             }
         apps = await self._steam.running_apps()
-        # Asked again after the reading: a second press may have started an
-        # attempt while this one waited for Steam.
+        frees_at = await self._steam.reload_frees_at()
+        # Asked again after the readings: a second press may have started an
+        # attempt while this one waited for them.
         if self._holding:
             return self._in_progress_refusal()
-        waits = [*_app_waits(apps), *self._work_waits()]
+        waits = [*_app_waits(apps), *self._work_waits(frees_at)]
         if waits:
             return {
                 "success": False,
@@ -220,6 +239,7 @@ class UpdateInstallService:
                 "wait_reasons": [wait.to_wire() for wait in waits],
             }
         self._holding = True
+        self._installer_may_run = False
         self._last_progress_emit = None
         self._bytes_seen = (0, None)
         self._attempt = InstallAttempt(version=release.version, step=InstallStep.DOWNLOADING)
@@ -234,6 +254,15 @@ class UpdateInstallService:
             await self._watch_installer(version)
         except _AttemptFailedError as failed:
             await self._fail(version, failed.failure)
+        except Exception:
+            if self._installer_may_run:
+                self._logger.exception(
+                    f"update: the attempt at {version} failed after the installer was asked to start; "
+                    "the update rule stays held while it may run"
+                )
+                return
+            self._logger.exception(f"update: the attempt at {version} failed before the installer was started")
+            await self._fail(version, _failure_at(self._attempt))
 
     async def _download_and_verify(self, version: str, tarball: ReleaseTarball) -> tuple[str, str]:
         """Download the tarball and its checksum file, check the digest, and unpack the installer."""
@@ -271,6 +300,7 @@ class UpdateInstallService:
         self._logger.info(
             f"update: starting the installer for {version}; follow it with journalctl --user -u {INSTALLER_UNIT}"
         )
+        self._installer_may_run = True
         try:
             why = await self._loop.run_in_executor(
                 None,
@@ -279,33 +309,66 @@ class UpdateInstallService:
                 installer_command(installer, tarball_path),
                 self._installer_environment,
             )
+        except TimeoutError as e:
+            why = await self._started_after_all(version, e)
         except Exception as e:
             why = repr(e)
         if why is not None:
+            self._installer_may_run = False
             self._logger.warning(f"update: the installer for {version} could not be started: {why}")
             raise _AttemptFailedError(InstallFailure.INSTALLER_NOT_STARTED)
         await self._advance(version, InstallStep.INSTALLER_STARTED)
+
+    async def _started_after_all(self, version: str, no_answer: TimeoutError) -> str | None:
+        """Why a start that gave no answer did not start the unit, or ``None`` where it may have.
+
+        Only a user manager that says the unit is not running makes it a start
+        that failed. Where it cannot say either, the attempt goes on as started
+        and the watch finds out, rather than giving the rule back while the
+        installer may run.
+        """
+        self._logger.warning(
+            f"update: starting the installer for {version} gave no answer ({no_answer}); asking whether it runs"
+        )
+        active, _why = await self._ask_unit()
+        return repr(no_answer) if active is False else None
 
     async def _watch_installer(self, version: str) -> None:
         """Wait for the installer to stop this process; it ending first is the attempt failing.
 
         A user manager that cannot be asked is not an answer, and neither is a
         seam that raised, so the watch goes on rather than calling the
-        installer stopped and giving the rule back while it may still run.
+        installer stopped and giving the rule back while it may still run. The
+        first such reading is a warning, since a watch that can no longer see
+        the installer holds the rule for as long as this process lives.
         """
+        told = False
         while True:
             await self._sleeper.sleep(_WATCH_SECONDS)
-            try:
-                active = await self._loop.run_in_executor(None, self._units.is_active, INSTALLER_UNIT)
-            except Exception as e:
-                self._logger.debug(f"update: the installer's unit could not be asked about: {e!r}")
-                continue
+            active, why = await self._ask_unit()
             if active is False:
                 self._logger.warning(
                     f"update: the installer for {version} stopped without updating; "
                     f"what it said is in journalctl --user -u {INSTALLER_UNIT}"
                 )
                 raise _AttemptFailedError(InstallFailure.INSTALLER_STOPPED)
+            if active is None and not told:
+                told = True
+                self._logger.warning(
+                    f"update: whether the installer for {version} still runs could not be read ({why}); "
+                    "still watching, and the update rule stays held while it may run — "
+                    f"journalctl --user -u {INSTALLER_UNIT}"
+                )
+            elif active is None:
+                self._log_debug(f"[update] the installer's unit could not be asked about ({why})")
+
+    async def _ask_unit(self) -> tuple[bool | None, str]:
+        """The installer's unit state, and what stood in the way where there is none."""
+        try:
+            active = await self._loop.run_in_executor(None, self._units.is_active, INSTALLER_UNIT)
+        except Exception as e:
+            return None, repr(e)
+        return active, "" if active is not None else "the user manager gave no state"
 
     async def _report_downloaded(self, version: str) -> None:
         """Report the download's final count, unless a frame already carried it."""
@@ -333,7 +396,13 @@ class UpdateInstallService:
         await self._emit_attempt()
 
     def _on_progress(self, done: int, total: int | None) -> None:
-        """The download's byte count, from the thread it runs on; throttled, then handed to the loop."""
+        """The download's byte count, from the thread it runs on; throttled, then handed to the loop.
+
+        Raises once this process is shutting down, which is what ends the
+        download on its thread.
+        """
+        if self._stopping:
+            raise _ShuttingDownError("the backend is shutting down")
         self._bytes_seen = (done, total)
         now = self._clock.monotonic()
         final = total is not None and done >= total
@@ -348,7 +417,9 @@ class UpdateInstallService:
         if attempt is None or attempt.step is not InstallStep.DOWNLOADING:
             return
         self._attempt = replace(attempt, bytes_done=done, bytes_total=total)
-        self._loop.create_task(self._emit_frame(self._attempt))
+        frame = self._loop.create_task(self._emit_frame(self._attempt))
+        self._frames.add(frame)
+        frame.add_done_callback(self._frames.discard)
 
     async def _emit_attempt(self) -> None:
         if self._attempt is not None:
@@ -367,10 +438,12 @@ class UpdateInstallService:
         return release if is_newer_version(release.version, self._current_version) else None
 
     async def _waits(self) -> list[Wait]:
-        return [*_app_waits(await self._steam.running_apps()), *self._work_waits()]
+        apps = await self._steam.running_apps()
+        frees_at = await self._steam.reload_frees_at()
+        return [*_app_waits(apps), *self._work_waits(frees_at)]
 
-    def _work_waits(self) -> list[Wait]:
-        """Every reason other than Steam's running apps, read from memory in one loop turn."""
+    def _work_waits(self, frees_at: float | None) -> list[Wait]:
+        """Every reason but Steam's two readings, read from memory in one loop turn, then the reload limit."""
         waits = [
             Wait(reason)
             for reason, busy in (
@@ -384,7 +457,6 @@ class UpdateInstallService:
             )
             if busy
         ]
-        frees_at = self._steam.reload_frees_at()
         if frees_at is not None:
             waits.append(Wait(WaitReason.INTERFACE_RELOAD_LIMIT, frees_at=frees_at))
         return waits
@@ -404,6 +476,13 @@ class UpdateInstallService:
     @staticmethod
     def _in_progress_refusal() -> dict[str, Any]:
         return {"success": False, "reason": "update_in_progress", "message": "An update is already being installed"}
+
+
+def _failure_at(attempt: InstallAttempt | None) -> InstallFailure:
+    """What an attempt that failed in an unforeseen way is reported as, by the step it had reached."""
+    if attempt is not None and attempt.step is InstallStep.DOWNLOADING:
+        return InstallFailure.DOWNLOAD_FAILED
+    return InstallFailure.INSTALLER_NOT_STARTED
 
 
 def _app_waits(apps: tuple[str, ...] | None) -> list[Wait]:

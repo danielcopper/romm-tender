@@ -899,12 +899,13 @@ live reading the caller already took, before the caller looks at any local file:
   folder's files too, and nothing is carried back in by the next path that follows.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
-once save sync is on again, for a game whose directory was recorded. It also does nothing while a RetroDECK home
-migration is pending or still running, its re-record included: `follow_save_directory` checks that itself, so the gate
-holds for every caller — the status and count reads among them, which the migration rule does not otherwise stop — and
-the files stay the migration's to move until it has finished. (Other things move save files regardless of the setting:
-the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is logged and
-leaves the record as it was; the operation that called it goes on. Against the record:
+once save sync is on again, for a game whose directory was recorded. It does nothing while an update of Tender is being
+installed, since the installer stops the backend without waiting for a move, and says so in the debug log. It also does
+nothing while a RetroDECK home migration is pending or still running, its re-record included: `follow_save_directory`
+checks that itself, so the gate holds for every caller — the status and count reads among them, which the migration rule
+does not otherwise stop — and the files stay the migration's to move until it has finished. (Other things move save
+files regardless of the setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused,
+the database busy — is logged and leaves the record as it was; the operation that called it goes on. Against the record:
 
 - an answer with no directory, or one anchored in the content's own directory (beside the content file or inside it) →
   nothing moves and nothing is recorded;

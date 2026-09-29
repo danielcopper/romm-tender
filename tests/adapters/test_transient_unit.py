@@ -84,6 +84,14 @@ class TestStart:
     def test_no_systemd_run_is_an_answer_not_an_exception(self, stubs):
         assert SystemdRunAdapter().start("u", ("/bin/true",), ()) == "systemd-run is not installed"
 
+    def test_no_answer_in_time_raises_rather_than_answering_that_nothing_started(self, stubs, monkeypatch):
+        """The unit may have started behind a tool that never answered, so no reason is given."""
+        stubs("systemd-run", "exec /bin/sleep 5")
+        monkeypatch.setattr("adapters.transient_unit._TIMEOUT_SECONDS", 0.2)
+
+        with pytest.raises(TimeoutError):
+            SystemdRunAdapter().start("u", ("/bin/true",), ())
+
 
 class TestIsActive:
     @pytest.mark.parametrize("state", ["active", "activating", "deactivating", "reloading"])

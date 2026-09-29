@@ -846,6 +846,43 @@ class TestTheRunningCheck:
         ((_, notice),) = events.events
         assert (notice["available"], notice["latest_version"]) == (False, None)
 
+    async def test_a_notice_worked_out_before_the_switch_went_off_is_not_pushed(self, monkeypatch):
+        events = FakeEventSink()
+        sleeper = _Rounds(1)
+        settings: dict[str, Any] = {}
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, events=events, settings=settings)
+        worked_out = service.get_update_notice
+
+        async def switched_off_meanwhile() -> dict[str, Any]:
+            notice = await worked_out()
+            settings[ENABLED_KEY] = False
+            return notice
+
+        monkeypatch.setattr(service, "get_update_notice", switched_off_meanwhile)
+
+        await _run_rounds(service, sleeper)
+
+        assert events.events == []
+
+    async def test_an_emit_that_raises_does_not_end_the_running_check_and_goes_out_again(self):
+        log: list[str] = []
+        sleeper = _Rounds(3)
+        pushed: list[str] = []
+
+        async def emit(_name: str, payload: Any) -> bool:
+            pushed.append(payload["latest_version"])
+            if len(pushed) == 1:
+                raise ConnectionError("panel gone")
+            return True
+
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, log=log)
+        service._emit = emit
+
+        await _run_rounds(service, sleeper)
+
+        assert pushed == ["0.35.0", "0.35.0"]
+        assert any("panel gone" in line for line in log)
+
     async def test_a_round_that_raises_is_logged_and_the_next_comes_as_usual(self, monkeypatch):
         log: list[str] = []
         sleeper = _Rounds(2)

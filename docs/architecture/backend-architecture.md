@@ -1782,15 +1782,15 @@ swaps the tree and rolls back what does not answer
   running version. A run from a checkout is offered nothing.
 - **What a press waits for** is listed as `wait_reasons`, each a discriminant the panel words: an app Steam lists as
   running (`app_running`, with the names), a running-apps reading that could not be taken (`running_apps_unknown` —
-  never read as "nothing running"; with `TENDER_INJECT=off` there is no injector and so never a reading), a library
-  sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included), firmware
-  downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration that is moving files, and
-  Steam's interface reload limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded takedown leaves
-  the window). A migration that is only **pending** does not wait: the stored question survives the restart and is asked
-  again. **Paused** ROM downloads do not wait either — they are counted as `paused_downloads`, because the queue lives
-  in memory and a start removes their partial files, so the restart cancels them. The running apps and the reload limit
-  are the host's (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector exists); every other reader
-  is the owning service's own.
+  never read as "nothing running"; with `TENDER_INJECT=off` the injector never attaches, so no reading is ever taken), a
+  library sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included),
+  firmware downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration that is moving
+  files, and Steam's interface reload limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded
+  takedown leaves the window). A migration that is only **pending** does not wait: the stored question survives the
+  restart and is asked again. **Paused** ROM downloads do not wait either — they are counted as `paused_downloads`,
+  because the queue lives in memory and a start removes their partial files, so the restart cancels them. The running
+  apps and the reload limit are the host's (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector
+  exists); every other reader is the owning service's own.
 - **The press** (`install_update`, naming the version it means) is refused while an attempt holds the rule
   (`update_in_progress`), where nothing is offered (`not_offered`), for a version that is not the stored one
   (`version_changed`), and while any reason holds (`update_waiting`, carrying `wait_reasons`). The reasons are asked
@@ -1812,10 +1812,21 @@ swaps the tree and rolls back what does not answer
   `verifying`, `installer_started`, `failed`), `bytes_done`, `bytes_total`, `failure` — once per step and at most every
   half second while bytes arrive, the last tick always. After `installer_started` this process sees nothing more
   succeed: the installer stops it.
+- **Starting the installer.** A `systemd-run` that refuses — a name still loaded among the reasons — fails the attempt
+  as `installer_not_started`. One that gives no answer within thirty seconds is not taken for a refusal, because the
+  unit may have started behind it: the user manager is asked, and only a unit it says is not running fails the attempt;
+  otherwise the attempt goes on as started and the watch finds out.
 - **Watching the installer.** Every three seconds the unit is asked whether it still runs. It ending while this process
   still runs means the installer refused or failed before it stopped the service — the attempt fails as
   `installer_stopped`, and what it said is in its journal. A user manager that cannot be asked is not taken for the unit
-  ending.
+  ending: the first such reading is a WARNING, later ones go to the debug log, and the watch goes on with the update
+  rule held, for as long as this process lives — it is never given back on a guess. The panel says what that looks like
+  after five minutes ([QAM panel](qam-panel.md#settings)).
+- **Something unforeseen** — an exception the steps above do not name — is logged with its trace. Before the installer
+  was asked to start it fails the attempt, as `download_failed` while downloading and as `installer_not_started` after;
+  from that moment on it leaves the rule held, since the installer may be running.
+- **Shutting down** cancels the attempt, and a download still running on its thread ends at its next block of bytes
+  rather than holding the process's exit up until it finishes.
 - **A failed attempt** — `download_failed`, `checksum_mismatch`, `installer_not_started` (no installer in the tarball,
   or a unit that would not start, a name still loaded among them), `installer_stopped` — removes what it staged, gives
   the update rule back and is reported; nothing is retried by itself. `try_again` is then true for that version, and it
@@ -1845,7 +1856,7 @@ through a seam. Selected adapters:
 | `github_releases.py`                                                       | `GithubReleaseAdapter` — `LatestReleaseFn`: GitHub's "latest release" route, the `tender-v` tag and the release's `romm-tender-<V>.tar.gz` asset with its `digest` and its `.sha256` asset; every failure answers `None`. And `ReleaseAssetDownloadFn`: one asset downloaded with byte progress, written beside the destination and renamed into place; a failure raises                                                                       |
 | `update_failure.py`                                                        | `UpdateFailureFileAdapter` — `UpdateFailureFn`: the installer's `update-failure.json` under the state root; a record that is missing, unreadable or malformed answers `None`                                                                                                                                                                                                                                                                   |
 | `update_staging.py`                                                        | `UpdateStagingAdapter` — `UpdateStagingStore`: `<cache root>/update/`, removed whole; the tarball under its asset name, its sha256, and only `romm-tender/install.sh` copied out of it, as a regular file, under a name chosen here                                                                                                                                                                                                            |
-| `transient_unit.py`                                                        | `SystemdRunAdapter` — `TransientUnitRunner`: `systemd-run --user --unit <name> --collect --setenv=…` and `systemctl --user show --property=ActiveState`; `--collect` so a unit that failed does not keep its name loaded                                                                                                                                                                                                                       |
+| `transient_unit.py`                                                        | `SystemdRunAdapter` — `TransientUnitControl`: `systemd-run --user --unit <name> --collect --setenv=…` and `systemctl --user show --property=ActiveState`; `--collect` so a unit that failed does not keep its name loaded                                                                                                                                                                                                                      |
 | `sgdb_artwork_cache.py`                                                    | `SgdbArtworkCacheAdapter` — on-disk SGDB artwork cache                                                                                                                                                                                                                                                                                                                                                                                         |
 | `cover_art_file_store.py`                                                  | `CoverArtFileStoreAdapter` — RomM cover art I/O across the per-ROM cover cache and the Steam grid dir (download, `copy_file` publish/seed, read, prune)                                                                                                                                                                                                                                                                                        |
 | `persistence.py`                                                           | `PersistenceAdapter` + per-domain persister adapters — `settings.json` read/write plus the one-time legacy `save_sync_state.json` read that feeds the bootstrap settings fold                                                                                                                                                                                                                                                                  |
@@ -2755,7 +2766,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 | **PruneLeaseService**       | `ConflictRules` (renews, releases and disowns the frontend's leases; checks no rule)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateCheckService**      | `LatestReleaseFn`, `Clock`, `Sleeper` + `EventEmitter` (the check while the backend runs), `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `update_check_last_seen`), the running `VERSION`, and whether this process is the installed program                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateOutcomeService**    | `UpdateFailureFn`, `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `last_run_version`), the running `VERSION`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `UpdateFailureFn`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitRunner`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                                                                                     |
+| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `UpdateFailureFn`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitControl`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                                                                                    |
 
 Most services also receive the `settings` dict (`StateBundle`'s only field), the runtime infrastructure (event loop,
 logger, the `DebugLogger` Protocol), and the `UnitOfWorkFactory` for relational state through their config. The old

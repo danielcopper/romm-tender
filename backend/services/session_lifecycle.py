@@ -290,6 +290,20 @@ class SessionLifecycleService:
         except Exception as e:
             self._logger.warning(f"SessionLifecycle achievement sync failed for rom_id={rom_id}: {e}")
 
+    def _skipped_sync(self, rom_id: int, why: str) -> SessionFinalizeSyncResult:
+        """The failed-sync verdict of a post-exit sync that did not run, logged with *why*."""
+        self._logger.info(f"SessionLifecycle post-exit sync skipped for rom_id={rom_id}: {why}")
+        return SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=None,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=_TOAST_BODY_FAILED,
+            conflicts_toast=None,
+        )
+
     async def _build_sync_result(self, rom_id: int) -> SessionFinalizeSyncResult:
         """Run post-exit sync and build the frontend's sync verdict.
 
@@ -297,21 +311,15 @@ class SessionLifecycleService:
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While an update is being installed or a RetroDECK migration is pending
-        the post-exit sync does not run and the verdict is the failed-sync one.
-        The ``finalize_game_session`` use case checks neither rule, so this is
-        the first check either meets on the way to that sync.
+        the post-exit sync does not run, the log says which held it off, and the
+        verdict is the failed-sync one. The ``finalize_game_session`` use case
+        checks neither rule, so this is the first check either meets on the way
+        to that sync.
         """
-        if self._update_in_progress() or self._migration_reader.is_retrodeck_migration_pending():
-            return SessionFinalizeSyncResult(
-                offline=False,
-                success=False,
-                synced=None,
-                uploaded=0,
-                downloaded=0,
-                conflicts=[],
-                failure_toast=_TOAST_BODY_FAILED,
-                conflicts_toast=None,
-            )
+        if self._update_in_progress():
+            return self._skipped_sync(rom_id, "an update is being installed")
+        if self._migration_reader.is_retrodeck_migration_pending():
+            return self._skipped_sync(rom_id, "a RetroDECK migration is pending")
 
         try:
             result = await self._post_exit_sync.post_exit_sync(rom_id)

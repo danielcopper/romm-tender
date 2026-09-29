@@ -745,6 +745,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             sleeper=cfg.runtime.sleeper,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
         ),
     )
     update_in_progress_binding.set(update_install_service.is_update_in_progress)

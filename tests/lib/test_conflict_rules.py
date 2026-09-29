@@ -204,6 +204,27 @@ async def test_the_prune_rule_holds_an_operation_named_after_the_endpoint_for_th
     assert rules.conflicts.conflicting_operations == 0
 
 
+async def test_an_update_pressed_while_the_operation_waited_to_register_refuses_the_block():
+    """The first ask passed; the press came while the registration waited for the prune conflicts' lock."""
+    rules = _Rules()
+    await rules.conflicts._lock.acquire()
+    entered: list[dict[str, Any] | None] = []
+
+    async def use_case() -> None:
+        async with rules.rules.hold("the_endpoint", update=True, prune=True) as refusal:
+            entered.append(refusal)
+
+    waiting = asyncio.ensure_future(use_case())
+    await asyncio.sleep(0)
+    assert rules.update.asked == 1
+    rules.update.holds = True
+    rules.conflicts._lock.release()
+    await waiting
+
+    assert entered == [_UPDATE_REFUSAL]
+    assert rules.conflicts.conflicting_operations == 0
+
+
 async def _raise_inside_a_prune_block(rules: _Rules) -> None:
     async with rules.rules.hold("the_endpoint", prune=True):
         raise RuntimeError("boom")

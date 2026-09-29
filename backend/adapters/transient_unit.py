@@ -40,7 +40,9 @@ class SystemdRunAdapter:
 
         Answers ``None`` once the unit is started, or why it was not: the
         tool's own complaint (a unit of that name still loaded among them), a
-        missing ``systemd-run``, or no answer in time. Never raises.
+        missing ``systemd-run``, or one that could not be run. Raises
+        ``TimeoutError`` where ``systemd-run`` gave no answer in time, because
+        then nobody knows whether the unit started.
         """
         argv = [
             "systemd-run",
@@ -57,15 +59,21 @@ class SystemdRunAdapter:
             done = subprocess.run(argv, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS, check=False)
         except FileNotFoundError:
             return "systemd-run is not installed"
-        except (OSError, subprocess.TimeoutExpired) as e:
-            return f"systemd-run did not answer: {e}"
+        except OSError as e:
+            return f"systemd-run could not be run: {e}"
+        except subprocess.TimeoutExpired as e:
+            raise TimeoutError(f"systemd-run did not answer: {e}") from e
         if done.returncode != 0:
             said = done.stderr.strip() or done.stdout.strip()
             return said or f"systemd-run exited with status {done.returncode}"
         return None
 
     def is_active(self, unit: str) -> bool | None:
-        """``True`` while *unit* runs, ``False`` once it has ended or is unknown, ``None`` where nobody answered."""
+        """``True`` while *unit* runs, ``False`` once it has ended or is unknown, ``None`` where no answer says either.
+
+        ``None`` covers a ``systemctl`` that could not be run, gave no answer in
+        time or failed, and a state that is neither running nor ended.
+        """
         argv = ["systemctl", "--user", "show", "--property=ActiveState", "--value", unit]
         try:
             done = subprocess.run(argv, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS, check=False)

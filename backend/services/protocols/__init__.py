@@ -106,7 +106,7 @@ from services.protocols.infra import (
     ResolvedPathFn,
     ResolveUploadConflictFn,
     SteamInterfaceReader,
-    TransientUnitRunner,
+    TransientUnitControl,
 )
 from services.protocols.paths import (
     CoreInfoProvider,
@@ -274,7 +274,7 @@ __all__ = [
     "SystemM3uSupportFn",
     "SystemResolver",
     "SystemSupportedExtensionsFn",
-    "TransientUnitRunner",
+    "TransientUnitControl",
     "UnitOfWork",
     "UnitOfWorkFactory",
     "UpdateFailureFn",

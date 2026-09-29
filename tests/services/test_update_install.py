@@ -8,8 +8,10 @@ import io
 import logging
 import os
 import tarfile
+import threading
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from fakes.fake_event_sink import FakeEventSink
@@ -23,6 +25,9 @@ from domain.update_install import INSTALLER_UNIT
 from domain.update_outcome import UpdateFailure
 from domain.update_release import LatestRelease, ReleaseTarball
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _RUNNING = "1.0.0"
 _OFFERED = "1.1.0"
@@ -102,6 +107,29 @@ class _ParkingSleeper:
             await asyncio.Event().wait()
 
 
+class _HeldSteam:
+    """A Steam whose running-apps readings all wait until ``answer`` is set, so two presses can wait together."""
+
+    def __init__(self) -> None:
+        self.answer = asyncio.Event()
+        self.readings = 0
+
+    async def running_apps(self) -> tuple[str, ...] | None:
+        self.readings += 1
+        await self.answer.wait()
+        return ()
+
+    async def reload_frees_at(self) -> float | None:
+        return None
+
+    async def both_waiting(self) -> None:
+        for _ in range(100):
+            if self.readings == 2:
+                return
+            await asyncio.sleep(0)
+        raise AssertionError(f"only {self.readings} reading(s) began")
+
+
 @dataclass
 class _Rig:
     service: UpdateInstallService
@@ -143,6 +171,7 @@ async def _rig(
     checksum_body: bytes = b"sidecar\n",
     unit_refusal: str | None = None,
     unit_states: list[bool | None] | None = None,
+    unit_no_answer: bool = False,
     sleeper: _ParkingSleeper | None = None,
     failure_record: UpdateFailure | None = None,
 ) -> _Rig:
@@ -154,7 +183,7 @@ async def _rig(
     downloads = FakeReleaseDownload(
         bodies={release.tarball.url: body, release.tarball.checksum_url: checksum_body}, failing=failing
     )
-    units = FakeTransientUnits(refusal=unit_refusal, states=unit_states)
+    units = FakeTransientUnits(refusal=unit_refusal, states=unit_states, no_answer=unit_no_answer)
     events = FakeEventSink()
     staging = UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update"))
     releases = _Releases(release, enabled=enabled)
@@ -183,6 +212,7 @@ async def _rig(
             sleeper=sleeper,
             loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test_update_install"),
+            log_debug=lambda msg: None,
         )
     )
     return _Rig(
@@ -408,16 +438,20 @@ class TestARefusedPress:
         assert answer["success"] is False
 
     async def test_a_press_that_started_while_another_read_steam_is_refused(self, rigs, tmp_path):
-        """Both presses pass the first check; the one that reads Steam second finds the rule held."""
+        """Both presses pass the first check and wait on Steam together; the one answered second finds the rule held."""
         rig = await _built(rigs, tmp_path)
+        steam = _HeldSteam()
+        rig.service._steam = steam
         first = asyncio.ensure_future(rig.service.install_update(_OFFERED))
         second = asyncio.ensure_future(rig.service.install_update(_OFFERED))
+        await steam.both_waiting()
 
+        steam.answer.set()
         answers = await asyncio.gather(first, second)
 
+        assert steam.readings == 2
         assert sorted(answer["success"] for answer in answers) == [False, True]
         assert {answer.get("reason") for answer in answers} == {None, "update_in_progress"}
-        assert len(rig.units.starts) <= 1
 
 
 # ── The press, through to the installer ──────────────────────────────────────
@@ -513,6 +547,23 @@ class TestThePress:
         assert state["attempt"]["step"] == "installer_started"
         assert state["wait_reasons"] == []
         assert state["try_again"] is False
+
+    async def test_a_state_that_cannot_be_read_is_a_warning_once_and_the_watch_goes_on(self, rigs, tmp_path, caplog):
+        rig = await _built(rigs, tmp_path, unit_states=[None, None, None], sleeper=_ParkingSleeper(free=3))
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            await rig.service.install_update(_OFFERED)
+            await rig.settled()
+            for _ in range(100):
+                if len(rig.units.asked) == 3:
+                    break
+                await asyncio.sleep(0.01)
+
+        unreadable = [record for record in caplog.records if "could not be read" in record.getMessage()]
+        assert len(unreadable) == 1
+        assert unreadable[0].levelno == logging.WARNING
+        assert rig.units.asked == [INSTALLER_UNIT] * 3
+        assert rig.service.is_update_in_progress() is True
 
     async def test_a_manager_that_cannot_be_asked_is_not_the_installer_stopping(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, unit_states=[None, True, None], sleeper=_ParkingSleeper(free=3))
@@ -626,6 +677,58 @@ class TestAFailedAttempt:
 
         assert asked == [INSTALLER_UNIT, INSTALLER_UNIT]
         assert rig.service.is_update_in_progress() is True
+
+    async def test_a_start_that_gave_no_answer_and_did_not_start_is_installer_not_started(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, unit_no_answer=True, unit_states=[False])
+
+        assert (await self._failed(rig))["failure"] == "installer_not_started"
+        assert rig.units.asked == [INSTALLER_UNIT]
+        assert rig.service.is_update_in_progress() is False
+
+    @pytest.mark.parametrize("state", [True, None])
+    async def test_a_start_that_gave_no_answer_is_watched_where_the_unit_may_run(self, rigs, tmp_path, state):
+        """A unit that runs, or one nobody can say about, keeps the rule: the installer may be running."""
+        rig = await _built(rigs, tmp_path, unit_no_answer=True, unit_states=[state])
+
+        assert (await self._failed(rig))["step"] == "installer_started"
+        assert rig.units.asked[0] == INSTALLER_UNIT
+        assert rig.service.is_update_in_progress() is True
+
+    async def test_an_unforeseen_failure_before_the_installer_fails_the_attempt_and_says_so(
+        self, rigs, tmp_path, monkeypatch, caplog
+    ):
+        rig = await _built(rigs, tmp_path)
+
+        def broken(_version: str) -> str:
+            raise RuntimeError("staging broke")
+
+        monkeypatch.setattr(rig.service._staging, "tarball_path", broken)
+
+        with caplog.at_level(logging.ERROR, logger="test_update_install"):
+            last = await self._failed(rig)
+
+        assert (last["step"], last["failure"]) == ("failed", "download_failed")
+        assert rig.service.is_update_in_progress() is False
+        assert "failed before the installer was started" in caplog.text
+        assert "staging broke" in caplog.text
+
+    async def test_an_unforeseen_failure_once_the_installer_may_run_keeps_the_rule(self, rigs, tmp_path, caplog):
+        class _BrokenSleeper:
+            async def sleep(self, _seconds: float) -> None:
+                raise RuntimeError("sleeper broke")
+
+        rig = await _built(rigs, tmp_path, sleeper=_BrokenSleeper())
+
+        with caplog.at_level(logging.ERROR, logger="test_update_install"):
+            await rig.service.install_update(_OFFERED)
+            await rig.settled()
+            task = rig.service._task
+            assert task is not None
+            await asyncio.gather(task, return_exceptions=True)
+
+        assert rig.service.is_update_in_progress() is True
+        assert (await rig.service.get_update_install_state())["attempt"]["step"] == "installer_started"
+        assert "the update rule stays held while it may run" in caplog.text
 
     @pytest.mark.parametrize(
         "setup",
@@ -743,6 +846,35 @@ class TestLeftoversAndShutdown:
         await rig.service.shutdown()
 
         assert rig.service.is_update_in_progress() is True
+
+    async def test_shutdown_ends_a_download_still_running_on_its_thread(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        ticking = threading.Event()
+        ended: list[BaseException] = []
+
+        def endless(url: str, dest: str, progress: Callable[[int, int | None], None] | None) -> None:
+            assert progress is not None, (url, dest)
+            try:
+                for done in range(1, 10_000):
+                    progress(done, None)
+                    ticking.set()
+                    time.sleep(0.001)
+            except BaseException as e:
+                ended.append(e)
+                raise
+
+        rig.service._download_asset = endless
+        await rig.service.install_update(_OFFERED)
+        await asyncio.get_running_loop().run_in_executor(None, ticking.wait, 5)
+
+        await rig.service.shutdown()
+        for _ in range(500):
+            if ended:
+                break
+            await asyncio.sleep(0.01)
+
+        assert len(ended) == 1
+        assert "shutting down" in str(ended[0])
 
     async def test_shutdown_with_no_attempt_is_nothing_to_do(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
