@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger("test_bootstrap_application")
 
 # Every repair in the order it runs. ``prune_stale_installed_roms`` runs only
-# after ``detect_retrodeck_path_change`` finished; ``record_save_directories``
+# after ``detect_retrodeck_path_change`` succeeded; ``record_save_directories``
 # starts the backfill rather than performing it.
 _REPAIRS = [
     "note_update_outcome",
@@ -153,7 +153,6 @@ class TestTheStartUpRepairs:
         await asyncio.wait_for(app.shutdown(), 5)
 
     async def test_the_prune_is_skipped_when_the_detection_fails(self):
-        """The prune reads the pending homes the detection writes; without them it deletes every install."""
         recorded = _Recorded(failing=frozenset({"detect_retrodeck_path_change"}))
         failures: list[str] = []
         app = _application(recorded)

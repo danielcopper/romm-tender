@@ -119,7 +119,7 @@ class TestWithRetryOnRetryListener:
         assert calls == []
 
     def test_listener_exception_never_breaks_the_retry(self):
-        # A raising listener (e.g. a closed loop at plugin unload) must be
+        # A raising listener (e.g. a closed loop at the backend's shutdown) must be
         # swallowed so it can't abort the real HTTP retry underway.
         def boom(*_a):
             raise RuntimeError("loop closed")

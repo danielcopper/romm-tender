@@ -280,9 +280,9 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Endpoints:
-                async def _main(self):
+                async def _helper(self):
                     ...
-                async def _unload(self):
+                async def _other_helper(self):
                     ...
                 @route
                 async def test_connection(self):
@@ -425,23 +425,23 @@ class TestFindMisplacedRoutes:
             """\
             class Endpoints:
                 @route
-                async def _main(self):
+                async def _helper(self):
                     ...
             """
         )
         findings = check.find_misplaced_routes(_write_main(tmp_path, body))
         assert len(findings) == 1
-        assert findings[0].startswith("_main:")
+        assert findings[0].startswith("_helper:")
         assert "underscored name" in findings[0]
 
     def test_unmarked_methods_are_no_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
             class Endpoints:
-                async def _main(self):
+                async def _helper(self):
                     ...
                 @classmethod
-                def run(cls):
+                def make(cls):
                     ...
             """
         )
@@ -497,8 +497,8 @@ class TestMainEntryPoint:
 
     def test_real_repo_run_is_clean(self, capsys: pytest.CaptureFixture[str]):
         # Locks the actual frontend/src/**/*.ts callable declarations in sync
-        # with the endpoints on Endpoints in main.py. If this fails, a callable
-        # was added/renamed/removed on one side only, or an arity drifted.
+        # with the endpoints on Endpoints in main.py. If this fails, a name was
+        # added/renamed/removed on one side only, or an arity drifted.
         rc = check.main([])
         assert rc == 0
         assert "OK:" in capsys.readouterr().out

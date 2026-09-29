@@ -1,6 +1,6 @@
 """Coverage for the delegation seams of ``main.Endpoints``.
 
-Every endpoint is a thin one-liner that forwards to a backend service.
+Every endpoint but ``get_host_status`` forwards to a backend service.
 These tests exercise each delegation by:
 
 - building ``Endpoints`` over an ``Application`` whose services are all

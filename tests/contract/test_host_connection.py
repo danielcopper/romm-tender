@@ -2,11 +2,11 @@
 
 Two halves are already covered separately and neither one covers this. The host
 tier drives a real socket onto a stand-in for the endpoints, so it proves the
-protocol and nothing about the callables; the rest of this tier drives the real
-callables by calling them, so it proves the answers and nothing about the wire.
-What is only here is the seam between them — a real callable resolved by name
+protocol and nothing about the real ones; the rest of this tier drives the real
+endpoints by calling them, so it proves the answers and nothing about the wire.
+What is only here is the seam between them — a real endpoint resolved by name
 out of the loaded `Endpoints`, its answer encoded by `encode_reply`, and the
-size cap judged against a payload a real callable actually produced.
+size cap judged against a payload a real endpoint actually produced.
 
 Every case builds the real `Endpoints` through the real `bootstrap()` (the shared
 harness) and puts a `HostServer` in front of it, then speaks to that server the
@@ -148,8 +148,8 @@ class TestARealCallableOverTheRealConnection:
         assert answer["type"] == TYPE_ERROR
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
-    async def test_a_private_method_of_the_real_endpoints_is_unreachable(self, served):
-        """`__init__` exists on the loaded class and is not callable surface."""
+    async def test_an_underscored_name_on_the_real_endpoints_is_unreachable(self, served):
+        """`__init__` exists on the loaded class, and an underscored name is never an endpoint."""
         answer = await served.call("__init__")
 
         assert answer["reason"] == REASON_METHOD_UNKNOWN
