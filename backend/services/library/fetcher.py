@@ -595,8 +595,9 @@ class LibraryFetcher:
         ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
         stamp stands only while the local mirror is complete, so without it a
         never-synced platform's PARTIAL rows (cross-platform collection siblings,
-        ADR-0021) would mis-weight the ETA below the true work. ``None`` (no stamp, or no persisted rows) rides the
-        payload absent, so the frontend weights the unit at its raw ``rom_count``
+        ADR-0021) would mis-weight the ETA below the true work. ``None`` (no
+        stamp, or no persisted rows) rides the payload absent, so the frontend
+        weights the unit at its raw ``rom_count``
         (``predicted_skip ? 0 : collapsed_count ?? rom_count``). Also split the
         unit by what the apply will actually do to it: count its BOUND rows —
         those already carrying a ``shortcut_app_id`` — which the frontend

@@ -868,9 +868,9 @@ A platform's **completion stamp** (`PlatformSyncState`) records that its most re
 fetch generation that apply marked its rows with. It has two uses: it is the incremental skip's sole authority (no
 stamp, no skip), and removed-game discovery reads its generation as the record of what RomM's last complete fetch
 returned. A stamp whose skip is **revoked** (`skip_revoked`) keeps the second use and loses the first. It is set when
-games are **unbound** in a way the skip's counts cannot see, and it lasts until the platform's next apply. Distinct from
-deleting the stamp, which removes both uses. A collection's completion stamp has no revoked state. What sets it and
-which readers honour it:
+games are **unbound** in a way the skip's counts cannot see (and was set once on every stamp by the upgrade that
+introduced it), and it lasts until the platform's next apply. Distinct from deleting the stamp, which removes both uses.
+A collection's completion stamp has no revoked state. What sets it and which readers honour it:
 [backend-architecture.md](docs/architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
 "Incremental skip".
 

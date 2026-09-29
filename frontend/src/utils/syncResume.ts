@@ -90,8 +90,9 @@ export function formatResumeScope(resumableGames: number): string {
  * anywhere", while the removal path is surgical: it revokes the skip of only the
  * platform slugs its removed rows name, and deletes only the collection stamps
  * whose member set intersects those rows. A stamp naming nothing the ``roms``
- * table still holds therefore outlives a remove-all. Prune is the reachable path — it deletes ``roms`` rows and never
- * touches ``platform_sync_state`` (services/prune/registry.py ``delete_rows``),
+ * table still holds therefore outlives a remove-all. Prune is the reachable
+ * path — it deletes ``roms`` rows and never touches ``platform_sync_state``
+ * (services/prune/registry.py ``delete_rows``),
  * so a platform whose games RomM dropped keeps its stamp with no rows left to
  * name it; the next remove-all cannot see that slug to revoke its skip. Without
  * this conjunct that state offers "Resume Sync" over zero shortcuts. It is also

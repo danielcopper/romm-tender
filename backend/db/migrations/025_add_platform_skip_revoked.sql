@@ -27,9 +27,10 @@
 -- Every existing stamp is revoked here. One written before this migration may
 -- stand over games a stale removal already unbound while the platform was
 -- turned off, and would keep skipping them once it is turned back on. Revoking
--- them all costs each platform one full fetch on the first sync after the
--- upgrade, and the preview offers Apply for it even with nothing else to do;
--- that apply re-stamps the platform.
+-- them all costs each enabled platform one full fetch on the first sync after
+-- the upgrade, and the preview offers Apply for it even with nothing else to
+-- do; that apply re-stamps the platform. A platform whose sync is off is not
+-- fetched until it is turned back on.
 --
 -- Transaction-safe DDL/DML only — the runner (adapters/sqlite_migrations.py)
 -- wraps BEGIN/COMMIT and stamps PRAGMA user_version = 25.

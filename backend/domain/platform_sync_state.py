@@ -21,8 +21,8 @@ unbound one of its rows since*: it is deleted at a platform unit's apply start
 chunk re-writes it, and cleared wholesale by Force Full Sync (the repository's
 ``clear``) — the stamps are the fetcher's sole skip authority, so clearing them
 arms the full re-fetch; the ``SyncRun`` history is preserved (it feeds no skip
-gate). Those two removals revoke the skip instead (the repository's
-``revoke_skip``): ``skip_revoked`` is set by the repository alone, and a fresh
+gate). Those two removals revoke the skip instead: ``skip_revoked`` is never
+set by the aggregate — the repository's ``revoke_skip`` sets it — and a fresh
 ``stamp`` never carries it. Why the stamp is kept rather than deleted, and which
 readers honour the flag, is in docs/architecture/backend-architecture.md,
 "Incremental skip".
