@@ -244,10 +244,8 @@ EXPLANATION = (
     "Steam is unaffected and nothing in your library has been changed. Tender did not start at all, "
     "rather than starting half-way, and it will try again when Steam's interface reloads."
 )
-# Printed rather than offered as a button: nothing in this program updates
-# itself yet, and a button aimed at a Steam API nobody here has run would be a
-# guess on the one page whose whole job is to be true after everything else has
-# failed. It becomes a button in the cut that gives it something to do (#1903).
+# Printed rather than offered as a button: docs/architecture/loading-the-panel.md,
+# "Checking for an update is text rather than a button".
 UPDATES_AT = "Releases are listed at github.com/danielcopper/romm-tender/releases"
 # One button rather than two, and a Dismiss beside it is the road not taken:
 # the card blocks nothing already (it accepts a press nowhere but here), so

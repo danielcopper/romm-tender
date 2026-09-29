@@ -1130,7 +1130,8 @@ outside every row, so reaching them reports no selection. The order freezes whil
 **The sync writes are a row's toggle and Enable all / Disable all, which write every row in the list**, and they follow
 the rule at the top of § Library (**Only the latest write speaks**). Both report in one line, under those two buttons:
 in the list column, scrolling with the rows, plain text rather than a focus stop. Either write is refused while a
-RetroDECK path migration is pending, and Enable all / Disable all also when the RomM listing they need fails.
+RetroDECK path migration is pending or an update is being installed, and Enable all / Disable all also when the RomM
+listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
 and the list's two header buttons act on every row at once — so it opens with one header line instead of a Sync section:

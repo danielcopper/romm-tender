@@ -189,8 +189,9 @@ class RuntimeBundle:
 
     ``steam`` is the host's reading of Steam's interface, which only the
     process hosting this backend can take and which ``main.py`` hands in the
-    way it hands in the emit. It carries no directory. Where anything lives is the ``AppDirectories`` the
-    entry point resolved, which reaches a service as ``WiringConfig.directories``
+    way it hands in the emit. The bundle carries no directory. Where anything
+    lives is the ``AppDirectories`` the entry point resolved, which reaches a
+    service as ``WiringConfig.directories``
     — this bundle used to hold two paths beside the seams above, which is how a
     question about the plugin loader's own layout came to sit next to a question
     about the user's data.

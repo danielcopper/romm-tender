@@ -376,11 +376,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   outside the rules** — test + prompt-only — `tests/contract/test_conflict_refusals.py`
   (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`,
   `test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`,
-  `test_every_direct_migration_check_is_answered_by_the_update_rule_too`,
+  `test_every_direct_migration_check_is_answered_by_the_update_rule_too` with its control
+  `test_the_read_behind_the_direct_check_sees_the_checks_it_is_about`,
   `test_an_update_in_progress_refuses_the_endpoint`, `test_an_update_in_progress_answers_before_every_other_condition`)
   and `tests/lib/test_conflict_rules.py`. Unseen by the source readers: a check reached under another name, through an
-  alias or a helper. Prompt-only: the rule is taken in the same loop turn as the press's last answer, and given back
-  only by an attempt that failed while this process runs
+  alias or a helper. Prompt-only: the rule is taken in the same loop turn as the check the press passed, and given back
+  only by an attempt that failed while this process runs, never on a guess while the installer may run
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `main.run()` resolves it once and hands it to `bootstrap()`, which derives nothing, and

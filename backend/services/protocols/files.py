@@ -36,10 +36,10 @@ if TYPE_CHECKING:
 class UpdateStagingStore(Protocol):
     """The directory a release is downloaded into and its installer unpacked into, before the installer runs.
 
-    It holds nothing that outlives an attempt, so it is emptied whole rather
-    than file by file. ``extract_installer`` takes the one member it asks for
-    and writes it under a name of its own choosing — never a path the archive
-    names — and raises where the tarball holds no such regular file.
+    ``remove_all`` removes it whole. ``extract_installer`` takes the one member
+    it asks for and writes it under a name of its own choosing — never a path
+    the archive names — and raises where the tarball holds no such regular
+    file.
     """
 
     def remove_all(self) -> None:

@@ -2,8 +2,9 @@
 
 Owns ``<cache root>/update/``: the tarball and its checksum file under the
 names the installer checks them by, and the installer unpacked out of that
-tarball. Nothing in it outlives an attempt, which is why it sits under the cache
-root and is removed whole.
+tarball. Nothing in it is needed once the installer has started from it, which
+is why it sits under the cache root; it is removed whole by an attempt that
+fails, and at the next start after one that did not.
 
 The installer is unpacked here rather than beside the program because the
 installer removes ``<code>.new`` and moves ``<code>`` while it runs.

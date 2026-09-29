@@ -144,8 +144,9 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "dismiss_update_announcement",
     "dismiss_update_failure",
     # Installing the last seen release from the panel. The read touches no
-    # RetroDECK state — it reads the stored release, the installer's record and
-    # this process's memory. The press does not name the migration rule because
+    # RetroDECK state — it reads the stored release, the installer's record,
+    # this process's memory and Steam's running apps. The press does not name
+    # the migration rule because
     # it asks the narrower question itself: a migration that is RUNNING makes it
     # wait, while one that is merely pending survives the restart and does not.
     "get_update_install_state",

@@ -299,19 +299,20 @@ class PruneRunClaim(Protocol):
 class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
-    ``hold(label, update=…, migration=…, sync=…, prune=…)`` yields the canonical refusal
-    of the first named rule that holds, or ``None`` when the block may run; with
-    ``prune`` the block runs under an operation named *label*. *label* is the
-    endpoint's name. ``retain`` holds an operation named *label* for detached
-    work until *task* ends; it checks no rule, so it is called inside the
-    ``hold(..., prune=True)`` block that started *task*. ``acquire_lease``
-    takes a lease under *key* for Steam writes the frontend makes after the
-    call or the event and answers its token; ``release_lease`` gives one back by token.
-    ``emit_under_lease`` emits an event through *emit_with* under a lease it
-    takes, and gives the lease back when the emit raises or nobody heard it.
-    ``hold_start(label, update=…, migration=…, sync=…)`` is a cleanup's exclusive start:
-    it reserves the start first, then checks the named rules, and holds the
-    reservation for the block. ``renew_lease`` extends a live lease by token,
+    ``hold(label, update=…, migration=…, sync=…, prune=…)`` yields the
+    canonical refusal of the first named rule that holds, or ``None`` when the
+    block may run; with ``prune`` the block runs under an operation named
+    *label*. *label* is the endpoint's name. ``retain`` holds an operation
+    named *label* for detached work until *task* ends; it checks no rule, so it
+    is called inside the ``hold(..., prune=True)`` block that started *task*.
+    ``acquire_lease`` takes a lease under *key* for Steam writes the frontend
+    makes after the call or the event and answers its token;
+    ``release_lease`` gives one back by token. ``emit_under_lease`` emits an
+    event through *emit_with* under a lease it takes, and gives the lease back
+    when the emit raises or nobody heard it. ``hold_start(label, update=…,
+    migration=…, sync=…)`` is a cleanup's exclusive start: it reserves the
+    start first, then checks the named rules, and holds the reservation for the
+    block. ``renew_lease`` extends a live lease by token,
     and ``release_orphaned_leases`` drops every lease and answers how many.
     CONTEXT.md → Conflict rules, Prune conflicts.
     """

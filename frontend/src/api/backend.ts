@@ -423,8 +423,8 @@ export const removePlatformShortcuts = callable<
   {
     success: boolean;
     // The success path returns success/app_ids/rom_ids/platform_name, plus
-    // prune_lease_token when app_ids is non-empty; a refusal by the migration,
-    // sync or prune rule answers success/reason/message, omitting
+    // prune_lease_token when app_ids is non-empty; a refusal by the update,
+    // migration, sync or prune rule answers success/reason/message, omitting
     // app_ids/rom_ids. Every field below the discriminant is therefore
     // path-dependent (mirrors removeAllShortcuts).
     app_ids?: number[];
@@ -440,8 +440,8 @@ export const removeAllShortcuts = callable<
   {
     success: boolean;
     // The success path returns only success/app_ids/rom_ids, plus
-    // prune_lease_token when app_ids is non-empty; a refusal by the migration,
-    // sync or prune rule answers success/reason/message, omitting
+    // prune_lease_token when app_ids is non-empty; a refusal by the update,
+    // migration, sync or prune rule answers success/reason/message, omitting
     // app_ids/rom_ids. Every field below the discriminant is therefore
     // path-dependent.
     reason?: string;
@@ -536,7 +536,7 @@ export const uninstallAllRoms = callable<
     success: boolean;
     // The removal path always carries removed_count/errors/app_ids — success
     // is False on a PARTIAL failure (some deletions failed) but the payload
-    // stays. A refusal by the migration, sync or prune rule answers
+    // stays. A refusal by the update, migration, sync or prune rule answers
     // success/reason/message with NO payload, so a missing app_ids is the
     // refusal discriminant.
     removed_count?: number;

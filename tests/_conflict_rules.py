@@ -1,8 +1,9 @@
 """Which endpoints declare a conflict rule, read from the use cases that check it.
 
 A rule is declared by a ``hold("<endpoint>", update=…, migration=…, sync=…,
-prune=…)`` or ``hold_start("<endpoint>", update=…, migration=…, sync=…)`` call at the entry of the use
-case the endpoint calls, under ``backend/services/``. The calls are read from
+prune=…)`` or ``hold_start("<endpoint>", update=…, migration=…, sync=…)``
+call at the entry of the use case the endpoint calls, under
+``backend/services/``. The calls are read from
 the source by AST, since a use case's rules are not visible on the object.
 ``hold_start`` declares the ``exclusive_start`` rule beside the rules its
 keywords name. A call whose label or rule keywords are not literals fails the

@@ -118,8 +118,8 @@ class ConflictRuleSet:
         refused while an operation or a lease is held answers
         ``operation_active``; an update, migration or sync refusal gives the
         reservation back before it answers, so a refused start leaves no claim,
-        and so does a rule that raises. Otherwise the reservation is given back when the
-        block ends, however it ends.
+        and so does a rule that raises. Otherwise the reservation is given back
+        when the block ends, however it ends.
         """
         message = await self._prune_conflicts.reserve_start(label)
         if message is not None:

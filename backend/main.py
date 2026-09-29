@@ -850,10 +850,10 @@ class Endpoints:
         ``reason`` ``update_in_progress``, ``not_offered``,
         ``version_changed``, or ``update_waiting`` together with
         ``wait_reasons``. From an accepted press on, every endpoint that a
-        RetroDECK migration refuses answers ``blocked_by_update`` instead,
-        until the attempt fails or the installer replaces this process; the
-        attempt reports its steps through the ``update_install_progress``
-        event.
+        pending RetroDECK migration refuses answers ``blocked_by_update``
+        instead, and so does starting the migration itself, until the attempt
+        fails or the installer replaces this process; the attempt reports its
+        steps through the ``update_install_progress`` event.
         """
         return await self._services.update_install_service.install_update(version)
 

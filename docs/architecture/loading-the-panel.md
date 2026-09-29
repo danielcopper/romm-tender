@@ -267,9 +267,10 @@ Two properties of the binding decide where it is installed:
 turns on every other Runtime event for that connection. So it is enabled **only once a card is up**: after a load that
 failed, where the card is the only thing left to act on, and never on the path where the panel came up.
 
-**Checking for an update is text rather than a button**, because nothing in this program updates itself yet and no way
-to open a web page out of Steam's UI has been measured here. It becomes a button in the cut that gives it something to
-do ([#1903](https://github.com/danielcopper/romm-tender/issues/1903)).
+**Checking for an update is text rather than a button.** Installing one is an action of the panel's, under Settings ›
+Updates, and the panel is what did not load; and no way to open a web page out of Steam's UI has been measured here, so
+a button aimed at the releases page would be a guess on the one page whose whole job is to be true after everything else
+has failed.
 
 ## The token
 

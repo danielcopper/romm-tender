@@ -228,8 +228,7 @@ styles: it uses neither React nor `@decky/ui`, because its own subject is that t
 
 It carries **one action** — stop trying until Tender restarts — which reaches the backend through a **debugger binding**
 and nothing else, and takes the card off the screen. The restart meant there is the **backend's own process**, the same
-way back the crash state has. Checking for an update is an address printed as text rather than an action, because
-installing one is a panel action, and the panel is what did not load.
+way back the crash state has. Checking for an update is an address printed as text rather than an action.
 
 **It is not the start-up check's fallback page** and the two are never called by the same name. The fallback page is a
 React component rendered INSIDE a panel that did mount, when a search into Steam's interface came back empty; this card
@@ -1113,8 +1112,10 @@ stored: from the press, through the download and its digest check, to the instal
 `romm-tender-update` — after which the installer stops this process — or to a failure (`download_failed`,
 `checksum_mismatch`, `installer_not_started`, `installer_stopped`, `game_started`, `running_apps_unknown`), which
 removes what it staged. From the press until it fails the attempt holds the **update rule** (see **Conflict rules**).
-Nothing retries an attempt by itself; a failed one, or one the installer rolled back, is offered again as **Try again**.
-A **wait reason** is one thing a press has to wait for because the restart would cut it short — a running app, a sync, a
+Nothing retries an attempt by itself; a failed attempt, or an update the installer rolled back, is offered again as
+**Try again**. The **attempt record** (`update-attempt.json`) is the backend's own note of an attempt whose installer it
+started, which tells the next start whether that installer stopped without updating; the installer never writes it. A
+**wait reason** is one thing a press has to wait for because the restart would cut it short — a running app, a sync, a
 download, a cleanup, a migration that is moving files, the reload limit, and **other work**: any other claim held on the
 **Prune conflicts** — and a running-apps reading that could not be taken is a wait reason of its own, never "nothing
 running". A **paused** ROM download is not one: the restart cancels it, and the panel says so.

@@ -3,10 +3,11 @@
 Owns the question and everything the answer needs a decision about: the
 once-a-day throttle, the user's switch, which release they have already waved
 away, and the stored answer itself — the install reads the last seen release
-through here rather than from the row. The answer is one-sided — it either has something to say or stays
-silent, and a check that reached nothing is silence rather than a failure. The
-release read itself is a seam; what a release is called and how the stored
-answer is spelled live in ``domain/update_release.py``.
+through here rather than from the row. The answer is one-sided — it either has
+something to say or stays silent, and a check that reached nothing is silence
+rather than a failure. The release read itself is a seam; what a release is
+called and how the stored answer is spelled live in
+``domain/update_release.py``.
 """
 
 from __future__ import annotations

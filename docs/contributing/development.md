@@ -362,13 +362,13 @@ systemctl --user restart romm-tender
 The check asks at most once a day, so press **Check now** in Settings › Updates to ask at once. To point the service
 back at GitHub, remove `fake-github.conf`, then `daemon-reload` and restart again.
 
-**Install** in Settings › Updates downloads from wherever the latest-release answer's asset addresses point — the fake
-server here, over plain HTTP on loopback — and starts the installer as the unit `romm-tender-update` with the service's
-own `TENDER_RELEASE_API`, `TENDER_DOWNLOAD_BASE` and `TENDER_UPDATE_WAIT` handed on, so a drop-in that sets them reaches
-the installer too. Follow it with `journalctl --user -u romm-tender-update`; `--corrupt-tarball` is refused before the
-installer starts, by the backend's own digest check.
+**Install update X** in Settings › Updates downloads from wherever the latest-release answer's asset addresses point —
+the fake server here, over plain HTTP on loopback — and starts the installer as the unit `romm-tender-update` with the
+service's own `TENDER_RELEASE_API`, `TENDER_DOWNLOAD_BASE` and `TENDER_UPDATE_WAIT` handed on, so a drop-in that sets
+them reaches the installer too. Follow it with `journalctl --user -u romm-tender-update`; `--corrupt-tarball` is refused
+before the installer starts, by the backend's own digest check.
 
-**`install.sh`** reads both variables from its own environment:
+**`install.sh`** reads `TENDER_RELEASE_API` and `TENDER_DOWNLOAD_BASE` from its own environment:
 
 ```bash
 TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest \

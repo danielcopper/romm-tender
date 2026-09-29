@@ -69,16 +69,18 @@ Format: **invariant** — tier — enforced by.
   `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
   (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`), and
   `functions_checking_migration_without_update` finds any function under `backend/services/` that reads the migration
-  check directly and not the update one — the save engine's pre-launch and post-exit backstops and its save-directory
-  follow, and the post-exit sync in `SessionLifecycleService` today
-  (`test_every_direct_migration_check_is_answered_by_the_update_rule_too`). They read names in the source, so a check
-  reached under another name, through a local alias or through a helper slips past them.
+  check directly without also reading the update one, and finds none
+  (`test_every_direct_migration_check_is_answered_by_the_update_rule_too`). The functions that read it directly today —
+  the save engine's pre-launch and post-exit backstops and its save-directory follow, and the post-exit sync in
+  `SessionLifecycleService` — read both, and `test_the_read_behind_the_direct_check_sees_the_checks_it_is_about` holds
+  that the read sees them, so the empty answer is not a blind one. They read names in the source, so a check reached
+  under another name, through a local alias or through a helper slips past them.
   `test_an_update_in_progress_refuses_the_endpoint` and
   `test_an_update_in_progress_answers_before_every_other_condition` drive every endpoint over the real wiring, and
   `tests/lib/test_conflict_rules.py` pins the order. **Prompt-only**: the rule is taken in the same loop turn as the
-  press's last answer — an `await` between them would let work start in the gap — and it is given back only by an
-  attempt that failed while this process runs; a successful install ends it with the process
-  ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
+  check the press passed — an `await` between them would let work start in the gap — and it is given back only by an
+  attempt that failed while this process runs, never on a guess while the installer may run; a successful install ends
+  it with the process ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
   defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `main.run()`
