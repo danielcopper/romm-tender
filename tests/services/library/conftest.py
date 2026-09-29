@@ -1,18 +1,15 @@
-"""Shared fixtures for the LibraryService sub-service test files.
+"""The ``library`` fixture every test under ``tests/services/library/`` runs on.
 
-Builds the full LibraryService composition (fetcher + orchestrator +
-reporter) plus the peer services LibraryService coordinates with
-(MetadataService, ArtworkService, ShortcutRemovalService), whose conflict
-rules share one prune conflicts and refuse nothing unless a test holds a
-claim. All test files under ``tests/services/library/`` consume the same
-``library`` fixture so coverage of the façade integration and the
-sub-service internals sits on top of an identical setup.
+It builds a :class:`LibraryService` beside the artwork, metadata and
+shortcut-removal services. All but the metadata service check conflict rules,
+and theirs share one :class:`PruneConflicts`, which refuses nothing unless a
+test holds a claim.
 """
 
 import asyncio
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
@@ -21,6 +18,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
+from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -39,14 +37,11 @@ from tests.services.library._helpers import rebind_loop
 
 @dataclass
 class LibraryHarness:
-    """What a library test reaches for: the wired services and the seams they share.
+    """The wired library services and the seams a test seeds or asserts against.
 
-    ``sync`` is the :class:`LibraryService` under test; ``artwork``,
-    ``metadata`` and ``shortcut_removal`` are its peers, and ``active_core``
-    the resolver its launch-option bake draws from. ``uow`` is the one
-    :class:`FakeUnitOfWork` behind every service's factory, the handle tests
-    seed and assert against. ``romm_api`` starts as a ``MagicMock`` and is
-    replaced by ``_use_fake_romm`` for the end-to-end paths.
+    ``sync`` is the :class:`LibraryService` under test. ``uow`` is the one
+    :class:`FakeUnitOfWork` every service's factory wraps, so a row a test
+    seeds there is the row the services read.
     """
 
     sync: LibraryService
@@ -55,7 +50,7 @@ class LibraryHarness:
     shortcut_removal: ShortcutRemovalService
     active_core: ActiveCoreResolver
     uow: FakeUnitOfWork
-    romm_api: Any
+    romm_api: MagicMock | FakeRommApi
     steam_config: SteamConfigAdapter
     settings_persister: FakeSettingsPersister
     core_info: FakeCoreInfoProvider
@@ -64,7 +59,6 @@ class LibraryHarness:
     renderer_gc: FakeRendererGc
     prune_conflicts: PruneConflicts
     settings: dict[str, Any]
-    emit: AsyncMock
 
 
 @pytest.fixture
@@ -84,7 +78,6 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
     # ONE shared FakeUnitOfWork across every sub-service + peer service so a
     # write by one (reporter upserting ``roms``) is visible to a read by
     # another (artwork resolving a cover, metadata building the app_id map).
-    # Each service gets its own factory wrapping the same unit.
     uow = FakeUnitOfWork()
 
     metadata_service = MetadataService(
@@ -130,7 +123,8 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
 
     # Session-budget seams default to "measurement unavailable" (RSS None) + a
     # no-op GC, so the gate is inert in the shared fixture; gate-specific tests
-    # reassign ``library.renderer_rss.rss_kb`` / ``.result`` to drive a pause.
+    # reassign ``library.renderer_rss.rss_kb`` / ``library.renderer_gc.result``
+    # to drive a pause.
     renderer_rss = FakeRendererRss()
     renderer_gc = FakeRendererGc()
 
@@ -184,7 +178,6 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
         renderer_gc=renderer_gc,
         prune_conflicts=prune_conflicts,
         settings=settings,
-        emit=emit,
     )
 
 

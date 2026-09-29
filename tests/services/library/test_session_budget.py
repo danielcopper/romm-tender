@@ -1,12 +1,12 @@
 """Tests for SessionBudgetMonitor — Steam's per-session renderer-heap budget.
 
-The monitor is reached through the library façade (``library.sync.
-_session_budget``) so every test drives the same instance the sync orchestrator
-holds, over the shared state box the pause verdict lands on. The renderer seams
-are the in-memory ``FakeRendererRss`` / ``FakeRendererGc`` the shared fixture
-wires in — ``library.renderer_rss.rss_kb`` sets the reading a test needs and
-``.calls`` records how often the reading was taken, which is how the GC-skip
-floor is pinned.
+The monitor is reached through the library façade
+(``library.sync._session_budget``) so every test drives the same instance the
+sync orchestrator holds, over the shared state box the pause verdict lands on.
+The renderer seams are the in-memory ``FakeRendererRss`` / ``FakeRendererGc``
+the shared fixture wires in — ``library.renderer_rss.rss_kb`` sets the reading a
+test needs and ``.calls`` records how often the reading was taken, which is how
+the GC-skip floor is pinned.
 
 The gate's arithmetic lives in ``domain.session_budget`` and is covered by
 ``tests/domain/test_session_budget.py``; what these tests own is the
@@ -221,7 +221,7 @@ class TestSessionBudgetMonitor:
 
         assert box.run_start_rss_kb is None
 
-    # ── get_session_budget_status callable ───────────────────────
+    # ── LibraryService.get_session_budget_status ─────────────────
 
     @pytest.mark.asyncio
     async def test_session_budget_status_happy(self, library):

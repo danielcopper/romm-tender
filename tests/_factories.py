@@ -91,13 +91,10 @@ def _make_testable_plugin():
         _prune_conflicts: Any
         _tmp_path: Any
         _core_info: Any
-        _platform_core_reader: Any
         _active_core: Any
         _m3u_supported: Any
         _system_extensions: Any
         _install_recorder: Any
-        _renderer_rss: Any
-        _renderer_gc: Any
         _save_directories: Any
 
     instance = TestablePlugin()

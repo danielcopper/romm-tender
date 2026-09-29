@@ -1,4 +1,4 @@
-"""Façade integration tests for LibraryService — public callable surface end-to-end."""
+"""Façade integration tests for LibraryService — its public methods end-to-end."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock

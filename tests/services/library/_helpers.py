@@ -50,7 +50,7 @@ def _make_collections_loop(user=None, smart=None, virtual=None):
     first type) — robust to the supported-type tuple growing.
 
     Every call after the listings runs the offloaded function for real:
-    ``get_collections`` then reads the reachable set from the harness's own fake
+    ``get_collections`` then reads the reachable set from the shared fake
     UoW, so its ``in_steam_count`` answers from whatever rows the test seeded.
     """
     listings = iter(
@@ -174,18 +174,14 @@ def _seed_rom_row(
 
 
 def _use_fake_romm(library, fake_romm_api):
-    """Swap the harness's MagicMock ``romm_api`` for the seeded fake.
+    """Swap the harness's ``MagicMock`` ``romm_api`` for the seeded fake.
 
-    The library-suite ``library`` fixture wires ``romm_api`` as a
-    ``MagicMock()`` (kept for the test_fetcher.py tests that match
-    callables by identity). Each test that wants the end-to-end path
-    drives through this helper, which rebinds the fake onto every
-    sub-service holding a stale reference.
+    The fetcher and the artwork service each hold the ``romm_api`` they were
+    built with, so both are rebound here.
     """
     library.romm_api = fake_romm_api
     library.sync._fetcher._romm_api = fake_romm_api
     library.artwork._romm_api = fake_romm_api
-    library.shortcut_removal._romm_api = fake_romm_api
     return fake_romm_api
 
 

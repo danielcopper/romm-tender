@@ -152,14 +152,14 @@ class TestShortcutDataFormat:
     def test_exe_path_is_the_launcher_it_was_handed(self, library):
         """The exe is the launcher path handed in, verbatim.
 
-        Where that path comes from is the composition root's answer (the user's
-        data root, ``tests/test_bootstrap.py``) — this builder composes none of
-        it, so that a launcher living outside the program's folder needs no second
+        Where that path comes from is the composition root's answer (the bin
+        root, ``tests/test_bootstrap.py``) — this builder composes none of it,
+        so that a launcher living outside the code root needs no second
         spelling here.
         """
         from domain.shortcut_data import build_shortcuts_data
 
-        launcher = "/home/deck/.local/share/romm-tender/bin/tender-rom-launcher"
+        launcher = "/home/deck/.local/bin/tender-rom-launcher"
 
         result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
 
@@ -5509,9 +5509,8 @@ class TestRunProgressCounters:
 
     @pytest.mark.asyncio
     async def test_status_callable_reports_unknown_before_any_run(self, library):
-        # A fresh backend process has no counters: the pair is
-        # None, and the banner drops the sentence rather than showing zeros.
-
+        # A fresh backend process has no counters: the pair is None, and the
+        # banner drops the sentence rather than showing zeros.
         result = await library.sync.get_session_budget_status()
 
         assert result["run_done_items"] is None
