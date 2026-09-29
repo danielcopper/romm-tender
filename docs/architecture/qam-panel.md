@@ -716,9 +716,9 @@ because the panel is entirely intact without it: syncs and downloads run, and mo
 are on the page they belong to as well. Not all of them, and the cases known to be said only by a toast, or by a line on
 a page that has to be open at the time, are these — known cases, not a complete list: a sync that fails before its work
 queue is built, which writes no run, so only the Sync page's status line and Main's transient line say it, each only if
-it is open when the sync fails (§ Sync); a removed-game cleanup scan that fails, which Data Management's scan button
-answers with a toast alone; and a play-button download that is refused or fails before it is queued, which never reaches
-the download queue.
+it is open when the sync fails (§ Sync); a removed-game cleanup that the game page's version picker cannot prepare for
+one version, which it answers with a toast alone; and a play-button download that is refused or fails before it is
+queued, which never reaches the download queue.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
