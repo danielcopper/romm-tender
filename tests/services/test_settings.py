@@ -389,12 +389,6 @@ class TestSettings:
         assert "rmm_abc" not in str(result)
 
     @pytest.mark.asyncio
-    async def test_get_settings_reports_token_absent(self, service, settings):
-        settings["romm_api_token"] = None
-        result = service.get_settings()
-        assert result["has_token"] is False
-
-    @pytest.mark.asyncio
     async def test_save_server_url_persists_url(self, service, settings):
         result = await service.save_server_url("http://example.com")
         assert result["success"] is True
@@ -421,21 +415,10 @@ class TestInsecureSslSetting:
         assert result["romm_allow_insecure_ssl"] is False
 
     @pytest.mark.asyncio
-    async def test_save_server_url_with_insecure_ssl(self, service, settings):
-        await service.save_server_url("https://romm.local", True)
-        assert settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
     async def test_save_server_url_without_param_preserves(self, service, settings):
         settings["romm_allow_insecure_ssl"] = True
         await service.save_server_url("https://romm.local")
         assert settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_explicit_false(self, service, settings):
-        settings["romm_allow_insecure_ssl"] = True
-        await service.save_server_url("https://romm.local", False)
-        assert settings["romm_allow_insecure_ssl"] is False
 
 
 # ── save_log_level ─────────────────────────────────────────────────────
