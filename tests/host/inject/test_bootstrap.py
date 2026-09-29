@@ -381,6 +381,8 @@ def _globals_bundle(report: dict[str, Any] | None) -> str:
 
 _PANEL = _module('globalThis.__ran.push("panel");')
 
+_PANEL_THAT_THROWS = _module('globalThis.__ran.push("panel"); throw new Error("the panel broke while evaluating");')
+
 # The panel with a tripwire on it: an installer that must never be reached, so
 # "nothing was installed" is a negative over something there was to call.
 _PANEL_WITH_A_TRIPWIRE = _module(
@@ -470,6 +472,26 @@ class TestItRunsUnderNode:
 
 class TestWhoseMarkerItIs:
     """The marker names the backend process that loaded the panel, so a later one can tell."""
+
+    @pytest.mark.parametrize(
+        ("urls", "globals_at"),
+        [
+            (
+                (_globals_bundle(installer_report(SP_REACT=True, SP_REACTDOM=True, SP_JSX=False)), _PANEL),
+                0,
+            ),
+            ((_PANEL_THAT_THROWS,), None),
+        ],
+        ids=["a-global-refused", "the-panel-threw"],
+    )
+    def test_a_load_that_failed_keeps_the_marker(self, tmp_path, urls, globals_at):
+        """Only a JS-context rebuild takes a failed load's partial state away, so
+        the marker stays: a later attachment must not evaluate into that context
+        again, and a later backend must see a context that needs rebuilding."""
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=urls, globals_at=globals_at)))
+        assert answered["answer"]["ok"] is False
+        assert answered["cards"] == 1
+        assert answered["owner"] == {"instance": "this-backend", "version": "1.2.3"}
 
     def test_the_panel_it_loads_is_marked_as_this_backends(self, tmp_path):
         report = installer_report(SP_REACT=True, SP_REACTDOM=True, SP_JSX=True)
