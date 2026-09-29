@@ -1,5 +1,5 @@
 import { FC } from "react";
-import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
+import { UpdateCard } from "./UpdateCard";
 import { dismissUpdateForVersion, useUpdateNoticeState } from "../utils/updateNoticeStore";
 import { failureTakesThePlaceOf, useUpdateOutcomeState } from "../utils/updateOutcomeStore";
 import { stoppedAttemptTakesThePlaceOf, useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
@@ -31,38 +31,14 @@ export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates 
   };
 
   return (
-    <>
-      <PanelSectionRow>
-        <Focusable onActivate={() => {}}>
-          <div
-            data-testid="update-notice"
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "rgba(61, 157, 246, 0.15)",
-              borderLeft: "3px solid #3d9df6",
-              borderRadius: "4px",
-              fontSize: "12px",
-            }}
-          >
-            <div style={{ fontWeight: "bold", color: "#3d9df6", marginBottom: "4px" }}>
-              Tender {latestVersion} is available
-            </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>Installed version: {state.currentVersion}.</div>
-          </div>
-        </Focusable>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
-          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
-              Open Updates
-            </DialogButton>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
-              Dismiss
-            </DialogButton>
-          </Focusable>
-        </Field>
-      </PanelSectionRow>
-    </>
+    <UpdateCard
+      testId="update-notice"
+      color="#3d9df6"
+      wash="rgba(61, 157, 246, 0.15)"
+      title={`Tender ${latestVersion} is available`}
+      detail={`Installed version: ${state.currentVersion}.`}
+      onOpenUpdates={onOpenUpdates}
+      onDismiss={handleDismiss}
+    />
   );
 };

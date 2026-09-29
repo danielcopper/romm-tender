@@ -87,9 +87,8 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        {/* A check sent while the installer takes this backend down would fail
-            on the lost connection, which is what a successful install looks like. */}
-        <ButtonItem layout="below" onClick={onCheckNow} disabled={checking || install.restarting}>
+        {/* Dead from the press on: why is docs/architecture/qam-panel.md, Settings. */}
+        <ButtonItem layout="below" onClick={onCheckNow} disabled={checking || install.underWay}>
           {checking ? "Checking…" : "Check now"}
         </ButtonItem>
       </PanelSectionRow>

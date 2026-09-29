@@ -15,12 +15,14 @@
  * Settings › Updates states it through the install's own read — the failed
  * attempt and Try again — so it is not read there.
  *
- * Every write installs a NEW value and notifies, which is what lets
+ * Subscribers are `updateOutcomeStore.ts`'s own, since both hold what the last
+ * update did. Every write installs a NEW value and notifies, which is what lets
  * {@link getStoppedUpdateAttempt} serve as a `useSyncExternalStore` snapshot.
  */
 
 import { useSyncExternalStore } from "react";
 import { dismissStoppedUpdateAttempt, getStoppedUpdateAttempt as readStoppedUpdateAttempt } from "../api/backend";
+import { notifyUpdateOutcome, onUpdateOutcomeChange } from "./updateOutcomeStore";
 
 /** An attempt whose installer stopped without updating, in this store's spelling. */
 export interface StoppedUpdateAttempt {
@@ -29,7 +31,6 @@ export interface StoppedUpdateAttempt {
 }
 
 let _attempt: StoppedUpdateAttempt | null = null;
-let _listeners: Array<() => void> = [];
 
 /**
  * Ordering fence for the read, as in `updateOutcomeStore.ts`: Dismiss moves
@@ -39,7 +40,7 @@ let _seq = 0;
 
 function set(attempt: StoppedUpdateAttempt | null): void {
   _attempt = attempt;
-  _listeners.forEach((fn) => fn());
+  notifyUpdateOutcome();
 }
 
 /** Test seam: drop the answer, as a fresh panel load has it. */
@@ -52,16 +53,9 @@ export function getStoppedUpdateAttempt(): StoppedUpdateAttempt | null {
   return _attempt;
 }
 
-export function onStoppedUpdateAttemptChange(fn: () => void): () => void {
-  _listeners.push(fn);
-  return () => {
-    _listeners = _listeners.filter((l) => l !== fn);
-  };
-}
-
 /** Subscribe to the stopped attempt from a component. */
 export function useStoppedUpdateAttempt(): StoppedUpdateAttempt | null {
-  return useSyncExternalStore(onStoppedUpdateAttemptChange, getStoppedUpdateAttempt);
+  return useSyncExternalStore(onUpdateOutcomeChange, getStoppedUpdateAttempt);
 }
 
 /** Ask the backend whether an earlier start's installer stopped without updating, and fill the store. */

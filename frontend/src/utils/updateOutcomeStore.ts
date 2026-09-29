@@ -83,6 +83,11 @@ let _seq = 0;
 
 export function setUpdateOutcomeState(state: UpdateOutcomeState): void {
   _state = state;
+  notifyUpdateOutcome();
+}
+
+/** Tell every subscriber something about the last update changed — `stoppedUpdateStore.ts` shares them. */
+export function notifyUpdateOutcome(): void {
   _listeners.forEach((fn) => fn());
 }
 

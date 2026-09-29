@@ -2,8 +2,9 @@
  * The words and the step list Settings › Updates shows for an install.
  *
  * The backend answers in discriminants (`UpdateWaitReason`,
- * `UpdateInstallStep`, `UpdateInstallFailure`); every sentence a reader sees
- * for one is here.
+ * `UpdateInstallStep`, `UpdateInstallFailure`, a refusal's `reason`); the
+ * sentence a reader sees for each is here. The button's labels and a step's
+ * value sit with the rows that show them, in `UpdateInstallRows.tsx`.
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
@@ -16,11 +17,75 @@ export const RESTARTING_LINE = "Tender is restarting — Steam's interface will 
 /** A press the connection failed to carry; the log names the error. */
 export const INSTALL_REQUEST_FAILED = "The install could not be requested.";
 
+/** While the release downloads or is checked: the backend asks Steam once more before the installer starts. */
+export const GAME_STARTS_CANCEL = "Starting a game now cancels the update.";
+
+/** A read of the install's state that did not answer, while no installer is running. */
+export const INSTALL_STATE_UNREAD = "Could not read the update state.";
+
+/** Where the installer's own account of an attempt is, as every line about it names it. */
+const INSTALLER_JOURNAL = "Details: journalctl --user -u romm-tender-update";
+
+/** Five minutes after the installer started, with the backend gone: it has not come back up. */
+export const NOT_BACK_LINE = `Tender has not come back. ${INSTALLER_JOURNAL} — start it again with: systemctl --user start romm-tender`;
+
+/** Five minutes after the installer started, with the backend still answering: the installer has not stopped it yet. */
+export const TAKING_LONG_LINE = `The installer is taking unusually long. ${INSTALLER_JOURNAL}`;
+
+/** How long after the panel first sees the installer started the restarting line gives way to one of the two above. */
+export const INSTALLER_OVERDUE_MS = 5 * 60 * 1000;
+
+/** A press the backend refused for something other than a wait, and a press the connection did not carry. */
+export type InstallRefusalReason = "update_in_progress" | "not_offered" | "version_changed" | "request_failed";
+
+export const INSTALL_REFUSAL_SENTENCES: Record<InstallRefusalReason, string> = {
+  update_in_progress: "An update is already being installed.",
+  not_offered: "There is no newer release to install.",
+  version_changed: "The release on offer has changed — press again to install it.",
+  request_failed: INSTALL_REQUEST_FAILED,
+};
+
+/** What refused a press, and the version that press named. */
+export interface InstallRefusal {
+  reason: InstallRefusalReason;
+  version: string;
+}
+
+/**
+ * Whether a refusal still says something true once a later read has answered.
+ *
+ * A press the connection did not carry is over once a read answers again. A
+ * release no longer offered, or another one offered, is over once a read
+ * names a different version than the press did — the button then says what is
+ * offered. An update already under way is over once no attempt is.
+ */
+export function refusalStands(
+  refusal: InstallRefusal,
+  read: { version: string | null; attempt: UpdateInstallAttempt | null },
+): boolean {
+  switch (refusal.reason) {
+    case "request_failed":
+      return false;
+    case "update_in_progress":
+      return read.attempt !== null && read.attempt.step !== "failed";
+    case "not_offered":
+    case "version_changed":
+      return read.version === refusal.version;
+  }
+}
+
+/**
+ * How many takedowns Steam's interface reload limit allows in its window —
+ * `RELOAD_LIMIT` in `backend/host/inject/reload_limit.py`, which
+ * `updateInstallView.test.ts` holds this equal to.
+ */
+export const RELOAD_LIMIT: number = 2;
+
 export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
   download_failed: "The download failed — nothing was changed.",
   checksum_mismatch: "The download did not match its checksum — nothing was changed.",
   installer_not_started: "The installer could not be started.",
-  installer_stopped: "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
+  installer_stopped: `The installer stopped without updating. ${INSTALLER_JOURNAL}`,
   game_started: "A game was started — nothing was changed. Try again once it has closed.",
   running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
 };
@@ -50,7 +115,7 @@ export function waitReasonLine(wait: UpdateWaitReason): string {
     case "app_running":
       return `A game to close (${wait.apps.join(", ")})`;
     case "interface_reload_limit":
-      return `Steam's interface was just reloaded twice — possible again at ${clockTime(wait.frees_at)}`;
+      return `Steam's interface was just reloaded ${RELOAD_LIMIT === 2 ? "twice" : `${RELOAD_LIMIT} times`} — possible again at ${clockTime(wait.frees_at)}`;
     default:
       return PLAIN_WAIT_LINES[wait.reason];
   }

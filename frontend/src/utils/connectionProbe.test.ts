@@ -6,6 +6,8 @@ import {
   onConnectionProbeChange,
   resetConnectionProbeForTests,
 } from "./connectionProbe";
+import { setUpdateInstallAttempt } from "./updateInstallStore";
+import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
 
 vi.mock("../api/backend", () => ({
   testConnection: vi.fn(),
@@ -21,6 +23,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   resetConnectionProbeForTests();
   vi.useFakeTimers();
+  setUpdateInstallAttempt(null);
 });
 
 afterEach(() => {
@@ -74,6 +77,48 @@ describe("connectionProbe", () => {
       expect.anything(),
     );
     consoleError.mockRestore();
+  });
+
+  describe("while an update's installer restarts the backend", () => {
+    const INSTALLER_STARTED = {
+      version: "1.1.0",
+      step: "installer_started" as const,
+      bytes_done: 0,
+      bytes_total: null,
+      failure: null,
+    };
+
+    let consoleError: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.mocked(testConnection).mockRejectedValue(new Error("connection_lost"));
+      vi.mocked(getSettings).mockRejectedValue(new Error("connection_lost"));
+      consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleError.mockRestore();
+      setUpdateInstallAttempt(null);
+    });
+
+    it("does not call a backend the installer is restarting failed", async () => {
+      setUpdateInstallAttempt(INSTALLER_STARTED);
+
+      ensureConnectionProbe();
+      await vi.advanceTimersByTimeAsync(FULL_LADDER_MS);
+
+      expect(getConnectionProbeState().connected).toBeNull();
+    });
+
+    it("calls it failed once the installer has had its five minutes", async () => {
+      setUpdateInstallAttempt(INSTALLER_STARTED);
+      await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS);
+
+      ensureConnectionProbe();
+      await vi.advanceTimersByTimeAsync(FULL_LADDER_MS);
+
+      expect(getConnectionProbeState().connected).toBe("backend_failed");
+    });
   });
 
   it("hands the stored verdict to a subscriber that arrives after the run ended", async () => {

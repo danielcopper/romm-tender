@@ -10,10 +10,18 @@ import {
 import { detach } from "../../utils/detach";
 import {
   getUpdateInstallAttempt,
+  installerSeenAt,
+  noteInstaller,
   setUpdateInstallAttempt,
   useUpdateInstallAttempt,
 } from "../../utils/updateInstallStore";
-import { furtherAttempt, INSTALL_REQUEST_FAILED } from "../../utils/updateInstallView";
+import {
+  furtherAttempt,
+  INSTALL_REFUSAL_SENTENCES,
+  INSTALLER_OVERDUE_MS,
+  refusalStands,
+  type InstallRefusal,
+} from "../../utils/updateInstallView";
 
 export const UPDATE_INSTALL_POLL_MS = 3000;
 
@@ -28,8 +36,14 @@ export interface UpdateInstall {
   pressing: boolean;
   /** What refused the last press, where it was not a wait; `""` otherwise. */
   refusal: string;
+  /** An attempt is downloading, verifying, or its installer has started. */
+  underWay: boolean;
   /** The installer is running, so this backend is going away and its connection with it. */
   restarting: boolean;
+  /** Five minutes have passed since this panel first saw the installer started, and it is still restarting. */
+  overdue: boolean;
+  /** The last read did not answer. */
+  readFailed: boolean;
   install: () => void;
 }
 
@@ -52,7 +66,10 @@ const started = (version: string): UpdateInstallAttempt => ({
 export function useUpdateInstall(): UpdateInstall {
   const [reading, setReading] = useState<UpdateInstallState | null>(null);
   const [pressing, setPressing] = useState(false);
-  const [refusal, setRefusal] = useState("");
+  const [refusal, setRefusal] = useState<InstallRefusal | null>(null);
+  const [readFailed, setReadFailed] = useState(false);
+  // The last moment the deadline below was looked at; moved only by its timer.
+  const [lookedAt, setLookedAt] = useState(() => Date.now());
   const pushed = useUpdateInstallAttempt();
   // Bumped by a press and by its answer: a read issued before either is older
   // than what the press established, and writes nothing when it lands.
@@ -63,7 +80,9 @@ export function useUpdateInstall(): UpdateInstall {
 
   const take = useCallback((next: UpdateInstallState) => {
     lastReading.current = next;
+    noteInstaller(next.attempt);
     setReading(next);
+    setRefusal((held) => (held !== null && !refusalStands(held, next) ? null : held));
   }, []);
 
   useEffect(() => {
@@ -75,10 +94,14 @@ export function useUpdateInstall(): UpdateInstall {
       const issuedIn = generation.current;
       try {
         const answer = await getUpdateInstallState();
-        if (mounted.current && issuedIn === generation.current) take(answer);
+        if (!mounted.current) return;
+        setReadFailed(false);
+        // A read that lands while a press waits for its answer may still carry
+        // the attempt the press replaces; the answer decides instead.
+        if (issuedIn === generation.current && !pressInFlight.current) take(answer);
       } catch (e) {
-        // Once the installer started, the connection going is what success
-        // looks like, so a read it takes down is no failure to report.
+        if (mounted.current) setReadFailed(true);
+        // Not logged once the installer started: qam-panel.md, Settings.
         const attempt = furtherAttempt(getUpdateInstallAttempt(), lastReading.current?.attempt ?? null);
         if (attempt?.step !== "installer_started") logError(`Failed to read the update install state: ${e}`);
       } finally {
@@ -95,31 +118,46 @@ export function useUpdateInstall(): UpdateInstall {
 
   const attempt = furtherAttempt(pushed, reading?.attempt ?? null);
   const version = reading?.version ?? null;
+  const restarting = attempt?.step === "installer_started";
+  const underWay = attempt !== null && attempt.step !== "failed";
+
+  // The restarting line gives way once the installer has had five minutes.
+  // Timed from the first time this panel saw it started, which the store
+  // keeps across the section's unmounts.
+  useEffect(() => {
+    const seenAt = installerSeenAt();
+    if (!restarting || seenAt === null) return;
+    const id = setTimeout(() => setLookedAt(Date.now()), Math.max(0, seenAt + INSTALLER_OVERDUE_MS - Date.now()));
+    return () => clearTimeout(id);
+  }, [restarting]);
+  const seenAt = installerSeenAt();
+  const overdue = restarting && seenAt !== null && lookedAt >= seenAt + INSTALLER_OVERDUE_MS;
 
   const install = async () => {
     // A disabled control still reports a press on the device.
-    if (pressInFlight.current || version === null) return;
+    const last = lastReading.current;
+    if (pressInFlight.current || version === null || underWay || (last?.wait_reasons.length ?? 0) > 0) return;
     pressInFlight.current = true;
     generation.current += 1;
     setUpdateInstallAttempt(null);
-    if (lastReading.current !== null) take({ ...lastReading.current, attempt: null });
+    if (last !== null) take({ ...last, attempt: null });
     setPressing(true);
-    setRefusal("");
+    setRefusal(null);
     try {
       const answer = await installUpdate(version);
       generation.current += 1;
       if (!mounted.current) return;
-      const last = lastReading.current;
+      const now = lastReading.current;
       if (answer.success) {
-        if (last !== null) take({ ...last, attempt: started(version), wait_reasons: [] });
+        if (now !== null) take({ ...now, attempt: started(version), wait_reasons: [] });
       } else if (answer.reason === "update_waiting") {
-        if (last !== null) take({ ...last, wait_reasons: answer.wait_reasons });
+        if (now !== null) take({ ...now, wait_reasons: answer.wait_reasons });
       } else {
-        setRefusal(answer.message);
+        setRefusal({ reason: answer.reason, version });
       }
     } catch (e) {
       logError(`Failed to request the update install: ${e}`);
-      if (mounted.current) setRefusal(INSTALL_REQUEST_FAILED);
+      if (mounted.current) setRefusal({ reason: "request_failed", version });
     } finally {
       pressInFlight.current = false;
       if (mounted.current) setPressing(false);
@@ -134,8 +172,11 @@ export function useUpdateInstall(): UpdateInstall {
     attempt,
     tryAgain: (reading?.try_again ?? false) || (attempt?.step === "failed" && attempt.version === version),
     pressing,
-    refusal,
-    restarting: attempt?.step === "installer_started",
+    refusal: refusal === null ? "" : INSTALL_REFUSAL_SENTENCES[refusal.reason],
+    underWay,
+    restarting,
+    overdue,
+    readFailed,
     install: () => detach(install()),
   };
 }

@@ -345,14 +345,18 @@ is left on it. A RetroDECK migration that is only waiting for your answer does n
 still there after the update. Paused game downloads do not hold it back either — a line under the button says how many
 there are, because the restart cancels them.
 
-Once you press it, the steps are listed under the button: **Downloading**, with how far it got, **Verifying** and
-**Starting the installer**. While it downloads and verifies, a line under the steps says **Starting a game now cancels
-the update.** — Tender checks once more right before the installer starts, and stops there, with nothing changed, if a
-game is running. When the installer has started, the section says **Tender is restarting — Steam's interface will reload
-in a moment.** From then on the panel loses touch with the old Tender, which is expected; after the reload Tender says
-it was updated, or, if the new version did not start, that the installer
+Once you press it, the button says **Installing…** and the steps are listed under it: **Downloading**, with how far it
+got, **Verifying** and **Starting the installer**. While it downloads and verifies, a line under the steps says
+**Starting a game now cancels the update.** — Tender checks once more right before the installer starts, and stops
+there, with nothing changed, if a game is running. When the installer has started, the section says **Tender is
+restarting — Steam's interface will reload in a moment.** From then on the panel loses touch with the old Tender, which
+is expected; after the reload Tender says it was updated, or, if the new version did not start, that the installer
 [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). While the install runs, Tender refuses
 to start a library sync, a game download or a save sync.
+
+If Tender is not back five minutes after the installer started, the restarting line changes: **Tender has not come
+back.** when it no longer answers — the line names the journal to read and the command that starts it again — or **The
+installer is taking unusually long.** when it still answers and the installer has not stopped it yet.
 
 If a step fails, it is marked **Failed** and the section says why, and the button comes back as **Try again**. Nothing
 tries again by itself.

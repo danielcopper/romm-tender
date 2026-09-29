@@ -1,10 +1,10 @@
 import { FC } from "react";
-import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 import { dismissStoppedUpdateCard, useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
 import { INSTALL_FAILURE_SENTENCES } from "../utils/updateInstallView";
 import { updateDidNotGoThrough } from "../utils/updateOutcomeStore";
 import { logError } from "../api/backend";
 import { AMBER, AMBER_WASH } from "./layout/pane";
+import { UpdateCard } from "./UpdateCard";
 
 /**
  * The notice on Main that an update's installer stopped without updating.
@@ -25,38 +25,14 @@ export const UpdateStoppedNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
   };
 
   return (
-    <>
-      <PanelSectionRow>
-        <Focusable onActivate={() => {}}>
-          <div
-            data-testid="update-stopped-notice"
-            style={{
-              padding: "8px 12px",
-              backgroundColor: AMBER_WASH,
-              borderLeft: `3px solid ${AMBER}`,
-              borderRadius: "4px",
-              fontSize: "12px",
-            }}
-          >
-            <div style={{ fontWeight: "bold", color: AMBER, marginBottom: "4px" }}>
-              {updateDidNotGoThrough(attempt.attemptedVersion, attempt.fromVersion)}
-            </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>{INSTALL_FAILURE_SENTENCES.installer_stopped}</div>
-          </div>
-        </Focusable>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
-          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
-              Open Updates
-            </DialogButton>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
-              Dismiss
-            </DialogButton>
-          </Focusable>
-        </Field>
-      </PanelSectionRow>
-    </>
+    <UpdateCard
+      testId="update-stopped-notice"
+      color={AMBER}
+      wash={AMBER_WASH}
+      title={updateDidNotGoThrough(attempt.attemptedVersion, attempt.fromVersion)}
+      detail={INSTALL_FAILURE_SENTENCES.installer_stopped}
+      onOpenUpdates={onOpenUpdates}
+      onDismiss={handleDismiss}
+    />
   );
 };

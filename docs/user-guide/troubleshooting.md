@@ -141,6 +141,9 @@ installer, and the step is marked **Failed** under **Settings › Updates** with
 again, the section says after five minutes **Tender has not come back** and how to start it; once it is running again,
 the main panel says the same as above.
 
+**Could not read the update state.** under the button means the section asked Tender how the install stands and got no
+answer; it asks again every few seconds, and the line goes once an answer comes.
+
 **Fix**: Tender's log names what went wrong, on its lines that say `update:`. For an installer that stopped, the
 installer's own output is in the journal:
 

@@ -1,5 +1,4 @@
 import { FC } from "react";
-import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 import {
   UPDATE_FAILURE_REASON,
   dismissUpdateFailureRecord,
@@ -9,6 +8,7 @@ import {
 } from "../utils/updateOutcomeStore";
 import { logError } from "../api/backend";
 import { AMBER, AMBER_WASH } from "./layout/pane";
+import { UpdateCard } from "./UpdateCard";
 
 /**
  * The notice on Main that the installer rolled an update back.
@@ -32,38 +32,14 @@ export const UpdateFailureNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
   };
 
   return (
-    <>
-      <PanelSectionRow>
-        <Focusable onActivate={() => {}}>
-          <div
-            data-testid="update-failure-notice"
-            style={{
-              padding: "8px 12px",
-              backgroundColor: AMBER_WASH,
-              borderLeft: `3px solid ${AMBER}`,
-              borderRadius: "4px",
-              fontSize: "12px",
-            }}
-          >
-            <div style={{ fontWeight: "bold", color: AMBER, marginBottom: "4px" }}>
-              {updateFailureSentence(failure)}
-            </div>
-            <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>{UPDATE_FAILURE_REASON}</div>
-          </div>
-        </Focusable>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
-          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
-              Open Updates
-            </DialogButton>
-            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
-              Dismiss
-            </DialogButton>
-          </Focusable>
-        </Field>
-      </PanelSectionRow>
-    </>
+    <UpdateCard
+      testId="update-failure-notice"
+      color={AMBER}
+      wash={AMBER_WASH}
+      title={updateFailureSentence(failure)}
+      detail={UPDATE_FAILURE_REASON}
+      onOpenUpdates={onOpenUpdates}
+      onDismiss={handleDismiss}
+    />
   );
 };

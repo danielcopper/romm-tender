@@ -100,9 +100,8 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
 };
 
 // What a Check now found, as the line under the button says it. A check that a
-// later switch press overtook — the only store write this page can issue while
-// one is in flight — reports nothing: its answer was never written, and the
-// press already emptied the line.
+// later switch press or a notice the backend pushed overtook reports nothing:
+// its answer was never written, and the store holds the newer one.
 const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, (latest: string | null) => string> = {
   found: (latest) => (latest === null ? "A newer release is available." : `Tender ${latest} is available.`),
   none: () => "You have the newest release.",

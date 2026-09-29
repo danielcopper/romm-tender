@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UpdateInstallAttempt } from "../api/backend";
-import { getUpdateInstallAttempt, onUpdateInstallAttemptChange, setUpdateInstallAttempt } from "./updateInstallStore";
+import {
+  getUpdateInstallAttempt,
+  installerRestarting,
+  installerSeenAt,
+  noteInstaller,
+  onUpdateInstallAttemptChange,
+  setUpdateInstallAttempt,
+} from "./updateInstallStore";
+import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
 
 const DOWNLOADING: UpdateInstallAttempt = {
   version: "1.1.0",
@@ -36,5 +44,39 @@ describe("updateInstallStore", () => {
     setUpdateInstallAttempt({ ...DOWNLOADING, bytes_done: 20 });
 
     expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  describe("when the installer was first seen started", () => {
+    const STARTED: UpdateInstallAttempt = { ...DOWNLOADING, step: "installer_started" };
+
+    it("is the first frame or read that showed it, and a later one does not move it", () => {
+      noteInstaller(STARTED, 1000);
+      noteInstaller(STARTED, 5000);
+      setUpdateInstallAttempt(STARTED);
+
+      expect(installerSeenAt()).toBe(1000);
+    });
+
+    it("is nothing for an attempt that has not got that far", () => {
+      noteInstaller(DOWNLOADING, 1000);
+
+      expect(installerSeenAt()).toBeNull();
+    });
+
+    it("counts as restarting for five minutes and no longer", () => {
+      noteInstaller(STARTED, 1000);
+
+      expect(installerRestarting(1000 + INSTALLER_OVERDUE_MS - 1)).toBe(true);
+      expect(installerRestarting(1000 + INSTALLER_OVERDUE_MS)).toBe(false);
+    });
+
+    it("is forgotten at a press, which clears the attempt", () => {
+      noteInstaller(STARTED, 1000);
+
+      setUpdateInstallAttempt(null);
+
+      expect(installerSeenAt()).toBeNull();
+      expect(installerRestarting(1001)).toBe(false);
+    });
   });
 });

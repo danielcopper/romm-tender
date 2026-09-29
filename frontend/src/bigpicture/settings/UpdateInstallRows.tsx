@@ -4,8 +4,12 @@ import { AMBER } from "../layout/pane";
 import type { UpdateInstallAttempt } from "../../api/backend";
 import { formatBytes } from "../../utils/formatters";
 import {
+  GAME_STARTS_CANCEL,
   INSTALL_FAILURE_SENTENCES,
+  INSTALL_STATE_UNREAD,
+  NOT_BACK_LINE,
   RESTARTING_LINE,
+  TAKING_LONG_LINE,
   WAITING_FOR,
   downloadPercent,
   installStepRows,
@@ -40,17 +44,66 @@ function downloadBar(step: InstallStepRow, attempt: UpdateInstallAttempt) {
   };
 }
 
+function buttonLabel(install: UpdateInstall): string {
+  if (install.underWay) return "Installing…";
+  return install.tryAgain ? "Try again" : `Install update ${install.version}`;
+}
+
+/** The line under the steps: what the attempt's state means for the reader, one row for all of them. */
+function statusLine(install: UpdateInstall, attempt: UpdateInstallAttempt) {
+  switch (attempt.step) {
+    case "downloading":
+    case "verifying":
+      return <span data-testid="updates-game-hint">{GAME_STARTS_CANCEL}</span>;
+    case "installer_started": {
+      if (!install.overdue) return <span data-testid="updates-restarting">{RESTARTING_LINE}</span>;
+      return (
+        <span data-testid="updates-restarting" style={{ color: AMBER }}>
+          {install.readFailed ? NOT_BACK_LINE : TAKING_LONG_LINE}
+        </span>
+      );
+    }
+    case "failed":
+      return (
+        <span data-testid="updates-install-failure" style={{ color: AMBER }}>
+          {attempt.failure === null ? "" : INSTALL_FAILURE_SENTENCES[attempt.failure]}
+        </span>
+      );
+  }
+}
+
 /**
  * The install under Settings › Updates: the button, what it waits for, and the
- * steps of an attempt. Every row is a focus stop, because the pane scrolls only
- * by moving focus. A step's bar rides its field's description so the step and
- * its bar are one stop.
+ * steps of an attempt. Which row carries what, and why none of them leaves
+ * while it can hold focus, is `docs/architecture/qam-panel.md`, Settings.
  */
 export const UpdateInstallRows: FC<{ install: UpdateInstall }> = ({ install }) => {
   const { attempt } = install;
-  const underWay = attempt !== null && attempt.step !== "failed";
-  const showButton = install.offered && install.version !== null && !underWay;
+  const showButton = (install.offered && install.version !== null) || install.underWay;
+  // A failed attempt for a version no longer offered says nothing about the one that is.
+  const showAttempt = attempt !== null && (install.underWay || attempt.version === install.version);
   const pausedHint = pausedDownloadsHint(install.pausedDownloads);
+  const waiting = !install.underWay && install.waitReasons.length > 0;
+  const unread = install.readFailed && !install.restarting;
+
+  const description = (
+    <>
+      {waiting && (
+        <div data-testid="updates-waiting">
+          <div>{WAITING_FOR}</div>
+          {install.waitReasons.map((wait) => (
+            <div key={wait.reason} data-testid="updates-wait-reason">
+              {waitReasonLine(wait)}
+            </div>
+          ))}
+        </div>
+      )}
+      {pausedHint && <div data-testid="updates-paused-hint">{pausedHint}</div>}
+      {install.refusal && <div data-testid="updates-install-refusal">{install.refusal}</div>}
+      {unread && <div data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</div>}
+    </>
+  );
+  const hasDescription = waiting || pausedHint !== "" || install.refusal !== "" || unread;
 
   return (
     <>
@@ -59,40 +112,20 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall }> = ({ install }) =
           <ButtonItem
             layout="below"
             onClick={install.install}
-            disabled={install.pressing || install.waitReasons.length > 0}
+            disabled={install.pressing || install.underWay || install.waitReasons.length > 0}
+            {...(hasDescription ? { description } : {})}
           >
-            {install.tryAgain ? "Try again" : `Install update ${install.version}`}
+            {buttonLabel(install)}
           </ButtonItem>
         </PanelSectionRow>
       )}
-      {showButton && pausedHint && (
+      {!showButton && unread && (
         <PanelSectionRow>
-          <Field label={<span data-testid="updates-paused-hint">{pausedHint}</span>} focusable={true} />
-        </PanelSectionRow>
-      )}
-      {showButton && install.waitReasons.length > 0 && (
-        <PanelSectionRow>
-          <Field
-            label={WAITING_FOR}
-            description={
-              <div data-testid="updates-waiting">
-                {install.waitReasons.map((wait) => (
-                  <div key={wait.reason} data-testid="updates-wait-reason">
-                    {waitReasonLine(wait)}
-                  </div>
-                ))}
-              </div>
-            }
-            focusable={true}
-          />
-        </PanelSectionRow>
-      )}
-      {install.refusal && (
-        <PanelSectionRow>
-          <Field label={<span data-testid="updates-install-refusal">{install.refusal}</span>} focusable={true} />
+          <Field label={<span data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</span>} focusable={true} />
         </PanelSectionRow>
       )}
       {attempt !== null &&
+        showAttempt &&
         installStepRows(attempt).map((step) => (
           <PanelSectionRow key={step.id}>
             <Field label={step.label} focusable={true} bottomSeparator="none" {...downloadBar(step, attempt)}>
@@ -106,21 +139,9 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall }> = ({ install }) =
             </Field>
           </PanelSectionRow>
         ))}
-      {attempt?.step === "installer_started" && (
-        <PanelSectionRow>
-          <Field label={<span data-testid="updates-restarting">{RESTARTING_LINE}</span>} focusable={true} />
-        </PanelSectionRow>
-      )}
-      {attempt?.step === "failed" && attempt.failure !== null && (
-        <PanelSectionRow>
-          <Field
-            label={
-              <span data-testid="updates-install-failure" style={{ color: AMBER }}>
-                {INSTALL_FAILURE_SENTENCES[attempt.failure]}
-              </span>
-            }
-            focusable={true}
-          />
+      {attempt !== null && showAttempt && (
+        <PanelSectionRow key="status">
+          <Field label={statusLine(install, attempt)} focusable={true} />
         </PanelSectionRow>
       )}
     </>

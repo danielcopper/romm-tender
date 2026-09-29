@@ -4,10 +4,10 @@ import {
   dismissStoppedUpdateCard,
   fetchStoppedUpdateAttempt,
   getStoppedUpdateAttempt,
-  onStoppedUpdateAttemptChange,
   resetStoppedUpdateStoreForTests,
   stoppedAttemptTakesThePlaceOf,
 } from "./stoppedUpdateStore";
+import { onUpdateOutcomeChange } from "./updateOutcomeStore";
 
 const WIRE = { attempted_version: "1.1.0", from_version: "1.0.0", started_at: "2026-09-29T10:00:00Z" };
 
@@ -42,7 +42,7 @@ describe("stoppedUpdateStore", () => {
     vi.mocked(readStopped).mockResolvedValue(WIRE);
     await fetchStoppedUpdateAttempt();
     const heard = vi.fn();
-    const stop = onStoppedUpdateAttemptChange(heard);
+    const stop = onUpdateOutcomeChange(heard);
 
     await dismissStoppedUpdateCard();
     stop();

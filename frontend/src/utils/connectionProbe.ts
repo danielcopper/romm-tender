@@ -25,6 +25,7 @@ import { getSettings, testConnection } from "../api/backend";
 import { setVersionError } from "./connectionState";
 import { detach } from "./detach";
 import { withTimeout } from "./withTimeout";
+import { installerRestarting } from "./updateInstallStore";
 
 // Each attempt is raced against a deadline because the callable hangs (rather
 // than rejects) while the backend is still starting. The schedule mirrors the
@@ -94,6 +95,13 @@ async function runProbe(): Promise<void> {
           await withTimeout(getSettings(), CONNECTION_CALLABLE_TIMEOUT);
           publish({ connected: false, failure: null });
         } catch (pingErr) {
+          // A backend an update's installer is restarting is expected to be
+          // gone for a while; the row stays at "Checking…" rather than calling
+          // it failed, until the Updates section says it has not come back.
+          if (installerRestarting()) {
+            publish({ connected: null, failure: null });
+            return;
+          }
           publish({ connected: "backend_failed", failure: null });
           // logError is itself a callable and would hang against a dead
           // backend — log to the console instead.

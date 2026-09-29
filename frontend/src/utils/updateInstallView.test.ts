@@ -1,7 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
 import {
   INSTALL_FAILURE_SENTENCES,
+  RELOAD_LIMIT,
+  refusalStands,
   downloadPercent,
   furtherAttempt,
   installStepRows,
@@ -37,11 +40,53 @@ describe("waitReasonLine", () => {
     expect(waitReasonLine(wait)).toBe(line);
   });
 
-  it("names the local time the reload limit frees up, as HH:MM", () => {
-    const freesAt = new Date(2026, 8, 29, 9, 5, 42).getTime() / 1000;
-    expect(waitReasonLine({ reason: "interface_reload_limit", frees_at: freesAt })).toBe(
-      "Steam's interface was just reloaded twice — possible again at 09:05",
-    );
+  describe("in a time zone away from UTC", () => {
+    const zone = process.env.TZ;
+
+    beforeEach(() => {
+      process.env.TZ = "Asia/Kolkata";
+    });
+
+    afterEach(() => {
+      process.env.TZ = zone;
+    });
+
+    it("names the local time the reload limit frees up, as HH:MM", () => {
+      // 03:35:42 UTC is 09:05 in Kolkata, five and a half hours ahead: a
+      // rendering in UTC would say 03:35.
+      const freesAt = Date.UTC(2026, 8, 29, 3, 35, 42) / 1000;
+      expect(waitReasonLine({ reason: "interface_reload_limit", frees_at: freesAt })).toBe(
+        "Steam's interface was just reloaded twice — possible again at 09:05",
+      );
+    });
+  });
+
+  it("counts the reloads the backend's limit allows", () => {
+    const source = readFileSync(`${process.cwd()}/../backend/host/inject/reload_limit.py`, "utf8");
+    expect(source.match(/^RELOAD_LIMIT = (\d+)$/m)?.[1]).toBe(String(RELOAD_LIMIT));
+  });
+});
+
+describe("refusalStands", () => {
+  const read = (version: string | null, attempt: UpdateInstallAttempt | null = null) => ({ version, attempt });
+
+  it("lets a press the connection did not carry go at the next read that answers", () => {
+    expect(refusalStands({ reason: "request_failed", version: "1.0.0" }, read("1.0.0"))).toBe(false);
+  });
+
+  it("holds a changed or withdrawn release while the read still names the pressed version", () => {
+    for (const reason of ["version_changed", "not_offered"] as const) {
+      expect(refusalStands({ reason, version: "1.0.0" }, read("1.0.0"))).toBe(true);
+      expect(refusalStands({ reason, version: "1.0.0" }, read("1.0.1"))).toBe(false);
+      expect(refusalStands({ reason, version: "1.0.0" }, read(null))).toBe(false);
+    }
+  });
+
+  it("holds an update already under way while an attempt is", () => {
+    const refusal = { reason: "update_in_progress" as const, version: "1.0.0" };
+    expect(refusalStands(refusal, read("1.0.0", DOWNLOADING))).toBe(true);
+    expect(refusalStands(refusal, read("1.0.0", failed("download_failed")))).toBe(false);
+    expect(refusalStands(refusal, read("1.0.0"))).toBe(false);
   });
 });
 

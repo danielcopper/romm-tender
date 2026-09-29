@@ -8,7 +8,7 @@ import {
   type UpdateInstallState,
 } from "../../api/backend";
 import { setUpdateInstallAttempt } from "../../utils/updateInstallStore";
-import { INSTALL_REQUEST_FAILED } from "../../utils/updateInstallView";
+import { INSTALL_REQUEST_FAILED, INSTALLER_OVERDUE_MS } from "../../utils/updateInstallView";
 import { UPDATE_INSTALL_POLL_MS, useUpdateInstall } from "./useUpdateInstall";
 
 const OFFERED: UpdateInstallState = {
@@ -201,19 +201,19 @@ describe("useUpdateInstall", () => {
     expect(result.current.attempt).toBeNull();
   });
 
-  it("shows the message of any other refusal", async () => {
-    vi.mocked(installUpdate).mockResolvedValue({
-      success: false,
-      reason: "version_changed",
-      message: "The release offered is now 1.0.1",
-    });
+  it.each([
+    ["update_in_progress", "An update is already being installed."],
+    ["not_offered", "There is no newer release to install."],
+    ["version_changed", "The release on offer has changed — press again to install it."],
+  ] as const)("words a %s refusal itself, whatever the backend's message says", async (reason, sentence) => {
+    vi.mocked(installUpdate).mockResolvedValue({ success: false, reason, message: "the backend's own words" });
     const { result } = renderHook(() => useUpdateInstall());
     await flush();
 
     act(() => result.current.install());
     await flush();
 
-    expect(result.current.refusal).toBe("The release offered is now 1.0.1");
+    expect(result.current.refusal).toBe(sentence);
   });
 
   it("says a press the connection failed to carry could not be requested, and logs it", async () => {
@@ -274,5 +274,203 @@ describe("useUpdateInstall", () => {
     expect(logError).not.toHaveBeenCalled();
     expect(result.current.attempt?.step).toBe("installer_started");
     expect(result.current.refusal).toBe("");
+  });
+
+  it("writes nothing from a read issued while the press waited that lands after its answer", async () => {
+    const answer = deferred<{ success: true }>();
+    vi.mocked(installUpdate).mockReturnValue(answer.promise);
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => result.current.install());
+    const late = deferred<UpdateInstallState>();
+    vi.mocked(getUpdateInstallState).mockReturnValueOnce(late.promise);
+    await tick();
+    await act(async () => {
+      answer.resolve({ success: true });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      late.resolve({ ...OFFERED, attempt: FAILED });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.attempt?.step).toBe("downloading");
+  });
+
+  it("takes no read that lands while the press still waits for its answer", async () => {
+    const answer = deferred<{ success: true }>();
+    vi.mocked(installUpdate).mockReturnValue(answer.promise);
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => result.current.install());
+    vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: FAILED, try_again: true });
+    await tick();
+
+    expect(result.current.attempt).toBeNull();
+    expect(result.current.tryAgain).toBe(false);
+  });
+
+  it("sends no press while the last read names something to wait for", async () => {
+    vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, wait_reasons: [{ reason: "save_sync" }] });
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => result.current.install());
+    await flush();
+
+    expect(installUpdate).not.toHaveBeenCalled();
+  });
+
+  it("sends no press while an attempt is under way", async () => {
+    vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: DOWNLOADING });
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+    expect(result.current.underWay).toBe(true);
+
+    act(() => result.current.install());
+    await flush();
+
+    expect(installUpdate).not.toHaveBeenCalled();
+  });
+
+  describe("a refusal", () => {
+    const refusedWith = async (reason: "update_in_progress" | "not_offered" | "version_changed") => {
+      vi.mocked(installUpdate).mockResolvedValue({ success: false, reason, message: "" });
+      const view = renderHook(() => useUpdateInstall());
+      await flush();
+      act(() => view.result.current.install());
+      await flush();
+      expect(view.result.current.refusal).not.toBe("");
+      return view;
+    };
+
+    it("goes once a read names another version than the press did", async () => {
+      const { result } = await refusedWith("version_changed");
+      vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, version: "1.0.1" });
+
+      await tick();
+
+      expect(result.current.refusal).toBe("");
+    });
+
+    it("stays while a read still names the version the press did", async () => {
+      const { result } = await refusedWith("version_changed");
+
+      await tick();
+
+      expect(result.current.refusal).not.toBe("");
+    });
+
+    it("goes, for one nothing was offered for, once a read names nothing", async () => {
+      const { result } = await refusedWith("not_offered");
+      vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, offered: false, version: null });
+
+      await tick();
+
+      expect(result.current.refusal).toBe("");
+    });
+
+    it("stays, for an update already under way, while one is, and goes once none is", async () => {
+      const { result } = await refusedWith("update_in_progress");
+      vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: DOWNLOADING });
+      await tick();
+      expect(result.current.refusal).toBe("An update is already being installed.");
+
+      vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: FAILED });
+      await tick();
+
+      expect(result.current.refusal).toBe("");
+    });
+
+    it("goes, for a press the connection did not carry, once a read answers again", async () => {
+      vi.mocked(installUpdate).mockRejectedValue(new Error("socket gone"));
+      const { result } = renderHook(() => useUpdateInstall());
+      await flush();
+      act(() => result.current.install());
+      await flush();
+      expect(result.current.refusal).toBe(INSTALL_REQUEST_FAILED);
+
+      await tick();
+
+      expect(result.current.refusal).toBe("");
+    });
+  });
+
+  describe("a read that does not answer", () => {
+    it("is said, and is no longer once a read answers again", async () => {
+      vi.mocked(getUpdateInstallState).mockRejectedValue(new Error("boom"));
+      const { result } = renderHook(() => useUpdateInstall());
+      await flush();
+      expect(result.current.readFailed).toBe(true);
+
+      vi.mocked(getUpdateInstallState).mockResolvedValue(OFFERED);
+      await tick();
+
+      expect(result.current.readFailed).toBe(false);
+      expect(result.current.offered).toBe(true);
+    });
+  });
+
+  describe("an installer that has not stopped this backend within five minutes", () => {
+    const INSTALLER_STARTED: UpdateInstallAttempt = { ...DOWNLOADING, step: "installer_started" };
+
+    it("is not overdue before five minutes have passed since the panel first saw it", async () => {
+      const { result } = renderHook(() => useUpdateInstall());
+      await flush();
+      act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS - 1000);
+      });
+
+      expect(result.current.restarting).toBe(true);
+      expect(result.current.overdue).toBe(false);
+    });
+
+    it("is overdue after five minutes, with reads failing where the backend is gone", async () => {
+      const { result } = renderHook(() => useUpdateInstall());
+      await flush();
+      act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
+      vi.mocked(getUpdateInstallState).mockRejectedValue(new Error("connection_lost"));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS);
+      });
+
+      expect(result.current.overdue).toBe(true);
+      expect(result.current.readFailed).toBe(true);
+    });
+
+    it("is overdue after five minutes with reads still answering where the installer has not stopped it", async () => {
+      vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: INSTALLER_STARTED });
+      const { result } = renderHook(() => useUpdateInstall());
+      await flush();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS);
+      });
+
+      expect(result.current.overdue).toBe(true);
+      expect(result.current.readFailed).toBe(false);
+    });
+
+    it("counts the five minutes from when the panel first saw it, across the section leaving the screen", async () => {
+      const first = renderHook(() => useUpdateInstall());
+      await flush();
+      act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS - 1000);
+      });
+      first.unmount();
+
+      const { result } = renderHook(() => useUpdateInstall());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(result.current.overdue).toBe(true);
+    });
   });
 });
