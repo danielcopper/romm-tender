@@ -345,7 +345,7 @@ class TestTestConnectionErrors:
 
     @pytest.mark.asyncio
     async def test_auth_error_on_401(self, connection):
-        """Returns auth_error when platforms endpoint returns 401."""
+        """Returns auth_failed when the platforms request answers 401."""
         _configure_server(connection.settings)
         # Heartbeat succeeds, platforms raises auth error
         connection.romm_api.heartbeat.return_value = {"status": "ok"}
@@ -357,7 +357,7 @@ class TestTestConnectionErrors:
 
     @pytest.mark.asyncio
     async def test_connection_error_on_refused(self, connection):
-        """Returns connection_error when server is unreachable."""
+        """Returns server_unreachable when the server refuses the connection."""
         _configure_server(connection.settings)
         connection.romm_api.heartbeat.side_effect = RommConnectionError("refused")
         result = await connection.service.test_connection()
@@ -367,7 +367,7 @@ class TestTestConnectionErrors:
 
     @pytest.mark.asyncio
     async def test_ssl_error(self, connection):
-        """Returns ssl_error on SSL certificate failure."""
+        """Returns server_unreachable, naming SSL, on a certificate failure."""
         _configure_server(connection.settings)
         connection.romm_api.heartbeat.side_effect = RommSSLError("cert fail")
         result = await connection.service.test_connection()
@@ -523,7 +523,7 @@ class TestVersionDetection:
 
     @pytest.mark.asyncio
     async def test_timeout_error(self, connection):
-        """Returns timeout_error on request timeout."""
+        """Returns server_unreachable on a request timeout."""
         _configure_server(connection.settings)
         connection.romm_api.heartbeat.side_effect = RommTimeoutError("timed out")
         result = await connection.service.test_connection()

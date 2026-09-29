@@ -1,4 +1,4 @@
-"""Tests for SaveService aggregate root — public callable surface and cross-service coordination."""
+"""Tests for SaveService — the use cases the endpoints call and the coordination across its sub-services."""
 
 import asyncio
 import hashlib
@@ -291,7 +291,6 @@ class TestEnsureDeviceRegistered:
         assert result["success"] is True
         assert result["device_id"]
         assert result.get("server_device_id") is not None
-        # Persisted to kv_config (SQLite), not save_sync_state.json.
         assert _get_device_id(saves.service) == result["device_id"]
 
     @pytest.mark.asyncio
@@ -691,8 +690,7 @@ class TestSaveSyncSettings:
         # sync_after_exit unchanged
         assert result["settings"]["sync_after_exit"] is True
 
-        # Persisted into the live settings.json view (#822), flushed via the
-        # settings persister — not save_sync_state.json.
+        # Written into the live settings dict the settings persister flushes.
         assert saves.settings["save_sync_enabled"] is True
         assert saves.settings["sync_before_launch"] is False
 
@@ -730,7 +728,6 @@ class TestSaveSyncFeatureFlag:
     @pytest.mark.asyncio
     async def test_default_disabled(self, saves):
         """save_sync_enabled defaults to False when absent from settings.json."""
-        # Reset to defaults — the toggle lives in settings.json now (#822).
         saves.settings.pop("save_sync_enabled", None)
         assert saves.service.is_save_sync_enabled() is False
 
@@ -897,19 +894,18 @@ class TestDeleteSaves:
 
 
 class TestDeleteLocalAndPlatformSaves:
-    """Deleting a ROM's or a platform's local saves clears the files and keeps the sync state."""
+    """Deleting a ROM's or a platform's local saves removes the files; each entry survives with an empty file map."""
 
     @pytest.mark.asyncio
     async def test_delete_local_saves_happy_path(self, saves, tmp_path):
-        """Deleting local saves removes files and cleans sync state."""
+        """Deleting local saves removes the files and empties the entry's file map; the entry survives."""
         rom_id = 100
         system = "snes"
         rom_name = "TestGame"
 
-        # Register as installed (file_path needed for _get_rom_save_info)
         _install_rom(saves.service, tmp_path, rom_id=100, system=system, file_name=f"{rom_name}.sfc")
 
-        # Create fake save files in the fallback saves path
+        # Save files in the system's folder under the saves root
         saves_dir = tmp_path / "retrodeck" / "saves" / system
         saves_dir.mkdir(parents=True)
         srm = saves_dir / f"{rom_name}.srm"
@@ -2009,7 +2005,7 @@ class TestSyncAllSaves:
 
     @pytest.mark.asyncio
     async def test_no_installed_roms(self, saves):
-        """Empty installed_roms completes gracefully."""
+        """With no installed ROM, the sync succeeds having checked none."""
         _set_device_id(saves.service, "dev-1")
 
         result = await saves.service.sync_all_saves()
@@ -2125,9 +2121,8 @@ class TestSavesVersionHistory:
 
     @pytest.mark.asyncio
     async def test_saves_rollback_to_version_signature(self, saves):
-        """rollback_to_version's signature is (rom_id, slot, save_id) —
-        no force flag (matrix pre-flight replaced Gate D/F) and no filename
-        (the canonical local path is derived from the target save + ROM)."""
+        """rollback_to_version's signature is (rom_id, slot, save_id) — no force flag and no
+        filename (the canonical local path is derived from the target save + ROM)."""
         import inspect
 
         sig = inspect.signature(saves.service.rollback_to_version)

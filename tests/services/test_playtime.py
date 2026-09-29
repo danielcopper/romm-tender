@@ -637,7 +637,7 @@ class TestGetPlaytime:
 class PlaytimeHarness:
     """The playtime service and the unit of work its tests seed and read back.
 
-    No device is registered, so a session start's outbox flush has nothing to send.
+    No device is registered, so a session end is folded into the local total and never enqueued for RomM.
     """
 
     service: PlaytimeService
@@ -657,7 +657,7 @@ def _get_playtime(uow: FakeUnitOfWork, rom_id: int) -> Playtime | None:
 
 
 class TestPlaytimeTracking:
-    """Tests for session playtime recording through the SQLite ``rom_playtime`` row."""
+    """Tests for session playtime recording into a ROM's ``Playtime`` aggregate."""
 
     @pytest.mark.asyncio
     async def test_session_start_records_timestamp(self, playtime):
@@ -746,7 +746,7 @@ class TestGetAllPlaytime:
 
     @pytest.mark.asyncio
     async def test_returns_all_playtime_entries(self, playtime):
-        """Returns all playtime entries from the ``rom_playtime`` table."""
+        """Returns the stored playtime of every ROM that has one."""
         _seed_playtime(playtime.uow, 42, Playtime(total_seconds=3000, session_count=5))
         _seed_playtime(playtime.uow, 99, Playtime(total_seconds=600, session_count=1))
 

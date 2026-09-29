@@ -1,4 +1,4 @@
-"""Tests for the PersistenceAdapter and SettingsPersisterAdapter: locking, version stamping, load edge cases."""
+"""Tests for adapters/persistence.py."""
 
 import json
 import logging
@@ -219,6 +219,17 @@ class TestLoadingEdgeCases:
         assert mode == 0o600
 
 
+class TestInsecureSslSetting:
+    def test_load_settings_defaults_false(self, tmp_path):
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"romm_url": "https://romm.local"}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = persistence.load_settings()
+        assert settings["romm_allow_insecure_ssl"] is False
+
+
 # ── Crash-safe write: fsync(tmp) before rename, fsync(dir) after ─────────────────
 
 
@@ -288,15 +299,7 @@ class TestCrashSafeWrite:
         assert not os.path.exists(settings_path)
 
 
-class TestInsecureSslSetting:
-    def test_load_settings_defaults_false(self, tmp_path):
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "https://romm.local"}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        settings = persistence.load_settings()
-        assert settings["romm_allow_insecure_ssl"] is False
+# ── settings.json's file mode and atomic replacement ───────────────────────────
 
 
 class TestSettingsFilePermissions:
@@ -344,17 +347,14 @@ class TestAtomicSettingsWrite:
     def test_settings_crash_preserves_original(self, tmp_path, logger, data_dir):
         persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
 
-        # Write initial settings
         settings = {"romm_url": "http://original.com"}
         persister = SettingsPersisterAdapter(persistence, settings)
         persister.save_settings()
 
-        # Now simulate a crash during json.dump
         settings["romm_url"] = "http://corrupted.com"
         with patch("json.dump", side_effect=OSError("disk full")), pytest.raises(OSError):
             persister.save_settings()
 
-        # Original file should still be intact
         settings_path = tmp_path / "settings.json"
         with open(settings_path) as f:
             data = json.load(f)

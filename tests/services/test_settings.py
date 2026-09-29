@@ -376,6 +376,9 @@ class TestGetSettings:
         assert result["retroarch_input_check"]["current"] == "x"
 
 
+# ── get_settings and save_server_url together ─────────────────────────
+
+
 class TestSettings:
     @pytest.mark.asyncio
     async def test_get_settings_reports_token_present(self, service, settings):
@@ -659,6 +662,9 @@ class TestAFrontendDebugLineIsWrittenRatherThanDropped:
         root.debug("a backend trace")
 
         assert "a backend trace" not in (tmp_path / "state" / LOG_FILENAME).read_text()
+
+
+# ── log_level: saved, reported and applied ────────────────────────────
 
 
 class TestLogLevel:
@@ -985,6 +991,9 @@ class TestSetCollectionNamingMode:
         settings_persister.save_settings.assert_not_called()
 
 
+# ── settings reset notice ─────────────────────────────────────────────
+
+
 class TestGetSettingsResetNotice:
     """The reset notice is read off the live settings dict and never consumed by reading."""
 
@@ -1044,7 +1053,6 @@ class TestDismissSettingsResetNoticeRoundTrip:
 
     @pytest.mark.asyncio
     async def test_pops_marker_and_persists(self, service, settings, settings_persister):
-        # Mutate the live dict in place (the SettingsService binds this same ref).
         settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
         before = settings_persister.save_count
 
