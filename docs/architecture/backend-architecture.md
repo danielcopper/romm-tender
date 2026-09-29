@@ -931,16 +931,18 @@ member the stale removal unbinds therefore belongs to a collection the run built
 full-fetches once a run builds one for it again instead of skipping over the member.
 
 **A collection listing that fails stops the run.** The standard, smart and virtual listings are read while the work
-queue is built, before any unit, and a failure there — what is left once the transport's retry ladder gives up — raises
-to the handler a failed platform listing reaches. Apply emits an `error` frame carrying the `classify_error` message and
-returns before it opens a `SyncRun`, so no stale removal runs and neither `sync_collections` nor `sync_complete` is
-emitted; the preview discards its delta and answers with the canonical failure shape. Read as an empty listing instead,
-the run would build no unit for an enabled collection, the stale removal would unbind the games only that collection
-brings in and delete its stamp (a standard or smart one has one), and the frontend's stale-collection cleanup would
-delete its Steam collection. A collection absent from a listing that answered is a real removal and still goes that way.
-Only a kind with an enabled id is listed, so an endpoint that keeps failing blocks the sync only for a user who syncs
-that kind. The Library page's `get_collections` reads the same listings only to display them, and keeps failing open for
-smart and virtual.
+queue is built, before any unit, and a failure there raises to the handler a failed platform listing reaches. A failure
+is what is left once the transport's retry ladder gives up, and also an answer that is not a list: the adapter's three
+collection listings (`adapters/romm/romm_api.py`) raise that as a plain `RommApiError`, never an empty list and never
+`RommNotFoundError`, since a listing names no collection a 404 verdict could be about. Apply emits an `error` frame
+carrying the `classify_error` message and returns before it opens a `SyncRun`, so no stale removal runs and neither
+`sync_collections` nor `sync_complete` is emitted; the preview discards its delta and answers with the canonical failure
+shape. Read as an empty listing instead, the run would build no unit for an enabled collection, the stale removal would
+unbind the games only that collection brings in and delete its stamp (a standard or smart one has one), and the
+frontend's stale-collection cleanup would delete its Steam collection. A collection absent from a list RomM did answer
+with is a real removal and still goes that way. Only a kind with an enabled id is listed, so an endpoint that keeps
+failing blocks the sync only for a user who syncs that kind. The Library page's `get_collections` reads the same
+listings only to display them, and keeps failing open for smart and virtual.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The

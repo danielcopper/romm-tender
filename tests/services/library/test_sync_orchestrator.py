@@ -4842,6 +4842,38 @@ class TestFailedCollectionListing:
         assert bindings() == {1: 5001, 2: 5002}
         assert stamp() == stamp_after_run_1
 
+    @pytest.mark.parametrize(
+        ("kind", "path"),
+        [
+            ("standard", "/api/collections"),
+            ("smart", "/api/collections/smart"),
+            ("virtual", "/api/collections/virtual?type=franchise"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_listing_that_answers_with_something_but_a_list_fails_the_run(self, library, emit, kind, path):
+        from adapters.romm.romm_api import RommApiAdapter
+
+        answers = {"/api/platforms": [], path: {"detail": "not a list"}}
+        client = MagicMock()
+        client.request.side_effect = lambda requested: answers.get(requested, [])
+        library.sync._fetcher._romm_api = RommApiAdapter(client)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {kind: {"7": True}}
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-1"
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+        assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
+            ("error", f"Unexpected response from {path}: dict", False)
+        ]
+        assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
+        with library.uow as uow:
+            assert uow.sync_runs.get("run-1") is None
+
 
 class TestStoppedRunLeavesNoHiddenStaleRow:
     """A version deleted on RomM loses its shortcut at the next completed run (#2084).
