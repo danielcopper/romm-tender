@@ -25,6 +25,7 @@ from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from domain.update_install import (
     INSTALLER_UNIT,
+    READ_ONLY_CLAIMS,
     UPDATE_ATTEMPT_FILENAME,
     UpdateAttemptRecord,
     WaitReason,
@@ -34,7 +35,7 @@ from domain.update_install import (
 from domain.update_outcome import UpdateFailure
 from domain.update_release import LatestRelease, ReleaseTarball
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
-from tests._conflict_rules import call_sites_with_rule, claim_names_in_source
+from tests._conflict_rules import call_sites_with_rule, claim_names_in_source, claims_held_on_the_prune_conflicts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,6 +45,8 @@ _OFFERED = "1.1.0"
 _INSTALLER = b"#!/bin/bash\necho installing\n"
 _STATE_KEYS = {"offered", "version", "wait_reasons", "paused_downloads", "attempt", "try_again"}
 _ENVIRONMENT = (("TENDER_CODE_DIR", "/code"), ("TENDER_PYTHON", "/usr/bin/python3.13"))
+# The installer's unit, asked about at a start, has ended: the record may be judged.
+_ENDED: list[bool | None] = [False]
 
 
 def _tarball(installer: bytes | None = _INSTALLER, *, as_link: bool = False) -> bytes:
@@ -359,6 +362,14 @@ class TestWaitReasons:
 
         assert reasons == [{"reason": "running_apps_unknown"}]
 
+    async def test_a_reading_that_raised_is_one_that_could_not_be_taken(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.steam.raises = RuntimeError("debugger gone")
+
+        assert (await rig.service.get_update_install_state())["wait_reasons"] == [{"reason": "running_apps_unknown"}]
+        answer = await rig.service.install_update(_OFFERED)
+        assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "running_apps_unknown"}])
+
     async def test_the_reload_limit_carries_the_time_it_frees_up(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, frees_at=1_800_000_600.0)
 
@@ -426,6 +437,15 @@ class TestWaitReasons:
 
         assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "other_work"}])
         assert rig.service.is_update_in_progress() is False
+
+    @pytest.mark.parametrize("claim", sorted(READ_ONLY_CLAIMS))
+    async def test_a_read_only_claim_makes_no_press_wait(self, rigs, tmp_path, claim):
+        """A restart cuts nothing short that only read: the reason would flicker in and out with every read."""
+        rig = await _built(rigs, tmp_path)
+        rig.work.claims = [claim]
+
+        assert (await rig.service.get_update_install_state())["wait_reasons"] == []
+        assert await rig.service.install_update(_OFFERED) == {"success": True}
 
     async def test_paused_downloads_do_not_make_a_press_wait(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
@@ -710,6 +730,18 @@ class TestAFailedAttempt:
         assert rig.units.starts == []
         assert rig.service.is_update_in_progress() is False
 
+    async def test_a_reading_that_raised_before_the_installer_is_no_reading(self, rigs, tmp_path):
+        """Not ``installer_not_started``: the sentence would blame the installer for what Steam's reading did."""
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.raises = RuntimeError("debugger gone")
+
+        last = await rig.settled()
+
+        assert (last["step"], last["failure"]) == ("failed", "running_apps_unknown")
+        assert rig.units.starts == []
+        assert rig.service.is_update_in_progress() is False
+
     async def test_the_running_apps_are_read_again_right_before_the_installer(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
 
@@ -769,11 +801,25 @@ class TestAFailedAttempt:
         assert rig.service.is_update_in_progress() is True
 
     async def test_a_start_that_gave_no_answer_and_did_not_start_is_installer_not_started(self, rigs, tmp_path):
-        rig = await _built(rigs, tmp_path, unit_no_answer=True, unit_states=[False])
+        """Not started only once the unit still reads ended one watch interval after the first ask."""
+        sleeper = _ParkingSleeper(free=1)
+        rig = await _built(rigs, tmp_path, unit_no_answer=True, unit_states=[False, False], sleeper=sleeper)
 
         assert (await self._failed(rig))["failure"] == "installer_not_started"
-        assert rig.units.asked == [INSTALLER_UNIT]
+        assert rig.units.asked == [INSTALLER_UNIT, INSTALLER_UNIT]
+        assert sleeper.calls == [3.0]
         assert rig.service.is_update_in_progress() is False
+
+    @pytest.mark.parametrize("later", [True, None])
+    async def test_an_ended_reading_right_after_no_answer_is_not_yet_a_start_that_failed(self, rigs, tmp_path, later):
+        """``systemd-run`` may not have made the unit yet, and a unit nobody knows reads as ended."""
+        rig = await _built(
+            rigs, tmp_path, unit_no_answer=True, unit_states=[False, later], sleeper=_ParkingSleeper(free=1)
+        )
+
+        assert (await self._failed(rig))["step"] == "installer_started"
+        assert rig.units.asked == [INSTALLER_UNIT, INSTALLER_UNIT]
+        assert rig.service.is_update_in_progress() is True
 
     @pytest.mark.parametrize("state", [True, None])
     async def test_a_start_that_gave_no_answer_is_watched_where_the_unit_may_run(self, rigs, tmp_path, state):
@@ -1011,7 +1057,7 @@ class TestTheNextStart:
         self, rigs, tmp_path, caplog
     ):
         _leave_record(tmp_path)
-        rig = await _built(rigs, tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
 
         with caplog.at_level(logging.WARNING, logger="test_update_install"):
             rig.service.note_start()
@@ -1045,7 +1091,7 @@ class TestTheNextStart:
             if rolled_back
             else None
         )
-        rig = await _built(rigs, tmp_path, current_version=running, failure_record=failure)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED, current_version=running, failure_record=failure)
 
         rig.service.note_start()
 
@@ -1054,7 +1100,7 @@ class TestTheNextStart:
 
     async def test_dismissing_it_removes_the_record_and_keeps_try_again_for_this_process(self, rigs, tmp_path):
         _leave_record(tmp_path)
-        rig = await _built(rigs, tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
         rig.service.note_start()
 
         assert await rig.service.dismiss_stopped_attempt() == {"success": True}
@@ -1063,14 +1109,153 @@ class TestTheNextStart:
         assert _read_record(tmp_path) is None
         assert (await rig.service.get_update_install_state())["try_again"] is True
 
+    async def test_a_dismiss_with_no_stopped_attempt_standing_removes_nothing(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        _leave_record(tmp_path)
+
+        assert await rig.service.dismiss_stopped_attempt() == {"success": True}
+
+        assert _read_record(tmp_path) is not None
+
+    async def test_a_dismiss_during_a_held_attempt_keeps_that_attempt_s_record(self, rigs, tmp_path):
+        """A card still on screen from before the press must not take the new attempt's record away."""
+        _leave_record(tmp_path, started_by=_RUNNING)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        rig.service.note_start()
+        await rig.service.install_update(_OFFERED)
+        assert (await rig.settled())["step"] == "installer_started"
+        written = _read_record(tmp_path)
+        assert written is not None
+        assert written["started_at"] != "2026-09-01T10:00:00Z"
+
+        assert await rig.service.dismiss_stopped_attempt() == {"success": True}
+
+        assert _read_record(tmp_path) == written
+        assert rig.service.is_update_in_progress() is True
+
     async def test_a_new_attempt_ends_the_notice(self, rigs, tmp_path):
         _leave_record(tmp_path)
-        rig = await _built(rigs, tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
         rig.service.note_start()
 
         assert await rig.service.install_update(_OFFERED) == {"success": True}
 
         assert rig.service.get_stopped_update_attempt() is None
+
+
+class TestAnInstallerStillRunningAtTheNextStart:
+    """The installer starts this program itself, and may not have ended when the start looks at the record."""
+
+    async def _judged(self, rig: _Rig) -> list[dict[str, Any]]:
+        """Wait for the late judgement to end, and answer what it pushed."""
+        task = rig.service._judging
+        assert task is not None
+        await asyncio.wait_for(task, 2)
+        return [payload for name, payload in rig.events.events if name == "update_attempt_stopped"]
+
+    async def test_the_record_is_judged_once_the_unit_ends_and_the_judgement_is_pushed(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=[True, True, False], sleeper=_ParkingSleeper(free=2))
+
+        rig.service.note_start()
+        assert rig.service.get_stopped_update_attempt() is None
+        assert _read_record(tmp_path) is not None
+
+        pushed = await self._judged(rig)
+
+        stopped = {"attempted_version": _OFFERED, "from_version": _RUNNING, "started_at": "2026-09-01T10:00:00Z"}
+        assert pushed == [stopped]
+        assert rig.service.get_stopped_update_attempt() == stopped
+        state = await rig.service.get_update_install_state()
+        assert (state["attempt"]["failure"], state["try_again"]) == ("installer_stopped", True)
+        assert rig.units.asked == [INSTALLER_UNIT] * 3
+
+    async def test_a_unit_nobody_can_say_about_is_asked_again_rather_than_judged(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=[None, None, False], sleeper=_ParkingSleeper(free=2))
+
+        rig.service.note_start()
+
+        assert len(await self._judged(rig)) == 1
+
+    async def test_a_seam_that_raises_at_the_start_is_nobody_able_to_say(self, rigs, tmp_path, monkeypatch):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=[False], sleeper=_ParkingSleeper(free=1))
+        answers = iter([OSError("bus gone")])
+
+        def first_raises(unit: str) -> bool | None:
+            error = next(answers, None)
+            if error is not None:
+                raise error
+            return FakeTransientUnits.is_active(rig.units, unit)
+
+        monkeypatch.setattr(rig.units, "is_active", first_raises)
+
+        rig.service.note_start()
+        assert rig.service.get_stopped_update_attempt() is None
+
+        assert len(await self._judged(rig)) == 1
+
+    async def test_an_update_that_went_through_is_removed_once_the_unit_ends_and_nothing_is_pushed(
+        self, rigs, tmp_path
+    ):
+        _leave_record(tmp_path)
+        rig = await _built(
+            rigs, tmp_path, current_version=_OFFERED, unit_states=[True, False], sleeper=_ParkingSleeper(free=1)
+        )
+
+        rig.service.note_start()
+
+        assert await self._judged(rig) == []
+        assert _read_record(tmp_path) is None
+        assert rig.service.get_stopped_update_attempt() is None
+
+    async def test_a_press_while_the_unit_still_runs_ends_the_question(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        sleeper = _ParkingSleeper(free=1)
+        rig = await _built(rigs, tmp_path, unit_states=[True], sleeper=sleeper)
+        rig.service.note_start()
+        assert await rig.service.install_update(_OFFERED) == {"success": True}
+
+        assert await self._judged(rig) == []
+        assert rig.service.get_stopped_update_attempt() is None
+
+    async def test_a_press_while_the_record_is_being_judged_wins(self, rigs, tmp_path, monkeypatch):
+        """The judgement reads the installer's record off the loop; a press can land before it is back."""
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=1))
+        entered, gate = threading.Event(), threading.Event()
+
+        def slow_read() -> UpdateFailure | None:
+            entered.set()
+            gate.wait(2)
+            return None
+
+        monkeypatch.setattr(rig.service, "_read_update_failure", slow_read)
+        rig.service.note_start()
+        for _ in range(200):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set()
+
+        assert await rig.service.install_update(_OFFERED) == {"success": True}
+        gate.set()
+
+        assert await self._judged(rig) == []
+        assert rig.service.get_stopped_update_attempt() is None
+
+    async def test_shutdown_stops_a_judgement_still_waiting(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=[True])
+        rig.service.note_start()
+        task = rig.service._judging
+        assert task is not None
+
+        await rig.service.shutdown()
+
+        assert task.cancelled()
+        assert _read_record(tmp_path) is not None
 
 
 # ── Leftovers and shutdown ───────────────────────────────────────────────────
@@ -1150,6 +1335,23 @@ class TestTheClaimsAReasonNames:
         named = set().union(*(claims_named_by(reason) for reason in WaitReason))
 
         assert named - claim_names_in_source() == set()
+
+    def test_every_claim_the_prune_conflicts_can_hold_is_classified(self):
+        """A new endpoint under the prune rule, retained task or lease is named by a reason or declared read-only.
+
+        Unclassified it would still make a press wait, as ``other_work``; this
+        makes the choice a deliberate one.
+        """
+        named = set().union(*(claims_named_by(reason) for reason in WaitReason))
+        held = claims_held_on_the_prune_conflicts()
+
+        # One of each way a claim is taken, so a read that sees nothing fails here.
+        one_of_each = {"test_connection", "record_session_start", "start_download", "launch_reconfirm", "sync_complete"}
+        assert one_of_each <= held
+        assert held - named - READ_ONLY_CLAIMS == set()
+
+    def test_every_read_only_claim_is_one_the_prune_conflicts_can_hold(self):
+        assert READ_ONLY_CLAIMS - claims_held_on_the_prune_conflicts() == set()
 
     def test_every_save_operation_the_update_rule_refuses_counts_as_the_save_sync(self):
         """The save use cases outside the device gate: a restart would cut each short, and the panel calls it save sync.

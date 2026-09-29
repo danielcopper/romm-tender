@@ -2,12 +2,12 @@
 
 Tender keeps what it knows about your library in folders under your own home directory, each named after Tender itself:
 
-| Folder                        | What is in it                                                                                                                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                                                     |
-| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/`    |
-| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                                                                                          |
-| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back; `update-attempt.json` while an update from Settings is under way, and after one whose installer stopped |
+| Folder                        | What is in it                                                                                                                                                                                                                                                                                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                                                                                                                                                                           |
+| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/`                                                                                                                          |
+| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                                                                                                                                                                                                                |
+| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back; `update-attempt.json` from the moment an update from Settings starts its installer until Tender, started again, has found out how it went — and after one whose installer stopped, until you dismiss that notice or try again |
 
 Four more places sit outside those folders, because none of them holds anything of yours:
 

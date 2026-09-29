@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from domain.identity import VERSION
+from domain.update_install import new_attempt_record
 from domain.update_release import LatestRelease, ReleaseTarball
 
 from ._harness import ContractHarness, build_contract_harness
@@ -113,6 +114,14 @@ async def test_a_lease_a_frontend_still_holds_makes_the_press_wait_as_other_work
     assert (await installed.endpoints.get_update_install_state())["wait_reasons"] == []
 
 
+async def test_an_endpoint_that_only_reads_makes_no_press_wait(installed):
+    registration = await installed.prune_conflicts.hold_operation("test_connection")
+    assert registration is not None
+
+    assert (await installed.endpoints.get_update_install_state())["wait_reasons"] == []
+    await installed.prune_conflicts.release_operation(registration)
+
+
 async def test_a_press_installs_the_stored_release_through_the_real_cache_root(installed):
     assert await installed.endpoints.install_update(_OFFERED) == {"success": True}
 
@@ -158,3 +167,26 @@ async def test_the_version_pressed_must_be_the_one_stored(installed):
     answer = await installed.endpoints.install_update(VERSION)
 
     assert answer["reason"] == "version_changed"
+
+
+async def test_a_stopped_attempt_judged_once_the_installer_ended_reaches_the_running_panel(tmp_path):
+    """A start the installer made itself, still inside its unit: the record waits for the unit, then is pushed."""
+    harness = build_contract_harness(tmp_path, installed_program=True)
+    service = harness.app.services.update_install_service
+    service._attempts.write(new_attempt_record(_OFFERED, VERSION, 0.0))
+    states: list[bool | None] = [True, True, False]
+    harness.units.states = states
+
+    service.note_start()
+    assert harness.endpoints.get_stopped_update_attempt() is None
+    judging = service._judging
+    assert judging is not None
+    await asyncio.wait_for(judging, 2)
+
+    stopped = {"attempted_version": _OFFERED, "from_version": VERSION, "started_at": "1970-01-01T00:00:00Z"}
+    pushed = [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "update_attempt_stopped"]
+    assert pushed == [stopped]
+    assert harness.endpoints.get_stopped_update_attempt() == stopped
+    assert await harness.endpoints.dismiss_stopped_update_attempt() == {"success": True}
+    assert harness.endpoints.get_stopped_update_attempt() is None
+    assert service._attempts.read() is None

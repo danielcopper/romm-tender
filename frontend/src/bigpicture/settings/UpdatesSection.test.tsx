@@ -61,6 +61,19 @@ const ROLLED_BACK: UpdateOutcomeState = {
   failureDismissed: false,
 };
 
+/**
+ * Call a button's own press handler past its `disabled`, as the device does:
+ * a disabled control there still reports the press, while the DOM drops the
+ * click before React sees it.
+ */
+function pressDespiteDisabled(element: HTMLElement): void {
+  const key = Object.keys(element).find((name) => name.startsWith("__reactProps$"));
+  const props = (key === undefined ? undefined : (element as unknown as Record<string, unknown>)[key]) as
+    { onClick?: () => void } | undefined;
+  if (props?.onClick === undefined) throw new Error("the element carries no press handler");
+  props.onClick();
+}
+
 const renderSection = (
   over: Partial<UpdateNoticeState> = {},
   props: { checking?: boolean; result?: string; outcome?: UpdateOutcomeState } = {},
@@ -408,6 +421,14 @@ describe("UpdatesSection", () => {
       expect((utils.getByText("Check now") as HTMLButtonElement).disabled).toBe(true);
     });
 
+    it("refuses a press of Check now in its handler while an attempt is under way", () => {
+      const utils = withInstall({ attempt: DOWNLOADING, underWay: true });
+
+      pressDespiteDisabled(utils.getByText("Check now"));
+
+      expect(utils.onCheckNow).not.toHaveBeenCalled();
+    });
+
     it("says a read of the state did not answer, on the button where there is one", () => {
       const utils = withInstall({ readFailed: true });
 
@@ -415,13 +436,28 @@ describe("UpdatesSection", () => {
       expect(utils.getByTestId("updates-install-unread").closest('[data-testid="button-desc"]')).not.toBeNull();
     });
 
-    it("says it in a row of its own where no read ever answered", () => {
+    it("says it on the Available row where there is no button, so no row comes and goes with the reads", () => {
       installView.current = { ...NOTHING_OFFERED, readFailed: true };
       const utils = renderSection();
+      const rowsBefore = utils.getAllByTestId("field").length;
 
       const line = utils.getByTestId("updates-install-unread");
       expect(line.textContent).toBe("Could not read the update state.");
-      expect(line.closest('[data-testid="field"]')?.getAttribute("tabindex")).toBe("0");
+      expect(line.closest('[data-testid="field"]')?.querySelector('[data-testid="updates-available"]')).not.toBeNull();
+
+      installView.current = { ...NOTHING_OFFERED };
+      utils.rerender(
+        <UpdatesSection
+          update={STATE}
+          outcome={NO_OUTCOME}
+          checking={false}
+          result=""
+          onEnabledChange={utils.onEnabledChange}
+          onCheckNow={utils.onCheckNow}
+        />,
+      );
+      expect(utils.queryByTestId("updates-install-unread")).toBeNull();
+      expect(utils.getAllByTestId("field")).toHaveLength(rowsBefore);
     });
 
     it("makes every row it adds a focus stop, and hangs what the button waits for on the button itself", () => {

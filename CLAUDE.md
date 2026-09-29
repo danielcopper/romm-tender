@@ -370,6 +370,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   whose calls it does not read; a write under a name not on its list; a runtime mode passed as `Path.open`'s first
   argument; a record path assembled from pieces or handed in from elsewhere; a write through a helper in another module;
   a call reached through `getattr`; and a subprocess
+- **`update-attempt.json` is written and removed by the backend alone, through `adapters/update_attempt.py`; the
+  installer never touches it** — test + prompt-only —
+  `tests/adapters/test_update_attempt.py::TestTheBackendIsItsOnlyWriter`: no backend module but
+  `adapters/update_attempt.py` and `domain/update_install.py` names `UPDATE_ATTEMPT_FILENAME` or the literal, and
+  neither `install.sh` nor a file under `scripts/` (`*.sh`) or `bin/` spells the literal. Unseen by it: a record path
+  assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess. Prompt-only: only
+  `UpdateInstallService` calls the adapter's `write` and `remove`
 - **From the press that starts an install attempt until it fails, everything a pending RetroDECK migration refuses is
   refused with `blocked_by_update`, and so is the migration itself, asked ahead of every other rule — at every `hold` /
   `hold_start` call that names the migration rule, at `migrate_retrodeck_files`, and at every direct migration check

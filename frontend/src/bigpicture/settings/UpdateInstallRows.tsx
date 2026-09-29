@@ -72,19 +72,31 @@ function statusLine(install: UpdateInstall, attempt: UpdateInstallAttempt) {
   }
 }
 
+/** Whether the install's button is there: while the backend offers a release, and through an attempt. */
+export function installButtonShown(install: UpdateInstall): boolean {
+  return (install.offered && install.version !== null) || install.underWay;
+}
+
+/** Whether to say the state could not be read: a read failed, and no installer's restart explains it. */
+export function installStateUnread(install: UpdateInstall): boolean {
+  return install.readFailed && !install.restarting;
+}
+
 /**
  * The install under Settings › Updates: the button, what it waits for, and the
- * steps of an attempt. Which row carries what, and why none of them leaves
- * while it can hold focus, is `docs/architecture/qam-panel.md`, Settings.
+ * steps of an attempt. Which row carries what, and which rows can leave while
+ * they hold focus, is `docs/architecture/qam-panel.md`, Settings. Where there
+ * is no button, the section says the state could not be read on its Available
+ * row instead.
  */
 export const UpdateInstallRows: FC<{ install: UpdateInstall }> = ({ install }) => {
   const { attempt } = install;
-  const showButton = (install.offered && install.version !== null) || install.underWay;
+  const showButton = installButtonShown(install);
   // A failed attempt for a version no longer offered says nothing about the one that is.
   const showAttempt = attempt !== null && (install.underWay || attempt.version === install.version);
   const pausedHint = pausedDownloadsHint(install.pausedDownloads);
   const waiting = !install.underWay && install.waitReasons.length > 0;
-  const unread = install.readFailed && !install.restarting;
+  const unread = installStateUnread(install);
 
   const description = (
     <>
@@ -117,11 +129,6 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall }> = ({ install }) =
           >
             {buttonLabel(install)}
           </ButtonItem>
-        </PanelSectionRow>
-      )}
-      {!showButton && unread && (
-        <PanelSectionRow>
-          <Field label={<span data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</span>} focusable={true} />
         </PanelSectionRow>
       )}
       {attempt !== null &&

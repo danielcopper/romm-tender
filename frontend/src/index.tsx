@@ -59,7 +59,7 @@ import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome } from "./utils/updateOutcomeStore";
-import { fetchStoppedUpdateAttempt } from "./utils/stoppedUpdateStore";
+import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -100,7 +100,7 @@ import {
 import { withTimeout } from "./utils/withTimeout";
 import { fetchMetadataCachePages } from "./utils/metadataCache";
 import { cancelPruneActions, handlePruneAction } from "./utils/pruneActions";
-import type { UpdateInstallAttempt, UpdateNotice } from "./api/backend";
+import type { StoppedUpdateAttemptWire, UpdateInstallAttempt, UpdateNotice } from "./api/backend";
 import type { PruneActionRequired } from "./utils/pruneActions";
 import { admitPruneFrame, setPruneComplete, setPruneProgress } from "./utils/pruneStore";
 import type { PruneComplete, PruneProgress } from "./utils/pruneStore";
@@ -1059,12 +1059,17 @@ const tender = definePlugin(() => {
     },
   );
 
-  // The backend's own release check, pushed when its answer changes, and the
-  // install attempt's steps; both are held in their stores for the surfaces.
+  // The backend's own release check, pushed when its answer changes, the
+  // install attempt's steps, and a stopped attempt judged after panel load;
+  // each is held in its store for the surfaces.
   const updateNoticeListener = addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
   const updateInstallListener = addEventListener<UpdateInstallAttempt>(
     "update_install_progress",
     setUpdateInstallAttempt,
+  );
+  const updateStoppedListener = addEventListener<StoppedUpdateAttemptWire>(
+    "update_attempt_stopped",
+    takePushedStoppedAttempt,
   );
 
   // Destructive cleanup actions must keep running even when the Data Management
@@ -1186,6 +1191,7 @@ const tender = definePlugin(() => {
       removeEventListener("server_retry_progress", serverRetryListener);
       removeEventListener("update_notice", updateNoticeListener);
       removeEventListener("update_install_progress", updateInstallListener);
+      removeEventListener("update_attempt_stopped", updateStoppedListener);
       removeEventListener("prune_action_required", pruneActionListener);
       cancelPruneActions();
       detach(releaseAllPruneLeases());

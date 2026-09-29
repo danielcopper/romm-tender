@@ -76,10 +76,12 @@ class WaitReason(StrEnum):
 
 
 # The claims on the prune conflicts — an operation named after its endpoint, or
-# a lease named after its key — whose work one of the reasons above already
-# names. Every other claim held is ``other_work``. The save operations outside
-# the device gate count as the save sync, the end of a session among them,
-# since its work is the post-exit sync.
+# a lease named after its key — by the reason each makes a press wait for. The
+# save operations outside the device gate count as the save sync, the end of a
+# session among them, since its work is the post-exit sync. Every claim is
+# named here or in ``READ_ONLY_CLAIMS``; one that is in neither still counts as
+# ``other_work``, so a claim nobody classified makes a press wait rather than
+# letting it through.
 _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
     {
         **dict.fromkeys(
@@ -106,17 +108,85 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
         ),
         "prune_complete": WaitReason.REMOVED_GAMES_CLEANUP,
         **dict.fromkeys(("migrate_retrodeck_files", "migration_relaunch_options"), WaitReason.RETRODECK_MIGRATION),
+        **dict.fromkeys(
+            (
+                # Removing games and their shortcuts, and the frontend's Steam
+                # writes that follow.
+                "uninstall_all_roms",
+                "remove_rom",
+                "remove_all_shortcuts",
+                "remove_platform_shortcuts",
+                "reconcile_shortcuts",
+                "report_removal_results",
+                "rom_uninstall",
+                "bulk_uninstall",
+                "shortcut_removal",
+                # A game's version, disc, core and adoption, and their launch
+                # commands in Steam.
+                "switch_version",
+                "version_switch",
+                "select_disc",
+                "disc_selection",
+                "set_system_core",
+                "set_game_core",
+                "clear_game_core",
+                "system_core",
+                "game_core",
+                "adopt_existing_rom",
+                "installed_reconcile",
+                "launch_reconfirm",
+                # Artwork and shortcut settings written to disk or to Steam.
+                "apply_sgdb_game_id",
+                "sgdb_artwork",
+                "refresh_cover_artwork",
+                "save_shortcut_icon",
+                "cleanup_orphaned_grid_images",
+                "apply_steam_input_setting",
+                # The connection's settings and credentials, the sync cache,
+                # and play time written to the server.
+                "connect_with_credentials",
+                "connect_with_pairing_code",
+                "connect_with_token",
+                "save_server_url",
+                "save_custom_headers",
+                "sign_out",
+                "clear_sync_cache",
+                "record_session_start",
+                "reconcile_playtime",
+            ),
+            WaitReason.OTHER_WORK,
+        ),
+    }
+)
+
+# The claims whose own work only reads — or writes a cache it can build again —
+# so a restart cuts nothing short, and they make no press wait. A lease one of
+# them hands out for the frontend's Steam write is a claim of its own above.
+READ_ONLY_CLAIMS: frozenset[str] = frozenset(
+    {
+        "evaluate_launch",
+        "fetch_cover_base64",
+        "get_installed_relaunch_options",
+        "get_rom_relaunch_options",
+        "get_save_slots",
+        "get_save_status",
+        "get_sgdb_artwork_base64",
+        "get_sgdb_resolution",
+        "refresh_save_status",
+        "test_connection",
     }
 )
 
 
 def claim_reasons(claims: Iterable[str]) -> frozenset[WaitReason]:
-    """The reasons the held *claims* stand for: the one that names each, and ``other_work`` for any none names."""
-    return frozenset(_CLAIMS_NAMED_BY_A_REASON.get(claim, WaitReason.OTHER_WORK) for claim in claims)
+    """The reasons the held *claims* stand for: none for a read-only one, and ``other_work`` for one never named."""
+    return frozenset(
+        _CLAIMS_NAMED_BY_A_REASON.get(claim, WaitReason.OTHER_WORK) for claim in claims if claim not in READ_ONLY_CLAIMS
+    )
 
 
 def claims_named_by(reason: WaitReason) -> frozenset[str]:
-    """Every claim *reason* already names."""
+    """Every claim *reason* names."""
     return frozenset(claim for claim, named in _CLAIMS_NAMED_BY_A_REASON.items() if named is reason)
 
 
@@ -242,7 +312,8 @@ def stopped_attempt(
 ) -> UpdateAttemptRecord | None:
     """The record, where it says the installer stopped without updating; ``None`` where it says anything else.
 
-    Judged once, at the start after the one that wrote it. Running the
+    Judged at every start while the record stands, once the installer's
+    unit has ended. Running the
     attempted version, the update went through. A standing record of the
     installer's that this attempt was rolled back is that record's story to
     tell. Running neither the attempted nor the starting version, the version

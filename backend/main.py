@@ -862,8 +862,9 @@ class Endpoints:
         """Report an update attempt whose installer stopped without updating, as an earlier start left it.
 
         Returns ``{"attempted_version", "from_version", "started_at"}``, or
-        ``None`` where there is none, it was dismissed, or a new attempt has
-        started since.
+        ``None`` where there is none, it was dismissed, a new attempt has
+        started since, or the installer's unit had not ended yet — a judgement
+        made later is pushed as ``update_attempt_stopped``.
         """
         return self._services.update_install_service.get_stopped_update_attempt()
 

@@ -51,15 +51,27 @@ Format: **invariant** — tier — enforced by.
   subprocess. The installer's half — the write on a rollback, before the restored version starts, and the removal once a
   later update's new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
+- **`update-attempt.json` is written and removed by the backend alone, through `adapters/update_attempt.py`; the
+  installer never touches it** — test + prompt-only — the record is how a start tells an installer that stopped without
+  updating from any other start on the same version: the backend writes it right before the installer starts, and the
+  start after judges it. An installer that wrote or removed it would decide what that start reports, and the two records
+  of an update would no longer have one writer each — this one the backend's, `update-failure.json` the installer's.
+  `tests/adapters/test_update_attempt.py::TestTheBackendIsItsOnlyWriter` reads the source: no backend module but
+  `adapters/update_attempt.py` and `domain/update_install.py` names `UPDATE_ATTEMPT_FILENAME` or the literal, and
+  neither `install.sh` nor a file under `scripts/` (`*.sh`) or `bin/` spells the literal. It reads names, so a record
+  path assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess slip past it.
+  **Prompt-only**: only `UpdateInstallService` calls the adapter's `write` and `remove`
+  ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
 - **From the press that starts an install attempt until it fails, everything a pending RetroDECK migration refuses is
   refused with `blocked_by_update`, and so is the migration itself, asked ahead of every other rule — at every `hold` /
   `hold_start` call that names the migration rule, at `migrate_retrodeck_files`, and at every direct migration check
   outside the rules** — test + prompt-only — the installer stops this process without waiting for anything, so work that
   starts after the press is cut short where it stands: a download leaves a partial file the next start removes, a save
   sync leaves a run half done, a file move leaves a record naming where the files no longer are. The press checks that
-  no work of this process is in flight — each kind the panel names, and every claim held on the prune conflicts, which
-  covers every endpoint that names the prune rule and every lease a frontend still holds; this rule keeps anything new
-  from starting behind that check, and a use case that names both rules asks the update rule again once its operation is
+  no work of this process is in flight — each kind the panel names, and every claim held on the prune conflicts but
+  those of endpoints that only read (`READ_ONLY_CLAIMS`, which a restart cuts nothing short of), which covers every
+  other endpoint that names the prune rule and every lease a frontend still holds; this rule keeps anything new from
+  starting behind that check, and a use case that names both rules asks the update rule again once its operation is
   registered, so a press that came while it waited to register cannot slip in between. The migration rule already names
   every endpoint that touches local game data, so the update rule rides on it rather than keeping a list of its own, and
   it is asked first because an update in progress is the answer the user can do nothing about but wait. The migration

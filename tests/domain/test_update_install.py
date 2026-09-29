@@ -8,6 +8,7 @@ import pytest
 
 from domain.app_directories import AppDirectories
 from domain.update_install import (
+    READ_ONLY_CLAIMS,
     InstallAttempt,
     InstallFailure,
     InstallStep,
@@ -130,15 +131,26 @@ class TestClaimReasons:
     def test_a_claim_counts_toward_the_reason_that_names_its_work(self):
         assert claim_reasons(["sync_rom_saves", "start_download"]) == {WaitReason.SAVE_SYNC, WaitReason.ROM_DOWNLOADS}
 
-    def test_a_claim_no_reason_names_is_other_work(self):
+    def test_work_of_another_kind_is_other_work(self):
         assert claim_reasons(["uninstall_all_roms", "launch_reconfirm"]) == {WaitReason.OTHER_WORK}
 
     def test_no_claim_is_no_reason(self):
         assert claim_reasons([]) == frozenset()
 
-    def test_other_work_names_no_claim_of_its_own(self):
-        """It is what is left over; a claim mapped onto it would read as named when it is not."""
-        assert claims_named_by(WaitReason.OTHER_WORK) == frozenset()
+    def test_a_claim_no_entry_names_still_counts_as_other_work(self):
+        """The safe side: a claim added without being classified makes a press wait rather than letting it through."""
+        assert claim_reasons(["a_claim_nobody_classified"]) == {WaitReason.OTHER_WORK}
+
+    def test_a_read_only_claim_is_no_reason(self):
+        assert claim_reasons(["get_save_status", "test_connection"]) == frozenset()
+
+    def test_a_read_only_claim_beside_work_leaves_the_work_s_reason(self):
+        assert claim_reasons(["fetch_cover_base64", "sync_rom_saves"]) == {WaitReason.SAVE_SYNC}
+
+    def test_no_claim_is_both_read_only_and_named_by_a_reason(self):
+        named = set().union(*(claims_named_by(reason) for reason in WaitReason))
+
+        assert named & READ_ONLY_CLAIMS == set()
 
 
 _ATTEMPT = UpdateAttemptRecord(attempted_version="1.1.0", from_version="1.0.0", started_at="2026-09-29T10:00:00Z")

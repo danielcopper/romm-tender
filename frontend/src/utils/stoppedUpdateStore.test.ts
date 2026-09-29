@@ -2,10 +2,12 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { dismissStoppedUpdateAttempt, getStoppedUpdateAttempt as readStopped } from "../api/backend";
 import {
   dismissStoppedUpdateCard,
+  endStoppedAttempt,
   fetchStoppedUpdateAttempt,
   getStoppedUpdateAttempt,
   resetStoppedUpdateStoreForTests,
   stoppedAttemptTakesThePlaceOf,
+  takePushedStoppedAttempt,
 } from "./stoppedUpdateStore";
 import { onUpdateOutcomeChange } from "./updateOutcomeStore";
 
@@ -68,6 +70,43 @@ describe("stoppedUpdateStore", () => {
 
     const reading = fetchStoppedUpdateAttempt();
     await dismissStoppedUpdateCard();
+    slow.resolve(WIRE);
+    await reading;
+
+    expect(getStoppedUpdateAttempt()).toBeNull();
+  });
+
+  it("takes a stopped attempt the backend pushed after panel load, and tells every subscriber", () => {
+    const heard = vi.fn();
+    const stop = onUpdateOutcomeChange(heard);
+
+    takePushedStoppedAttempt(WIRE);
+    stop();
+
+    expect(getStoppedUpdateAttempt()).toEqual({ attemptedVersion: "1.1.0", fromVersion: "1.0.0" });
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps what was pushed over a read that was in flight before it", async () => {
+    const slow = deferred<typeof WIRE | null>();
+    vi.mocked(readStopped).mockReturnValueOnce(slow.promise);
+
+    const reading = fetchStoppedUpdateAttempt();
+    takePushedStoppedAttempt(WIRE);
+    slow.resolve(null);
+    await reading;
+
+    expect(getStoppedUpdateAttempt()).not.toBeNull();
+  });
+
+  it("takes the card down at an accepted press, and a read in flight before it does not put it back", async () => {
+    vi.mocked(readStopped).mockResolvedValue(WIRE);
+    await fetchStoppedUpdateAttempt();
+    const slow = deferred<typeof WIRE | null>();
+    vi.mocked(readStopped).mockReturnValueOnce(slow.promise);
+    const reading = fetchStoppedUpdateAttempt();
+
+    endStoppedAttempt();
     slow.resolve(WIRE);
     await reading;
 

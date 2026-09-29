@@ -36,6 +36,7 @@ import { getSettingsResetState, setSettingsResetState } from "./utils/settingsRe
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
 import { getUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
+import { getStoppedUpdateAttempt, resetStoppedUpdateStoreForTests } from "./utils/stoppedUpdateStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
 import { estimateApplySeconds } from "./utils/syncEstimate";
@@ -1526,6 +1527,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   beforeEach(() => {
     resetUpdateNoticeStoreForTests();
     setUpdateInstallAttempt(null);
+    resetStoppedUpdateStoreForTests();
   });
 
   it("takes a notice from the backend's own check into the store the card and the section read", () => {
@@ -1562,15 +1564,32 @@ describe("index.tsx — what the backend pushes about updates", () => {
     plugin.onDismount();
   });
 
-  it("stops listening for both on dismount", () => {
+  it("takes a stopped attempt judged after panel load into the store the card on Main reads", () => {
+    const plugin = pluginFactory();
+
+    act(() =>
+      emitHostEvent("update_attempt_stopped", {
+        attempted_version: "0.35.0",
+        from_version: "0.33.0",
+        started_at: "2026-09-29T10:00:00Z",
+      }),
+    );
+
+    expect(getStoppedUpdateAttempt()).toEqual({ attemptedVersion: "0.35.0", fromVersion: "0.33.0" });
+    plugin.onDismount();
+  });
+
+  it("stops listening for all three on dismount", () => {
     const plugin = pluginFactory();
     expect(hostEventListenerCount("update_notice")).toBe(1);
     expect(hostEventListenerCount("update_install_progress")).toBe(1);
+    expect(hostEventListenerCount("update_attempt_stopped")).toBe(1);
 
     plugin.onDismount();
 
     expect(hostEventListenerCount("update_notice")).toBe(0);
     expect(hostEventListenerCount("update_install_progress")).toBe(0);
+    expect(hostEventListenerCount("update_attempt_stopped")).toBe(0);
   });
 });
 

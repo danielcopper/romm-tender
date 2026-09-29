@@ -4,8 +4,14 @@
  *
  * Updated by:
  *   - panel load in index.tsx (fetchStoppedUpdateAttempt), detached
+ *   - the `update_attempt_stopped` listener in index.tsx
+ *     (takePushedStoppedAttempt), for a judgement the backend could make only
+ *     once the installer's unit had ended, after the panel had loaded
  *   - the card's Dismiss (dismissStoppedUpdateCard), after the backend removed
  *     its record
+ *   - a press of Install the backend accepted (endStoppedAttempt,
+ *     bigpicture/settings/useUpdateInstall.ts): the new attempt ended the
+ *     record, and the card goes with it
  *
  * Read by:
  *   - bigpicture/UpdateStoppedNotice.tsx, the card on Main
@@ -21,7 +27,11 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { dismissStoppedUpdateAttempt, getStoppedUpdateAttempt as readStoppedUpdateAttempt } from "../api/backend";
+import {
+  dismissStoppedUpdateAttempt,
+  getStoppedUpdateAttempt as readStoppedUpdateAttempt,
+  type StoppedUpdateAttemptWire,
+} from "../api/backend";
 import { notifyUpdateOutcome, onUpdateOutcomeChange } from "./updateOutcomeStore";
 
 /** An attempt whose installer stopped without updating, in this store's spelling. */
@@ -33,8 +43,9 @@ export interface StoppedUpdateAttempt {
 let _attempt: StoppedUpdateAttempt | null = null;
 
 /**
- * Ordering fence for the read, as in `updateOutcomeStore.ts`: Dismiss moves
- * it, so a read in flight when Dismiss was pressed cannot put the card back up.
+ * Ordering fence for the read, as in `updateOutcomeStore.ts`: Dismiss, a push
+ * and an accepted press move it, so a read in flight before any of them cannot
+ * put back what it replaced.
  */
 let _seq = 0;
 
@@ -58,12 +69,28 @@ export function useStoppedUpdateAttempt(): StoppedUpdateAttempt | null {
   return useSyncExternalStore(onUpdateOutcomeChange, getStoppedUpdateAttempt);
 }
 
+function fromWire(wire: StoppedUpdateAttemptWire): StoppedUpdateAttempt {
+  return { attemptedVersion: wire.attempted_version, fromVersion: wire.from_version };
+}
+
 /** Ask the backend whether an earlier start's installer stopped without updating, and fill the store. */
 export async function fetchStoppedUpdateAttempt(): Promise<void> {
   const seq = ++_seq;
   const answer = await readStoppedUpdateAttempt();
   if (seq !== _seq) return;
-  set(answer === null ? null : { attemptedVersion: answer.attempted_version, fromVersion: answer.from_version });
+  set(answer === null ? null : fromWire(answer));
+}
+
+/** Take the stopped attempt the backend pushed; it outranks a read still in flight. */
+export function takePushedStoppedAttempt(pushed: StoppedUpdateAttemptWire): void {
+  ++_seq;
+  set(fromWire(pushed));
+}
+
+/** A new attempt was accepted: the backend ended the stopped one's record, so the card comes down here too. */
+export function endStoppedAttempt(): void {
+  ++_seq;
+  if (_attempt !== null) set(null);
 }
 
 /** Wave the card away, then take it down here — only once the backend answered. A failed call rejects. */

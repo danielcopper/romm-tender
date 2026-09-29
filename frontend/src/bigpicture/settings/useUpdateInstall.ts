@@ -8,6 +8,7 @@ import {
   type UpdateWaitReason,
 } from "../../api/backend";
 import { detach } from "../../utils/detach";
+import { endStoppedAttempt } from "../../utils/stoppedUpdateStore";
 import {
   getUpdateInstallAttempt,
   installerSeenAt,
@@ -24,6 +25,13 @@ import {
 } from "../../utils/updateInstallView";
 
 export const UPDATE_INSTALL_POLL_MS = 3000;
+
+/**
+ * How long a read may go unanswered before it counts as failed. A call made
+ * while the connection is down does not fail, it waits (`api/hostSocket.ts`),
+ * so without this a backend the installer stopped would never read as gone.
+ */
+export const UPDATE_INSTALL_READ_DEADLINE_MS = 5000;
 
 export interface UpdateInstall {
   offered: boolean;
@@ -42,7 +50,7 @@ export interface UpdateInstall {
   restarting: boolean;
   /** Five minutes have passed since this panel first saw the installer started, and it is still restarting. */
   overdue: boolean;
-  /** The last read did not answer. */
+  /** The last read failed, or has not answered within {@link UPDATE_INSTALL_READ_DEADLINE_MS}. */
   readFailed: boolean;
   install: () => void;
 }
@@ -92,6 +100,12 @@ export function useUpdateInstall(): UpdateInstall {
       if (inFlight) return;
       inFlight = true;
       const issuedIn = generation.current;
+      // Past its deadline the read counts as failed but stays the one in
+      // flight: abandoning it would leave it queued behind the connection
+      // while the next tick queued another.
+      const deadline = setTimeout(() => {
+        if (mounted.current) setReadFailed(true);
+      }, UPDATE_INSTALL_READ_DEADLINE_MS);
       try {
         const answer = await getUpdateInstallState();
         if (!mounted.current) return;
@@ -105,6 +119,7 @@ export function useUpdateInstall(): UpdateInstall {
         const attempt = furtherAttempt(getUpdateInstallAttempt(), lastReading.current?.attempt ?? null);
         if (attempt?.step !== "installer_started") logError(`Failed to read the update install state: ${e}`);
       } finally {
+        clearTimeout(deadline);
         inFlight = false;
       }
     };
@@ -146,6 +161,9 @@ export function useUpdateInstall(): UpdateInstall {
     try {
       const answer = await installUpdate(version);
       generation.current += 1;
+      // The new attempt ended the stopped one's record, and the card on Main
+      // with it, whether or not this section is still on screen.
+      if (answer.success) endStoppedAttempt();
       if (!mounted.current) return;
       const now = lastReading.current;
       if (answer.success) {

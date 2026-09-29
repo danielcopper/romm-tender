@@ -165,6 +165,9 @@ class UpdateInstallService:
         # The attempt a previous start's installer stopped without updating, as
         # this start found it; gone once dismissed or a new attempt starts.
         self._stopped: UpdateAttemptRecord | None = None
+        # Asks after the installer's unit until it ends, where it still ran
+        # when this start looked at the record.
+        self._judging: asyncio.Task[None] | None = None
         # Whether this attempt's record was written, so a failure this process
         # reports itself takes it away again.
         self._record_written = False
@@ -193,15 +196,51 @@ class UpdateInstallService:
         attempt starts, or the running version changes. Any other record — an
         update that went through, one the installer rolled back, a version
         that moved since — is removed.
+
+        The installer starts this program itself — the new version, the one it
+        rolled back to, or the same one again after it gave up — and may still
+        be running when this start asks. Only once its unit reads ended is the
+        record judged: while it runs, or nobody can say whether it does, the
+        unit is asked again every watch interval, the judgement is pushed to
+        the panel as ``update_attempt_stopped`` when it finds a stopped
+        attempt, and a press in the meantime ends the question, since a new
+        attempt ends the record itself.
         """
         record = self._attempts.read()
         if record is None:
             return
+        running = self._installer_running()
+        if running is False:
+            stopped = self._judge_io(record)
+            if stopped is not None:
+                self._take_stopped(stopped)
+            return
+        self._logger.info(
+            f"update: the installer for {record.attempted_version} "
+            f"{'still runs' if running else 'may still run'}; its record is judged once it has ended"
+        )
+        self._judging = self._loop.create_task(self._judge_once_the_installer_ended())
+
+    def _installer_running(self) -> bool | None:
+        """Whether the installer's unit runs now; ``None`` where the seam could not say or raised."""
+        try:
+            return self._units.is_active(INSTALLER_UNIT)
+        except Exception:
+            return None
+
+    def _judge_io(self, record: UpdateAttemptRecord) -> UpdateAttemptRecord | None:
+        """*record* where it says the installer stopped without updating; any other record is removed."""
         failure = standing_update_failure(self._read_update_failure(), self._current_version)
         stopped = stopped_attempt(record, self._current_version, failure)
         if stopped is None:
             self._remove_record_io()
-            return
+        return stopped
+
+    def _judge_the_record_io(self) -> UpdateAttemptRecord | None:
+        record = self._attempts.read()
+        return self._judge_io(record) if record is not None else None
+
+    def _take_stopped(self, stopped: UpdateAttemptRecord) -> None:
         self._logger.warning(
             f"update: the installer for {stopped.attempted_version} started at {stopped.started_at} stopped without "
             f"updating; still on {self._current_version} — what it said is in journalctl --user -u {INSTALLER_UNIT}"
@@ -211,39 +250,57 @@ class UpdateInstallService:
             version=stopped.attempted_version, step=InstallStep.FAILED, failure=InstallFailure.INSTALLER_STOPPED
         )
 
+    async def _judge_once_the_installer_ended(self) -> None:
+        """Ask the installer's unit until it reads ended, then judge the record and push what it found."""
+        try:
+            while True:
+                await self._sleeper.sleep(_WATCH_SECONDS)
+                if self._attempt is not None:
+                    return
+                active, _why = await self._ask_unit()
+                if active is False:
+                    break
+            stopped = await self._loop.run_in_executor(None, self._judge_the_record_io)
+            if stopped is None or self._attempt is not None:
+                return
+            self._take_stopped(stopped)
+            await self._emit("update_attempt_stopped", _stopped_wire(stopped))
+        except Exception:
+            self._logger.exception("update: the record of the last update attempt could not be judged")
+
     def get_stopped_update_attempt(self) -> dict[str, Any] | None:
         """The attempt an earlier start's installer stopped without updating, until dismissed or superseded.
 
         ``{"attempted_version", "from_version", "started_at"}``, or ``None``.
-        Judged by :meth:`note_start`; the notice on Main shows it.
+        Judged by :meth:`note_start`, whose late judgement pushes the same
+        shape as ``update_attempt_stopped``; the notice on Main shows it.
         """
         stopped = self._stopped
-        if stopped is None:
-            return None
-        return {
-            "attempted_version": stopped.attempted_version,
-            "from_version": stopped.from_version,
-            "started_at": stopped.started_at,
-        }
+        return _stopped_wire(stopped) if stopped is not None else None
 
     async def dismiss_stopped_attempt(self) -> dict[str, Any]:
         """Wave away the notice of an installer that stopped without updating, and remove its record.
 
-        Returns ``{"success": True}``. A record that could not be removed is
+        Returns ``{"success": True}``. Does nothing unless such an attempt
+        stands — and none does once a press has started a new one — since a
+        card left on screen from before that press would otherwise take the
+        new attempt's record away. A record that could not be removed is
         logged and is judged again at the next start — a notice shown twice
         rather than one lost.
         """
+        if self._stopped is None:
+            return {"success": True}
         self._stopped = None
         await self._loop.run_in_executor(None, self._remove_record_io)
         return {"success": True}
 
     async def shutdown(self) -> None:
-        """Stop the attempt's task and a download still running on its thread; the hold ends with the process."""
+        """Stop the attempt, a download on its thread and a judgement still waiting; the hold ends with the process."""
         self._stopping = True
-        task = self._task
-        if task is not None and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        for task in (self._task, self._judging):
+            if task is not None and not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
 
     async def get_update_install_state(self) -> dict[str, Any]:
         """Report whether an install is offered, what it waits for, and how the latest attempt went.
@@ -297,7 +354,7 @@ class UpdateInstallService:
                 "reason": "version_changed",
                 "message": f"The release offered is now {release.version}",
             }
-        apps = await self._steam.running_apps()
+        apps = await self._running_apps()
         frees_at = await self._steam.reload_frees_at()
         # Asked again after the readings: a second press may have started an
         # attempt while this one waited for them.
@@ -374,7 +431,7 @@ class UpdateInstallService:
         return installer, path
 
     async def _start_installer(self, version: str, installer: str, tarball_path: str) -> None:
-        apps = await self._steam.running_apps()
+        apps = await self._running_apps()
         if apps is None:
             self._logger.warning(
                 f"update: whether a game runs could not be read before the installer for {version}; nothing changed"
@@ -430,14 +487,19 @@ class UpdateInstallService:
         """Why a start that gave no answer did not start the unit, or ``None`` where it may have.
 
         Only a user manager that says the unit is not running makes it a start
-        that failed. Where it cannot say either, the attempt goes on as started
-        and the watch finds out, rather than giving the rule back while the
-        installer may run.
+        that failed, and only when it still says so one watch interval later: a
+        ``systemd-run`` that gave no answer may not have created the unit yet,
+        and an unknown unit reads as ended. Where it cannot say either, the
+        attempt goes on as started and the watch finds out, rather than giving
+        the rule back while the installer may run.
         """
         self._logger.warning(
             f"update: starting the installer for {version} gave no answer ({no_answer}); asking whether it runs"
         )
         active, _why = await self._ask_unit()
+        if active is False:
+            await self._sleeper.sleep(_WATCH_SECONDS)
+            active, _why = await self._ask_unit()
         return repr(no_answer) if active is False else None
 
     async def _watch_installer(self, version: str) -> None:
@@ -549,17 +611,26 @@ class UpdateInstallService:
             return None
         return release if is_newer_version(release.version, self._current_version) else None
 
+    async def _running_apps(self) -> tuple[str, ...] | None:
+        """One reading of Steam's running apps; a reader that raised took none, which is never "nothing runs"."""
+        try:
+            return await self._steam.running_apps()
+        except Exception as e:
+            self._log_debug(f"[update] Steam's running apps could not be read: {e!r}")
+            return None
+
     async def _waits(self) -> list[Wait]:
-        apps = await self._steam.running_apps()
+        apps = await self._running_apps()
         frees_at = await self._steam.reload_frees_at()
         return [*_app_waits(apps), *self._work_waits(frees_at)]
 
     def _work_waits(self, frees_at: float | None) -> list[Wait]:
-        """Every reason but Steam's two readings, read from memory in one loop turn, then the reload limit.
+        """Every reason but the running apps: the work in flight, read from memory in one loop turn, then *frees_at*.
 
         A claim held on the prune conflicts counts towards the reason that
-        names its work, and every other one is ``other_work``: any work of
-        this process a restart would cut short makes a press wait.
+        names its work, a read-only one towards none, and one nothing
+        classified towards ``other_work``: any work of this process a restart
+        would cut short makes a press wait.
         """
         claimed = claim_reasons(self._held_claims())
         waits = [
@@ -598,10 +669,23 @@ class UpdateInstallService:
 
 
 def _failure_at(attempt: InstallAttempt | None) -> InstallFailure:
-    """What an attempt that failed in an unforeseen way is reported as, by the step it had reached."""
+    """What an attempt that failed in an unforeseen way is reported as, by the step it had reached.
+
+    Past the download every check of it reports its own failure, and a Steam
+    reading that raised is one that could not be taken, so what is left is the
+    way to the installer's start.
+    """
     if attempt is not None and attempt.step is InstallStep.DOWNLOADING:
         return InstallFailure.DOWNLOAD_FAILED
     return InstallFailure.INSTALLER_NOT_STARTED
+
+
+def _stopped_wire(stopped: UpdateAttemptRecord) -> dict[str, Any]:
+    return {
+        "attempted_version": stopped.attempted_version,
+        "from_version": stopped.from_version,
+        "started_at": stopped.started_at,
+    }
 
 
 def _app_waits(apps: tuple[str, ...] | None) -> list[Wait]:

@@ -759,11 +759,13 @@ The notice that an **update's installer stopped without updating** is the rolled
 failure the installer cannot report: it stopped Tender, then gave up and started the same version again. It uses the
 same sentence (`updateDidNotGoThrough`) and, below it, the Updates section's own line for that failure, pointing at the
 installer's journal. Its answer is its own read (`get_stopped_update_attempt`, `utils/stoppedUpdateStore.ts`), made at
-panel load beside the other two; Dismiss removes the backend's record of the attempt, so the next start does not raise
-it again, and a new attempt takes it down too. It takes the place of the update notice for the version it tried, as the
-rolled-back notice does, but only while it stands — once dismissed, that version's "is available" card comes back
-(`stoppedAttemptTakesThePlaceOf`). Its home is Settings › Updates, where the attempt stands as failed with **Try again**
-for the rest of that run.
+panel load beside the other two, and a push (`update_attempt_stopped`) for the one the backend could judge only after
+the panel loaded, once the installer's unit had ended. Dismiss removes the backend's record of the attempt, so the next
+start does not raise it again; a press of Install the backend accepts takes the card down too, since the new attempt
+ended that record, and with the card goes its hold on the "is available" card. It takes the place of the update notice
+for the version it tried, as the rolled-back notice does, but only while it stands — once dismissed, that version's "is
+available" card comes back (`stoppedAttemptTakesThePlaceOf`). Its home is Settings › Updates, where the attempt stands
+as failed with **Try again** for the rest of that run.
 
 The update announcement is the one condition shown twice over, as a toast and as a card, both from that same read. The
 **toast** says **Tender updated to X** after an update, **Tender is back on X** after a return to an earlier release.
@@ -1735,28 +1737,33 @@ and a stop there would be a step that leads nowhere.
 it rather than failing, so an interval that kept issuing would queue one read per tick behind it — and stops when the
 section unmounts (`bigpicture/settings/useUpdateInstall.ts`). The button is there while the backend offers the stored
 release (`offered`), and stays through an attempt: it reads **Install update X**, **Try again** where that version
-already failed here or was rolled back, and **Installing…**, disabled, while an attempt is under way — **nothing that
-can hold focus unmounts under it**. It is disabled while any wait reason holds, and a press on it then is refused in the
-handler too, since a disabled control still reports a press on the device. What it waits for — **Waiting for:** and a
-line per reason — rides the button's own description, with the paused-download hint, what refused the last press and
-**Could not read the update state.** after a read that did not answer, so none of them is a row that can leave while it
-holds focus; the reasons go by themselves once a read no longer names any. The backend answers in discriminants; the
-sentences for them are in `utils/updateInstallView.ts`, and the button's labels and a step's value beside the rows in
-`bigpicture/settings/UpdateInstallRows.tsx`. A refusal is worded by the panel, not by the backend's message, and goes
-once a read says it no longer holds (`refusalStands`). After a press the steps come from two sources, the
-`update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a press
-fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`). The steps show
-for an attempt under way, and for a failed one only while its version is the one offered. The download's bar rides the
-step's field description, as Main's sync bar does, so the step and its bar are one focus stop; the steps and the one
-line under them are focusable read-only fields, and that line is one row whose words change with the attempt —
-**Starting a game now cancels the update.** while it downloads and verifies, then the restarting line, then a failure's
-sentence. **From `installer_started` on, a lost connection is the expected outcome** — the installer stops this backend
-— so a read it takes down is not logged, Main's connection row stays at Checking… rather than calling the backend
-failed, and Check now is disabled from the press on, since a check in flight when the connection goes would fail on it
-and say so. Five minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`, counted from that
-moment across the section leaving the screen), the restarting line gives way: **Tender has not come back.** with the
-journal and the command to start it where reads no longer answer, **The installer is taking unusually long.** with the
-journal where they still do. From then on the connection row is left to its own verdict too.
+already failed here or was rolled back, and **Installing…**, disabled, while an attempt is under way — **while an
+attempt is under way, nothing that can hold focus unmounts under it**. It is disabled while any wait reason holds, and a
+press on it then is refused in the handler too, since a disabled control still reports a press on the device. What it
+waits for — **Waiting for:** and a line per reason — rides the button's own description, with the paused-download hint,
+what refused the last press and **Could not read the update state.** after a read that failed or did not answer within
+five seconds (`UPDATE_INSTALL_READ_DEADLINE_MS`; the late read stays the one in flight), so none of them is a row that
+can leave while it holds focus; the reasons go by themselves once a read no longer names any. Where there is no button,
+that line rides the **Available** row's description instead, which is always there. The backend answers in
+discriminants; the sentences for them are in `utils/updateInstallView.ts`, and the button's labels and a step's value
+beside the rows in `bigpicture/settings/UpdateInstallRows.tsx`. A refusal is worded by the panel, not by the backend's
+message, and goes once a read says it no longer holds (`refusalStands`). After a press the steps come from two sources,
+the `update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a
+press fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`). The steps
+show for an attempt under way, and for a failed one only while its version is the one offered — those rows leave, and
+the failure's line with them, once a read no longer offers that version. The download's bar rides the step's field
+description, as Main's sync bar does, so the step and its bar are one focus stop; the steps and the one line under them
+are focusable read-only fields, and that line is one row whose words change with the attempt — **Starting a game now
+cancels the update.** while it downloads and verifies, then the restarting line, then a failure's sentence. **From
+`installer_started` on, a lost connection is the expected outcome** — the installer stops this backend — so a read it
+takes down is not logged, Main's connection row stays at Checking... rather than calling the backend failed, and Check
+now is disabled while an attempt is under way — in its handler too — since a check in flight when the connection goes
+would fail on it and say so. Five minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`,
+counted from that moment across the section leaving the screen), the restarting line gives way: **Tender has not come
+back.** with the journal and the command to start it where reads no longer answer — a call to a backend that is gone
+waits rather than fails, so it is the read deadline that says so — and **The installer is taking unusually long.** with
+the journal where they still do. From then on the connection row is left to its own verdict too: a probe that held it at
+Checking... asks again when the five minutes are up.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

@@ -9,8 +9,9 @@
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
 import { AMBER } from "../layout/pane";
-import { UpdateInstallRows } from "./UpdateInstallRows";
+import { UpdateInstallRows, installButtonShown, installStateUnread } from "./UpdateInstallRows";
 import { useUpdateInstall } from "./useUpdateInstall";
+import { INSTALL_STATE_UNREAD } from "../../utils/updateInstallView";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import { UPDATE_FAILURE_REASON, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
@@ -55,7 +56,16 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
         </Field>
       </PanelSectionRow>
       <PanelSectionRow>
-        <Field label="Available" focusable={true}>
+        {/* Where the install has no button to carry it, a read that did not
+            answer is said here: a row of its own would come and go with the
+            reads under a reader's focus. */}
+        <Field
+          label="Available"
+          focusable={true}
+          {...(!installButtonShown(install) && installStateUnread(install)
+            ? { description: <span data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</span> }
+            : {})}
+        >
           <span data-testid="updates-available">{availableValue(update)}</span>
         </Field>
       </PanelSectionRow>
@@ -87,8 +97,16 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        {/* Dead from the press on: why is docs/architecture/qam-panel.md, Settings. */}
-        <ButtonItem layout="below" onClick={onCheckNow} disabled={checking || install.underWay}>
+        {/* Dead while an attempt is under way, in the handler too since a
+            disabled control still reports a press on the device: why is
+            docs/architecture/qam-panel.md, Settings. */}
+        <ButtonItem
+          layout="below"
+          onClick={() => {
+            if (!install.underWay) onCheckNow();
+          }}
+          disabled={checking || install.underWay}
+        >
           {checking ? "Checking…" : "Check now"}
         </ButtonItem>
       </PanelSectionRow>

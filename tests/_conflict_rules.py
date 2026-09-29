@@ -3,8 +3,8 @@
 A rule is declared by a ``hold("<endpoint>", update=…, migration=…, sync=…,
 prune=…)`` or ``hold_start("<endpoint>", update=…, migration=…, sync=…)``
 call at the entry of the use case the endpoint calls, under
-``backend/services/``. The calls are read from
-the source by AST, since a use case's rules are not visible on the object.
+``backend/services/``. The calls are read from the source by AST, since a use
+case's rules are not visible on the object.
 ``hold_start`` declares the ``exclusive_start`` rule beside the rules its
 keywords name. A call whose label or rule keywords are not literals fails the
 read instead of being skipped.
@@ -172,13 +172,33 @@ def claim_names_in_source() -> set[str]:
     Not seen: a name built at run time, passed by keyword, or handed through a
     helper that is not in the list.
     """
+    return _names_taken_by(_CLAIM_TAKERS)
+
+
+# The takers among them whose claim ``PruneConflicts.held_claims`` names: a
+# retained operation and a lease. ``hold`` registers an operation only with
+# ``prune=True``, and ``hold_start`` takes a reservation, which it does not name.
+_HELD_CLAIM_TAKERS = ("retain", "acquire_lease", "emit_under_lease", "_retain_started_task")
+
+
+def claims_held_on_the_prune_conflicts() -> set[str]:
+    """Every name a claim ``PruneConflicts.held_claims`` answers with can go by: a ``hold`` label with the prune rule, a
+    retained operation's label, a lease's key.
+
+    Blind where :func:`claim_names_in_source` and :func:`endpoints_with_rule` are.
+    """
+    takers = {method: _CLAIM_TAKERS[method] for method in _HELD_CLAIM_TAKERS}
+    return endpoints_with_rule("prune") | _names_taken_by(takers)
+
+
+def _names_taken_by(takers: dict[str, int]) -> set[str]:
     names: set[str] = set()
     for path in sorted(_SERVICES.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue
-            at = _CLAIM_TAKERS.get(node.func.attr)
+            at = takers.get(node.func.attr)
             if at is None or len(node.args) <= at:
                 continue
             arg = node.args[at]

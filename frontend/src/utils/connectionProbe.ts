@@ -25,7 +25,8 @@ import { getSettings, testConnection } from "../api/backend";
 import { setVersionError } from "./connectionState";
 import { detach } from "./detach";
 import { withTimeout } from "./withTimeout";
-import { installerRestarting } from "./updateInstallStore";
+import { installerRestarting, installerSeenAt } from "./updateInstallStore";
+import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
 
 // Each attempt is raced against a deadline because the callable hangs (rather
 // than rejects) while the backend is still starting. The schedule mirrors the
@@ -96,10 +97,16 @@ async function runProbe(): Promise<void> {
           publish({ connected: false, failure: null });
         } catch (pingErr) {
           // A backend an update's installer is restarting is expected to be
-          // gone for a while; the row stays at "Checking…" rather than calling
-          // it failed, until the Updates section says it has not come back.
+          // gone for a while; the row stays at "Checking..." rather than
+          // calling it failed until INSTALLER_OVERDUE_MS after the installer
+          // was first seen started, and is asked again then, so a verdict
+          // follows without the panel having to be opened again.
           if (installerRestarting()) {
             publish({ connected: null, failure: null });
+            const seenAt = installerSeenAt();
+            if (seenAt !== null) {
+              setTimeout(ensureConnectionProbe, Math.max(0, seenAt + INSTALLER_OVERDUE_MS - Date.now()));
+            }
             return;
           }
           publish({ connected: "backend_failed", failure: null });
