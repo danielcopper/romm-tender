@@ -864,15 +864,13 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
 
 ### Completion stamp / revoked skip
 
-A platform's **completion stamp** (`PlatformSyncState`, `platform_sync_state`) records that its most recent apply ran to
-completion, with the fetch generation that apply marked its rows with. It has two readers: the incremental skip, for
-which it is the sole authority (no stamp, no skip), and removed-game discovery, which takes the generation as the record
-of what RomM's last complete fetch returned. A **revoked skip** (`skip_revoked`) is a stamp that keeps the second job
-and loses the first. Any **unbind** outside the platform's own apply sets it — the **stale** removal on a platform the
-run did not process, "Remove shortcuts", a shortcut deleted in Steam's own UI — and the platform full-fetches until a
-completed apply writes a fresh stamp. Distinct from deleting the stamp, which the apply start does and which leaves
-discovery nothing to read. A collection's completion stamp (`CollectionSyncState`) has no revoked state; it is deleted.
-The rule and its readers:
+A platform's **completion stamp** (`PlatformSyncState`) records that its most recent apply ran to completion, with the
+fetch generation that apply marked its rows with. It has two uses: it is the incremental skip's sole authority (no
+stamp, no skip), and removed-game discovery reads its generation as the record of what RomM's last complete fetch
+returned. A stamp whose skip is **revoked** (`skip_revoked`) keeps the second use and loses the first. It is set when
+games are **unbound** in a way the skip's counts cannot see, and it lasts until the platform's next apply. Distinct from
+deleting the stamp, which removes both uses. A collection's completion stamp has no revoked state. What sets it and
+which readers honour it:
 [backend-architecture.md](docs/architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
 "Incremental skip".
 

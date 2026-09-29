@@ -757,10 +757,11 @@ class LibraryFetcher:
         fetch generation. The stamp (``PlatformSyncState``) is the **sole** skip
         authority — it exists iff the platform's most recent apply attempt ran to
         completion (cleared at apply start, rewritten by the final chunk;
-        ADR-0023), and it reads as absent once an unbind outside that apply
-        revoked its skip. A completed-run ``last_sync`` is deliberately NOT a
-        fallback: it cannot see a locally-removed-then-partially-reapplied
-        platform, so trusting it can skip a platform with missing shortcuts.
+        ADR-0023), and it reads as absent once a local removal, or a stale
+        removal on a run that did not process the platform, revoked its skip. A
+        completed-run ``last_sync`` is deliberately NOT a fallback: it cannot see
+        a locally-removed-then-partially-reapplied platform, so trusting it can
+        skip a platform with missing shortcuts.
         Group-aware sync persists every sibling (ADR-0021), so bound and unbound
         rows count alike — only the generation decides, which keeps skip parity on
         platforms holding sibling groups while excluding a row for a rom_id the
