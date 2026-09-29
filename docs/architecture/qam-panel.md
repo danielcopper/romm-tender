@@ -861,7 +861,8 @@ sync" has to reach the reader under the rows it is about. The Sync page passes n
 numbers; what it keys on the run's end for is its own three reads — the run list, the stats and the session-budget
 reading all describe the run that just stopped — taken on a stop that carries a **terminal stage** rather than through a
 second announcement of it. The stage is what separates a run's end from that page retracting its own optimistic frame
-after a preview: both stop the store's `running`, and only one of them ended a run.
+after a preview: both stop the store's `running`, and only one of them ended a run. The one end that page does say is an
+apply run's failure, on its status line, because the only other word of it is a toast (§ Sync).
 
 **Steam memory is not on Main.** The reading and the session-budget card are on the Sync page, at the home of the button
 they are about; what stays on Main is the notice naming a paused run and pointing at it. Main reads the session-budget
@@ -1034,6 +1035,17 @@ mount and not Main, which starts no run and computes nothing; its one sync contr
 going — so a preview happens because the reader pressed the button that asks for one, right here. Everything the call
 can answer — the run while it works, the table when it lands, and a refusal — is therefore reported where the reader is
 looking.
+
+**An apply run that stops at stage `error` is reported whichever page is open.** It emits no `sync_complete`, whether it
+failed before its work queue was built or part-way through, so the toast that announces a finished run never comes; its
+one word is a `sync_progress` frame at `error`. Two places read it, both keyed on the frame's `runKind`. The
+`sync_progress` listener in `index.tsx`, which lives as long as the panel, raises a toast: the frame's message behind
+"Sync failed — ", unless the message already starts that way — the backend words a failure part-way through so and
+leaves one before the work queue bare — and once per run id. The Sync page puts the message on its status line under the
+start button, the line a failed preview writes, where it stays until the next press clears it. A preview's failure gets
+neither: its own answer writes that line, and a preview runs only while the reader is on this page. Main's transient
+status line says it as well while Main is open. A failure before the work queue is built writes no sync run, so the run
+list and Last sync do not change.
 
 What the backend holds for it: the preview answer carries library-wide totals (`SyncPreviewSummary`: new, changed,
 unchanged and removed counts, the platform and collection counts, and more), the names of new and changed games, and the
