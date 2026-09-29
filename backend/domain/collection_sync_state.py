@@ -31,9 +31,10 @@ Only **standard** and **smart** collections carry a stamp — virtual collection
 are auto-generated groupings with no stable ``updated_at`` and are never
 stamped (they always full-fetch). A thin record built whole and upserted —
 never a partial field mutation — so it carries a single ``stamp`` constructor and
-no verb-named mutators. Cleared on the same events that clear platform stamps:
-the local destructive flows (shortcut removal / live-shortcut reconcile) drop any
-stamp whose member set intersects the removed ROMs, and Force Full Sync clears
+no verb-named mutators. Unlike a platform stamp it has no revoked state and is
+deleted outright: the local destructive flows (shortcut removal / live-shortcut
+reconcile) drop any stamp whose member set intersects the removed ROMs, removed-game
+cleanup drops those intersecting the rows it deletes, and Force Full Sync clears
 every stamp wholesale.
 """
 

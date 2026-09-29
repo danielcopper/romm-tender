@@ -9,9 +9,9 @@ row and its per-ROM children (ADR-0007), never deletes. Every unbind here also
 revokes the skip of the touched platforms' completion stamps (ADR-0023) — and
 deletes any collection stamp whose member set contained a removed ROM (#742) — so
 the next sync's incremental-skip gate can't skip a platform/collection whose
-shortcuts were removed locally and leave the removal never recreated. The platform
-stamp itself stays, because removed-game discovery reads its fetch generation.
-Reads the synced-shortcut binding from ``uow.roms``; the offline
+shortcuts were removed locally and leave the removal never recreated. Why the
+platform stamp is kept is in docs/architecture/backend-architecture.md,
+"Incremental skip". Reads the synced-shortcut binding from ``uow.roms``; the offline
 ``platform_slug → display_name`` label comes from the ``kv_config`` cache the
 library sync refreshes each run.
 """

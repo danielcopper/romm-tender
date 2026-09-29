@@ -409,9 +409,8 @@ class PlatformSyncStateRepository(Protocol):
         """Keep *platform_slug*'s stamp but take away its skip authority.
 
         A no-op when no stamp exists; the next ``save`` for the slug clears it.
-        Called wherever a platform's rows are unbound outside its own apply — the
-        end-of-run stale removal on a platform the run did not process
-        (library/reporter.py) and the local destructive flows
+        Called by the end-of-run stale removal on a platform the run did not
+        process (library/reporter.py) and by the local destructive flows
         (services/shortcut_removal.py). ``get`` still returns the stamp, flagged
         ``skip_revoked``, so removed-game discovery keeps its fetch generation.
         """

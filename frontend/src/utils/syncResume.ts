@@ -86,14 +86,14 @@ export function formatResumeScope(resumableGames: number): string {
  * commands without reaching a stamp, and the next run genuinely does less work.
  *
  * ``roms > 0`` is LOAD-BEARING, not a belt-and-braces restatement of the two
- * branches. ``has_completion_stamp`` is a global "any stamp anywhere", while the
- * removal path is surgical: it deletes only the platform slugs its removed rows
- * name, and only the collection stamps whose member set intersects those rows. A
- * stamp naming nothing the ``roms`` table still holds therefore outlives a
- * remove-all. Prune is the reachable path — it deletes ``roms`` rows and never
+ * branches. ``has_completion_stamp`` is a global "any stamp that may still skip,
+ * anywhere", while the removal path is surgical: it revokes the skip of only the
+ * platform slugs its removed rows name, and deletes only the collection stamps
+ * whose member set intersects those rows. A stamp naming nothing the ``roms``
+ * table still holds therefore outlives a remove-all. Prune is the reachable path — it deletes ``roms`` rows and never
  * touches ``platform_sync_state`` (services/prune/registry.py ``delete_rows``),
  * so a platform whose games RomM dropped keeps its stamp with no rows left to
- * name it; the next remove-all cannot see that slug to invalidate it. Without
+ * name it; the next remove-all cannot see that slug to revoke its skip. Without
  * this conjunct that state offers "Resume Sync" over zero shortcuts. It is also
  * the rule in its own right: a run that stopped before a single shortcut was
  * written starts from the beginning and must read "Sync Library".

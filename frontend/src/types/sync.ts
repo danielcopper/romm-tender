@@ -337,7 +337,8 @@ export interface SyncPreviewSummary {
    */
   cover_refresh_count?: number;
   /**
-   * Enabled platforms lacking a completion stamp (#1416) — a late-ack-recovered
+   * Enabled platforms holding no completion stamp that may skip — none at all,
+   * or one whose skip was revoked (#1416) — a late-ack-recovered
    * platform is complete but unstamped, so its apply is a 0-delta empty final
    * chunk that re-writes the stamp and records a fresh run. A restamp-only
    * preview (all other diffs zero, this > 0) must still offer Apply, or the

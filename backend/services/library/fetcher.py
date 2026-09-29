@@ -587,16 +587,15 @@ class LibraryFetcher:
         Per unit slug: replay the wholesale-skip gate's LOCAL conditions
         (``predict_unit_skip`` — a stamp present and not revoked
         (``stamp_for_skip``), the stamped count and the count of rows carrying
-        the stamp's fetch generation both match the server
-        count, bound rows exist, no group-key backfill pending, no bound row the
-        stamp's fetch did not return) and derive the persisted post-collapse
-        shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group
-        keys + bound flags). The collapsed count is emitted ONLY for slugs that carry
-        a ``PlatformSyncState`` completion stamp the gate would read (#1412): the
-        stamp exists iff the local mirror is complete, so without it a never-synced platform's
-        PARTIAL rows
-        (cross-platform collection siblings, ADR-0021) would mis-weight the ETA
-        below the true work. ``None`` (no stamp, or no persisted rows) rides the
+        the stamp's fetch generation both match the server count, bound rows
+        exist, no group-key backfill pending, no bound row the stamp's fetch did
+        not return) and derive the persisted post-collapse shortcut count
+        (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
+        flags). The collapsed count is emitted ONLY for slugs that carry a
+        ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
+        stamp stands only while the local mirror is complete, so without it a
+        never-synced platform's PARTIAL rows (cross-platform collection siblings,
+        ADR-0021) would mis-weight the ETA below the true work. ``None`` (no stamp, or no persisted rows) rides the
         payload absent, so the frontend weights the unit at its raw ``rom_count``
         (``predicted_skip ? 0 : collapsed_count ?? rom_count``). Also split the
         unit by what the apply will actually do to it: count its BOUND rows —
@@ -768,11 +767,12 @@ class LibraryFetcher:
         server has since dropped (#1504; such a row is retained per ADR-0007 and
         would otherwise inflate the count — or demand a backfill no fetch can
         deliver — forever). Returns ``None`` to fall through to a full paginated
-        fetch — no stamp or a revoked one (including every platform's first
-        sync after this contract shipped — a one-time re-walk), no rows carrying
-        the stamp's generation, an un-backfilled row from that generation, a bound row the
-        stamp's fetch did not return, a stamped ROM count that no longer matches
-        the server, the delta check raised, or the server reports changes.
+        fetch — no stamp (including every platform's first sync after this
+        contract shipped — a one-time re-walk) or a revoked one, no rows carrying
+        the stamp's generation, an un-backfilled row from that generation, a
+        bound row the stamp's fetch did not return, a stamped ROM count that no
+        longer matches the server, the delta check raised, or the server reports
+        changes.
 
         This gate is the SOLE skip authority (ADR-0023). The plan-time
         ``predicted_skip`` rider (``_read_plan_estimates`` /
