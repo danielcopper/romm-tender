@@ -95,6 +95,42 @@ class TestDelete:
         assert uow.collection_sync_state.get("nope", "standard") is None
 
 
+class TestDeleteIntersecting:
+    def test_deletes_every_stamp_holding_one_of_the_ids_whatever_its_kind(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", kind="standard", member_rom_ids=(1, 2)))
+        uow.collection_sync_state.save(_stamp("9", kind="smart", member_rom_ids=(3, 4)))
+        uow.collection_sync_state.save(_stamp("5", kind="standard", member_rom_ids=(6,)))
+
+        uow.collection_sync_state.delete_intersecting({2, 4})
+
+        assert uow.collection_sync_state.get("7", "standard") is None
+        assert uow.collection_sync_state.get("9", "smart") is None
+        assert uow.collection_sync_state.get("5", "standard") is not None
+
+    def test_keeps_the_same_id_under_the_other_kind(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", kind="standard", member_rom_ids=(1,)))
+        uow.collection_sync_state.save(_stamp("7", kind="smart", member_rom_ids=(2,)))
+
+        uow.collection_sync_state.delete_intersecting({1})
+
+        assert uow.collection_sync_state.get("7", "standard") is None
+        assert uow.collection_sync_state.get("7", "smart") is not None
+
+    def test_no_ids_delete_nothing(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", member_rom_ids=(1,)))
+
+        uow.collection_sync_state.delete_intersecting(set())
+
+        assert uow.collection_sync_state.get("7", "standard") is not None
+
+    def test_an_empty_member_set_intersects_nothing(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", rom_count=0, member_rom_ids=()))
+
+        uow.collection_sync_state.delete_intersecting({1})
+
+        assert uow.collection_sync_state.get("7", "standard") is not None
+
+
 class TestIterAll:
     def test_iter_all_yields_every_stamp(self, uow: SqliteUnitOfWork):
         uow.collection_sync_state.save(_stamp("7", kind="standard", member_rom_ids=(1, 2)))

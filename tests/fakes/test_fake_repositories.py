@@ -470,6 +470,16 @@ class TestFakeCollectionSyncStateRepository:
         repo.delete("7", "smart")
         assert repo.has_any() is False
 
+    def test_delete_intersecting_drops_only_the_stamps_holding_one_of_the_ids(self):
+        repo = FakeCollectionSyncStateRepository()
+        repo.save(_collection_stamp("7", "standard", members=(1, 2)))
+        repo.save(_collection_stamp("7", "smart", members=(3,)))
+        repo.save(_collection_stamp("9", "smart", members=(4,)))
+        repo.delete_intersecting({2, 4})
+        assert repo.get("7", "standard") is None
+        assert repo.get("7", "smart") is not None
+        assert repo.get("9", "smart") is None
+
     def test_clear_empties_it(self):
         repo = FakeCollectionSyncStateRepository()
         repo.save(_collection_stamp("7", "standard"))

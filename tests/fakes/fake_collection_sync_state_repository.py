@@ -6,7 +6,7 @@ import copy
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Collection, Iterator
 
     from domain.collection_sync_state import CollectionSyncState
 
@@ -27,6 +27,11 @@ class FakeCollectionSyncStateRepository:
 
     def delete(self, collection_id: str, collection_kind: str) -> None:
         self._stamps.pop((collection_id, collection_kind), None)
+
+    def delete_intersecting(self, rom_ids: Collection[int]) -> None:
+        self._stamps = {
+            key: state for key, state in self._stamps.items() if not set(rom_ids).intersection(state.member_rom_ids)
+        }
 
     def iter_all(self) -> Iterator[CollectionSyncState]:
         return iter([copy.deepcopy(state) for state in self._stamps.values()])

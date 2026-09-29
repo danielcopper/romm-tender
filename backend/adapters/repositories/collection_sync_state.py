@@ -4,11 +4,10 @@ One row per synced standard/smart collection, keyed by the composite
 ``(collection_id, collection_kind)`` — the per-collection completion stamp the
 incremental-skip gate reads (ADR-0023, the collection sibling of
 ``platform_sync_state``). A leaf table with no cascade children, so ``save``
-upserts with ``INSERT OR REPLACE``, ``delete`` drops one collection's row (local
-destructive flows that intersect a removed ROM), ``iter_all`` scans every stamp
-(so a removal can find the ones whose member set contains a removed ROM), and
-``clear`` drops the whole table (Force Full Sync). ``member_rom_ids`` is stored
-as a JSON array TEXT and decoded back to a tuple.
+upserts with ``INSERT OR REPLACE``, ``delete`` drops one collection's row,
+``delete_intersecting`` drops every row whose member set holds one of the given
+ROMs, and ``clear`` drops the whole table (Force Full Sync). ``member_rom_ids``
+is stored as a JSON array TEXT and decoded back to a tuple.
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from domain.collection_sync_state import CollectionSyncState
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterator
+    from collections.abc import Collection, Iterator
 
 _COLUMNS = "collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids"
 
@@ -63,6 +62,18 @@ class SqliteCollectionSyncStateRepository(BaseRepository):
             "DELETE FROM collection_sync_state WHERE collection_id = ? AND collection_kind = ?",
             (collection_id, collection_kind),
         )
+
+    def delete_intersecting(self, rom_ids: Collection[int]) -> None:
+        wanted = set(rom_ids)
+        if not wanted:
+            return
+        holding = [
+            (stamp.collection_id, stamp.collection_kind)
+            for stamp in self.iter_all()
+            if wanted.intersection(stamp.member_rom_ids)
+        ]
+        for collection_id, collection_kind in holding:
+            self.delete(collection_id, collection_kind)
 
     def iter_all(self) -> Iterator[CollectionSyncState]:
         for row in self._conn.execute(f"SELECT {_COLUMNS} FROM collection_sync_state").fetchall():

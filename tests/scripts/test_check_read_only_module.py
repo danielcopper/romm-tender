@@ -63,6 +63,7 @@ _EXPECTED_WRITES = frozenset(
         "clear",
         "clear_all_applied_launch_options",
         "delete",
+        "delete_intersecting",
         "replace_all",
         "revoke_skip",
         "save",

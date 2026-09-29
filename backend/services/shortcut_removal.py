@@ -198,26 +198,7 @@ class ShortcutRemovalService:
                 uow.roms.save(rom)
             for slug in touched_slugs:
                 uow.platform_sync_state.revoke_skip(slug)
-            self._invalidate_collection_stamps_for(uow, removed_ids)
-
-    @staticmethod
-    def _invalidate_collection_stamps_for(uow, removed_ids: set[int]) -> None:
-        """Drop any collection stamp whose member set intersects the removed ROMs.
-
-        The collection sibling of the platform-skip revocation (#742 /
-        ADR-0023): a collection member losing its Steam shortcut (removed locally)
-        must re-fetch + re-apply that collection next sync, else the collection's
-        incremental skip would rebuild the Steam collection from a stale member
-        set and never recreate the removed shortcut. Surgical — only collections
-        that actually contained a removed ROM lose their stamp (a collection id
-        can't be mapped from a platform slug, so this scans the stamps' stored
-        member sets). Shares the caller's write UoW.
-        """
-        if not removed_ids:
-            return
-        for stamp in list(uow.collection_sync_state.iter_all()):
-            if removed_ids.intersection(stamp.member_rom_ids):
-                uow.collection_sync_state.delete(stamp.collection_id, stamp.collection_kind)
+            uow.collection_sync_state.delete_intersecting(removed_ids)
 
     @staticmethod
     def _artwork_entry(rom) -> ShortcutRegistryEntry:
@@ -288,7 +269,7 @@ class ShortcutRemovalService:
             # (completing the #1046 recovery under the persisted-count skip).
             for slug in touched_slugs:
                 uow.platform_sync_state.revoke_skip(slug)
-            self._invalidate_collection_stamps_for(uow, unbound_ids)
+            uow.collection_sync_state.delete_intersecting(unbound_ids)
         return unbound
 
     async def reconcile_live_shortcuts(self, live_app_ids: list[int | str]) -> dict[str, Any]:
