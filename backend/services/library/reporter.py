@@ -313,7 +313,7 @@ class SyncReporter:
         to: (1) unbind the stale ROMs (clear ``shortcut_app_id``, keeping
         the row per ADR-0007 — never delete), revoke the skip of the
         platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
-        every collection holding an unbound ROM, (2) refresh the offline
+        every collection whose member set holds an unbound ROM, (2) refresh the offline
         ``platform_slug → display_name`` cache from the live work-queue, and
         (3) build the cross-unit collection mappings. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
@@ -371,8 +371,8 @@ class SyncReporter:
         processed, skipped and fetched alike. A stale unbind on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
         revokes that platform's skip; a processed platform keeps its skip. A
-        stale unbind also deletes the stamp of every collection holding the
-        unbound ROM, with no processed set to consult. Why, and why a platform's
+        stale unbind also deletes the stamp of every collection whose member
+        set holds the unbound ROM, with no processed set to consult. Why, and why a platform's
         stamp itself stays, is in docs/architecture/backend-architecture.md,
         "Incremental skip".
 

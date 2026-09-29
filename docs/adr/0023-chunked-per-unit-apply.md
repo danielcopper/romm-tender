@@ -134,10 +134,10 @@ mid-unit failure forfeits only the in-flight chunk.**
   > "Incremental skip".
   >
   > **Amendment (2026-09-29, #2106).** The stale removal now deletes collection stamps as well: every stamp whose member
-  > set holds a row it unbinds, the same rule the local flows and removed-game cleanup already applied. A collection
-  > whose games sat on a platform with its sync off lost their shortcuts to the stale removal while the collection was
-  > off, and once it was back on it skipped on its old stamp, whose replay passes over unbound members, so the shortcuts
-  > never came back. The current rule is in
+  > set holds a row the stale removal unbinds, the same rule the local flows and removed-game cleanup already applied.
+  > Take a collection whose games sat on a platform whose sync was off. While the collection was off, the stale removal
+  > unbound those games' shortcuts; once the collection was back on, the collection skipped on its old stamp, whose
+  > replay passes over unbound members, so the shortcuts never came back. The current rule is in
   > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
   > "Incremental skip".
 

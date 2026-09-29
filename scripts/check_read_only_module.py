@@ -14,9 +14,9 @@ method that is not a read is a finding. Read or write is decided **by the name's
 shape**: ``get`` / ``get_*`` / ``iter_*`` / ``count`` plus the explicit names in
 :data:`READ_METHODS`. That partition is exact over
 ``services/protocols/repositories.py`` as it stands today (no write there matches
-a read shape: ``save``, ``delete``, ``clear``, ``clear_*``, ``replace_all``,
-``set``, ``set_*``), and `test_check_read_only_module.py` re-derives every method
-name from that file so a new one has to be classified here rather than drift past.
+a read shape; the writes are pinned in ``_EXPECTED_WRITES`` in
+`test_check_read_only_module.py`), and that test re-derives every method name
+from that file so a new one has to be classified here rather than drift past.
 
 **The two directions are not symmetric, and the asymmetry runs the wrong way.**
 A read named outside the shapes is called a write: it fails loud until a line is
