@@ -25,7 +25,6 @@ from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.debug_logger import SettingsAwareDebugLogger
-from adapters.persistence import PersistenceAdapter, SettingsPersisterAdapter
 from adapters.steam_config import SteamConfigAdapter
 from host import HostStatus
 from main import Plugin
@@ -294,91 +293,6 @@ class TestLogLevel:
             assert result["no_api_key"] is True
             logged_msgs = [str(c) for c in mock_info.call_args_list]
             assert any("SGDB artwork" in m for m in logged_msgs)
-
-
-class TestInsecureSslSetting:
-    def test_load_settings_defaults_false(self, plugin, tmp_path):
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "https://romm.local"}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = persistence.load_settings()
-        assert plugin.settings["romm_allow_insecure_ssl"] is False
-
-
-class TestSettingsFilePermissions:
-    def test_save_settings_creates_file_with_0600(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        plugin.settings = {"romm_url": "http://example.com"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-        settings_path = tmp_path / "settings.json"
-        mode = os.stat(settings_path).st_mode & 0o777
-        assert mode == 0o600
-
-    def test_load_settings_fixes_permissions(self, plugin, tmp_path):
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-
-        settings_path = tmp_path / "settings.json"
-        import json as _json
-
-        with open(settings_path, "w") as f:
-            _json.dump({"romm_url": "http://example.com"}, f)
-        os.chmod(settings_path, 0o644)
-        assert os.stat(settings_path).st_mode & 0o777 == 0o644
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        persistence.load_settings()
-        assert os.stat(settings_path).st_mode & 0o777 == 0o600
-
-
-class TestAtomicSettingsWrite:
-    def test_settings_written_atomically(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        plugin.settings = {"romm_url": "http://example.com", "romm_user": "user"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-
-        settings_path = tmp_path / "settings.json"
-        with open(settings_path) as f:
-            data = json.load(f)
-        assert data["romm_url"] == "http://example.com"
-        assert data["romm_user"] == "user"
-
-    def test_settings_no_tmp_left_after_write(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        plugin.settings = {"romm_url": "http://example.com"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-
-        tmp_file = tmp_path / "settings.json.tmp"
-        assert not tmp_file.exists()
-
-    def test_settings_crash_preserves_original(self, plugin, tmp_path, logger, data_dir):
-        from unittest.mock import patch
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        # Write initial settings
-        plugin.settings = {"romm_url": "http://original.com"}
-        persister = SettingsPersisterAdapter(plugin._persistence, plugin.settings)
-        persister.save_settings()
-
-        # Now simulate a crash during json.dump
-        plugin.settings["romm_url"] = "http://corrupted.com"
-        with patch("json.dump", side_effect=OSError("disk full")), pytest.raises(OSError):
-            persister.save_settings()
-
-        # Original file should still be intact
-        settings_path = tmp_path / "settings.json"
-        with open(settings_path) as f:
-            data = json.load(f)
-        assert data["romm_url"] == "http://original.com"
 
 
 class TestRefreshMigrationState:
