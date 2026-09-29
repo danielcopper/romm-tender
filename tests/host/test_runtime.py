@@ -188,23 +188,26 @@ class TestABuildThatFails:
 
     async def test_the_error_surfaces(self, tmp_path, recorder):
         self._break(recorder)
+        status, port = HostStatus(), free_port()
 
         with pytest.raises(RuntimeError, match="the schema migration broke"):
-            await _run(tmp_path, recorder, HostStatus(), free_port())
+            await _run(tmp_path, recorder, status, port)
 
     async def test_nothing_is_shut_down(self, tmp_path, recorder):
         self._break(recorder)
+        status, port = HostStatus(), free_port()
 
         with pytest.raises(RuntimeError):
-            await _run(tmp_path, recorder, HostStatus(), free_port())
+            await _run(tmp_path, recorder, status, port)
 
         assert recorder.steps == ["build"]
 
     async def test_the_lock_is_let_go(self, tmp_path, recorder):
         self._break(recorder)
+        status, port = HostStatus(), free_port()
 
         with pytest.raises(RuntimeError):
-            await _run(tmp_path, recorder, HostStatus(), free_port())
+            await _run(tmp_path, recorder, status, port)
 
         successor = SingleInstanceLock(recorder.lock_path, retry_seconds=0.0)
         try:
