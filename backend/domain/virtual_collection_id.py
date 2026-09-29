@@ -9,7 +9,6 @@ RomM builds a virtual collection's id as the URL-safe base64 of the JSON
 from __future__ import annotations
 
 import base64
-import binascii
 import json
 
 
@@ -17,7 +16,7 @@ def virtual_type_of(collection_id: str) -> str | None:
     """The ``type`` encoded in *collection_id*, or ``None`` when the id does not decode to one."""
     try:
         decoded = json.loads(base64.urlsafe_b64decode(collection_id.encode()).decode())
-    except (binascii.Error, UnicodeDecodeError, ValueError):
+    except ValueError:  # binascii.Error, UnicodeDecodeError and JSONDecodeError all derive from it
         return None
     if not isinstance(decoded, dict):
         return None
