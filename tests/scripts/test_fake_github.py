@@ -38,7 +38,8 @@ if TYPE_CHECKING:
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "fake_github.py"
 _spec = importlib.util.spec_from_file_location("fake_github", _SCRIPT)
-assert _spec is not None and _spec.loader is not None
+assert _spec is not None
+assert _spec.loader is not None
 fake_github = importlib.util.module_from_spec(_spec)
 sys.modules["fake_github"] = fake_github
 _spec.loader.exec_module(fake_github)
@@ -164,7 +165,8 @@ class TestTheDownloads:
     def test_the_digest_the_answer_states_is_the_downloaded_tarball_s(self, serve):
         server = serve()
         release = _latest(server)
-        assert release is not None and release.tarball is not None
+        assert release is not None
+        assert release.tarball is not None
 
         assert _sha256(_get(release.tarball.url)) == release.tarball.digest
 
@@ -178,8 +180,10 @@ class TestTheDownloads:
         ],
     )
     def test_anything_else_is_not_found(self, serve, path):
+        url = f"{serve().base_url}{path}"
+
         with pytest.raises(urllib.error.HTTPError) as refused:
-            _get(f"{serve().base_url}{path}")
+            _get(url)
 
         assert refused.value.code == 404
 
@@ -192,16 +196,18 @@ class TestTheFaults:
         server = serve(no_tarball=True)
 
         assert _latest(server) == LatestRelease(version=_NEW, tarball=None)
+        url = f"{_download_base(server)}/tender-v{_NEW}/romm-tender-{_NEW}.tar.gz"
         with pytest.raises(urllib.error.HTTPError) as refused:
-            _get(f"{_download_base(server)}/tender-v{_NEW}/romm-tender-{_NEW}.tar.gz")
+            _get(url)
         assert refused.value.code == 404
 
     def test_a_release_without_its_checksum_file_is_no_release_and_has_no_sidecar(self, serve):
         server = serve(no_checksum_file=True)
 
         assert _latest(server) == LatestRelease(version=_NEW, tarball=None)
+        url = f"{_download_base(server)}/tender-v{_NEW}/romm-tender-{_NEW}.tar.gz.sha256"
         with pytest.raises(urllib.error.HTTPError) as refused:
-            _get(f"{_download_base(server)}/tender-v{_NEW}/romm-tender-{_NEW}.tar.gz.sha256")
+            _get(url)
         assert refused.value.code == 404
 
     def test_a_fault_on_the_latest_release_leaves_an_older_one_whole(self, serve):
@@ -214,7 +220,8 @@ class TestTheFaults:
         """The check has no bytes to compare, so only a download can find this — which is the point of the fault."""
         server = serve(corrupt_tarball=True)
         release = _latest(server)
-        assert release is not None and release.tarball is not None
+        assert release is not None
+        assert release.tarball is not None
 
         tarball = _get(release.tarball.url)
         sidecar = _get(release.tarball.checksum_url)
