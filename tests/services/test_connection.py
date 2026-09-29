@@ -287,6 +287,20 @@ class TestTestConnectionEdgeCases:
         assert "5.4.0" in result["message"]
 
 
+class TestConnection:
+    @pytest.mark.asyncio
+    async def test_test_connection_sets_version_on_romm_api(self, romm_api, logger):
+        settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+        settings["romm_url"] = "http://romm.local"
+        settings["romm_api_token"] = "rmm_token"
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
+        service = _make_service(settings=settings, romm_api=romm_api, loop=asyncio.get_running_loop(), logger=logger)
+        result = await service.test_connection()
+        assert result["success"] is True
+        romm_api.set_version.assert_called_once_with("5.3.0")
+
+
 class TestEstablishTokenHappyPath:
     def test_mints_and_stores_token(self, event_loop, romm_api, logger, settings_persister):
         settings: dict[str, Any] = {}

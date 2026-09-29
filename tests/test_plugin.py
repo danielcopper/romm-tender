@@ -1,119 +1,34 @@
-import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _conflict_rules import endpoints_with_rule
 from _factories import _make_conflict_rules, _make_prune_conflicts
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
-from fakes.fake_path_exists_reader import FakePathExistsReader
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
-from fakes.fake_resolved_path import FakeResolvedPath
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
-from fakes.library_peers import FakeArtworkManager
-from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
-from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
 from host import HostStatus
 from main import Plugin
-from services.connection import ConnectionService, ConnectionServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
-from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 
 
 @pytest.fixture
-def plugin(logger, home, data_dir):
+def plugin(logger, home):
     p = Plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._http_adapter = MagicMock()
-    p._romm_api = MagicMock()
-    # Default to "/tmp" so the prune guard sees an existing home in tests that
-    # don't override it. Tests exercising the guard rebuild this with a
-    # non-existent path or empty string.
-    p._retrodeck_paths = FakeRetroDeckPaths(home="/tmp")
-    # Default migration service mock — no migration pending.
-    p._migration_service = MagicMock()
-    p._migration_service.is_retrodeck_migration_pending.return_value = False
-    p._prune_service = MagicMock()
-    conflict_rules = _make_conflict_rules()
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    p._settings_persister = FakeSettingsPersister()
-
-    p._sync_service = LibraryService(
-        config=LibraryServiceConfig(
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            # An emit that answers every event as heard.
-            emit=AsyncMock(return_value=True),
-            clock=FakeClock(),
-            uuid_gen=FakeUuidGen(),
-            sleeper=FakeSleeper(),
-            settings_persister=p._settings_persister,
-            log_debug=p._log_debug,
-            artwork=FakeArtworkManager(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            renderer_rss=FakeRendererRss(),
-            renderer_gc=FakeRendererGc(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
     p._settings_service = SettingsService(
         config=SettingsServiceConfig(
             settings=p.settings,
             uow_factory=FakeUnitOfWorkFactory(),
             logger=logger,
-            settings_persister=p._settings_persister,
-            steam_config=steam_config,
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._connection_service = ConnectionService(
-        config=ConnectionServiceConfig(
-            settings=p.settings,
-            romm_api=p._romm_api,
-            settings_persister=p._settings_persister,
-            loop=running_loop(),
-            logger=logger,
-            min_required_version=Plugin._MIN_REQUIRED_VERSION,
-            forget_device=MagicMock(),
-            clear_playtime_scope_notice=MagicMock(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._startup_healing_service = StartupHealingService(
-        config=StartupHealingServiceConfig(
-            logger=logger,
-            clock=FakeClock(),
-            retrodeck_paths=p._retrodeck_paths,
-            path_probe=FakePathExistsReader(),
-            resolve_path=FakeResolvedPath(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            relaunch_options=FakeRelaunchOptionsResolver(),
-            loop=running_loop(),
-            conflict_rules=conflict_rules,
+            settings_persister=FakeSettingsPersister(),
+            steam_config=SteamConfigAdapter(user_home=str(home), logger=logger),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
     return p
@@ -130,34 +45,6 @@ class TestUnsetSlotsAreLoud:
 
         with pytest.raises(AttributeError, match="_settings_persister"):
             _ = bare._settings_persister
-
-
-class TestConnection:
-    @pytest.mark.asyncio
-    async def test_test_connection_sets_version_on_romm_api(self, plugin, logger):
-        plugin.loop = asyncio.get_running_loop()
-        plugin.settings["romm_url"] = "http://romm.local"
-        plugin.settings["romm_api_token"] = "rmm_token"
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
-        plugin._romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
-        # Rebuild connection service with the live event loop so executor
-        # callbacks dispatch on the same loop the test awaits.
-        plugin._connection_service = ConnectionService(
-            config=ConnectionServiceConfig(
-                settings=plugin.settings,
-                romm_api=plugin._romm_api,
-                settings_persister=MagicMock(),
-                loop=plugin.loop,
-                logger=logger,
-                min_required_version=Plugin._MIN_REQUIRED_VERSION,
-                forget_device=MagicMock(),
-                clear_playtime_scope_notice=MagicMock(),
-                conflict_rules=_make_conflict_rules(),
-            ),
-        )
-        result = await plugin.test_connection()
-        assert result["success"] is True
-        plugin._romm_api.set_version.assert_called_once_with("5.3.0")
 
 
 class TestLogLevel:
