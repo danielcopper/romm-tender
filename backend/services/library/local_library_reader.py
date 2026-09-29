@@ -56,6 +56,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.platform_sync_state import stamp_for_skip
 from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import select_stale_removals
 
@@ -123,9 +124,10 @@ class LocalLibraryReader:
         return registry, last_platforms, last_collections
 
     def do_count_unstamped_platforms(self, platform_slugs: set[str]) -> int:
-        """Count enabled platform slugs without a ``PlatformSyncState`` stamp.
+        """Count enabled platform slugs without a ``PlatformSyncState`` stamp that may skip.
 
-        A platform lacking a completion stamp has no wholesale-skip authority —
+        A platform lacking a completion stamp, or holding one whose skip was
+        revoked (``stamp_for_skip``), has no wholesale-skip authority —
         ``LibraryFetcher._try_unit_incremental_skip`` full-fetches it — so its
         apply runs even at a zero shortcut delta and the empty final chunk
         re-writes the stamp (the one-time re-walk ADR-0023 intends after a
@@ -134,7 +136,7 @@ class LocalLibraryReader:
         Apply on an otherwise-empty delta (#1416). One short read UoW.
         """
         with self._uow_factory() as uow:
-            return sum(1 for slug in platform_slugs if uow.platform_sync_state.get(slug) is None)
+            return sum(1 for slug in platform_slugs if stamp_for_skip(uow.platform_sync_state.get(slug)) is None)
 
     def do_read_apply_registry(self, unit: WorkUnit) -> dict[str, dict[str, Any]]:
         """Read the bound-row registry the per-unit group collapse diffs against.

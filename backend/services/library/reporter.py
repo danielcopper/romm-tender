@@ -36,7 +36,7 @@ from domain.version_metadata import VersionMetadata
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Collection
 
     from domain.collection_sync_state import CollectionSyncState
     from domain.platform_sync_state import PlatformSyncState
@@ -303,28 +303,25 @@ class SyncReporter:
         pending_collection_memberships: dict[tuple[str, str], CollectionMembership],
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str],
-        stale_rom_ids: list[int] | None = None,
+        stale_rom_ids: list[int] | None,
+        processed_platform_slugs: frozenset[str],
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Unbind stale ROMs, refresh the name cache, and build collection maps.
 
         By the time this runs, every per-unit ``commit_unit_results``
         has already upserted its ROMs into ``uow.roms``, so we only need
         to: (1) unbind the stale ROMs (clear ``shortcut_app_id``, keeping
-        the row per ADR-0007 — never delete) and delete the completion stamp
-        of every platform this run did not process that one of them was
-        unbound on, (2) refresh the offline ``platform_slug → display_name``
-        cache from the live work-queue, and (3) build the cross-unit
-        collection mappings. The last-sync timestamp and the synced
-        platform/collection lists live on the ``SyncRun`` record
-        :class:`SyncRunRecorder` writes — they are not persisted here.
+        the row per ADR-0007 — never delete) and revoke the skip of the
+        platforms that rule names, (2) refresh the offline
+        ``platform_slug → display_name`` cache from the live work-queue, and
+        (3) build the cross-unit collection mappings. The last-sync timestamp
+        and the synced platform/collection lists live on the ``SyncRun``
+        record :class:`SyncRunRecorder` writes — they are not persisted here.
 
-        Everything happens inside one write UoW so the unbind, the stamp
-        deletes, the cache refresh and the reads commit atomically.
+        Everything happens inside one write UoW so the unbind, the revocations,
+        the cache refresh and the reads commit atomically.
         """
         with self._uow_factory() as uow:
-            # Stale removal only UNBINDS the row (ADR-0007 keeps it). Which
-            # stamps it takes, and why a processed platform keeps its own, is in
-            # docs/architecture/backend-architecture.md, "Incremental skip".
             unprocessed_slugs_unbound: set[str] = set()
             for rid in stale_rom_ids or []:
                 rom = uow.roms.get(rid)
@@ -332,10 +329,10 @@ class SyncReporter:
                     continue
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
-                if rom.platform_slug not in platform_names:
+                if rom.platform_slug not in processed_platform_slugs:
                     unprocessed_slugs_unbound.add(rom.platform_slug)
             for slug in unprocessed_slugs_unbound:
-                uow.platform_sync_state.delete(slug)
+                uow.platform_sync_state.revoke_skip(slug)
 
             uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(platform_names))
 
@@ -352,6 +349,7 @@ class SyncReporter:
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str] | None = None,
         stale_rom_ids: list[int] | None = None,
+        processed_platform_slugs: Collection[str] = frozenset(),
     ):
         """Unbind stale ROMs, rebuild Steam-collection maps, and emit ``sync_collections``.
 
@@ -363,9 +361,20 @@ class SyncReporter:
         keeping the backend registry in sync with the frontend removals.
         ``platform_names`` is the live ``platform_slug → display_name``
         map from the work-queue, cached for the offline ``roms``-derived queries.
-        Its keys are also the platforms this run processed, skipped and fetched
-        alike: a stale unbind on any other platform deletes that platform's
-        completion stamp.
+
+        ``processed_platform_slugs`` names the platform units this run
+        processed, skipped and fetched alike. A stale unbind on any other
+        platform — one whose sync is turned off, or one RomM no longer lists —
+        revokes that platform's skip and keeps its stamp. Where an enabled
+        collection keeps one of its games bound, that stamp would otherwise let
+        the platform skip once it is processed again, rebuilding it from its
+        bound rows alone, so the unbound games would never come back; removed-game
+        discovery still needs the stamp's fetch generation. A processed platform
+        keeps its skip, because every stale row there is one its stamp already
+        leaves out: a skip rebuilds every bound row, and a fetch stamps a
+        generation no stale row carries. The default names none, so every
+        platform a stale unbind lands on is revoked, which costs a full fetch and
+        never a missed game.
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The
@@ -383,6 +392,7 @@ class SyncReporter:
             pending_platform_rom_ids,
             names,
             stale_rom_ids,
+            frozenset(processed_platform_slugs),
         )
 
         await self._emit(

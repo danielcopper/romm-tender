@@ -19,6 +19,7 @@ from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
 from domain.fetch_generation import backfill_needed, bound_row_not_returned, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
+from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled, SyncState
@@ -584,14 +585,15 @@ class LibraryFetcher:
         """Read the plan-time estimate baseline for platform units (#1382).
 
         Per unit slug: replay the wholesale-skip gate's LOCAL conditions
-        (``predict_unit_skip`` — stamp present, the stamped count and the count
-        of rows carrying the stamp's fetch generation both match the server
+        (``predict_unit_skip`` — a stamp present and not revoked
+        (``stamp_for_skip``), the stamped count and the count of rows carrying
+        the stamp's fetch generation both match the server
         count, bound rows exist, no group-key backfill pending, no bound row the
         stamp's fetch did not return) and derive the persisted post-collapse
         shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group
         keys + bound flags). The collapsed count is emitted ONLY for slugs that carry
-        a ``PlatformSyncState`` completion stamp (#1412): the stamp exists iff
-        the local mirror is complete, so without it a never-synced platform's
+        a ``PlatformSyncState`` completion stamp the gate would read (#1412): the
+        stamp exists iff the local mirror is complete, so without it a never-synced platform's
         PARTIAL rows
         (cross-platform collection siblings, ADR-0021) would mis-weight the ETA
         below the true work. ``None`` (no stamp, or no persisted rows) rides the
@@ -631,7 +633,7 @@ class LibraryFetcher:
         estimates: dict[str, _PlanEstimate] = {}
         with self._uow_factory() as uow:
             for unit in units:
-                stamp = uow.platform_sync_state.get(unit.slug)
+                stamp = stamp_for_skip(uow.platform_sync_state.get(unit.slug))
                 all_rows = list(uow.roms.iter_by_platform(unit.slug))
                 bound_count = sum(1 for rom in all_rows if rom.shortcut_app_id is not None)
                 fetch_id = stamp.fetch_id if stamp is not None else None
@@ -666,7 +668,8 @@ class LibraryFetcher:
 
         * ``stamp_completed_at`` / ``stamp_rom_count`` — the platform's
           completion stamp (``PlatformSyncState``), or ``None``/``None`` when
-          there is no stamp. The stamp is the **sole** skip authority
+          there is no stamp or its skip was revoked (``stamp_for_skip``). The
+          stamp is the **sole** skip authority
           (ADR-0023): it exists iff the platform's most recent apply attempt
           ran to completion, a property no run-scoped ``last_sync`` can carry —
           a completed run says nothing about a platform whose shortcuts were
@@ -699,7 +702,7 @@ class LibraryFetcher:
         Only one short read UoW is opened.
         """
         with self._uow_factory() as uow:
-            stamp = uow.platform_sync_state.get(platform_slug)
+            stamp = stamp_for_skip(uow.platform_sync_state.get(platform_slug))
             all_rows = list(uow.roms.iter_by_platform(platform_slug))
         reconstructed = [
             {
@@ -754,9 +757,10 @@ class LibraryFetcher:
         ``rom_count`` matches the count of persisted rows carrying the stamp's
         fetch generation. The stamp (``PlatformSyncState``) is the **sole** skip
         authority — it exists iff the platform's most recent apply attempt ran to
-        completion (cleared at apply start and by local removals, rewritten by the
-        final chunk; ADR-0023). A completed-run ``last_sync`` is deliberately NOT
-        a fallback: it cannot see a locally-removed-then-partially-reapplied
+        completion (cleared at apply start, rewritten by the final chunk;
+        ADR-0023), and it reads as absent once an unbind outside that apply
+        revoked its skip. A completed-run ``last_sync`` is deliberately NOT a
+        fallback: it cannot see a locally-removed-then-partially-reapplied
         platform, so trusting it can skip a platform with missing shortcuts.
         Group-aware sync persists every sibling (ADR-0021), so bound and unbound
         rows count alike — only the generation decides, which keeps skip parity on
@@ -764,9 +768,9 @@ class LibraryFetcher:
         server has since dropped (#1504; such a row is retained per ADR-0007 and
         would otherwise inflate the count — or demand a backfill no fetch can
         deliver — forever). Returns ``None`` to fall through to a full paginated
-        fetch — no stamp (including every platform's first sync after this
-        contract shipped — a one-time re-walk), no rows carrying the stamp's
-        generation, an un-backfilled row from that generation, a bound row the
+        fetch — no stamp or a revoked one (including every platform's first
+        sync after this contract shipped — a one-time re-walk), no rows carrying
+        the stamp's generation, an un-backfilled row from that generation, a bound row the
         stamp's fetch did not return, a stamped ROM count that no longer matches
         the server, the delta check raised, or the server reports changes.
 

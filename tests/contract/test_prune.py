@@ -120,6 +120,19 @@ async def test_preview_is_local_paged_and_frontend_shaped(harness):
     assert harness.romm.call_log == []
 
 
+async def test_preview_discovers_on_a_platform_whose_skip_was_revoked(harness):
+    """The stale removal and the local removals revoke a platform's skip; discovery reads the stamp regardless."""
+    _seed_bulk_candidate(harness)
+    with harness.uow_factory() as uow:
+        uow.platform_sync_state.revoke_skip("gba")
+
+    result = await harness.plugin.get_prune_preview(_preview_request())
+
+    assert result["success"] is True
+    assert result["candidate_total"] == 1
+    assert result["items"][0]["rom_id"] == 41
+
+
 @pytest.mark.parametrize("state", [SyncState.RUNNING, SyncState.CANCELLING])
 async def test_preview_refuses_active_sync_with_canonical_shape(harness, state):
     hold_sync_in_flight(harness, state)

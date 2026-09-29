@@ -732,6 +732,7 @@ class SyncOrchestrator:
             # threaded into finalize so collections key on display names and
             # the offline name cache stays current as of this sync.
             platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
+            processed_platform_slugs = frozenset(u.slug for u in work_queue if u.type == "platform" and u.slug)
             # The run's denominator for the paused banner's "X of Y games done" — the
             # same planned total the ``sync_plan`` event carries (#1383).
             box.run_total_items = total_roms_planned
@@ -810,6 +811,7 @@ class SyncOrchestrator:
                 collection_memberships=collection_memberships,
                 platform_rom_ids=platform_rom_ids,
                 platform_names=platform_names,
+                processed_platform_slugs=processed_platform_slugs,
                 cancelled=cancelled,
             )
 
@@ -1198,6 +1200,7 @@ class SyncOrchestrator:
         platform_rom_ids: set[int],
         platform_names: dict[str, str],
         cancelled: bool,
+        processed_platform_slugs: frozenset[str] = frozenset(),
     ) -> FinalizeOutcome:
         """Emit stale-removal + collection mappings; measure the run's memory delta.
 
@@ -1265,6 +1268,7 @@ class SyncOrchestrator:
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=platform_names,
+            processed_platform_slugs=processed_platform_slugs,
             stale_rom_ids=[rom_id for rom_id, _app_id in stale],
         )
         return FinalizeOutcome(

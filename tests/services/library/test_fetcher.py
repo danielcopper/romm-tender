@@ -987,6 +987,24 @@ class TestIncrementalSkipFromPlatformStamp:
         assert {r["id"] for r in result} == {10}
 
     @pytest.mark.asyncio
+    async def test_a_revoked_stamp_never_skips(self, library, fake_romm_api):
+        """The crash-resume scenario above with the stamp's skip revoked: a full fetch, and no probe."""
+        _wire_fake(library, fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
+        with uow:
+            uow.platform_sync_state.revoke_skip("n64")
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=3)
+
+        result = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is None
+        assert not [c for c in fake_romm_api.call_log if c[0] == "list_roms_updated_after"]
+
+    @pytest.mark.asyncio
     async def test_stamp_completed_at_is_the_delta_reference(self, library, fake_romm_api):
         """The stamp's ``completed_at`` (not the older completed-run last_sync) is the
         delta reference: a ROM updated between the two timestamps decides the skip.
@@ -1751,6 +1769,25 @@ class TestPlanEstimates:
         assert len(units) == 1
         assert units[0].predicted_skip is True
         assert units[0].collapsed_count == 1
+
+    @pytest.mark.asyncio
+    async def test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count(self, library, fake_romm_api):
+        """The estimate reads the stamp the gate reads, so a revoked one is no stamp here either."""
+        _wire_fake(library, fake_romm_api)
+        uow = library.uow
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
+        library.settings["enabled_platforms"] = {"1": True}
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=3)
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 11, app_id=None, group_key="igdb:100:1")
+        _seed_persisted_rom(uow, 12, app_id=None, group_key="igdb:100:1")
+        with uow:
+            uow.platform_sync_state.revoke_skip("n64")
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert units[0].predicted_skip is False
+        assert units[0].collapsed_count is None
 
     @pytest.mark.asyncio
     async def test_bound_row_not_returned_predicts_no_skip(self, library, fake_romm_api):

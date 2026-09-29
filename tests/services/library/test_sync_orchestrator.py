@@ -584,6 +584,34 @@ class TestPreviewRestampPlatformCount:
         assert result["success"] is True
         assert result["summary"]["restamp_platform_count"] == 1
 
+    @pytest.mark.asyncio
+    async def test_a_platform_whose_skip_was_revoked_is_counted(self, library, fake_romm_api):
+        # The stamp is still there, but a revoked one authorises no skip, so the
+        # platform full-fetches and only an apply can give it a stamp that does.
+        # Were it not counted, an empty delta would offer no Apply and the
+        # platform would full-fetch on every sync.
+        self._preview_setup(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64"}],
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
+        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1)
+        with library.uow as uow:
+            uow.platform_sync_state.revoke_skip("n64")
+
+        result = await library.sync.sync_preview()
+
+        assert result["success"] is True
+        summary = result["summary"]
+        assert summary["restamp_platform_count"] == 1
+        assert summary["new_count"] == 0
+        assert summary["changed_count"] == 0
+
 
 class TestSyncApplyDelta:
     """Tests for sync_apply_delta().
@@ -4629,10 +4657,11 @@ class TestPlatformTurnedOffAndBackOn:
     """A platform whose sync is turned off and back on gets all its shortcuts back (#2094).
 
     While the platform is off, the stale-removal scan unbinds its games except the
-    ones an enabled collection lists. Were its completion stamp left in place, the
-    game the collection held would stay bound, which keeps the zero-bound guard
+    ones an enabled collection lists. Were its completion stamp left able to skip,
+    the game the collection held would stay bound, which keeps the zero-bound guard
     quiet, and the unbound ones would still carry the stamp's generation, so every
-    count the skip reads would match.
+    count the skip reads would match. The stamp itself stays, because removed-game
+    discovery reads its generation.
     """
 
     @pytest.mark.asyncio
@@ -4680,12 +4709,54 @@ class TestPlatformTurnedOffAndBackOn:
         await complete_a_run("run-2")
         assert bindings() == {1: 5001, 2: None, 3: None}
         with library.uow as uow:
-            assert uow.platform_sync_state.get("n64") is None
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert (stamp.fetch_id, stamp.skip_revoked) == ("run-1", True)
 
         # Run 3: N64 is back on and nothing changed on RomM.
         library.settings["enabled_platforms"] = {"1": True}
         await complete_a_run("run-3")
         assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+        with library.uow as uow:
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert (stamp.fetch_id, stamp.skip_revoked) == ("run-3", False)
+
+    @pytest.mark.asyncio
+    async def test_a_platform_romm_no_longer_lists_is_one_the_run_did_not_process(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        await complete_a_run("run-1")
+
+        # N64 is still turned on, but RomM no longer lists it.
+        fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "n64"]
+        await complete_a_run("run-2")
+
+        with library.uow as uow:
+            assert uow.roms.get(1).shortcut_app_id is None
+            n64 = uow.platform_sync_state.get("n64")
+            gba = uow.platform_sync_state.get("gba")
+        assert n64 is not None
+        assert (n64.fetch_id, n64.skip_revoked) == ("run-1", True)
+        assert gba is not None
+        assert gba.skip_revoked is False
 
 
 class TestRegression738CacheCorruption:
