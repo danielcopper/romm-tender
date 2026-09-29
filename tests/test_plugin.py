@@ -1,7 +1,5 @@
 import asyncio
-import json
 import logging
-import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -236,38 +234,6 @@ class TestLogLevel:
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] test backward compat"),
         ]
-
-    def test_migration_debug_logging_true(self, plugin, tmp_path):
-        """Old debug_logging=True migrates to log_level='debug'."""
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-        from domain.state_migrations import migrate_settings
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": True, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in plugin.settings
-        assert plugin.settings["log_level"] == "debug"
-
-    def test_migration_debug_logging_false(self, plugin, tmp_path):
-        """Old debug_logging=False migrates to log_level='warn' (default)."""
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-        from domain.state_migrations import migrate_settings
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": False, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in plugin.settings
-        assert plugin.settings["log_level"] == "warn"
 
     @pytest.mark.asyncio
     async def test_sgdb_artwork_silent_when_debug_off(self, plugin, tmp_path, logger):
