@@ -16,11 +16,11 @@
  * A run ends once, but every mounted consumer of this hook watches it end: each
  * holds its own watch, so each would fire its own {@link
  * SyncRunViewOptions.onRunEnd}. The page that owns the run's end — today Main,
- * which announces it, re-reads the stats and the session budget, and asks for a
- * preview the run may have staged — passes the callbacks. A second consumer
- * passes none and reads the same numbers. What the hook does for every consumer
- * is tear down the live-ETA state, which is idempotent and belongs to the
- * reading rather than to the page.
+ * which words it on its status line, re-reads the stats and the session budget,
+ * and asks for a preview the run may have staged — passes the callbacks. A
+ * second consumer passes none and reads the same numbers. What the hook does for
+ * every consumer is tear down the live-ETA state, which is idempotent and
+ * belongs to the reading rather than to the page.
  *
  * **Why a run's end is two callbacks and not one with a mode.** The backend
  * signals a run's end TWICE, in a fixed order: `sync_complete`, which

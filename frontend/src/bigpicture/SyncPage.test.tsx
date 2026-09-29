@@ -30,7 +30,12 @@ import { SyncPage } from "./SyncPage";
 import * as backend from "../api/backend";
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
-import { getSyncProgress, resetSyncProgressStoreForTests, setSyncProgress } from "../utils/syncProgress";
+import {
+  getSyncProgress,
+  resetSyncProgressStoreForTests,
+  setSyncProgress,
+  updateSyncProgress,
+} from "../utils/syncProgress";
 import { resetEta } from "../utils/syncEta";
 import { adoptPreview, resetPendingPreviewStoreForTests } from "../utils/pendingPreviewStore";
 import { attachRunUnitsMirror, resetRunUnitsStoreForTests, seedRunUnits } from "../utils/runUnitsStore";
@@ -2561,13 +2566,14 @@ describe("SyncPage", () => {
       });
     }
 
-    it("a run whose work queue could not be built shows the backend's message under the start button", async () => {
+    it("a run whose work queue could not be built says it failed, and why, under the start button", async () => {
       const { container } = await renderAndStartRun();
 
       await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
 
       expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      expect(occurrences(container, UNREACHABLE)).toBe(1);
+      expect(occurrences(container, `Sync failed — ${UNREACHABLE}`)).toBe(1);
+      expect(occurrences(container, "Sync failed")).toBe(1);
     });
 
     it("a run that failed part-way shows its own sentence once, prefix and all", async () => {
@@ -2579,12 +2585,12 @@ describe("SyncPage", () => {
       expect(occurrences(container, "Sync failed")).toBe(1);
     });
 
-    it("a failure the backend gave no words to still says the run stopped", async () => {
+    it("a failure the backend gave no words to still says the sync failed", async () => {
       const { container } = await renderAndStartRun();
 
       await endRun({ stage: "error", message: "", runId: "run-err", runKind: "apply" });
 
-      expect(container.textContent).toContain("The sync stopped with an error.");
+      expect(container.textContent).toContain("Sync failed.");
     });
 
     it("an apply started from the preview says it too", async () => {
@@ -2594,7 +2600,7 @@ describe("SyncPage", () => {
 
       await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
 
-      expect(container.textContent).toContain(UNREACHABLE);
+      expect(container.textContent).toContain(`Sync failed — ${UNREACHABLE}`);
     });
 
     it("the line stays until the next press, which clears it", async () => {
@@ -2609,6 +2615,27 @@ describe("SyncPage", () => {
       await endRun({ stage: "done", message: "Sync complete", runId: "run-ok", runKind: "apply" });
 
       expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(container.textContent).not.toContain(UNREACHABLE);
+    });
+
+    it("a line the reader cleared does not come back with a later write to the store", async () => {
+      // The store still holds the failed run's frame after Cancel has cleared
+      // the line, and a merge that says nothing about the run notifies again.
+      const { container } = await renderAndStartRun();
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
+      await act(async () => {
+        adoptPreview(preview());
+        await Promise.resolve();
+      });
+      await press(container, "Cancel");
+      expect(container.textContent).not.toContain(UNREACHABLE);
+
+      await act(async () => {
+        updateSyncProgress({ etaSeconds: 30 });
+        await Promise.resolve();
+      });
+
+      expect(getSyncProgress().stage).toBe("error");
       expect(container.textContent).not.toContain(UNREACHABLE);
     });
 

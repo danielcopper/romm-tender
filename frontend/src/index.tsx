@@ -18,6 +18,7 @@ import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
+import { syncFailedMessage } from "./utils/syncFailed";
 import { updateDownload, getDownloadState, removeDownload } from "./utils/downloadStore";
 import { handleGlobalDownloadFailure } from "./utils/downloadFailure";
 import { registerGameDetailPatch, unregisterGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
@@ -251,19 +252,6 @@ function buildSyncCompleteToast(
     body += " Steam restart recommended before further large operations.";
   }
   return { body };
-}
-
-const SYNC_FAILED = "Sync failed";
-
-/**
- * The toast body for an apply run that ended at stage `error`. A failure inside
- * the run is already worded "Sync failed — …"; one before its work queue was
- * built carries the bare `classify_error` message
- * (`services/library/sync_orchestrator.py`, `_do_sync_per_unit`).
- */
-function buildSyncFailedToast(message: string): string {
-  if (message.startsWith(SYNC_FAILED)) return message;
-  return message ? `${SYNC_FAILED} — ${message}` : `${SYNC_FAILED}.`;
 }
 
 const ROMM_COLLECTION_NAME = /^RomM: \[([^\]]+)\]/;
@@ -913,7 +901,8 @@ const tender = definePlugin(() => {
   //
   // An apply run that fails emits no `sync_complete`, so its error frame is the
   // only word of its end and the toast is raised from here instead. A preview's
-  // failure is not toasted: the Sync page that asked for it says it.
+  // failure is not toasted: the Sync page that asked for it says it, or Main's
+  // status line if the reader has left.
   const failedRunsAnnounced = new Set<string>();
   const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
@@ -924,7 +913,7 @@ const tender = definePlugin(() => {
       if (failedRunsAnnounced.has(runId)) return;
       failedRunsAnnounced.add(runId);
     }
-    showToast(buildSyncFailedToast(progress.message ?? ""));
+    showToast(syncFailedMessage(progress.message));
   });
 
   const downloadProgressListener = addEventListener<DownloadProgressEvent>(
