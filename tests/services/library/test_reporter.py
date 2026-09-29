@@ -75,10 +75,10 @@ def _stage(box, rom_id, entry, *, emitted=True):
 
 class TestGetSyncStats:
     @pytest.mark.asyncio
-    async def test_computes_from_registry(self, plugin):
+    async def test_computes_from_registry(self, library):
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 20, app_id=1002, platform_slug="n64", name="Game B")
         _seed_rom(uow, 30, app_id=1003, platform_slug="snes", name="Game C")
@@ -86,14 +86,14 @@ class TestGetSyncStats:
         run.complete("2025-01-01T00:00:00", ["N64", "SNES"], [])
         with uow:
             uow.sync_runs.save(run)
-        plugin.settings["enabled_platforms"] = {"1": True, "2": True}
-        plugin.settings["enabled_collections"] = {
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        library.settings["enabled_collections"] = {
             "standard": {"3": True},
             "smart": {"5": True},
             "virtual": {"abc": False},  # disabled — not counted
         }
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["platforms"] == 2
         # 3 enabled across two buckets (user["3"], smart["5"]); virtual["abc"] is False.
         assert stats["collections"] == 2
@@ -104,8 +104,8 @@ class TestGetSyncStats:
         assert stats["last_attempt"] is None
 
     @pytest.mark.asyncio
-    async def test_empty_registry(self, plugin):
-        stats = plugin.get_sync_stats()
+    async def test_empty_registry(self, library):
+        stats = library.sync.get_sync_stats()
         assert stats["platforms"] == 0
         assert stats["roms"] == 0
         assert stats["total_shortcuts"] == 0
@@ -113,26 +113,26 @@ class TestGetSyncStats:
         assert stats["last_attempt"] is None
 
     @pytest.mark.asyncio
-    async def test_excludes_unbound_roms_from_count(self, plugin):
+    async def test_excludes_unbound_roms_from_count(self, library):
         """Stats count only bound ROMs — unbound (stale) rows do not inflate the total."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 20, app_id=None, platform_slug="snes", name="Game B (stale)")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["total_shortcuts"] == 1
 
     @pytest.mark.asyncio
-    async def test_report_removal_unbinds_roms_so_stats_drop(self, plugin):
+    async def test_report_removal_unbinds_roms_so_stats_drop(self, library):
         """report_removal_results unbinds the ROMs; derived get_sync_stats then counts zero."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 20, app_id=1002, platform_slug="snes", name="Game B")
 
-        await plugin.report_removal_results([10, 20], None)
+        await library.shortcut_removal.report_removal_results([10, 20], None)
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["roms"] == 0
         assert stats["total_shortcuts"] == 0
         # Rows survive (ADR-0007): they're unbound, not deleted.
@@ -181,23 +181,23 @@ class TestGetSyncStatsLastAttempt:
             uow.sync_runs.save(run)
 
     @pytest.mark.asyncio
-    async def test_no_runs_reports_no_attempt(self, plugin):
-        stats = plugin.get_sync_stats()
+    async def test_no_runs_reports_no_attempt(self, library):
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] is None
 
     @pytest.mark.asyncio
-    async def test_only_cancelled_run_surfaces_attempt(self, plugin):
+    async def test_only_cancelled_run_surfaces_attempt(self, library):
         """A cancelled run with no completed run ever → last_sync None, last_attempt set."""
-        self._cancelled(plugin._uow, id="run-c", started="2025-06-01T17:00:00", finished="2025-06-01T17:48:00")
+        self._cancelled(library.uow, id="run-c", started="2025-06-01T17:00:00", finished="2025-06-01T17:48:00")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-06-01T17:48:00", "status": "cancelled"}
 
     @pytest.mark.asyncio
-    async def test_errored_run_surfaces_attempt_with_errored_status(self, plugin):
-        run_uow = plugin._uow
+    async def test_errored_run_surfaces_attempt_with_errored_status(self, library):
+        run_uow = library.uow
         from domain.sync_run import SyncRun
 
         run = SyncRun.start(id="run-e", at="2025-06-01T10:00:00", platforms_planned=1, roms_planned=1)
@@ -205,66 +205,66 @@ class TestGetSyncStatsLastAttempt:
         with run_uow:
             run_uow.sync_runs.save(run)
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-06-01T10:05:00", "status": "errored"}
 
     @pytest.mark.asyncio
-    async def test_cancelled_newer_than_completed_surfaces_attempt(self, plugin):
+    async def test_cancelled_newer_than_completed_surfaces_attempt(self, library):
         """A cancelled run newer than the last completed one → both surface."""
-        self._completed(plugin._uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
-        self._cancelled(plugin._uow, id="run-c", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
+        self._completed(library.uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
+        self._cancelled(library.uow, id="run-c", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-06-01T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-06-02T08:20:00", "status": "cancelled"}
 
     @pytest.mark.asyncio
-    async def test_interrupted_newer_than_completed_surfaces_attempt(self, plugin):
+    async def test_interrupted_newer_than_completed_surfaces_attempt(self, library):
         """An interrupted run (external death) newer than the last completed one →
         last_attempt carries the 'interrupted' status (get_latest_terminal must
         include interrupted, or this run would be invisible to the hint)."""
-        self._completed(plugin._uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
-        self._interrupted(plugin._uow, id="run-i", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
+        self._completed(library.uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
+        self._interrupted(library.uow, id="run-i", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-06-01T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-06-02T08:20:00", "status": "interrupted"}
 
     @pytest.mark.asyncio
-    async def test_completed_newer_than_cancelled_hides_attempt(self, plugin):
+    async def test_completed_newer_than_cancelled_hides_attempt(self, library):
         """A clean run after a cancelled one → last_sync only, no stale attempt line."""
-        self._cancelled(plugin._uow, id="run-c", started="2025-06-01T08:00:00", finished="2025-06-01T08:20:00")
-        self._completed(plugin._uow, id="run-ok", started="2025-06-02T09:00:00", finished="2025-06-02T09:30:00")
+        self._cancelled(library.uow, id="run-c", started="2025-06-01T08:00:00", finished="2025-06-01T08:20:00")
+        self._completed(library.uow, id="run-ok", started="2025-06-02T09:00:00", finished="2025-06-02T09:30:00")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-06-02T09:30:00"
         assert stats["last_attempt"] is None
 
     @pytest.mark.asyncio
-    async def test_paused_newer_than_completed_surfaces_resumable_attempt(self, plugin):
+    async def test_paused_newer_than_completed_surfaces_resumable_attempt(self, library):
         """A session-budget 'paused' run newer than the last completed one → last_attempt
         carries the 'paused' status (get_latest_terminal must include paused, or the
         run — and the Resume Sync affordance it drives — would be invisible, #1383)."""
-        self._completed(plugin._uow, id="run-ok", started="2025-07-11T09:00:00", finished="2025-07-11T09:30:00")
-        self._paused(plugin._uow, id="run-p", started="2025-07-11T10:00:00", finished="2025-07-11T10:20:00")
+        self._completed(library.uow, id="run-ok", started="2025-07-11T09:00:00", finished="2025-07-11T09:30:00")
+        self._paused(library.uow, id="run-p", started="2025-07-11T10:00:00", finished="2025-07-11T10:20:00")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-07-11T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-07-11T10:20:00", "status": "paused"}
 
 
 class TestGetRegistryPlatforms:
     @pytest.mark.asyncio
-    async def test_returns_platforms_from_registry(self, plugin):
-        uow = plugin._uow
+    async def test_returns_platforms_from_registry(self, library):
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
         _seed_rom(uow, 20, app_id=1002, platform_slug="n64", name="Zelda OOT")
         _seed_rom(uow, 30, app_id=1003, platform_slug="snes", name="DKC")
         # Live name cache resolves slugs → display names.
         _seed_platform_names(uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
 
-        result = plugin.get_registry_platforms()
+        result = library.sync.get_registry_platforms()
         assert len(result["platforms"]) == 2
         # Sorted by display name
         assert result["platforms"][0]["name"] == "Nintendo 64"
@@ -275,29 +275,29 @@ class TestGetRegistryPlatforms:
         assert result["platforms"][1]["count"] == 1
 
     @pytest.mark.asyncio
-    async def test_empty_registry(self, plugin):
-        result = plugin.get_registry_platforms()
+    async def test_empty_registry(self, library):
+        result = library.sync.get_registry_platforms()
         assert result["platforms"] == []
 
     @pytest.mark.asyncio
-    async def test_excludes_unbound_roms(self, plugin):
+    async def test_excludes_unbound_roms(self, library):
         """Unbound (stale) rows are not surfaced as registry platforms."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Bound")
         _seed_rom(uow, 20, app_id=None, platform_slug="snes", name="Unbound")
         _seed_platform_names(uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
 
-        result = plugin.get_registry_platforms()
+        result = library.sync.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["slug"] == "n64"
 
     @pytest.mark.asyncio
-    async def test_degrades_to_slug_when_name_cache_absent(self, plugin):
+    async def test_degrades_to_slug_when_name_cache_absent(self, library):
         """Offline / no cache → the display name degrades to the slug."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
 
-        result = plugin.get_registry_platforms()
+        result = library.sync.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["name"] == "n64"
         assert result["platforms"][0]["slug"] == "n64"
@@ -305,15 +305,15 @@ class TestGetRegistryPlatforms:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("blob", ["not json at all {", '"a json string, not a dict"', "[1, 2, 3]"])
-    async def test_degrades_to_slug_when_name_cache_corrupt(self, plugin, blob):
+    async def test_degrades_to_slug_when_name_cache_corrupt(self, library, blob):
         """A corrupt / non-dict ``platform_names`` blob decodes to ``{}`` so the
         display name degrades to the slug (bad-path for the decode guard)."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
         with uow:
             uow.kv_config.set("platform_names", blob)
 
-        result = plugin.get_registry_platforms()
+        result = library.sync.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["name"] == "n64"
         assert result["platforms"][0]["slug"] == "n64"
@@ -323,41 +323,41 @@ class TestRegistryPlatformsReachableCount:
     """``reachable_count`` counts ROMs a shortcut can reach, never shortcuts."""
 
     @pytest.mark.asyncio
-    async def test_a_groups_unbound_versions_count_with_its_binding(self, plugin):
+    async def test_a_groups_unbound_versions_count_with_its_binding(self, library):
         """One game, three versions, one shortcut — all three are reachable.
 
         The two the binding did not go to are reached by switching version on
         the one it did, so counting bindings here would report them as absent
         from Steam.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="sms", group_key="igdb:1:2")
         _seed_rom(uow, 11, app_id=None, platform_slug="sms", group_key="igdb:1:2")
         _seed_rom(uow, 12, app_id=None, platform_slug="sms", group_key="igdb:1:2")
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 3
 
     @pytest.mark.asyncio
-    async def test_a_group_with_no_binding_reaches_nothing(self, plugin):
+    async def test_a_group_with_no_binding_reaches_nothing(self, library):
         """A partly-applied platform: the two numbers differ and the gap is real.
 
         The second game was fetched and never applied, so no shortcut anywhere
         leads to either of its versions.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="gba", group_key="igdb:1:2")
         _seed_rom(uow, 11, app_id=None, platform_slug="gba", group_key="igdb:1:2")
         _seed_rom(uow, 20, app_id=None, platform_slug="gba", group_key="igdb:9:2")
         _seed_rom(uow, 21, app_id=None, platform_slug="gba", group_key="igdb:9:2")
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 2
 
     @pytest.mark.asyncio
-    async def test_a_null_group_key_is_its_own_group(self, plugin):
+    async def test_a_null_group_key_is_its_own_group(self, library):
         """A NULL key relates no rows, so one binding speaks only for its own row.
 
         The key was never computed for either row. Folding them together on
@@ -365,16 +365,16 @@ class TestRegistryPlatformsReachableCount:
         the count, which is the whole platform reading reachable off one
         applied game.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="nes", group_key=None)
         _seed_rom(uow, 11, app_id=None, platform_slug="nes", group_key=None)
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_a_version_the_last_fetch_did_not_return_is_not_counted(self, plugin):
+    async def test_a_version_the_last_fetch_did_not_return_is_not_counted(self, library):
         """RomM dropped a version; its row stays reachable and stops counting.
 
         Nothing deletes it — ADR-0007 keeps the row as an identity anchor and
@@ -382,18 +382,18 @@ class TestRegistryPlatformsReachableCount:
         reaches it, but RomM no longer serves it. Counting it was the header
         claiming a version is in Steam that RomM has stopped serving.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="dc", group_key="igdb:1:2")
         _seed_rom(uow, 11, app_id=None, platform_slug="dc", group_key="igdb:1:2")
         _stamp_fetch(uow, "dc", rom_count=2, fetch_id="fetch-1", seen=[10, 11])
         _stamp_fetch(uow, "dc", rom_count=1, fetch_id="fetch-2", seen=[10])
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_a_group_still_reaches_its_survivors_when_the_binding_vanished(self, plugin):
+    async def test_a_group_still_reaches_its_survivors_when_the_binding_vanished(self, library):
         """The exclusion is from the COUNT, never from the grouping.
 
         The shortcut exists whether or not the version it binds is still on the
@@ -402,13 +402,13 @@ class TestRegistryPlatformsReachableCount:
         no binding at all and report nothing reachable, which is a shortcut the
         reader can plainly see.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="dc", group_key="igdb:1:2")
         _seed_rom(uow, 11, app_id=None, platform_slug="dc", group_key="igdb:1:2")
         # The BOUND row is the one the fetch did not return.
         _stamp_fetch(uow, "dc", rom_count=1, fetch_id="fetch-2", seen=[11])
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
@@ -422,7 +422,7 @@ class TestRegistryPlatformsReachableCount:
         ],
         ids=["no stamp", "no generation", "empty fetch"],
     )
-    async def test_a_platform_with_no_usable_stamp_keeps_every_row(self, plugin, stamp_args):
+    async def test_a_platform_with_no_usable_stamp_keeps_every_row(self, library, stamp_args):
         """Discovery only, never deletion authority — and never a silent drop.
 
         A stamp that is missing, carries no generation, or recorded an empty
@@ -431,22 +431,22 @@ class TestRegistryPlatformsReachableCount:
         is what makes the exclusion safe: its worst case is the number already
         printed.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="dc", group_key="igdb:1:2")
         _seed_rom(uow, 11, app_id=None, platform_slug="dc", group_key="igdb:1:2")
         if stamp_args is not None:
             _stamp_fetch(uow, "dc", seen=[10], **stamp_args)
 
-        entry = plugin.get_registry_platforms()["platforms"][0]
+        entry = library.sync.get_registry_platforms()["platforms"][0]
         assert entry["reachable_count"] == 2
 
 
 class TestGetRomBySteamAppId:
     @pytest.mark.asyncio
-    async def test_finds_rom_by_app_id_installed(self, plugin):
+    async def test_finds_rom_by_app_id_installed(self, library):
         from domain.rom_install import RomInstall
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 42, app_id=100001, platform_slug="n64", name="Zelda")
         _seed_platform_names(uow, {"n64": "Nintendo 64"})
         with uow:
@@ -460,7 +460,7 @@ class TestGetRomBySteamAppId:
                     installed_at="2025-01-01T00:00:00",
                 )
             )
-        result = plugin._sync_service.get_rom_by_steam_app_id(100001)
+        result = library.sync.get_rom_by_steam_app_id(100001)
         assert result is not None
         assert result["rom_id"] == 42
         assert result["name"] == "Zelda"
@@ -469,26 +469,26 @@ class TestGetRomBySteamAppId:
         assert result["installed"] is True
 
     @pytest.mark.asyncio
-    async def test_finds_rom_by_app_id_not_installed(self, plugin):
+    async def test_finds_rom_by_app_id_not_installed(self, library):
         """A bound ROM with no install record reports ``installed`` False."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 42, app_id=100001, platform_slug="n64", name="Zelda")
         _seed_platform_names(uow, {"n64": "Nintendo 64"})
 
-        result = plugin._sync_service.get_rom_by_steam_app_id(100001)
+        result = library.sync.get_rom_by_steam_app_id(100001)
         assert result is not None
         assert result["installed"] is False
 
     @pytest.mark.asyncio
-    async def test_returns_none_for_unknown(self, plugin):
-        result = plugin._sync_service.get_rom_by_steam_app_id(999999)
+    async def test_returns_none_for_unknown(self, library):
+        result = library.sync.get_rom_by_steam_app_id(999999)
         assert result is None
 
 
 class TestFinalizeCoverPath:
     """Tests for _finalize_cover_path() — publishes the cache cover onto the grid."""
 
-    def test_copies_cache_to_final_and_persists_cache_path(self, plugin, tmp_path):
+    def test_copies_cache_to_final_and_persists_cache_path(self, library, tmp_path):
         grid_path = tmp_path / "grid"
         grid_path.mkdir()
         grid = str(grid_path)
@@ -496,30 +496,30 @@ class TestFinalizeCoverPath:
         cache.parent.mkdir(parents=True)
         cache.write_text("cover data")
 
-        result = plugin._sync_service._reporter._finalize_cover_path(grid, str(cache), 100001, "1")
+        result = library.sync._reporter._finalize_cover_path(grid, str(cache), 100001, "1")
         expected_final = os.path.join(grid, "100001p.png")
         # The persisted path is the CACHE path; the grid gets a copy (cache survives).
         assert result == str(cache)
         assert cache.exists()
         assert os.path.exists(expected_final)
 
-    def test_returns_existing_final_when_cover_missing(self, plugin, tmp_path):
+    def test_returns_existing_final_when_cover_missing(self, library, tmp_path):
         grid = str(tmp_path)
         final = tmp_path / "100001p.png"
         final.write_text("final data")
 
-        result = plugin._sync_service._reporter._finalize_cover_path(grid, "/nonexistent/path.png", 100001, "1")
+        result = library.sync._reporter._finalize_cover_path(grid, "/nonexistent/path.png", 100001, "1")
         assert result == str(final)
 
-    def test_returns_cover_path_when_no_grid(self, plugin):
-        result = plugin._sync_service._reporter._finalize_cover_path(None, "/some/path.png", 100001, "1")
+    def test_returns_cover_path_when_no_grid(self, library):
+        result = library.sync._reporter._finalize_cover_path(None, "/some/path.png", 100001, "1")
         assert result == "/some/path.png"
 
-    def test_returns_cover_path_when_empty(self, plugin, tmp_path):
-        result = plugin._sync_service._reporter._finalize_cover_path(str(tmp_path), "", 100001, "1")
+    def test_returns_cover_path_when_empty(self, library, tmp_path):
+        result = library.sync._reporter._finalize_cover_path(str(tmp_path), "", 100001, "1")
         assert result == ""
 
-    def test_handles_copy_os_error(self, plugin, tmp_path):
+    def test_handles_copy_os_error(self, library, tmp_path):
         grid = str(tmp_path / "grid")
         cache_path = os.path.join(str(tmp_path / "covers"), "1.png")
 
@@ -528,9 +528,9 @@ class TestFinalizeCoverPath:
         # of patching ``shutil.copyfile`` globally.
         fake_store = FakeCoverArtFileStore(files={cache_path: b"data"})
         fake_store.copy_failures.add(cache_path)
-        plugin._artwork_service._cover_art_file_store = fake_store
+        library.artwork._cover_art_file_store = fake_store
 
-        result = plugin._sync_service._reporter._finalize_cover_path(grid, cache_path, 100001, "1")
+        result = library.sync._reporter._finalize_cover_path(grid, cache_path, 100001, "1")
         # A failed copy still returns the cache path (persist unchanged).
         assert result == cache_path
 
@@ -538,11 +538,11 @@ class TestFinalizeCoverPath:
 class TestCommitUnitResults:
     """Tests for _commit_unit_results_io — per-unit ``roms`` upsert via ``Rom.synced``."""
 
-    def test_commit_upserts_rom_from_pending(self, plugin):
+    def test_commit_upserts_rom_from_pending(self, library):
         """A unit's acked ROM is upserted into ``uow.roms`` from its pending entry."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -556,7 +556,7 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         assert uow.committed is True
         with uow:
@@ -570,12 +570,12 @@ class TestCommitUnitResults:
         assert rom.sgdb_id == 999
         assert rom.ra_id == 777
 
-    def test_commit_records_applied_launch_options_for_binding_target(self, plugin):
+    def test_commit_records_applied_launch_options_for_binding_target(self, library):
         """A binding target this cycle records the launch command the frontend wrote
         onto the shortcut, so the next sync skips the now-correct shortcut (#1383)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -586,30 +586,30 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.applied_launch_options == "flatpak run net.retrodeck.retrodeck /game.z64"
 
-    def test_commit_preserves_applied_for_unacked_row(self, plugin):
+    def test_commit_preserves_applied_for_unacked_row(self, library):
         """A row committed this chunk but NOT acked (a skipped-unchanged item riding
         chunk 0's leftover) keeps its binding AND its recorded applied state — save()
         excludes applied_launch_options, so the un-re-acked value is never wiped."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 43, app_id=100043, platform_slug="n64", name="Keep")
         with uow:
             uow.roms.set_applied_launch_options(43, "flatpak run … /keep.z64")
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             43,
             {"name": "Keep", "fs_name": "keep.z64", "platform_slug": "n64", "cover_path": "", "launch_options": ""},
             emitted=False,
         )
 
         # Empty ack — rom 43 is not a binding target this cycle, but its row commits.
-        plugin._sync_service._reporter._commit_unit_results_io({}, [{"id": 43}])
+        library.sync._reporter._commit_unit_results_io({}, [{"id": 43}])
 
         with uow:
             rom = uow.roms.get(43)
@@ -617,63 +617,63 @@ class TestCommitUnitResults:
         assert rom.shortcut_app_id == 100043
         assert rom.applied_launch_options == "flatpak run … /keep.z64"
 
-    def test_commit_stamps_confirmed_cover_source(self, plugin):
+    def test_commit_stamps_confirmed_cover_source(self, library):
         """A fingerprint the artwork layer confirmed for this unit (staged in
         ``pending_cover_sources``) is persisted on the upserted row (#1386)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
-        plugin._sync_service._box.pending_cover_sources = {42: "/cover/big.png?ts=2026-07-11 12:00:00"}
+        library.sync._box.pending_cover_sources = {42: "/cover/big.png?ts=2026-07-11 12:00:00"}
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.cover_source == "/cover/big.png?ts=2026-07-11 12:00:00"
 
-    def test_commit_preserves_existing_cover_source_when_unconfirmed(self, plugin):
+    def test_commit_preserves_existing_cover_source_when_unconfirmed(self, library):
         """A row whose cover was NOT confirmed this unit (failed download, or a
         sibling the download never touched) keeps its persisted fingerprint —
         the fresh fetch string is never blindly stamped, so the change is
         retried next sync (#1386)."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 42, app_id=100001, platform_slug="n64", name="Game")
         with uow:
             rom = uow.roms.get(42)
             rom.adopt_cover_source("/cover/big.png?ts=2026-01-01 00:00:00")
             uow.roms.save(rom)
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
-        assert plugin._sync_service._box.pending_cover_sources == {}
+        assert library.sync._box.pending_cover_sources == {}
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.cover_source == "/cover/big.png?ts=2026-01-01 00:00:00"
 
-    def test_commit_stamps_confirmed_source_for_unacked_row(self, plugin):
+    def test_commit_stamps_confirmed_source_for_unacked_row(self, library):
         """The fingerprint records the CACHE state, not applied frontend state:
         a confirmed download whose shortcut was never acked still persists
         (the cache file was written regardless of the ack)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
-        plugin._sync_service._box.pending_cover_sources = {42: "/cover/big.png?ts=2026-07-11 12:00:00"}
+        library.sync._box.pending_cover_sources = {42: "/cover/big.png?ts=2026-07-11 12:00:00"}
 
         # Empty ack — rom 42's shortcut never landed, its row commits unbound.
-        plugin._sync_service._reporter._commit_unit_results_io({}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
@@ -681,20 +681,20 @@ class TestCommitUnitResults:
         assert rom.shortcut_app_id is None
         assert rom.cover_source == "/cover/big.png?ts=2026-07-11 12:00:00"
 
-    def test_commit_persists_platform_stamp_atomically(self, plugin):
+    def test_commit_persists_platform_stamp_atomically(self, library):
         """A passed ``platform_stamp`` lands in the SAME committed UoW as the rom
         upsert — the per-platform completion stamp is atomic with the chunk (ADR-0023)."""
         from domain.platform_sync_state import PlatformSyncState
 
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
         stamp = PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=7)
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], stamp)
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], stamp)
 
         assert uow.committed is True
         with uow:
@@ -704,35 +704,33 @@ class TestCommitUnitResults:
         assert loaded.rom_count == 7
         assert loaded.completed_at == "2026-01-01T00:00:00+00:00"
 
-    def test_commit_without_stamp_writes_no_platform_state(self, plugin):
+    def test_commit_without_stamp_writes_no_platform_state(self, library):
         """A commit with the default ``platform_stamp=None`` (non-final chunk, or a
         collection/late-ack path) leaves ``platform_sync_state`` untouched."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             assert uow.platform_sync_state.get("n64") is None
 
-    def test_commit_marks_every_upserted_row_with_the_fetch_generation(self, plugin):
+    def test_commit_marks_every_upserted_row_with_the_fetch_generation(self, library):
         """A platform unit's commit stamps the generation onto EVERY row it upserts,
         so the stamp can later count exactly the rows its fetch returned (#1504)."""
-        uow = plugin._uow
+        uow = library.uow
         for rom_id in (10, 11):
             _stage(
-                plugin._sync_service._box,
+                library.sync._box,
                 rom_id,
                 {"name": f"G{rom_id}", "fs_name": f"g{rom_id}.z64", "platform_slug": "n64", "cover_path": ""},
             )
 
-        plugin._sync_service._reporter._commit_unit_results_io(
-            {"10": 9001}, [{"id": 10}, {"id": 11}], None, None, "run-new"
-        )
+        library.sync._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}], None, None, "run-new")
 
         with uow:
             bound = uow.roms.get(10)
@@ -743,14 +741,14 @@ class TestCommitUnitResults:
         assert bound.last_fetch_id == "run-new"
         assert unbound.last_fetch_id == "run-new"
 
-    def test_commit_writes_the_same_generation_the_stamp_records(self, plugin):
+    def test_commit_writes_the_same_generation_the_stamp_records(self, library):
         """Row generation and stamp generation come from one value, so the skip's
         two sides always agree (#1504)."""
         from domain.platform_sync_state import PlatformSyncState
 
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
@@ -758,7 +756,7 @@ class TestCommitUnitResults:
             platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=1, fetch_id="run-new"
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], stamp, None, "run-new")
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], stamp, None, "run-new")
 
         with uow:
             rom = uow.roms.get(42)
@@ -767,34 +765,34 @@ class TestCommitUnitResults:
         assert loaded is not None
         assert rom.last_fetch_id == loaded.fetch_id == "run-new"
 
-    def test_collection_commit_preserves_a_foreign_platforms_generation(self, plugin):
+    def test_collection_commit_preserves_a_foreign_platforms_generation(self, library):
         """A collection spans platforms, so its commit must NOT re-mark a member's
         row: re-stamping would drop that row from its own platform's counted rows
         and suppress that platform's skip (#1504)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, None, "run-new")
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, None, "run-new")
 
         # A later collection unit re-commits the same ROM with no generation.
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, None, None)
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, None, None)
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.last_fetch_id == "run-new"
 
-    def test_commit_persists_collection_stamp_atomically(self, plugin):
+    def test_commit_persists_collection_stamp_atomically(self, library):
         """A passed ``collection_stamp`` lands in the SAME committed UoW as the rom
         upsert — the per-collection completion stamp is atomic with the chunk (#742)."""
         from domain.collection_sync_state import CollectionSyncState
 
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
@@ -807,7 +805,7 @@ class TestCommitUnitResults:
             member_rom_ids=(42,),
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, stamp)
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, stamp)
 
         assert uow.committed is True
         with uow:
@@ -818,27 +816,27 @@ class TestCommitUnitResults:
         assert loaded.member_rom_ids == (42,)
         assert loaded.completed_at == "2026-01-01T00:05:00+00:00"
 
-    def test_commit_without_collection_stamp_writes_no_collection_state(self, plugin):
+    def test_commit_without_collection_stamp_writes_no_collection_state(self, library):
         """The default ``collection_stamp=None`` (platform / non-final / late-ack path)
         leaves ``collection_sync_state`` untouched."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is None
 
-    def test_commit_persists_version_metadata_from_pending(self, plugin):
+    def test_commit_persists_version_metadata_from_pending(self, library):
         """The sibling-group key + version dimensions ride the pending entry onto
         the upserted ``Rom`` (#1295)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -854,7 +852,7 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
@@ -866,12 +864,12 @@ class TestCommitUnitResults:
         assert rom.tags == ("Demo",)
         assert rom.is_main_sibling is True
 
-    def test_commit_defaults_version_metadata_when_pending_omits_it(self, plugin):
+    def test_commit_defaults_version_metadata_when_pending_omits_it(self, library):
         """A pending entry with no version fields upserts a Rom carrying the
         aggregate defaults — never raises on the missing keys."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -881,7 +879,7 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
@@ -891,12 +889,12 @@ class TestCommitUnitResults:
         assert rom.revision == ""
         assert rom.is_main_sibling is False
 
-    def test_commit_persists_fs_size_bytes_from_pending(self, plugin):
+    def test_commit_persists_fs_size_bytes_from_pending(self, library):
         """The server-reported ROM size (#1395) rides the pending entry onto the
         upserted ``Rom``, refreshed every sync like the version dimensions."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -907,18 +905,18 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.fs_size_bytes == 3_145_728
 
-    def test_commit_defaults_fs_size_bytes_when_pending_omits_it(self, plugin):
+    def test_commit_defaults_fs_size_bytes_when_pending_omits_it(self, library):
         """A pending entry with no size upserts a Rom carrying NULL (size unknown)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -928,18 +926,18 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.fs_size_bytes is None
 
-    def test_commit_stamps_cover_path_when_present(self, plugin):
+    def test_commit_stamps_cover_path_when_present(self, library):
         """A finalized cover path is recorded on the upserted ROM row."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -949,18 +947,18 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
         # No grid dir in the test stub → finalize returns the path unchanged.
         assert rom.cover_path == "/covers/staging.png"
 
-    def test_commit_skips_invalid_rom_keeps_rest(self, plugin):
+    def test_commit_skips_invalid_rom_keeps_rest(self, library):
         """An invariant ValueError (missing platform_slug) skips one ROM; the rest still commit."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             10,
             {
                 "name": "Bad",
@@ -970,7 +968,7 @@ class TestCommitUnitResults:
             },
         )
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             20,
             {
                 "name": "Good",
@@ -980,21 +978,21 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"10": 1010, "20": 1020}, [{"id": 10}, {"id": 20}])
+        library.sync._reporter._commit_unit_results_io({"10": 1010, "20": 1020}, [{"id": 10}, {"id": 20}])
 
         assert uow.committed is True
         with uow:
             assert uow.roms.get(10) is None
             assert uow.roms.get(20) is not None
 
-    def test_commit_preserves_out_of_band_sgdb_id_on_resync(self, plugin):
+    def test_commit_preserves_out_of_band_sgdb_id_on_resync(self, library):
         """An sgdb_id resolved out-of-band (e.g. IGDB cross-ref) survives a re-sync
         whose pending entry has sgdb_id=None — the live RomM fetch never carries it.
 
         Regression of #746's _merge_optional_id contract: a blind upsert would
         NULL the resolved id and revert SGDB artwork to "needs pick"."""
-        uow = plugin._uow
-        # Existing row carries a plugin-resolved sgdb_id + ra_id + cover_path.
+        uow = library.uow
+        # Existing row carries a backend-resolved sgdb_id + ra_id + cover_path.
         _seed_rom(
             uow,
             42,
@@ -1012,7 +1010,7 @@ class TestCommitUnitResults:
         # The re-sync's built entry (live RomM fetch) lacks sgdb_id / ra_id /
         # cover_path entirely.
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -1025,7 +1023,7 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             rom = uow.roms.get(42)
@@ -1035,13 +1033,13 @@ class TestCommitUnitResults:
         assert rom.cover_path == "/covers/42p.png"
         assert rom.igdb_id == 555
 
-    def test_commit_new_value_overwrites_existing_id(self, plugin):
+    def test_commit_new_value_overwrites_existing_id(self, library):
         """A fresh non-None sgdb_id in pending wins over the existing row's value."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 42, app_id=100001, platform_slug="gb", name="Game", sgdb_id=4242)
 
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {
                 "name": "Game",
@@ -1052,7 +1050,7 @@ class TestCommitUnitResults:
             },
         )
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
 
         with uow:
             assert uow.roms.get(42).sgdb_id == 9999
@@ -1062,11 +1060,11 @@ class TestGroupAwareCommit:
     """Group-aware per-unit commit (ADR-0021): persist every fetched sibling,
     bind only representatives, and move a binding on a rebind."""
 
-    def test_persists_non_representative_sibling_unbound(self, plugin):
+    def test_persists_non_representative_sibling_unbound(self, library):
         """A fetched sibling that is not the emitted representative lands a ``roms``
         row for its identity + version, but carries no shortcut binding."""
-        uow = plugin._uow
-        box = plugin._sync_service._box
+        uow = library.uow
+        box = library.sync._box
         rep = {
             "name": "Game (USA)",
             "fs_name": "usa.z64",
@@ -1084,7 +1082,7 @@ class TestGroupAwareCommit:
         box.pending_sync = {10: rep}  # only rom 10 is emitted
         box.pending_all_roms = {10: rep, 11: sibling}
 
-        plugin._sync_service._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}])
+        library.sync._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}])
 
         with uow:
             rep_row = uow.roms.get(10)
@@ -1095,7 +1093,7 @@ class TestGroupAwareCommit:
         assert sibling_row.name == "Game (JP)"
         assert sibling_row.sibling_group_key == "g"
 
-    def test_non_acked_bound_sibling_keeps_its_existing_binding(self, plugin):
+    def test_non_acked_bound_sibling_keeps_its_existing_binding(self, library):
         """A bound sibling NOT acked this cycle keeps its existing binding — the
         `_persist_synced_rom` fallback (`existing.shortcut_app_id`) is load-bearing.
 
@@ -1108,10 +1106,10 @@ class TestGroupAwareCommit:
         seeds no prior row for rom 11, so it passes with or without the fallback;
         this one seeds the prior binding and only passes with it.
         """
-        uow = plugin._uow
+        uow = library.uow
         # rom 11 already carries a shortcut (grandfathered duplicate of group "g").
         _seed_rom(uow, 11, app_id=7777, platform_slug="n64", name="Game (JP)", group_key="g")
-        box = plugin._sync_service._box
+        box = library.sync._box
         rep = {
             "name": "Game (USA)",
             "fs_name": "usa.z64",
@@ -1129,7 +1127,7 @@ class TestGroupAwareCommit:
         box.pending_sync = {10: rep}  # only rom 10 is emitted / acked this cycle
         box.pending_all_roms = {10: rep, 11: sibling}
 
-        plugin._sync_service._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}])
+        library.sync._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}])
 
         with uow:
             rep_row = uow.roms.get(10)
@@ -1138,13 +1136,13 @@ class TestGroupAwareCommit:
         assert rep_row is not None and rep_row.shortcut_app_id == 9001
         assert sibling_row is not None and sibling_row.shortcut_app_id == 7777
 
-    def test_rebind_moves_binding_to_representative(self, plugin):
+    def test_rebind_moves_binding_to_representative(self, library):
         """A rebind entry (keyed to the vanished bound sibling, carrying
         ``bind_rom_id``) moves the DB binding onto the surviving representative:
         the appId survives, the old sibling is unbound (ADR-0021 §2)."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=5000, platform_slug="n64", name="Game (USA)", group_key="g")
-        box = plugin._sync_service._box
+        box = library.sync._box
         # The emitted rebind entry is keyed to the vanished bound sibling (rom 1)
         # and names the representative (rom 2) in bind_rom_id.
         box.pending_sync = {1: {"name": "Game (USA)", "cover_path": "", BIND_ROM_ID_KEY: 2}}
@@ -1159,7 +1157,7 @@ class TestGroupAwareCommit:
         }
 
         # The frontend reused the old shortcut's appId (5000) under rom_id 1.
-        plugin._sync_service._reporter._commit_unit_results_io({"1": 5000}, [{"id": 2}])
+        library.sync._reporter._commit_unit_results_io({"1": 5000}, [{"id": 2}])
 
         with uow:
             rep = uow.roms.get(2)
@@ -1182,13 +1180,13 @@ class TestCommitUnitMetadataStamp:
     FK is satisfied at commit), so a ROM and its metadata land atomically.
     """
 
-    def test_stamps_metadata_alongside_rom(self, plugin):
+    def test_stamps_metadata_alongside_rom(self, library):
         """An acked ROM carrying a ``metadatum`` lands both a ``roms`` row and
         a ``rom_metadata`` row in the same commit, with fields mapped + ms→s +
         steam_categories computed."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "gb", "cover_path": ""},
         )
@@ -1207,7 +1205,7 @@ class TestCommitUnitMetadataStamp:
             },
         ]
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, acked)
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, acked)
 
         assert uow.committed is True
         with uow:
@@ -1230,14 +1228,14 @@ class TestCommitUnitMetadataStamp:
         assert 4 in meta.steam_categories  # Puzzle
         assert 2 in meta.steam_categories  # Single player
 
-    def test_malformed_metadatum_skips_metadata_keeps_rom(self, plugin, caplog):
+    def test_malformed_metadatum_skips_metadata_keeps_rom(self, library, caplog):
         """A malformed ``metadatum`` (non-numeric release date) skips only that
         ROM's metadata — the Rom row still commits and a warning is logged."""
         import logging
 
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "gb", "cover_path": ""},
         )
@@ -1246,7 +1244,7 @@ class TestCommitUnitMetadataStamp:
         acked = [{"id": 42, "summary": "Bad", "metadatum": {"first_release_date": "not-a-number"}}]
 
         with caplog.at_level(logging.WARNING):
-            plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, acked)
+            library.sync._reporter._commit_unit_results_io({"42": 100001}, acked)
 
         assert uow.committed is True
         with uow:
@@ -1255,50 +1253,50 @@ class TestCommitUnitMetadataStamp:
             assert uow.rom_metadata.get(42) is None
         assert any("malformed metadatum" in r.message.lower() for r in caplog.records)
 
-    def test_no_metadatum_writes_no_metadata_row(self, plugin):
+    def test_no_metadatum_writes_no_metadata_row(self, library):
         """An acked ROM without a ``metadatum`` field commits the Rom but no
         ``rom_metadata`` row (defensive guard against thin-ROM cache erasure)."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             42,
             {"name": "Game", "fs_name": "game.z64", "platform_slug": "gb", "cover_path": ""},
         )
         acked = [{"id": 42, "name": "Thin"}]  # no metadatum
 
-        plugin._sync_service._reporter._commit_unit_results_io({"42": 100001}, acked)
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, acked)
 
         assert uow.committed is True
         with uow:
             assert uow.roms.get(42) is not None
             assert uow.rom_metadata.get(42) is None
 
-    def test_falsy_metadatum_writes_no_metadata_row(self, plugin):
+    def test_falsy_metadatum_writes_no_metadata_row(self, library):
         """``metadatum: None`` and ``metadatum: {}`` both skip the metadata stamp."""
-        uow = plugin._uow
+        uow = library.uow
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             10,
             {"name": "A", "fs_name": "a.z64", "platform_slug": "gb", "cover_path": ""},
         )
         _stage(
-            plugin._sync_service._box,
+            library.sync._box,
             20,
             {"name": "B", "fs_name": "b.z64", "platform_slug": "gb", "cover_path": ""},
         )
         acked = [{"id": 10, "metadatum": None}, {"id": 20, "metadatum": {}}]
 
-        plugin._sync_service._reporter._commit_unit_results_io({"10": 1010, "20": 1020}, acked)
+        library.sync._reporter._commit_unit_results_io({"10": 1010, "20": 1020}, acked)
 
         with uow:
             assert uow.rom_metadata.get(10) is None
             assert uow.rom_metadata.get(20) is None
 
-    def test_empty_unit_commits_nothing_extra(self, plugin):
+    def test_empty_unit_commits_nothing_extra(self, library):
         """An empty unit (no acked ROMs) commits cleanly with no metadata rows."""
-        uow = plugin._uow
+        uow = library.uow
 
-        plugin._sync_service._reporter._commit_unit_results_io({}, [])
+        library.sync._reporter._commit_unit_results_io({}, [])
 
         assert uow.committed is True
         with uow:
@@ -1313,27 +1311,27 @@ class TestAckMatchesActiveUnit:
     chunk can never be credited to the chunk in flight.
     """
 
-    def test_matches_when_run_unit_and_chunk_all_agree(self, plugin):
-        box = plugin._sync_service._box
+    def test_matches_when_run_unit_and_chunk_all_agree(self, library):
+        box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 5
         box.active_chunk_index = 2
-        assert plugin._sync_service._reporter._ack_matches_active_unit("run-1", 5, 2) is True
+        assert library.sync._reporter._ack_matches_active_unit("run-1", 5, 2) is True
 
-    def test_rejects_wrong_chunk_index(self, plugin):
-        box = plugin._sync_service._box
+    def test_rejects_wrong_chunk_index(self, library):
+        box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 5
         box.active_chunk_index = 2
         # Run + unit agree, but the ack is for a stale chunk.
-        assert plugin._sync_service._reporter._ack_matches_active_unit("run-1", 5, 1) is False
+        assert library.sync._reporter._ack_matches_active_unit("run-1", 5, 1) is False
 
-    def test_rejects_when_no_active_chunk(self, plugin):
-        box = plugin._sync_service._box
+    def test_rejects_when_no_active_chunk(self, library):
+        box = library.sync._box
         box.current_sync_id = "run-1"
         box.active_unit_id = 5
         box.active_chunk_index = None  # no chunk in flight (cancelled / committed)
-        assert plugin._sync_service._reporter._ack_matches_active_unit("run-1", 5, 0) is False
+        assert library.sync._reporter._ack_matches_active_unit("run-1", 5, 0) is False
 
 
 class TestClearSyncCache:
@@ -1341,31 +1339,31 @@ class TestClearSyncCache:
     and the recorded launch options but PRESERVES the run history, so the Last-sync
     display stays truthful (#1318)."""
 
-    async def test_preserves_completed_run_so_last_sync_survives(self, plugin):
+    async def test_preserves_completed_run_so_last_sync_survives(self, library):
         """After clear, the completed run remains → get_latest_completed is set and last_sync still reads its time."""
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         run = SyncRun.start(id="run-1", at="2025-01-01T00:00:00", platforms_planned=1, roms_planned=1)
         run.complete("2025-01-01T00:10:00", ["N64"], [])
         with uow:
             uow.sync_runs.save(run)
 
-        result = await plugin._sync_service.clear_sync_cache()
+        result = await library.sync.clear_sync_cache()
 
         assert result["success"] is True
         with uow:
             assert uow.sync_runs.get_latest_completed() is not None
         # The derived last_sync read still surfaces the completed run — no reset to "Never".
-        stats = plugin._sync_service.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-01-01T00:10:00"
 
-    async def test_leaves_run_history_untouched(self, plugin):
+    async def test_leaves_run_history_untouched(self, library):
         """Force Full Sync deletes no runs — a completed run AND a running run both
         survive the reset (it clears stamps + recorded launch options only)."""
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         completed = SyncRun.start(id="run-done", at="2025-01-01T00:00:00", platforms_planned=1, roms_planned=1)
         completed.complete("2025-01-01T00:10:00", ["N64"], [])
         running = SyncRun.start(id="run-live", at="2025-02-01T00:00:00", platforms_planned=1, roms_planned=1)
@@ -1373,30 +1371,30 @@ class TestClearSyncCache:
             uow.sync_runs.save(completed)
             uow.sync_runs.save(running)
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
         with uow:
             assert uow.sync_runs.get("run-done") is not None
             assert uow.sync_runs.get_running() is not None
 
-    async def test_resets_recorded_launch_options_so_the_next_apply_skips_nothing(self, plugin):
+    async def test_resets_recorded_launch_options_so_the_next_apply_skips_nothing(self, library):
         """Force Full Sync must force past the per-item delta skip (ADR-0025).
 
         The recorded launch command is the skip's evidence; resetting it to NULL
         (never matches a target) makes the next apply re-touch every shortcut —
         the repair path for Steam-side drift the recorded value cannot see.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 7, app_id=111, platform_slug="n64")
         with uow:
             uow.roms.set_applied_launch_options(7, "flatpak run app 'x.zip'")
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
         with uow:
             assert uow.roms.get(7).applied_launch_options is None
 
-    async def test_preserves_last_sync_and_a_newer_cancelled_attempt(self, plugin):
+    async def test_preserves_last_sync_and_a_newer_cancelled_attempt(self, library):
         """After Force Full Sync, BOTH a completed run's last_sync AND a newer
         cancelled run's last-attempt hint survive (#1318).
 
@@ -1407,7 +1405,7 @@ class TestClearSyncCache:
         """
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         completed = SyncRun.start(id="run-ok", at="2025-01-01T00:00:00", platforms_planned=1, roms_planned=1)
         completed.complete("2025-01-01T00:10:00", ["N64"], [])
         cancelled = SyncRun.start(id="run-x", at="2025-01-01T01:00:00", platforms_planned=1, roms_planned=1)
@@ -1416,32 +1414,32 @@ class TestClearSyncCache:
             uow.sync_runs.save(completed)
             uow.sync_runs.save(cancelled)
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
-        stats = plugin._sync_service.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] == "2025-01-01T00:10:00"
         assert stats["last_attempt"] == {"finished_at": "2025-01-01T01:05:00", "status": "cancelled"}
 
-    async def test_preserves_a_lone_failed_attempt_across_the_reset(self, plugin):
+    async def test_preserves_a_lone_failed_attempt_across_the_reset(self, library):
         """The #1318 core case: with only a non-completed run (a resume situation),
         Force Full Sync no longer blanks the display to "Never" — the interrupted
         attempt survives so last_attempt still surfaces it.
         """
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         interrupted = SyncRun.start(id="run-i", at="2025-01-01T00:00:00", platforms_planned=1, roms_planned=1)
         interrupted.mark_interrupted("2025-01-01T00:05:00", reason="external death")
         with uow:
             uow.sync_runs.save(interrupted)
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
-        stats = plugin._sync_service.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-01-01T00:05:00", "status": "interrupted"}
 
-    async def test_clears_platform_completion_stamps(self, plugin):
+    async def test_clears_platform_completion_stamps(self, library):
         """Force Full Sync also drops the per-platform completion stamps (ADR-0023).
 
         Each stamp is its own effective ``last_sync``; leaving them would let an
@@ -1449,7 +1447,7 @@ class TestClearSyncCache:
         """
         from domain.platform_sync_state import PlatformSyncState
 
-        uow = plugin._uow
+        uow = library.uow
         with uow:
             uow.platform_sync_state.save(
                 PlatformSyncState.stamp(platform_slug="n64", at="2025-01-01T00:00:00", rom_count=100)
@@ -1458,13 +1456,13 @@ class TestClearSyncCache:
                 PlatformSyncState.stamp(platform_slug="snes", at="2025-01-01T00:00:00", rom_count=200)
             )
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
         with uow:
             assert uow.platform_sync_state.get("n64") is None
             assert uow.platform_sync_state.get("snes") is None
 
-    async def test_clears_collection_completion_stamps(self, plugin):
+    async def test_clears_collection_completion_stamps(self, library):
         """Force Full Sync also drops the per-collection completion stamps (#742).
 
         Each collection stamp is its own effective ``last_sync``; leaving them would
@@ -1473,7 +1471,7 @@ class TestClearSyncCache:
         """
         from domain.collection_sync_state import CollectionSyncState
 
-        uow = plugin._uow
+        uow = library.uow
         with uow:
             uow.collection_sync_state.save(
                 CollectionSyncState.stamp(
@@ -1496,7 +1494,7 @@ class TestClearSyncCache:
                 )
             )
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
         with uow:
             assert uow.collection_sync_state.get("7", "standard") is None
@@ -1547,48 +1545,48 @@ class TestGetSyncStatsResumeInputs:
     (#1318), cannot carry the offer."""
 
     @pytest.mark.asyncio
-    async def test_pristine_install_has_neither(self, plugin):
-        stats = plugin.get_sync_stats()
+    async def test_pristine_install_has_neither(self, library):
+        stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 0
         assert stats["has_completion_stamp"] is False
 
     @pytest.mark.asyncio
-    async def test_counts_bound_roms_carrying_a_recorded_launch_command(self, plugin):
-        uow = plugin._uow
+    async def test_counts_bound_roms_carrying_a_recorded_launch_command(self, library):
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _seed_rom(uow, 20, app_id=1002, platform_slug="n64")
         _record_launch_options(uow, 10)
         _record_launch_options(uow, 20)
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 2
 
     @pytest.mark.asyncio
-    async def test_a_bound_rom_with_no_recorded_command_is_not_resumable(self, plugin):
+    async def test_a_bound_rom_with_no_recorded_command_is_not_resumable(self, library):
         """A NULL recorded value never matches a target, so that row is always re-applied."""
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["resumable_games"] == 0
 
     @pytest.mark.asyncio
-    async def test_the_uninstalled_placeholder_still_counts(self, plugin):
+    async def test_the_uninstalled_placeholder_still_counts(self, library):
         """An empty string is a recorded value (the uninstall placeholder, #1146), not a missing one.
 
         The shortcut it describes carries an empty launch command and is correct as
         it stands, so the next run skips it exactly as it skips a full command.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10, "")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 1
 
     @pytest.mark.asyncio
-    async def test_an_unbound_rom_is_not_resumable_however_it_was_recorded(self, plugin):
+    async def test_an_unbound_rom_is_not_resumable_however_it_was_recorded(self, library):
         """Removing every shortcut must drop the offer, and unbinding KEEPS the row.
 
         ``Rom.unbind_shortcut`` clears only ``shortcut_app_id`` (ADR-0007), so the
@@ -1598,73 +1596,73 @@ class TestGetSyncStatsResumeInputs:
         to mint the shortcut regardless. A count over every row would keep offering to resume
         shortcuts that no longer exist.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10)
-        assert plugin.get_sync_stats()["resumable_games"] == 1
+        assert library.sync.get_sync_stats()["resumable_games"] == 1
 
-        await plugin.report_removal_results([10], None)
+        await library.shortcut_removal.report_removal_results([10], None)
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["roms"] == 0
         assert stats["resumable_games"] == 0
         with uow:
             assert uow.roms.get(10).applied_launch_options is not None
 
     @pytest.mark.asyncio
-    async def test_a_cancel_inside_the_first_platform_is_still_a_resume(self, plugin):
+    async def test_a_cancel_inside_the_first_platform_is_still_a_resume(self, library):
         """The case the stamp-only rule got wrong.
 
         A run cancelled before any unit reached its final chunk leaves no stamp,
         but its committed chunks wrote shortcuts and recorded their launch
         commands. The next run genuinely does less work, so this is a resume.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10)
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 1
         assert stats["has_completion_stamp"] is False
 
     @pytest.mark.asyncio
-    async def test_a_platform_stamp_alone_is_still_a_resume(self, plugin):
+    async def test_a_platform_stamp_alone_is_still_a_resume(self, library):
         """The mirror case: stamps with no recorded game.
 
         A row predating migration 015 carries a NULL recorded value while its
         platform's stamp survives, so an upgraded install can hold stamps and no
         recorded games — and those platforms still skip wholesale at fetch time.
         """
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _stamp_platform(uow, "n64")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["resumable_games"] == 0
         assert stats["has_completion_stamp"] is True
 
     @pytest.mark.asyncio
-    async def test_a_collection_stamp_alone_answers_the_same_way(self, plugin):
+    async def test_a_collection_stamp_alone_answers_the_same_way(self, library):
         """A library synced only through collections holds no platform stamp at all."""
-        uow = plugin._uow
+        uow = library.uow
         _stamp_collection(uow, "7", "smart")
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["has_completion_stamp"] is True
 
     @pytest.mark.asyncio
-    async def test_the_stamp_flag_follows_a_dropped_stamp(self, plugin):
+    async def test_the_stamp_flag_follows_a_dropped_stamp(self, library):
         """Read live, not cached — an apply-start clear shows up at once."""
-        uow = plugin._uow
+        uow = library.uow
         _stamp_platform(uow, "n64")
-        assert plugin.get_sync_stats()["has_completion_stamp"] is True
+        assert library.sync.get_sync_stats()["has_completion_stamp"] is True
         with uow:
             uow.platform_sync_state.delete("n64")
 
-        assert plugin.get_sync_stats()["has_completion_stamp"] is False
+        assert library.sync.get_sync_stats()["has_completion_stamp"] is False
 
     @pytest.mark.asyncio
-    async def test_force_full_sync_takes_both_while_the_attempt_survives(self, plugin):
+    async def test_force_full_sync_takes_both_while_the_attempt_survives(self, library):
         """The #1789 case end to end: the clear takes both skip authorities, not the history.
 
         Before the clear the panel holds an incomplete attempt, recorded games AND
@@ -1674,7 +1672,7 @@ class TestGetSyncStatsResumeInputs:
         """
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         interrupted = SyncRun.start(id="run-i", at="2025-01-01T00:00:00", platforms_planned=1, roms_planned=1)
         interrupted.mark_interrupted("2025-01-01T00:05:00", reason="external death")
         with uow:
@@ -1684,13 +1682,13 @@ class TestGetSyncStatsResumeInputs:
         _stamp_platform(uow, "n64")
         _stamp_collection(uow, "7")
 
-        before = plugin.get_sync_stats()
+        before = library.sync.get_sync_stats()
         assert before["resumable_games"] == 1
         assert before["has_completion_stamp"] is True
 
-        await plugin._sync_service.clear_sync_cache()
+        await library.sync.clear_sync_cache()
 
-        after = plugin.get_sync_stats()
+        after = library.sync.get_sync_stats()
         assert after["resumable_games"] == 0
         assert after["has_completion_stamp"] is False
         # The shortcuts themselves are untouched — only the skip authority went.
@@ -1704,13 +1702,13 @@ class TestFinalizePerUnitRun:
     LAST by the orchestrator after the SyncRun write, #39)."""
 
     @pytest.mark.asyncio
-    async def test_builds_platform_collections_from_roms(self, plugin, emit):
-        uow = plugin._uow
+    async def test_builds_platform_collections_from_roms(self, library, emit):
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
-        plugin.settings["collection_create_platform_groups"] = True
+        library.settings["collection_create_platform_groups"] = True
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
@@ -1728,14 +1726,14 @@ class TestFinalizePerUnitRun:
             }
 
     @pytest.mark.asyncio
-    async def test_builds_romm_collection_app_ids_excluding_unbound(self, plugin, emit):
+    async def test_builds_romm_collection_app_ids_excluding_unbound(self, library, emit):
         """RomM collections resolve rom_id→app_id via uow.roms and skip unbound rows."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=None, platform_slug="snes", name="B (unbound)")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1, 2], kind="standard")
             },
@@ -1749,16 +1747,16 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_romm_collection_group_fallback_maps_unbound_sibling(self, plugin, emit):
+    async def test_romm_collection_group_fallback_maps_unbound_sibling(self, library, emit):
         """A collection membership on an UNBOUND sibling maps to its group's bound
         sibling's appId (ADR-0021) — collecting any version collects the game."""
 
-        uow = plugin._uow
+        uow = library.uow
         # A bound representative + an unbound sibling in the SAME group.
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             # the UNBOUND sibling is collected
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard")
@@ -1772,15 +1770,15 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_romm_collection_dedups_group_members_onto_one_shortcut(self, plugin, emit):
+    async def test_romm_collection_dedups_group_members_onto_one_shortcut(self, library, emit):
         """A collection holding several siblings of one group yields the group's
         single shortcut appId once, not duplicated."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             # BOTH siblings collected
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1, 2], kind="standard")
@@ -1793,7 +1791,7 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_same_named_collections_union_their_members(self, plugin, emit):
+    async def test_same_named_collections_union_their_members(self, library, emit):
         """Two same-named DIFFERENT-kind collections UNION into one Steam collection (#1503).
 
         RomM permits same-named collections across kinds/users. Steam's collection
@@ -1802,11 +1800,11 @@ class TestFinalizePerUnitRun:
         overwrite, only the last-synced collection's member would survive.
         """
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="X", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="X", rom_ids=[2], kind="smart"),
@@ -1820,14 +1818,14 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"X": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_same_named_union_dedups_shared_member_across_collections(self, plugin, emit):
+    async def test_same_named_union_dedups_shared_member_across_collections(self, library, emit):
         """A member shared by two same-named collections contributes its appId once."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="X", rom_ids=[1, 2], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="X", rom_ids=[1], kind="smart"),
@@ -1842,18 +1840,18 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"X": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_distinct_named_collections_unchanged_common_case(self, plugin, emit):
+    async def test_distinct_named_collections_unchanged_common_case(self, library, emit):
         """The all-distinct-names common case is byte-for-byte the pre-#1503 output.
 
         Each name unions a set of one, so distinct collections keep their own
         member sets — no merge, no reordering.
         """
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Alpha", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Beta", rom_ids=[2], kind="smart"),
@@ -1866,18 +1864,18 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Alpha": [1001], "Beta": [1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keys_a_single_collection_with_its_type_label(self, plugin, emit):
+    async def test_by_label_keys_a_single_collection_with_its_type_label(self, library, emit):
         """``by_label`` mode appends the type label to the reporter key.
 
         The key becomes ``"<name> (<Label>)"`` so the frontend builds
         ``RomM: [<name> (Label)]``. Default ``merge`` would key by the bare name.
         """
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("virtual", "vc-1"): CollectionMembership(
                     name="coll-a", rom_ids=[1], kind="virtual", virtual_type="franchise"
@@ -1891,7 +1889,7 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"coll-a (Franchise)": [1001]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keeps_same_name_different_label_separate(self, plugin, emit):
+    async def test_by_label_keeps_same_name_different_label_separate(self, library, emit):
         """A standard and a virtual collection sharing a name stay SEPARATE under by_label.
 
         The load-bearing behavior: the standard collection keeps its bare name and
@@ -1899,12 +1897,12 @@ class TestFinalizePerUnitRun:
         Steam collections, not a union (which is what ``merge`` does).
         """
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="shared-name", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -1922,15 +1920,15 @@ class TestFinalizePerUnitRun:
         }
 
     @pytest.mark.asyncio
-    async def test_by_label_franchise_vs_igdb_collection_same_name_two_keys(self, plugin, emit):
+    async def test_by_label_franchise_vs_igdb_collection_same_name_two_keys(self, library, emit):
         """Two virtual collections of the same name but different virtual_type split apart."""
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("virtual", "vc-f"): CollectionMembership(
                     name="shared-name", rom_ids=[1], kind="virtual", virtual_type="franchise"
@@ -1950,19 +1948,19 @@ class TestFinalizePerUnitRun:
         }
 
     @pytest.mark.asyncio
-    async def test_by_label_same_name_same_label_still_unions(self, plugin, emit):
+    async def test_by_label_same_name_same_label_still_unions(self, library, emit):
         """Two collections of the SAME name AND same kind still UNION under by_label.
 
         Same-name-within-one-kind is accepted as merged (two standard "Faves"),
         so the bare key ``"Faves"`` unions both member sets.
         """
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Faves", rom_ids=[1], kind="standard"),
                 ("standard", "8"): CollectionMembership(name="Faves", rom_ids=[2], kind="standard"),
@@ -1975,15 +1973,15 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Faves": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_gives_a_smart_collection_its_label_and_a_standard_one_none(self, plugin, emit):
+    async def test_by_label_gives_a_smart_collection_its_label_and_a_standard_one_none(self, library, emit):
         """A same-named standard and smart collection: the standard key is bare, the smart one ``(Smart)``."""
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Kids", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Kids", rom_ids=[2], kind="smart"),
@@ -1996,7 +1994,7 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Kids": [1001], "Kids (Smart)": [1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_unions_a_standard_named_like_another_kinds_key(self, plugin, emit):
+    async def test_by_label_unions_a_standard_named_like_another_kinds_key(self, library, emit):
         """A standard collection whose name spells another kind's key unions with it.
 
         Deliberate: a standard collection carries no label, so one named
@@ -2005,12 +2003,12 @@ class TestFinalizePerUnitRun:
         another kind's label to get there.
         """
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="Foo (Smart)", rom_ids=[1], kind="standard"),
                 ("smart", "9"): CollectionMembership(name="Foo", rom_ids=[2], kind="smart"),
@@ -2023,19 +2021,19 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"Foo (Smart)": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_merge_mode_unions_same_name_across_kinds(self, plugin, emit):
+    async def test_merge_mode_unions_same_name_across_kinds(self, library, emit):
         """Default ``merge`` still unions the same-named standard + virtual pair by bare name.
 
         The complement to ``test_by_label_keeps_same_name_different_label_separate``:
         with the default mode the exact same input collapses onto one bare-name key.
         """
 
-        plugin.settings["collection_naming_mode"] = "merge"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "merge"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="shared-name", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -2050,7 +2048,7 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"shared-name": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_merge_unions_case_differing_names(self, plugin, emit):
+    async def test_merge_unions_case_differing_names(self, library, emit):
         """Two names differing ONLY by case union into ONE key under merge (#1569).
 
         The data-loss guard: Steam collapses "7 up" and "7 Up" onto one
@@ -2059,13 +2057,13 @@ class TestFinalizePerUnitRun:
         and its games are lost. First-seen casing wins for display.
         """
 
-        plugin.settings["collection_naming_mode"] = "merge"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "merge"
+        uow = library.uow
         # collection A ("7 up") → 2 apps; collection B ("7 Up") → 5 apps.
         for rid, aid in [(1, 1001), (2, 1002), (3, 1003), (4, 1004), (5, 1005), (6, 1006), (7, 1007)]:
             _seed_rom(uow, rid, app_id=aid, platform_slug="n64", name=f"g{rid}")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="7 up", rom_ids=[1, 2], kind="standard"),
                 ("virtual", "vc-1"): CollectionMembership(
@@ -2081,15 +2079,15 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"7 up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
 
     @pytest.mark.asyncio
-    async def test_by_label_merges_same_type_case_variants(self, plugin, emit):
+    async def test_by_label_merges_same_type_case_variants(self, library, emit):
         """Under by_label, same-TYPE case variants merge (both bare standard names → folded keys match)."""
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="abc", rom_ids=[1], kind="standard"),
                 ("standard", "8"): CollectionMembership(name="ABC", rom_ids=[2], kind="standard"),
@@ -2103,15 +2101,15 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"abc": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keeps_different_type_case_variants_separate(self, plugin, emit):
+    async def test_by_label_keeps_different_type_case_variants_separate(self, library, emit):
         """Under by_label, a standard and an IGDB-collection case variant stay separate (only one is labelled)."""
 
-        plugin.settings["collection_naming_mode"] = "by_label"
-        uow = plugin._uow
+        library.settings["collection_naming_mode"] = "by_label"
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={
                 ("standard", "7"): CollectionMembership(name="abc", rom_ids=[1], kind="standard"),
                 ("virtual", "vc-9"): CollectionMembership(
@@ -2129,15 +2127,15 @@ class TestFinalizePerUnitRun:
         }
 
     @pytest.mark.asyncio
-    async def test_platform_names_union_case_insensitively(self, plugin, emit):
+    async def test_platform_names_union_case_insensitively(self, library, emit):
         """Two platform display names differing only by case union into one bucket (#1569)."""
 
-        uow = plugin._uow
+        uow = library.uow
         # Two distinct slugs whose live display names collide only by case.
         _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "Retro", "b": "retro"},
@@ -2152,8 +2150,8 @@ class TestFinalizePerUnitRun:
         assert set(app_ids) == {1001, 1002}
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_terminal(self, plugin, emit):
-        await plugin._sync_service._reporter.emit_sync_complete(
+    async def test_emit_sync_complete_terminal(self, library, emit):
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=0,
@@ -2171,8 +2169,8 @@ class TestFinalizePerUnitRun:
         assert "memory_delta_kb" not in complete_events[0][0][1]
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_carries_restart_recommended_on_clean_run(self, plugin, emit):
-        await plugin._sync_service._reporter.emit_sync_complete(
+    async def test_emit_sync_complete_carries_restart_recommended_on_clean_run(self, library, emit):
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=0,
@@ -2185,13 +2183,13 @@ class TestFinalizePerUnitRun:
         assert complete and complete[-1]["restart_recommended"] is True
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_cancelled_frame_says_cancelled_when_not_interrupted(self, plugin, emit):
+    async def test_emit_sync_complete_cancelled_frame_says_cancelled_when_not_interrupted(self, library, emit):
         """A user cancel (box.run_interrupted False) → the terminal CANCELLED frame
         leads with 'Sync cancelled:' and the payload carries no ``interrupted``."""
 
-        plugin._sync_service._box.run_interrupted = False
+        library.sync._box.run_interrupted = False
 
-        await plugin._sync_service._reporter.emit_sync_complete(
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=3,
@@ -2202,22 +2200,22 @@ class TestFinalizePerUnitRun:
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert "interrupted" not in complete[-1]
-        progress = plugin._sync_service._sync_progress
+        progress = library.sync._sync_progress
         assert progress["stage"] == "cancelled"
         assert progress["message"].startswith("Sync cancelled: ")
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_frame_says_interrupted_when_run_interrupted(self, plugin, emit):
+    async def test_emit_sync_complete_frame_says_interrupted_when_run_interrupted(self, library, emit):
         """A heartbeat-timeout run routes through the same cancelled emit; with
         box.run_interrupted set the payload carries ``interrupted: True`` and the
         terminal frame leads with 'Sync interrupted:' (stage stays CANCELLED — no
         new SyncStage). The frame's denominator is the PLANNED total from the
         box, not the bound-ROM count (#1384)."""
 
-        plugin._sync_service._box.run_interrupted = True
-        plugin._sync_service._box.run_total_items = 10
+        library.sync._box.run_interrupted = True
+        library.sync._box.run_total_items = 10
 
-        await plugin._sync_service._reporter.emit_sync_complete(
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=3,
@@ -2228,17 +2226,17 @@ class TestFinalizePerUnitRun:
 
         complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["interrupted"] is True
-        progress = plugin._sync_service._sync_progress
+        progress = library.sync._sync_progress
         assert progress["stage"] == "cancelled"
         assert progress["message"] == "Sync interrupted: 3 of 10 games processed"
         assert progress["total"] == 10
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_uses_interrupt_reason_verbatim(self, plugin, emit):
+    async def test_emit_sync_complete_uses_interrupt_reason_verbatim(self, library, emit):
         """A budget-pause interrupt_reason rides the payload AND becomes the terminal
         frame message verbatim (resume-friendly guidance, #1383)."""
 
-        await plugin._sync_service._reporter.emit_sync_complete(
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=2,
@@ -2252,22 +2250,22 @@ class TestFinalizePerUnitRun:
         # A budget pause sets run_paused + interrupt_reason, never run_interrupted —
         # the payload must not read as a heartbeat interrupt (#1384).
         assert "interrupted" not in complete[-1]
-        assert plugin._sync_service._sync_progress["message"] == "Sync paused: restart Steam, then sync again."
+        assert library.sync._sync_progress["message"] == "Sync paused: restart Steam, then sync again."
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, plugin, emit):
+    async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, library, emit):
         """With no planned total in the box (``run_total_items`` None — pre-plan or
-        the box wiped by a plugin reload), the terminal frame's denominator falls
+        the box wiped by a backend restart), the terminal frame's denominator falls
         back to the bound-ROM registry count (#1384)."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="Game B")
-        box = plugin._sync_service._box
+        box = library.sync._box
         box.run_interrupted = True
         assert box.run_total_items is None
 
-        await plugin._sync_service._reporter.emit_sync_complete(
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
             total_games=1,
@@ -2276,21 +2274,21 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        progress = plugin._sync_service._sync_progress
+        progress = library.sync._sync_progress
         assert progress["message"] == "Sync interrupted: 1 of 2 games processed"
         assert progress["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_counts_only_bound_roms(self, plugin, emit):
+    async def test_emit_sync_complete_counts_only_bound_roms(self, library, emit):
         """A completed run's terminal frame counts the ROMs that carry a shortcut;
         a row whose shortcut was unbound stays out of the total."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game B")
         _seed_rom(uow, 3, app_id=1003, platform_slug="n64", name="Game C")
 
-        await plugin._sync_service._reporter.emit_sync_complete(
+        await library.sync._reporter.emit_sync_complete(
             platform_app_ids={"n64": [1001, 1003]},
             romm_collection_app_ids={},
             total_games=2,
@@ -2299,12 +2297,12 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        progress = plugin._sync_service._sync_progress
+        progress = library.sync._sync_progress
         assert progress["message"] == "Sync complete: 2 games from 1 platforms"
         assert progress["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_finalize_does_not_reset_run_lifecycle(self, plugin, emit):
+    async def test_finalize_does_not_reset_run_lifecycle(self, library, emit):
         """finalize_per_unit_run + emit_sync_complete never touch the run lifecycle (#1202).
 
         The IDLE/None reset lives in the orchestrator's single run-scoped
@@ -2314,28 +2312,28 @@ class TestFinalizePerUnitRun:
 
         from domain.sync_state import SyncState
 
-        plugin._sync_service._box.sync_state = SyncState.RUNNING
-        plugin._sync_service._box.current_sync_id = "sync-xyz"
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "sync-xyz"
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids=set(),
             platform_names={},
         )
 
-        assert plugin._sync_service._sync_state == SyncState.RUNNING
-        assert plugin._sync_service._current_sync_id == "sync-xyz"
+        assert library.sync._sync_state == SyncState.RUNNING
+        assert library.sync._current_sync_id == "sync-xyz"
 
     @pytest.mark.asyncio
-    async def test_unbinds_stale_rom_ids_keeping_rows(self, plugin, emit):
+    async def test_unbinds_stale_rom_ids_keeping_rows(self, library, emit):
         """stale_rom_ids are UNBOUND (NULL app_id) — the rows survive (ADR-0007), never deleted."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
         _seed_rom(uow, 3, app_id=1003, platform_slug="gba", name="C")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2351,15 +2349,15 @@ class TestFinalizePerUnitRun:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2, 3}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_excludes_them_from_collections(self, plugin, emit):
+    async def test_stale_unbind_excludes_them_from_collections(self, library, emit):
         """Collections built from uow.roms must skip NULL-app_id (just-unbound) rows."""
 
-        plugin.settings["collection_create_platform_groups"] = True
-        uow = plugin._uow
+        library.settings["collection_create_platform_groups"] = True
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
@@ -2371,16 +2369,16 @@ class TestFinalizePerUnitRun:
         assert set(payload["platform_app_ids"].keys()) == {"Nintendo 64"}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_skips_missing_and_already_unbound(self, plugin, emit):
+    async def test_stale_unbind_skips_missing_and_already_unbound(self, library, emit):
         """A stale_rom_id with no row (missing) or already-unbound row is skipped
         without error; the genuinely-bound stale rows still unbind."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Kept")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="Stale bound")
         _seed_rom(uow, 5, app_id=None, platform_slug="gba", name="Already unbound")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
@@ -2398,14 +2396,14 @@ class TestFinalizePerUnitRun:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2, 5}
 
     @pytest.mark.asyncio
-    async def test_no_unbind_when_stale_rom_ids_default(self, plugin, emit):
+    async def test_no_unbind_when_stale_rom_ids_default(self, library, emit):
         """Default stale_rom_ids=None unbinds nothing — every bound row stays bound."""
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={},
@@ -2416,12 +2414,12 @@ class TestFinalizePerUnitRun:
             assert uow.roms.get(2).shortcut_app_id == 1002
 
     @pytest.mark.asyncio
-    async def test_get_sync_stats_reflects_unbound_count(self, plugin, emit):
+    async def test_get_sync_stats_reflects_unbound_count(self, library, emit):
         """After a normal finalize unbinds stale rows, get_sync_stats counts only bound ones."""
 
         from domain.sync_run import SyncRun
 
-        uow = plugin._uow
+        uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
         _seed_rom(uow, 3, app_id=1003, platform_slug="gba", name="C")
@@ -2430,14 +2428,14 @@ class TestFinalizePerUnitRun:
         with uow:
             uow.sync_runs.save(run)
 
-        await plugin._sync_service._reporter.finalize_per_unit_run(
+        await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             stale_rom_ids=[2, 3],
         )
 
-        stats = plugin.get_sync_stats()
+        stats = library.sync.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["total_shortcuts"] == 1
 
@@ -2457,16 +2455,16 @@ class TestGetSyncRuns:
         return SyncRun.start(id=run_id, at=started, platforms_planned=2, roms_planned=7)
 
     @pytest.mark.asyncio
-    async def test_no_runs_answers_an_empty_list(self, plugin):
-        assert plugin.get_sync_runs() == {"success": True, "runs": []}
+    async def test_no_runs_answers_an_empty_list(self, library):
+        assert library.sync.get_sync_runs() == {"success": True, "runs": []}
 
     @pytest.mark.asyncio
-    async def test_completed_run_serialised_field_for_field(self, plugin):
+    async def test_completed_run_serialised_field_for_field(self, library):
         run = self._start("run-1", "2026-01-01T09:00:00")
         run.complete("2026-01-01T09:30:00", ["N64", "SNES"], ["Favourites"])
-        self._save(plugin._uow, run)
+        self._save(library.uow, run)
 
-        result = plugin.get_sync_runs()
+        result = library.sync.get_sync_runs()
         assert result["success"] is True
         assert result["runs"] == [
             {
@@ -2483,35 +2481,35 @@ class TestGetSyncRuns:
         ]
 
     @pytest.mark.asyncio
-    async def test_cancelled_run_keeps_null_lists_and_carries_its_reason(self, plugin):
+    async def test_cancelled_run_keeps_null_lists_and_carries_its_reason(self, library):
         """A run that did not complete recorded no lists — they stay null, not empty."""
         run = self._start("run-c", "2026-01-02T09:00:00")
         run.mark_cancelled("2026-01-02T09:05:00", "Sync cancelled")
-        self._save(plugin._uow, run)
+        self._save(library.uow, run)
 
-        record = plugin.get_sync_runs()["runs"][0]
+        record = library.sync.get_sync_runs()["runs"][0]
         assert record["status"] == "cancelled"
         assert record["platforms_completed"] is None
         assert record["collections_completed"] is None
         assert record["error"] == "Sync cancelled"
 
     @pytest.mark.asyncio
-    async def test_running_run_is_listed_with_null_terminal_fields(self, plugin):
-        self._save(plugin._uow, self._start("run-live", "2026-01-03T09:00:00"))
+    async def test_running_run_is_listed_with_null_terminal_fields(self, library):
+        self._save(library.uow, self._start("run-live", "2026-01-03T09:00:00"))
 
-        record = plugin.get_sync_runs()["runs"][0]
+        record = library.sync.get_sync_runs()["runs"][0]
         assert record["status"] == "running"
         assert record["finished_at"] is None
         assert record["error"] is None
 
     @pytest.mark.asyncio
-    async def test_newest_first_and_capped_at_the_history_limit(self, plugin):
+    async def test_newest_first_and_capped_at_the_history_limit(self, library):
         from services.library.reporter import SYNC_RUN_HISTORY_LIMIT
 
         for minute in range(SYNC_RUN_HISTORY_LIMIT + 3):
-            self._save(plugin._uow, self._start(f"run-{minute:02d}", f"2026-01-01T09:{minute:02d}:00"))
+            self._save(library.uow, self._start(f"run-{minute:02d}", f"2026-01-01T09:{minute:02d}:00"))
 
-        runs = plugin.get_sync_runs()["runs"]
+        runs = library.sync.get_sync_runs()["runs"]
         assert len(runs) == SYNC_RUN_HISTORY_LIMIT
         newest = SYNC_RUN_HISTORY_LIMIT + 2
         assert [run["id"] for run in runs] == [

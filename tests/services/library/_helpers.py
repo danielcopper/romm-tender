@@ -50,7 +50,7 @@ def _make_collections_loop(user=None, smart=None, virtual=None):
     first type) — robust to the supported-type tuple growing.
 
     Every call after the listings runs the offloaded function for real:
-    ``get_collections`` then reads the reachable set from the plugin's own fake
+    ``get_collections`` then reads the reachable set from the harness's own fake
     UoW, so its ``in_steam_count`` answers from whatever rows the test seeded.
     """
     listings = iter(
@@ -102,13 +102,13 @@ def _page(items):
     return {"items": items, "total": len(items)}
 
 
-def _seed_install(plugin, rom_id, *, file_path, platform_slug="n64"):
+def _seed_install(library, rom_id, *, file_path, platform_slug="n64"):
     """Insert a ``RomInstall`` record (with its FK-parent ``Rom``) into the shared UoW."""
     from domain.rom import Rom
     from domain.rom_install import RomInstall
 
-    with plugin._uow:
-        plugin._uow.roms.save(
+    with library.uow:
+        library.uow.roms.save(
             Rom(
                 rom_id=rom_id,
                 platform_slug=platform_slug,
@@ -118,7 +118,7 @@ def _seed_install(plugin, rom_id, *, file_path, platform_slug="n64"):
                 last_synced_at="2025-01-01T00:00:00",
             )
         )
-        plugin._uow.rom_installs.save(
+        library.uow.rom_installs.save(
             RomInstall.mark_installed(
                 rom_id=rom_id,
                 file_path=file_path,
@@ -131,7 +131,7 @@ def _seed_install(plugin, rom_id, *, file_path, platform_slug="n64"):
 
 
 def _seed_rom_row(
-    plugin,
+    library,
     rom_id,
     *,
     app_id,
@@ -168,24 +168,24 @@ def _seed_rom_row(
         sibling_group_key=sibling_group_key,
         cover_source=cover_source,
     )
-    with plugin._uow:
-        plugin._uow.roms.save(rom)
-        plugin._uow.roms.set_applied_launch_options(rom_id, applied_launch_options)
+    with library.uow:
+        library.uow.roms.save(rom)
+        library.uow.roms.set_applied_launch_options(rom_id, applied_launch_options)
 
 
-def _use_fake_romm(plugin, fake_romm_api):
-    """Swap the plugin's MagicMock ``_romm_api`` for the seeded fake.
+def _use_fake_romm(library, fake_romm_api):
+    """Swap the harness's MagicMock ``romm_api`` for the seeded fake.
 
-    The library-suite plugin fixture wires ``_romm_api`` as a
+    The library-suite ``library`` fixture wires ``romm_api`` as a
     ``MagicMock()`` (kept for the test_fetcher.py tests that match
     callables by identity). Each test that wants the end-to-end path
     drives through this helper, which rebinds the fake onto every
     sub-service holding a stale reference.
     """
-    plugin._romm_api = fake_romm_api
-    plugin._sync_service._fetcher._romm_api = fake_romm_api
-    plugin._artwork_service._romm_api = fake_romm_api
-    plugin._shortcut_removal_service._romm_api = fake_romm_api
+    library.romm_api = fake_romm_api
+    library.sync._fetcher._romm_api = fake_romm_api
+    library.artwork._romm_api = fake_romm_api
+    library.shortcut_removal._romm_api = fake_romm_api
     return fake_romm_api
 
 
