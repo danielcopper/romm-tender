@@ -253,6 +253,19 @@ function buildSyncCompleteToast(
   return { body };
 }
 
+const SYNC_FAILED = "Sync failed";
+
+/**
+ * The toast body for an apply run that ended at stage `error`. A failure inside
+ * the run is already worded "Sync failed — …"; one before its work queue was
+ * built carries the bare `classify_error` message
+ * (`services/library/sync_orchestrator.py`, `_do_sync_per_unit`).
+ */
+function buildSyncFailedToast(message: string): string {
+  if (message.startsWith(SYNC_FAILED)) return message;
+  return message ? `${SYNC_FAILED} — ${message}` : `${SYNC_FAILED}.`;
+}
+
 const ROMM_COLLECTION_NAME = /^RomM: \[([^\]]+)\]/;
 const COLLECTION_HOST_SUFFIX = /\s\([^)]+\)$/;
 
@@ -897,9 +910,21 @@ const tender = definePlugin(() => {
   // module-level store. The backend frame carries no etaSeconds (that ceiling is
   // frontend-computed from sync_plan), so carry the current value across each
   // frame rather than letting the full-object replace wipe it.
+  //
+  // An apply run that fails emits no `sync_complete`, so its error frame is the
+  // only word of its end and the toast is raised from here instead. A preview's
+  // failure is not toasted: the Sync page that asked for it says it.
+  const failedRunsAnnounced = new Set<string>();
   const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
     setSyncProgress(etaSeconds !== undefined ? { ...progress, etaSeconds } : progress);
+    if (progress.running || progress.stage !== "error" || progress.runKind !== "apply") return;
+    const runId = progress.runId ?? "";
+    if (runId !== "") {
+      if (failedRunsAnnounced.has(runId)) return;
+      failedRunsAnnounced.add(runId);
+    }
+    showToast(buildSyncFailedToast(progress.message ?? ""));
   });
 
   const downloadProgressListener = addEventListener<DownloadProgressEvent>(
