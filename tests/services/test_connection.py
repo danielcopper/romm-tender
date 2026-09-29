@@ -104,7 +104,7 @@ class ConnectionHarness:
 
 @pytest.fixture
 def connection(logger) -> ConnectionHarness:
-    settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+    settings: dict[str, Any] = {"romm_url": "", "enabled_platforms": {}}
     romm_api = MagicMock()
     service = _make_service(settings=settings, romm_api=romm_api, loop=running_loop(), logger=logger)
     return ConnectionHarness(service=service, romm_api=romm_api, settings=settings)
@@ -191,7 +191,7 @@ class TestTestConnectionBadPath:
         assert result["message"].startswith("Server reachable but API request failed: ")
 
     def test_list_platforms_auth_error_not_prefixed(self, event_loop, romm_api, logger):
-        """auth_error / forbidden_error keep their original message — no prefix."""
+        """auth_failed keeps its original message — no prefix."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.list_platforms.side_effect = RommAuthError("bad credentials")
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
@@ -318,7 +318,7 @@ class TestTestConnectionEdgeCases:
 class TestTestConnectionRecordsVersion:
     @pytest.mark.asyncio
     async def test_test_connection_sets_version_on_romm_api(self, romm_api, logger):
-        settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+        settings: dict[str, Any] = {"romm_url": "", "enabled_platforms": {}}
         settings["romm_url"] = "http://romm.local"
         settings["romm_api_token"] = "rmm_token"
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
@@ -330,7 +330,7 @@ class TestTestConnectionRecordsVersion:
 
 
 class TestTestConnectionOutcomes:
-    """test_connection's answer per server outcome: a canonical ``reason`` slug on failure, the version on success."""
+    """test_connection's answer per outcome: a canonical ``reason`` slug on failure, the version on success."""
 
     @pytest.mark.asyncio
     async def test_config_error_when_url_empty(self, connection):

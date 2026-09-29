@@ -1,4 +1,4 @@
-"""Tests for PlaytimeService — SQLite ``rom_playtime`` aggregate + native play-session ingest."""
+"""Tests for PlaytimeService — the ``Playtime`` aggregate and native play-session ingest."""
 
 import asyncio
 import logging
