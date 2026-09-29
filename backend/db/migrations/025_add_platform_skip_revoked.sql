@@ -36,4 +36,4 @@
 -- wraps BEGIN/COMMIT and stamps PRAGMA user_version = 25.
 -- -----------------------------------------------------------------------------
 ALTER TABLE platform_sync_state ADD COLUMN skip_revoked INTEGER NOT NULL DEFAULT 0;  -- 1 = the skip reads no stamp
-UPDATE platform_sync_state SET skip_revoked = 1;
+UPDATE platform_sync_state SET skip_revoked = 1 WHERE skip_revoked = 0;
