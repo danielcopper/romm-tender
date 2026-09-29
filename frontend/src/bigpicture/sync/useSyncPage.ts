@@ -15,7 +15,8 @@
  * and those are observations of the frame, not a second announcement of it.
  * They are taken on a stop carrying a terminal stage, because this page also
  * stops a run of its own making: the optimistic frame it retracts when a
- * preview answers.
+ * preview answers. The one end it does say is an apply run that stopped at
+ * `error`, whose message it puts on its status line.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Sync.
  */
@@ -45,7 +46,12 @@ import {
 import { PREVIEW_COUNTDOWN_TICK_MS, previewHasChanges, previewSecondsLeft } from "../../utils/previewState";
 import { clearRunUnits, useRunUnits, type RunUnit } from "../../utils/runUnitsStore";
 import { previewApplySeconds } from "../../utils/syncEstimate";
-import { getSyncProgress, isTerminalStage, setSyncProgress as setStoredSyncProgress } from "../../utils/syncProgress";
+import {
+  getSyncProgress,
+  isTerminalStage,
+  onSyncProgressChange,
+  setSyncProgress as setStoredSyncProgress,
+} from "../../utils/syncProgress";
 import {
   isCancelRequested,
   reconcileStaleShortcuts,
@@ -74,6 +80,10 @@ const PREVIEW_FAILED = "Could not work out what would change. Check the connecti
 /** What the armed line falls back to when the clear answered without a message
  *  of its own — the same shape every other status line here takes. */
 const FULL_SYNC_CLEARED = "The next sync will re-fetch and re-apply everything";
+
+/** What the status line says for an apply run that stopped at `error` with no
+ *  message of its own. */
+const RUN_FAILED = "The sync stopped with an error.";
 
 /** How often the session-budget reading is re-taken while it can still move: a
  *  run is climbing it, or a paused run is waiting for a Steam restart to drop
@@ -514,6 +524,21 @@ export function useSyncPage(): SyncPageState {
     }
     wasRunning.current = running;
   }, [running, terminal, loadRuns]);
+
+  // A preview's failure is left to the preview's own answer, which writes the
+  // same line. Taken from the store's notification rather than from the
+  // run-end effect above, which may not set state from what it renders
+  // (`react-hooks/set-state-in-effect`).
+  useEffect(
+    () =>
+      onSyncProgressChange(() => {
+        const frame = getSyncProgress();
+        if (frame.stage === "error" && frame.runKind === "apply") {
+          setStatus(frame.message || RUN_FAILED);
+        }
+      }),
+    [],
+  );
 
   // Poll the live renderer-heap reading while it can still change: during a run
   // (so "Steam memory" tracks the climbing RSS) and while the last run is paused

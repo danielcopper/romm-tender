@@ -46,6 +46,7 @@ import type {
   SyncPlanUnit,
   SyncPreview,
   SyncPreviewSummary,
+  SyncProgress,
   SyncRunRecord,
   SyncStats,
 } from "../types";
@@ -2523,6 +2524,117 @@ describe("SyncPage", () => {
       expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
       expect(buttonByExactText(container, "Apply Sync")).toBeNull();
       expect(container.textContent).toContain("Sync cancelled");
+    });
+  });
+
+  // ===========================================================================
+  // A run that ends at stage `error` says so where the reader is.
+  // ===========================================================================
+  describe("a run that ends at stage error", () => {
+    const UNREACHABLE = "Server unreachable — check your URL and ensure RomM is running";
+
+    function occurrences(container: HTMLElement, text: string): number {
+      return container.textContent.split(text).length - 1;
+    }
+
+    async function press(container: HTMLElement, label: string): Promise<void> {
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, label)!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    /** Skip preview on, so the start button starts the apply run itself. */
+    async function renderAndStartRun() {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), skip_preview: true });
+      const result = await renderPage();
+      await press(result.container, "Sync Library");
+      expect(buttonByExactText(result.container, "Cancel Sync")).not.toBeNull();
+      return result;
+    }
+
+    async function endRun(frame: Partial<SyncProgress>): Promise<void> {
+      await act(async () => {
+        setSyncProgress({ running: false, current: 0, total: 0, message: "", ...frame });
+        await Promise.resolve();
+      });
+    }
+
+    it("a run whose work queue could not be built shows the backend's message under the start button", async () => {
+      const { container } = await renderAndStartRun();
+
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
+
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(occurrences(container, UNREACHABLE)).toBe(1);
+    });
+
+    it("a run that failed part-way shows its own sentence once, prefix and all", async () => {
+      const { container } = await renderAndStartRun();
+
+      await endRun({ stage: "error", message: `Sync failed — ${UNREACHABLE}`, runId: "run-err", runKind: "apply" });
+
+      expect(occurrences(container, `Sync failed — ${UNREACHABLE}`)).toBe(1);
+      expect(occurrences(container, "Sync failed")).toBe(1);
+    });
+
+    it("a failure the backend gave no words to still says the run stopped", async () => {
+      const { container } = await renderAndStartRun();
+
+      await endRun({ stage: "error", message: "", runId: "run-err", runKind: "apply" });
+
+      expect(container.textContent).toContain("The sync stopped with an error.");
+    });
+
+    it("an apply started from the preview says it too", async () => {
+      adoptPreview(preview());
+      const { container } = await renderPage();
+      await press(container, "Apply Sync");
+
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
+
+      expect(container.textContent).toContain(UNREACHABLE);
+    });
+
+    it("the line stays until the next press, which clears it", async () => {
+      const { container } = await renderAndStartRun();
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err", runKind: "apply" });
+      await flushAsync();
+      expect(container.textContent).toContain(UNREACHABLE);
+
+      // Back on the idle body after the next run, so the line would be on screen
+      // if anything had kept it.
+      await press(container, "Sync Library");
+      await endRun({ stage: "done", message: "Sync complete", runId: "run-ok", runKind: "apply" });
+
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(container.textContent).not.toContain(UNREACHABLE);
+    });
+
+    it("a preview's error frame alone puts up no line", async () => {
+      // The preview call has not answered yet: the only thing that could say
+      // anything is the frame, and a preview's frame is not this line's.
+      vi.mocked(backend.syncPreview).mockReturnValue(new Promise<SyncPreview>(() => {}));
+      const { container } = await renderAndStartPreview();
+
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "preview-err", runKind: "preview" });
+
+      expect(container.textContent).not.toContain(UNREACHABLE);
+    });
+
+    it("a run that ends at done puts up no line", async () => {
+      const { container } = await renderAndStartRun();
+
+      await endRun({
+        stage: "done",
+        message: "Sync complete: 5 games from 1 platform",
+        runId: "run-ok",
+        runKind: "apply",
+      });
+
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(container.textContent).not.toContain("Sync complete: 5 games from 1 platform");
     });
   });
 });
