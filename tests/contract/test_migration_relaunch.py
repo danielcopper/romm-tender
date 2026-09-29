@@ -22,7 +22,7 @@ from ._seed import seed_install, seed_rom
 
 async def test_build_relaunch_items_no_installs_is_empty(harness):
     """Nothing installed → empty list, no UoW contention."""
-    items = harness.plugin._migration_service._build_relaunch_items()
+    items = harness.app.services.migration_service._build_relaunch_items()
     assert items == []
 
 
@@ -37,7 +37,7 @@ async def test_build_relaunch_items_installed_bound_rom(harness):
     """
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
 
-    items = harness.plugin._migration_service._build_relaunch_items()
+    items = harness.app.services.migration_service._build_relaunch_items()
 
     assert len(items) == 1
     item = items[0]
@@ -50,5 +50,5 @@ async def test_build_relaunch_items_installed_bound_rom(harness):
 async def test_build_relaunch_items_skips_unbound_rom(harness):
     """A bound-but-uninstalled ROM contributes no item (no install row)."""
     seed_rom(harness, 7, platform_slug="gba", shortcut_app_id=7)
-    items = harness.plugin._migration_service._build_relaunch_items()
+    items = harness.app.services.migration_service._build_relaunch_items()
     assert items == []

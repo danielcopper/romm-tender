@@ -1,9 +1,9 @@
-"""Contract-test harness — the real ``Plugin`` over the real ``bootstrap()``.
+"""Contract-test harness — the real ``Endpoints`` over the real ``bootstrap()``.
 
-This tier drives the actual ``main.py`` callable surface the way the
-frontend does. Anything that builds, wires, or seeds the real plugin for
-a contract test belongs here; the per-callable contract assertions live
-in the sibling ``test_*.py`` modules.
+This tier drives the actual ``main.py`` endpoints the way the frontend
+does. Anything that builds, wires, or seeds the real application for a
+contract test belongs here; the per-endpoint contract assertions live in
+the sibling ``test_*.py`` modules.
 
 What stays real vs. what is faked
 =================================
@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 from bootstrap import (
+    Application,
     RuntimeBundle,
     WiringConfig,
     bootstrap,
@@ -59,60 +60,29 @@ from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from domain.app_directories import AppDirectories
+from domain.identity import MIN_ROMM_VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 from domain.update_release import UpdateSource
+from host import HostStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from lib.prune_conflicts import PruneConflicts
-
-# The wired attributes ``main.py:_main`` binds onto ``Plugin`` — every service
-# it calls. The harness binds the same set; the loud-failure assert below checks
-# every one is present so a wiring drift (a renamed/added service field) fails
-# the fixture instead of surfacing as a confusing ``AttributeError`` mid-test.
-_BOUND_SERVICE_ATTRS = {
-    "_save_sync_service": "save_sync_service",
-    "_playtime_service": "playtime_service",
-    "_sync_service": "sync_service",
-    "_download_service": "download_service",
-    "_rom_adoption_service": "rom_adoption_service",
-    "_rom_removal_service": "rom_removal_service",
-    "_firmware_service": "firmware_service",
-    "_sgdb_service": "sgdb_service",
-    "_metadata_service": "metadata_service",
-    "_achievements_service": "achievements_service",
-    "_migration_service": "migration_service",
-    "_game_detail_service": "game_detail_service",
-    "_artwork_service": "artwork_service",
-    "_shortcut_removal_service": "shortcut_removal_service",
-    "_settings_service": "settings_service",
-    "_core_service": "core_service",
-    "_disc_service": "disc_service",
-    "_version_switch_service": "version_switch_service",
-    "_prune_service": "prune_service",
-    "_prune_lease_service": "prune_lease_service",
-    "_data_inventory_service": "data_inventory_service",
-    "_connection_service": "connection_service",
-    "_startup_healing_service": "startup_healing_service",
-    "_shortcut_relocation_service": "shortcut_relocation_service",
-    "_update_check_service": "update_check_service",
-    "_update_outcome_service": "update_outcome_service",
-    "_launch_gate_service": "launch_gate_service",
-    "_session_lifecycle_service": "session_lifecycle_service",
-    "_game_process_service": "game_process_service",
-    "_relaunch_options_resolver": "relaunch_options_resolver",
-}
+    from main import Endpoints
 
 
 @dataclass
 class ContractHarness:
-    """What a contract test reaches for: the wired plugin + the fake edges.
+    """What a contract test reaches for: the wired endpoints + the fake edges.
 
-    ``plugin`` is the real :class:`main.Plugin` with every service wired.
-    ``romm`` is the :class:`FakeRommApi` the plugin's services talk to —
-    tests seed library/saves/server state on it and arm its failure seams.
+    ``endpoints`` is the real :class:`main.Endpoints` over ``app``, the real
+    :class:`bootstrap.Application` with every service wired; a test reaches a
+    service through ``app.services``. ``settings`` is the live settings dict
+    every service shares. ``romm`` is the :class:`FakeRommApi` the services
+    talk to — tests seed library/saves/server state on it and arm its failure
+    seams.
     ``sgdb`` is the :class:`FakeSteamGridDbApi`. ``releases`` is the
     :class:`FakeLatestRelease` standing in for GitHub. ``emit`` is the
     ``AsyncMock`` the runtime emits through. ``clock`` is the deterministic
@@ -120,7 +90,9 @@ class ContractHarness:
     writes under.
     """
 
-    plugin: Any
+    endpoints: Endpoints
+    app: Application
+    settings: dict[str, Any]
     romm: FakeRommApi
     sgdb: FakeSteamGridDbApi
     releases: FakeLatestRelease
@@ -131,9 +103,10 @@ class ContractHarness:
     # to seed relational state (roms / rom_installs / rom_save_sync_states / kv_config)
     # exactly as the services read it — same database, same connection contract.
     uow_factory: Any
-    # The real RetroDECK paths provider bound onto the plugin. A migration test
-    # swaps a controllable fake onto ``plugin._migration_service._retrodeck_paths``
-    # to drive RetroDECK-home changes through detection.
+    # The real RetroDECK paths provider the services were wired with. A migration
+    # test swaps a controllable fake onto
+    # ``app.services.migration_service._retrodeck_paths`` to drive RetroDECK-home
+    # changes through detection.
     retrodeck_paths: Any
     # The in-memory process table behind the stop-game ladder. Tests seed ``pids``
     # (and ``survive_stop`` / ``alive``) to stage what the kill should find.
@@ -150,7 +123,7 @@ class ContractHarness:
     cache_dir: str
     bin_dir: str
     # The record of every claim that conflicts with a removed-game cleanup, as the
-    # composition root built it. ``Plugin`` holds none: the services it calls do.
+    # composition root built it. ``Endpoints`` holds none: the services it calls do.
     prune_conflicts: PruneConflicts
 
 
@@ -176,13 +149,13 @@ _UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", 
 
 
 def build_contract_harness(tmp_path: Any) -> ContractHarness:
-    """Build the real ``Plugin`` over the real ``bootstrap()``, faking only the edges.
+    """Build the real ``Endpoints`` over the real ``bootstrap()``, faking only the edges.
 
-    Mirrors ``main.py:_main`` bindings exactly (see ``_BOUND_SERVICE_ATTRS``)
-    so the wired plugin behaves as it does in production, then asserts every
-    expected service attribute is bound — a wiring drift fails loudly here.
+    Composes what ``build_application`` composes, with the edges swapped in
+    between ``bootstrap()`` and ``wire_services()``, and runs none of the
+    start-up repairs, the network step or the shutdown.
     """
-    from main import Plugin
+    from main import Endpoints
 
     logger = logging.getLogger("contract")
 
@@ -281,31 +254,21 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             machine_id_provider=result.runtime_adapters.machine_id_provider,
         ),
         callbacks=result.callbacks,
-        min_required_version=Plugin._MIN_REQUIRED_VERSION,
+        min_required_version=MIN_ROMM_VERSION,
         directories=result.directories,
         launcher=result.launcher,
         update_source=_UPDATE_SOURCE,
     )
     services = wire_services(cfg)
 
-    # 4. Construct the real Plugin and bind exactly as main.py:_main does —
-    # plus the two handles main.py never sets, which contract tests read to
-    # seed and inspect the live settings dict and the RetroDECK paths.
-    plugin = Plugin()
-    plugin.loop = loop
-    plugin._debug_logger = result.handles.debug_logger
-    plugin.settings = result.stores.settings
-    plugin._retrodeck_paths = result.callbacks.retrodeck_paths
-    for attr, field in _BOUND_SERVICE_ATTRS.items():
-        setattr(plugin, attr, getattr(services, field))
-
-    # Loud-failure guard: a wiring drift (renamed/added service) must fail the
-    # fixture here, not as a confusing AttributeError deep in a contract test.
-    missing = [attr for attr in _BOUND_SERVICE_ATTRS if getattr(plugin, attr, None) is None]
-    assert not missing, f"contract harness wiring drift — unbound service attrs: {missing}"
+    # 4. The real Application and Endpoints over the wired services, as the
+    # entry point builds them.
+    app = Application(services, logger=logger, loop=loop, user_agent=result.user_agent)
 
     return ContractHarness(
-        plugin=plugin,
+        endpoints=Endpoints(app, HostStatus()),
+        app=app,
+        settings=result.stores.settings,
         romm=fake_romm,
         sgdb=fake_sgdb,
         releases=fake_releases,
@@ -349,7 +312,7 @@ def hold_sync_in_flight(harness: ContractHarness, state: SyncState = SyncState.R
     state would not hold still for the endpoint under test.
     """
     assert state in (SyncState.RUNNING, SyncState.CANCELLING), state
-    box = harness.plugin._sync_service._box
+    box = harness.app.services.sync_service._box
     assert box.try_begin_run("held-sync-run", kind=SyncRunKind.APPLY)
     if state is SyncState.CANCELLING:
         box.request_cancel("held-sync-run")

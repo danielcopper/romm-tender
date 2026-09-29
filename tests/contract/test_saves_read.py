@@ -34,7 +34,7 @@ from ._seed import enable_save_sync, seed_confirmed_slot, seed_install, seed_rom
 
 def _write_local_save(harness, *, system: str, filename: str, content: bytes) -> None:
     """Materialize a local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, filename), "wb") as fh:
         fh.write(content)
@@ -46,7 +46,7 @@ def _write_local_save(harness, *, system: str, filename: str, content: bytes) ->
 async def test_get_save_status_full_shape_and_partial_flag(harness):
     """Happy path: full payload, with the additive server_query_failed flag present and a bool."""
     enable_save_sync(harness)
-    result = await harness.plugin.get_save_status(42)
+    result = await harness.endpoints.get_save_status(42)
     expected_keys = {
         "rom_id",
         "files",
@@ -78,7 +78,7 @@ async def test_get_save_status_server_failure_keeps_full_payload(harness):
     """Server unreachable: server_query_failed True, full payload still returned (partial-success)."""
     enable_save_sync(harness)
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_save_status(42)
+    result = await harness.endpoints.get_save_status(42)
     # The carve-out: a failure flag rides alongside the full payload, not a
     # bare {success: False}. The frontend still renders local state.
     assert result["server_query_failed"] is True
@@ -97,7 +97,7 @@ async def test_get_save_status_definitive_404_is_not_unreachable(harness):
     """
     enable_save_sync(harness)
     harness.romm.list_saves_side_effect = RommNotFoundError("HTTP 404: Not Found")
-    result = await harness.plugin.get_save_status(42)
+    result = await harness.endpoints.get_save_status(42)
     assert result["server_query_failed"] is True
     assert result["server_query_reason"] == "not_found"
     assert result["server_query_reason"] != "server_unreachable"
@@ -115,7 +115,7 @@ async def test_get_save_status_carries_the_save_resolution(harness):
     enable_save_sync(harness)
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="game.gba")
 
-    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+    resolution = (await harness.endpoints.get_save_status(42))["save_resolution"]
 
     assert set(resolution.keys()) == {
         "state",
@@ -152,7 +152,7 @@ async def test_a_configuration_file_is_named_on_the_wire_and_flagged_unsynced(ha
     enable_save_sync(harness)
     seed_install(harness, 42, system="saturn", platform_slug="sega-saturn", file_name="rally.cue")
 
-    files = (await harness.plugin.get_save_status(42))["save_resolution"]["files"]
+    files = (await harness.endpoints.get_save_status(42))["save_resolution"]["files"]
 
     by_name = {entry["name"]: entry for entry in files}
     assert by_name["rally.smpc"]["role"] == "settings"
@@ -169,7 +169,7 @@ async def test_an_uninstalled_rom_says_its_answer_is_about_a_game_that_is_not_th
     enable_save_sync(harness)
     seed_rom(harness, 42, platform_slug="gba")
 
-    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+    resolution = (await harness.endpoints.get_save_status(42))["save_resolution"]
 
     assert resolution["content_installed"] is False
     assert resolution["state"] == "per_game_files"
@@ -181,7 +181,7 @@ async def test_a_refusing_state_names_the_emulator_and_syncs_nothing(harness):
 
     enable_save_sync(harness)
     seed_install(harness, 42, system="ps2", platform_slug="ps2", file_name="game.iso")
-    harness.plugin._save_sync_service._rom_info._save_locations.answer_with(
+    harness.app.services.save_sync_service._rom_info._save_locations.answer_with(
         "ps2",
         SaveAnswer(
             state="shared",
@@ -197,7 +197,7 @@ async def test_a_refusing_state_names_the_emulator_and_syncs_nothing(harness):
         ),
     )
 
-    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+    resolution = (await harness.endpoints.get_save_status(42))["save_resolution"]
 
     assert resolution["state"] == "shared"
     assert resolution["emulator"] == "PCSX2 (Standalone)"
@@ -213,7 +213,7 @@ async def test_get_save_status_pending_upload_display(harness):
     _write_local_save(harness, system="gba", filename="game.srm", content=b"local progress")
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", slot_confirmed=True, system="gba"))
 
-    result = await harness.plugin.get_save_status(42)
+    result = await harness.endpoints.get_save_status(42)
 
     files = {f["filename"]: f for f in result["files"]}
     assert files["game.srm"]["status"] == "upload"
@@ -233,7 +233,7 @@ async def test_get_save_slots_happy_shape(harness):
     # needs the roms FK parent (a synced ROM always has one in production).
     seed_rom(harness, 42)
     seed_server_save(harness, save_id=500, rom_id=42, slot="main")
-    result = await harness.plugin.get_save_slots(42)
+    result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is True
     assert isinstance(result["slots"], list)
     assert isinstance(result["active_slot"], str)
@@ -245,7 +245,7 @@ async def test_get_save_slots_happy_shape(harness):
 async def test_get_save_slots_sync_disabled_failure_shape(harness):
     """Sync disabled → failure shape WITH fallback fields the frontend renders."""
     # save_sync_enabled defaults to False — do not enable it.
-    result = await harness.plugin.get_save_slots(42)
+    result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
     assert result["reason"] == "sync_disabled"
     assert isinstance(result["message"], str)
@@ -258,7 +258,7 @@ async def test_get_save_slots_server_failure_shape(harness):
     """Server unreachable → canonical SERVER_UNREACHABLE failure with fallbacks."""
     enable_save_sync(harness)
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_save_slots(42)
+    result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE
     assert isinstance(result["message"], str)
@@ -272,7 +272,7 @@ async def test_get_save_slots_server_failure_carries_last_known_slots(harness):
     enable_save_sync(harness)
     seed_confirmed_slot(harness, 42, slot="main")
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_save_slots(42)
+    result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
     assert result["slots"] == []
     assert result["last_known"] == {
@@ -294,7 +294,7 @@ async def test_get_save_slots_server_failure_omits_last_known_slots_when_unconfi
         ),
     )
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_save_slots(42)
+    result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
     assert result["last_known"] is None
 
@@ -305,7 +305,7 @@ async def test_get_save_slots_server_failure_omits_last_known_slots_when_unconfi
 async def test_get_slot_saves_happy_shape(harness):
     enable_save_sync(harness)
     seed_server_save(harness, save_id=600, rom_id=42, slot="main", file_name="game.srm")
-    result = await harness.plugin.get_slot_saves(42, "main")
+    result = await harness.endpoints.get_slot_saves(42, "main")
     assert result["success"] is True
     assert result["slot"] == "main"
     assert isinstance(result["saves"], list)
@@ -319,7 +319,7 @@ async def test_get_slot_saves_happy_shape(harness):
 async def test_get_slot_saves_server_failure_shape(harness):
     enable_save_sync(harness)
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_slot_saves(42, "main")
+    result = await harness.endpoints.get_slot_saves(42, "main")
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE
     assert isinstance(result["message"], str)
@@ -352,13 +352,13 @@ async def test_null_slot_save_isolated_from_named_slot_but_visible_in_legacy_buc
     )
 
     # Named-slot status: the newer legacy save is absent; only the "default" head shows.
-    status = await harness.plugin.get_save_status(42)
+    status = await harness.endpoints.get_save_status(42)
     surfaced = [f["server_save_id"] for f in status["files"]]
     assert 600 not in surfaced
     assert surfaced == [500]
 
     # The legacy bucket still renders the null save — and only it.
-    legacy = await harness.plugin.get_slot_saves(42, "")
+    legacy = await harness.endpoints.get_slot_saves(42, "")
     assert legacy["success"] is True
     assert [s["id"] for s in legacy["saves"]] == [600]
 
@@ -372,7 +372,7 @@ async def test_get_slot_delete_info_happy_shape(harness):
     seed_install(harness, 42, system="gba", platform_slug="gba")
     seed_confirmed_slot(harness, 42, slot="main", source="server")
     seed_server_save(harness, save_id=700, rom_id=42, slot="main")
-    result = await harness.plugin.get_slot_delete_info(42, "main")
+    result = await harness.endpoints.get_slot_delete_info(42, "main")
     assert result["success"] is True
     assert set(result.keys()) == {
         "success",
@@ -392,7 +392,7 @@ async def test_get_slot_delete_info_happy_shape(harness):
 async def test_get_slot_delete_info_not_installed_failure_shape(harness):
     """Documented guard: sync on but not installed → canonical {success: False, reason, message}."""
     enable_save_sync(harness)
-    result = await harness.plugin.get_slot_delete_info(42, "main")
+    result = await harness.endpoints.get_slot_delete_info(42, "main")
     assert result == {"success": False, "reason": "not_installed", "message": "ROM is not installed"}
 
 
@@ -402,7 +402,7 @@ async def test_get_slot_delete_info_server_failure_shape(harness):
     seed_install(harness, 42, system="gba", platform_slug="gba")
     seed_confirmed_slot(harness, 42, slot="main", source="server")
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_slot_delete_info(42, "main")
+    result = await harness.endpoints.get_slot_delete_info(42, "main")
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE
     assert isinstance(result["message"], str)
@@ -413,13 +413,13 @@ async def test_get_slot_delete_info_server_failure_shape(harness):
 
 
 async def test_is_save_tracking_configured_unconfigured_shape(harness):
-    result = harness.plugin.is_save_tracking_configured(42)
+    result = harness.endpoints.is_save_tracking_configured(42)
     assert result == {"configured": False, "active_slot": None}
 
 
 async def test_is_save_tracking_configured_configured_shape(harness):
     seed_confirmed_slot(harness, 42, slot="main")
-    result = harness.plugin.is_save_tracking_configured(42)
+    result = harness.endpoints.is_save_tracking_configured(42)
     assert result["configured"] is True
     assert result["active_slot"] == "main"
 
@@ -430,7 +430,7 @@ async def test_is_save_tracking_configured_configured_shape(harness):
 async def test_get_save_setup_info_happy_shape(harness):
     enable_save_sync(harness)
     seed_server_save(harness, save_id=800, rom_id=42, slot="main")
-    result = await harness.plugin.get_save_setup_info(42)
+    result = await harness.endpoints.get_save_setup_info(42)
     expected_keys = {
         "has_local_saves",
         "local_files",
@@ -452,7 +452,7 @@ async def test_get_save_setup_info_server_failure_carve_out(harness):
     """Server unreachable → recommended_action carve-out + additive failure flag."""
     enable_save_sync(harness)
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_save_setup_info(42)
+    result = await harness.endpoints.get_save_setup_info(42)
     # Partial-success carve-out: surface a distinct recommendation instead of
     # auto-confirming a default that could clobber real server saves.
     assert result["recommended_action"] == "server_unreachable"
@@ -464,7 +464,7 @@ async def test_get_save_setup_info_server_failure_carve_out(harness):
 
 
 async def test_get_save_sync_settings_shape(harness):
-    result = harness.plugin.get_save_sync_settings()
+    result = harness.endpoints.get_save_sync_settings()
     assert set(result.keys()) == {
         "save_sync_enabled",
         "sync_before_launch",
@@ -485,7 +485,7 @@ async def test_saves_list_file_versions_ok_shape(harness):
     """status == 'ok' discriminant + versions list."""
     enable_save_sync(harness)
     seed_server_save(harness, save_id=900, rom_id=42, slot="main", file_name="game.srm")
-    result = await harness.plugin.saves_list_file_versions(42, "main", "game.srm")
+    result = await harness.endpoints.saves_list_file_versions(42, "main", "game.srm")
     assert result["status"] == "ok"
     assert isinstance(result["versions"], list)
     if result["versions"]:
@@ -505,7 +505,7 @@ async def test_saves_list_file_versions_server_unreachable_shape(harness):
     """status == 'server_unreachable' carries message: str (NOT error)."""
     enable_save_sync(harness)
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.saves_list_file_versions(42, "main", "game.srm")
+    result = await harness.endpoints.saves_list_file_versions(42, "main", "game.srm")
     assert result["status"] == "server_unreachable"
     assert isinstance(result["message"], str)
     assert result["message"]

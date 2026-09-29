@@ -1,6 +1,6 @@
 """Contract test for ``get_rom_relaunch_options`` over the real nesting.
 
-``Plugin.get_rom_relaunch_options(rom_id)`` is the single-ROM re-confirm seam
+``Endpoints.get_rom_relaunch_options(rom_id)`` is the single-ROM re-confirm seam
 both launch funnels — the Play button and Steam's direct-launch watcher — pull
 just before a launch to heal mid-session ``launch_options`` drift (#1150). It resolves through the real
 :class:`RelaunchOptionsResolver`, whose ``active_core_for_rom`` opens its **own**
@@ -55,7 +55,7 @@ async def test_installed_bound_rom_returns_item(harness):
     """An installed+bound ROM → ``{app_id, launch_options}`` with a real command."""
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
 
-    item = await harness.plugin.get_rom_relaunch_options(42)
+    item = await harness.endpoints.get_rom_relaunch_options(42)
 
     assert item is not None
     assert set(item.keys()) == {"success", "app_id", "launch_options", "prune_lease_token"}
@@ -70,14 +70,14 @@ async def test_bound_rom_with_no_install_returns_none(harness):
     """A bound-but-uninstalled ROM (no install row) → literal None (TS ``null``)."""
     seed_rom(harness, 7, platform_slug="gba", shortcut_app_id=7)
 
-    item = await harness.plugin.get_rom_relaunch_options(7)
+    item = await harness.endpoints.get_rom_relaunch_options(7)
 
     assert item is None
 
 
 async def test_unknown_rom_returns_none(harness):
     """A rom_id with no rows at all → None — nothing to re-confirm."""
-    item = await harness.plugin.get_rom_relaunch_options(999)
+    item = await harness.endpoints.get_rom_relaunch_options(999)
     assert item is None
 
 
@@ -114,7 +114,7 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
             )
         )
 
-    item = await harness.plugin.get_rom_relaunch_options(rom_id)
+    item = await harness.endpoints.get_rom_relaunch_options(rom_id)
 
     assert item is not None
     launch_options = item["launch_options"]

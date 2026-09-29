@@ -1,14 +1,14 @@
-"""The real plugin, reached the way the panel will reach it: over a socket.
+"""The real endpoints, reached the way the panel will reach them: over a socket.
 
 Two halves are already covered separately and neither one covers this. The host
-tier drives a real socket onto a stand-in plugin, so it proves the protocol and
-nothing about the callables; the rest of this tier drives the real callables by
-calling them, so it proves the answers and nothing about the wire. What is only
-here is the seam between them — a real callable resolved by name out of the
-loaded `Plugin`, its answer encoded by `encode_reply`, and the size cap judged
-against a payload a real callable actually produced.
+tier drives a real socket onto a stand-in for the endpoints, so it proves the
+protocol and nothing about the callables; the rest of this tier drives the real
+callables by calling them, so it proves the answers and nothing about the wire.
+What is only here is the seam between them — a real callable resolved by name
+out of the loaded `Endpoints`, its answer encoded by `encode_reply`, and the
+size cap judged against a payload a real callable actually produced.
 
-Every case builds the real `Plugin` through the real `bootstrap()` (the shared
+Every case builds the real `Endpoints` through the real `bootstrap()` (the shared
 harness) and puts a `HostServer` in front of it, then speaks to that server the
 way `frontend/src/api/backend.ts` will: positional, JSON-shaped arguments in a
 `call` message.
@@ -66,8 +66,8 @@ def _seed_metadata(harness: ContractHarness, rom_id: int) -> None:
         )
 
 
-class ServedPlugin:
-    """A started `HostServer` in front of the harness's real `Plugin`."""
+class ServedEndpoints:
+    """A started `HostServer` in front of the harness's real `Endpoints`."""
 
     def __init__(self, server: HostServer, harness: ContractHarness) -> None:
         self.server = server
@@ -83,12 +83,12 @@ class ServedPlugin:
 
 
 @pytest.fixture
-async def served(harness, tmp_path) -> AsyncIterator[ServedPlugin]:
-    """Serve the real plugin on a free loopback port for the length of one test."""
+async def served(harness, tmp_path) -> AsyncIterator[ServedEndpoints]:
+    """Serve the real endpoints on a free loopback port for the length of one test."""
     static_root = tmp_path / "dist"
     static_root.mkdir(exist_ok=True)
     server = HostServer(
-        dispatcher=CallDispatcher(harness.plugin, LOGGER),
+        dispatcher=CallDispatcher(harness.endpoints, LOGGER),
         events=EventSink(LOGGER),
         static_root=str(static_root),
         logger=LOGGER,
@@ -97,7 +97,7 @@ async def served(harness, tmp_path) -> AsyncIterator[ServedPlugin]:
     )
     await server.start()
     try:
-        yield ServedPlugin(server, harness)
+        yield ServedEndpoints(server, harness)
     finally:
         await server.stop()
 
@@ -174,7 +174,7 @@ class TestTheSizeCapAgainstARealAnswer:
         static_root = tmp_path / "dist"
         static_root.mkdir(exist_ok=True)
         server = HostServer(
-            dispatcher=CallDispatcher(harness.plugin, LOGGER, payload_limit=8),
+            dispatcher=CallDispatcher(harness.endpoints, LOGGER, payload_limit=8),
             events=EventSink(LOGGER),
             static_root=str(static_root),
             logger=LOGGER,

@@ -1,6 +1,6 @@
 """Contract test — chained RetroDECK home migration over the real plugin (#1042).
 
-Drives the real ``Plugin`` through the real ``bootstrap()`` + real SQLite: an
+Drives the real ``Endpoints`` through the real ``bootstrap()`` + real SQLite: an
 install is recorded under home A, then the RetroDECK home is changed twice
 (A→B→C) through the real ``detect_retrodeck_path_change`` before migrating. The
 regression this locks is that the second change used to overwrite the pending
@@ -61,8 +61,8 @@ def _relaunch_payload(harness):
 
 async def _detect_at(harness, home: str) -> None:
     """Point the RetroDECK home at *home* and run one detection pass."""
-    harness.plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
-    harness.plugin._migration_service.detect_retrodeck_path_change()
+    harness.app.services.migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+    harness.app.services.migration_service.detect_retrodeck_path_change()
     await asyncio.sleep(0)  # drain the spawned retrodeck_path_changed emit
 
 
@@ -92,7 +92,7 @@ async def test_second_home_change_before_migrating_does_not_strand_files(harness
         assert uow.kv_config.get("retrodeck_home_path_previous") == a
         assert uow.kv_config.get("retrodeck_home_path_hops") == '["' + b + '"]'
 
-    result = await harness.plugin.migrate_retrodeck_files(None)
+    result = await harness.endpoints.migrate_retrodeck_files(None)
 
     # Response shape (MigrationResult) pinned.
     assert result["success"] is True
@@ -121,7 +121,7 @@ async def test_second_home_change_before_migrating_does_not_strand_files(harness
 
 async def test_migrate_with_no_pending_returns_canonical_failure_shape(harness):
     """No migration pending → the canonical {success, reason, message} failure shape."""
-    result = await harness.plugin.migrate_retrodeck_files(None)
+    result = await harness.endpoints.migrate_retrodeck_files(None)
     assert result["success"] is False
     assert result["reason"] == "no_migration_needed"
     assert isinstance(result["message"], str)

@@ -52,7 +52,7 @@ async def test_start_download_supersedes_installed_sibling(harness):
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=_APP_ID)
     _seed_server_rom(harness, 2, fs_name="new.gba")
 
-    result = await harness.plugin.start_download(2)
+    result = await harness.endpoints.start_download(2)
     assert result["success"] is True
 
     # The old sibling's install is stripped synchronously, before the transfer.
@@ -71,7 +71,7 @@ async def test_start_download_keeps_grandfathered_sibling(harness):
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=_APP_ID)
     _seed_server_rom(harness, 2, fs_name="new.gba")
 
-    result = await harness.plugin.start_download(2)
+    result = await harness.endpoints.start_download(2)
     assert result["success"] is True
 
     await _drain_background_tasks()
@@ -93,7 +93,7 @@ async def test_the_supersede_removes_a_sibling_while_the_remove_rom_endpoints_ru
     hold_migration_pending(harness)
     hold_prune_active(harness)
 
-    refusal = await harness.plugin._download_service.supersede_sibling_installs(2)
+    refusal = await harness.app.services.download_service.supersede_sibling_installs(2)
 
     assert refusal is None
     with harness.uow_factory() as uow:

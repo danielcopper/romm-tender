@@ -1,6 +1,6 @@
 """Contract tests for the platform-toggle callables (#1007).
 
-Drives the real ``Plugin`` over the real ``bootstrap`` to pin the
+Drives the real ``Endpoints`` over the real ``bootstrap`` to pin the
 end-to-end behavior the data-loss fix restores: opening the Platforms page
 (``get_platforms``) materializes the full per-platform enabled map into the
 real ``settings.json``, and un-toggling exactly ONE platform
@@ -34,7 +34,7 @@ async def test_get_platforms_materializes_full_map_to_disk(harness):
         {"id": 3, "name": "Empty", "slug": "empty", "rom_count": 0},  # filtered out
     ]
 
-    result = await harness.plugin.get_platforms()
+    result = await harness.endpoints.get_platforms()
 
     assert result["success"] is True
     assert [p["slug"] for p in result["platforms"]] == ["snes", "n64"]
@@ -60,10 +60,10 @@ async def test_one_off_toggle_leaves_other_platforms_enabled(harness):
     ]
 
     # 1. Platforms page mount materializes the full map.
-    await harness.plugin.get_platforms()
+    await harness.endpoints.get_platforms()
 
     # 2. Un-toggle exactly one platform (frontend: number id, bool enabled).
-    toggle_result = await harness.plugin.save_platform_sync(2, False)
+    toggle_result = await harness.endpoints.save_platform_sync(2, False)
     assert toggle_result == {"success": True}
 
     # 3. The on-disk map is a true partial update — only id 2 flipped.
@@ -71,7 +71,7 @@ async def test_one_off_toggle_leaves_other_platforms_enabled(harness):
     assert on_disk["enabled_platforms"] == {"1": True, "2": False, "3": True}
 
     # 4. The sync-time filter keeps every OTHER platform.
-    filtered = await harness.plugin._sync_service._fetcher._fetch_enabled_platforms()
+    filtered = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
     kept_slugs = {p["slug"] for p in filtered}
     assert kept_slugs == {"snes", "gba"}
     assert "n64" not in kept_slugs
@@ -84,11 +84,11 @@ async def test_get_platforms_idempotent_after_materialization(harness):
         {"id": 2, "name": "Nintendo 64", "slug": "n64", "rom_count": 4},
     ]
 
-    await harness.plugin.get_platforms()
-    await harness.plugin.save_platform_sync(1, False)
+    await harness.endpoints.get_platforms()
+    await harness.endpoints.save_platform_sync(1, False)
 
     # Re-opening the page reads the explicit map literally — no re-materialize.
-    result = await harness.plugin.get_platforms()
+    result = await harness.endpoints.get_platforms()
     by_id = {p["id"]: p["sync_enabled"] for p in result["platforms"]}
     assert by_id == {1: False, 2: True}
 

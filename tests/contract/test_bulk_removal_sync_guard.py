@@ -36,27 +36,27 @@ def _assert_sync_active_refusal(result):
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_remove_all_shortcuts_refused_while_in_flight(harness, state):
     hold_sync_in_flight(harness, state)
-    result = await harness.plugin.remove_all_shortcuts()
+    result = await harness.endpoints.remove_all_shortcuts()
     _assert_sync_active_refusal(result)
 
 
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_remove_platform_shortcuts_refused_while_in_flight(harness, state):
     hold_sync_in_flight(harness, state)
-    result = await harness.plugin.remove_platform_shortcuts("n64")
+    result = await harness.endpoints.remove_platform_shortcuts("n64")
     _assert_sync_active_refusal(result)
 
 
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_uninstall_all_roms_refused_while_in_flight(harness, state):
     hold_sync_in_flight(harness, state)
-    result = await harness.plugin.uninstall_all_roms()
+    result = await harness.endpoints.uninstall_all_roms()
     _assert_sync_active_refusal(result)
 
 
 async def test_remove_all_shortcuts_normal_shape_at_idle(harness):
     """IDLE: the callable answers its normal success shape (empty registry)."""
-    result = await harness.plugin.remove_all_shortcuts()
+    result = await harness.endpoints.remove_all_shortcuts()
     assert result["success"] is True
     assert result["app_ids"] == []
     assert result["rom_ids"] == []
@@ -64,7 +64,7 @@ async def test_remove_all_shortcuts_normal_shape_at_idle(harness):
 
 async def test_remove_platform_shortcuts_normal_shape_at_idle(harness):
     """IDLE: the callable answers its normal shape (name degrades to the slug)."""
-    result = await harness.plugin.remove_platform_shortcuts("n64")
+    result = await harness.endpoints.remove_platform_shortcuts("n64")
     assert result["success"] is True
     assert result["app_ids"] == []
     assert result["rom_ids"] == []
@@ -73,5 +73,5 @@ async def test_remove_platform_shortcuts_normal_shape_at_idle(harness):
 
 async def test_uninstall_all_roms_partial_success_shape_at_idle(harness):
     """IDLE: the callable answers its partial-success shape (nothing installed)."""
-    result = await harness.plugin.uninstall_all_roms()
+    result = await harness.endpoints.uninstall_all_roms()
     assert result == {"success": True, "removed_count": 0, "errors": [], "app_ids": []}

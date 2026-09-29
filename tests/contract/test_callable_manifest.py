@@ -2,7 +2,7 @@
 
 This runs the checks the CI gate (``scripts/check_callable_manifest.py``) runs:
 every ``callable<[Args], Return>("name")`` declared on the frontend
-(``frontend/src/**/*.ts``) has a matching endpoint ``name`` on the ``Plugin``
+(``frontend/src/**/*.ts``) has a matching endpoint ``name`` on the ``Endpoints``
 class in ``main.py``, in both directions, with matching arity, and no ``@route``
 sits where the gate cannot count it. It is the static-parity sibling of the rest
 of ``tests/contract/`` — those tests *drive* the real endpoints frontend-shaped;

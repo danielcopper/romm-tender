@@ -25,12 +25,12 @@ from ._seed import seed_rom
 async def test_finalize_excludes_suspend_via_monotonic(harness):
     """180s awake + 120s suspended (300s wall) → only the 180s awake span counts."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
-    await harness.plugin.record_session_start(1)
+    harness.settings["save_sync_enabled"] = False
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(180)  # 180s awake (both clocks)
     harness.clock.advance_wall(120)  # 120s suspended (wall only, monotonic paused)
 
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] == 180
 
@@ -38,11 +38,11 @@ async def test_finalize_excludes_suspend_via_monotonic(harness):
 async def test_finalize_zero_suspend_counts_full_span(harness):
     """Control: 300s elapsed with no suspend → the full 300s counts."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
-    await harness.plugin.record_session_start(1)
+    harness.settings["save_sync_enabled"] = False
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(300)
 
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] == 300
 
@@ -50,11 +50,11 @@ async def test_finalize_zero_suspend_counts_full_span(harness):
 async def test_finalize_fully_suspended_session_counts_zero(harness):
     """A session suspended the whole time (monotonic never advanced) counts 0."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
-    await harness.plugin.record_session_start(1)
+    harness.settings["save_sync_enabled"] = False
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance_wall(600)  # 10 min of wall, monotonic frozen throughout
 
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] == 0
 
@@ -73,16 +73,16 @@ async def test_overlapping_sessions_each_fold_their_own_span(harness):
     """
     seed_rom(harness, 1)
     seed_rom(harness, 2)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(60)
-    await harness.plugin.record_session_start(2)  # ROM 1 is still open
+    await harness.endpoints.record_session_start(2)  # ROM 1 is still open
     harness.clock.advance(240)
 
-    first = await harness.plugin.finalize_game_session(1)  # ROM 2 is still open
+    first = await harness.endpoints.finalize_game_session(1)  # ROM 2 is still open
     harness.clock.advance(60)
-    second = await harness.plugin.finalize_game_session(2)
+    second = await harness.endpoints.finalize_game_session(2)
 
     assert first["total_seconds"] == 300
     assert second["total_seconds"] == 300
@@ -91,9 +91,9 @@ async def test_overlapping_sessions_each_fold_their_own_span(harness):
 async def test_finalize_no_active_session_leaves_total_none(harness):
     """No open session → playtime record fails → ``total_seconds`` is ``None``."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] is None
 
@@ -105,13 +105,13 @@ async def test_finalize_registered_device_ingests_play_session(harness):
     here, yet the session is recorded for the ROM because a device id is bound.
     """
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
     with harness.uow_factory() as uow:
         uow.kv_config.set("device_id", "device-1")
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(300)
-    await harness.plugin.finalize_game_session(1)
+    await harness.endpoints.finalize_game_session(1)
 
     stored = harness.romm.play_sessions.get(1)
     assert stored is not None
@@ -127,14 +127,14 @@ async def test_finalize_server_rejected_session_drains_outbox(harness):
     re-flush) rather than being retained and re-POSTed on every heartbeat.
     """
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
     with harness.uow_factory() as uow:
         uow.kv_config.set("device_id", "device-1")
     harness.romm.reject_below_duration_ms = 1000  # server refuses sub-1s sessions
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     # No clock advance → a 0ms session the server rejects.
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] == 0  # still folded locally
     assert harness.romm.play_sessions == {}  # server stored nothing
@@ -147,12 +147,12 @@ async def test_finalize_server_rejected_session_drains_outbox(harness):
 async def test_finalize_unregistered_device_folds_locally_no_ingest(harness):
     """No device id → the session is counted locally but never POSTed (decision #8)."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
     # No device_id in kv_config — the device is unregistered.
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(300)
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     assert result["total_seconds"] == 300  # counted locally
     assert harness.romm.play_sessions == {}  # nothing ingested
@@ -162,11 +162,11 @@ async def test_finalize_sync_payload_carries_counts_not_toast_keys(harness):
     """The ``sync`` payload carries per-direction counts + ``failure_toast``; the
     removed backend-rendered ``toast_title`` / ``toast_body`` keys are gone (#1481)."""
     seed_rom(harness, 1)
-    harness.plugin.settings["save_sync_enabled"] = False
-    await harness.plugin.record_session_start(1)
+    harness.settings["save_sync_enabled"] = False
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(60)
 
-    result = await harness.plugin.finalize_game_session(1)
+    result = await harness.endpoints.finalize_game_session(1)
 
     sync = result["sync"]
     assert set(sync.keys()) == {

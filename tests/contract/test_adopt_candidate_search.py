@@ -5,7 +5,7 @@ Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 BackendResult | TargetOccupiedResult | CandidatesFoundResult | RenameCollisionsResult>``
 and ``adoptExistingRom = callable<[number, string | null, CollisionChoice | null], AdoptResult>``.
 
-The real ``Plugin`` over a real filesystem is what this tier is for: the search
+The real ``Endpoints`` over a real filesystem is what this tier is for: the search
 lists a real directory, the rename runs the real ``os.link`` / ``os.unlink``, and
 the save and savestate directories come from the real RetroDECK-path and
 ``retroarch.cfg`` adapters — whose no-config defaults are the shape a stock
@@ -79,7 +79,7 @@ async def test_a_download_is_refused_with_the_file_already_on_the_device(harness
     _stage(harness, size=len(b"my own dump"))
     candidate = _place_candidate(harness)
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "adoption_candidates"
@@ -105,7 +105,7 @@ async def test_a_refused_download_leaves_the_candidate_byte_identical(harness):
     _stage(harness)
     candidate = _place_candidate(harness)
 
-    await harness.plugin.start_download(_ROM_ID, False)
+    await harness.endpoints.start_download(_ROM_ID, False)
 
     assert candidate.read_bytes() == b"my own dump"
     assert not (_platform_dir(harness) / _CANONICAL).exists()
@@ -116,7 +116,7 @@ async def test_an_unrelated_platform_folder_downloads_as_before(harness):
     _stage(harness)
     (_platform_dir(harness) / "Some Other Game (USA).gba").write_bytes(b"not it")
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result.get("reason") != "adoption_candidates"
 
@@ -132,7 +132,7 @@ async def _drain_download(harness) -> None:
     or not a download was ever queued. The service hands out the task it made,
     so the test waits on exactly that one.
     """
-    task = harness.plugin._download_service.task_for_rom(_ROM_ID)
+    task = harness.app.services.download_service.task_for_rom(_ROM_ID)
     if task is not None:
         await asyncio.gather(task, return_exceptions=True)
 
@@ -154,7 +154,7 @@ async def test_a_same_named_folder_refuses_a_single_file_download(harness):
     folder.mkdir()
     (folder / "notes.txt").write_bytes(b"whatever the user keeps here")
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "unusable_namesake"
@@ -167,7 +167,7 @@ async def test_a_same_named_folder_refuses_a_single_file_download(harness):
     # The point of the refusal: no transfer started behind the user's back.
     await _drain_download(harness)
     assert not (_platform_dir(harness) / _CANONICAL).exists()
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
 
 
 async def test_a_same_named_file_refuses_a_folder_download(harness):
@@ -176,7 +176,7 @@ async def test_a_same_named_file_refuses_a_folder_download(harness):
     loose = _platform_dir(harness) / "rom-41 (U).gba"
     loose.write_bytes(b"my own dump")
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "unusable_namesake"
@@ -195,7 +195,7 @@ async def test_the_refusal_leaves_the_folder_byte_identical(harness):
     folder.mkdir()
     (folder / "notes.txt").write_bytes(b"mine")
 
-    await harness.plugin.start_download(_ROM_ID, False)
+    await harness.endpoints.start_download(_ROM_ID, False)
     await _drain_download(harness)
 
     assert sorted(path.name for path in _platform_dir(harness).iterdir()) == ["rom-41 (U)"]
@@ -210,7 +210,7 @@ async def test_downloading_anyway_lands_beside_the_namesake(harness):
     folder.mkdir()
     (folder / "notes.txt").write_bytes(b"mine")
 
-    result = await harness.plugin.start_download(_ROM_ID, True)
+    result = await harness.endpoints.start_download(_ROM_ID, True)
     await _drain_download(harness)
 
     assert result["success"] is True
@@ -228,7 +228,7 @@ async def test_the_page_reports_a_candidate_without_the_user_pressing_download(h
     _stage(harness)
     _place_candidate(harness)
 
-    detail = await harness.plugin.get_cached_game_detail(_ROM_ID)
+    detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
 
     assert detail["installed"] is False
     assert detail["adoption_candidate_present"] is True
@@ -240,7 +240,7 @@ async def test_an_empty_platform_folder_leaves_the_page_offering_a_download(harn
     _stage(harness)
     _platform_dir(harness)
 
-    detail = await harness.plugin.get_cached_game_detail(_ROM_ID)
+    detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
 
     assert detail["adoption_candidate_present"] is False
 
@@ -254,10 +254,10 @@ async def test_the_page_stays_usable_when_the_roms_folder_cannot_be_read(harness
     # catching this raise, so it says the probe ran AND survived.
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage(harness)
-    harness.plugin._rom_adoption_service._search._retrodeck_paths = _UnreadableRomsPaths()
+    harness.app.services.rom_adoption_service._search._retrodeck_paths = _UnreadableRomsPaths()
 
     with caplog.at_level(logging.WARNING):
-        detail = await harness.plugin.get_cached_game_detail(_ROM_ID)
+        detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
 
     assert detail["found"] is True
     assert detail["adoption_candidate_present"] is False
@@ -280,13 +280,13 @@ async def test_adopting_a_candidate_renames_it_and_records_the_install(harness):
     candidate = _place_candidate(harness)
     canonical = _platform_dir(harness) / _CANONICAL
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert result["success"] is True
     assert result["file_path"] == str(canonical)
     assert canonical.read_bytes() == b"my own dump"
     assert not candidate.exists()
-    installed = harness.plugin.get_installed_rom(_ROM_ID)
+    installed = harness.endpoints.get_installed_rom(_ROM_ID)
     assert installed is not None
     assert installed["file_path"] == str(canonical)
     assert installed["system"] == "gba"
@@ -304,7 +304,7 @@ async def test_the_rename_carries_a_save_and_a_savestate(harness):
     state = _states_dir(harness) / "rom-41 (U).state.auto"
     state.write_bytes(b"snapshot")
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert result["success"] is True
     assert (_saves_dir(harness) / "rom-41 (USA).srm").read_bytes() == b"battery"
@@ -320,7 +320,7 @@ async def test_another_game_s_save_stays_where_it_is(harness):
     stranger = _saves_dir(harness) / "some other game (U).srm"
     stranger.write_bytes(b"not mine")
 
-    await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert stranger.read_bytes() == b"not mine"
 
@@ -330,7 +330,7 @@ async def test_an_adopted_candidate_is_launchable_like_a_downloaded_one(harness)
     _stage(harness)
     candidate = _place_candidate(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert result["app_id"] == _ROM_ID  # seed_rom binds shortcut_app_id to rom_id
     assert isinstance(result["launch_options"], str)
@@ -345,7 +345,7 @@ async def test_a_candidate_outside_this_game_s_platform_folder_is_refused(harnes
     intruder = elsewhere / _CANDIDATE
     intruder.write_bytes(b"different platform")
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(intruder), None)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(intruder), None)
 
     assert result["success"] is False
     assert isinstance(result["reason"], str)
@@ -354,7 +354,7 @@ async def test_a_candidate_outside_this_game_s_platform_folder_is_refused(harnes
     assert result["message"]
     assert "error" not in result
     assert intruder.read_bytes() == b"different platform"
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
 
 
 # ── the collision decision ───────────────────────────────────────────────
@@ -375,7 +375,7 @@ def _stage_collision(harness) -> tuple[Path, Path, Path]:
 async def test_a_taken_name_refuses_and_lists_every_collision(harness):
     candidate, _mine, theirs = _stage_collision(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert result["success"] is False
     assert result["reason"] == "rename_collisions"
@@ -390,17 +390,17 @@ async def test_an_unanswered_collision_leaves_the_filesystem_byte_identical(harn
     candidate, mine, theirs = _stage_collision(harness)
     before = {path: path.read_bytes() for path in (candidate, mine, theirs)}
 
-    await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), None)
+    await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), None)
 
     assert {path: path.read_bytes() for path in (candidate, mine, theirs)} == before
     assert not (_platform_dir(harness) / _CANONICAL).exists()
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
 
 
 async def test_overwrite_replaces_the_taken_name_and_completes_the_adoption(harness):
     candidate, mine, theirs = _stage_collision(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
 
     assert result["success"] is True
     assert theirs.read_bytes() == b"my progress"
@@ -416,7 +416,7 @@ async def test_overwrite_backs_the_replaced_save_up_rather_than_destroying_it(ha
     # savestate is synced nowhere at all.
     candidate, _mine, theirs = _stage_collision(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
 
     assert result["success"] is True
     backups = sorted((_saves_dir(harness) / ".romm-backup").iterdir())
@@ -435,7 +435,7 @@ async def test_a_replaced_savestate_is_backed_up_beside_the_states_root(harness)
     theirs = _states_dir(harness) / "rom-41 (USA).state"
     theirs.write_bytes(b"the other version's snapshot")
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
 
     assert result["success"] is True
     backups = sorted((_states_dir(harness) / ".romm-backup").iterdir())
@@ -453,7 +453,7 @@ async def test_a_folder_at_a_save_s_name_is_refused_before_anything_moves(harnes
     theirs.mkdir()
     (theirs / "not a save").write_bytes(b"someone's folder")
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
 
     assert result["success"] is False
     assert result["reason"] == "replace_failed"
@@ -473,7 +473,7 @@ async def test_a_dangling_symlink_at_a_save_s_name_is_refused_too(harness):
     theirs.unlink()
     theirs.symlink_to(_saves_dir(harness) / "gone.srm")
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "overwrite")
 
     assert result["success"] is False
     assert result["reason"] == "replace_failed"
@@ -487,7 +487,7 @@ async def test_a_dangling_symlink_at_a_save_s_name_is_refused_too(harness):
 async def test_keep_leaves_both_saves_and_still_adopts_the_rom(harness):
     candidate, mine, theirs = _stage_collision(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID, str(candidate), "keep")
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID, str(candidate), "keep")
 
     assert result["success"] is True
     # Nothing is lost — and the old-named save is now orphaned, which is what the
@@ -512,7 +512,7 @@ async def test_downloading_over_a_candidate_removes_it_and_carries_its_saves(har
     state = _states_dir(harness) / "rom-41 (U).state"
     state.write_bytes(b"snapshot")
 
-    result = await harness.plugin.start_download(_ROM_ID, True, str(candidate), None)
+    result = await harness.endpoints.start_download(_ROM_ID, True, str(candidate), None)
 
     assert result["success"] is True
     assert not candidate.exists()
@@ -525,7 +525,7 @@ async def test_none_of_these_downloads_without_deleting_anything(harness):
     _stage(harness)
     candidate = _place_candidate(harness)
 
-    result = await harness.plugin.start_download(_ROM_ID, True, None, None)
+    result = await harness.endpoints.start_download(_ROM_ID, True, None, None)
 
     assert result["success"] is True
     assert candidate.read_bytes() == b"my own dump"
@@ -540,7 +540,7 @@ async def test_a_taken_save_name_stops_the_download_before_anything_is_removed(h
     theirs = _saves_dir(harness) / "rom-41 (USA).srm"
     theirs.write_bytes(b"the other version's progress")
 
-    result = await harness.plugin.start_download(_ROM_ID, True, str(candidate), None)
+    result = await harness.endpoints.start_download(_ROM_ID, True, str(candidate), None)
 
     assert result["success"] is False
     assert result["reason"] == "rename_collisions"
@@ -558,7 +558,7 @@ async def test_the_collision_answer_completes_the_download(harness):
     theirs = _saves_dir(harness) / "rom-41 (USA).srm"
     theirs.write_bytes(b"the other version's progress")
 
-    result = await harness.plugin.start_download(_ROM_ID, True, str(candidate), "overwrite")
+    result = await harness.endpoints.start_download(_ROM_ID, True, str(candidate), "overwrite")
 
     assert result["success"] is True
     assert theirs.read_bytes() == b"my progress"
@@ -586,7 +586,7 @@ async def test_the_content_check_runs_against_the_candidate_not_the_empty_target
         ],
     )
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID, str(candidate))
+    result = await harness.endpoints.verify_existing_content(_ROM_ID, str(candidate))
 
     assert result["status"] == "match"
     assert result["differences"] == []
@@ -602,7 +602,7 @@ async def test_the_content_check_reports_a_candidate_that_is_a_different_dump(ha
         files=[{"file_name": _CANONICAL, "file_size_bytes": len(data), "md5_hash": "0" * 32}],
     )
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID, str(candidate))
+    result = await harness.endpoints.verify_existing_content(_ROM_ID, str(candidate))
 
     assert result["status"] == "mismatch"
     assert result["differences"] == [{"name": _CANONICAL, "detail": "contents differ from the server's copy"}]
@@ -627,7 +627,7 @@ async def test_a_symlink_is_never_offered_as_a_candidate(harness):
     _stage(harness)
     link = _place_link(harness)
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "unusable_namesake"
@@ -646,7 +646,7 @@ async def test_a_link_pointing_nowhere_is_reported_the_same_way(harness):
     link = _platform_dir(harness) / "rom-41 (U).gba"
     link.symlink_to(_platform_dir(harness) / "gone.gba")
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["reason"] == "unusable_namesake"
     assert result["existing"] == [{"name": link.name, "path": str(link), "kind": "link"}]
@@ -660,8 +660,8 @@ async def test_a_named_pipe_with_the_game_s_name_is_not_mentioned_at_all(harness
     harness.romm.download_payloads[f"rom:{_ROM_ID}:{_CANONICAL}"] = b"srv!"
     os.mkfifo(str(_platform_dir(harness) / "rom-41 (U).gba"))
 
-    detail = await harness.plugin.get_cached_game_detail(_ROM_ID)
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
     await _drain_download(harness)
 
     assert detail["adoption_candidate_present"] is False
@@ -675,7 +675,7 @@ async def test_downloading_anyway_leaves_the_link_alone(harness):
     harness.romm.download_payloads[f"rom:{_ROM_ID}:{_CANONICAL}"] = b"srv!"
     link = _place_link(harness)
 
-    result = await harness.plugin.start_download(_ROM_ID, True)
+    result = await harness.endpoints.start_download(_ROM_ID, True)
     await _drain_download(harness)
 
     assert result["success"] is True
@@ -690,8 +690,8 @@ async def test_the_page_and_the_click_search_see_the_same_link(harness):
     _stage(harness)
     _place_link(harness)
 
-    detail = await harness.plugin.get_cached_game_detail(_ROM_ID)
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert detail["adoption_candidate_present"] is True
     assert result["reason"] == "unusable_namesake"
@@ -710,7 +710,7 @@ async def test_a_link_at_the_target_path_is_not_adoptable(harness):
     link = _platform_dir(harness) / _CANONICAL
     link.symlink_to(real)
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "target_occupied"
@@ -727,7 +727,7 @@ async def test_a_link_pointing_nowhere_at_the_target_path_is_not_silently_destro
     link = _platform_dir(harness) / _CANONICAL
     link.symlink_to(_platform_dir(harness) / "gone.gba")
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
     await _drain_download(harness)
 
     assert result["success"] is False
@@ -745,8 +745,8 @@ async def test_a_named_pipe_at_the_target_path_is_never_offered_as_this_game(har
     pipe = _platform_dir(harness) / _CANONICAL
     os.mkfifo(str(pipe))
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
-    adopted = await harness.plugin.adopt_existing_rom(_ROM_ID, None, None)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
+    adopted = await harness.endpoints.adopt_existing_rom(_ROM_ID, None, None)
     await _drain_download(harness)
 
     assert result["success"] is False
@@ -755,7 +755,7 @@ async def test_a_named_pipe_at_the_target_path_is_never_offered_as_this_game(har
     assert result["adoptable"] is False
     assert adopted["success"] is False
     assert adopted["reason"] == "unexpected_content_kind"
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
     # And it is still a pipe: nothing wrote over it, and nothing removed it.
     assert stat.S_ISFIFO(os.lstat(str(pipe)).st_mode)
 
@@ -770,11 +770,11 @@ async def test_a_symlink_at_the_target_path_cannot_be_adopted_either(harness):
     link = _platform_dir(harness) / _CANONICAL
     link.symlink_to(real)
 
-    adopted = await harness.plugin.adopt_existing_rom(_ROM_ID, None, None)
+    adopted = await harness.endpoints.adopt_existing_rom(_ROM_ID, None, None)
 
     assert adopted["success"] is False
     assert adopted["reason"] == "unexpected_content_kind"
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
     assert link.is_symlink()
     assert real.read_bytes() == b"my own dump"
 
@@ -789,7 +789,7 @@ async def test_a_page_that_found_a_copy_never_ends_in_a_silent_download(harness)
     _stage(harness)
     harness.romm.download_payloads[f"rom:{_ROM_ID}:{_CANONICAL}"] = b"srv!"
 
-    result = await harness.plugin.start_download(_ROM_ID, False, None, None, True)
+    result = await harness.endpoints.start_download(_ROM_ID, False, None, None, True)
 
     assert result["success"] is False
     assert result["reason"] == "candidate_vanished"
@@ -805,7 +805,7 @@ async def test_answering_the_backstop_downloads(harness):
     _stage(harness)
     harness.romm.download_payloads[f"rom:{_ROM_ID}:{_CANONICAL}"] = b"srv!"
 
-    result = await harness.plugin.start_download(_ROM_ID, True, None, None, True)
+    result = await harness.endpoints.start_download(_ROM_ID, True, None, None, True)
     await _drain_download(harness)
 
     assert result["success"] is True
@@ -817,7 +817,7 @@ async def test_a_page_that_found_nothing_still_downloads_without_a_dialog(harnes
     _stage(harness)
     harness.romm.download_payloads[f"rom:{_ROM_ID}:{_CANONICAL}"] = b"srv!"
 
-    result = await harness.plugin.start_download(_ROM_ID, False, None, None, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False, None, None, False)
     await _drain_download(harness)
 
     assert result["success"] is True

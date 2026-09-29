@@ -1,4 +1,4 @@
-"""Contract tests for ``fetch_cover_base64`` over the real Plugin/bootstrap.
+"""Contract tests for ``fetch_cover_base64`` over the real Endpoints/bootstrap.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``fetchCoverBase64 = callable<[number], { base64: string | null }>`` — a single
@@ -22,7 +22,7 @@ async def test_fetch_cover_base64_downloads_and_returns_bytes(harness):
     harness.romm.roms[7] = {"id": 7, "path_cover_large": "/cover/7.png"}
     harness.romm.download_payloads["cover:/cover/7.png"] = b"PNGBYTES"
 
-    result = await harness.plugin.fetch_cover_base64(7)
+    result = await harness.endpoints.fetch_cover_base64(7)
     assert result == {"base64": base64.b64encode(b"PNGBYTES").decode("ascii")}
 
 
@@ -31,12 +31,12 @@ async def test_fetch_cover_base64_cache_hit_is_served_without_redownload(harness
     harness.romm.roms[7] = {"id": 7, "path_cover_large": "/cover/7.png"}
     harness.romm.download_payloads["cover:/cover/7.png"] = b"ORIGINAL"
 
-    first = await harness.plugin.fetch_cover_base64(7)
+    first = await harness.endpoints.fetch_cover_base64(7)
     assert base64.b64decode(first["base64"]) == b"ORIGINAL"
 
     # Change the server payload; a cache hit must NOT re-download it.
     harness.romm.download_payloads["cover:/cover/7.png"] = b"CHANGED"
-    second = await harness.plugin.fetch_cover_base64(7)
+    second = await harness.endpoints.fetch_cover_base64(7)
     assert base64.b64decode(second["base64"]) == b"ORIGINAL"
 
 
@@ -45,7 +45,7 @@ async def test_fetch_cover_base64_works_without_local_db_row(harness):
     harness.romm.roms[123] = {"id": 123, "path_cover_small": "/cover/small.png"}
     harness.romm.download_payloads["cover:/cover/small.png"] = b"SMALL"
 
-    result = await harness.plugin.fetch_cover_base64(123)
+    result = await harness.endpoints.fetch_cover_base64(123)
     assert base64.b64decode(result["base64"]) == b"SMALL"
 
 
@@ -53,7 +53,7 @@ async def test_fetch_cover_base64_server_unreachable_returns_null(harness):
     """A transport failure degrades silently to ``{"base64": None}``."""
     harness.romm.get_rom_side_effect = ConnectionError("down")
 
-    result = await harness.plugin.fetch_cover_base64(7)
+    result = await harness.endpoints.fetch_cover_base64(7)
     assert result == {"base64": None}
     assert "success" not in result and "reason" not in result
 
@@ -62,7 +62,7 @@ async def test_fetch_cover_base64_rom_404_returns_null_data_shape(harness):
     """Artwork remains a data query, not a ROM-liveness authority."""
     harness.romm.get_rom_side_effect = RommNotFoundError("HTTP 404: Not Found")
 
-    result = await harness.plugin.fetch_cover_base64(7)
+    result = await harness.endpoints.fetch_cover_base64(7)
 
     assert result == {"base64": None}
     assert "success" not in result and "reason" not in result
@@ -72,5 +72,5 @@ async def test_fetch_cover_base64_rom_without_cover_returns_null(harness):
     """A ROM with no cover URL returns ``{"base64": None}`` silently."""
     harness.romm.roms[7] = {"id": 7, "name": "No Cover"}
 
-    result = await harness.plugin.fetch_cover_base64(7)
+    result = await harness.endpoints.fetch_cover_base64(7)
     assert result == {"base64": None}

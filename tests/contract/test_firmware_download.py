@@ -38,7 +38,7 @@ async def test_downloads_the_named_file_and_records_it(harness):
     harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
     harness.romm.download_payloads["firmware:1:dc_boot.bin"] = b"bootbios"
 
-    result = await harness.plugin.download_platform_firmware_file("dc", "dc_boot.bin")
+    result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
 
     assert result["success"] is True
     assert result["downloaded"] == 1
@@ -56,8 +56,8 @@ async def test_a_second_press_finds_the_file_already_here(harness):
     harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
     harness.romm.download_payloads["firmware:1:dc_boot.bin"] = b"bootbios"
 
-    assert (await harness.plugin.download_platform_firmware_file("dc", "dc_boot.bin"))["downloaded"] == 1
-    result = await harness.plugin.download_platform_firmware_file("dc", "dc_boot.bin")
+    assert (await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin"))["downloaded"] == 1
+    result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
 
     assert result["success"] is True
     assert result["downloaded"] == 0
@@ -67,7 +67,7 @@ async def test_a_second_press_finds_the_file_already_here(harness):
 async def test_a_name_outside_the_platform_is_refused(harness):
     harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
 
-    result = await harness.plugin.download_platform_firmware_file("n64", "dc_boot.bin")
+    result = await harness.endpoints.download_platform_firmware_file("n64", "dc_boot.bin")
 
     assert result["success"] is False
     assert result["reason"] == "not_in_library"
@@ -81,7 +81,7 @@ async def test_an_unreachable_server_reports_its_own_reason(harness):
     harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
     harness.romm.download_firmware_side_effect = OSError("Connection reset")
 
-    result = await harness.plugin.download_platform_firmware_file("dc", "dc_boot.bin")
+    result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
 
     assert result["success"] is False
     assert result["reason"]

@@ -1,7 +1,7 @@
 """Contract tests for the post-upload confirm-download skip (#1458) and the
 dedup-to-non-head guard (#1482).
 
-Driven frontend-shaped through the real ``Plugin`` / ``bootstrap`` harness. A
+Driven frontend-shaped through the real ``Endpoints`` / ``bootstrap`` harness. A
 normal automatic upload leaves this device ``is_current`` via ``add_save``'s own
 DeviceSaveSync upsert, so the sync engine skips the redundant
 ``POST /saves/{id}/downloaded`` ack (#1458). When ``add_save``'s content-dedup
@@ -29,7 +29,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> str:
     """Write a real local save under the resolved saves dir; return its path."""
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -45,7 +45,7 @@ async def test_normal_upload_skips_confirm_download(harness):
     _write_local_save(harness, system="gba", content=b"first save", filename="game.srm")
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", system="gba"))
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
 
     assert result["success"] is True
     assert result["synced"] == 1
@@ -90,7 +90,7 @@ async def test_dedup_to_non_head_surfaces_conflict(harness):
 
     harness.romm.arm_add_save_dedup(400)  # the POST dedups to the OLDER, non-head save
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
 
     assert result["success"] is True
     # Not a false "synced" — the true divergence surfaced as a conflict on the head.

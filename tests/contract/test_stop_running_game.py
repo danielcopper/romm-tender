@@ -1,4 +1,4 @@
-"""Contract test for the ``stop_running_game`` callable over the real ``Plugin``.
+"""Contract test for the ``stop_running_game`` callable over the real ``Endpoints``.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``stopRunningGame = callable<[number], StopGameResult>`` — the rom id, passed
@@ -40,7 +40,7 @@ def _add_instance(harness, pids: list[int], launch_path: str) -> None:
 async def test_stop_running_game_with_nothing_running_returns_the_canonical_failure(harness):
     seed_install(harness, 42)
 
-    result = await harness.plugin.stop_running_game(42)
+    result = await harness.endpoints.stop_running_game(42)
 
     assert result == {
         "success": False,
@@ -58,7 +58,7 @@ async def test_stop_running_game_stops_only_the_instance_running_this_rom(harnes
     _add_instance(harness, [4201, 4202], _OTHER_GAME)
     _add_instance(harness, [4101, 4102], file_path)
 
-    result = await harness.plugin.stop_running_game(42)
+    result = await harness.endpoints.stop_running_game(42)
 
     assert result == {"success": True, "stopped": 2, "force_killed": 0}
     assert harness.game_process.stop_calls == [4101, 4102]
@@ -72,7 +72,7 @@ async def test_stop_running_game_refuses_when_no_instance_runs_this_rom(harness)
     seed_install(harness, 42, file_name="ours.gba")
     _add_instance(harness, [4201], _OTHER_GAME)
 
-    result = await harness.plugin.stop_running_game(42)
+    result = await harness.endpoints.stop_running_game(42)
 
     assert result == {
         "success": False,
@@ -94,7 +94,7 @@ async def test_stop_running_game_refuses_for_a_rom_with_no_install_row(harness):
     # the behaviour this callable's rom_id exists to prevent.
     _add_instance(harness, [4201], _OTHER_GAME)
 
-    result = await harness.plugin.stop_running_game(999)
+    result = await harness.endpoints.stop_running_game(999)
 
     assert result["success"] is False
     assert result["reason"] == "game_not_running"
@@ -106,7 +106,7 @@ async def test_stop_running_game_forces_a_process_that_ignores_the_request(harne
     _add_instance(harness, [4101], file_path)
     harness.game_process.survive_stop = {4101}
 
-    result = await harness.plugin.stop_running_game(42)
+    result = await harness.endpoints.stop_running_game(42)
 
     assert result == {"success": True, "stopped": 1, "force_killed": 1}
     # Exactly one stop request even though the process stayed alive throughout —
@@ -116,6 +116,6 @@ async def test_stop_running_game_forces_a_process_that_ignores_the_request(harne
 
 
 async def test_stop_running_game_looks_up_retrodecks_flatpak_app_id(harness):
-    await harness.plugin.stop_running_game(42)
+    await harness.endpoints.stop_running_game(42)
 
     assert harness.game_process.find_calls == [RETRODECK_APP_ID]

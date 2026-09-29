@@ -58,7 +58,7 @@ async def test_start_download_refuses_an_occupied_target_with_the_comparison(har
     _stage_detail(harness)
     path = _place_single_file(harness)
 
-    result = await harness.plugin.start_download(_ROM_ID, False)
+    result = await harness.endpoints.start_download(_ROM_ID, False)
 
     assert result["success"] is False
     assert result["reason"] == "target_occupied"
@@ -81,7 +81,7 @@ async def test_a_refused_download_leaves_the_file_byte_identical(harness):
     _stage_detail(harness)
     path = _place_single_file(harness)
 
-    await harness.plugin.start_download(_ROM_ID, False)
+    await harness.endpoints.start_download(_ROM_ID, False)
 
     assert path.read_bytes() == b"user's own dump"
 
@@ -94,12 +94,12 @@ async def test_adopt_records_an_install_the_read_surface_reports(harness):
     _stage_detail(harness)
     path = _place_single_file(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
     assert result["file_path"] == str(path)
     assert result["rom_dir"] is None
-    installed = harness.plugin.get_installed_rom(_ROM_ID)
+    installed = harness.endpoints.get_installed_rom(_ROM_ID)
     assert installed is not None
     assert installed["file_path"] == str(path)
     assert installed["system"] == "gba"
@@ -110,7 +110,7 @@ async def test_adopt_leaves_the_bytes_untouched(harness):
     _stage_detail(harness)
     path = _place_single_file(harness)
 
-    await harness.plugin.adopt_existing_rom(_ROM_ID)
+    await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert path.read_bytes() == b"user's own dump"
 
@@ -120,7 +120,7 @@ async def test_a_bound_adopt_carries_a_prune_lease_for_the_frontend_s_steam_writ
     _stage_detail(harness)
     _place_single_file(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["app_id"] == _ROM_ID  # seed_rom binds shortcut_app_id to rom_id
     assert isinstance(result["prune_lease_token"], str)
@@ -137,7 +137,7 @@ async def test_an_unbound_adopt_is_issued_no_prune_lease(harness):
     _stage_detail(harness)
     _place_single_file(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
     assert result["app_id"] is None
@@ -159,11 +159,11 @@ async def test_adopting_supersedes_the_group_s_other_installed_version(harness):
     _stage_detail(harness)
     _place_single_file(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
-    assert harness.plugin.get_installed_rom(_ROM_ID) is not None
-    assert harness.plugin.get_installed_rom(42) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is not None
+    assert harness.endpoints.get_installed_rom(42) is None
     assert not Path(sibling_path).exists()
 
 
@@ -181,10 +181,10 @@ async def test_adopting_leaves_a_sibling_bound_to_a_different_shortcut_alone(har
     _stage_detail(harness)
     _place_single_file(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is True
-    assert harness.plugin.get_installed_rom(42) is not None
+    assert harness.endpoints.get_installed_rom(42) is not None
     assert Path(sibling_path).read_bytes() == b"its own shortcut"
 
 
@@ -192,13 +192,13 @@ async def test_adopt_refuses_when_nothing_is_there(harness):
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage_detail(harness)
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is False
     assert result["reason"] == "nothing_to_adopt"
     assert isinstance(result["message"], str)
     assert result["message"]
-    assert harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.endpoints.get_installed_rom(_ROM_ID) is None
 
 
 async def test_adopt_surfaces_a_server_failure_in_the_canonical_shape(harness):
@@ -206,7 +206,7 @@ async def test_adopt_surfaces_a_server_failure_in_the_canonical_shape(harness):
     _place_single_file(harness)
     harness.romm.fail_on_next(OSError("no route to host"))
 
-    result = await harness.plugin.adopt_existing_rom(_ROM_ID)
+    result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
     assert result["success"] is False
     assert isinstance(result["reason"], str)
@@ -230,7 +230,7 @@ async def test_verify_reports_a_match_against_the_server_digest(harness):
         files=[{"file_name": "rom-41", "file_size_bytes": len(data), "md5_hash": _md5(data)}],
     )
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result == {"status": "match", "message": result["message"], "differences": []}
     assert result["message"]
@@ -246,7 +246,7 @@ async def test_verify_names_what_differed(harness):
         files=[{"file_name": "rom-41", "file_size_bytes": len(data), "md5_hash": "0" * 32}],
     )
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "mismatch"
     # One line per difference, and no digests in it: two 32-character hex
@@ -262,7 +262,7 @@ async def test_verify_reports_a_checksumless_server_as_its_own_outcome(harness):
     _place_single_file(harness, data=data)
     _stage_detail(harness, fs_size_bytes=len(data), files=[{"file_name": "rom-41", "file_size_bytes": len(data)}])
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "unverifiable"
     assert result["differences"] == []
@@ -273,7 +273,7 @@ async def test_verify_reports_a_server_failure_as_error(harness):
     _place_single_file(harness)
     harness.romm.fail_on_next(OSError("no route to host"))
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "error"
     assert isinstance(result["message"], str)
@@ -339,7 +339,7 @@ async def test_verify_matches_a_zipped_rom_the_plugin_itself_downloaded(harness)
     archive = _place_archive(harness, members)
     _stage_archived_detail(harness, archive, members)
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result == {"status": "match", "message": result["message"], "differences": []}
 
@@ -350,7 +350,7 @@ async def test_verify_reports_a_changed_byte_inside_an_archive(harness):
     archive = _place_archive(harness, {"rom-41.gba": b"cartridge bytez" * 64})
     _stage_archived_detail(harness, archive, {"rom-41.gba": b"cartridge bytes" * 64})
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "mismatch"
     assert result["differences"] == [{"name": "rom-41.zip", "detail": "contents differ from the server's copy"}]
@@ -364,7 +364,7 @@ async def test_verify_cannot_confirm_an_archive_described_only_as_a_whole(harnes
     archive = _place_archive(harness, members)
     _stage_archived_detail(harness, archive, members)
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "unverifiable"
     assert result["differences"] == []
@@ -376,7 +376,7 @@ async def test_verify_names_the_member_that_differs_when_the_server_lists_them(h
     archive = _place_archive(harness, {"rom-41.gba": b"cartridge bytez" * 64})
     _stage_archived_detail(harness, archive, {"rom-41.gba": b"cartridge bytes" * 64}, state_members=True)
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "mismatch"
     assert result["differences"] == [
@@ -389,7 +389,7 @@ async def test_verify_reports_a_multi_member_archive_that_lost_a_member(harness)
     archive = _place_archive(harness, {"disc1.bin": b"one" * 32})
     _stage_archived_detail(harness, archive, {"disc1.bin": b"one" * 32, "disc2.bin": b"two" * 32}, state_members=True)
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "mismatch"
     assert result["differences"] == [{"name": "rom-41.zip/disc2.bin", "detail": "missing from the archive"}]
@@ -426,7 +426,7 @@ async def test_verify_holds_a_directory_file_to_the_place_the_server_named(harne
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage_directory_rom(harness, data=b"nested payload", on_disk_subdir="inner")
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "match"
 
@@ -438,7 +438,7 @@ async def test_verify_reports_a_file_in_the_wrong_subdirectory_as_missing(harnes
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage_directory_rom(harness, data=b"nested payload", on_disk_subdir="elsewhere")
 
-    result = await harness.plugin.verify_existing_content(_ROM_ID)
+    result = await harness.endpoints.verify_existing_content(_ROM_ID)
 
     assert result["status"] == "mismatch"
     assert result["differences"] == [{"name": "inner/data.bin", "detail": "missing"}]

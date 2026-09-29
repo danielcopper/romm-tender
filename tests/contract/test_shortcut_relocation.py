@@ -48,7 +48,7 @@ def _launcher_home(harness) -> str:
 
 async def test_no_steam_directory_at_all_blocks_rather_than_reporting_nothing_to_do(harness):
     """Not being able to look is not a finished reading, and must not be stamped."""
-    result = await harness.plugin.get_shortcut_relocation()
+    result = await harness.endpoints.get_shortcut_relocation()
 
     assert result["status"] == "blocked"
     assert result["message"]
@@ -58,13 +58,13 @@ async def test_a_machine_with_no_shortcut_file_is_already_done(harness):
     """Steam writes the file only once a non-Steam shortcut exists."""
     (harness.tmp_path / "home" / ".local" / "share" / "Steam" / "userdata" / "123").mkdir(parents=True)
 
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
 
 
 async def test_a_shortcut_of_ours_away_from_the_home_is_named_for_rewriting(harness):
     _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
-    result = await harness.plugin.get_shortcut_relocation()
+    result = await harness.endpoints.get_shortcut_relocation()
 
     assert result == {
         "status": "outstanding",
@@ -80,7 +80,7 @@ async def test_a_foreign_shortcut_is_never_named(harness):
         [(1, _ELSEWHERE), (2, "/usr/bin/some-other-game")],
     )
 
-    result = await harness.plugin.get_shortcut_relocation()
+    result = await harness.endpoints.get_shortcut_relocation()
 
     assert result["app_ids"] == [1]
 
@@ -88,21 +88,21 @@ async def test_a_foreign_shortcut_is_never_named(harness):
 async def test_a_library_already_on_the_home_is_done(harness):
     _write_shortcuts(harness, [(1, _launcher_home(harness))])
 
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
 
 
 async def test_a_shortcut_on_the_superseded_ending_is_not_ours(harness):
     """One ending is the whole of ownership, so an earlier version's is foreign here."""
     _write_shortcuts(harness, [(1, _SUPERSEDED)])
 
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
 
 
 async def test_the_reported_exe_is_a_real_file_the_start_installed(harness):
     """It is the frontend's authority to repoint every shortcut, so it exists."""
     _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
-    result = await harness.plugin.get_shortcut_relocation()
+    result = await harness.endpoints.get_shortcut_relocation()
 
     assert os.path.isfile(result["exe"])
     assert os.access(result["exe"], os.X_OK)
@@ -117,20 +117,20 @@ async def test_a_completed_rewrite_is_stamped_on_the_following_reading(harness):
     the new paths and closes the question itself.
     """
     _write_shortcuts(harness, [(1, _ELSEWHERE)])
-    assert (await harness.plugin.get_shortcut_relocation())["status"] == "outstanding"
+    assert (await harness.endpoints.get_shortcut_relocation())["status"] == "outstanding"
 
     # The frontend has written, and Steam has since flushed its memory to disk.
     _write_shortcuts(harness, [(1, _launcher_home(harness))])
 
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
 
 
 async def test_a_reading_that_still_finds_them_stamps_nothing(harness):
     """A pass whose writes are not in the file yet leaves the question open."""
     _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
-    first = await harness.plugin.get_shortcut_relocation()
-    second = await harness.plugin.get_shortcut_relocation()
+    first = await harness.endpoints.get_shortcut_relocation()
+    second = await harness.endpoints.get_shortcut_relocation()
 
     assert first == second
     assert second["status"] == "outstanding"
@@ -140,8 +140,8 @@ async def test_a_reading_that_still_finds_them_stamps_nothing(harness):
 async def test_the_stamp_closes_the_question_for_every_later_start(harness):
     """Permanent by design: a shortcut that turns up later away from the home stays there."""
     _write_shortcuts(harness, [(1, _launcher_home(harness))])
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
 
     _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
-    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+    assert await harness.endpoints.get_shortcut_relocation() == {"status": "done"}
