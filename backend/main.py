@@ -1,4 +1,6 @@
 import asyncio
+import functools
+import logging
 import os
 import sys
 from dataclasses import asdict
@@ -14,9 +16,9 @@ _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import Application, build_application
 
-from domain.app_directories import resolve_directories
+from domain.app_directories import AppDirectories, resolve_directories
 from domain.identity import VERSION
-from domain.update_release import resolve_update_source
+from domain.update_release import UpdateSource, resolve_update_source
 from host import (
     LOCK_FILENAME,
     PORT_FILENAME,
@@ -862,6 +864,38 @@ class Endpoints:
         }
 
 
+async def build_backend(
+    *,
+    directories: AppDirectories,
+    update_source: UpdateSource,
+    user_home: str,
+    logger: logging.Logger,
+    status: HostStatus,
+    events: EventSink,
+) -> BackendBuild:
+    """Build the :class:`Application`, run its start-up repairs, and answer with what the host needs of it.
+
+    A start-up repair that fails is recorded on *status*, which is where
+    ``get_host_status`` reads it from.
+    """
+    app = build_application(
+        directories=directories,
+        update_source=update_source,
+        user_home=user_home,
+        logger=logger,
+        loop=asyncio.get_running_loop(),
+        emit=events.emit,
+    )
+    app.run_startup_repairs(status.record_failed_step)
+    logger.info("Tender backend loaded")
+    return BackendBuild(
+        dispatcher=CallDispatcher(Endpoints(app, status), logger),
+        server_identity=app.user_agent,
+        open_network=app.open_network,
+        shutdown=app.shutdown,
+    )
+
+
 def run() -> int:
     """Run the backend as a process of its own, until it is asked to stop.
 
@@ -884,24 +918,15 @@ def run() -> int:
     logger.info(f"host: code {directories.code_dir}, data {directories.data_dir}, cache {directories.cache_dir}")
     status = HostStatus()
     events = EventSink(logger)
-
-    async def build() -> BackendBuild:
-        app = build_application(
-            directories=directories,
-            update_source=update_source,
-            user_home=user_home,
-            logger=logger,
-            loop=asyncio.get_running_loop(),
-            emit=events.emit,
-        )
-        app.run_startup_repairs(status.record_failed_step)
-        logger.info("Tender backend loaded")
-        return BackendBuild(
-            dispatcher=CallDispatcher(Endpoints(app, status), logger),
-            server_identity=app.user_agent,
-            open_network=app.open_network,
-            shutdown=app.shutdown,
-        )
+    build = functools.partial(
+        build_backend,
+        directories=directories,
+        update_source=update_source,
+        user_home=user_home,
+        logger=logger,
+        status=status,
+        events=events,
+    )
 
     # Handed in, never searched for: a host that looked for its own build
     # output relative to ``__file__`` would be the only part of this backend
