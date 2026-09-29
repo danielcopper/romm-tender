@@ -263,15 +263,18 @@ class UpdateInstallService:
 
     async def _start_installer(self, version: str, installer: str, tarball_path: str) -> None:
         self._logger.info(
-            f"update: installer started for {version}; follow it with journalctl --user -u {INSTALLER_UNIT}"
+            f"update: starting the installer for {version}; follow it with journalctl --user -u {INSTALLER_UNIT}"
         )
-        why = await self._loop.run_in_executor(
-            None,
-            self._units.start,
-            INSTALLER_UNIT,
-            installer_command(installer, tarball_path),
-            self._installer_environment,
-        )
+        try:
+            why = await self._loop.run_in_executor(
+                None,
+                self._units.start,
+                INSTALLER_UNIT,
+                installer_command(installer, tarball_path),
+                self._installer_environment,
+            )
+        except Exception as e:
+            why = repr(e)
         if why is not None:
             self._logger.warning(f"update: the installer for {version} could not be started: {why}")
             raise _AttemptFailedError(InstallFailure.INSTALLER_NOT_STARTED)
@@ -280,12 +283,17 @@ class UpdateInstallService:
     async def _watch_installer(self, version: str) -> None:
         """Wait for the installer to stop this process; it ending first is the attempt failing.
 
-        A user manager that cannot be asked is not an answer, so the watch
-        goes on rather than calling the installer stopped.
+        A user manager that cannot be asked is not an answer, and neither is a
+        seam that raised, so the watch goes on rather than calling the
+        installer stopped and giving the rule back while it may still run.
         """
         while True:
             await self._sleeper.sleep(_WATCH_SECONDS)
-            active = await self._loop.run_in_executor(None, self._units.is_active, INSTALLER_UNIT)
+            try:
+                active = await self._loop.run_in_executor(None, self._units.is_active, INSTALLER_UNIT)
+            except Exception as e:
+                self._logger.debug(f"update: the installer's unit could not be asked about: {e!r}")
+                continue
             if active is False:
                 self._logger.warning(
                     f"update: the installer for {version} stopped without updating; "

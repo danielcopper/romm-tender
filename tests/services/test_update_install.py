@@ -594,6 +594,37 @@ class TestAFailedAttempt:
         assert frames[-1]["failure"] == "installer_stopped"
         assert rig.units.asked == [INSTALLER_UNIT, INSTALLER_UNIT]
 
+    async def test_a_unit_seam_that_raises_is_installer_not_started(self, rigs, tmp_path, monkeypatch):
+        rig = await _built(rigs, tmp_path)
+
+        def raising(*_args: object) -> str | None:
+            raise OSError("no user manager")
+
+        monkeypatch.setattr(rig.units, "start", raising)
+
+        assert (await self._failed(rig))["failure"] == "installer_not_started"
+        assert rig.service.is_update_in_progress() is False
+
+    async def test_a_state_seam_that_raises_is_not_the_installer_stopping(self, rigs, tmp_path, monkeypatch):
+        rig = await _built(rigs, tmp_path, sleeper=_ParkingSleeper(free=2))
+        asked: list[str] = []
+
+        def raising(unit: str) -> bool | None:
+            asked.append(unit)
+            raise OSError("bus gone")
+
+        monkeypatch.setattr(rig.units, "is_active", raising)
+
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+        for _ in range(100):
+            if len(asked) == 2:
+                break
+            await asyncio.sleep(0.01)
+
+        assert asked == [INSTALLER_UNIT, INSTALLER_UNIT]
+        assert rig.service.is_update_in_progress() is True
+
     @pytest.mark.parametrize(
         "setup",
         [
