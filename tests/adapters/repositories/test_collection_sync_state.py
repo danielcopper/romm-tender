@@ -80,21 +80,6 @@ class TestUpsert:
         assert loaded.member_rom_ids == (10, 11, 12, 13)
 
 
-class TestDelete:
-    def test_delete_removes_only_the_named_key(self, uow: SqliteUnitOfWork):
-        uow.collection_sync_state.save(_stamp("7", kind="standard"))
-        uow.collection_sync_state.save(_stamp("7", kind="smart"))
-
-        uow.collection_sync_state.delete("7", "standard")
-
-        assert uow.collection_sync_state.get("7", "standard") is None
-        assert uow.collection_sync_state.get("7", "smart") is not None
-
-    def test_delete_absent_key_is_noop(self, uow: SqliteUnitOfWork):
-        uow.collection_sync_state.delete("nope", "standard")  # no row → no error
-        assert uow.collection_sync_state.get("nope", "standard") is None
-
-
 class TestDeleteIntersecting:
     def test_deletes_every_stamp_holding_one_of_the_ids_whatever_its_kind(self, uow: SqliteUnitOfWork):
         uow.collection_sync_state.save(_stamp("7", kind="standard", member_rom_ids=(1, 2)))
@@ -115,6 +100,18 @@ class TestDeleteIntersecting:
 
         assert uow.collection_sync_state.get("7", "standard") is None
         assert uow.collection_sync_state.get("7", "smart") is not None
+
+    def test_an_id_no_stamp_holds_deletes_nothing(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", member_rom_ids=(1,)))
+
+        uow.collection_sync_state.delete_intersecting({99})
+
+        assert uow.collection_sync_state.get("7", "standard") is not None
+
+    def test_no_stamps_at_all_is_a_noop(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.delete_intersecting({1})
+
+        assert uow.collection_sync_state.has_any() is False
 
     def test_no_ids_delete_nothing(self, uow: SqliteUnitOfWork):
         uow.collection_sync_state.save(_stamp("7", member_rom_ids=(1,)))
@@ -153,14 +150,14 @@ class TestHasAny:
 
         assert uow.collection_sync_state.has_any() is True
 
-    def test_follows_delete_down_to_the_last_stamp(self, uow: SqliteUnitOfWork):
-        uow.collection_sync_state.save(_stamp("7", kind="standard"))
-        uow.collection_sync_state.save(_stamp("9", kind="smart"))
+    def test_follows_delete_intersecting_down_to_the_last_stamp(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7", kind="standard", member_rom_ids=(1,)))
+        uow.collection_sync_state.save(_stamp("9", kind="smart", member_rom_ids=(2,)))
 
-        uow.collection_sync_state.delete("7", "standard")
+        uow.collection_sync_state.delete_intersecting({1})
         assert uow.collection_sync_state.has_any() is True
 
-        uow.collection_sync_state.delete("9", "smart")
+        uow.collection_sync_state.delete_intersecting({2})
         assert uow.collection_sync_state.has_any() is False
 
     def test_false_after_clear(self, uow: SqliteUnitOfWork):

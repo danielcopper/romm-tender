@@ -462,12 +462,12 @@ class TestFakeCollectionSyncStateRepository:
         same id under two kinds is two stamps and the last delete empties it."""
         repo = FakeCollectionSyncStateRepository()
         assert repo.has_any() is False
-        repo.save(_collection_stamp("7", "standard"))
-        repo.save(_collection_stamp("7", "smart"))
+        repo.save(_collection_stamp("7", "standard", members=(1,)))
+        repo.save(_collection_stamp("7", "smart", members=(2,)))
         assert repo.has_any() is True
-        repo.delete("7", "standard")
+        repo.delete_intersecting({1})
         assert repo.has_any() is True
-        repo.delete("7", "smart")
+        repo.delete_intersecting({2})
         assert repo.has_any() is False
 
     def test_delete_intersecting_drops_only_the_stamps_holding_one_of_the_ids(self):

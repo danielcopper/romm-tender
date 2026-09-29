@@ -457,20 +457,17 @@ class CollectionSyncStateRepository(Protocol):
         """Upsert the completion stamp. (library/reporter.py final-chunk commit)"""
         ...
 
-    def delete(self, collection_id: str, collection_kind: str) -> None:
-        """Drop the collection's stamp so it full-fetches next run. A no-op when absent."""
-        ...
-
     def delete_intersecting(self, rom_ids: Collection[int]) -> None:
         """Drop every stamp whose ``member_rom_ids`` hold one of *rom_ids*, of either kind.
 
         A no-op for an empty *rom_ids* or when no stamp holds one. The ``roms``
         table records no collection membership, so the stored member sets are
-        the only way to find the stamps. Called in the write UoW that unbinds or
-        deletes those ROMs: the local destructive flows
+        the only way to find the stamps. Called in the write UoW that removes,
+        unbinds or deletes those ROMs: the local destructive flows
         (services/shortcut_removal.py), the end-of-run stale removal
         (library/reporter.py) and removed-game cleanup's row delete
-        (prune/registry.py).
+        (prune/registry.py). There is no single-stamp delete: one would let a
+        caller drop one stamp and leave another holding the same ROM.
         """
         ...
 
