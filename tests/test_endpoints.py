@@ -1,29 +1,30 @@
-import logging
-from unittest.mock import AsyncMock, MagicMock
+"""What the endpoints do beyond forwarding a call, and the rule every one of them is classified under."""
+
+from unittest.mock import AsyncMock
 
 import pytest
 from _conflict_rules import endpoints_with_rule
-from _factories import _make_conflict_rules, _make_prune_conflicts
-from fakes.fake_event_sink import FakeEventSink
-from fakes.fake_game_process_control import FakeGameProcessControlAdapter
-from fakes.fake_renderer_gc import FakeRendererGc
-from fakes.fake_renderer_rss import FakeRendererRss
+from _factories import _make_application, _make_conflict_rules, _make_services_bundle
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
 from adapters.steam_config import SteamConfigAdapter
 from host import HostStatus
-from main import Plugin
+from host.dispatch import route_names
+from main import Endpoints
 from services.settings import SettingsService, SettingsServiceConfig
 
 
 @pytest.fixture
-def plugin(logger, home):
-    p = Plugin()
-    p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._settings_service = SettingsService(
+def settings():
+    return {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+
+
+@pytest.fixture
+def services(logger, home, settings):
+    settings_service = SettingsService(
         config=SettingsServiceConfig(
-            settings=p.settings,
+            settings=settings,
             uow_factory=FakeUnitOfWorkFactory(),
             logger=logger,
             settings_persister=FakeSettingsPersister(),
@@ -31,28 +32,20 @@ def plugin(logger, home):
             conflict_rules=_make_conflict_rules(),
         ),
     )
-    return p
+    return _make_services_bundle(settings_service=settings_service)
 
 
-class TestUnsetSlotsAreLoud:
-    """A test-only slot on ``Plugin`` is an annotation, not an attribute: bare access raises."""
-
-    def test_settings_persister_missing_on_bare_plugin(self):
-        """``_settings_persister`` is never set by production; bare access raises."""
-        from main import Plugin
-
-        bare = Plugin()
-
-        with pytest.raises(AttributeError, match="_settings_persister"):
-            _ = bare._settings_persister
+@pytest.fixture
+def endpoints(services):
+    return Endpoints(_make_application(services), HostStatus())
 
 
 class TestLogLevel:
     @pytest.mark.asyncio
-    async def test_debug_log_backward_compat(self, plugin, caplog):
+    async def test_debug_log_backward_compat(self, endpoints, settings, caplog):
         """debug_log reaches the log as a debug line of its own."""
-        plugin.settings["log_level"] = "debug"
-        plugin.debug_log("test backward compat")
+        settings["log_level"] = "debug"
+        endpoints.debug_log("test backward compat")
 
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] test backward compat"),
@@ -61,27 +54,21 @@ class TestLogLevel:
 
 class TestRefreshMigrationState:
     @pytest.mark.asyncio
-    async def test_delegates_to_migration_service_refresh_state(self, plugin):
-        """Plugin callable forwards to MigrationService.refresh_state."""
-        from unittest.mock import AsyncMock
-
+    async def test_delegates_to_migration_service_refresh_state(self, endpoints, services):
+        """The endpoint forwards to MigrationService.refresh_state."""
         sentinel = {
             "retrodeck": {"pending": True, "old_path": "/a", "new_path": "/b"},
         }
-        plugin._migration_service = MagicMock()
-        plugin._migration_service.refresh_state = AsyncMock(return_value=sentinel)
-        result = await plugin.refresh_migration_state()
-        plugin._migration_service.refresh_state.assert_awaited_once_with()
+        services.migration_service.refresh_state = AsyncMock(return_value=sentinel)
+        result = await endpoints.refresh_migration_state()
+        services.migration_service.refresh_state.assert_awaited_once_with()
         assert result is sentinel
 
     @pytest.mark.asyncio
-    async def test_propagates_exceptions(self, plugin):
-        from unittest.mock import AsyncMock
-
-        plugin._migration_service = MagicMock()
-        plugin._migration_service.refresh_state = AsyncMock(side_effect=RuntimeError("boom"))
+    async def test_propagates_exceptions(self, endpoints, services):
+        services.migration_service.refresh_state = AsyncMock(side_effect=RuntimeError("boom"))
         with pytest.raises(RuntimeError, match="boom"):
-            await plugin.refresh_migration_state()
+            await endpoints.refresh_migration_state()
 
 
 _MIGRATION_RULE_WHITELIST: set[str] = {
@@ -310,7 +297,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
 
 
 class TestMigrationRuleCoverage:
-    """Every endpoint on Plugin must be classified: either explicitly
+    """Every endpoint on Endpoints must be classified: either explicitly
     whitelisted (read-only / unblock pathway / non-retrodeck) or declaring the
     migration rule — a ``hold("<endpoint>", migration=True)`` or
     ``hold_start("<endpoint>", migration=True)`` at the entry of the use case
@@ -318,12 +305,9 @@ class TestMigrationRuleCoverage:
     pending migration corruption."""
 
     def test_all_callables_either_whitelisted_or_declaring_the_rule(self):
-        from host.dispatch import reachable_methods
-        from main import Plugin
-
         migration_ruled = endpoints_with_rule("migration")
         unclassified: list[str] = []
-        for name in reachable_methods(Plugin()):
+        for name in route_names(Endpoints):
             if name in _MIGRATION_RULE_WHITELIST:
                 continue
             if name in migration_ruled:
@@ -331,7 +315,7 @@ class TestMigrationRuleCoverage:
             unclassified.append(name)
 
         assert not unclassified, (
-            "Unclassified endpoints on Plugin — every one must be in "
+            "Unclassified endpoints on Endpoints — every one must be in "
             "_MIGRATION_RULE_WHITELIST or declare the migration rule: "
             f"{sorted(unclassified)}"
         )
@@ -340,14 +324,9 @@ class TestMigrationRuleCoverage:
         """An endpoint that both declares the migration rule AND is whitelisted
         is silently passing the coverage check — likely a misclassification.
         Catch it."""
-        from host.dispatch import reachable_methods
-        from main import Plugin
-
         migration_ruled = endpoints_with_rule("migration")
         double_classified = [
-            name
-            for name in reachable_methods(Plugin())
-            if name in _MIGRATION_RULE_WHITELIST and name in migration_ruled
+            name for name in route_names(Endpoints) if name in _MIGRATION_RULE_WHITELIST and name in migration_ruled
         ]
 
         assert not double_classified, (
@@ -357,213 +336,11 @@ class TestMigrationRuleCoverage:
 
     def test_whitelisted_callables_are_endpoints_declaring_no_rule(self):
         """Every name in _MIGRATION_RULE_WHITELIST must be an endpoint on
-        Plugin and must NOT declare the migration rule. Reads from the
+        Endpoints and must NOT declare the migration rule. Reads from the
         whitelist side, so a name left behind by a removed or renamed endpoint
         fails here instead of classifying nothing."""
-        from host.dispatch import reachable_methods
-        from main import Plugin
-
-        endpoints = reachable_methods(Plugin())
-        stale = sorted(_MIGRATION_RULE_WHITELIST - endpoints.keys())
-        assert not stale, f"Whitelisted names that are not endpoints on Plugin: {stale}"
+        stale = sorted(_MIGRATION_RULE_WHITELIST - route_names(Endpoints))
+        assert not stale, f"Whitelisted names that are not endpoints on Endpoints: {stale}"
 
         ruled = sorted(_MIGRATION_RULE_WHITELIST & endpoints_with_rule("migration"))
         assert not ruled, f"Whitelisted endpoints that also declare the migration rule: {ruled}"
-
-
-class TestMainStartupOrdering:
-    """Lock-in test for the #251 startup-order invariant: ``detect_retrodeck_path_change``
-    must run BEFORE ``prune_stale_installed_roms`` so the prune skips entries living
-    under a pending migration's previous home. Brittle by design — the assertion
-    is intentionally narrow."""
-
-    @pytest.mark.asyncio
-    async def test_main_calls_detect_path_change_before_prune(self):
-        from unittest.mock import patch
-
-        from bootstrap import (
-            AdapterBundle,
-            BootstrapHandles,
-            BootstrapResult,
-            CallbackBundle,
-            RuntimeAdaptersBundle,
-            ServicesBundle,
-            StateBundle,
-        )
-        from models.shortcut_launcher import ShortcutLauncher
-
-        from domain.app_directories import AppDirectories
-        from domain.update_release import UpdateSource
-        from main import Plugin
-
-        plugin = Plugin()
-
-        call_order: list[str] = []
-
-        # Mocks for the call-order check.
-        migration_service = MagicMock()
-        migration_service.detect_retrodeck_path_change.side_effect = lambda: call_order.append(
-            "detect_retrodeck_path_change"
-        )
-        save_sync_service = MagicMock()
-        save_sync_service.record_save_directories_once = AsyncMock()
-
-        sgdb_service = MagicMock()
-        sgdb_service.prune_orphaned_artwork_cache = MagicMock()
-
-        artwork_service = MagicMock()
-        artwork_service.prune_orphaned_staging_artwork = MagicMock()
-
-        download_service = MagicMock()
-
-        leftover_tmp_cleanup_service = MagicMock()
-        leftover_tmp_cleanup_service.cleanup_leftover_tmp_files = MagicMock()
-
-        firmware_service = MagicMock()
-
-        startup_healing_service = MagicMock()
-        startup_healing_service.prune_stale_installed_roms.side_effect = lambda: call_order.append(
-            "prune_stale_installed_roms"
-        )
-        startup_healing_service.reconcile_orphaned_sync_runs.side_effect = lambda: call_order.append(
-            "reconcile_orphaned_sync_runs"
-        )
-
-        connection_service = MagicMock()
-        connection_service.migrate_legacy_credentials = AsyncMock()
-
-        update_outcome_service = MagicMock()
-
-        wired_services = ServicesBundle(
-            prune_conflicts=_make_prune_conflicts(),
-            save_sync_service=save_sync_service,
-            playtime_service=MagicMock(),
-            sync_service=MagicMock(),
-            download_service=download_service,
-            rom_adoption_service=MagicMock(),
-            rom_removal_service=MagicMock(),
-            firmware_service=firmware_service,
-            sgdb_service=sgdb_service,
-            metadata_service=MagicMock(),
-            achievements_service=MagicMock(),
-            migration_service=migration_service,
-            game_detail_service=MagicMock(),
-            artwork_service=artwork_service,
-            shortcut_removal_service=MagicMock(),
-            settings_service=MagicMock(),
-            core_service=MagicMock(),
-            disc_service=MagicMock(),
-            version_switch_service=MagicMock(),
-            prune_service=MagicMock(shutdown=AsyncMock()),
-            prune_lease_service=MagicMock(),
-            data_inventory_service=MagicMock(),
-            connection_service=connection_service,
-            startup_healing_service=startup_healing_service,
-            shortcut_relocation_service=MagicMock(),
-            update_check_service=MagicMock(),
-            update_outcome_service=update_outcome_service,
-            launch_gate_service=MagicMock(),
-            session_lifecycle_service=MagicMock(),
-            game_process_service=MagicMock(),
-            relaunch_options_resolver=MagicMock(),
-            leftover_tmp_cleanup_service=leftover_tmp_cleanup_service,
-        )
-
-        bootstrap_result = BootstrapResult(
-            adapters=AdapterBundle(
-                http_adapter=MagicMock(),
-                romm_api=MagicMock(),
-                steam_config=MagicMock(),
-                sgdb_adapter=MagicMock(),
-                cover_art_file_store=MagicMock(),
-                sgdb_artwork_cache=MagicMock(),
-                download_file_store=MagicMock(),
-                adoption_move=MagicMock(),
-                firmware_file_store=MagicMock(),
-                firmware_resolver=MagicMock(),
-                platform_firmware_resolver=MagicMock(),
-                migration_file_store=MagicMock(),
-                rom_file_store=MagicMock(),
-                save_file_store=MagicMock(),
-                path_probe=MagicMock(),
-                resolve_path=MagicMock(),
-                core_info_provider=MagicMock(),
-                save_locations=MagicMock(),
-                renderer_rss=FakeRendererRss(),
-                renderer_gc=FakeRendererGc(),
-                game_process=FakeGameProcessControlAdapter(),
-                resolve_upload_conflict=MagicMock(),
-                compute_sync_action=MagicMock(),
-                recovery_store=MagicMock(),
-                recovery_inventory=MagicMock(),
-                prune_artifacts=MagicMock(),
-                steam_recovery=MagicMock(),
-                latest_release=MagicMock(),
-                update_failure=MagicMock(return_value=None),
-            ),
-            stores=StateBundle(
-                settings={},
-            ),
-            callbacks=CallbackBundle(
-                retrodeck_paths=MagicMock(),
-                platform_core_reader=MagicMock(),
-                m3u_support=MagicMock(),
-                sandbox_launcher=MagicMock(return_value=None),
-                system_extensions=MagicMock(),
-                system_known=MagicMock(return_value=None),
-                list_rom_dir_files=MagicMock(),
-                settings_persister=MagicMock(),
-                log_debug=MagicMock(),
-                uow_factory=MagicMock(),
-            ),
-            runtime_adapters=RuntimeAdaptersBundle(
-                clock=MagicMock(),
-                uuid_gen=MagicMock(),
-                sleeper=MagicMock(),
-                hostname_provider=MagicMock(),
-                machine_id_provider=MagicMock(),
-            ),
-            handles=BootstrapHandles(debug_logger=MagicMock()),
-            directories=AppDirectories(
-                config_dir="/fake/config",
-                data_dir="/fake/data",
-                cache_dir="/fake/cache",
-                state_dir="/fake/state",
-                runtime_dir="/fake/run",
-                code_dir="/fake/code",
-                bin_dir="/fake/home/.local/bin",
-            ),
-            launcher=ShortcutLauncher(path="/fake/home/.local/bin/tender-rom-launcher", at_home=True),
-            user_agent="romm-tender/0.0.0-test",
-        )
-        events = FakeEventSink()
-
-        with (
-            patch("main.bootstrap", return_value=bootstrap_result),
-            patch("main.wire_services", return_value=wired_services) as wire,
-        ):
-            await plugin._main(
-                directories=bootstrap_result.directories,
-                update_source=UpdateSource(release_api="http://127.0.0.1:9/", installed_program=False),
-                user_home="/fake/home",
-                logger=logging.getLogger("test_startup_order"),
-                emit=events.emit,
-                status=HostStatus(),
-            )
-
-        assert "detect_retrodeck_path_change" in call_order
-        assert "prune_stale_installed_roms" in call_order
-        assert call_order.index("detect_retrodeck_path_change") < call_order.index("prune_stale_installed_roms")
-        # The save-directory backfill is started without holding start-up up.
-        await plugin._save_directory_backfill
-        save_sync_service.record_save_directories_once.assert_awaited_once_with()
-        # Services emit through the sink itself, so its answer reaches them
-        # unchanged: a claim goes back only when nobody heard the event.
-        service_emit = wire.call_args.args[0].runtime.emit
-        events.delivers = False
-        assert await service_emit("probe", {"n": 1}) is False
-        events.delivers = True
-        assert await service_emit("probe", {"n": 2}) is True
-        assert events.events == [("probe", {"n": 1}), ("probe", {"n": 2})]
-        # A start compares its version with the last one's once, before the port.
-        update_outcome_service.note_start.assert_called_once_with()

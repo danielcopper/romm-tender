@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from host.dispatch import CallDispatcher, reachable_methods
+from host.dispatch import CallDispatcher, route_names
 from host.protocol import (
     REASON_BACKEND_EXCEPTION,
     REASON_METHOD_UNKNOWN,
@@ -26,7 +26,7 @@ from host.protocol import (
     TYPE_REPLY,
 )
 from host.route import route
-from tests.host.conftest import FakePlugin
+from tests.host.conftest import FakeEndpoints
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GATE_PATH = _REPO_ROOT / "scripts" / "check_callable_manifest.py"
@@ -48,17 +48,20 @@ def _load_gate():
 
 @pytest.fixture
 def dispatcher():
-    return CallDispatcher(FakePlugin(), LOGGER)
+    return CallDispatcher(FakeEndpoints(), LOGGER)
 
 
 class TestTheReachableSurface:
     def test_the_dispatcher_reaches_exactly_what_the_gate_derives(self):
         """Two different readings of one surface, held to each other."""
-        from main import Plugin
+        from main import Endpoints
 
         gate = _load_gate()
 
-        assert set(reachable_methods(Plugin())) == set(gate.parse_backend_callables(_MAIN_PY))
+        assert route_names(Endpoints) == set(gate.parse_backend_callables(_MAIN_PY))
+
+    def test_the_names_are_read_off_the_class_the_dispatcher_reaches(self, dispatcher):
+        assert route_names(FakeEndpoints) == dispatcher.method_names
 
     def test_a_marked_coroutine_method_is_reachable(self, dispatcher):
         assert "echo" in dispatcher.method_names
@@ -78,17 +81,17 @@ class TestTheReachableSurface:
 
     def test_an_instance_attribute_holding_a_marked_function_is_not(self):
         """Reachability is a property of the class, never of what a test poked in."""
-        plugin = FakePlugin()
+        endpoints = FakeEndpoints()
 
         @route
         async def smuggled() -> None: ...
 
-        plugin.smuggled = smuggled  # type: ignore[attr-defined]
+        endpoints.smuggled = smuggled  # type: ignore[attr-defined]
 
-        assert "smuggled" not in CallDispatcher(plugin, LOGGER).method_names
+        assert "smuggled" not in CallDispatcher(endpoints, LOGGER).method_names
 
     def test_inherited_endpoints_are_reachable(self):
-        class Extended(FakePlugin):
+        class Extended(FakeEndpoints):
             @route
             async def extra(self) -> str:
                 return "extra"
@@ -99,7 +102,7 @@ class TestTheReachableSurface:
     def test_an_unmarked_override_of_a_marked_method_is_not(self):
         """The most-derived definition decides, as it does for the call itself."""
 
-        class Overriding(FakePlugin):
+        class Overriding(FakeEndpoints):
             async def echo(self, value: str) -> dict[str, str]:
                 return {"echo": value}
 
@@ -123,7 +126,7 @@ class TestDispatch:
     async def test_a_raising_synchronous_endpoint_answers_with_a_traceback(self):
         """The call itself sits inside the exception boundary, not only the await."""
 
-        class Raising(FakePlugin):
+        class Raising(FakeEndpoints):
             @route
             def breaks(self) -> None:
                 raise ValueError("the synchronous backend broke")
@@ -174,26 +177,26 @@ class TestDispatch:
 
 class TestThePayloadCap:
     async def test_an_answer_at_the_cap_is_sent(self):
-        dispatcher = CallDispatcher(FakePlugin(), LOGGER, payload_limit=200)
+        dispatcher = CallDispatcher(FakeEndpoints(), LOGGER, payload_limit=200)
         answer = json.loads(await dispatcher.dispatch(1, "blob", [100]))
 
         assert answer["type"] == TYPE_REPLY
 
     async def test_an_answer_over_the_cap_is_refused(self):
-        dispatcher = CallDispatcher(FakePlugin(), LOGGER, payload_limit=50)
+        dispatcher = CallDispatcher(FakeEndpoints(), LOGGER, payload_limit=50)
         answer = json.loads(await dispatcher.dispatch(1, "blob", [100]))
 
         assert answer["reason"] == REASON_PAYLOAD_TOO_LARGE
 
     async def test_the_refusal_names_the_size_and_the_limit(self):
-        dispatcher = CallDispatcher(FakePlugin(), LOGGER, payload_limit=50)
+        dispatcher = CallDispatcher(FakeEndpoints(), LOGGER, payload_limit=50)
         answer = json.loads(await dispatcher.dispatch(1, "blob", [100]))
 
         assert "50" in answer["message"]
 
     async def test_the_cap_is_judged_on_encoded_bytes(self):
         """A character can encode to more than one byte; the socket carries bytes."""
-        dispatcher = CallDispatcher(FakePlugin(), LOGGER, payload_limit=40)
+        dispatcher = CallDispatcher(FakeEndpoints(), LOGGER, payload_limit=40)
 
         assert json.loads(await dispatcher.dispatch(1, "echo", ["ä" * 20]))["reason"] == REASON_PAYLOAD_TOO_LARGE
 

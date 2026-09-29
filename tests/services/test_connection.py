@@ -1498,7 +1498,7 @@ class TestMigrateLegacyCredentials:
 
     def test_persist_failure_is_swallowed(self, event_loop, romm_api, logger, settings_persister, caplog):
         # A disk-write failure during the credential migration must not propagate
-        # out of the start-up step that runs it (``Plugin._open_network``); the
+        # out of the start-up step that runs it (``Application.open_network``); the
         # mint succeeds but the persist raises.
         settings = {"romm_user": "alice", "romm_pass": "secret"}
         settings_persister.save_settings.side_effect = OSError("disk full")

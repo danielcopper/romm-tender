@@ -23,7 +23,7 @@ from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PA
 from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
-from tests.host.conftest import FakePlugin, close_listener, free_port
+from tests.host.conftest import FakeEndpoints, close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
 from tests.host.ws_client import http_get
 
@@ -37,7 +37,7 @@ class Recorder:
         self.port_file = port_file
         self.lock_path = lock_path
         self.steps: list[str] = []
-        self.port_at_after_bind: int | None = None
+        self.port_at_open_network: int | None = None
         self.lock_held_at_build: bool | None = None
         self.shutdown_ran = asyncio.Event()
 
@@ -47,13 +47,15 @@ class Recorder:
         self.lock_held_at_build = not contender.acquire()
         contender.release()
         return BackendBuild(
-            dispatcher=CallDispatcher(FakePlugin(), LOGGER),
+            dispatcher=CallDispatcher(FakeEndpoints(), LOGGER),
             server_identity="romm-tender/0.0.0-test",
+            open_network=self.open_network,
+            shutdown=self.shutdown,
         )
 
-    async def after_bind(self) -> None:
-        self.steps.append("after_bind")
-        self.port_at_after_bind = self.port_file.read()
+    async def open_network(self) -> None:
+        self.steps.append("open_network")
+        self.port_at_open_network = self.port_file.read()
         os.kill(os.getpid(), signal.SIGTERM)
 
     async def shutdown(self) -> None:
@@ -77,8 +79,6 @@ async def _run(tmp_path, recorder: Recorder, status: HostStatus, port: int, inje
     await run_backend(
         injection=injection,
         build=recorder.build,
-        after_bind=recorder.after_bind,
-        shutdown=recorder.shutdown,
         events=EventSink(LOGGER),
         status=status,
         static_root=str(static_root),
@@ -99,7 +99,7 @@ class TestTheStartUpOrder:
     async def test_every_step_runs_once_and_in_order(self, tmp_path, recorder, default_sigterm):
         await _run(tmp_path, recorder, HostStatus(), free_port())
 
-        assert recorder.steps == ["build", "after_bind", "shutdown"]
+        assert recorder.steps == ["build", "open_network", "shutdown"]
 
     async def test_the_lock_is_held_before_anything_is_built(self, tmp_path, recorder, default_sigterm):
         """Two backends would both migrate the schema and both run the repairs."""
@@ -113,7 +113,7 @@ class TestTheStartUpOrder:
 
         await _run(tmp_path, recorder, status, free_port())
 
-        assert recorder.port_at_after_bind == status.port
+        assert recorder.port_at_open_network == status.port
 
     async def test_the_network_touching_step_runs_after_the_port_is_announced(
         self, tmp_path, recorder, default_sigterm
@@ -121,7 +121,7 @@ class TestTheStartUpOrder:
         """An unreachable RomM must not hold readiness hostage."""
         await _run(tmp_path, recorder, HostStatus(), free_port())
 
-        assert recorder.port_at_after_bind is not None
+        assert recorder.port_at_open_network is not None
 
     async def test_the_server_answers_while_it_runs(self, tmp_path, recorder, default_sigterm):
         status = HostStatus()
@@ -167,6 +167,44 @@ class TestShutdown:
         recorder.shutdown = broken_shutdown  # type: ignore[method-assign]
 
         await _run(tmp_path, recorder, HostStatus(), free_port())
+
+        successor = SingleInstanceLock(recorder.lock_path, retry_seconds=0.0)
+        try:
+            assert successor.acquire() is True
+        finally:
+            successor.release()
+
+
+class TestABuildThatFails:
+    """Nothing was built, so there is nothing to open and nothing to shut down."""
+
+    @staticmethod
+    def _break(recorder: Recorder) -> None:
+        async def broken_build() -> BackendBuild:
+            recorder.steps.append("build")
+            raise RuntimeError("the schema migration broke")
+
+        recorder.build = broken_build  # type: ignore[method-assign]
+
+    async def test_the_error_surfaces(self, tmp_path, recorder):
+        self._break(recorder)
+
+        with pytest.raises(RuntimeError, match="the schema migration broke"):
+            await _run(tmp_path, recorder, HostStatus(), free_port())
+
+    async def test_nothing_is_shut_down(self, tmp_path, recorder):
+        self._break(recorder)
+
+        with pytest.raises(RuntimeError):
+            await _run(tmp_path, recorder, HostStatus(), free_port())
+
+        assert recorder.steps == ["build"]
+
+    async def test_the_lock_is_let_go(self, tmp_path, recorder):
+        self._break(recorder)
+
+        with pytest.raises(RuntimeError):
+            await _run(tmp_path, recorder, HostStatus(), free_port())
 
         successor = SingleInstanceLock(recorder.lock_path, retry_seconds=0.0)
         try:
@@ -251,14 +289,14 @@ class TestLoadingThePanelIntoSteam:
         for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
             (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
 
-        async def after_bind() -> None:
-            recorder.steps.append("after_bind")
+        async def open_network() -> None:
+            recorder.steps.append("open_network")
             async with asyncio.timeout(10):
                 while not page.bootstraps:
                     await asyncio.sleep(0.01)
             os.kill(os.getpid(), signal.SIGTERM)
 
-        recorder.after_bind = after_bind
+        recorder.open_network = open_network  # type: ignore[method-assign]
         try:
             await asyncio.wait_for(
                 _run(
@@ -312,7 +350,7 @@ class TestLoadingThePanelIntoSteam:
                 20,
             )
             assert page.evaluated == []
-            assert recorder.steps == ["build", "after_bind", "shutdown"]
+            assert recorder.steps == ["build", "open_network", "shutdown"]
         finally:
             await debugger.stop()
 

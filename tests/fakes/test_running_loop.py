@@ -48,7 +48,7 @@ async def test_it_refuses_from_a_worker_thread():
     """A worker thread is a second way to stand where no loop runs, and it refuses there too.
 
     This is the bad path that decided a design: ``tests/contract/_harness.py``
-    hands the real ``Plugin`` the loop OBJECT because its ``DownloadService``
+    hands the real services the loop OBJECT because their ``DownloadService``
     reaches ``call_soon_threadsafe`` from an executor thread — which is exactly
     the position below, and where the forwarder raises instead of answering. A
     service whose loop is touched off the loop thread needs the real object.

@@ -111,7 +111,7 @@ class TestCallAndReply:
         finally:
             await client.close()
 
-        assert running_host.plugin.calls == [("echo", ({"nested": [1, 2]},))]
+        assert running_host.endpoints.calls == [("echo", ({"nested": [1, 2]},))]
 
     async def test_a_call_with_no_arguments_is_answered(self, running_host):
         client = await WsTestClient.connect(running_host.port, running_host.token)
@@ -476,12 +476,12 @@ class TestConnectionLoss:
         """Its answer has nowhere to go, so it is not left running into a dead write."""
         client = await WsTestClient.connect(running_host.port, running_host.token)
         await client.send_json({"type": "call", "id": 1, "method": "never_returns", "args": []})
-        await asyncio.wait_for(running_host.plugin.entered.wait(), 5)
+        await asyncio.wait_for(running_host.endpoints.entered.wait(), 5)
 
         await client.close()
 
-        await asyncio.wait_for(running_host.plugin.cancelled.wait(), 5)
-        assert running_host.plugin.cancelled.is_set()
+        await asyncio.wait_for(running_host.endpoints.cancelled.wait(), 5)
+        assert running_host.endpoints.cancelled.is_set()
 
     async def test_a_panel_connecting_is_something_to_wait_for(self, running_host):
         waiting = asyncio.ensure_future(running_host.server.wait_connected())
