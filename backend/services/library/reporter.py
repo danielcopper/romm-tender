@@ -349,7 +349,8 @@ class SyncReporter:
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str] | None = None,
         stale_rom_ids: list[int] | None = None,
-        processed_platform_slugs: Collection[str] = frozenset(),
+        *,
+        processed_platform_slugs: Collection[str],
     ):
         """Unbind stale ROMs, rebuild Steam-collection maps, and emit ``sync_collections``.
 
@@ -365,16 +366,9 @@ class SyncReporter:
         ``processed_platform_slugs`` names the platform units this run
         processed, skipped and fetched alike. A stale unbind on any other
         platform — one whose sync is turned off, or one RomM no longer lists —
-        revokes that platform's skip and keeps its stamp. Where an enabled
-        collection keeps one of its games bound, that stamp would otherwise let
-        the platform skip once it is processed again, rebuilding it from its
-        bound rows alone, so the unbound games would never come back; removed-game
-        discovery still needs the stamp's fetch generation. A processed platform
-        keeps its skip, because every stale row there is one its stamp already
-        leaves out: a skip rebuilds every bound row, and a fetch stamps a
-        generation no stale row carries. The default names none, so every
-        platform a stale unbind lands on is revoked, which costs a full fetch and
-        never a missed game.
+        revokes that platform's skip; a processed platform keeps its skip. Why,
+        and why the stamp itself stays, is in
+        docs/architecture/backend-architecture.md, "Incremental skip".
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The

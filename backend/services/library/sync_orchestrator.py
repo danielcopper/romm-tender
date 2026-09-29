@@ -1202,8 +1202,8 @@ class SyncOrchestrator:
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
         platform_names: dict[str, str],
+        processed_platform_slugs: frozenset[str],
         cancelled: bool,
-        processed_platform_slugs: frozenset[str] = frozenset(),
     ) -> FinalizeOutcome:
         """Emit stale-removal + collection mappings; measure the run's memory delta.
 

@@ -1739,6 +1739,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
@@ -1766,6 +1767,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
         )
 
         collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
@@ -1790,6 +1792,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1812,6 +1815,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1838,6 +1842,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1859,6 +1864,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1885,6 +1891,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1910,6 +1917,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1938,6 +1946,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1966,6 +1975,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1994,6 +2004,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2015,6 +2026,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2042,6 +2054,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2069,6 +2082,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2099,6 +2113,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids=set(range(1, 8)),
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2121,6 +2136,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2145,6 +2161,7 @@ class TestFinalizePerUnitRun:
             },
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2166,6 +2183,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "Retro", "b": "retro"},
+            processed_platform_slugs={"a", "b"},
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2346,6 +2364,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids=set(),
             platform_names={},
+            processed_platform_slugs=set(),
         )
 
         assert library.sync._sync_state == SyncState.RUNNING
@@ -2364,6 +2383,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 3],
         )
 
@@ -2388,6 +2408,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
+            processed_platform_slugs={"n64", "snes"},
             stale_rom_ids=[2],
         )
 
@@ -2409,6 +2430,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 5, 99],  # 2 bound, 5 already unbound, 99 missing
         )
 
@@ -2434,6 +2456,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={},
+            processed_platform_slugs=set(),
         )
 
         with uow:
@@ -2555,6 +2578,7 @@ class TestFinalizePerUnitRun:
             pending_collection_memberships={},
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 3],
         )
 

@@ -4723,6 +4723,44 @@ class TestPlatformTurnedOffAndBackOn:
         assert (stamp.fetch_id, stamp.skip_revoked) == ("run-3", False)
 
     @pytest.mark.asyncio
+    async def test_a_platform_the_run_processed_keeps_its_skip_when_romm_drops_a_game(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        app_ids = {1: 5001, 2: 5002}
+
+        async def bind_what_romm_serves(unit, event):
+            event.set()
+            served = {rom_id: app_id for rom_id, app_id in app_ids.items() if rom_id in fake_romm_api.roms}
+            return {str(rom_id): app_id for rom_id, app_id in served.items()} if unit.slug == "n64" else {}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_romm_serves
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        await complete_a_run("run-1")
+
+        # RomM drops game 2; N64 stays on, so the run fetches it and the stale scan unbinds the row.
+        del fake_romm_api.roms[2]
+        fake_romm_api.platforms[0]["rom_count"] = 1
+        await complete_a_run("run-2")
+
+        with library.uow as uow:
+            assert uow.roms.get(2).shortcut_app_id is None
+            stamp = uow.platform_sync_state.get("n64")
+        assert stamp is not None
+        assert (stamp.fetch_id, stamp.skip_revoked) == ("run-2", False)
+
+    @pytest.mark.asyncio
     async def test_a_platform_romm_no_longer_lists_is_one_the_run_did_not_process(self, library, fake_romm_api):
         _use_fake_romm(library, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
@@ -5329,6 +5367,7 @@ class TestSessionBudgetGate:
             collection_memberships={},
             platform_rom_ids=set(),
             platform_names={},
+            processed_platform_slugs=frozenset(),
             cancelled=False,
         )
 
@@ -5349,6 +5388,7 @@ class TestSessionBudgetGate:
             collection_memberships={},
             platform_rom_ids=set(),
             platform_names={},
+            processed_platform_slugs=frozenset(),
             cancelled=False,
         )
 
@@ -5375,6 +5415,7 @@ class TestSessionBudgetGate:
             collection_memberships={},
             platform_rom_ids=set(),
             platform_names={},
+            processed_platform_slugs=frozenset(),
             cancelled=True,  # a stopped (paused) run
         )
 
