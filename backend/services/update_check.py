@@ -20,6 +20,7 @@ from domain.update_release import UpdateCheck, decode_update_check, encode_updat
 from domain.version import is_newer_version
 
 if TYPE_CHECKING:
+    import logging
     from typing import Any
 
     from domain.update_release import LatestRelease
@@ -66,8 +67,8 @@ class UpdateCheckServiceConfig:
     is the installed program, the clock the throttle is measured on, the
     unit-of-work factory the last-seen marker is stored through, the live
     settings dict plus its persister for the two user-intent keys, and the
-    runtime infrastructure — the sleeper the running check waits on, and the
-    emit it tells the panel through.
+    runtime infrastructure — the sleeper the running check waits on, the emit
+    it tells the panel through, and the logger a failed round is warned on.
     """
 
     latest_release: LatestReleaseFn
@@ -80,6 +81,7 @@ class UpdateCheckServiceConfig:
     loop: asyncio.AbstractEventLoop
     sleeper: Sleeper
     emit: EventEmitter
+    logger: logging.Logger
     log_debug: DebugLogger
 
 
@@ -97,6 +99,7 @@ class UpdateCheckService:
         self._loop = config.loop
         self._sleeper = config.sleeper
         self._emit = config.emit
+        self._logger = config.logger
         self._log_debug = config.log_debug
         # One check at a time, from reading the stored answer to recording the
         # new one: the panel-load read and a Check now can overlap, and the one
@@ -190,7 +193,7 @@ class UpdateCheckService:
                 await self._emit("update_notice", notice)
                 last = notice
             except Exception as e:
-                self._log_debug(f"[update] the running check failed: {e!r}")
+                self._logger.warning(f"update: the running release check failed: {e!r}")
 
     async def last_seen_release(self) -> LatestRelease | None:
         """The last available release a check stored, whatever the switch says; asks GitHub nothing."""

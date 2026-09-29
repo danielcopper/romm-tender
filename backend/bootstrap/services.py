@@ -704,6 +704,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             loop=cfg.runtime.loop,
             sleeper=cfg.runtime.sleeper,
             emit=cfg.runtime.emit,
+            logger=cfg.runtime.logger,
             log_debug=cfg.callbacks.log_debug,
         ),
     )

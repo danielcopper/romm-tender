@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import threading
 from typing import TYPE_CHECKING, Any
 
@@ -74,6 +75,7 @@ def _make(
             loop=running_loop(),
             sleeper=sleeper if sleeper is not None else FakeSleeper(),
             emit=(events if events is not None else FakeEventSink()).emit,
+            logger=logging.getLogger("test_update_check"),
             log_debug=lambda msg: sink.append(msg),
         ),
     )
@@ -590,6 +592,7 @@ class TestOverlappingChecks:
                 loop=running_loop(),
                 sleeper=FakeSleeper(),
                 emit=FakeEventSink().emit,
+                logger=logging.getLogger("test_update_check"),
                 log_debug=lambda msg: None,
             ),
         )
@@ -864,8 +867,7 @@ class TestTheRunningCheck:
 
         assert events.events == []
 
-    async def test_an_emit_that_raises_does_not_end_the_running_check_and_goes_out_again(self):
-        log: list[str] = []
+    async def test_an_emit_that_raises_does_not_end_the_running_check_and_goes_out_again(self, caplog):
         sleeper = _Rounds(3)
         pushed: list[str] = []
 
@@ -875,18 +877,18 @@ class TestTheRunningCheck:
                 raise ConnectionError("panel gone")
             return True
 
-        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, log=log)
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper)
         service._emit = emit
 
-        await _run_rounds(service, sleeper)
+        with caplog.at_level(logging.WARNING, logger="test_update_check"):
+            await _run_rounds(service, sleeper)
 
         assert pushed == ["0.35.0", "0.35.0"]
-        assert any("panel gone" in line for line in log)
+        assert "panel gone" in caplog.text
 
-    async def test_a_round_that_raises_is_logged_and_the_next_comes_as_usual(self, monkeypatch):
-        log: list[str] = []
+    async def test_a_round_that_raises_is_a_warning_and_the_next_comes_as_usual(self, monkeypatch, caplog):
         sleeper = _Rounds(2)
-        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, log=log)
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper)
         answers = iter([RuntimeError("database is locked")])
 
         async def flaky():
@@ -896,7 +898,9 @@ class TestTheRunningCheck:
 
         monkeypatch.setattr(service, "get_update_notice", flaky)
 
-        await _run_rounds(service, sleeper)
+        with caplog.at_level(logging.WARNING, logger="test_update_check"):
+            await _run_rounds(service, sleeper)
 
-        assert any("database is locked" in line for line in log)
+        warned = [r for r in caplog.records if r.name == "test_update_check" and r.levelno == logging.WARNING]
+        assert any("database is locked" in r.getMessage() for r in warned)
         assert len(sleeper.calls) == 3

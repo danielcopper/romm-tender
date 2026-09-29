@@ -41,6 +41,7 @@ _TOAST_BODY_OFFLINE = "Server offline — saves will sync next time"
 _TOAST_BODY_FAILED = "Failed to sync saves after exit"
 _TOAST_BODY_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 _TOAST_BODY_SYNC_BUSY = "Another save sync was still running — saves will sync next time"
+_TOAST_BODY_UPDATING = "Tender is installing an update — saves sync with the next sync that runs"
 
 # Reason slug the saves engine returns when RomM's per-device sync-disabled switch
 # stops the post-exit run (#1489). Mirrored here as a literal — a service must not
@@ -290,8 +291,8 @@ class SessionLifecycleService:
         except Exception as e:
             self._logger.warning(f"SessionLifecycle achievement sync failed for rom_id={rom_id}: {e}")
 
-    def _skipped_sync(self, rom_id: int, why: str) -> SessionFinalizeSyncResult:
-        """The failed-sync verdict of a post-exit sync that did not run, logged with *why*."""
+    def _skipped_sync(self, rom_id: int, why: str, toast: str) -> SessionFinalizeSyncResult:
+        """The failed-sync verdict of a post-exit sync that did not run, logged with *why* and toasted as *toast*."""
         self._logger.info(f"SessionLifecycle post-exit sync skipped for rom_id={rom_id}: {why}")
         return SessionFinalizeSyncResult(
             offline=False,
@@ -300,7 +301,7 @@ class SessionLifecycleService:
             uploaded=0,
             downloaded=0,
             conflicts=[],
-            failure_toast=_TOAST_BODY_FAILED,
+            failure_toast=toast,
             conflicts_toast=None,
         )
 
@@ -312,14 +313,15 @@ class SessionLifecycleService:
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While an update is being installed or a RetroDECK migration is pending
         the post-exit sync does not run, the log says which held it off, and the
-        verdict is the failed-sync one. The ``finalize_game_session`` use case
+        verdict is the failed-sync one — its toast saying an update is why,
+        where it is. The ``finalize_game_session`` use case
         checks neither rule, so this is the first check either meets on the way
         to that sync.
         """
         if self._update_in_progress():
-            return self._skipped_sync(rom_id, "an update is being installed")
+            return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
         if self._migration_reader.is_retrodeck_migration_pending():
-            return self._skipped_sync(rom_id, "a RetroDECK migration is pending")
+            return self._skipped_sync(rom_id, "a RetroDECK migration is pending", _TOAST_BODY_FAILED)
 
         try:
             result = await self._post_exit_sync.post_exit_sync(rom_id)
