@@ -27,8 +27,9 @@ games appear in the Steam Library with cover art, metadata, and organized into c
    number of shortcuts added and/or removed this run (e.g. "Sync complete — 42 added, 3 removed."), omitting a part that
    is zero. If nothing changed, it reads "Library up to date."
 6. If the sync fails instead, a toast says so and why (e.g. "Sync failed — Server unreachable — check your URL and
-   ensure RomM is running"), and the Sync page shows the reason under its start button until you press that button
-   again. A preview that cannot be worked out shows its reason in the same place, without a toast
+   ensure RomM is running"). If you are on the Sync page when it fails, the same sentence also shows under its start
+   button until you press that button again or leave the page. A preview that cannot be worked out shows its reason in
+   the same place, without a toast.
 
 ## The Sync page
 
@@ -384,10 +385,10 @@ If the collection list cannot be read, the pane shows what went wrong. Leave the
 
 If you have switched on any collection of a kind and RomM cannot list that kind, the sync stops with an error before it
 changes anything in Steam, rather than reading the kind as empty and removing the games only its collections brought in.
-Whether that happens while a preview is worked out or during the sync itself, the reason shows under the Sync page's
-start button, and a failed sync also raises a toast (see [Starting a Sync](#starting-a-sync)). A collection deleted in
-RomM is different: it is missing from a list RomM did give, so the sync removes its Steam collection, and the games only
-it brought in, as usual.
+A failed sync raises a toast saying why, and if you are on the Sync page, the reason also shows under its start button —
+as it does when a preview cannot be worked out (see [Starting a Sync](#starting-a-sync)). A collection deleted in RomM
+is different: it is missing from a list RomM did give, so the sync removes its Steam collection, and the games only it
+brought in, as usual.
 
 The **Show collection games in platform groups** setting — whether games pulled in via a collection also get added to
 their platform's Steam group — lives on the **Settings** page under **Steam Library**, alongside the preferred-region
