@@ -71,7 +71,8 @@ class WiringConfig:
     """Composition-root inputs for ``wire_services``.
 
     Four bundles carry the wiring; ``min_required_version`` sits at the
-    top level — it's plugin metadata, not a runtime seam, and only
+    top level — it is the oldest RomM release this program accepts
+    (``MIN_ROMM_VERSION``), a constant rather than a runtime seam, and only
     ConnectionService consumes it. ``directories`` sits beside it for the
     same reason: it is where this program's directories are, resolved
     from the environment by the entry point rather than derived. It is
