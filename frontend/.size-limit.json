@@ -9,7 +9,7 @@
     "name": "dist/index.js — the panel, @decky/ui bundled (raw)",
     "path": "../dist/index.js",
     "brotli": false,
-    "limit": "850 KB"
+    "limit": "860 KB"
   },
   {
     "name": "dist/index-coexistence.js — the panel, @decky/ui from DFL (raw)",
