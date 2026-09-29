@@ -5488,7 +5488,7 @@ class TestRunProgressCounters:
         assert box.run_done_items == 1
 
     @pytest.mark.asyncio
-    async def test_status_callable_surfaces_the_run_progress(self, library, fake_romm_api):
+    async def test_the_session_budget_status_surfaces_the_run_progress(self, library, fake_romm_api):
         # The pair rides the existing session-budget payload the QAM already polls.
         self._arm(library, fake_romm_api, run_id="run-status")
         _seed_platform(
@@ -5508,7 +5508,7 @@ class TestRunProgressCounters:
         assert result["run_total_items"] == 2
 
     @pytest.mark.asyncio
-    async def test_status_callable_reports_unknown_before_any_run(self, library):
+    async def test_the_session_budget_status_reports_unknown_before_any_run(self, library):
         # A fresh backend process has no counters: the pair is None, and the
         # banner drops the sentence rather than showing zeros.
         result = await library.sync.get_session_budget_status()
