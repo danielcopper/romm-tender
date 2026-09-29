@@ -340,10 +340,11 @@ directory move, a removed-game cleanup, a RetroDECK migration, or **Other Tender
 middle of, such as uninstalling games, removing shortcuts or switching a game's version. **Could not check whether a
 game is running** means Tender could not ask Steam, and it waits then too rather than assume nothing is running. An
 update reloads Steam's interface, and Tender reloads it at most twice in ten minutes; after two reloads the button waits
-until the time it names. The list updates by itself every few seconds, and the button comes back on its own once nothing
-is left on it. A RetroDECK migration that is only waiting for your answer does not hold the button back: the question is
-still there after the update. Paused game downloads do not hold it back either — a line under the button says how many
-there are, because the restart cancels them.
+until the time it names. **Could not check when Steam's interface may be reloaded** means Tender could not check that
+limit, and it waits then too. The list updates by itself every few seconds, and the button comes back on its own once
+nothing is left on it. A RetroDECK migration that is only waiting for your answer does not hold the button back: the
+question is still there after the update. Paused game downloads do not hold it back either — a line under the button
+says how many there are, because the restart cancels them.
 
 Once you press it, the button says **Installing…** and the steps are listed under it: **Downloading**, with how far it
 got, **Verifying** and **Starting the installer**. While it downloads and verifies, a line under the steps says

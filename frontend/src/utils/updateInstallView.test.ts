@@ -36,6 +36,7 @@ describe("waitReasonLine", () => {
     [{ reason: "removed_games_cleanup" }, "A removed-game cleanup"],
     [{ reason: "retrodeck_migration" }, "A RetroDECK migration"],
     [{ reason: "other_work" }, "Other Tender work"],
+    [{ reason: "interface_reload_limit_unknown" }, "Could not check when Steam's interface may be reloaded"],
   ])("words %j", (wait, line) => {
     expect(waitReasonLine(wait)).toBe(line);
   });

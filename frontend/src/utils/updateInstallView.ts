@@ -102,6 +102,7 @@ const PLAIN_WAIT_LINES: Record<PlainWaitReason, string> = {
   removed_games_cleanup: "A removed-game cleanup",
   retrodeck_migration: "A RetroDECK migration",
   other_work: "Other Tender work",
+  interface_reload_limit_unknown: "Could not check when Steam's interface may be reloaded",
 };
 
 /** Local wall-clock `HH:MM` of an epoch-seconds instant. */

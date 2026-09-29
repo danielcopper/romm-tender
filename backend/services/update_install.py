@@ -165,8 +165,8 @@ class UpdateInstallService:
         # The attempt a previous start's installer stopped without updating, as
         # this start found it; gone once dismissed or a new attempt starts.
         self._stopped: UpdateAttemptRecord | None = None
-        # Asks after the installer's unit until it ends, where it still ran
-        # when this start looked at the record.
+        # Judges the record an earlier start's attempt left, once the
+        # installer's unit has ended.
         self._judging: asyncio.Task[None] | None = None
         # Whether this attempt's record was written, so a failure this process
         # reports itself takes it away again.
@@ -192,41 +192,22 @@ class UpdateInstallService:
         stopped first, and a start on the same version looks like any other.
         Where the record says that is what happened, the attempt is reported
         as ``installer_stopped`` — logged at WARNING, offered again as Try
-        again, and kept for the notice on Main until it is dismissed, a new
-        attempt starts, or the running version changes. Any other record — an
-        update that went through, one the installer rolled back, a version
-        that moved since — is removed.
+        again, pushed to the panel as ``update_attempt_stopped``, and kept for
+        the notice on Main until it is dismissed, a new attempt starts, or the
+        running version changes. Any other record — an update that went
+        through, one the installer rolled back, a version that moved since —
+        is removed.
 
         The installer starts this program itself — the new version, the one it
         rolled back to, or the same one again after it gave up — and may still
         be running when this start asks. Only once its unit reads ended is the
         record judged: while it runs, or nobody can say whether it does, the
-        unit is asked again every watch interval, the judgement is pushed to
-        the panel as ``update_attempt_stopped`` when it finds a stopped
-        attempt, and a press in the meantime ends the question, since a new
-        attempt ends the record itself.
+        unit is asked again every watch interval, and a press in the meantime
+        ends the question, since a new attempt ends the record itself. All of
+        it runs in a task of its own, the record and the unit read off the
+        loop, so a user manager slow to answer holds up no other start step.
         """
-        record = self._attempts.read()
-        if record is None:
-            return
-        running = self._installer_running()
-        if running is False:
-            stopped = self._judge_io(record)
-            if stopped is not None:
-                self._take_stopped(stopped)
-            return
-        self._logger.info(
-            f"update: the installer for {record.attempted_version} "
-            f"{'still runs' if running else 'may still run'}; its record is judged once it has ended"
-        )
-        self._judging = self._loop.create_task(self._judge_once_the_installer_ended())
-
-    def _installer_running(self) -> bool | None:
-        """Whether the installer's unit runs now; ``None`` where the seam could not say or raised."""
-        try:
-            return self._units.is_active(INSTALLER_UNIT)
-        except Exception:
-            return None
+        self._judging = self._loop.create_task(self._judge_the_last_attempt())
 
     def _judge_io(self, record: UpdateAttemptRecord) -> UpdateAttemptRecord | None:
         """*record* where it says the installer stopped without updating; any other record is removed."""
@@ -250,23 +231,51 @@ class UpdateInstallService:
             version=stopped.attempted_version, step=InstallStep.FAILED, failure=InstallFailure.INSTALLER_STOPPED
         )
 
-    async def _judge_once_the_installer_ended(self) -> None:
-        """Ask the installer's unit until it reads ended, then judge the record and push what it found."""
+    async def _judge_the_last_attempt(self) -> None:
+        """Judge the record once the installer's unit reads ended, then push a stopped attempt it found."""
         try:
-            while True:
-                await self._sleeper.sleep(_WATCH_SECONDS)
-                if self._attempt is not None:
-                    return
-                active, _why = await self._ask_unit()
-                if active is False:
-                    break
-            stopped = await self._loop.run_in_executor(None, self._judge_the_record_io)
-            if stopped is None or self._attempt is not None:
-                return
-            self._take_stopped(stopped)
-            await self._emit("update_attempt_stopped", _stopped_wire(stopped))
+            stopped = await self._stopped_once_the_installer_ended()
         except Exception:
             self._logger.exception("update: the record of the last update attempt could not be judged")
+            return
+        if stopped is None:
+            return
+        try:
+            await self._emit("update_attempt_stopped", _stopped_wire(stopped))
+        except Exception:
+            self._logger.exception(
+                f"update: the panel could not be told that the installer for {stopped.attempted_version} stopped "
+                "without updating; the notice on Main shows it once the panel loads again"
+            )
+
+    async def _stopped_once_the_installer_ended(self) -> UpdateAttemptRecord | None:
+        """The stopped attempt the record names, once the unit reads ended; ``None`` where a press came first.
+
+        A press is looked for after every answer the unit gives and after the
+        record is judged, since a new attempt ends the record itself.
+        """
+        record = await self._loop.run_in_executor(None, self._attempts.read)
+        if record is None:
+            return None
+        told = False
+        while True:
+            active, _why = await self._ask_unit()
+            if self._attempt is not None:
+                return None
+            if active is False:
+                break
+            if not told:
+                told = True
+                self._logger.info(
+                    f"update: the installer for {record.attempted_version} "
+                    f"{'still runs' if active else 'may still run'}; its record is judged once it has ended"
+                )
+            await self._sleeper.sleep(_WATCH_SECONDS)
+        stopped = await self._loop.run_in_executor(None, self._judge_the_record_io)
+        if stopped is None or self._attempt is not None:
+            return None
+        self._take_stopped(stopped)
+        return stopped
 
     def get_stopped_update_attempt(self) -> dict[str, Any] | None:
         """The attempt an earlier start's installer stopped without updating, until dismissed or superseded.
@@ -355,12 +364,12 @@ class UpdateInstallService:
                 "message": f"The release offered is now {release.version}",
             }
         apps = await self._running_apps()
-        frees_at = await self._steam.reload_frees_at()
+        limit = await self._reload_limit_waits()
         # Asked again after the readings: a second press may have started an
         # attempt while this one waited for them.
         if self._holding:
             return self._in_progress_refusal()
-        waits = [*_app_waits(apps), *self._work_waits(frees_at)]
+        waits = [*_app_waits(apps), *self._work_waits(), *limit]
         if waits:
             return {
                 "success": False,
@@ -619,13 +628,27 @@ class UpdateInstallService:
             self._log_debug(f"[update] Steam's running apps could not be read: {e!r}")
             return None
 
+    async def _reload_limit_waits(self) -> list[Wait]:
+        """The reload limit's reason, where it holds; a reader that raised took no reading, never "one more is allowed".
+
+        Its own reason rather than the limit's, which carries a time: the
+        restart's panel is replaced only where the limit lets it, so a press
+        waits rather than guess.
+        """
+        try:
+            frees_at = await self._steam.reload_frees_at()
+        except Exception as e:
+            self._log_debug(f"[update] Steam's interface reload limit could not be read: {e!r}")
+            return [Wait(WaitReason.INTERFACE_RELOAD_LIMIT_UNKNOWN)]
+        return [Wait(WaitReason.INTERFACE_RELOAD_LIMIT, frees_at=frees_at)] if frees_at is not None else []
+
     async def _waits(self) -> list[Wait]:
         apps = await self._running_apps()
-        frees_at = await self._steam.reload_frees_at()
-        return [*_app_waits(apps), *self._work_waits(frees_at)]
+        limit = await self._reload_limit_waits()
+        return [*_app_waits(apps), *self._work_waits(), *limit]
 
-    def _work_waits(self, frees_at: float | None) -> list[Wait]:
-        """Every reason but the running apps: the work in flight, read from memory in one loop turn, then *frees_at*.
+    def _work_waits(self) -> list[Wait]:
+        """Every reason but Steam's two readings: the work in flight, read from memory in one loop turn.
 
         A claim held on the prune conflicts counts towards the reason that
         names its work, a read-only one towards none, and one nothing
@@ -633,7 +656,7 @@ class UpdateInstallService:
         would cut short makes a press wait.
         """
         claimed = claim_reasons(self._held_claims())
-        waits = [
+        return [
             Wait(reason)
             for reason, busy in (
                 (WaitReason.LIBRARY_SYNC, self._library_sync_in_flight()),
@@ -647,9 +670,6 @@ class UpdateInstallService:
             )
             if busy or reason in claimed
         ]
-        if frees_at is not None:
-            waits.append(Wait(WaitReason.INTERFACE_RELOAD_LIMIT, frees_at=frees_at))
-        return waits
 
     def _paused_downloads(self) -> int:
         downloads = self._download_queue().get("downloads", [])

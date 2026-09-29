@@ -833,8 +833,9 @@ class Endpoints:
         ``app_running`` (with ``apps``), ``running_apps_unknown``,
         ``library_sync``, ``rom_downloads``, ``save_sync``,
         ``firmware_downloads``, ``save_directory_move``,
-        ``removed_games_cleanup``, ``retrodeck_migration``, ``other_work`` and
-        ``interface_reload_limit`` (with ``frees_at``, epoch seconds).
+        ``removed_games_cleanup``, ``retrodeck_migration``, ``other_work``,
+        ``interface_reload_limit`` (with ``frees_at``, epoch seconds) and
+        ``interface_reload_limit_unknown``.
         ``paused_downloads`` counts the paused ROM downloads the restart would
         cancel. ``attempt`` is the latest attempt's ``{"version", "step",
         "bytes_done", "bytes_total", "failure"}``, or ``None``; ``try_again``

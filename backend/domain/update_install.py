@@ -73,6 +73,7 @@ class WaitReason(StrEnum):
     RETRODECK_MIGRATION = "retrodeck_migration"
     OTHER_WORK = "other_work"
     INTERFACE_RELOAD_LIMIT = "interface_reload_limit"
+    INTERFACE_RELOAD_LIMIT_UNKNOWN = "interface_reload_limit_unknown"
 
 
 # The claims on the prune conflicts — an operation named after its endpoint, or

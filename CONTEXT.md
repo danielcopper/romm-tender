@@ -1117,11 +1117,12 @@ Nothing retries an attempt by itself; a failed attempt, or an update the install
 started, which tells the next start whether that installer stopped without updating; the installer never writes it. A
 **wait reason** is one thing a press has to wait for because the restart would cut it short — a running app, a sync, a
 download, a cleanup, a migration that is moving files, the reload limit, and **other work**: any other claim of work
-held on the **Prune conflicts**, where an endpoint that only reads holds none that counts — and a running-apps reading
-that could not be taken is a wait reason of its own, never "nothing running". A **paused** ROM download is not one: the
-restart cancels it, and the panel says so. `domain/update_install.py` names the steps, failures and reasons;
-`services/update_install.py` runs the attempt. _Avoid_: "update" alone for the attempt — an update is what the installer
-does, and it can be rolled back after the attempt has ended.
+held on the **Prune conflicts**, where an endpoint that only reads, or rebuilds what it writes, holds none that counts —
+and a running-apps reading or a reload-limit reading that could not be taken is a wait reason of its own, never "nothing
+running" or "the limit lets one through". A **paused** ROM download is not one: the restart cancels it, and the panel
+says so. `domain/update_install.py` names the steps, failures and reasons; `services/update_install.py` runs the
+attempt. _Avoid_: "update" alone for the attempt — an update is what the installer does, and it can be rolled back after
+the attempt has ended.
 
 ### Rolled-back update / update announcement
 

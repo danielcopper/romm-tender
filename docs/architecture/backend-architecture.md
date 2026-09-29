@@ -1786,22 +1786,22 @@ swaps the tree and rolls back what does not answer
   library sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included, and
   every save operation outside it — a conflict resolved, a slot switched or deleted, a save copied or rolled back, local
   saves deleted), firmware downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration
-  that is moving files, any other claim held on the prune conflicts (`other_work` — an uninstall, a shortcut removal, a
-  version switch, an adoption, a lease the frontend holds for its Steam writes), and Steam's interface reload limit
-  (`interface_reload_limit`, with `frees_at`, when the oldest recorded takedown leaves the window). A migration that is
-  only **pending** does not wait: the stored question survives the restart and is asked again. **Paused** ROM downloads
-  do not wait either — they are counted as `paused_downloads`, because the queue lives in memory and a start removes
-  their partial files, so the restart cancels them. The running apps and the reload limit are the host's
+  that is moving files, any other claim of work held on the prune conflicts (`other_work` — an uninstall, a shortcut
+  removal, a version switch, an adoption, a lease the frontend holds for its Steam writes), Steam's interface reload
+  limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded takedown leaves the window), and a reading
+  of that limit that could not be taken (`interface_reload_limit_unknown` — never read as a limit that lets one more
+  through, since the restarted backend replaces the panel only where the limit lets it). A migration that is only
+  **pending** does not wait: the stored question survives the restart and is asked again. **Paused** ROM downloads do
+  not wait either — they are counted as `paused_downloads`, because the queue lives in memory and a start removes their
+  partial files, so the restart cancels them. The running apps and the reload limit are the host's
   (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector exists), and the claims are the prune
   conflicts' (`HeldClaimsFn`, which sweeps expired leases first); every other reader is the owning service's own. A
   claim counts toward the reason that names its work — `domain/update_install.py` maps each endpoint and lease key to
   one, the save use cases to the save sync among them and the rest of the work to `other_work` — except a claim whose
-  own work only reads or rebuilds a cache (`READ_ONLY_CLAIMS`: `evaluate_launch`, `fetch_cover_base64`,
-  `get_installed_relaunch_options`, `get_rom_relaunch_options`, `get_save_slots`, `get_save_status`,
-  `get_sgdb_artwork_base64`, `get_sgdb_resolution`, `refresh_save_status`, `test_connection`), which a restart cuts
-  nothing short of and which makes no press wait; a lease such a read hands out is a claim of its own. A test reads
-  every claim name the source takes and fails on one in neither list, and a claim neither names still counts as
-  `other_work`, so work nobody classified makes a press wait rather than slipping through.
+  own work only reads, or rebuilds what it writes (`READ_ONLY_CLAIMS` there), which a restart cuts nothing short of and
+  which makes no press wait; a lease such a read hands out is a claim of its own. A test reads every claim name the
+  source takes and fails on one in neither list, and a claim neither names still counts as `other_work`, so work nobody
+  classified makes a press wait rather than slipping through.
 - **The press** (`install_update`, naming the version it means) is refused while an attempt holds the rule
   (`update_in_progress`), where nothing is offered (`not_offered`), for a version that is not the stored one
   (`version_changed`), and while any reason holds (`update_waiting`, carrying `wait_reasons`). The reasons are asked
@@ -1840,9 +1840,10 @@ swaps the tree and rolls back what does not answer
   was asked to start it fails the attempt, as `download_failed` while downloading and as `installer_not_started` after;
   from that moment on it leaves the rule held, since the installer may be running. A running-apps reader that raises is
   not unforeseen: it is a reading that could not be taken, `running_apps_unknown`, at the press and before the installer
-  alike.
-- **Shutting down** cancels the attempt, and a download still running on its thread ends at its next block of bytes
-  rather than holding the process's exit up until it finishes.
+  alike; nor is a reload-limit reader that raises, which is `interface_reload_limit_unknown` at the press.
+- **Shutting down** cancels the attempt and a judgement of the attempt record still waiting for the installer's unit,
+  and a download still running on its thread ends at its next block of bytes rather than holding the process's exit up
+  until it finishes.
 - **A failed attempt** — `download_failed`, `checksum_mismatch`, `installer_not_started` (no installer in the tarball,
   or a unit that would not start, a name still loaded among them), `installer_stopped`, `game_started`,
   `running_apps_unknown` — removes what it staged, gives the update rule back and is reported; nothing is retried by
@@ -1871,12 +1872,14 @@ swaps the tree and rolls back what does not answer
   `dismiss_stopped_update_attempt` removes the record or a new attempt starts. The dismissal does nothing where no such
   attempt stands — a card left on screen from before a new press must not take the new attempt's record away. The
   installer starts this program itself — the new version, the one it rolled back to, or the same one again after it gave
-  up — so the start that looks at the record may run inside the installer's unit. Only once that unit reads ended is the
-  record judged: while it runs, or the user manager cannot say, the unit is asked again every three seconds, a stopped
-  attempt found then is pushed to the panel as `update_attempt_stopped` (the panel read the answer once, at load), and a
-  press in the meantime ends the question. A record that cannot be written is a WARNING and does not hold the install up
-  — should that installer then stop without updating, the next start cannot say so; one that cannot be removed is judged
-  again at the next start.
+  up — so the start that looks at the record may run inside the installer's unit. `note_update_attempt` therefore only
+  starts a task, which reads the record and asks the unit off the loop, so a user manager slow to answer holds up no
+  other start step; only once that unit reads ended is the record judged. While it runs, or the user manager cannot say,
+  the unit is asked again every three seconds; a stopped attempt found is pushed to the panel as
+  `update_attempt_stopped` (the panel reads the answer once, at load, which may come before the judgement or after it);
+  and a press in the meantime ends the question. A record that cannot be written is a WARNING and does not hold the
+  install up — should that installer then stop without updating, the next start cannot say so; one that cannot be
+  removed is judged again at the next start.
 
 ### Adapters (`backend/adapters/`)
 

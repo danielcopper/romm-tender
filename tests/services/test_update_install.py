@@ -377,6 +377,19 @@ class TestWaitReasons:
 
         assert reasons == [{"reason": "interface_reload_limit", "frees_at": 1_800_000_600.0}]
 
+    async def test_a_reload_limit_reading_that_raised_is_its_own_reason_never_no_limit(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.steam.limit_raises = RuntimeError("cannot schedule new futures after shutdown")
+
+        state = await rig.service.get_update_install_state()
+        assert state["wait_reasons"] == [{"reason": "interface_reload_limit_unknown"}]
+        answer = await rig.service.install_update(_OFFERED)
+        assert (answer["reason"], answer["wait_reasons"]) == (
+            "update_waiting",
+            [{"reason": "interface_reload_limit_unknown"}],
+        )
+        assert rig.service.is_update_in_progress() is False
+
     async def test_every_reason_that_holds_is_named(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, apps=None, frees_at=5.0)
         for flag, _reason, value in _WORK_REASONS:
@@ -1044,11 +1057,22 @@ class TestTheAttemptRecord:
         assert "could not be written" in caplog.text
 
 
+async def _judged(rig: _Rig) -> list[dict[str, Any]]:
+    """Wait for the judgement a start began to end, and answer what it pushed."""
+    task = rig.service._judging
+    assert task is not None
+    await asyncio.wait_for(task, 2)
+    return [payload for name, payload in rig.events.events if name == "update_attempt_stopped"]
+
+
 class TestTheNextStart:
     async def test_no_record_is_nothing_to_say(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
 
         rig.service.note_start()
+
+        assert await _judged(rig) == []
+        assert rig.units.asked == []
 
         assert rig.service.get_stopped_update_attempt() is None
         assert (await rig.service.get_update_install_state())["attempt"] is None
@@ -1061,12 +1085,11 @@ class TestTheNextStart:
 
         with caplog.at_level(logging.WARNING, logger="test_update_install"):
             rig.service.note_start()
+            pushed = await _judged(rig)
 
-        assert rig.service.get_stopped_update_attempt() == {
-            "attempted_version": _OFFERED,
-            "from_version": _RUNNING,
-            "started_at": "2026-09-01T10:00:00Z",
-        }
+        stopped = {"attempted_version": _OFFERED, "from_version": _RUNNING, "started_at": "2026-09-01T10:00:00Z"}
+        assert pushed == [stopped]
+        assert rig.service.get_stopped_update_attempt() == stopped
         state = await rig.service.get_update_install_state()
         assert state["attempt"] == {
             "version": _OFFERED,
@@ -1095,6 +1118,7 @@ class TestTheNextStart:
 
         rig.service.note_start()
 
+        assert await _judged(rig) == []
         assert rig.service.get_stopped_update_attempt() is None
         assert _read_record(tmp_path) is None
 
@@ -1102,6 +1126,7 @@ class TestTheNextStart:
         _leave_record(tmp_path)
         rig = await _built(rigs, tmp_path, unit_states=_ENDED)
         rig.service.note_start()
+        await _judged(rig)
 
         assert await rig.service.dismiss_stopped_attempt() == {"success": True}
 
@@ -1122,6 +1147,7 @@ class TestTheNextStart:
         _leave_record(tmp_path, started_by=_RUNNING)
         rig = await _built(rigs, tmp_path, unit_states=_ENDED)
         rig.service.note_start()
+        await _judged(rig)
         await rig.service.install_update(_OFFERED)
         assert (await rig.settled())["step"] == "installer_started"
         written = _read_record(tmp_path)
@@ -1137,6 +1163,8 @@ class TestTheNextStart:
         _leave_record(tmp_path)
         rig = await _built(rigs, tmp_path, unit_states=_ENDED)
         rig.service.note_start()
+        await _judged(rig)
+        assert rig.service.get_stopped_update_attempt() is not None
 
         assert await rig.service.install_update(_OFFERED) == {"success": True}
 
@@ -1146,13 +1174,6 @@ class TestTheNextStart:
 class TestAnInstallerStillRunningAtTheNextStart:
     """The installer starts this program itself, and may not have ended when the start looks at the record."""
 
-    async def _judged(self, rig: _Rig) -> list[dict[str, Any]]:
-        """Wait for the late judgement to end, and answer what it pushed."""
-        task = rig.service._judging
-        assert task is not None
-        await asyncio.wait_for(task, 2)
-        return [payload for name, payload in rig.events.events if name == "update_attempt_stopped"]
-
     async def test_the_record_is_judged_once_the_unit_ends_and_the_judgement_is_pushed(self, rigs, tmp_path):
         _leave_record(tmp_path)
         rig = await _built(rigs, tmp_path, unit_states=[True, True, False], sleeper=_ParkingSleeper(free=2))
@@ -1161,7 +1182,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
         assert rig.service.get_stopped_update_attempt() is None
         assert _read_record(tmp_path) is not None
 
-        pushed = await self._judged(rig)
+        pushed = await _judged(rig)
 
         stopped = {"attempted_version": _OFFERED, "from_version": _RUNNING, "started_at": "2026-09-01T10:00:00Z"}
         assert pushed == [stopped]
@@ -1170,13 +1191,85 @@ class TestAnInstallerStillRunningAtTheNextStart:
         assert (state["attempt"]["failure"], state["try_again"]) == ("installer_stopped", True)
         assert rig.units.asked == [INSTALLER_UNIT] * 3
 
+    async def test_the_start_asks_the_unit_off_the_loop_and_returns_before_it_answers(
+        self, rigs, tmp_path, monkeypatch
+    ):
+        """A user manager slow to answer must not hold up the start steps after this one."""
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        asked_on: list[int] = []
+
+        def is_active(unit: str) -> bool | None:
+            asked_on.append(threading.get_ident())
+            return FakeTransientUnits.is_active(rig.units, unit)
+
+        monkeypatch.setattr(rig.units, "is_active", is_active)
+
+        rig.service.note_start()
+        assert rig.units.asked == []
+
+        assert len(await _judged(rig)) == 1
+        assert asked_on
+        assert threading.get_ident() not in asked_on
+
+    async def test_a_press_while_the_unit_is_being_asked_ends_the_question(self, rigs, tmp_path, monkeypatch):
+        """The unit is asked off the loop; a press can land before its answer is back."""
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path)
+        entered, gate = threading.Event(), threading.Event()
+        attempts = rig.service._attempts
+        reads: list[UpdateAttemptRecord | None] = []
+
+        def slow_ask(unit: str) -> bool | None:
+            entered.set()
+            gate.wait(2)
+            return False
+
+        def counted_read(read: Callable[[], UpdateAttemptRecord | None] = attempts.read) -> UpdateAttemptRecord | None:
+            reads.append(read())
+            return reads[-1]
+
+        monkeypatch.setattr(rig.units, "is_active", slow_ask)
+        monkeypatch.setattr(attempts, "read", counted_read)
+        rig.service.note_start()
+        for _ in range(200):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set()
+
+        assert await rig.service.install_update(_OFFERED) == {"success": True}
+        gate.set()
+
+        assert await _judged(rig) == []
+        assert len(reads) == 1, "the record was looked at again after the press"
+
+    async def test_a_push_that_fails_leaves_the_judgement_standing_and_says_only_that(
+        self, rigs, tmp_path, monkeypatch, caplog
+    ):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+
+        async def failing_emit(name: str, payload: dict[str, Any]) -> None:
+            raise ConnectionError("socket gone")
+
+        monkeypatch.setattr(rig.service, "_emit", failing_emit)
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            rig.service.note_start()
+            await _judged(rig)
+
+        assert rig.service.get_stopped_update_attempt() is not None
+        assert "the panel could not be told" in caplog.text
+        assert "could not be judged" not in caplog.text
+
     async def test_a_unit_nobody_can_say_about_is_asked_again_rather_than_judged(self, rigs, tmp_path):
         _leave_record(tmp_path)
         rig = await _built(rigs, tmp_path, unit_states=[None, None, False], sleeper=_ParkingSleeper(free=2))
 
         rig.service.note_start()
 
-        assert len(await self._judged(rig)) == 1
+        assert len(await _judged(rig)) == 1
 
     async def test_a_seam_that_raises_at_the_start_is_nobody_able_to_say(self, rigs, tmp_path, monkeypatch):
         _leave_record(tmp_path)
@@ -1194,7 +1287,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
         rig.service.note_start()
         assert rig.service.get_stopped_update_attempt() is None
 
-        assert len(await self._judged(rig)) == 1
+        assert len(await _judged(rig)) == 1
 
     async def test_an_update_that_went_through_is_removed_once_the_unit_ends_and_nothing_is_pushed(
         self, rigs, tmp_path
@@ -1206,7 +1299,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
 
         rig.service.note_start()
 
-        assert await self._judged(rig) == []
+        assert await _judged(rig) == []
         assert _read_record(tmp_path) is None
         assert rig.service.get_stopped_update_attempt() is None
 
@@ -1217,7 +1310,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
         rig.service.note_start()
         assert await rig.service.install_update(_OFFERED) == {"success": True}
 
-        assert await self._judged(rig) == []
+        assert await _judged(rig) == []
         assert rig.service.get_stopped_update_attempt() is None
 
     async def test_a_press_while_the_record_is_being_judged_wins(self, rigs, tmp_path, monkeypatch):
@@ -1242,7 +1335,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
         assert await rig.service.install_update(_OFFERED) == {"success": True}
         gate.set()
 
-        assert await self._judged(rig) == []
+        assert await _judged(rig) == []
         assert rig.service.get_stopped_update_attempt() is None
 
     async def test_shutdown_stops_a_judgement_still_waiting(self, rigs, tmp_path):
