@@ -2618,6 +2618,19 @@ describe("SyncPage", () => {
       expect(container.textContent).not.toContain(UNREACHABLE);
     });
 
+    it("a later run's failure puts up its own line after a press cleared the first", async () => {
+      const { container } = await renderAndStartRun();
+      await endRun({ stage: "error", message: UNREACHABLE, runId: "run-err-1", runKind: "apply" });
+      await flushAsync();
+      expect(container.textContent).toContain(`Sync failed — ${UNREACHABLE}`);
+
+      await press(container, "Sync Library");
+      await endRun({ stage: "error", message: "Authentication failed", runId: "run-err-2", runKind: "apply" });
+
+      expect(container.textContent).toContain("Sync failed — Authentication failed");
+      expect(container.textContent).not.toContain(UNREACHABLE);
+    });
+
     it("a line the reader cleared does not come back with a later write to the store", async () => {
       // The store still holds the failed run's frame after Cancel has cleared
       // the line, and a merge that says nothing about the run notifies again.
