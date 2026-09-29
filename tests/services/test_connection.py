@@ -317,7 +317,7 @@ class TestTestConnectionEdgeCases:
         assert "5.4.0" in result["message"]
 
 
-class TestConnection:
+class TestTestConnectionRecordsVersion:
     @pytest.mark.asyncio
     async def test_test_connection_sets_version_on_romm_api(self, romm_api, logger):
         settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
@@ -331,8 +331,8 @@ class TestConnection:
         romm_api.set_version.assert_called_once_with("5.3.0")
 
 
-class TestTestConnectionErrors:
-    """test_connection returns a canonical ``reason`` slug in failure responses."""
+class TestTestConnectionOutcomes:
+    """test_connection's answer per server outcome: a canonical ``reason`` slug on failure, the version on success."""
 
     @pytest.mark.asyncio
     async def test_config_error_when_url_empty(self, connection):

@@ -1043,7 +1043,7 @@ class TestDismissSettingsResetNotice:
         settings_persister.save_settings.assert_called_once_with()
 
 
-class TestDismissSettingsResetNoticeRoundTrip:
+class TestDismissSettingsResetNoticePersistsOnce:
     """Dismissing the settings-reset notice pops the persistent marker and
     persists the dismissal — the user's explicit QAM acknowledgement."""
 

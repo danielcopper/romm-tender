@@ -17,6 +17,7 @@ from adapters.persistence import (
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
 )
+from domain.state_migrations import migrate_settings
 
 
 @pytest.fixture
@@ -228,6 +229,32 @@ class TestInsecureSslSetting:
         persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
         settings = persistence.load_settings()
         assert settings["romm_allow_insecure_ssl"] is False
+
+
+class TestDebugLoggingMigration:
+    """A settings.json carrying the old ``debug_logging`` flag, loaded and then migrated."""
+
+    def test_migration_debug_logging_true(self, tmp_path):
+        """Old debug_logging=True migrates to log_level='debug'."""
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"debug_logging": True, "romm_url": ""}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = migrate_settings(persistence.load_settings())
+        assert "debug_logging" not in settings
+        assert settings["log_level"] == "debug"
+
+    def test_migration_debug_logging_false(self, tmp_path):
+        """Old debug_logging=False migrates to log_level='warn' (default)."""
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"debug_logging": False, "romm_url": ""}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = migrate_settings(persistence.load_settings())
+        assert "debug_logging" not in settings
+        assert settings["log_level"] == "warn"
 
 
 # ── Crash-safe write: fsync(tmp) before rename, fsync(dir) after ─────────────────

@@ -1,11 +1,7 @@
 """Tests for domain/state_migrations.py — pure migration functions."""
 
-import json
-import logging
-import os
 from typing import Any
 
-from adapters.persistence import PersistenceAdapter
 from domain.state_migrations import (
     _migrate_v2_to_v3,
     _migrate_v5_to_v6,
@@ -1043,27 +1039,3 @@ class TestMigrateSettingsV13Standard:
         }
         migrate_settings(data)
         assert data == original
-
-
-class TestLogLevel:
-    def test_migration_debug_logging_true(self, tmp_path):
-        """Old debug_logging=True migrates to log_level='debug'."""
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": True, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in settings
-        assert settings["log_level"] == "debug"
-
-    def test_migration_debug_logging_false(self, tmp_path):
-        """Old debug_logging=False migrates to log_level='warn' (default)."""
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": False, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in settings
-        assert settings["log_level"] == "warn"
