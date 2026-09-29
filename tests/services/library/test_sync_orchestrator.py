@@ -4674,6 +4674,55 @@ class TestCollectionTurnedOffAndBackOn:
         assert stamp is not None
         assert stamp.member_rom_ids == (1,)
 
+    @pytest.mark.asyncio
+    async def test_a_collection_the_run_full_fetched_keeps_its_fresh_stamp_when_a_game_it_does_not_hold_is_unbound(
+        self, library, fake_romm_api
+    ):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_n64_game(unit, event):
+            event.set()
+            return {"1": 5001, "2": 5002, "3": 5003} if unit.slug == "n64" else {}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_n64_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 3)}
+
+        # Run 1: N64 and the collection are on.
+        library.settings["enabled_platforms"] = {"1": True}
+        await complete_a_run("run-1")
+        assert bindings() == {1: 5001, 2: 5002, 3: 5003}
+
+        # Run 2: N64 is off, and RomM moved the collection's updated_at, so it full-fetches and is stamped again.
+        library.settings["enabled_platforms"] = {"1": False}
+        fake_romm_api.collections[0]["updated_at"] = "2025-02-01T00:00:00+00:00"
+        await complete_a_run("run-2")
+        assert bindings() == {1: 5001, 2: None, 3: None}
+        with library.uow as uow:
+            stamp = uow.collection_sync_state.get("7", "standard")
+        assert stamp is not None
+        assert (stamp.updated_at, stamp.member_rom_ids) == ("2025-02-01T00:00:00+00:00", (1,))
+
 
 class TestStoppedRunLeavesNoHiddenStaleRow:
     """A version deleted on RomM loses its shortcut at the next completed run (#2084).
