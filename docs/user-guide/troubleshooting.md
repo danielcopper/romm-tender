@@ -128,6 +128,10 @@ have:
   — for example because an earlier one is still running.
 - **The installer stopped without updating.** The installer started, but ended before it replaced Tender — it refused,
   or it failed.
+- **A game was started — nothing was changed. Try again once it has closed.** A game was started while the update
+  downloaded; Tender checks right before the installer starts, and does not start it under a running game.
+- **Could not check whether a game is running — nothing was changed.** At that same check Tender could not ask Steam,
+  and did not start the installer on a guess.
 
 Nothing tries again by itself; what the attempt downloaded is removed.
 

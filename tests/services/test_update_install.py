@@ -675,6 +675,39 @@ class TestAFailedAttempt:
         assert (await self._failed(rig))["failure"] == "installer_not_started"
         assert rig.units.starts == []
 
+    async def test_a_game_started_during_the_download_fails_the_attempt_before_anything_changed(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.apps = ("Celeste",)
+
+        last = await rig.settled()
+
+        assert (last["step"], last["failure"]) == ("failed", "game_started")
+        assert rig.units.starts == []
+        assert rig.service.is_update_in_progress() is False
+        assert not os.path.lexists(rig.staging_dir)
+        assert (await rig.service.get_update_install_state())["try_again"] is True
+
+    async def test_no_reading_of_the_running_apps_before_the_installer_fails_the_attempt(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.apps = None
+
+        last = await rig.settled()
+
+        assert (last["step"], last["failure"]) == ("failed", "running_apps_unknown")
+        assert rig.units.starts == []
+        assert rig.service.is_update_in_progress() is False
+
+    async def test_the_running_apps_are_read_again_right_before_the_installer(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        assert rig.steam.readings == 2
+        assert len(rig.units.starts) == 1
+
     async def test_a_unit_that_would_not_start_is_installer_not_started(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, unit_refusal="Unit romm-tender-update.service was already loaded")
 

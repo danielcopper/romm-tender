@@ -1273,7 +1273,12 @@ export type UpdateInstallStep = "downloading" | "verifying" | "installer_started
 
 /** How an attempt ended before the installer stopped this backend. */
 export type UpdateInstallFailure =
-  "download_failed" | "checksum_mismatch" | "installer_not_started" | "installer_stopped";
+  | "download_failed"
+  | "checksum_mismatch"
+  | "installer_not_started"
+  | "installer_stopped"
+  | "game_started"
+  | "running_apps_unknown";
 
 /** One press of Install, as far as it got — the state answer's `attempt` and the progress event's payload. */
 export interface UpdateInstallAttempt {

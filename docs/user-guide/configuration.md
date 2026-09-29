@@ -346,9 +346,11 @@ still there after the update. Paused game downloads do not hold it back either �
 there are, because the restart cancels them.
 
 Once you press it, the steps are listed under the button: **Downloading**, with how far it got, **Verifying** and
-**Starting the installer**. When the installer has started, the section says **Tender is restarting — Steam's interface
-will reload in a moment.** From then on the panel loses touch with the old Tender, which is expected; after the reload
-Tender says it was updated, or, if the new version did not start, that the installer
+**Starting the installer**. While it downloads and verifies, a line under the steps says **Starting a game now cancels
+the update.** — Tender checks once more right before the installer starts, and stops there, with nothing changed, if a
+game is running. When the installer has started, the section says **Tender is restarting — Steam's interface will reload
+in a moment.** From then on the panel loses touch with the old Tender, which is expected; after the reload Tender says
+it was updated, or, if the new version did not start, that the installer
 [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). While the install runs, Tender refuses
 to start a library sync, a game download or a save sync.
 

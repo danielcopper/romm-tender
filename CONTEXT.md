@@ -1111,15 +1111,16 @@ whether the notice shows. _Avoid_: "new version" for a release that is merely pu
 An **install attempt** is one press of Install under Settings › Updates, for the available release the last check
 stored: from the press, through the download and its digest check, to the installer started as the transient unit
 `romm-tender-update` — after which the installer stops this process — or to a failure (`download_failed`,
-`checksum_mismatch`, `installer_not_started`, `installer_stopped`), which removes what it staged. From the press until
-it fails the attempt holds the **update rule** (see **Conflict rules**). Nothing retries an attempt by itself; a failed
-one, or one the installer rolled back, is offered again as **Try again**. A **wait reason** is one thing a press has to
-wait for because the restart would cut it short — a running app, a sync, a download, a cleanup, a migration that is
-moving files, the reload limit, and **other work**: any other claim held on the **Prune conflicts** — and a running-apps
-reading that could not be taken is a wait reason of its own, never "nothing running". A **paused** ROM download is not
-one: the restart cancels it, and the panel says so. `domain/update_install.py` names the steps, failures and reasons;
-`services/update_install.py` runs the attempt. _Avoid_: "update" alone for the attempt — an update is what the installer
-does, and it can be rolled back after the attempt has ended.
+`checksum_mismatch`, `installer_not_started`, `installer_stopped`, `game_started`, `running_apps_unknown`), which
+removes what it staged. From the press until it fails the attempt holds the **update rule** (see **Conflict rules**).
+Nothing retries an attempt by itself; a failed one, or one the installer rolled back, is offered again as **Try again**.
+A **wait reason** is one thing a press has to wait for because the restart would cut it short — a running app, a sync, a
+download, a cleanup, a migration that is moving files, the reload limit, and **other work**: any other claim held on the
+**Prune conflicts** — and a running-apps reading that could not be taken is a wait reason of its own, never "nothing
+running". A **paused** ROM download is not one: the restart cancels it, and the panel says so.
+`domain/update_install.py` names the steps, failures and reasons; `services/update_install.py` runs the attempt.
+_Avoid_: "update" alone for the attempt — an update is what the installer does, and it can be rolled back after the
+attempt has ended.
 
 ### Rolled-back update / update announcement
 

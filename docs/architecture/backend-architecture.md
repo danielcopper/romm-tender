@@ -1806,7 +1806,9 @@ swaps the tree and rolls back what does not answer
 - **The attempt**: `<cache root>/update/` is started afresh; the tarball is downloaded to `romm-tender-<V>.tar.gz` there
   (the name its checksum file names) with byte progress; its sha256 is compared with the `digest` GitHub stated; the
   `.sha256` file is downloaded beside it for the installer's own check; only `romm-tender/install.sh` is copied out of
-  it; a line in the log names the unit to follow (`journalctl --user -u romm-tender-update`); and
+  it; Steam's running apps are read once more, and a game started during the download — or a reading that could not be
+  taken — fails the attempt there as `game_started` (or `running_apps_unknown`), before anything changed; a line in the
+  log names the unit to follow (`journalctl --user -u romm-tender-update`); and
   `/bin/bash install.sh --from <tarball> --yes` is started with
   `systemd-run --user --unit romm-tender-update --collect`. The unit gets the six `TENDER_*` directories as this process
   resolved them, `TENDER_PYTHON` set to this process's interpreter (the installer writes it into the service's
@@ -1834,10 +1836,10 @@ swaps the tree and rolls back what does not answer
 - **Shutting down** cancels the attempt, and a download still running on its thread ends at its next block of bytes
   rather than holding the process's exit up until it finishes.
 - **A failed attempt** — `download_failed`, `checksum_mismatch`, `installer_not_started` (no installer in the tarball,
-  or a unit that would not start, a name still loaded among them), `installer_stopped` — removes what it staged, gives
-  the update rule back and is reported; nothing is retried by itself. `try_again` is then true for that version, and it
-  is also true where the installer's record of a rolled-back update (read through `UpdateFailureFn`, never written)
-  stands and names the offered version.
+  or a unit that would not start, a name still loaded among them), `installer_stopped`, `game_started`,
+  `running_apps_unknown` — removes what it staged, gives the update rule back and is reported; nothing is retried by
+  itself. `try_again` is then true for that version, and it is also true where the installer's record of a rolled-back
+  update (read through `UpdateFailureFn`, never written) stands and names the offered version.
 - **The update rule.** From the press that starts an attempt until it fails, `is_update_in_progress` answers true, and
   `ConflictRuleSet` refuses with `blocked_by_update` every use case that names the migration rule, and the migration
   itself (`migrate_retrodeck_files`) — ahead of every other rule — as do the save engine's pre-launch and post-exit

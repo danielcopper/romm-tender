@@ -132,6 +132,10 @@ class InstallFailure(StrEnum):
     CHECKSUM_MISMATCH = "checksum_mismatch"
     INSTALLER_NOT_STARTED = "installer_not_started"
     INSTALLER_STOPPED = "installer_stopped"
+    # Asked again right before the installer starts: a game started during the
+    # download, or no reading of whether one had, ends the attempt there.
+    GAME_STARTED = "game_started"
+    RUNNING_APPS_UNKNOWN = "running_apps_unknown"
 
 
 @dataclass(frozen=True)

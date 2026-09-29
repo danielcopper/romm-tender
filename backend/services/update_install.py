@@ -301,6 +301,15 @@ class UpdateInstallService:
         return installer, path
 
     async def _start_installer(self, version: str, installer: str, tarball_path: str) -> None:
+        apps = await self._steam.running_apps()
+        if apps is None:
+            self._logger.warning(
+                f"update: whether a game runs could not be read before the installer for {version}; nothing changed"
+            )
+            raise _AttemptFailedError(InstallFailure.RUNNING_APPS_UNKNOWN)
+        if apps:
+            self._logger.warning(f"update: {', '.join(apps)} started during the download of {version}; nothing changed")
+            raise _AttemptFailedError(InstallFailure.GAME_STARTED)
         self._logger.info(
             f"update: starting the installer for {version}; follow it with journalctl --user -u {INSTALLER_UNIT}"
         )

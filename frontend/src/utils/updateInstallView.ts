@@ -21,6 +21,8 @@ export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
   checksum_mismatch: "The download did not match its checksum — nothing was changed.",
   installer_not_started: "The installer could not be started.",
   installer_stopped: "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
+  game_started: "A game was started — nothing was changed. Try again once it has closed.",
+  running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
 };
 
 type PlainWaitReason = Exclude<UpdateWaitReason, { apps: string[] } | { frees_at: number }>["reason"];
@@ -80,6 +82,8 @@ const FAILED_AT: Record<UpdateInstallFailure, InstallStepId> = {
   checksum_mismatch: "verify",
   installer_not_started: "installer",
   installer_stopped: "installer",
+  game_started: "installer",
+  running_apps_unknown: "installer",
 };
 
 /**
