@@ -18,7 +18,7 @@ import host.inject.recovery as recovery_module
 from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
-from host.inject.reload_limit import RELOAD_LIMIT_FILENAME
+from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, RELOAD_WINDOW_SECONDS
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from tests.host.conftest import close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
@@ -186,6 +186,50 @@ async def injecting(tmp_path):
             with contextlib.suppress(asyncio.CancelledError):
                 await running.task
             await running.debugger.stop()
+
+
+class TestWhatItReadsForTheApplication:
+    """The two readings the host hands on: Steam's running apps, and when the reload limit frees up."""
+
+    async def test_the_running_apps_are_read_off_the_attached_renderer(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        running.page.running_apps = ["Celeste", "Hades"]
+
+        assert await running.injector.running_apps() == ("Celeste", "Hades")
+
+    async def test_a_definite_none_is_an_empty_reading(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        running.page.running_apps = []
+
+        assert await running.injector.running_apps() == ()
+
+    async def test_a_list_steam_would_not_give_is_no_reading(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        running.page.running_apps = None
+
+        assert await running.injector.running_apps() is None
+
+    async def test_with_the_panel_not_loaded_at_all_no_reading_can_be_taken(self, injecting):
+        running = await injecting(override=INJECT_OFF)
+        await running.task
+
+        assert await running.injector.running_apps() is None
+
+    async def test_the_reload_limit_is_the_one_in_the_state_directory(self, injecting):
+        running = await injecting(override=INJECT_OFF)
+        now = time.time()
+        with open(f"{running.setup.state_dir}/{RELOAD_LIMIT_FILENAME}", "w", encoding="utf-8") as handle:
+            json.dump({"takedowns": [now - 30, now - 90]}, handle)
+
+        assert running.injector.reload_frees_at() == now - 90 + RELOAD_WINDOW_SECONDS
+
+    async def test_an_empty_reload_record_is_free_now(self, injecting):
+        running = await injecting(override=INJECT_OFF)
+
+        assert running.injector.reload_frees_at() is None
 
 
 class TestLoadingThePanel:

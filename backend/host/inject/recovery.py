@@ -115,11 +115,22 @@ class _OwnerReading:
 
 
 @dataclass(frozen=True)
-class _AppsReading:
+class AppsReading:
     """Steam's running apps by name, or why they could not be read (``names`` is ``None``)."""
 
     names: tuple[str, ...] | None
     why: str = ""
+
+
+async def read_running_apps(evaluate: EvaluateFn) -> AppsReading:
+    """Ask Steam, through *evaluate*, which apps are running."""
+    try:
+        value = await evaluate(RUNNING_APPS_EXPRESSION)
+    except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
+        return AppsReading(None, f"{type(exc).__name__}: {exc}")
+    if not isinstance(value, list):
+        return AppsReading(None, "Steam's list of running apps could not be read")
+    return AppsReading(tuple(str(name) for name in value))
 
 
 class StrandedPanelRecovery:
@@ -314,15 +325,8 @@ class StrandedPanelRecovery:
             return _OwnerReading(answered=False, why=f"{type(exc).__name__}: {exc}")
         return _OwnerReading(answered=True, marker=read_panel_marker(value))
 
-    async def _running_apps(self) -> _AppsReading:
-        """Ask Steam which apps are running."""
-        try:
-            value = await self._evaluate(RUNNING_APPS_EXPRESSION)
-        except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
-            return _AppsReading(None, f"{type(exc).__name__}: {exc}")
-        if not isinstance(value, list):
-            return _AppsReading(None, "Steam's list of running apps could not be read")
-        return _AppsReading(tuple(str(name) for name in value))
+    async def _running_apps(self) -> AppsReading:
+        return await read_running_apps(self._evaluate)
 
     async def _request_reload(self) -> bool:
         """Ask Steam to rebuild its JS context; ``False`` only where it said it cannot.

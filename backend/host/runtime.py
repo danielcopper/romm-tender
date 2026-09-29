@@ -165,16 +165,18 @@ async def run_backend(
                 # says "leave Steam alone" may not write a file into Steam's
                 # directory.
                 ensure_debugger_marker(injection.user_home, injection.state_dir, logger)
-            injector = asyncio.create_task(
-                PanelInjector(
-                    setup=injection,
-                    asset_url=server.asset_url,
-                    token=token,
-                    panel=server,
-                    terminate_webhelper=terminate_steam_webhelper,
-                    logger=logger,
-                ).run()
+            panel_injector = PanelInjector(
+                setup=injection,
+                asset_url=server.asset_url,
+                token=token,
+                panel=server,
+                terminate_webhelper=terminate_steam_webhelper,
+                logger=logger,
             )
+            status.steam.attach(
+                running_apps=panel_injector.running_apps, reload_frees_at=panel_injector.reload_frees_at
+            )
+            injector = asyncio.create_task(panel_injector.run())
 
         await built.open_network()
         await stop.wait()

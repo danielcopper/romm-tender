@@ -55,6 +55,13 @@ class ReloadLimit:
         """May the interface be taken down once more now?"""
         return len(self._recent(self._clock())) < self._limit
 
+    def frees_at(self) -> float | None:
+        """When one more takedown will be allowed again, on this clock; ``None`` while it is allowed now."""
+        recent = sorted(self._recent(self._clock()))
+        if len(recent) < self._limit:
+            return None
+        return recent[len(recent) - self._limit] + self._window
+
     def record(self) -> None:
         """Note one takedown, now."""
         now = self._clock()

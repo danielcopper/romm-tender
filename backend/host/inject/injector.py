@@ -53,7 +53,7 @@ from host.inject.cdp import (
     unnamed_targets,
 )
 from host.inject.machine import DECKY_LOADER_PORT, decky_loader_is_serving, read_steam_build
-from host.inject.recovery import PanelPresence, StrandedPanelRecovery
+from host.inject.recovery import PanelPresence, StrandedPanelRecovery, read_running_apps
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, ReloadLimit
 from host.inject.watchdog import (
     INJECT_ENV,
@@ -211,12 +211,13 @@ class PanelInjector:
         self._instance = secrets.token_hex(8)
         self._connection: CdpConnection | None = None
         self._takedowns = 0
+        self._reload_limit = ReloadLimit(os.path.join(setup.state_dir, RELOAD_LIMIT_FILENAME))
         self._recovery = StrandedPanelRecovery(
             evaluate=self._evaluate_attached,
             panel=panel,
             terminate_webhelper=terminate_webhelper,
             before_takedown=self._count_a_takedown,
-            limit=ReloadLimit(os.path.join(setup.state_dir, RELOAD_LIMIT_FILENAME)),
+            limit=self._reload_limit,
             logger=logger,
         )
 
@@ -224,6 +225,14 @@ class PanelInjector:
     def instance(self) -> str:
         """What the marker of a panel this process loaded says about who loaded it."""
         return self._instance
+
+    async def running_apps(self) -> tuple[str, ...] | None:
+        """Steam's running apps by name, one reading; ``None`` where it could not be taken."""
+        return (await read_running_apps(self._evaluate_attached)).names
+
+    def reload_frees_at(self) -> float | None:
+        """When Steam's interface may be taken down once more; ``None`` while it may be now."""
+        return self._reload_limit.frees_at()
 
     async def run(self) -> None:
         """Attach, inject, and stay attached until cancelled or stopped for cause."""

@@ -323,6 +323,64 @@ class TestLoadingThePanelIntoSteam:
         finally:
             await debugger.stop()
 
+    async def test_the_steam_readings_answer_through_the_injector_once_it_exists(
+        self, tmp_path, recorder, default_sigterm
+    ):
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+            running_apps=["Celeste"],
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        debugger.targets = [FakeTarget(id="renderer", title="SharedJSContext")]
+        debugger.handlers["Page.enable"] = lambda _params: {}
+        static_root = tmp_path / "dist"
+        static_root.mkdir(exist_ok=True)
+        for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
+            (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
+        status = HostStatus()
+        read_during_the_build: list[tuple[str, ...] | None] = []
+        read_while_running: list[tuple[str, ...] | None] = []
+        build = recorder.build
+
+        async def reading_build():
+            read_during_the_build.append(await status.steam.running_apps())
+            return await build()
+
+        async def open_network() -> None:
+            recorder.steps.append("open_network")
+            async with asyncio.timeout(10):
+                while not page.bootstraps:
+                    await asyncio.sleep(0.01)
+            read_while_running.append(await status.steam.running_apps())
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        recorder.build = reading_build  # type: ignore[method-assign]
+        recorder.open_network = open_network  # type: ignore[method-assign]
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    status,
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(static_root),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+            assert read_during_the_build == [None]
+            assert read_while_running == [("Celeste",)]
+        finally:
+            await debugger.stop()
+
     async def test_the_switch_turns_it_off_without_touching_the_rest_of_the_run(
         self, tmp_path, recorder, default_sigterm
     ):
