@@ -134,6 +134,10 @@ class UpdateInstallService:
         # only by an attempt that failed while this process still runs.
         self._holding = False
         self._last_progress_emit: float | None = None
+        # Every tick's count, throttled or not: the frames the worker hands the
+        # loop can land after the download's own completion has been seen, and
+        # are then dropped, so the final count is taken from here instead.
+        self._bytes_seen: tuple[int, int | None] = (0, None)
 
     def is_update_in_progress(self) -> bool:
         """Whether an attempt holds the update rule: from its press until it fails, or this process ends."""
@@ -217,6 +221,7 @@ class UpdateInstallService:
             }
         self._holding = True
         self._last_progress_emit = None
+        self._bytes_seen = (0, None)
         self._attempt = InstallAttempt(version=release.version, step=InstallStep.DOWNLOADING)
         self._task = self._loop.create_task(self._run(release.version, release.tarball))
         await self._emit_attempt()
@@ -240,6 +245,7 @@ class UpdateInstallService:
         except Exception as e:
             self._logger.warning(f"update: downloading {version} failed: {e!r}")
             raise _AttemptFailedError(InstallFailure.DOWNLOAD_FAILED) from e
+        await self._report_downloaded(version)
         await self._advance(version, InstallStep.VERIFYING)
         try:
             digest = await self._loop.run_in_executor(None, self._staging.sha256_of, path)
@@ -301,6 +307,17 @@ class UpdateInstallService:
                 )
                 raise _AttemptFailedError(InstallFailure.INSTALLER_STOPPED)
 
+    async def _report_downloaded(self, version: str) -> None:
+        """Report the download's final count, unless a frame already carried it."""
+        done, total = self._bytes_seen
+        attempt = self._attempt
+        if attempt is not None and (attempt.bytes_done, attempt.bytes_total) == (done, total):
+            return
+        self._attempt = InstallAttempt(
+            version=version, step=InstallStep.DOWNLOADING, bytes_done=done, bytes_total=total
+        )
+        await self._emit_attempt()
+
     async def _advance(self, version: str, step: InstallStep) -> None:
         self._attempt = InstallAttempt(version=version, step=step)
         await self._emit_attempt()
@@ -317,6 +334,7 @@ class UpdateInstallService:
 
     def _on_progress(self, done: int, total: int | None) -> None:
         """The download's byte count, from the thread it runs on; throttled, then handed to the loop."""
+        self._bytes_seen = (done, total)
         now = self._clock.monotonic()
         final = total is not None and done >= total
         last = self._last_progress_emit

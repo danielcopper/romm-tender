@@ -496,9 +496,11 @@ class TestThePress:
             for name, payload in rig.events.events
             if name == "update_install_progress" and payload["step"] == "downloading" and payload["bytes_done"]
         ]
-        # The clock never moves, so after the first tick only the final one passes.
+        # The clock never moves, so only the first tick and the final count pass
+        # the throttle; the first can land after the download is done and is
+        # then dropped, the final count never is.
         size = len(_tarball())
-        assert [payload["bytes_done"] for payload in with_bytes] == [4, size]
+        assert [payload["bytes_done"] for payload in with_bytes] in ([4, size], [size])
 
     async def test_the_answer_while_the_installer_runs_carries_the_attempt_and_no_reasons(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)

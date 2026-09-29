@@ -3449,7 +3449,7 @@ class TestWhetherADownloadIsInFlight:
         assert fw.is_downloading() is False
 
     @pytest.mark.asyncio
-    async def test_a_refused_call_was_never_in_flight(self, plugin, fw):
+    async def test_a_refused_call_was_never_in_flight(self, fw):
         seen: list[bool] = []
         fw._rules = _make_conflict_rules(update_in_progress=True)
 
