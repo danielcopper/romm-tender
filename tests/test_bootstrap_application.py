@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 from _factories import _make_services_bundle
 from bootstrap import Application, ServicesBundle, WiringConfig, build_application
 from fakes.fake_event_sink import FakeEventSink
+from fakes.fake_steam_interface import FakeSteamInterface
 
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
@@ -23,7 +24,7 @@ LOGGER = logging.getLogger("test_bootstrap_application")
 
 # Every repair in the order it runs. ``prune_stale_installed_roms`` runs only
 # after ``detect_retrodeck_path_change`` succeeded; ``record_save_directories``
-# starts the backfill rather than performing it.
+# and ``run_due_update_checks`` start a background task rather than performing it.
 _REPAIRS = [
     "note_update_outcome",
     "detect_retrodeck_path_change",
@@ -33,7 +34,9 @@ _REPAIRS = [
     "prune_orphaned_staging_artwork",
     "prune_orphaned_cover_cache",
     "cleanup_leftover_tmp_files",
+    "remove_update_leftovers",
     "record_save_directories",
+    "run_due_update_checks",
 ]
 
 
@@ -46,6 +49,7 @@ class _Recorded:
         self.backfill_started = asyncio.Event()
         self.backfill_release = asyncio.Event()
         self.backfill_ran_to_the_end = False
+        self.due_checks_started = asyncio.Event()
 
     def _step(self, name: str) -> MagicMock:
         def run() -> None:
@@ -72,6 +76,19 @@ class _Recorded:
 
         return backfill()
 
+    def _due_checks(self) -> Any:
+        self.calls.append("run_due_update_checks")
+
+        async def due_checks() -> None:
+            self.due_checks_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                self.calls.append("due checks cancelled")
+                raise
+
+        return due_checks()
+
     def bundle(self) -> ServicesBundle:
         return _make_services_bundle(
             update_outcome_service=MagicMock(note_start=self._step("note_update_outcome")),
@@ -92,6 +109,11 @@ class _Recorded:
                 cleanup_leftover_tmp_files=self._step("cleanup_leftover_tmp_files"),
             ),
             save_sync_service=MagicMock(record_save_directories_once=self._backfill),
+            update_check_service=MagicMock(run_due_checks=self._due_checks),
+            update_install_service=MagicMock(
+                remove_leftovers=self._step("remove_update_leftovers"),
+                shutdown=self._async_step("update_install_service.shutdown"),
+            ),
             sync_service=MagicMock(shutdown=self._step("sync_service.shutdown")),
             prune_service=MagicMock(shutdown=self._async_step("prune_service.shutdown")),
             download_service=MagicMock(shutdown=self._async_step("download_service.shutdown")),
@@ -112,6 +134,7 @@ def _application(recorded: _Recorded) -> Application:
 
 # Every service shutdown, in the order they run.
 _SHUTDOWNS = [
+    "update_install_service.shutdown",
     "sync_service.shutdown",
     "prune_service.shutdown",
     "download_service.shutdown",
@@ -179,6 +202,16 @@ class TestTheStartUpRepairs:
         recorded.backfill_release.set()
         await asyncio.wait_for(app.shutdown(), 5)
 
+    async def test_the_release_check_is_started_to_run_for_as_long_as_the_backend_runs(self):
+        recorded = _Recorded()
+        app = _application(recorded)
+
+        app.run_startup_repairs(lambda _name: None)
+        await asyncio.wait_for(recorded.due_checks_started.wait(), 5)
+
+        assert "due checks cancelled" not in recorded.calls
+        await asyncio.wait_for(app.shutdown(), 5)
+
 
 class TestTheNetworkStep:
     async def test_it_migrates_legacy_credentials(self):
@@ -199,16 +232,17 @@ class TestShutdown:
 
         assert recorded.calls == _SHUTDOWNS
 
-    async def test_a_backfill_still_running_is_cancelled_first(self):
+    async def test_the_background_tasks_still_running_are_cancelled_first(self):
         recorded = _Recorded()
         app = _application(recorded)
         app.run_startup_repairs(lambda _name: None)
         await asyncio.wait_for(recorded.backfill_started.wait(), 5)
+        await asyncio.wait_for(recorded.due_checks_started.wait(), 5)
         recorded.calls.clear()
 
         await asyncio.wait_for(app.shutdown(), 5)
 
-        assert recorded.calls == ["backfill cancelled", *_SHUTDOWNS]
+        assert recorded.calls == ["backfill cancelled", "due checks cancelled", *_SHUTDOWNS]
 
 
 _UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
@@ -232,10 +266,12 @@ class TestBuildApplication:
         return build_application(
             directories=_directories_at(tmp_path),
             update_source=_UPDATE_SOURCE,
+            installer_environment=(),
             user_home=str(tmp_path / "home"),
             logger=LOGGER,
             loop=asyncio.get_running_loop(),
             emit=emit,
+            steam=FakeSteamInterface(),
         )
 
     async def test_it_wires_the_services(self, tmp_path):

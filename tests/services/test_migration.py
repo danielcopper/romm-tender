@@ -1015,6 +1015,26 @@ class TestMigrateRetroDeckFiles:
         assert seen == [before, before]
 
     @pytest.mark.asyncio
+    async def test_a_run_is_running_while_it_moves_files_and_a_pending_one_is_not(self, migration, tmp_path):
+        """What an update waits for: a migration that is moving files, never one the user has not answered."""
+        self._conflicting_rom(migration, tmp_path)
+        service = migration.service
+        seen: list[bool] = []
+
+        async def _watched_run(*_args: Any) -> dict[str, Any]:
+            seen.append(service.is_retrodeck_migration_running())
+            return {"success": True}
+
+        assert service.is_retrodeck_migration_pending() is True
+        assert service.is_retrodeck_migration_running() is False
+        service._run_migration = _watched_run
+
+        await migration.service.migrate_retrodeck_files("skip")
+
+        assert seen == [True]
+        assert service.is_retrodeck_migration_running() is False
+
+    @pytest.mark.asyncio
     async def test_a_run_that_raises_leaves_nothing_in_flight(self, migration, tmp_path):
         # Left behind, the counter would hold every sync off and the status would
         # report a migration nobody is running, until the process restarts.

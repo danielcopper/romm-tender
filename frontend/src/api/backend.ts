@@ -1246,6 +1246,74 @@ export const dismissUpdateAnnouncement = callable<[], { success: true }>("dismis
 /** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */
 export const dismissUpdateFailure = callable<[string], UpdateSettingWrite>("dismiss_update_failure");
 
+/**
+ * One reason a press of Install has to wait. `apps` names what Steam lists as
+ * running; `frees_at` is when Steam's interface may be reloaded again, in epoch
+ * seconds. `running_apps_unknown` is a reading that could not be taken, never
+ * "nothing running".
+ */
+export type UpdateWaitReason =
+  | { reason: "app_running"; apps: string[] }
+  | { reason: "interface_reload_limit"; frees_at: number }
+  | {
+      reason:
+        | "running_apps_unknown"
+        | "library_sync"
+        | "rom_downloads"
+        | "save_sync"
+        | "firmware_downloads"
+        | "save_directory_move"
+        | "removed_games_cleanup"
+        | "retrodeck_migration";
+    };
+
+/** Where an install attempt is; after `installer_started` this backend is replaced, or the attempt fails. */
+export type UpdateInstallStep = "downloading" | "verifying" | "installer_started" | "failed";
+
+/** How an attempt ended before the installer stopped this backend. */
+export type UpdateInstallFailure =
+  "download_failed" | "checksum_mismatch" | "installer_not_started" | "installer_stopped";
+
+/** One press of Install, as far as it got — the state answer's `attempt` and the progress event's payload. */
+export interface UpdateInstallAttempt {
+  version: string;
+  step: UpdateInstallStep;
+  bytes_done: number;
+  /** The size the download announced, `null` where it announced none. */
+  bytes_total: number | null;
+  /** Set exactly when `step` is `failed`. */
+  failure: UpdateInstallFailure | null;
+}
+
+/**
+ * Whether Install is offered for the last seen release, and what it waits for.
+ *
+ * `offered` holds only on the installed program, with the check on and a stored
+ * release newer than the running one, which `version` names. `wait_reasons` is
+ * empty while nothing is offered or an attempt is under way.
+ * `paused_downloads` counts the paused ROM downloads the restart cancels.
+ * `try_again` says the offered version already failed once — here, or in an
+ * update the installer rolled back.
+ */
+export interface UpdateInstallState {
+  offered: boolean;
+  version: string | null;
+  wait_reasons: UpdateWaitReason[];
+  paused_downloads: number;
+  attempt: UpdateInstallAttempt | null;
+  try_again: boolean;
+}
+
+export const getUpdateInstallState = callable<[], UpdateInstallState>("get_update_install_state");
+
+/** Why a press of Install was refused; `update_waiting` carries every reason it waits for. */
+export type UpdateInstallRefusal =
+  | (CallableFailure & { reason: "update_waiting"; wait_reasons: UpdateWaitReason[] })
+  | (CallableFailure & { reason: "update_in_progress" | "not_offered" | "version_changed" });
+
+/** Install the named version, which must be the stored one; answers once the attempt has started. */
+export const installUpdate = callable<[string], { success: true } | UpdateInstallRefusal>("install_update");
+
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
 // See SessionLifecycleService in backend/services/session_lifecycle.py.

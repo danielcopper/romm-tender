@@ -9,6 +9,7 @@ open it.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -23,7 +24,7 @@ from lib.path_safety import PathTraversalError
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
 
     from domain.firmware_wants import FirmwarePlacement
     from services.firmware.demand import FirmwareDemand
@@ -79,6 +80,22 @@ class FirmwareDownloader:
         self._uow_factory = config.uow_factory
         self._loop = config.loop
         self._logger = config.logger
+        # A download is awaited inside the call that asked for it, so the calls
+        # still running are the whole of what is in flight.
+        self._calls_in_flight = 0
+
+    def is_downloading(self) -> bool:
+        """Whether a call made under :meth:`downloading` is still running."""
+        return self._calls_in_flight > 0
+
+    @contextlib.contextmanager
+    def downloading(self) -> Iterator[None]:
+        """Count the block as a download in flight, for as long as it runs."""
+        self._calls_in_flight += 1
+        try:
+            yield
+        finally:
+            self._calls_in_flight -= 1
 
     def _download_firmware_post_io(self, fw, firmware_id, dest, tmp_path):
         """Sync worker for download_firmware — file rename, hash verification, DB persist.

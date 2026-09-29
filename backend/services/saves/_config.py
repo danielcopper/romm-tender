@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         SettingsPersister,
         SystemResolver,
         UnitOfWorkFactory,
+        UpdateInProgressFn,
     )
 
 
@@ -96,6 +97,10 @@ class SaveServiceConfig:
         no-fingerprint path.
     emit:
         Event emitter for pushing save-sync progress to the frontend.
+    is_update_in_progress:
+        Callback returning ``True`` while an update of this program is being
+        installed; the sync engine refuses a pre-launch or post-exit sync and
+        does not follow a save directory on this signal, as it does below.
     is_retrodeck_migration_pending:
         Callback returning ``True`` when a RetroDECK migration is in
         flight; the sync engine's own backstop — it refuses a pre-launch or
@@ -134,6 +139,7 @@ class SaveServiceConfig:
     machine_id_provider: MachineIdReader
     log_debug: DebugLogger
     emit: EventEmitter
+    is_update_in_progress: UpdateInProgressFn
     is_retrodeck_migration_pending: MigrationPendingFn
     conflict_rules: ConflictRules
     uow_factory: UnitOfWorkFactory

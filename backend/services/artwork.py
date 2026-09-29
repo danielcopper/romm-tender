@@ -816,7 +816,7 @@ class ArtworkService:
         the canonical ``{success, reason, message}`` failure shape on every
         failure branch — see ``lib/list_result.py``.
         """
-        async with self._rules.hold("refresh_cover_artwork", migration=True, prune=True) as refusal:
+        async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
@@ -1029,7 +1029,9 @@ class ArtworkService:
         from the one the dry run answered; any shortfall of ``removed_count``
         below it is candidates whose unlink failed, which are still on disk.
         """
-        async with self._rules.hold("cleanup_orphaned_grid_images", migration=True, sync=True, prune=True) as refusal:
+        async with self._rules.hold(
+            "cleanup_orphaned_grid_images", update=True, migration=True, sync=True, prune=True
+        ) as refusal:
             if refusal is not None:
                 return refusal
             grid = self._steam_config.grid_dir()

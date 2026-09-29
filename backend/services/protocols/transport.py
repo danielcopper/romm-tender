@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 from lib.romm_paging import LIST_PAGE_SIZE
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from models.cover import CoverRevalidation
     from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResponse
     from models.sync import (
@@ -489,6 +491,18 @@ class LatestReleaseFn(Protocol):
     """
 
     def __call__(self) -> LatestRelease | None: ...
+
+
+class ReleaseAssetDownloadFn(Protocol):
+    """Download one asset of this program's releases to a file.
+
+    *progress*, when given, is called with the bytes written so far and the
+    size the server announced (``None`` where it announced none), from the
+    thread the download runs on. Raises on any failure; on return *dest*
+    holds the whole body.
+    """
+
+    def __call__(self, url: str, dest: str, progress: Callable[[int, int | None], None] | None) -> None: ...
 
 
 class SteamGridDbApi(Protocol):

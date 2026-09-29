@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import http.server
 import json
+import threading
 import urllib.error
 from email.message import Message
 from unittest.mock import MagicMock, patch
@@ -168,3 +170,125 @@ class TestEveryFailureIsSilent:
         with _answering(_payload(tag=tag)):
             assert adapter.get_latest_release() is None
         assert log
+
+
+class _AssetServer:
+    """A loopback HTTP server answering one body per path, as a release's asset host would."""
+
+    def __init__(self) -> None:
+        self.bodies: dict[str, bytes] = {}
+        self.announce: dict[str, int] = {}
+        self.user_agents: list[str | None] = []
+        server = self
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                server.user_agents.append(self.headers.get("User-Agent"))
+                body = server.bodies.get(self.path)
+                if body is None:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(server.announce.get(self.path, len(body))))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args: object) -> None:
+                return
+
+        self._httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._thread.start()
+
+    def url(self, path: str) -> str:
+        return f"http://127.0.0.1:{self._httpd.server_address[1]}{path}"
+
+    def close(self) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()
+        self._thread.join()
+
+
+@pytest.fixture
+def assets():
+    server = _AssetServer()
+    yield server
+    server.close()
+
+
+class TestDownloadAsset:
+    def test_the_whole_body_lands_at_the_destination_with_progress_along_the_way(self, adapter, assets, tmp_path):
+        body = bytes(range(256)) * 1024
+        assets.bodies["/romm-tender-1.1.0.tar.gz"] = body
+        dest = tmp_path / "romm-tender-1.1.0.tar.gz"
+        ticks: list[tuple[int, int | None]] = []
+
+        adapter.download_asset(assets.url("/romm-tender-1.1.0.tar.gz"), str(dest), lambda d, t: ticks.append((d, t)))
+
+        assert dest.read_bytes() == body
+        assert ticks[-1] == (len(body), len(body))
+        assert [done for done, _total in ticks] == sorted(done for done, _total in ticks)
+        assert not (tmp_path / "romm-tender-1.1.0.tar.gz.part").exists()
+
+    def test_it_asks_with_the_program_user_agent(self, adapter, assets, tmp_path):
+        assets.bodies["/a"] = b"x"
+
+        adapter.download_asset(assets.url("/a"), str(tmp_path / "a"), None)
+
+        assert assets.user_agents == ["romm-tender/9.9.9"]
+
+    def test_a_missing_asset_raises_and_leaves_nothing_behind(self, adapter, assets, tmp_path):
+        dest = tmp_path / "missing"
+
+        with pytest.raises(urllib.error.HTTPError):
+            adapter.download_asset(assets.url("/missing"), str(dest), None)
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_body_shorter_than_announced_raises_and_leaves_nothing_behind(self, adapter, tmp_path):
+        """Written as the response a server gives when the connection drops mid-body."""
+        resp = MagicMock()
+        headers = Message()
+        headers["Content-Length"] = "10"
+        resp.headers = headers
+        resp.read.side_effect = [b"12345", b""]
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        dest = tmp_path / "short"
+
+        with patch("urllib.request.urlopen", return_value=resp), pytest.raises(OSError, match="5 of 10"):
+            adapter.download_asset("https://github.test/short", str(dest), None)
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_a_download_that_raises_midway_leaves_no_partial_file(self, adapter, assets, tmp_path):
+        assets.bodies["/a"] = b"x" * 200_000
+
+        def interrupt(done: int, _total: int | None) -> None:
+            raise RuntimeError("interrupted")
+
+        with pytest.raises(RuntimeError, match="interrupted"):
+            adapter.download_asset(assets.url("/a"), str(tmp_path / "a"), interrupt)
+
+        assert list(tmp_path.iterdir()) == []
+
+    @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://x.test/a", "/relative"])
+    def test_an_address_that_is_not_http_is_refused_before_anything_is_asked(self, adapter, tmp_path, url):
+        with patch("urllib.request.urlopen") as opened, pytest.raises(ValueError, match="not an HTTP"):
+            adapter.download_asset(url, str(tmp_path / "a"), None)
+
+        opened.assert_not_called()
+
+    def test_no_announced_size_is_reported_as_none(self, adapter, tmp_path):
+        resp = MagicMock()
+        resp.headers = Message()
+        resp.read.side_effect = [b"abc", b""]
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        ticks: list[tuple[int, int | None]] = []
+
+        with patch("urllib.request.urlopen", return_value=resp):
+            adapter.download_asset("https://github.test/a", str(tmp_path / "a"), lambda d, t: ticks.append((d, t)))
+
+        assert ticks == [(3, None)]
+        assert (tmp_path / "a").read_bytes() == b"abc"

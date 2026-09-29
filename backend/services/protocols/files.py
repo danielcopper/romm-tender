@@ -32,6 +32,36 @@ if TYPE_CHECKING:
     from domain.update_outcome import UpdateFailure
 
 
+class UpdateStagingStore(Protocol):
+    """The directory a release is downloaded into and its installer unpacked into, before the installer runs.
+
+    It holds nothing that outlives an attempt, so it is emptied whole rather
+    than file by file. ``extract_installer`` takes the one member it asks for
+    and writes it under a name of its own choosing — never a path the archive
+    names — and raises where the tarball holds no such regular file.
+    """
+
+    def remove_all(self) -> None:
+        """Remove the directory and everything in it; nothing there is nothing to do."""
+        ...
+
+    def prepare(self) -> None:
+        """Start the directory afresh, empty."""
+        ...
+
+    def tarball_path(self, version: str) -> str:
+        """Where *version*'s tarball goes, under the name the installer's checksum file names it by."""
+        ...
+
+    def sha256_of(self, path: str) -> str:
+        """The lowercase sha256 hex of the file at *path*."""
+        ...
+
+    def extract_installer(self, tarball: str) -> str:
+        """Unpack the installer out of *tarball* into the directory, and answer its path."""
+        ...
+
+
 class DirectoryFileListerFn(Protocol):
     """Recursively list the absolute paths of every file under a directory.
 

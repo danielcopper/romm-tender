@@ -16,6 +16,7 @@ import {
   resetUpdateNoticeStoreForTests,
   runUpdateCheckNow,
   setUpdateCheckSwitch,
+  takePushedUpdateNotice,
 } from "./updateNoticeStore";
 
 const NOTICE: UpdateNotice = {
@@ -259,6 +260,42 @@ describe("updateNoticeStore", () => {
 
       expect(await pressed).toBe("superseded");
       expect(getUpdateNoticeState().available).toBe(false);
+    });
+  });
+  describe("a notice the backend pushed", () => {
+    it("is taken as the answer", () => {
+      takePushedUpdateNotice({ ...NOTICE, latest_version: "0.35.0" });
+
+      expect(getUpdateNoticeState()).toEqual({
+        available: true,
+        newer: true,
+        latestVersion: "0.35.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: true,
+      });
+    });
+
+    it("tells every subscriber", () => {
+      const heard = vi.fn();
+      const stop = onUpdateNoticeChange(heard);
+
+      takePushedUpdateNotice(NOTICE);
+      stop();
+
+      expect(heard).toHaveBeenCalledTimes(1);
+    });
+
+    it("overtakes a read still in flight, whose older answer then writes nothing", async () => {
+      const slow = deferred<UpdateNotice>();
+      vi.mocked(getUpdateNotice).mockReturnValueOnce(slow.promise);
+
+      const reading = fetchUpdateNotice();
+      takePushedUpdateNotice({ ...NOTICE, latest_version: "0.35.0" });
+      slow.resolve({ ...NOTICE, latest_version: "0.34.0" });
+      await reading;
+
+      expect(getUpdateNoticeState().latestVersion).toBe("0.35.0");
     });
   });
 });

@@ -135,7 +135,7 @@ class DiscService:
         the live Steam shortcut, plus the now-effective ``selected`` value, and a
         ``disc_selection`` lease in ``prune_lease_token`` for that write.
         """
-        async with self._rules.hold("select_disc", migration=True, prune=True) as refusal:
+        async with self._rules.hold("select_disc", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)

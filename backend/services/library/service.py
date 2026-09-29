@@ -378,13 +378,13 @@ class LibraryService:
         return await self._fetcher.get_platforms()
 
     async def save_platform_sync(self, platform_id, enabled):
-        async with self._rules.hold("save_platform_sync", migration=True) as refusal:
+        async with self._rules.hold("save_platform_sync", update=True, migration=True) as refusal:
             if refusal is not None:
                 return refusal
             return self._fetcher.save_platform_sync(platform_id, enabled)
 
     async def set_all_platforms_sync(self, enabled):
-        async with self._rules.hold("set_all_platforms_sync", migration=True) as refusal:
+        async with self._rules.hold("set_all_platforms_sync", update=True, migration=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._fetcher.set_all_platforms_sync(enabled)
@@ -394,20 +394,20 @@ class LibraryService:
         return await self._fetcher.get_collections()
 
     async def save_collection_sync(self, collection_id, kind, enabled):
-        async with self._rules.hold("save_collection_sync", migration=True) as refusal:
+        async with self._rules.hold("save_collection_sync", update=True, migration=True) as refusal:
             if refusal is not None:
                 return refusal
             return self._fetcher.save_collection_sync(collection_id, kind, enabled)
 
     async def save_collections_sync(self, collection_ids, kind, enabled):
-        async with self._rules.hold("save_collections_sync", migration=True) as refusal:
+        async with self._rules.hold("save_collections_sync", update=True, migration=True) as refusal:
             if refusal is not None:
                 return refusal
             return self._fetcher.save_collections_sync(collection_ids, kind, enabled)
 
     # Sync control
     async def start_sync(self):
-        async with self._rules.hold("start_sync", migration=True, prune=True) as refusal:
+        async with self._rules.hold("start_sync", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             return self._orchestrator.start_sync()
@@ -420,13 +420,13 @@ class LibraryService:
 
     # Preview / apply
     async def sync_preview(self):
-        async with self._rules.hold("sync_preview", migration=True, prune=True) as refusal:
+        async with self._rules.hold("sync_preview", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._orchestrator.sync_preview()
 
     async def sync_apply_delta(self, preview_id):
-        async with self._rules.hold("sync_apply_delta", migration=True, prune=True) as refusal:
+        async with self._rules.hold("sync_apply_delta", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._orchestrator.sync_apply_delta(preview_id)
@@ -455,7 +455,7 @@ class LibraryService:
         return self._reporter.get_registry_platforms()
 
     async def clear_sync_cache(self):
-        async with self._rules.hold("clear_sync_cache", migration=True, prune=True) as refusal:
+        async with self._rules.hold("clear_sync_cache", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             return self._reporter.clear_sync_cache()

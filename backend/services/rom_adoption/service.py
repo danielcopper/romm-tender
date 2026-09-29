@@ -484,7 +484,7 @@ class RomAdoptionService:
         write to, so its lease would hold off every cleanup until it expired. A
         download's ``download_complete`` is leased on the same condition.
         """
-        async with self._rules.hold("adopt_existing_rom", migration=True, prune=True) as refusal:
+        async with self._rules.hold("adopt_existing_rom", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)

@@ -59,6 +59,7 @@ def _directories_at(tmp_path) -> AppDirectories:
 
 
 _UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
+_INSTALLER_ENVIRONMENT = (("TENDER_DATA_DIR", "/data"),)
 
 
 class TestBuildBackend:
@@ -77,6 +78,7 @@ class TestBuildBackend:
         built = await build_backend(
             directories=_directories_at(tmp_path),
             update_source=_UPDATE_SOURCE,
+            installer_environment=_INSTALLER_ENVIRONMENT,
             user_home=str(tmp_path / "home"),
             logger=LOGGER,
             status=status,
@@ -87,16 +89,18 @@ class TestBuildBackend:
     async def test_it_builds_the_application_on_the_running_loop_emitting_through_the_sink(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
-        _built, _app, _status, events, asked = await self._build(tmp_path, monkeypatch)
+        _built, _app, status, events, asked = await self._build(tmp_path, monkeypatch)
 
         assert asked == [
             {
                 "directories": _directories_at(tmp_path),
                 "update_source": _UPDATE_SOURCE,
+                "installer_environment": _INSTALLER_ENVIRONMENT,
                 "user_home": str(tmp_path / "home"),
                 "logger": LOGGER,
                 "loop": asyncio.get_running_loop(),
                 "emit": events.emit,
+                "steam": status.steam,
             }
         ]
 

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
     from contextlib import AbstractAsyncContextManager
 
     from domain.game_instance import GameInstance
@@ -171,6 +171,35 @@ class RendererGcFn(Protocol):
     def __call__(self) -> bool: ...
 
 
+class SteamInterfaceReader(Protocol):
+    """What only the process hosting this backend can read of Steam's interface.
+
+    ``running_apps`` is one reading of the apps Steam lists as running, by
+    name, and ``None`` where no reading could be taken — no debugger attached,
+    or the panel not being loaded at all — which is never the same as none
+    running. ``reload_frees_at`` is the epoch second the limit on taking the
+    interface down lets one more through, ``None`` while it would now.
+    """
+
+    async def running_apps(self) -> tuple[str, ...] | None: ...
+
+    def reload_frees_at(self) -> float | None: ...
+
+
+class TransientUnitRunner(Protocol):
+    """Starts a command as a transient systemd user unit, and asks whether it still runs.
+
+    ``start`` answers ``None`` once the unit is running, or why it is not —
+    a name still in use among them — and never waits for the command to end.
+    ``is_active`` answers ``True`` while the unit runs, ``False`` once it has
+    ended or is unknown, and ``None`` where the user manager could not be asked.
+    """
+
+    def start(self, unit: str, command: Sequence[str], environment: Sequence[tuple[str, str]]) -> str | None: ...
+
+    def is_active(self, unit: str) -> bool | None: ...
+
+
 class GameProcessControl(Protocol):
     """Discovery and signalled termination of a flatpak app's host processes.
 
@@ -268,7 +297,7 @@ class PruneRunClaim(Protocol):
 class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
-    ``hold(label, migration=…, sync=…, prune=…)`` yields the canonical refusal
+    ``hold(label, update=…, migration=…, sync=…, prune=…)`` yields the canonical refusal
     of the first named rule that holds, or ``None`` when the block may run; with
     ``prune`` the block runs under an operation named *label*. *label* is the
     endpoint's name. ``retain`` holds an operation named *label* for detached
@@ -278,7 +307,7 @@ class ConflictRules(Protocol):
     call or the event and answers its token; ``release_lease`` gives one back by token.
     ``emit_under_lease`` emits an event through *emit_with* under a lease it
     takes, and gives the lease back when the emit raises or nobody heard it.
-    ``hold_start(label, migration=…, sync=…)`` is a cleanup's exclusive start:
+    ``hold_start(label, update=…, migration=…, sync=…)`` is a cleanup's exclusive start:
     it reserves the start first, then checks the named rules, and holds the
     reservation for the block. ``renew_lease`` extends a live lease by token,
     and ``release_orphaned_leases`` drops every lease and answers how many.
@@ -286,11 +315,17 @@ class ConflictRules(Protocol):
     """
 
     def hold(
-        self, label: str, *, migration: bool = False, sync: bool = False, prune: bool = False
+        self,
+        label: str,
+        *,
+        update: bool = False,
+        migration: bool = False,
+        sync: bool = False,
+        prune: bool = False,
     ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
 
     def hold_start(
-        self, label: str, *, migration: bool = False, sync: bool = False
+        self, label: str, *, update: bool = False, migration: bool = False, sync: bool = False
     ) -> AbstractAsyncContextManager[dict[str, Any] | None]: ...
 
     async def retain(self, task: asyncio.Task[Any], label: str) -> None: ...

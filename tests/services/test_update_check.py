@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock
+from fakes.system_time import FakeClock, FakeSleeper
 
 from domain.update_release import LatestRelease, ReleaseTarball, UpdateCheck, encode_update_check
 from services.update_check import (
@@ -22,6 +24,9 @@ from services.update_check import (
     UpdateCheckService,
     UpdateCheckServiceConfig,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _A_DAY = 24 * 60 * 60
 _NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program"}
@@ -50,6 +55,8 @@ def _make(
     clock: FakeClock | None = None,
     uow_factory: FakeUnitOfWorkFactory | None = None,
     log: list[str] | None = None,
+    sleeper: Any = None,
+    events: FakeEventSink | None = None,
 ):
     releases = FakeLatestRelease(answer=latest, raises=raises)
     used_settings = settings if settings is not None else {}
@@ -65,6 +72,8 @@ def _make(
             settings=used_settings,
             settings_persister=persister,
             loop=running_loop(),
+            sleeper=sleeper if sleeper is not None else FakeSleeper(),
+            emit=(events if events is not None else FakeEventSink()).emit,
             log_debug=lambda msg: sink.append(msg),
         ),
     )
@@ -579,6 +588,8 @@ class TestOverlappingChecks:
                 settings=settings,
                 settings_persister=FakeSettingsPersister(),
                 loop=running_loop(),
+                sleeper=FakeSleeper(),
+                emit=FakeEventSink().emit,
                 log_debug=lambda msg: None,
             ),
         )
@@ -687,3 +698,168 @@ class TestOverlappingChecks:
 
         assert settings[DISMISSED_KEY] == "0.35.0"
         assert answer["available"] is False
+
+
+class TestTheStoredRelease:
+    """What the install reads through this service rather than from the row."""
+
+    async def test_it_is_the_release_the_last_check_stored(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, releases, _, _ = _make(latest=_release("0.35.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+        releases.answer = None
+
+        assert await service.last_seen_release() == _release("0.35.0")
+        assert releases.calls == 1
+
+    async def test_no_check_yet_is_none(self):
+        service, releases, _, _ = _make()
+
+        assert await service.last_seen_release() is None
+        assert releases.calls == 0
+
+    async def test_it_is_read_whatever_the_switch_says(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, settings, _ = _make(latest=_release("0.35.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+        settings[ENABLED_KEY] = False
+
+        assert await service.last_seen_release() == _release("0.35.0")
+
+    def test_the_switch_is_on_by_default_and_off_once_switched_off(self):
+        service, _, settings, _ = _make()
+
+        assert service.is_check_enabled() is True
+        settings[ENABLED_KEY] = False
+        assert service.is_check_enabled() is False
+
+
+class _Rounds:
+    """A sleeper that lets *rounds* sleeps through, then parks until cancelled.
+
+    ``before`` maps a round's number, counted from 1, to what happens in the
+    world while that sleep lasts.
+    """
+
+    def __init__(self, rounds: int, before: dict[int, Callable[[], None]] | None = None) -> None:
+        self.rounds = rounds
+        self.before = before or {}
+        self.calls: list[float] = []
+        self.parked = asyncio.Event()
+
+    async def sleep(self, seconds: float) -> None:
+        self.calls.append(seconds)
+        if len(self.calls) > self.rounds:
+            self.parked.set()
+            await asyncio.Event().wait()
+        happening = self.before.get(len(self.calls))
+        if happening is not None:
+            happening()
+
+
+async def _run_rounds(service: UpdateCheckService, sleeper: _Rounds) -> None:
+    task = asyncio.ensure_future(service.run_due_checks())
+    try:
+        await asyncio.wait_for(sleeper.parked.wait(), 5)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+class TestTheRunningCheck:
+    async def test_it_asks_whenever_a_check_may_be_due_and_github_only_once_a_day(self):
+        clock = FakeClock()
+        sleeper = _Rounds(3)
+        service, releases, _, _ = _make(latest=_release("0.35.0"), clock=clock, sleeper=sleeper)
+
+        await _run_rounds(service, sleeper)
+
+        assert releases.calls == 1
+        assert sleeper.calls == [60 * 60] * 4
+
+    async def test_a_stamp_gone_stale_while_it_runs_is_checked_again(self):
+        clock = FakeClock()
+        sleeper = _Rounds(1)
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, _, _ = _make(latest=_release("0.35.0"), clock=clock, uow_factory=uow_factory)
+        await service.get_update_notice()
+        clock.advance(_A_DAY)
+        running, releases_now, _, _ = _make(
+            latest=_release("0.36.0"), clock=clock, uow_factory=uow_factory, sleeper=sleeper
+        )
+
+        await _run_rounds(running, sleeper)
+
+        assert releases_now.calls == 1
+        assert _stored(uow_factory)["version"] == "0.36.0"
+
+    async def test_a_changed_answer_is_pushed_to_the_panel_and_an_unchanged_one_is_not(self):
+        clock = FakeClock()
+        events = FakeEventSink()
+        sleeper = _Rounds(2)
+        service, _, _, _ = _make(latest=_release("0.35.0"), clock=clock, sleeper=sleeper, events=events)
+
+        await _run_rounds(service, sleeper)
+
+        assert [name for name, _ in events.events] == ["update_notice"]
+        _, notice = events.events[0]
+        assert set(notice) == _NOTICE_KEYS
+        assert (notice["available"], notice["latest_version"]) == (True, "0.35.0")
+
+    async def test_a_new_release_is_pushed_again(self):
+        clock = FakeClock()
+        events = FakeEventSink()
+        sleeper = _Rounds(3)
+        service, releases, _, _ = _make(latest=_release("0.35.0"), clock=clock, sleeper=sleeper, events=events)
+
+        def a_day_later_a_new_release() -> None:
+            clock.advance(_A_DAY)
+            releases.answer = _release("0.36.0")
+
+        sleeper.before[3] = a_day_later_a_new_release
+
+        await _run_rounds(service, sleeper)
+
+        assert [notice["latest_version"] for _, notice in events.events] == ["0.35.0", "0.36.0"]
+
+    async def test_with_the_switch_off_nothing_is_asked_and_nothing_pushed(self):
+        events = FakeEventSink()
+        sleeper = _Rounds(2)
+        service, releases, _, _ = _make(
+            latest=_release("0.35.0"), settings={ENABLED_KEY: False}, sleeper=sleeper, events=events
+        )
+
+        await _run_rounds(service, sleeper)
+
+        assert releases.calls == 0
+        assert events.events == []
+
+    async def test_a_check_that_reached_nothing_is_silent(self):
+        events = FakeEventSink()
+        sleeper = _Rounds(1)
+        service, releases, _, _ = _make(latest=None, sleeper=sleeper, events=events)
+
+        await _run_rounds(service, sleeper)
+
+        assert releases.calls == 1
+        ((_, notice),) = events.events
+        assert (notice["available"], notice["latest_version"]) == (False, None)
+
+    async def test_a_round_that_raises_is_logged_and_the_next_comes_as_usual(self, monkeypatch):
+        log: list[str] = []
+        sleeper = _Rounds(2)
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, log=log)
+        answers = iter([RuntimeError("database is locked")])
+
+        async def flaky():
+            for answer in answers:
+                raise answer
+            return {"available": False}
+
+        monkeypatch.setattr(service, "get_update_notice", flaky)
+
+        await _run_rounds(service, sleeper)
+
+        assert any("database is locked" in line for line in log)
+        assert len(sleeper.calls) == 3

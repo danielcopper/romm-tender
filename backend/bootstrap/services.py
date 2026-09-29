@@ -51,6 +51,7 @@ from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalSer
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
+from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
 from services.update_outcome import UpdateOutcomeService, UpdateOutcomeServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
@@ -85,7 +86,10 @@ class WiringConfig:
     start actually put the launcher under it — otherwise it is the copy the
     release ships. ``update_source`` is the entry point's other environment
     answer — where releases are asked for, and whether this process is the
-    installed program — handed to ``bootstrap()`` too.
+    installed program — handed to ``bootstrap()`` too. ``installer_environment``
+    is the third: the variables an installer started from the panel runs with,
+    resolved by the entry point from this process's environment and
+    directories.
     """
 
     adapters: AdapterBundle
@@ -96,6 +100,7 @@ class WiringConfig:
     directories: AppDirectories
     launcher: ShortcutLauncher
     update_source: UpdateSource
+    installer_environment: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -129,6 +134,7 @@ class ServicesBundle:
     shortcut_relocation_service: ShortcutRelocationService
     update_check_service: UpdateCheckService
     update_outcome_service: UpdateOutcomeService
+    update_install_service: UpdateInstallService
     launch_gate_service: LaunchGateService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
@@ -169,12 +175,15 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # whoever holds it. Built before every service so any of them can be handed it.
     prune_conflicts = PruneConflicts(logger=cfg.runtime.logger, log_debug=cfg.callbacks.log_debug)
     # The conflict rules a use case checks at its entry, built beside the
-    # prune conflicts so any service can be handed them. The migration and
-    # sync services that answer the other two rules are built later.
+    # prune conflicts so any service can be handed them. The update install,
+    # migration and sync services that answer the other three rules are built
+    # later.
+    update_in_progress_binding: LateBinding[bool] = LateBinding("update_in_progress")
     migration_pending_binding: LateBinding[bool] = LateBinding("migration_pending")
     sync_in_flight_binding: LateBinding[bool] = LateBinding("sync_in_flight")
     conflict_rules = ConflictRuleSet(
         prune_conflicts=prune_conflicts,
+        update_in_progress=update_in_progress_binding.get,
         migration_pending=migration_pending_binding.get,
         sync_in_flight=sync_in_flight_binding.get,
     )
@@ -282,6 +291,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         machine_id_provider=cfg.runtime.machine_id_provider,
         log_debug=cfg.callbacks.log_debug,
         emit=cfg.runtime.emit,
+        is_update_in_progress=update_in_progress_binding.get,
         is_retrodeck_migration_pending=migration_service.is_retrodeck_migration_pending,
         conflict_rules=conflict_rules,
         uow_factory=cfg.callbacks.uow_factory,
@@ -642,6 +652,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             post_exit_sync=save_sync_service,
             achievement_sync=achievements_service,
             migration_reader=migration_service,
+            update_in_progress=update_in_progress_binding.get,
             logger=cfg.runtime.logger,
             conflict_rules=conflict_rules,
         ),
@@ -691,6 +702,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
             loop=cfg.runtime.loop,
+            sleeper=cfg.runtime.sleeper,
+            emit=cfg.runtime.emit,
             log_debug=cfg.callbacks.log_debug,
         ),
     )
@@ -706,6 +719,35 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             logger=cfg.runtime.logger,
         ),
     )
+
+    # Built last: it reads the work in flight off every service that owns some.
+    update_install_service = UpdateInstallService(
+        config=UpdateInstallServiceConfig(
+            releases=update_check_service,
+            current_version=VERSION,
+            installed_program=cfg.update_source.installed_program,
+            steam=cfg.runtime.steam,
+            library_sync_in_flight=sync_service.is_sync_in_flight,
+            rom_downloads_in_flight=download_service.active_download_rom_ids,
+            download_queue=download_service.get_download_queue,
+            save_sync_in_flight=save_sync_service.is_save_sync_in_flight,
+            firmware_downloads_in_flight=firmware_service.is_downloading,
+            save_directory_move_in_flight=save_sync_service.is_save_directory_move_in_flight,
+            cleanup_running=prune_service.is_active,
+            migration_running=migration_service.is_retrodeck_migration_running,
+            read_update_failure=cfg.adapters.update_failure,
+            download_asset=cfg.adapters.download_release_asset,
+            staging=cfg.adapters.update_staging,
+            units=cfg.adapters.transient_units,
+            installer_environment=cfg.installer_environment,
+            emit=cfg.runtime.emit,
+            clock=cfg.runtime.clock,
+            sleeper=cfg.runtime.sleeper,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+        ),
+    )
+    update_in_progress_binding.set(update_install_service.is_update_in_progress)
 
     return ServicesBundle(
         prune_conflicts=prune_conflicts,
@@ -735,6 +777,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         shortcut_relocation_service=shortcut_relocation_service,
         update_check_service=update_check_service,
         update_outcome_service=update_outcome_service,
+        update_install_service=update_install_service,
         launch_gate_service=launch_gate_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,

@@ -143,6 +143,13 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "acknowledge_update_toast",
     "dismiss_update_announcement",
     "dismiss_update_failure",
+    # Installing the last seen release from the panel. The read touches no
+    # RetroDECK state — it reads the stored release, the installer's record and
+    # this process's memory. The press does not name the migration rule because
+    # it asks the narrower question itself: a migration that is RUNNING makes it
+    # wait, while one that is merely pending survives the restart and does not.
+    "get_update_install_state",
+    "install_update",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.
     # Touches no RetroDECK state and reads nothing from disk. It has to answer

@@ -248,7 +248,7 @@ class RomRemovalService:
         removal that succeeded carries a ``rom_uninstall`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
-        async with self._rules.hold("remove_rom", migration=True, prune=True) as refusal:
+        async with self._rules.hold("remove_rom", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self.remove_rom_unchecked(rom_id)
@@ -368,7 +368,9 @@ class RomRemovalService:
         gone whether or not every other deletion succeeded. A refusal, this
         method's own included, carries neither ``app_ids`` nor a lease.
         """
-        async with self._rules.hold("uninstall_all_roms", migration=True, sync=True, prune=True) as refusal:
+        async with self._rules.hold(
+            "uninstall_all_roms", update=True, migration=True, sync=True, prune=True
+        ) as refusal:
             if refusal is not None:
                 return refusal
             result = await self._uninstall_all_roms()

@@ -551,7 +551,7 @@ class VersionSwitchService:
         switch that succeeded carries a ``version_switch`` lease in
         ``prune_lease_token`` for the frontend's Steam write.
         """
-        async with self._rules.hold("switch_version", migration=True, prune=True) as refusal:
+        async with self._rules.hold("switch_version", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self.switch_version_unchecked(app_id, target_rom_id, allow_stranded)

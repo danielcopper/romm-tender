@@ -220,7 +220,7 @@ class DownloadService:
         Checked against the ``start_download`` endpoint's conflict rules first.
         A started download's task holds an operation until it ends.
         """
-        async with self._rules.hold("start_download", migration=True, prune=True) as refusal:
+        async with self._rules.hold("start_download", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             rom_id = int(rom_id)
@@ -1263,7 +1263,7 @@ class DownloadService:
         Checked against the ``resume_download`` endpoint's conflict rules first.
         A resumed download's task holds an operation until it ends.
         """
-        async with self._rules.hold("resume_download", migration=True, prune=True) as refusal:
+        async with self._rules.hold("resume_download", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             rom_id = int(rom_id)

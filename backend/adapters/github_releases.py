@@ -1,16 +1,22 @@
-"""GitHub releases HTTP adapter — this program's own latest published release.
+"""GitHub releases HTTP adapter — this program's own published releases.
 
-Owns the one request that asks whether a newer Tender exists, and answers in
-this program's vocabulary rather than GitHub's. Every failure answers ``None``:
-the caller's whole purpose is a card it may or may not show, so an unreachable
-network, an unreadable body, or a payload shaped differently than expected all
-mean "nothing to say" and never an error the user has to read.
+Owns the requests that reach this program's releases: the one that asks whether
+a newer Tender exists, answered in this program's vocabulary rather than
+GitHub's, and the download of one of a release's assets. The two fail
+differently. The question answers ``None`` on every failure: the caller's whole
+purpose is a card it may or may not show, so an unreachable network, an
+unreadable body, or a payload shaped differently than expected all mean
+"nothing to say". A download raises, because its caller has to tell the user
+the install did not happen.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import ssl
+import urllib.parse
 import urllib.request
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +31,15 @@ if TYPE_CHECKING:
 # ``run_in_executor`` on the backend draws from. Nothing awaits the check before
 # rendering, so the bound protects that pool rather than a page.
 _TIMEOUT_SECONDS = 10
+
+# A download's bound is per read rather than for the whole body, which may take
+# minutes on a slow line: it ends a transfer that has stalled, not a slow one.
+_DOWNLOAD_READ_TIMEOUT_SECONDS = 30
+_DOWNLOAD_BLOCK_BYTES = 64 * 1024
+
+# An asset address comes out of a GitHub answer, or out of the fake server a
+# test points ``TENDER_RELEASE_API`` at, which serves plain HTTP on loopback.
+_DOWNLOAD_SCHEMES = frozenset({"https", "http"})
 
 
 class GithubReleaseAdapter:
@@ -115,6 +130,41 @@ class GithubReleaseAdapter:
             self._log_debug(f"[update] release {version} carries no usable {checksum_name} yet")
             return None
         return ReleaseTarball(url=url, digest=digest, checksum_url=checksum_url)
+
+    def download_asset(self, url: str, dest: str, progress: Callable[[int, int | None], None] | None) -> None:
+        """Download the asset at *url* to *dest*, calling *progress* with the bytes so far and the announced size.
+
+        Written beside *dest* first and renamed into place only once the whole
+        body has arrived, so *dest* never holds part of one. Raises ``ValueError``
+        for an address that is not HTTP(S) and ``OSError`` for a body shorter
+        than the size the server announced; anything the request itself raises
+        propagates.
+        """
+        if urllib.parse.urlsplit(url).scheme not in _DOWNLOAD_SCHEMES:
+            raise ValueError(f"not an HTTP(S) address: {url!r}")
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("User-Agent", self._user_agent)
+        partial = f"{dest}.part"
+        try:
+            with urllib.request.urlopen(
+                req, context=self._ssl_context(), timeout=_DOWNLOAD_READ_TIMEOUT_SECONDS
+            ) as resp:
+                announced = resp.headers.get("Content-Length")
+                total = int(announced) if announced and announced.isdigit() else None
+                done = 0
+                with open(partial, "wb") as out:
+                    while chunk := resp.read(_DOWNLOAD_BLOCK_BYTES):
+                        out.write(chunk)
+                        done += len(chunk)
+                        if progress is not None:
+                            progress(done, total)
+            if total is not None and done != total:
+                raise OSError(f"download ended at {done} of {total} bytes")
+            os.replace(partial, dest)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.remove(partial)
+            raise
 
     @staticmethod
     def _ssl_context() -> ssl.SSLContext:

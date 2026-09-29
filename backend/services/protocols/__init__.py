@@ -37,9 +37,11 @@ from services.protocols.cross_service import (
     DeviceForgetFn,
     DeviceIdProvider,
     DiscResolver,
+    DownloadQueueFn,
     DownloadTargetGateFn,
     InstalledRomFilesRemoverFn,
     InstalledRomRemoverFn,
+    LastSeenReleaseReader,
     LaunchGateDriftReader,
     LaunchGateInstalledChecker,
     LaunchGateRomLookup,
@@ -65,7 +67,9 @@ from services.protocols.cross_service import (
     SessionPostExitSync,
     SiblingSupersedeFn,
     SiblingSupersedeProvider,
+    UpdateInProgressFn,
     VersionSwitcherFn,
+    WorkInFlightFn,
 )
 from services.protocols.determinism import Clock, Sleeper, UuidGen
 from services.protocols.files import (
@@ -83,6 +87,7 @@ from services.protocols.files import (
     SgdbArtworkCache,
     SteamRecoveryStore,
     UpdateFailureFn,
+    UpdateStagingStore,
 )
 from services.protocols.infra import (
     ComputeSyncActionFn,
@@ -100,6 +105,8 @@ from services.protocols.infra import (
     RendererRssFn,
     ResolvedPathFn,
     ResolveUploadConflictFn,
+    SteamInterfaceReader,
+    TransientUnitRunner,
 )
 from services.protocols.paths import (
     CoreInfoProvider,
@@ -132,6 +139,7 @@ from services.protocols.repositories import (
 )
 from services.protocols.transport import (
     LatestReleaseFn,
+    ReleaseAssetDownloadFn,
     RommAchievementsApi,
     RommApi,
     RommConnectionApi,
@@ -176,6 +184,7 @@ __all__ = [
     "DiscResolver",
     "DownloadFileStore",
     "DownloadQueueCleanup",
+    "DownloadQueueFn",
     "DownloadTargetGateFn",
     "EventEmitter",
     "FirmwareCacheRepository",
@@ -187,6 +196,7 @@ __all__ = [
     "InstalledRomFilesRemoverFn",
     "InstalledRomRemoverFn",
     "KvConfigRepository",
+    "LastSeenReleaseReader",
     "LatestReleaseFn",
     "LaunchGateDriftReader",
     "LaunchGateInstalledChecker",
@@ -208,6 +218,7 @@ __all__ = [
     "RecoveryBundleInventoryReader",
     "RecoveryBundleStore",
     "RelaunchOptionsReader",
+    "ReleaseAssetDownloadFn",
     "RendererGcFn",
     "RendererRssFn",
     "ResolveUploadConflictFn",
@@ -256,15 +267,20 @@ __all__ = [
     "Sleeper",
     "SteamConfigStore",
     "SteamGridDbApi",
+    "SteamInterfaceReader",
     "SteamRecoveryStore",
     "SyncRunRepository",
     "SystemKnownFn",
     "SystemM3uSupportFn",
     "SystemResolver",
     "SystemSupportedExtensionsFn",
+    "TransientUnitRunner",
     "UnitOfWork",
     "UnitOfWorkFactory",
     "UpdateFailureFn",
+    "UpdateInProgressFn",
+    "UpdateStagingStore",
     "UuidGen",
     "VersionSwitcherFn",
+    "WorkInFlightFn",
 ]

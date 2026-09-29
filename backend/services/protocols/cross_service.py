@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.shortcut_data import EmulatorInvocation
+    from domain.update_release import LatestRelease
 
 
 class RomInstallRecorder(Protocol):
@@ -641,6 +642,48 @@ class MigrationPendingFn(Protocol):
     The composition root satisfies this with
     ``MigrationService.is_retrodeck_migration_pending``. SaveService
     gates destructive operations on this signal.
+    """
+
+    def __call__(self) -> bool: ...
+
+
+class LastSeenReleaseReader(Protocol):
+    """The release check's own answer, read by the install: the switch, and the last available release it saw.
+
+    The composition root satisfies this with ``UpdateCheckService``, the one
+    owner of the stored check. ``last_seen_release`` reads what the last check
+    stored and asks nothing new; ``None`` where no check has seen an available
+    release.
+    """
+
+    def is_check_enabled(self) -> bool: ...
+
+    async def last_seen_release(self) -> LatestRelease | None: ...
+
+
+class WorkInFlightFn(Protocol):
+    """Whether one kind of work a restart would cut short is under way now.
+
+    The composition root satisfies each with the reader on the service that
+    owns the work. Answered from memory, so it may be asked on the loop.
+    """
+
+    def __call__(self) -> bool: ...
+
+
+class DownloadQueueFn(Protocol):
+    """The ROM download queue as the panel is shown it: ``{"downloads": [entry, ...]}``, each with a ``status``."""
+
+    def __call__(self) -> dict[str, Any]: ...
+
+
+class UpdateInProgressFn(Protocol):
+    """Whether an update of this program is being installed, consumed where a migration is checked outside the rules.
+
+    The composition root satisfies this with
+    ``UpdateInstallService.is_update_in_progress``. It is the update rule's
+    answer, for the paths that ask the migration directly rather than through
+    ``ConflictRules`` — the save engine's backstops and the post-exit sync.
     """
 
     def __call__(self) -> bool: ...

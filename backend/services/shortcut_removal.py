@@ -91,7 +91,9 @@ class ShortcutRemovalService:
         ``shortcut_removal`` lease in ``prune_lease_token`` for the frontend's
         Steam writes.
         """
-        async with self._rules.hold("remove_all_shortcuts", migration=True, sync=True, prune=True) as refusal:
+        async with self._rules.hold(
+            "remove_all_shortcuts", update=True, migration=True, sync=True, prune=True
+        ) as refusal:
             if refusal is not None:
                 return refusal
             with self._uow_factory() as uow:
@@ -110,7 +112,9 @@ class ShortcutRemovalService:
         shortcut to remove, the answer carries a ``shortcut_removal`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
-        async with self._rules.hold("remove_platform_shortcuts", migration=True, sync=True, prune=True) as refusal:
+        async with self._rules.hold(
+            "remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True
+        ) as refusal:
             if refusal is not None:
                 return refusal
             try:

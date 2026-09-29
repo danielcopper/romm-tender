@@ -46,7 +46,10 @@ class _Endpoints:
     def __init__(self, conflicts: PruneConflicts) -> None:
         self._prune_conflicts = conflicts
         self._rules = ConflictRuleSet(
-            prune_conflicts=conflicts, migration_pending=lambda: False, sync_in_flight=lambda: False
+            prune_conflicts=conflicts,
+            update_in_progress=lambda: False,
+            migration_pending=lambda: False,
+            sync_in_flight=lambda: False,
         )
         self.called = False
 

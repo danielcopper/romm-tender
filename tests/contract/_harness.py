@@ -52,11 +52,14 @@ from bootstrap import (
 )
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_latest_release import FakeLatestRelease
+from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
+from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
+from fakes.fake_transient_units import FakeTransientUnits
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from domain.app_directories import AppDirectories
@@ -125,6 +128,12 @@ class ContractHarness:
     # The record of every claim that conflicts with a removed-game cleanup, as the
     # composition root built it. ``Endpoints`` holds none: the services it calls do.
     prune_conflicts: PruneConflicts
+    # The three edges an install from the panel reaches past this process: the
+    # host's reading of Steam, the release download, and the unit the installer
+    # would be started as — none of which a test may reach for real.
+    steam: FakeSteamInterface
+    downloads: FakeReleaseDownload
+    units: FakeTransientUnits
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -148,7 +157,7 @@ _SHIPPED_LAUNCHER = b'#!/bin/bash\nexec "$@"\n'
 _UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
 
 
-def build_contract_harness(tmp_path: Any) -> ContractHarness:
+def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) -> ContractHarness:
     """Build the real ``Endpoints`` over the real ``bootstrap()``, faking only the edges.
 
     Composes what ``build_application`` composes, with the edges swapped in
@@ -213,6 +222,9 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # real, every test that opens the update check would reach github.com and
     # spend a share of an IP-wide hourly budget.
     fake_releases = FakeLatestRelease()
+    fake_downloads = FakeReleaseDownload()
+    fake_units = FakeTransientUnits()
+    fake_steam = FakeSteamInterface()
     patched_adapters = dataclasses.replace(
         result.adapters,
         romm_api=fake_romm,
@@ -225,6 +237,8 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             states_root=os.path.join(result.callbacks.retrodeck_paths.retrodeck_home(), "states"),
         ),
         latest_release=fake_releases,
+        download_release_asset=fake_downloads,
+        transient_units=fake_units,
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.
@@ -252,12 +266,14 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             sleeper=fake_sleeper,
             hostname_provider=result.runtime_adapters.hostname_provider,
             machine_id_provider=result.runtime_adapters.machine_id_provider,
+            steam=fake_steam,
         ),
         callbacks=result.callbacks,
         min_required_version=MIN_ROMM_VERSION,
         directories=result.directories,
         launcher=result.launcher,
-        update_source=_UPDATE_SOURCE,
+        update_source=dataclasses.replace(_UPDATE_SOURCE, installed_program=installed_program),
+        installer_environment=(),
     )
     services = wire_services(cfg)
 
@@ -283,6 +299,9 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         cache_dir=result.directories.cache_dir,
         bin_dir=result.directories.bin_dir,
         prune_conflicts=services.prune_conflicts,
+        steam=fake_steam,
+        downloads=fake_downloads,
+        units=fake_units,
     )
 
 
@@ -290,7 +309,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
 # rule reaches it through the helper here, so moving where a condition lives
 # changes one helper rather than every test that needs the condition. Only the
 # cleanup's claim has a release, for a test that probes what a refusal left
-# behind once the claim is gone; the other two hold until the test ends, and
+# behind once the claim is gone; the other three hold until the test ends, and
 # each test gets a fresh harness.
 
 
@@ -316,6 +335,16 @@ def hold_sync_in_flight(harness: ContractHarness, state: SyncState = SyncState.R
     assert box.try_begin_run("held-sync-run", kind=SyncRunKind.APPLY)
     if state is SyncState.CANCELLING:
         box.request_cancel("held-sync-run")
+
+
+def hold_update_in_progress(harness: ContractHarness) -> None:
+    """Leave an update holding the update rule, as a press that passed its checks leaves it.
+
+    Set on the install service's own flag rather than by pressing: a real
+    attempt runs on by itself to the installer and fails there, which gives the
+    rule back, so the state would not hold still for the endpoint under test.
+    """
+    harness.app.services.update_install_service._holding = True
 
 
 _HELD_PRUNE_RUN = "held-prune-run"

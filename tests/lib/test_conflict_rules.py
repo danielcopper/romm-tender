@@ -11,9 +11,15 @@ from lib.conflict_rules import (
     operation_active_refusal,
     prune_active_refusal,
     sync_refusal,
+    update_refusal,
 )
 from lib.prune_conflicts import PruneConflicts
 
+_UPDATE_REFUSAL = {
+    "success": False,
+    "reason": "blocked_by_update",
+    "message": "Tender is installing an update and will restart in a moment.",
+}
 _MIGRATION_REFUSAL = {
     "success": False,
     "reason": "blocked_by_migration",
@@ -52,15 +58,19 @@ class _Condition:
 
 
 class _Rules:
-    def __init__(self, *, migration: bool = False, sync: bool = False, cleanup: bool = False) -> None:
+    def __init__(
+        self, *, update: bool = False, migration: bool = False, sync: bool = False, cleanup: bool = False
+    ) -> None:
         self.logger = _RecordingLogger()
         self.conflicts = PruneConflicts(logger=self.logger, log_debug=lambda _msg: None)
         if cleanup:
             self.conflicts.register_run("held-run")
+        self.update = _Condition(holds=update)
         self.migration = _Condition(holds=migration)
         self.sync = _Condition(holds=sync)
         self.rules = ConflictRuleSet(
             prune_conflicts=self.conflicts,
+            update_in_progress=self.update,
             migration_pending=self.migration,
             sync_in_flight=self.sync,
         )
@@ -75,6 +85,7 @@ async def _refusal(rules: ConflictRuleSet, **named: bool) -> dict[str, Any] | No
 
 
 def test_each_refusal_is_the_canonical_failure_shape():
+    assert update_refusal() == _UPDATE_REFUSAL
     assert migration_refusal() == _MIGRATION_REFUSAL
     assert sync_refusal() == _SYNC_REFUSAL
     assert prune_active_refusal() == _PRUNE_REFUSAL
@@ -86,6 +97,17 @@ def test_each_refusal_is_the_canonical_failure_shape():
 
 
 # ── Each rule on its own ─────────────────────────────────────────────────────
+
+
+async def test_an_update_in_progress_refuses_a_use_case_that_names_the_update_rule():
+    assert await _refusal(_Rules(update=True).rules, update=True) == _UPDATE_REFUSAL
+
+
+async def test_an_update_in_progress_does_not_refuse_a_use_case_that_names_only_the_migration_rule():
+    rules = _Rules(update=True)
+
+    assert await _refusal(rules.rules, migration=True) is None
+    assert rules.update.asked == 0
 
 
 async def test_a_pending_migration_refuses_a_use_case_that_names_the_migration_rule():
@@ -101,14 +123,15 @@ async def test_a_running_cleanup_refuses_a_use_case_that_names_the_prune_rule():
 
 
 async def test_no_condition_holding_lets_the_block_run():
-    assert await _refusal(_Rules().rules, migration=True, sync=True, prune=True) is None
+    assert await _refusal(_Rules().rules, update=True, migration=True, sync=True, prune=True) is None
 
 
 async def test_a_condition_the_use_case_does_not_name_is_never_asked():
-    rules = _Rules(migration=True, sync=True, cleanup=True)
+    rules = _Rules(update=True, migration=True, sync=True, cleanup=True)
 
     assert await _refusal(rules.rules) is None
 
+    assert rules.update.asked == 0
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
     assert rules.conflicts.conflicting_operations == 0
@@ -124,6 +147,16 @@ async def test_each_refusal_is_a_fresh_dict():
 
 
 # ── The order they are asked in ──────────────────────────────────────────────
+
+
+async def test_an_update_in_progress_answers_before_every_other_rule():
+    rules = _Rules(update=True, migration=True, sync=True, cleanup=True)
+
+    refusal = await _refusal(rules.rules, update=True, migration=True, sync=True, prune=True)
+
+    assert refusal == _UPDATE_REFUSAL
+    assert rules.migration.asked == 0
+    assert rules.sync.asked == 0
 
 
 async def test_a_pending_migration_answers_before_a_sync_in_flight_and_a_running_cleanup():
@@ -145,6 +178,7 @@ async def test_a_sync_in_flight_answers_before_a_running_cleanup():
 @pytest.mark.parametrize(
     ("condition", "named"),
     [
+        ({"update": True}, {"update": True, "prune": True}),
         ({"migration": True}, {"migration": True, "prune": True}),
         ({"sync": True}, {"sync": True, "prune": True}),
         ({"cleanup": True}, {"prune": True}),
@@ -336,12 +370,22 @@ async def test_the_rules_are_asked_while_the_reservation_is_held():
         return False
 
     rules.rules = ConflictRuleSet(
-        prune_conflicts=rules.conflicts, migration_pending=rules.migration, sync_in_flight=sync_in_flight
+        prune_conflicts=rules.conflicts,
+        update_in_progress=rules.update,
+        migration_pending=rules.migration,
+        sync_in_flight=sync_in_flight,
     )
 
     assert await _start_refusal(rules.rules, sync=True) is None
 
     assert seen == [True]
+
+
+async def test_an_update_in_progress_answers_the_start_before_a_pending_migration():
+    rules = _Rules(update=True, migration=True)
+
+    assert await _start_refusal(rules.rules, update=True, migration=True, sync=True) == _UPDATE_REFUSAL
+    assert rules.migration.asked == 0
 
 
 async def test_a_pending_migration_answers_the_start_before_a_sync_in_flight():
@@ -355,11 +399,11 @@ async def test_a_sync_in_flight_refuses_the_start():
     assert await _start_refusal(_Rules(sync=True).rules, migration=True, sync=True) == _SYNC_REFUSAL
 
 
-@pytest.mark.parametrize("condition", [{"migration": True}, {"sync": True}])
+@pytest.mark.parametrize("condition", [{"update": True}, {"migration": True}, {"sync": True}])
 async def test_a_refused_start_gives_its_reservation_back_before_it_answers(condition):
     rules = _Rules(**condition)
 
-    async with rules.rules.hold_start("start_prune", migration=True, sync=True) as refusal:
+    async with rules.rules.hold_start("start_prune", update=True, migration=True, sync=True) as refusal:
         assert refusal is not None
         assert rules.conflicts.cleanup_running is False
 
@@ -399,7 +443,10 @@ async def test_a_rule_that_raises_gives_the_reservation_back():
         raise RuntimeError("database locked")
 
     rules.rules = ConflictRuleSet(
-        prune_conflicts=rules.conflicts, migration_pending=migration_pending, sync_in_flight=rules.sync
+        prune_conflicts=rules.conflicts,
+        update_in_progress=rules.update,
+        migration_pending=migration_pending,
+        sync_in_flight=rules.sync,
     )
 
     with pytest.raises(RuntimeError, match="database locked"):

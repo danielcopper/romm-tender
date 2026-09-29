@@ -60,9 +60,12 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from adapters.transient_unit import SystemdRunAdapter
 from adapters.update_failure import UpdateFailureFileAdapter
+from adapters.update_staging import UpdateStagingAdapter
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
+from domain.update_install import UPDATE_DIR_NAME
 from domain.user_data_location import launcher_in_bin_dir, launcher_path
 
 if TYPE_CHECKING:
@@ -95,6 +98,7 @@ if TYPE_CHECKING:
         PruneArtifactStore,
         RecoveryBundleInventoryReader,
         RecoveryBundleStore,
+        ReleaseAssetDownloadFn,
         RendererGcFn,
         RendererRssFn,
         ResolvedPathFn,
@@ -109,12 +113,15 @@ if TYPE_CHECKING:
         SgdbArtworkCache,
         Sleeper,
         SteamConfigStore,
+        SteamInterfaceReader,
         SteamRecoveryStore,
         SystemKnownFn,
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
+        TransientUnitRunner,
         UnitOfWorkFactory,
         UpdateFailureFn,
+        UpdateStagingStore,
         UuidGen,
     )
 
@@ -161,6 +168,9 @@ class AdapterBundle:
     steam_recovery: SteamRecoveryStore
     latest_release: LatestReleaseFn
     update_failure: UpdateFailureFn
+    download_release_asset: ReleaseAssetDownloadFn
+    update_staging: UpdateStagingStore
+    transient_units: TransientUnitRunner
 
 
 @dataclass(frozen=True)
@@ -174,7 +184,9 @@ class StateBundle:
 class RuntimeBundle:
     """Process-level runtime infrastructure (event loop, logger, the event sink's emit, time/UUID/sleep seams).
 
-    It carries no directory. Where anything lives is the ``AppDirectories`` the
+    ``steam`` is the host's reading of Steam's interface, which only the
+    process hosting this backend can take and which ``main.py`` hands in the
+    way it hands in the emit. It carries no directory. Where anything lives is the ``AppDirectories`` the
     entry point resolved, which reaches a service as ``WiringConfig.directories``
     — this bundle used to hold two paths beside the seams above, which is how a
     question about the plugin loader's own layout came to sit next to a question
@@ -189,6 +201,7 @@ class RuntimeBundle:
     sleeper: Sleeper
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
+    steam: SteamInterfaceReader
 
 
 @dataclass(frozen=True)
@@ -406,6 +419,8 @@ def bootstrap(
         log_debug=debug_logger,
     )
     update_failure = UpdateFailureFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
+    update_staging = UpdateStagingAdapter(directory=os.path.join(directories.cache_dir, UPDATE_DIR_NAME))
+    transient_units = SystemdRunAdapter()
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
@@ -470,6 +485,9 @@ def bootstrap(
         steam_recovery=steam_recovery,
         latest_release=github_releases.get_latest_release,
         update_failure=update_failure.read_update_failure,
+        download_release_asset=github_releases.download_asset,
+        update_staging=update_staging,
+        transient_units=transient_units,
     )
     stores = StateBundle(
         settings=settings,

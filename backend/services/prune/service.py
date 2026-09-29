@@ -189,7 +189,7 @@ class PruneService:
         Checks its endpoint's conflict rules at its entry and answers the
         canonical refusal when one holds (CONTEXT.md → Conflict rules).
         """
-        async with self._rules.hold("get_prune_preview", migration=True, sync=True) as refusal:
+        async with self._rules.hold("get_prune_preview", update=True, migration=True, sync=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._get_prune_preview(request)
@@ -270,7 +270,7 @@ class PruneService:
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.
         """
-        async with self._rules.hold_start("start_prune", migration=True, sync=True) as refusal:
+        async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True) as refusal:
             if refusal is not None:
                 return refusal
             return await self._start_prune(request)

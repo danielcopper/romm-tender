@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
-    from services.protocols import EventEmitter
+    from services.protocols import EventEmitter, SteamInterfaceReader
 
     from .services import ServicesBundle
 
@@ -51,6 +51,8 @@ class Application:
         self._loop = loop
         # The one-time save-directory backfill, held so the loop cannot collect it.
         self._save_directory_backfill: asyncio.Task[None] | None = None
+        # The release check asked for as long as the backend runs, held likewise.
+        self._due_update_checks: asyncio.Task[None] | None = None
 
     def run_startup_repairs(self, report_failure: Callable[[str], None]) -> None:
         """Run the start-up repairs, each one reporting a failure rather than raising it.
@@ -74,7 +76,9 @@ class Application:
         steps.run("prune_orphaned_staging_artwork", services.artwork_service.prune_orphaned_staging_artwork)
         steps.run("prune_orphaned_cover_cache", services.artwork_service.prune_orphaned_cover_cache)
         steps.run("cleanup_leftover_tmp_files", services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files)
+        steps.run("remove_update_leftovers", services.update_install_service.remove_leftovers)
         steps.run("record_save_directories", self._start_save_directory_backfill)
+        steps.run("run_due_update_checks", self._start_due_update_checks)
 
     async def open_network(self) -> None:
         """The one start-up step that makes a network request.
@@ -88,12 +92,13 @@ class Application:
         await self.services.connection_service.migrate_legacy_credentials()
 
     async def shutdown(self) -> None:
-        """Stop the save-directory backfill if it is still running, then shut the services down."""
-        backfill = self._save_directory_backfill
-        if backfill is not None:
-            backfill.cancel()
-            await asyncio.gather(backfill, return_exceptions=True)
+        """Stop the background tasks that are still running, then shut the services down."""
+        for task in (self._save_directory_backfill, self._due_update_checks):
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         services = self.services
+        await services.update_install_service.shutdown()
         services.sync_service.shutdown()
         await services.prune_service.shutdown()
         await services.download_service.shutdown()
@@ -112,15 +117,21 @@ class Application:
             self.services.save_sync_service.record_save_directories_once()
         )
 
+    def _start_due_update_checks(self) -> None:
+        """Start asking the release check whenever it may be due, for as long as the backend runs."""
+        self._due_update_checks = self._loop.create_task(self.services.update_check_service.run_due_checks())
+
 
 def build_application(
     *,
     directories: AppDirectories,
     update_source: UpdateSource,
+    installer_environment: tuple[tuple[str, str], ...],
     user_home: str,
     logger: logging.Logger,
     loop: asyncio.AbstractEventLoop,
     emit: EventEmitter,
+    steam: SteamInterfaceReader,
 ) -> Application:
     """Build every adapter and wire every service into an :class:`Application`.
 
@@ -148,12 +159,14 @@ def build_application(
                 sleeper=result.runtime_adapters.sleeper,
                 hostname_provider=result.runtime_adapters.hostname_provider,
                 machine_id_provider=result.runtime_adapters.machine_id_provider,
+                steam=steam,
             ),
             callbacks=result.callbacks,
             min_required_version=MIN_ROMM_VERSION,
             directories=directories,
             launcher=result.launcher,
             update_source=update_source,
+            installer_environment=installer_environment,
         )
     )
     return Application(services, logger=logger, loop=loop, user_agent=result.user_agent)

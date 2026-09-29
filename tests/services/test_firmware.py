@@ -426,6 +426,7 @@ class TestTheFacadeOnlyDelegates:
             "delete_platform_bios",
             "delete_bios_file",
             "delete_bios_folder",
+            "is_downloading",
         }
 
     def test_the_facade_holds_only_its_sub_services(self, fw):
@@ -3408,6 +3409,55 @@ class TestDownloadFirmware:
         assert not escape_target.exists()
         # No BIOS record persisted.
         assert firmware.uow.bios_files.get("n64", "../evil.desktop") is None
+
+
+class TestWhetherADownloadIsInFlight:
+    """The reader the update install asks: a download is awaited inside the call that asked for it."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("entry", "inner", "args"),
+        [
+            ("download_all_firmware", "download_all_firmware", ("dc",)),
+            ("download_platform_firmware_file", "download_platform_firmware_file", ("dc", "a.bin")),
+            ("download_required_firmware", "download_required_firmware", ("dc",)),
+            ("download_firmware", "download_firmware", (7,)),
+        ],
+    )
+    async def test_it_is_in_flight_for_as_long_as_the_call_runs(self, fw, entry, inner, args):
+        seen: list[bool] = []
+
+        async def downloading(*_args: Any) -> dict[str, Any]:
+            seen.append(fw.is_downloading())
+            return {"success": True}
+
+        assert fw.is_downloading() is False
+        with patch.object(fw._downloads, inner, side_effect=downloading):
+            await getattr(fw, entry)(*args)
+
+        assert seen == [True]
+        assert fw.is_downloading() is False
+
+    @pytest.mark.asyncio
+    async def test_a_call_that_raises_is_no_longer_in_flight(self, fw):
+        with (
+            patch.object(fw._downloads, "download_all_firmware", side_effect=RuntimeError("boom")),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            await fw.download_all_firmware("dc")
+
+        assert fw.is_downloading() is False
+
+    @pytest.mark.asyncio
+    async def test_a_refused_call_was_never_in_flight(self, plugin, fw):
+        seen: list[bool] = []
+        fw._rules = _make_conflict_rules(update_in_progress=True)
+
+        with patch.object(fw._downloads, "download_all_firmware", side_effect=lambda *_a: seen.append(True)):
+            result = await fw.download_all_firmware("dc")
+
+        assert result["reason"] == "blocked_by_update"
+        assert seen == []
 
 
 class TestDownloadAllFirmware:

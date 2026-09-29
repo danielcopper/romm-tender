@@ -30,6 +30,7 @@ from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_resolved_path import FakeResolvedPath
@@ -38,6 +39,8 @@ from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_save_file_store import FakeSaveFileStore
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
+from fakes.fake_steam_interface import FakeSteamInterface
+from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from models.shortcut_launcher import ShortcutLauncher
@@ -47,6 +50,7 @@ from adapters.retrodeck_paths import RetroDeckPathsAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
+from adapters.update_staging import UpdateStagingAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
@@ -265,12 +269,14 @@ class TestTheCacheRootAndTheDataRootStayApart:
                     sleeper=result.runtime_adapters.sleeper,
                     hostname_provider=result.runtime_adapters.hostname_provider,
                     machine_id_provider=result.runtime_adapters.machine_id_provider,
+                    steam=FakeSteamInterface(),
                 ),
                 callbacks=result.callbacks,
                 min_required_version=MIN_ROMM_VERSION,
                 directories=directories,
                 launcher=result.launcher,
                 update_source=_UPDATE_SOURCE,
+                installer_environment=(),
             )
         )
 
@@ -467,6 +473,7 @@ class TestWireServices:
             "steam_recovery": MagicMock(),
             "latest_release": FakeLatestRelease(),
             "update_failure": MagicMock(return_value=None),
+            "update_staging": UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update")),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -534,6 +541,9 @@ class TestWireServices:
                 steam_recovery=deps["steam_recovery"],
                 latest_release=deps["latest_release"],
                 update_failure=deps["update_failure"],
+                download_release_asset=FakeReleaseDownload(),
+                update_staging=deps["update_staging"],
+                transient_units=FakeTransientUnits(),
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -547,6 +557,7 @@ class TestWireServices:
                 sleeper=deps["sleeper"],
                 hostname_provider=deps["hostname_provider"],
                 machine_id_provider=deps["machine_id_provider"],
+                steam=FakeSteamInterface(),
             ),
             callbacks=CallbackBundle(
                 retrodeck_paths=deps["retrodeck_paths"],
@@ -564,6 +575,7 @@ class TestWireServices:
             directories=deps["directories"],
             launcher=deps["launcher"],
             update_source=_UPDATE_SOURCE,
+            installer_environment=(),
         )
 
     def test_returns_all_services(self, tmp_path):
@@ -617,7 +629,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 32
+        assert len(fields(result)) == 33
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)

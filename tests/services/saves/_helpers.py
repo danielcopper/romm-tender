@@ -74,6 +74,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,
         "emit": emit if emit is not None else _noop_emit,
+        "is_update_in_progress": lambda: False,
         "is_retrodeck_migration_pending": lambda: False,
         "conflict_rules": _make_conflict_rules(),
         "uow_factory": FakeUnitOfWorkFactory(),

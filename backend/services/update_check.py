@@ -1,8 +1,9 @@
 """UpdateCheckService — whether a newer release exists, and whether to say so.
 
 Owns the question and everything the answer needs a decision about: the
-once-a-day throttle, the user's switch, and which release they have already
-waved away. The answer is one-sided — it either has something to say or stays
+once-a-day throttle, the user's switch, which release they have already waved
+away, and the stored answer itself — the install reads the last seen release
+through here rather than from the row. The answer is one-sided — it either has something to say or stays
 silent, and a check that reached nothing is silence rather than a failure. The
 release read itself is a seam; what a release is called and how the stored
 answer is spelled live in ``domain/update_release.py``.
@@ -24,8 +25,10 @@ if TYPE_CHECKING:
     from services.protocols import (
         Clock,
         DebugLogger,
+        EventEmitter,
         LatestReleaseFn,
         SettingsPersister,
+        Sleeper,
         UnitOfWorkFactory,
     )
 
@@ -33,6 +36,11 @@ if TYPE_CHECKING:
 # tell a user about a release eventually, not promptly, and GitHub's
 # unauthenticated budget is 60 requests an hour per IP.
 _CHECK_INTERVAL_SECONDS = 24 * 60 * 60
+
+# How often the running backend asks whether a check is due. Far shorter than
+# the interval, so a backend that runs for days checks within an hour of the
+# stamp going stale; the stamp, not this, decides whether GitHub is asked.
+_DUE_POLL_SECONDS = 60 * 60
 
 # The version whose card the user waved away. User intent, so settings.json
 # rather than kv_config (CONTEXT.md, Persistence boundary), and no default entry:
@@ -57,7 +65,8 @@ class UpdateCheckServiceConfig:
     is the installed program, the clock the throttle is measured on, the
     unit-of-work factory the last-seen marker is stored through, the live
     settings dict plus its persister for the two user-intent keys, and the
-    runtime infrastructure.
+    runtime infrastructure — the sleeper the running check waits on, and the
+    emit it tells the panel through.
     """
 
     latest_release: LatestReleaseFn
@@ -68,6 +77,8 @@ class UpdateCheckServiceConfig:
     settings: dict[str, Any]
     settings_persister: SettingsPersister
     loop: asyncio.AbstractEventLoop
+    sleeper: Sleeper
+    emit: EventEmitter
     log_debug: DebugLogger
 
 
@@ -83,6 +94,8 @@ class UpdateCheckService:
         self._settings = config.settings
         self._settings_persister = config.settings_persister
         self._loop = config.loop
+        self._sleeper = config.sleeper
+        self._emit = config.emit
         self._log_debug = config.log_debug
         # One check at a time, from reading the stored answer to recording the
         # new one: the panel-load read and a Check now can overlap, and the one
@@ -111,11 +124,11 @@ class UpdateCheckService:
         With the switch off nothing is fetched and nothing is read: the answer
         names no version, because the program is not looking.
         """
-        if not self._enabled():
+        if not self.is_check_enabled():
             return self._notice(None, enabled=False)
         async with self._check_lock:
             # Asked again: the switch may have gone off while this waited.
-            if not self._enabled():
+            if not self.is_check_enabled():
                 return self._notice(None, enabled=False)
             check = await self._loop.run_in_executor(None, self._read_last_check_io)
             if self._is_due(check):
@@ -136,7 +149,7 @@ class UpdateCheckService:
         is forgotten — a button is not consent the switch withheld — and the
         answer carries ``enabled: False`` with ``reached: False``.
         """
-        if not self._enabled():
+        if not self.is_check_enabled():
             return {**self._notice(None, enabled=False), "reached": False}
         # The dismissal this press is undoing is the one standing when it was
         # made; a Dismiss pressed while it waited for the lock is newer intent.
@@ -144,12 +157,41 @@ class UpdateCheckService:
         async with self._check_lock:
             # Asked again: the switch may have gone off while this waited, and
             # then nothing is read and nothing is forgotten.
-            if not self._enabled():
+            if not self.is_check_enabled():
                 return {**self._notice(None, enabled=False), "reached": False}
             self._forget_dismissal(dismissed_at_press)
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
         return {**self._notice(check, enabled=True), "reached": reached}
+
+    async def run_due_checks(self) -> None:
+        """Ask for the notice whenever a check may be due, for as long as this runs; tell the panel when it changes.
+
+        The throttle stands as it does for the panel's own read: the stored
+        stamp decides whether GitHub is asked, so this asks at most once a day
+        and a check that reached nothing is silent. A notice different from the
+        one this loop saw last is emitted as ``update_notice``, carrying what
+        :meth:`get_update_notice` answers. Runs until cancelled; a round that
+        raises is logged and the next one comes as usual.
+        """
+        last: dict[str, Any] | None = None
+        while True:
+            await self._sleeper.sleep(_DUE_POLL_SECONDS)
+            if not self.is_check_enabled():
+                continue
+            try:
+                notice = await self.get_update_notice()
+            except Exception as e:
+                self._log_debug(f"[update] the running check failed: {e!r}")
+                continue
+            if notice != last:
+                last = notice
+                await self._emit("update_notice", notice)
+
+    async def last_seen_release(self) -> LatestRelease | None:
+        """The last available release a check stored, whatever the switch says; asks GitHub nothing."""
+        check = await self._loop.run_in_executor(None, self._read_last_check_io)
+        return check.release if check is not None else None
 
     def dismiss_update_notice(self, version: object) -> dict[str, Any]:
         """Record that the user waved away the card for *version*.
@@ -177,7 +219,8 @@ class UpdateCheckService:
         self._settings_persister.save_settings()
         return {"success": True}
 
-    def _enabled(self) -> bool:
+    def is_check_enabled(self) -> bool:
+        """Whether the user lets this program ask GitHub about newer releases."""
         return bool(self._settings.get(ENABLED_KEY, True))
 
     def _is_due(self, check: UpdateCheck | None) -> bool:

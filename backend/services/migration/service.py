@@ -310,6 +310,14 @@ class MigrationService:
         with self._uow_factory() as uow:
             return bool(uow.kv_config.get(_KV_RETRODECK_HOME_PREVIOUS))
 
+    def is_retrodeck_migration_running(self) -> bool:
+        """Return True while a RetroDECK home migration is moving files.
+
+        Narrower than :meth:`is_retrodeck_migration_pending`: a migration the
+        user has not answered yet is not running, and survives a restart.
+        """
+        return self._migrations_in_flight > 0
+
     def dismiss_retrodeck_migration(self) -> dict[str, Any]:
         """Dismiss the RetroDECK path migration warning without migrating files."""
         with self._uow_factory() as uow:

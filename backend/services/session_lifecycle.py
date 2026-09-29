@@ -28,7 +28,7 @@ from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
 if TYPE_CHECKING:
     import logging
 
-    from services.protocols import ConflictRules
+    from services.protocols import ConflictRules, UpdateInProgressFn
     from services.protocols.cross_service import (
         SessionAchievementSync,
         SessionMigrationReader,
@@ -127,12 +127,15 @@ class SessionLifecycleServiceConfig:
     backend-side reporting of the fire-and-forget achievement sync —
     its result and failures never reach the frontend. ``conflict_rules`` are
     what :meth:`SessionLifecycleService.finalize` checks at its entry.
+    ``update_in_progress`` answers whether an update is being installed, which
+    holds the post-exit sync off as a pending migration does.
     """
 
     playtime_recorder: SessionPlaytimeRecorder
     post_exit_sync: SessionPostExitSync
     achievement_sync: SessionAchievementSync
     migration_reader: SessionMigrationReader
+    update_in_progress: UpdateInProgressFn
     logger: logging.Logger
     conflict_rules: ConflictRules
 
@@ -187,6 +190,7 @@ class SessionLifecycleService:
         self._post_exit_sync = config.post_exit_sync
         self._achievement_sync = config.achievement_sync
         self._migration_reader = config.migration_reader
+        self._update_in_progress = config.update_in_progress
         self._logger = config.logger
         self._rules = config.conflict_rules
         # Strong refs to in-flight background tasks. ``asyncio.create_task``
@@ -292,12 +296,12 @@ class SessionLifecycleService:
         Carries the per-direction transfer counts (from which the
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
-        While a RetroDECK migration is pending the post-exit sync does not
-        run and the verdict is the failed-sync one. The
-        ``finalize_game_session`` use case checks no migration rule, so this is
-        the first check a pending migration meets on the way to that sync.
+        While an update is being installed or a RetroDECK migration is pending
+        the post-exit sync does not run and the verdict is the failed-sync one.
+        The ``finalize_game_session`` use case checks neither rule, so this is
+        the first check either meets on the way to that sync.
         """
-        if self._migration_reader.is_retrodeck_migration_pending():
+        if self._update_in_progress() or self._migration_reader.is_retrodeck_migration_pending():
             return SessionFinalizeSyncResult(
                 offline=False,
                 success=False,

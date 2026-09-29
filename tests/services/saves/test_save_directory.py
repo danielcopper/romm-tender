@@ -575,6 +575,23 @@ class TestTheSecondaryWritePathsFollowFirst:
         assert _recorded(svc) == str(old)
 
     @pytest.mark.asyncio
+    async def test_nothing_is_followed_while_an_update_is_being_installed(self, tmp_path, dirs):
+        # The install stops this process without waiting for a move.
+        old, new = dirs
+        svc, _ = make_service(tmp_path, is_update_in_progress=lambda: True)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+
+        await svc.get_save_status(_ROM)
+
+        assert save.read_bytes() == b"progress"
+        assert not new.exists()
+        assert _recorded(svc) == str(old)
+
+    @pytest.mark.asyncio
     async def test_nothing_is_followed_while_save_sync_is_off(self, tmp_path, dirs):
         old, new = dirs
         svc, _ = make_service(tmp_path)

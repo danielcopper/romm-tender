@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from lib.conflict_rules import migration_refusal
+from lib.conflict_rules import migration_refusal, update_refusal
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._messages import (
@@ -93,6 +93,7 @@ if TYPE_CHECKING:
         SaveFileStore,
         SaveInventoryBuilderFn,
         UnitOfWorkFactory,
+        UpdateInProgressFn,
     )
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine.devices import DeviceRegistry
@@ -164,8 +165,8 @@ class SyncEngineConfig:
     infrastructure (loop, logger, clock), the Protocol-typed filesystem
     adapter, the ``DebugLogger`` seam, the per-ROM active-core resolver,
     the hostname provider + machine-id provider passed through to device
-    registration, and the migration-pending callback SyncEngine consults at
-    the entry of every public flow.
+    registration, and the update-in-progress and migration-pending callbacks
+    SyncEngine consults at the entry of every public flow.
     """
 
     settings: dict[str, Any]
@@ -184,6 +185,7 @@ class SyncEngineConfig:
     active_core: ActiveCoreReader
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
+    is_update_in_progress: UpdateInProgressFn
     is_retrodeck_migration_pending: MigrationPendingFn
     build_inventory: SaveInventoryBuilderFn
 
@@ -207,6 +209,7 @@ class SyncEngine:
         self._active_core = config.active_core
         self._hostname_provider = config.hostname_provider
         self._machine_id_provider = config.machine_id_provider
+        self._is_update_in_progress = config.is_update_in_progress
         self._is_retrodeck_migration_pending = config.is_retrodeck_migration_pending
         self._build_inventory = config.build_inventory
         # Per-rom lock dict — serializes concurrent sync operations on the
@@ -251,6 +254,7 @@ class SyncEngine:
         # in-flight one, bounded so a stuck run never traps the launch path.
         # Sits OUTSIDE the per-ROM ``rom_lock`` — wraps the whole run body.
         self._device_gate = SaveSyncGate()
+        self._follows_in_flight = 0
 
     def rom_lock(self, rom_id: int) -> asyncio.Lock:
         """Return the lock for this rom_id, creating it lazily."""
@@ -261,6 +265,14 @@ class SyncEngine:
     # ------------------------------------------------------------------
     # Settings / device-id / core helpers
     # ------------------------------------------------------------------
+
+    def is_sync_in_flight(self) -> bool:
+        """Whether a save-sync run holds the device gate — pre-launch, post-exit, one ROM or all."""
+        return self._device_gate.is_in_flight()
+
+    def is_following_save_directory(self) -> bool:
+        """Whether a save directory is being followed — the files carried to where it moved."""
+        return self._follows_in_flight > 0
 
     def is_save_sync_enabled(self) -> bool:
         """Whether the save-sync feature toggle is on (settings.json)."""
@@ -479,21 +491,25 @@ class SyncEngine:
         (peer-called): the peer services' write, delete, count and status paths
         follow first as well; ``resolve_sync_conflict`` does so here.
         The follow belongs to the sync, so it does nothing while save sync is
-        off, and nothing while a RetroDECK home migration is pending or still
-        running: the files are that migration's to move, and a follow then would
-        get past the user's overwrite-or-skip choice. A failure is logged and
-        leaves the record as it was, so the caller goes on and the next caller
-        tries again.
+        off, nothing while an update is being installed — that stops this
+        process without waiting for a move — and nothing while a RetroDECK home
+        migration is pending or still running: the files are that migration's
+        to move, and a follow then would get past the user's overwrite-or-skip
+        choice. A failure is logged and leaves the record as it was, so the
+        caller goes on and the next caller tries again.
         """
-        if answer is None or not self.is_save_sync_enabled():
+        if answer is None or not self.is_save_sync_enabled() or self._is_update_in_progress():
             return
         if await self._loop.run_in_executor(None, self._is_retrodeck_migration_pending):
             self._log_debug(f"follow_save_directory: rom {rom_id}: a home migration is pending; not following")
             return
+        self._follows_in_flight += 1
         try:
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
         except Exception:
             self._logger.exception("Following the save directory of rom %d failed; its record stays", rom_id)
+        finally:
+            self._follows_in_flight -= 1
 
     async def record_save_directories(self) -> bool:
         """Record the answered save directory of each installed ROM that has none — the one-time backfill.
@@ -762,7 +778,9 @@ class SyncEngine:
                 # files still living at the old home. Every other path into
                 # do_sync_rom_saves either checks the migration rule at its use
                 # case's entry or carries a guard of its own; this one is
-                # pre_launch_sync's.
+                # pre_launch_sync's. The update rule is backstopped the same way.
+                if self._is_update_in_progress():
+                    return {**update_refusal(), "synced": 0}
                 if self._is_retrodeck_migration_pending():
                     return {**migration_refusal(), "synced": 0}
 
@@ -838,7 +856,10 @@ class SyncEngine:
                 # Defense in depth: post_exit_sync has no endpoint;
                 # SessionLifecycleService checks the migration before calling it,
                 # and this guard answers a caller that reaches the engine without
-                # that check.
+                # that check. The same holds for an update being installed.
+                if self._is_update_in_progress():
+                    self._logger.info("post_exit_sync skipped: an update is being installed")
+                    return {**update_refusal(), "synced": 0}
                 if self._is_retrodeck_migration_pending():
                     self._logger.info("post_exit_sync skipped: retrodeck migration pending")
                     return {**migration_refusal(), "synced": 0}

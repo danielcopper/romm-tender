@@ -252,7 +252,7 @@ class CoreService:
         write error, fan-out error) returns
         ``{"success": False, "reason": ..., "message": ...}``.
         """
-        async with self._rules.hold("set_system_core", migration=True, prune=True) as refusal:
+        async with self._rules.hold("set_system_core", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             try:
@@ -288,7 +288,7 @@ class CoreService:
         next download). A live update carries a ``game_core`` lease in
         ``prune_lease_token`` for the frontend's write.
         """
-        async with self._rules.hold("set_game_core", migration=True, prune=True) as refusal:
+        async with self._rules.hold("set_game_core", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
@@ -375,7 +375,7 @@ class CoreService:
         update carries a ``game_core`` lease in ``prune_lease_token`` for the
         frontend's write.
         """
-        async with self._rules.hold("clear_game_core", migration=True, prune=True) as refusal:
+        async with self._rules.hold("clear_game_core", update=True, migration=True, prune=True) as refusal:
             if refusal is not None:
                 return refusal
             result = await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
