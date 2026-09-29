@@ -265,7 +265,7 @@ class PruneService:
         """Atomically consume a preview and start one explicit cleanup run.
 
         The whole start runs under the cleanup's exclusive reservation, taken
-        before the migration and sync rules are asked, and answers their
+        before the update, migration and sync rules are asked, and answers their
         canonical refusal when one holds (CONTEXT.md → Conflict rules, Prune
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.

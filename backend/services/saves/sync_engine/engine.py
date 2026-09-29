@@ -949,8 +949,10 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # The use case asked the update rule before this waited for the
-                # gate, and an install pressed meanwhile saw no run holding it.
+                # Defense in depth: the use case asked the update rule before
+                # this waited for the gate, and its operation on the prune
+                # conflicts makes a press wait from then on; a caller that
+                # reached the engine some other way is refused here.
                 if self._is_update_in_progress():
                     return {**update_refusal(), "synced": 0}
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
@@ -1059,7 +1061,7 @@ class SyncEngine:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
             # sweep; each ROM still takes its own rom_lock inside the loop.
             async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
-                # As in sync_rom_saves: asked again once the gate is held.
+                # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
                     return {**update_refusal(), "synced": 0, "conflicts": 0}
                 failure = await self._ensure_device_live_or_fail()

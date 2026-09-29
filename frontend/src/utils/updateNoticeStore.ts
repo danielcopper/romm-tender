@@ -158,7 +158,8 @@ export async function runUpdateCheckNow(): Promise<UpdateCheckOutcome> {
  * Take a notice the backend pushed after a check of its own. It moves the
  * fence, so a read or press still in flight writes nothing once it lands — see
  * {@link _seq} — and a Check now it overtakes reports nothing. The backend
- * pushes nothing it worked out with the check on once the switch is off.
+ * asks the switch once more right before it pushes, so a notice worked out
+ * with the check on is not pushed once the switch reads off.
  */
 export function takePushedUpdateNotice(notice: UpdateNotice): void {
   ++_seq;

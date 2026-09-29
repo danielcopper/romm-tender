@@ -221,6 +221,10 @@ moments of each other, the second one's sync waits for the first. If that wait r
 it says so — "Another save sync was still running — saves will sync next time". Your local save is untouched and is
 picked up by the next launch or by a manual **Sync All Saves Now**; nothing about your server is wrong.
 
+The after-exit sync is skipped the same way while Tender is installing an update from Settings, and the toast says so —
+"Tender is installing an update — saves sync with the next sync that runs". Your local save is untouched, and the first
+sync after the update picks it up.
+
 After a failed sync the game-detail save panel reflects the honest state right away: a file whose upload failed shows a
 yellow **Local changes** badge (not a green "synced"), and its "Last synced" line keeps the time of the last
 _successful_ sync — a green checkmark appears only once a sync actually succeeds. A separate "Checked" line shows when

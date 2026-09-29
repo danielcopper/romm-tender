@@ -719,7 +719,7 @@ class TestUpdateInProgressGuards:
         ("entry", "args", "extra"), [("sync_rom_saves", (42,), {}), ("sync_all_saves", (), {"conflicts": 0})]
     )
     async def test_a_manual_sync_asks_again_once_it_holds_the_device_gate(self, tmp_path, entry, args, extra):
-        """The use case's rules passed before the gate was waited for; an install pressed meanwhile refuses it here."""
+        """Defense in depth: whichever way the engine was reached, an update holding the rule refuses it at the gate."""
         svc, fake = make_service(tmp_path, is_update_in_progress=lambda: True)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")

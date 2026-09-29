@@ -312,11 +312,10 @@ class SessionLifecycleService:
         frontend renders the directional success toast) plus the
         backend-owned ``failure_toast`` / ``conflicts_toast`` bodies.
         While an update is being installed or a RetroDECK migration is pending
-        the post-exit sync does not run, the log says which held it off, and the
-        verdict is the failed-sync one — its toast saying an update is why,
-        where it is. The ``finalize_game_session`` use case
-        checks neither rule, so this is the first check either meets on the way
-        to that sync.
+        the post-exit sync does not run, the log says which held it off, and
+        the verdict is the failed-sync one; for an update its toast says so.
+        The ``finalize_game_session`` use case checks neither rule, so this is
+        the first check either meets on the way to that sync.
         """
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
