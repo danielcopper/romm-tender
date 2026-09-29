@@ -142,13 +142,13 @@ class TestARealCallableOverTheRealConnection:
         assert "reason" in answer["result"]
         assert "message" in answer["result"]
 
-    async def test_a_name_the_plugin_does_not_have_is_a_transport_error(self, served):
+    async def test_a_name_the_endpoints_do_not_have_is_a_transport_error(self, served):
         answer = await served.call("no_such_callable")
 
         assert answer["type"] == TYPE_ERROR
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
-    async def test_a_private_method_of_the_real_plugin_is_unreachable(self, served):
+    async def test_a_private_method_of_the_real_endpoints_is_unreachable(self, served):
         """`__init__` exists on the loaded class and is not callable surface."""
         answer = await served.call("__init__")
 
@@ -196,7 +196,7 @@ class TestTheSizeCapAgainstARealAnswer:
         assert after["reason"] == "payload_too_large"
 
 
-class TestAdmissionInFrontOfTheRealPlugin:
+class TestAdmissionInFrontOfTheRealEndpoints:
     async def test_no_token_reaches_no_callable(self, served):
         status, _, _ = await http_get(served.server.port, "/ws", token=None)
 
