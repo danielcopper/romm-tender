@@ -4566,6 +4566,69 @@ class TestPlatformCompletionStamp:
         assert stamp.rom_count == 5  # untouched — the apply never started
 
 
+class TestCollectionTurnedOffAndBackOn:
+    """A collection whose sync is turned off and back on gets its shortcuts back (#2106).
+
+    Its games sit on a platform whose own sync is off, so while the collection is
+    off the stale-removal scan unbinds them. Were the collection's completion stamp
+    left able to skip, nothing the skip reads would have moved: RomM's
+    ``updated_at`` and count are the same and no member changed since the stamp,
+    and the skip's reconstruction passes over an unbound member.
+    """
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#2106: the collection skip passes over the members the stale removal unbound while it was off",
+    )
+    @pytest.mark.asyncio
+    async def test_the_games_unbound_while_it_was_off_are_bound_again(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[1, 2])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
+        library.settings["enabled_platforms"] = {"1": False, "2": True}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2)}
+
+        # Run 1: the collection is on and binds both of its games.
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-1")
+        assert bindings() == {1: 5001, 2: 5002}
+        with library.uow as uow:
+            stamp = uow.collection_sync_state.get("7", "standard")
+        assert stamp is not None
+        assert (stamp.rom_count, stamp.member_rom_ids) == (2, (1, 2))
+
+        # Run 2: the collection is off, so no unit covers its games any more.
+        library.settings["enabled_collections"] = {"standard": {"7": False}}
+        await complete_a_run("run-2")
+        assert bindings() == {1: None, 2: None}
+
+        # Run 3: the collection is back on and nothing changed on RomM.
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        await complete_a_run("run-3")
+        assert bindings() == {1: 5001, 2: 5002}
+
+
 class TestStoppedRunLeavesNoHiddenStaleRow:
     """A version deleted on RomM loses its shortcut at the next completed run (#2084).
 
