@@ -909,12 +909,12 @@ from the ones it did not. Such an unbind changes neither side of that: the rows 
 generation still records what RomM served. Deleting the stamp would blind discovery on the platform until its next
 completed apply, which never comes while its sync stays off. The skip gate, the plan estimate (`predicted_skip` and the
 stamp-gated `collapsed_count`) and the preview's `restamp_platform_count` read the stamp through
-`domain/platform_sync_state.py::stamp_for_skip`, which answers a revoked stamp with none. Were the re-stamp count to
-read it raw, an enabled platform holding a revoked stamp and an empty delta would be offered no Apply and full-fetch on
-every sync. The resume offer asks `PlatformSyncStateRepository.has_any`, whose query applies the same rule, so that is
-the one other place it lives. The final chunk's fresh stamp replaces the row, which clears the flag. The apply start
-deletes rather than revokes, because its chunks re-mark rows with the new run's generation and a kept stamp naming the
-old one would make discovery read every re-marked row as gone from RomM.
+`domain/platform_sync_state.py::stamp_for_skip`, which answers a revoked stamp with none; what each of them breaks by
+reading it raw is in the [invariant register](invariants.md). The resume offer asks
+`PlatformSyncStateRepository.has_any`, whose query applies the same rule, so that is the one other place it lives. The
+final chunk's fresh stamp replaces the row, which clears the flag. The apply start deletes rather than revokes, because
+its chunks re-mark rows with the new run's generation and a kept stamp naming the old one would make discovery read
+every re-marked row as gone from RomM.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The

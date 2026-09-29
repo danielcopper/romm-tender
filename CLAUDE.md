@@ -412,15 +412,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx` ("a previous run's rows
   at the next press") and `frontend/src/utils/runUnitsStore.test.ts`; prompt-only: every start path in `useSyncPage`
   clears, and a resume is told apart only by `syncResumeState(stats).canResume` at the press
-- **Every reader that decides or predicts a platform skip reads the stamp through
-  `domain/platform_sync_state.py::stamp_for_skip`, which answers a revoked stamp with none — the skip gate, the plan
-  estimate and the preview's `restamp_platform_count` — and the resume offer's `PlatformSyncStateRepository.has_any`
-  applies the same rule in its query; removed-game discovery, the prune canaries, `reachable_count` and the recovery
-  snapshot read the stamp raw; the end-of-run stale removal revokes a skip only on a platform outside
-  `processed_platform_slugs`** — test + prompt-only — `tests/domain/test_platform_sync_state.py::TestStampForSkip`; the
-  skip side by `tests/services/library/test_fetcher.py`'s
-  `TestIncrementalSkipFromPlatformStamp::test_a_revoked_stamp_never_skips` and
-  `TestPlanEstimates::test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count`,
+- **Every reader that decides or predicts a platform skip — the skip gate, the plan estimate and the preview's
+  `restamp_platform_count` — reads the stamp through `domain/platform_sync_state.py::stamp_for_skip`, which answers a
+  revoked stamp with none; the resume offer's `PlatformSyncStateRepository.has_any` applies the same rule in its query;
+  removed-game discovery, the prune canaries, `reachable_count` and the recovery snapshot read the stamp raw; the
+  end-of-run stale removal revokes a skip only on a platform outside `processed_platform_slugs`** — test + prompt-only —
+  `tests/domain/test_platform_sync_state.py::TestStampForSkip`; the skip side by
+  `tests/services/library/test_fetcher.py`'s `TestIncrementalSkipFromPlatformStamp::test_a_revoked_stamp_never_skips`
+  and `TestPlanEstimates::test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count`,
   `test_sync_orchestrator.py::TestPreviewRestampPlatformCount::test_a_platform_whose_skip_was_revoked_is_counted`,
   `test_reporter.py::TestGetSyncStatsResumeInputs::test_a_platform_stamp_whose_skip_was_revoked_is_no_resume` and
   `tests/adapters/repositories/test_platform_sync_state.py::TestHasAny::test_a_revoked_stamp_is_not_counted`; the raw
@@ -432,7 +431,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the stale removal by `test_reporter.py::TestFinalizePerUnitRun` and
   `test_sync_orchestrator.py::TestPlatformTurnedOffAndBackOn`. Prompt-only: a new skip-side reader calling
   `platform_sync_state.get` raw, the recovery snapshot's raw read (no test pins it), and `has_any`'s query agreeing with
-  `stamp_for_skip` — each is pinned alone and nothing joins the two
+  `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
