@@ -3,7 +3,8 @@
 ``adapters.py`` owns adapter instantiation and the typed bundles it
 hands on; ``services.py`` turns those bundles into the live service
 instances; ``application.py`` composes the two into the
-:class:`Application` ``main.py`` runs. The names re-exported below are
+:class:`Application` ``main.py`` runs, whose start-up repairs each run
+through the wrapper in ``startup.py``. The names re-exported below are
 the composition root's whole public surface — consumers import them
 from ``bootstrap``, never from a submodule.
 """

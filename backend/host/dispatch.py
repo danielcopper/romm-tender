@@ -85,7 +85,7 @@ def reachable_methods(target: object) -> dict[str, Any]:
 
 
 class CallDispatcher:
-    """Resolves a call onto the object calls land on and answers with one wire message."""
+    """Resolves a call by name onto a reachable method of its target and answers with one wire message."""
 
     def __init__(self, target: object, logger: logging.Logger, payload_limit: int = DEFAULT_PAYLOAD_LIMIT) -> None:
         self._methods = reachable_methods(target)

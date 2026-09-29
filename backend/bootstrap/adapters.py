@@ -254,7 +254,7 @@ def bootstrap(
     user_home: str,
     logger: logging.Logger,
 ) -> BootstrapResult:
-    """Build every adapter and bundle the composition root hands to ``wire_services``.
+    """Build every adapter and bundle them for ``build_application``.
 
     Bootstrap owns adapter instantiation and is the only path that
     constructs ``PersistenceAdapter``. Settings are loaded + migrated
@@ -281,8 +281,8 @@ def bootstrap(
     Returns
     -------
     :class:`BootstrapResult`
-        Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``, ``directories``).
+        What ``build_application`` builds the services and the
+        :class:`Application` from.
     """
     # SystemClock is dependency-free; construct it first so the single shared
     # instance threads into PersistenceAdapter (corrupt-settings backup stamp)

@@ -38,15 +38,14 @@ from host import (
 class Endpoints:
     """What the panel can call: one public method marked ``@route`` per endpoint.
 
-    Each one calls a use case on a service and hands its answer back; the few
-    that do more translate an argument or an answer for the wire and nothing
-    else.
+    Every endpoint but ``get_host_status`` calls a use case on a service and
+    hands its answer back; the few that do more translate an argument or an
+    answer for the wire and nothing else. ``get_host_status`` answers from the
+    host's own record of this run, which no service holds.
     """
 
     def __init__(self, app: Application, host_status: HostStatus) -> None:
         self._services = app.services
-        # What the process hosting this backend knows about its own run, for the
-        # one endpoint that reads it (``get_host_status``).
         self._host_status = host_status
 
     @route
@@ -899,9 +898,10 @@ async def build_backend(
 def run() -> int:
     """Run the backend as a process of its own, until it is asked to stop.
 
-    The whole composition, in the order the host needs it: resolve where the
+    The whole start, in the order the host needs it: resolve where the
     directories are, mint the admission token, configure logging around it, then
-    hand the host a build that wires everything and the endpoints to dispatch onto.
+    hand the host :func:`build_backend` to build the application and the
+    endpoints to dispatch onto.
 
     Synchronous on purpose. Everything here is path and environment work that
     belongs before a loop exists — and the token has to be minted before the

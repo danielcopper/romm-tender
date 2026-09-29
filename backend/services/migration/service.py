@@ -121,11 +121,11 @@ class MigrationService:
         self._status_in_flight: dict[str, Any] | None = None
 
     def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
-        """Schedule ``coro`` on the plugin loop and track the task for shutdown.
+        """Schedule ``coro`` on the backend's event loop and track the task for shutdown.
 
         Wraps ``loop.create_task`` so the resulting task is retained in
         ``_background_tasks`` until completion. ``shutdown()`` cancels any
-        still-pending entries on plugin unload.
+        still-pending entries when the backend shuts down.
         """
         task = self._loop.create_task(coro)
         self._background_tasks.add(task)

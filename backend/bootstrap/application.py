@@ -46,8 +46,6 @@ class Application:
         user_agent: str,
     ) -> None:
         self.services = services
-        # ``<package name>/<version>``, the identity the host answers under — the
-        # same string every outgoing request carries.
         self.user_agent = user_agent
         self._logger = logger
         self._loop = loop
@@ -61,9 +59,6 @@ class Application:
         makes the port file mean "ready". The one start-up step that talks to the
         network is deliberately not here — see :meth:`open_network`.
         """
-        # Each runs through the reporting wrapper: these are not prerequisites,
-        # and most catch nothing themselves — hosted, one raising would end the
-        # process and a restart policy would loop.
         steps = StartupSteps(self._logger, report_failure)
         services = self.services
         steps.run("note_update_outcome", services.update_outcome_service.note_start)

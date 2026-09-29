@@ -70,24 +70,22 @@ if TYPE_CHECKING:
 class WiringConfig:
     """Composition-root inputs for ``wire_services``.
 
-    Four bundles carry the wiring; ``min_required_version`` sits at the
-    top level — it is the oldest RomM release this program accepts
-    (``MIN_ROMM_VERSION``), a constant rather than a runtime seam, and only
-    ConnectionService consumes it. ``directories`` sits beside it for the
-    same reason: it is where this program's directories are, resolved
-    from the environment by the entry point rather than derived. It is
-    the same value ``bootstrap()`` was handed, carried on so that a
-    service's wiring reads a directory rather than composing one — the
-    entry point is the only caller of ``resolve_directories``, and
-    nothing downstream of it builds a root out of a home. ``launcher``
-    sits beside
-    it for the same reason: it says where the launcher a Steam shortcut
-    runs through lives, and whether this start got it there. Its path is
-    the data directory's only where this start actually put the launcher
-    under it — otherwise it is the copy the release ships. ``update_source``
-    is the entry point's other environment answer — where releases are asked
-    for, and whether this process is the installed program — handed to
-    ``bootstrap()`` too.
+    Four bundles carry the wiring; ``min_required_version`` sits at the top
+    level — it is the oldest RomM release this program accepts
+    (``MIN_ROMM_VERSION``), a constant rather than a runtime seam.
+    ``directories`` sits beside it for the same reason: it is where this
+    program's directories are, resolved from the environment by the entry
+    point rather than derived. It is the same value ``bootstrap()`` was
+    handed, carried on so that a service's wiring reads a directory rather
+    than composing one — the entry point is the only caller of
+    ``resolve_directories``, and nothing downstream of it builds a root out
+    of a home. ``launcher`` sits beside it for the same reason: it says
+    where the launcher a Steam shortcut runs through lives, and whether this
+    start got it there. Its path is the data directory's only where this
+    start actually put the launcher under it — otherwise it is the copy the
+    release ships. ``update_source`` is the entry point's other environment
+    answer — where releases are asked for, and whether this process is the
+    installed program — handed to ``bootstrap()`` too.
     """
 
     adapters: AdapterBundle
@@ -142,8 +140,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     """Create service instances once ``bootstrap()`` has loaded the state they share.
 
     Called from ``build_application`` after ``bootstrap()`` has loaded
-    and migrated the settings, so that services receive live references
-    to the fully-populated state dicts.
+    and migrated the settings, so that services receive a live reference
+    to the migrated settings dict.
 
     Returns
     -------
