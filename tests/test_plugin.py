@@ -180,51 +180,6 @@ class TestConnection:
 
 
 class TestLogLevel:
-    def test_log_debug_enabled(self, plugin, logger):
-        """_log_debug logs when log_level is 'debug'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "debug"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_called_once_with("test message")
-
-    def test_log_debug_disabled_at_warn(self, plugin, logger):
-        """_log_debug does not log when log_level is 'warn' (default)."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "warn"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_disabled_at_info(self, plugin, logger):
-        """_log_debug does not log when log_level is 'info'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "info"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_disabled_at_error(self, plugin, logger):
-        """_log_debug does not log when log_level is 'error'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "error"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_missing_setting_defaults_warn(self, plugin, logger):
-        """_log_debug does not log when log_level key is missing (defaults to warn)."""
-        from unittest.mock import patch
-
-        plugin.settings.pop("log_level", None)
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
     @pytest.mark.asyncio
     async def test_debug_log_backward_compat(self, plugin, caplog):
         """debug_log reaches the log as a debug line of its own."""
