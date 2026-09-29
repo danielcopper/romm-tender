@@ -150,7 +150,7 @@ Format: **invariant** — tier — enforced by.
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
   `services/artwork.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight" from
   `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read, the Sync page's
-  three, and the failure toast and the Sync page's failure line — on the stage, so a stopping frame with a non-terminal
+  three, the failure toast, and the Sync page's failure line — on the stage, so a stopping frame with a non-terminal
   stage would collapse the in-progress rows while ending nothing. The panel cannot defend against it: a bare
   `running: false` is exactly what the Sync page's own retraction of an optimistic start looks like. Since #1814 the
   frontend's frame store reads the same discrimination for a rule of its own — a run whose stopping frame carried a

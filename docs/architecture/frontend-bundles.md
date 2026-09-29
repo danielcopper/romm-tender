@@ -137,9 +137,9 @@ optional, leaving a toast that says everything it says in an unstyled box. `play
 one read in the program is inside `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` where
 the class name would go, so nothing a user can see changes at all. `ToastRenderer`, `NotificationStore` and
 `ErrorBoundary` cost a feature: without any one of them no toast appears at all, and every page, every sync and every
-download is untouched — the result a toast would have announced is on the page it belongs to, with the one exception the
-[notifications notice](qam-panel.md#notices-and-homes) names. `AppDetailsRoute` and `appDetailsClasses` cost a feature
-for the same shape of reason on the other surface: the panel renders whole and
+download is untouched — where a result a toast would have announced is on its page as well, and where it is not, is the
+[notifications notice](qam-panel.md#notices-and-homes)'s to say. `AppDetailsRoute` and `appDetailsClasses` cost a
+feature for the same shape of reason on the other surface: the panel renders whole and
 [Steam's game page](#tenders-section-on-steams-game-page) carries no Tender section.
 
 **Only one of the four costs is read by anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel

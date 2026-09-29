@@ -902,7 +902,7 @@ const tender = definePlugin(() => {
   // An apply run that fails emits no `sync_complete`, so its error frame is the
   // only word of its end and the toast is raised from here instead. A preview's
   // failure is not toasted: the Sync page that asked for it says it, or Main's
-  // status line if the reader has left.
+  // status line if the reader has left, and only while Main is open.
   const failedRunsAnnounced = new Set<string>();
   const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
