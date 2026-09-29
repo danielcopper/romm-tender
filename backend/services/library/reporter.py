@@ -312,7 +312,7 @@ class SyncReporter:
         has already upserted its ROMs into ``uow.roms``, so we only need
         to: (1) unbind the stale ROMs (clear ``shortcut_app_id``, keeping
         the row per ADR-0007 — never delete) and revoke the skip of the
-        platforms that rule names, (2) refresh the offline
+        platforms :meth:`finalize_per_unit_run` says to, (2) refresh the offline
         ``platform_slug → display_name`` cache from the live work-queue, and
         (3) build the cross-unit collection mappings. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
