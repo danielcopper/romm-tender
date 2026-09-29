@@ -1,5 +1,5 @@
 import { FC } from "react";
-import { PanelSectionRow, DialogButton, Focusable } from "@decky/ui";
+import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 import {
   UPDATE_FAILURE_REASON,
   dismissUpdateFailureRecord,
@@ -53,14 +53,16 @@ export const UpdateFailureNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
         </Focusable>
       </PanelSectionRow>
       <PanelSectionRow>
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
-            Open Updates
-          </DialogButton>
-          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
-            Dismiss
-          </DialogButton>
-        </Focusable>
+        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
+          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
+              Open Updates
+            </DialogButton>
+            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
+              Dismiss
+            </DialogButton>
+          </Focusable>
+        </Field>
       </PanelSectionRow>
     </>
   );

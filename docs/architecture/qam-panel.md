@@ -721,14 +721,16 @@ screen. Its jump is not an answer either — only a fresh sign-in ends the condi
 standing and **Dismiss** remains the way to put it away for this view.
 
 The update notice and the rolled-back notice are the other two with two buttons, side by side for the same reason, with
-no horizontal padding so each label fits on one line, as the Platforms tab's Enable all pair does. The update notice's
-Dismiss is **per version**: it records the version the card names (`update_notice_dismissed_version`), so the next
-release raises the card again, and **Check now** in its home forgets it. The home states the versions and holds the
-check's switch and Check now; it installs nothing, and to a run from a checkout it shows a line naming this a
-development build. The card's condition is `available` on the backend's answer and nothing else — a newer release with
-its tarball, a valid digest and its checksum file attached, not the dismissed version, the check switched on. The answer
-is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by
-Dismiss, the switch and Check now.
+no horizontal padding so each label fits on one line, as the Platforms tab's Enable all pair does. Their button row sits
+in Steam's `Field` with its children below, because the announcement card's Dismiss is a `ButtonItem`, which is such a
+row: the space between card and buttons is then Steam's on all three update cards. The update notice's Dismiss is **per
+version**: it records the version the card names (`update_notice_dismissed_version`), so the next release raises the
+card again, and **Check now** in its home forgets it. The home states the versions and holds the check's switch and
+Check now; it installs nothing, and to a run from a checkout it shows a line naming this a development build. The card's
+condition is `available` on the backend's answer and nothing else — a newer release with its tarball, a valid digest and
+its checksum file attached, not the dismissed version, the check switched on. The answer is fetched at panel load by a
+detached call nothing awaits (the store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check
+now.
 
 The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is:
 Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was stopped is
