@@ -305,7 +305,8 @@ Steam, the emulator core it launches with, its BIOS files, and the two ways to t
 [BIOS and Emulator Core Management](bios-management.md#library-platforms).
 
 All platforms are enabled by default until you change a toggle. Turning one platform off affects only that platform —
-every other platform stays enabled and keeps syncing.
+every other platform stays enabled and keeps syncing. Its games leave Steam at the next sync, apart from any an enabled
+collection still holds, and turning it back on brings them all back with the sync after that.
 
 <!-- Screenshot: Library › Platforms with the list on the left and one platform's detail on the right -->
 
