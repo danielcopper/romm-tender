@@ -13,7 +13,6 @@ via the root conftest, the same way ``fakes/`` is reached.
 """
 
 import logging
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -70,23 +69,7 @@ def _make_conflict_rules(
 
 
 def _make_testable_plugin():
-    """Return a TestablePlugin instance with test-only attributes declared.
-
-    Pre-wires a no-op ``_debug_logger`` so any service that consumes
-    ``Plugin._log_debug`` (which forwards through ``_debug_logger``) works
-    out of the box.
-    """
+    """Return a bare ``Plugin`` for the endpoint delegation tests to hang their mocked services on."""
     from main import Plugin
 
-    class TestablePlugin(Plugin):
-        """Plugin subclass that declares test-only attributes for type safety."""
-
-        _fake_api: Any
-        _save_settings: Any
-        _uow_factory: Any
-        _prune_conflicts: Any
-
-    instance = TestablePlugin()
-    instance._prune_conflicts = _make_prune_conflicts()
-    instance._debug_logger = lambda msg: None
-    return instance
+    return Plugin()
