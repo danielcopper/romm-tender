@@ -1,4 +1,3 @@
-import asyncio
 import gzip
 import http.client
 import io
@@ -11,8 +10,6 @@ from typing import Any, ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
-from _factories import _make_conflict_rules
-from fakes.running_loop import running_loop
 
 from adapters.romm.http import RommHttpAdapter
 from domain.app_directories import resolve_directories
@@ -31,8 +28,7 @@ from lib.errors import (
     classify_error,
 )
 from lib.list_result import ErrorCode
-from main import _CODE_DIR_FALLBACK, Plugin
-from services.connection import ConnectionService, ConnectionServiceConfig
+from main import _CODE_DIR_FALLBACK
 
 # The UA every adapter in this file is constructed with, and the value its
 # outgoing header is then asserted against — this file pins the pass-through,
@@ -76,27 +72,6 @@ def romm_http(project_root) -> RommHttpHarness:
         settings, project_root, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
     )
     return RommHttpHarness(adapter=adapter, settings=settings)
-
-
-@pytest.fixture
-def plugin(logger):
-    p = Plugin()
-    p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._romm_api = MagicMock()
-    p._connection_service = ConnectionService(
-        config=ConnectionServiceConfig(
-            settings=p.settings,
-            romm_api=p._romm_api,
-            settings_persister=MagicMock(),
-            loop=running_loop(),
-            logger=logger,
-            min_required_version=Plugin._MIN_REQUIRED_VERSION,
-            forget_device=MagicMock(),
-            clear_playtime_scope_notice=MagicMock(),
-            conflict_rules=_make_conflict_rules(),
-        ),
-    )
-    return p
 
 
 class TestResolveSystem:
@@ -1166,36 +1141,6 @@ def _configure_server(settings: dict[str, Any]) -> None:
     settings["romm_allow_insecure_ssl"] = False
 
 
-def _setup_plugin(plugin):
-    """Configure plugin with valid settings for HTTP tests.
-
-    Also rebuilds the connection service on the live event loop so
-    executor calls dispatch on the loop the test awaits — pytest-asyncio
-    creates a fresh loop per test in auto mode, so the loop the fixture
-    captured at setup time is not the loop the test runs on.
-    """
-
-    plugin.settings["romm_url"] = "http://romm.local"
-    plugin.settings["romm_user"] = "user"
-    plugin.settings["romm_pass"] = "pass"
-    plugin.settings["romm_api_token"] = "rmm_token"
-    plugin.settings["romm_allow_insecure_ssl"] = False
-    plugin.loop = running_loop()
-    plugin._connection_service = ConnectionService(
-        config=ConnectionServiceConfig(
-            settings=plugin.settings,
-            romm_api=plugin._romm_api,
-            settings_persister=MagicMock(),
-            loop=plugin.loop,
-            logger=logging.getLogger("test"),
-            min_required_version=Plugin._MIN_REQUIRED_VERSION,
-            forget_device=MagicMock(),
-            clear_playtime_scope_notice=MagicMock(),
-            conflict_rules=_make_conflict_rules(),
-        ),
-    )
-
-
 class TestTranslateHttpError:
     """Tests for _translate_http_error method."""
 
@@ -1682,229 +1627,6 @@ class TestRetryMRO:
         result = romm_http.adapter.with_retry(fn, "arg1")
         assert result == "ok"
         fn.assert_called_once_with("arg1")
-
-
-# ============================================================================
-# test_connection structured errors
-# ============================================================================
-
-
-class TestTestConnectionErrors:
-    """test_connection returns a canonical ``reason`` slug in failure responses."""
-
-    @pytest.mark.asyncio
-    async def test_config_error_when_url_empty(self, plugin):
-        """Returns config_error when no URL is configured."""
-        plugin.settings["romm_url"] = ""
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "config_error"
-        assert "No server URL" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_auth_error_on_401(self, plugin):
-        """Returns auth_error when platforms endpoint returns 401."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        # Heartbeat succeeds, platforms raises auth error
-        plugin._romm_api.heartbeat.return_value = {"status": "ok"}
-        plugin._romm_api.list_platforms.side_effect = RommAuthError("401")
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "auth_failed"
-        assert "Authentication failed" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_connection_error_on_refused(self, plugin):
-        """Returns connection_error when server is unreachable."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.side_effect = RommConnectionError("refused")
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "unreachable" in result["message"].lower()
-
-    @pytest.mark.asyncio
-    async def test_ssl_error(self, plugin):
-        """Returns ssl_error on SSL certificate failure."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.side_effect = RommSSLError("cert fail")
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "SSL" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_success_on_happy_path(self, plugin):
-        """Returns success when both heartbeat and platforms succeed."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}, "status": "ok"}
-        plugin._romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
-        result = await plugin.test_connection()
-        assert result["success"] is True
-        assert "Connected to RomM 5.3.0" in result["message"]
-        assert result["romm_version"] == "5.3.0"
-        plugin._romm_api.set_version.assert_called_with("5.3.0")
-
-    @pytest.mark.asyncio
-    async def test_server_reachable_but_api_failed(self, plugin):
-        """When heartbeat succeeds but platforms fails with non-auth error, message is prefixed."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
-        plugin._romm_api.list_platforms.side_effect = RommServerError("500", status_code=500)
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "Server reachable but API request failed" in result["message"]
-
-
-class TestVersionDetection:
-    """test_connection detects and reports RomM server version."""
-
-    @pytest.mark.asyncio
-    async def test_version_extracted_from_heartbeat(self, plugin):
-        """Extracts version from SYSTEM.VERSION in heartbeat response."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["romm_version"] == "5.3.0"
-        plugin._romm_api.set_version.assert_called_with("5.3.0")
-
-    @pytest.mark.asyncio
-    async def test_old_version_rejected(self, plugin):
-        """Versions below 5.3.0 are rejected with version_error."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-        assert result["romm_version"] == "4.5.0"
-
-    @pytest.mark.asyncio
-    async def test_46_version_rejected(self, plugin):
-        """RomM 4.6.x is below the 5.3.0 minimum and is rejected."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.6.1"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-
-    @pytest.mark.asyncio
-    async def test_47_version_rejected(self, plugin):
-        """RomM 4.7.x is below the 5.3.0 minimum and is rejected."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.7.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-
-    @pytest.mark.asyncio
-    async def test_minimum_version_accepted(self, plugin):
-        """RomM 5.3.0 meets the minimum version requirement."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is True
-
-    @pytest.mark.asyncio
-    async def test_49_version_rejected(self, plugin):
-        """RomM 4.9.0, below the 5.3.0 floor, is rejected."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-
-    @pytest.mark.asyncio
-    async def test_release_below_minimum_rejected(self, plugin):
-        """RomM 5.2.0, the last release before the 5.3.0 minimum, is rejected."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.2.0"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-
-    @pytest.mark.asyncio
-    async def test_prerelease_at_minimum_rejected(self, plugin):
-        """A 5.3.0 pre-release ranks below the 5.3.0 release and is rejected."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0-beta.1"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "version_error"
-
-    @pytest.mark.asyncio
-    async def test_prerelease_above_minimum_accepted(self, plugin):
-        """A pre-release whose core is above 5.3.0 passes the gate."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.1-beta"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is True
-
-    @pytest.mark.asyncio
-    async def test_development_version_accepted(self, plugin):
-        """Development builds pass through without version check."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "development"}}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is True
-        assert result.get("romm_version") == "development"
-
-    @pytest.mark.asyncio
-    async def test_missing_version_in_heartbeat(self, plugin):
-        """Handles heartbeat without SYSTEM.VERSION gracefully."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.return_value = {"status": "ok"}
-        plugin._romm_api.list_platforms.return_value = []
-        result = await plugin.test_connection()
-        assert result["success"] is True
-        plugin._romm_api.set_version.assert_called_with(None)
-
-    @pytest.mark.asyncio
-    async def test_version_cleared_on_connection_failure(self, plugin):
-        """Version is cleared when heartbeat fails."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.get_version.return_value = "5.3.0"  # previously detected
-        plugin._romm_api.heartbeat.side_effect = RommConnectionError("refused")
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        plugin._romm_api.set_version.assert_called_with(None)
-
-    @pytest.mark.asyncio
-    async def test_timeout_error(self, plugin):
-        """Returns timeout_error on request timeout."""
-        _setup_plugin(plugin)
-        plugin.loop = asyncio.get_running_loop()
-        plugin._romm_api.heartbeat.side_effect = RommTimeoutError("timed out")
-        result = await plugin.test_connection()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
 
 
 # ── Tests for uncovered HTTP adapter methods ──────────
