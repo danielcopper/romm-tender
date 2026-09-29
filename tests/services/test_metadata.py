@@ -1,13 +1,13 @@
 import asyncio
+from dataclasses import dataclass
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_testable_plugin
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from adapters.debug_logger import SettingsAwareDebugLogger
-from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from domain.rom_metadata import RomMetadata
 from services.metadata import MetadataService, MetadataServiceConfig
@@ -65,41 +65,45 @@ def uow() -> FakeUnitOfWork:
     return FakeUnitOfWork()
 
 
+@dataclass
+class MetadataHarness:
+    """The metadata service and what its tests seed or patch beside it.
+
+    ``settings`` is the dict the service's debug logger reads ``log_level``
+    from. ``romm_api`` is a RomM API the service is not given.
+    """
+
+    service: MetadataService
+    settings: dict[str, Any]
+    romm_api: MagicMock
+
+
 @pytest.fixture
-def plugin(uow, logger, home):
-    p = _make_testable_plugin()
-    p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._romm_api = MagicMock()
-    p._uow = uow
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    metadata_service = MetadataService(
+def metadata(uow, logger) -> MetadataHarness:
+    settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+    debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
+    service = MetadataService(
         config=MetadataServiceConfig(
             loop=running_loop(),
             logger=logger,
-            log_debug=p._log_debug,
+            log_debug=debug_logger,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
     )
-    p._metadata_service = metadata_service
-    return p
+    return MetadataHarness(service=service, settings=settings, romm_api=MagicMock())
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop(plugin):
-    """Ensure plugin.loop and service loop match the running event loop for async tests."""
-    plugin.loop = asyncio.get_running_loop()
-    plugin._metadata_service._loop = asyncio.get_running_loop()
+async def _set_event_loop(metadata):
+    """Bind the service to the running event loop for async tests."""
+    metadata.service._loop = asyncio.get_running_loop()
 
 
 class TestGetRomMetadata:
-    """Tests for the get_rom_metadata callable."""
+    """Tests for get_rom_metadata."""
 
     @pytest.mark.asyncio
-    async def test_cache_hit(self, plugin, uow):
+    async def test_cache_hit(self, metadata, uow):
         """Returns cached data as the frontend entry (list-shaped array fields)."""
         import time
 
@@ -117,8 +121,8 @@ class TestGetRomMetadata:
                 cached_at=time.time(),
             ),
         )
-        plugin.settings["log_level"] = "warn"
-        result = plugin.get_rom_metadata(42)
+        metadata.settings["log_level"] = "warn"
+        result = metadata.service.get_rom_metadata(42)
         assert result["summary"] == "Cached summary"
         # Tuple fields flatten to lists for the wire shape.
         assert result["genres"] == ["RPG"]
@@ -128,11 +132,11 @@ class TestGetRomMetadata:
         assert result["average_rating"] == 85.0
 
     @pytest.mark.asyncio
-    async def test_cache_miss_returns_empty_defaults(self, plugin):
+    async def test_cache_miss_returns_empty_defaults(self, metadata):
         """Cache miss returns empty defaults without calling the API."""
-        plugin.settings["log_level"] = "warn"
+        metadata.settings["log_level"] = "warn"
 
-        result = plugin.get_rom_metadata(42)
+        result = metadata.service.get_rom_metadata(42)
 
         assert result["summary"] == ""
         assert result["genres"] == []
@@ -144,70 +148,70 @@ class TestGetRomMetadata:
         assert result["cached_at"] == 0
 
     @pytest.mark.asyncio
-    async def test_stale_cache_returns_stale_data(self, plugin, uow):
+    async def test_stale_cache_returns_stale_data(self, metadata, uow):
         """Stale cache (>7 days) is still returned — refreshed on next sync."""
         import time
 
-        plugin.settings["log_level"] = "warn"
+        metadata.settings["log_level"] = "warn"
         _seed_metadata(
             uow,
             42,
             _meta(summary="Old summary", genres=("Action",), cached_at=time.time() - (8 * 24 * 3600)),
         )
 
-        result = plugin.get_rom_metadata(42)
+        result = metadata.service.get_rom_metadata(42)
 
         assert result["summary"] == "Old summary"
         assert result["genres"] == ["Action"]
 
     @pytest.mark.asyncio
-    async def test_no_api_call_on_cache_miss(self, plugin):
+    async def test_no_api_call_on_cache_miss(self, metadata):
         """Verify get_rom is never called — metadata comes only from SQLite."""
         from unittest.mock import patch
 
-        plugin.settings["log_level"] = "warn"
+        metadata.settings["log_level"] = "warn"
 
-        with patch.object(plugin._romm_api, "get_rom") as mock_get_rom:
-            plugin.get_rom_metadata(42)
+        with patch.object(metadata.romm_api, "get_rom") as mock_get_rom:
+            metadata.service.get_rom_metadata(42)
 
         mock_get_rom.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_debug_logging_on_cache_hit(self, plugin, uow, logger):
+    async def test_debug_logging_on_cache_hit(self, metadata, uow, logger):
         """Verify _log_debug is called during cache hit."""
         import time
         from unittest.mock import patch
 
-        plugin.settings["log_level"] = "debug"
+        metadata.settings["log_level"] = "debug"
         _seed_metadata(uow, 42, _meta(summary="cached", cached_at=time.time()))
 
         with patch.object(logger, "info") as mock_info:
-            plugin.get_rom_metadata(42)
+            metadata.service.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache hit" in m.lower() for m in logged)
 
     @pytest.mark.asyncio
-    async def test_debug_logging_on_cache_miss(self, plugin, logger):
+    async def test_debug_logging_on_cache_miss(self, metadata, logger):
         """Verify _log_debug is called during cache miss."""
         from unittest.mock import patch
 
-        plugin.settings["log_level"] = "debug"
+        metadata.settings["log_level"] = "debug"
 
         with patch.object(logger, "info") as mock_info:
-            plugin.get_rom_metadata(42)
+            metadata.service.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache miss" in m.lower() for m in logged)
 
 
 class TestGetMetadataCachePage:
-    """Tests for the get_metadata_cache_page callable — {items, total} wire shape."""
+    """Tests for get_metadata_cache_page — {items, total} wire shape."""
 
     @pytest.mark.asyncio
-    async def test_returns_page_items_and_total(self, plugin, uow):
+    async def test_returns_page_items_and_total(self, metadata, uow):
         _seed_metadata(uow, 1, _meta(summary="Game 1", genres=("RPG",), cached_at=100.0))
         _seed_metadata(uow, 2, _meta(summary="Game 2", cached_at=200.0))
 
-        result = plugin.get_metadata_cache_page(0, 500)
+        result = metadata.service.get_metadata_cache_page(0, 500)
 
         assert set(result.keys()) == {"items", "total"}
         assert result["total"] == 2
@@ -222,13 +226,13 @@ class TestGetMetadataCachePage:
         assert items["1"]["cached_at"] == 100.0
 
     @pytest.mark.asyncio
-    async def test_pages_are_rom_id_ordered_and_disjoint(self, plugin, uow):
+    async def test_pages_are_rom_id_ordered_and_disjoint(self, metadata, uow):
         for rom_id in (5, 1, 3, 4, 2):
             _seed_metadata(uow, rom_id, _meta(summary=f"Game {rom_id}"))
 
-        first = plugin.get_metadata_cache_page(0, 2)
-        second = plugin.get_metadata_cache_page(2, 2)
-        third = plugin.get_metadata_cache_page(4, 2)
+        first = metadata.service.get_metadata_cache_page(0, 2)
+        second = metadata.service.get_metadata_cache_page(2, 2)
+        third = metadata.service.get_metadata_cache_page(4, 2)
 
         # Every page reports the full total, not the page size.
         assert first["total"] == second["total"] == third["total"] == 5
@@ -238,48 +242,48 @@ class TestGetMetadataCachePage:
         assert list(third["items"].keys()) == ["5"]
 
     @pytest.mark.asyncio
-    async def test_out_of_range_page_returns_empty_items_with_total(self, plugin, uow):
+    async def test_out_of_range_page_returns_empty_items_with_total(self, metadata, uow):
         _seed_metadata(uow, 1, _meta(summary="Game 1"))
         _seed_metadata(uow, 2, _meta(summary="Game 2"))
 
-        result = plugin.get_metadata_cache_page(500, 500)
+        result = metadata.service.get_metadata_cache_page(500, 500)
 
         assert result["items"] == {}
         assert result["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_clamps_negative_offset_and_limit(self, plugin, uow):
+    async def test_clamps_negative_offset_and_limit(self, metadata, uow):
         _seed_metadata(uow, 1, _meta(summary="Game 1"))
 
         # Negative offset clamps to 0; negative limit clamps to 0 (empty page).
-        neg_limit = plugin.get_metadata_cache_page(-10, -1)
+        neg_limit = metadata.service.get_metadata_cache_page(-10, -1)
         assert neg_limit["items"] == {}
         assert neg_limit["total"] == 1
 
-        neg_offset = plugin.get_metadata_cache_page(-10, 500)
+        neg_offset = metadata.service.get_metadata_cache_page(-10, 500)
         assert list(neg_offset["items"].keys()) == ["1"]
         assert neg_offset["total"] == 1
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_cache(self, plugin):
-        result = plugin.get_metadata_cache_page(0, 500)
+    async def test_returns_empty_when_no_cache(self, metadata):
+        result = metadata.service.get_metadata_cache_page(0, 500)
         assert result == {"items": {}, "total": 0}
 
 
 class TestGetAppIdRomIdMap:
     """Tests for get_app_id_rom_id_map() — unchanged behaviour (reads uow.roms)."""
 
-    def test_builds_mapping(self, plugin, uow):
+    def test_builds_mapping(self, metadata, uow):
         _seed_rom(uow, 10, app_id=1001, name="Game A")
         _seed_rom(uow, 20, app_id=1002, name="Game B")
         _seed_rom(uow, 30, app_id=None, name="Game C")  # unbound — excluded
-        result = plugin._metadata_service.get_app_id_rom_id_map()
+        result = metadata.service.get_app_id_rom_id_map()
         assert result["1001"] == 10
         assert result["1002"] == 20
         # The unbound ROM (NULL shortcut_app_id) contributes no mapping.
         assert "None" not in result
         assert len(result) == 2
 
-    def test_empty_registry(self, plugin):
-        result = plugin._metadata_service.get_app_id_rom_id_map()
+    def test_empty_registry(self, metadata):
+        result = metadata.service.get_app_id_rom_id_map()
         assert result == {}
