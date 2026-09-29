@@ -23,6 +23,7 @@ from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled, SyncState
+from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
 from lib.errors import classify_error
 from lib.list_result import ErrorCode
@@ -446,7 +447,7 @@ class LibraryFetcher:
         """
         if not enabled_ids:
             return []
-        collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
+        collections = await self._list_for_work_queue("standard", self._romm_api.list_collections)
         return collection_units(
             collections, enabled_ids, "standard", own_user_id=own_user_id, filter_to_own=filter_to_own
         )
@@ -461,11 +462,11 @@ class LibraryFetcher:
         """
         if not enabled_ids:
             return []
-        collections = await self._loop.run_in_executor(None, self._romm_api.list_smart_collections)
+        collections = await self._list_for_work_queue("smart", self._romm_api.list_smart_collections)
         return collection_units(collections, enabled_ids, "smart", own_user_id=own_user_id, filter_to_own=filter_to_own)
 
     async def _build_virtual_collection_units(self, enabled_ids: set[str]) -> list[WorkUnit]:
-        """Fetch every supported virtual type and emit units for those whose id is in *enabled_ids*.
+        """Fetch each supported virtual type that holds an id in *enabled_ids*, and emit units for those ids.
 
         The ids are globally unique across virtual types (RomM bakes the type
         into the base64 id), so a single enabled-id set selects across the merged
@@ -474,10 +475,21 @@ class LibraryFetcher:
         if not enabled_ids:
             return []
         units: list[WorkUnit] = []
-        for virtual_type in _SUPPORTED_VIRTUAL_TYPES:
-            collections = await self._loop.run_in_executor(None, self._romm_api.list_virtual_collections, virtual_type)
+        for virtual_type in virtual_types_to_list(enabled_ids, _SUPPORTED_VIRTUAL_TYPES):
+            collections = await self._list_for_work_queue(
+                virtual_type, self._romm_api.list_virtual_collections, virtual_type
+            )
             units.extend(collection_units(collections, enabled_ids, "virtual", virtual_type=virtual_type))
         return units
+
+    async def _list_for_work_queue(
+        self, label: str, listing: Callable[..., list[dict[str, Any]]], *args: str
+    ) -> list[dict[str, Any]]:
+        try:
+            return await self._loop.run_in_executor(None, listing, *args)
+        except Exception as e:
+            self._logger.warning(f"Failed to list {label} collections for the work queue: {e}")
+            raise
 
     async def _attach_plan_estimates(self, platform_units: list[WorkUnit]) -> list[WorkUnit]:
         """Stamp each platform unit with its plan-time estimate riders (#1382).
