@@ -1320,6 +1320,19 @@ export type UpdateInstallRefusal =
 /** Install the named version, which must be the stored one; answers once the attempt has started. */
 export const installUpdate = callable<[string], { success: true } | UpdateInstallRefusal>("install_update");
 
+/** An update attempt an earlier start's installer stopped without updating; `started_at` is ISO-8601 UTC. */
+export interface StoppedUpdateAttemptWire {
+  attempted_version: string;
+  from_version: string;
+  started_at: string;
+}
+
+/** The stopped attempt a start found, until dismissed or a new attempt starts; `null` where there is none. */
+export const getStoppedUpdateAttempt = callable<[], StoppedUpdateAttemptWire | null>("get_stopped_update_attempt");
+
+/** Wave the stopped attempt's card away; the backend removes its record. */
+export const dismissStoppedUpdateAttempt = callable<[], { success: true }>("dismiss_stopped_update_attempt");
+
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
 // See SessionLifecycleService in backend/services/session_lifecycle.py.

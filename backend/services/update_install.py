@@ -6,10 +6,11 @@ its check against the digest the release states, the installer's start as a
 unit of its own, and watching that unit for as long as this process lives. It
 also owns the update rule every conflicting use case asks
 (``is_update_in_progress``), held from a press that starts an attempt until
-that attempt fails. Which release is meant is the release check's answer, read
-through its owner. What the steps and reasons are called is in
-``domain/update_install.py``; the download, the files, the hashing and the unit
-are behind seams.
+that attempt fails, and the record of an attempt whose installer it started,
+which tells the next start whether that installer stopped without updating.
+Which release is meant is the release check's answer, read through its owner.
+What the steps, reasons and record are called is in ``domain/update_install.py``;
+the download, the files, the hashing and the unit are behind seams.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ from domain.update_install import (
     WaitReason,
     claim_reasons,
     installer_command,
+    new_attempt_record,
+    stopped_attempt,
 )
 from domain.update_outcome import standing_update_failure
 from domain.version import is_newer_version
@@ -34,6 +37,7 @@ from domain.version import is_newer_version
 if TYPE_CHECKING:
     import logging
 
+    from domain.update_install import UpdateAttemptRecord
     from domain.update_release import LatestRelease, ReleaseTarball
     from services.protocols import (
         ActiveDownloadRomIdsFn,
@@ -47,6 +51,7 @@ if TYPE_CHECKING:
         Sleeper,
         SteamInterfaceReader,
         TransientUnitControl,
+        UpdateAttemptStore,
         UpdateFailureFn,
         UpdateStagingStore,
         WorkInFlightFn,
@@ -79,10 +84,11 @@ class UpdateInstallServiceConfig:
 
     Carries the release check the release is read through, the running version
     and whether this process is the installed program, one reader per kind of
-    work a restart would cut short, the Steam interface reader the host fills
-    in, the installer's record of a rolled-back update, the download, staging
-    and unit seams with the environment the installer starts with, and the
-    runtime infrastructure.
+    work a restart would cut short and the claims on the prune conflicts, the
+    Steam interface reader the host fills in, the installer's record of a
+    rolled-back update and this program's own record of an attempt, the
+    download, staging and unit seams with the environment the installer starts
+    with, and the runtime infrastructure.
     """
 
     releases: LastSeenReleaseReader
@@ -99,6 +105,7 @@ class UpdateInstallServiceConfig:
     migration_running: WorkInFlightFn
     held_claims: HeldClaimsFn
     read_update_failure: UpdateFailureFn
+    attempts: UpdateAttemptStore
     download_asset: ReleaseAssetDownloadFn
     staging: UpdateStagingStore
     units: TransientUnitControl
@@ -129,6 +136,7 @@ class UpdateInstallService:
         self._migration_running = config.migration_running
         self._held_claims = config.held_claims
         self._read_update_failure = config.read_update_failure
+        self._attempts = config.attempts
         self._download_asset = config.download_asset
         self._staging = config.staging
         self._units = config.units
@@ -154,6 +162,12 @@ class UpdateInstallService:
         # The frames the download's thread hands the loop, held so the loop
         # cannot collect one before it is sent.
         self._frames: set[asyncio.Task[None]] = set()
+        # The attempt a previous start's installer stopped without updating, as
+        # this start found it; gone once dismissed or a new attempt starts.
+        self._stopped: UpdateAttemptRecord | None = None
+        # Whether this attempt's record was written, so a failure this process
+        # reports itself takes it away again.
+        self._record_written = False
         self._last_progress_emit: float | None = None
         # Every tick's count, throttled or not: the frames the worker hands the
         # loop can land after the download's own completion has been seen, and
@@ -167,6 +181,61 @@ class UpdateInstallService:
     def remove_leftovers(self) -> None:
         """Remove whatever an earlier attempt left in the staging directory. Run once, at start."""
         self._staging.remove_all()
+
+    def note_start(self) -> None:
+        """Judge the record of the attempt whose installer an earlier start started. Run once, at start.
+
+        An installer that stopped without updating never tells the backend it
+        stopped first, and a start on the same version looks like any other.
+        Where the record says that is what happened, the attempt is reported
+        as ``installer_stopped`` — logged at WARNING, offered again as Try
+        again, and kept for the notice on Main until it is dismissed, a new
+        attempt starts, or the running version changes. Any other record — an
+        update that went through, one the installer rolled back, a version
+        that moved since — is removed.
+        """
+        record = self._attempts.read()
+        if record is None:
+            return
+        failure = standing_update_failure(self._read_update_failure(), self._current_version)
+        stopped = stopped_attempt(record, self._current_version, failure)
+        if stopped is None:
+            self._remove_record_io()
+            return
+        self._logger.warning(
+            f"update: the installer for {stopped.attempted_version} started at {stopped.started_at} stopped without "
+            f"updating; still on {self._current_version} — what it said is in journalctl --user -u {INSTALLER_UNIT}"
+        )
+        self._stopped = stopped
+        self._attempt = InstallAttempt(
+            version=stopped.attempted_version, step=InstallStep.FAILED, failure=InstallFailure.INSTALLER_STOPPED
+        )
+
+    def get_stopped_update_attempt(self) -> dict[str, Any] | None:
+        """The attempt an earlier start's installer stopped without updating, until dismissed or superseded.
+
+        ``{"attempted_version", "from_version", "started_at"}``, or ``None``.
+        Judged by :meth:`note_start`; the notice on Main shows it.
+        """
+        stopped = self._stopped
+        if stopped is None:
+            return None
+        return {
+            "attempted_version": stopped.attempted_version,
+            "from_version": stopped.from_version,
+            "started_at": stopped.started_at,
+        }
+
+    async def dismiss_stopped_attempt(self) -> dict[str, Any]:
+        """Wave away the notice of an installer that stopped without updating, and remove its record.
+
+        Returns ``{"success": True}``. A record that could not be removed is
+        logged and is judged again at the next start — a notice shown twice
+        rather than one lost.
+        """
+        self._stopped = None
+        await self._loop.run_in_executor(None, self._remove_record_io)
+        return {"success": True}
 
     async def shutdown(self) -> None:
         """Stop the attempt's task and a download still running on its thread; the hold ends with the process."""
@@ -244,6 +313,8 @@ class UpdateInstallService:
             }
         self._holding = True
         self._installer_may_run = False
+        self._stopped = None
+        self._record_written = False
         self._last_progress_emit = None
         self._bytes_seen = (0, None)
         self._attempt = InstallAttempt(version=release.version, step=InstallStep.DOWNLOADING)
@@ -253,6 +324,8 @@ class UpdateInstallService:
 
     async def _run(self, version: str, tarball: ReleaseTarball) -> None:
         try:
+            # A new attempt ends the record of an earlier one.
+            await self._loop.run_in_executor(None, self._remove_record_io)
             installer, path = await self._download_and_verify(version, tarball)
             await self._start_installer(version, installer, path)
             await self._watch_installer(version)
@@ -310,6 +383,7 @@ class UpdateInstallService:
         if apps:
             self._logger.warning(f"update: {', '.join(apps)} started during the download of {version}; nothing changed")
             raise _AttemptFailedError(InstallFailure.GAME_STARTED)
+        await self._write_record(version)
         self._logger.info(
             f"update: starting the installer for {version}; follow it with journalctl --user -u {INSTALLER_UNIT}"
         )
@@ -331,6 +405,26 @@ class UpdateInstallService:
             self._logger.warning(f"update: the installer for {version} could not be started: {why}")
             raise _AttemptFailedError(InstallFailure.INSTALLER_NOT_STARTED)
         await self._advance(version, InstallStep.INSTALLER_STARTED)
+
+    async def _write_record(self, version: str) -> None:
+        """Record the attempt before its installer starts, so the next start can tell whether it stopped."""
+        record = new_attempt_record(version, self._current_version, self._clock.time())
+        try:
+            await self._loop.run_in_executor(None, self._attempts.write, record)
+        except OSError as e:
+            self._logger.warning(
+                f"update: the record of the attempt at {version} could not be written ({e!r}); "
+                "should its installer stop without updating, the next start cannot say so"
+            )
+            return
+        self._record_written = True
+
+    def _remove_record_io(self) -> None:
+        """Remove the attempt record, logging rather than raising where it stays."""
+        try:
+            self._attempts.remove()
+        except OSError as e:
+            self._logger.warning(f"update: the record of an update attempt could not be removed: {e!r}")
 
     async def _started_after_all(self, version: str, no_answer: TimeoutError) -> str | None:
         """Why a start that gave no answer did not start the unit, or ``None`` where it may have.
@@ -404,6 +498,11 @@ class UpdateInstallService:
             await self._loop.run_in_executor(None, self._staging.remove_all)
         except Exception:
             self._logger.exception("update: what the failed attempt staged could not be removed")
+        # This process reports the failure itself, so the record would tell the
+        # next start of something already shown.
+        if self._record_written:
+            self._record_written = False
+            await self._loop.run_in_executor(None, self._remove_record_io)
         self._attempt = InstallAttempt(version=version, step=InstallStep.FAILED, failure=failure)
         self._holding = False
         await self._emit_attempt()

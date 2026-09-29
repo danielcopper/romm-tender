@@ -87,6 +87,7 @@ from services.protocols.files import (
     SaveFileStore,
     SgdbArtworkCache,
     SteamRecoveryStore,
+    UpdateAttemptStore,
     UpdateFailureFn,
     UpdateStagingStore,
 )
@@ -279,6 +280,7 @@ __all__ = [
     "TransientUnitControl",
     "UnitOfWork",
     "UnitOfWorkFactory",
+    "UpdateAttemptStore",
     "UpdateFailureFn",
     "UpdateInProgressFn",
     "UpdateStagingStore",

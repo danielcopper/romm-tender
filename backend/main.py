@@ -858,6 +858,21 @@ class Endpoints:
         return await self._services.update_install_service.install_update(version)
 
     @route
+    def get_stopped_update_attempt(self):
+        """Report an update attempt whose installer stopped without updating, as an earlier start left it.
+
+        Returns ``{"attempted_version", "from_version", "started_at"}``, or
+        ``None`` where there is none, it was dismissed, or a new attempt has
+        started since.
+        """
+        return self._services.update_install_service.get_stopped_update_attempt()
+
+    @route
+    async def dismiss_stopped_update_attempt(self):
+        """Wave away the notice of an installer that stopped without updating. Returns ``{"success": True}``."""
+        return await self._services.update_install_service.dismiss_stopped_attempt()
+
+    @route
     async def get_shortcut_relocation(self):
         """Report which Steam shortcuts still have to be pointed at the launcher.
 

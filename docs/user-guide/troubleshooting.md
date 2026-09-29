@@ -135,6 +135,12 @@ have:
 
 Nothing tries again by itself; what the attempt downloaded is removed.
 
+An installer that stops without updating after it has stopped Tender cannot say so itself. If it started Tender again on
+the version you had, the main panel says **Update to X failed — you are still on Y.** with the same line about the
+installer, and the step is marked **Failed** under **Settings › Updates** with **Try again**. If it did not start Tender
+again, the section says after five minutes **Tender has not come back** and how to start it; once it is running again,
+the main panel says the same as above.
+
 **Fix**: Tender's log names what went wrong, on its lines that say `update:`. For an installer that stopped, the
 installer's own output is in the journal:
 

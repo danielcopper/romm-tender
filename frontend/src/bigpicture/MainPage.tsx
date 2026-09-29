@@ -35,6 +35,7 @@ import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { UpdateNotice } from "./UpdateNotice";
 import { UpdateFailureNotice } from "./UpdateFailureNotice";
+import { UpdateStoppedNotice } from "./UpdateStoppedNotice";
 import { UpdateAnnouncementNotice } from "./UpdateAnnouncementNotice";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
@@ -772,6 +773,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             simply exists. */}
         <UpdateAnnouncementNotice />
         <UpdateFailureNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
+        <UpdateStoppedNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
         <UpdateNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
         <BlockSeparator />
       </PanelSection>

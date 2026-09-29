@@ -59,6 +59,7 @@ import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome } from "./utils/updateOutcomeStore";
+import { fetchStoppedUpdateAttempt } from "./utils/stoppedUpdateStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -579,6 +580,18 @@ const tender = definePlugin(() => {
         await fetchUpdateOutcome();
       } catch (e) {
         logError(`Failed to read what the last update did: ${e}`);
+      }
+    })(),
+  );
+
+  // An installer an earlier start ran that stopped without updating: the card
+  // on Main says so. Detached like the two reads above.
+  detach(
+    (async () => {
+      try {
+        await fetchStoppedUpdateAttempt();
+      } catch (e) {
+        logError(`Failed to read whether the last update attempt stopped: ${e}`);
       }
     })(),
   );

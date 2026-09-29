@@ -1848,6 +1848,18 @@ swaps the tree and rolls back what does not answer
   [invariants](invariants.md).
 - **Leftovers.** The update directory is removed at every start (`remove_update_leftovers`); the installer never removes
   a tarball it was given.
+- **The attempt record.** An installer that stops without updating after it stopped this process can tell nobody: the
+  next start runs the same version and looks like any other. So right before the installer starts, the service writes
+  `update-attempt.json` in the state root (`UpdateAttemptStore`, `adapters/update_attempt.py`) — the attempted version,
+  the running one, and when — the backend being its only writer and the installer never touching it, unlike
+  `update-failure.json`. A failure this process reports itself removes it (the panel already showed it), and so does the
+  next attempt. At start (`note_update_attempt`), `domain/update_install.py::stopped_attempt` judges it: running the
+  attempted version, the update went through; a standing record of the installer's that it rolled this attempt back is
+  that record's story; running neither version, the version moved since — each removes it. Running the version that
+  started it, with no rollback recorded, is an installer that stopped without updating: a WARNING, the attempt reported
+  as `installer_stopped` for Try again, and `get_stopped_update_attempt` answering it for the notice on Main until
+  `dismiss_stopped_update_attempt` removes the record or a new attempt starts. A record that cannot be written is a
+  WARNING and does not hold the install up; one that cannot be removed is judged again at the next start.
 
 ### Adapters (`backend/adapters/`)
 
@@ -2774,7 +2786,7 @@ Protocol-typed (services never import each other's concrete classes). Selected w
 | **PruneLeaseService**       | `ConflictRules` (renews, releases and disowns the frontend's leases; checks no rule)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateCheckService**      | `LatestReleaseFn`, `Clock`, `Sleeper` + `EventEmitter` (the check while the backend runs), `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `update_check_last_seen`), the running `VERSION`, and whether this process is the installed program                                                                                                                                                                                                                                                                                                                                                            |
 | **UpdateOutcomeService**    | `UpdateFailureFn`, `SettingsPersister`, `UnitOfWorkFactory` (`kv_config` `last_run_version`), the running `VERSION`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `HeldClaimsFn` (the prune conflicts), `UpdateFailureFn`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitControl`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                                              |
+| **UpdateInstallService**    | `LastSeenReleaseReader` (the release check), `SteamInterfaceReader` (running apps and the reload limit, from the host), one `WorkInFlightFn` per kind of work a restart cuts short plus `ActiveDownloadRomIdsFn` and `DownloadQueueFn`, `HeldClaimsFn` (the prune conflicts), `UpdateFailureFn`, `UpdateAttemptStore`, `ReleaseAssetDownloadFn`, `UpdateStagingStore`, `TransientUnitControl`, `Clock`, `Sleeper`, `EventEmitter`, the installer's environment, the running `VERSION`, and whether this process is the installed program                                                                        |
 
 Most services also receive the `settings` dict (`StateBundle`'s only field), the runtime infrastructure (event loop,
 logger, the `DebugLogger` Protocol), and the `UnitOfWorkFactory` for relational state through their config. The old

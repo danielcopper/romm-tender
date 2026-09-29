@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from domain.app_directories import AppDirectories
@@ -9,13 +11,19 @@ from domain.update_install import (
     InstallAttempt,
     InstallFailure,
     InstallStep,
+    UpdateAttemptRecord,
     Wait,
     WaitReason,
     claim_reasons,
     claims_named_by,
+    decode_attempt_record,
+    encode_attempt_record,
     installer_command,
     installer_environment,
+    new_attempt_record,
+    stopped_attempt,
 )
+from domain.update_outcome import UpdateFailure
 
 _DIRECTORIES = AppDirectories(
     config_dir="/home/u/.config/romm-tender",
@@ -131,3 +139,54 @@ class TestClaimReasons:
     def test_other_work_names_no_claim_of_its_own(self):
         """It is what is left over; a claim mapped onto it would read as named when it is not."""
         assert claims_named_by(WaitReason.OTHER_WORK) == frozenset()
+
+
+_ATTEMPT = UpdateAttemptRecord(attempted_version="1.1.0", from_version="1.0.0", started_at="2026-09-29T10:00:00Z")
+
+
+class TestTheAttemptRecord:
+    def test_a_new_record_stamps_utc_to_the_second(self):
+        now = datetime(2026, 9, 29, 10, 0, 0, 750000, tzinfo=UTC).timestamp()
+
+        assert new_attempt_record("1.1.0", "1.0.0", now) == _ATTEMPT
+
+    def test_it_reads_back_what_it_writes(self):
+        assert decode_attempt_record(encode_attempt_record(_ATTEMPT)) == _ATTEMPT
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "",
+            "{",
+            "[]",
+            '{"attempted_version": "1.1.0", "from_version": "1.0.0"}',
+            '{"attempted_version": " ", "from_version": "1.0.0", "started_at": "x"}',
+            '{"attempted_version": 1, "from_version": "1.0.0", "started_at": "x"}',
+        ],
+    )
+    def test_anything_short_of_three_non_empty_strings_is_no_record(self, raw):
+        assert decode_attempt_record(raw) is None
+
+
+class TestAStoppedAttempt:
+    def test_a_start_on_the_version_that_began_it_is_an_installer_that_stopped(self):
+        assert stopped_attempt(_ATTEMPT, "1.0.0", None) == _ATTEMPT
+
+    def test_a_start_on_the_attempted_version_is_an_update_that_went_through(self):
+        assert stopped_attempt(_ATTEMPT, "1.1.0", None) is None
+
+    def test_a_rollback_of_that_attempt_is_the_installer_s_record_to_tell(self):
+        failure = UpdateFailure(attempted_version="1.1.0", restored_version="1.0.0", rolled_back_at="2026-09-29T10:01Z")
+
+        assert stopped_attempt(_ATTEMPT, "1.0.0", failure) is None
+
+    def test_a_rollback_of_another_attempt_does_not_explain_this_one(self):
+        failure = UpdateFailure(attempted_version="1.0.5", restored_version="1.0.0", rolled_back_at="2026-09-01T10:01Z")
+
+        assert stopped_attempt(_ATTEMPT, "1.0.0", failure) == _ATTEMPT
+
+    def test_a_version_that_moved_some_other_way_since_is_over(self):
+        assert stopped_attempt(_ATTEMPT, "0.9.0", None) is None
+
+    def test_no_record_is_nothing(self):
+        assert stopped_attempt(None, "1.0.0", None) is None

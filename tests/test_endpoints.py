@@ -150,6 +150,10 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # wait, while one that is merely pending survives the restart and does not.
     "get_update_install_state",
     "install_update",
+    # An installer that stopped without updating: the read and the dismissal
+    # touch this program's own record of the attempt and nothing else.
+    "get_stopped_update_attempt",
+    "dismiss_stopped_update_attempt",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.
     # Touches no RetroDECK state and reads nothing from disk. It has to answer

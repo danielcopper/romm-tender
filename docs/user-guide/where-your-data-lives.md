@@ -2,12 +2,12 @@
 
 Tender keeps what it knows about your library in folders under your own home directory, each named after Tender itself:
 
-| Folder                        | What is in it                                                                                                                                                                                      |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                                                  |
-| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/` |
-| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                                                                                       |
-| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back                                                                                                       |
+| Folder                        | What is in it                                                                                                                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                                                     |
+| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state; the copy an update made of the database and your settings, in `update-backup/`, and the one going back by hand made, in `rollback-backup/`    |
+| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                                                                                          |
+| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`; `update-failure.json` after an update that was rolled back; `update-attempt.json` while an update from Settings is under way, and after one whose installer stopped |
 
 Four more places sit outside those folders, because none of them holds anything of yours:
 
@@ -34,6 +34,13 @@ starts it again — so anything the new version recorded in that minute is gone,
 leaves `~/.local/state/romm-tender/update-failure.json` saying which version it tried, which one it went back to, and
 when; the next update whose new version answers removes it. Tender reads that note to tell you on its main panel, and
 never changes or removes it itself. [Troubleshooting](troubleshooting.md#an-update-was-rolled-back) has what to do next.
+
+An update started from **Settings › Updates** leaves a note of its own,
+`~/.local/state/romm-tender/update-attempt.json`, written by Tender right before it starts the installer: which version
+it tried, which one it was running, and when. The installer never touches it. When Tender next starts, the note tells it
+how that update ended. Running the new version, or after a rollback, the note is removed. Running the same version as
+before, with no rollback recorded, the installer stopped without updating — Tender says so on its main panel and removes
+the note once you dismiss that, press **Try again**, or run another version.
 
 Going back to the previous version by hand (`install.sh --rollback`) puts back that same copy, but first copies the
 database and settings it is about to replace to `~/.local/share/romm-tender/rollback-backup/`, replacing the copy the

@@ -737,6 +737,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             migration_running=migration_service.is_retrodeck_migration_running,
             held_claims=prune_conflicts.held_claims,
             read_update_failure=cfg.adapters.update_failure,
+            attempts=cfg.adapters.update_attempt,
             download_asset=cfg.adapters.download_release_asset,
             staging=cfg.adapters.update_staging,
             units=cfg.adapters.transient_units,

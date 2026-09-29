@@ -61,6 +61,7 @@ from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
 from adapters.transient_unit import SystemdRunAdapter
+from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_failure import UpdateFailureFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from domain.identity import PACKAGE_NAME, VERSION
@@ -120,6 +121,7 @@ if TYPE_CHECKING:
         SystemSupportedExtensionsFn,
         TransientUnitControl,
         UnitOfWorkFactory,
+        UpdateAttemptStore,
         UpdateFailureFn,
         UpdateStagingStore,
         UuidGen,
@@ -168,6 +170,7 @@ class AdapterBundle:
     steam_recovery: SteamRecoveryStore
     latest_release: LatestReleaseFn
     update_failure: UpdateFailureFn
+    update_attempt: UpdateAttemptStore
     download_release_asset: ReleaseAssetDownloadFn
     update_staging: UpdateStagingStore
     transient_units: TransientUnitControl
@@ -419,6 +422,7 @@ def bootstrap(
         log_debug=debug_logger,
     )
     update_failure = UpdateFailureFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
+    update_attempt = UpdateAttemptFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
     update_staging = UpdateStagingAdapter(directory=os.path.join(directories.cache_dir, UPDATE_DIR_NAME))
     transient_units = SystemdRunAdapter()
     game_process = GameProcessAdapter()
@@ -485,6 +489,7 @@ def bootstrap(
         steam_recovery=steam_recovery,
         latest_release=github_releases.get_latest_release,
         update_failure=update_failure.read_update_failure,
+        update_attempt=update_attempt,
         download_release_asset=github_releases.download_asset,
         update_staging=update_staging,
         transient_units=transient_units,

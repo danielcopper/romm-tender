@@ -50,6 +50,7 @@ from adapters.retrodeck_paths import RetroDeckPathsAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
+from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
@@ -474,6 +475,7 @@ class TestWireServices:
             "latest_release": FakeLatestRelease(),
             "update_failure": MagicMock(return_value=None),
             "update_staging": UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update")),
+            "update_attempt": UpdateAttemptFileAdapter(state_dir=str(tmp_path / "state"), log_debug=lambda msg: None),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -541,6 +543,7 @@ class TestWireServices:
                 steam_recovery=deps["steam_recovery"],
                 latest_release=deps["latest_release"],
                 update_failure=deps["update_failure"],
+                update_attempt=deps["update_attempt"],
                 download_release_asset=FakeReleaseDownload(),
                 update_staging=deps["update_staging"],
                 transient_units=FakeTransientUnits(),

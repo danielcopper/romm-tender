@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     )
 
     from domain.prune import BundleReadmeContext
+    from domain.update_install import UpdateAttemptRecord
     from domain.update_outcome import UpdateFailure
 
 
@@ -60,6 +61,21 @@ class UpdateStagingStore(Protocol):
     def extract_installer(self, tarball: str) -> str:
         """Unpack the installer out of *tarball* into the directory, and answer its path."""
         ...
+
+
+class UpdateAttemptStore(Protocol):
+    """This program's record of the update attempt whose installer it last started.
+
+    ``read`` answers ``None`` where there is none or it cannot be read, and
+    never raises; ``write`` and ``remove`` raise ``OSError`` where the file
+    could not be changed, and removing a missing record is nothing to do.
+    """
+
+    def read(self) -> UpdateAttemptRecord | None: ...
+
+    def write(self, record: UpdateAttemptRecord) -> None: ...
+
+    def remove(self) -> None: ...
 
 
 class DirectoryFileListerFn(Protocol):

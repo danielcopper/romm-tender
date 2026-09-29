@@ -35,6 +35,7 @@ _REPAIRS = [
     "prune_orphaned_cover_cache",
     "cleanup_leftover_tmp_files",
     "remove_update_leftovers",
+    "note_update_attempt",
     "record_save_directories",
     "run_due_update_checks",
 ]
@@ -112,6 +113,7 @@ class _Recorded:
             update_check_service=MagicMock(run_due_checks=self._due_checks),
             update_install_service=MagicMock(
                 remove_leftovers=self._step("remove_update_leftovers"),
+                note_start=self._step("note_update_attempt"),
                 shutdown=self._async_step("update_install_service.shutdown"),
             ),
             sync_service=MagicMock(shutdown=self._step("sync_service.shutdown")),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import json
 import logging
 import os
 import tarfile
@@ -20,8 +21,16 @@ from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.system_time import FakeClock
 
+from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
-from domain.update_install import INSTALLER_UNIT, WaitReason, claims_named_by
+from domain.update_install import (
+    INSTALLER_UNIT,
+    UPDATE_ATTEMPT_FILENAME,
+    UpdateAttemptRecord,
+    WaitReason,
+    claims_named_by,
+    encode_attempt_record,
+)
 from domain.update_outcome import UpdateFailure
 from domain.update_release import LatestRelease, ReleaseTarball
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
@@ -176,6 +185,7 @@ async def _rig(
     unit_no_answer: bool = False,
     sleeper: _ParkingSleeper | None = None,
     failure_record: UpdateFailure | None = None,
+    current_version: str = _RUNNING,
 ) -> _Rig:
     body = body if body is not None else _tarball()
     release = release if release is not None else _release(body=body)
@@ -193,7 +203,7 @@ async def _rig(
     service = UpdateInstallService(
         config=UpdateInstallServiceConfig(
             releases=releases,
-            current_version=_RUNNING,
+            current_version=current_version,
             installed_program=installed_program,
             steam=steam,
             library_sync_in_flight=lambda: work.library_sync,
@@ -206,6 +216,7 @@ async def _rig(
             migration_running=lambda: work.migration_running,
             held_claims=lambda: tuple(work.claims),
             read_update_failure=lambda: failure_record,
+            attempts=UpdateAttemptFileAdapter(state_dir=str(tmp_path / "state"), log_debug=lambda msg: None),
             download_asset=downloads,
             staging=staging,
             units=units,
@@ -894,6 +905,172 @@ class TestAfterARollback:
         rig = await _built(rigs, tmp_path, failure_record=record)
 
         assert (await rig.service.get_update_install_state())["try_again"] is False
+
+
+# ── The record of an attempt whose installer was started ────────────────────
+
+
+def _record_path(tmp_path) -> str:
+    return str(tmp_path / "state" / UPDATE_ATTEMPT_FILENAME)
+
+
+def _leave_record(tmp_path, attempted: str = _OFFERED, started_by: str = _RUNNING) -> None:
+    os.makedirs(tmp_path / "state", exist_ok=True)
+    record = UpdateAttemptRecord(
+        attempted_version=attempted, from_version=started_by, started_at="2026-09-01T10:00:00Z"
+    )
+    with open(_record_path(tmp_path), "w", encoding="utf-8") as f:
+        f.write(encode_attempt_record(record))
+
+
+def _read_record(tmp_path) -> dict[str, Any] | None:
+    if not os.path.exists(_record_path(tmp_path)):
+        return None
+    with open(_record_path(tmp_path), encoding="utf-8") as f:
+        return json.load(f)
+
+
+class TestTheAttemptRecord:
+    async def test_it_is_written_before_the_installer_starts(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        assert _read_record(tmp_path) == {
+            "attempted_version": _OFFERED,
+            "from_version": _RUNNING,
+            "started_at": "2026-01-01T00:00:00Z",
+        }
+
+    @pytest.mark.parametrize("setup", [{"failing": "tarball"}, {"apps_after_press": ("Celeste",)}])
+    async def test_an_attempt_that_ends_before_the_installer_writes_none(self, rigs, tmp_path, setup):
+        release = _release()
+        rig = await _built(
+            rigs, tmp_path, release=release, failing={_asset(release).url} if "failing" in setup else None
+        )
+
+        await rig.service.install_update(_OFFERED)
+        if "apps_after_press" in setup:
+            rig.steam.apps = setup["apps_after_press"]
+        await rig.settled()
+
+        assert _read_record(tmp_path) is None
+
+    async def test_a_failure_this_process_reports_itself_takes_the_record_away(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, unit_states=[False], sleeper=_ParkingSleeper(free=1))
+
+        await rig.service.install_update(_OFFERED)
+        for _ in range(200):
+            frames = [payload for name, payload in rig.events.events if name == "update_install_progress"]
+            if frames[-1]["step"] == "failed":
+                break
+            await asyncio.sleep(0.01)
+
+        assert frames[-1]["failure"] == "installer_stopped"
+        assert _read_record(tmp_path) is None
+
+    async def test_a_new_attempt_takes_an_earlier_record_away(self, rigs, tmp_path):
+        release = _release()
+        _leave_record(tmp_path, attempted="1.0.5")
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url})
+
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        assert _read_record(tmp_path) is None
+
+    async def test_a_record_that_cannot_be_written_does_not_hold_the_install_up(
+        self, rigs, tmp_path, monkeypatch, caplog
+    ):
+        rig = await _built(rigs, tmp_path)
+
+        def unwritable(_record: object) -> None:
+            raise OSError("read-only file system")
+
+        monkeypatch.setattr(rig.service._attempts, "write", unwritable)
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            await rig.service.install_update(_OFFERED)
+            last = await rig.settled()
+
+        assert last["step"] == "installer_started"
+        assert "could not be written" in caplog.text
+
+
+class TestTheNextStart:
+    async def test_no_record_is_nothing_to_say(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+
+        rig.service.note_start()
+
+        assert rig.service.get_stopped_update_attempt() is None
+        assert (await rig.service.get_update_install_state())["attempt"] is None
+
+    async def test_a_start_on_the_version_that_began_it_with_no_rollback_is_an_installer_that_stopped(
+        self, rigs, tmp_path, caplog
+    ):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path)
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            rig.service.note_start()
+
+        assert rig.service.get_stopped_update_attempt() == {
+            "attempted_version": _OFFERED,
+            "from_version": _RUNNING,
+            "started_at": "2026-09-01T10:00:00Z",
+        }
+        state = await rig.service.get_update_install_state()
+        assert state["attempt"] == {
+            "version": _OFFERED,
+            "step": "failed",
+            "bytes_done": 0,
+            "bytes_total": None,
+            "failure": "installer_stopped",
+        }
+        assert state["try_again"] is True
+        assert _read_record(tmp_path) is not None
+        assert "stopped without updating" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("running", "rolled_back"),
+        [(_OFFERED, False), (_RUNNING, True), ("1.0.5", False)],
+        ids=["updated", "rolled-back", "moved-since"],
+    )
+    async def test_any_other_record_is_removed_and_says_nothing(self, rigs, tmp_path, running, rolled_back):
+        _leave_record(tmp_path)
+        failure = (
+            UpdateFailure(attempted_version=_OFFERED, restored_version=_RUNNING, rolled_back_at="2026-09-01T10:05:00Z")
+            if rolled_back
+            else None
+        )
+        rig = await _built(rigs, tmp_path, current_version=running, failure_record=failure)
+
+        rig.service.note_start()
+
+        assert rig.service.get_stopped_update_attempt() is None
+        assert _read_record(tmp_path) is None
+
+    async def test_dismissing_it_removes_the_record_and_keeps_try_again_for_this_process(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path)
+        rig.service.note_start()
+
+        assert await rig.service.dismiss_stopped_attempt() == {"success": True}
+
+        assert rig.service.get_stopped_update_attempt() is None
+        assert _read_record(tmp_path) is None
+        assert (await rig.service.get_update_install_state())["try_again"] is True
+
+    async def test_a_new_attempt_ends_the_notice(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path)
+        rig.service.note_start()
+
+        assert await rig.service.install_update(_OFFERED) == {"success": True}
+
+        assert rig.service.get_stopped_update_attempt() is None
 
 
 # ── Leftovers and shutdown ───────────────────────────────────────────────────

@@ -77,6 +77,7 @@ class Application:
         steps.run("prune_orphaned_cover_cache", services.artwork_service.prune_orphaned_cover_cache)
         steps.run("cleanup_leftover_tmp_files", services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files)
         steps.run("remove_update_leftovers", services.update_install_service.remove_leftovers)
+        steps.run("note_update_attempt", services.update_install_service.note_start)
         steps.run("record_save_directories", self._start_save_directory_backfill)
         steps.run("run_due_update_checks", self._start_due_update_checks)
 
