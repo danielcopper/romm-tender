@@ -1,12 +1,12 @@
 """GameDetailService — game detail page data aggregation.
 
 Aggregates the synced-ROM registry, install record, cached save-sync state,
-firmware cache, cached ROM metadata, and achievement progress into a single
-response payload for the frontend game detail page. Reads the relational state
-from SQLite through the Unit of Work; the platform display name comes from the
-offline ``kv_config`` cache (not stored on the ROM — see ADR-0003). Cross-service
-reads (BIOS, achievements) go through callback-injected Protocols so the service
-stays independent of other service modules.
+cached ROM metadata, and achievement progress into a single response payload
+for the frontend game detail page. Reads the relational state from SQLite
+through the Unit of Work; the platform display name comes from the offline
+``kv_config`` cache (not stored on the ROM — see ADR-0003). Cross-service reads
+(BIOS, achievements) go through callback-injected Protocols so the service stays
+independent of other service modules.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from domain.save_status import compute_save_sync_display
 from lib.path_safety import PathTraversalError, safe_join
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
 
     from models.state import MetadataCacheEntry
@@ -55,14 +56,14 @@ ACHIEVEMENT_TTL_SEC = 3600  # 1 hour
 class GameDetailServiceConfig:
     """Frozen wiring bundle handed to ``GameDetailService.__init__``.
 
-    Holds the live settings dict, runtime infrastructure, the clock seam, the
-    SQLite Unit-of-Work factory (the read seam over the ``roms`` /
-    ``rom_installs`` / ``rom_save_sync_states`` / ``rom_metadata`` / ``kv_config``
-    aggregates), and the Protocol-typed reader adapters (``BiosChecker``,
-    ``AchievementsReader``, ``ActiveCoreReader``) GameDetailService consults to
-    assemble the game-detail payload. The active-core resolver answers "which
-    ``.so`` will this ROM launch with?" so the core-aware BIOS filter keys off
-    the per-game pin, not a platform default. ``path_exists`` /
+    Holds the live settings dict, the loop the page's read is offloaded to,
+    runtime infrastructure, the clock seam, the SQLite Unit-of-Work factory (the
+    read seam over the ``roms`` / ``rom_installs`` / ``rom_save_sync_states`` /
+    ``rom_metadata`` / ``kv_config`` aggregates), and the Protocol-typed reader
+    adapters. ``AchievementsReader`` feeds the game-detail payload;
+    ``BiosChecker`` and ``ActiveCoreReader`` answer the page's separate BIOS
+    question, the latter naming the emulator this ROM launches with so the BIOS
+    filter keys off the per-game pin, not a platform default. ``path_exists`` /
     ``retrodeck_paths`` / ``resolve_system`` are the single ``stat`` the page
     runs on an uninstalled ROM's target path; ``candidate_probe`` is the one
     ``readdir`` beside it, answering whether the same game is in the folder under
@@ -71,6 +72,7 @@ class GameDetailServiceConfig:
     """
 
     settings: dict[str, Any]
+    loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     clock: Clock
     uow_factory: UnitOfWorkFactory
@@ -88,6 +90,7 @@ class GameDetailService:
 
     def __init__(self, *, config: GameDetailServiceConfig) -> None:
         self._settings = config.settings
+        self._loop = config.loop
         self._logger = config.logger
         self._clock = config.clock
         self._uow_factory = config.uow_factory
@@ -232,15 +235,25 @@ class GameDetailService:
 
         return stale
 
-    def get_cached_game_detail(self, app_id) -> dict[str, Any]:
+    async def get_cached_game_detail(self, app_id) -> dict[str, Any]:
+        """Return the game page's whole payload, assembled off the loop thread.
+
+        Network-free but not free: a read UoW, and for an uninstalled ROM a
+        ``stat`` and a directory listing on storage that may have to wake up.
+        Every game page opens this, so it goes to a worker — which is also where
+        a `SqliteUnitOfWork` connection is meant to live (ADR-0004).
+        """
+        return await self._loop.run_in_executor(None, self._get_cached_game_detail_io, app_id)
+
+    def _get_cached_game_detail_io(self, app_id) -> dict[str, Any]:
         """Return cached data for a game keyed by its Steam ``app_id``."""
         app_id = int(app_id)
 
         # ── Single unified read UoW (ADR-0006): one transaction reads the ROM,
         # its install/save-state/metadata children, and the platform-name cache.
-        # Capture locals, close the UoW, then build the response and call the
-        # bios_checker (HTTP-free cache read) entirely outside the transaction —
-        # no I/O of any kind runs inside the ``with`` block.
+        # Capture locals, close the UoW, then build the response entirely
+        # outside the transaction — no I/O of any kind runs inside the ``with``
+        # block.
         with self._uow_factory() as uow:
             rom = uow.roms.get_by_app_id(app_id)
             if rom is None:

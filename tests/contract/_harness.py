@@ -98,6 +98,7 @@ _BOUND_SERVICE_ATTRS = {
     "_startup_healing_service": "startup_healing_service",
     "_shortcut_relocation_service": "shortcut_relocation_service",
     "_update_check_service": "update_check_service",
+    "_update_outcome_service": "update_outcome_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",
@@ -287,12 +288,13 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     )
     services = wire_services(cfg)
 
-    # 4. Construct the real Plugin and bind exactly as main.py:_main does.
+    # 4. Construct the real Plugin and bind exactly as main.py:_main does —
+    # plus the two handles main.py never sets, which contract tests read to
+    # seed and inspect the live settings dict and the RetroDECK paths.
     plugin = Plugin()
     plugin.loop = loop
-    plugin.settings = result.stores.settings
     plugin._debug_logger = result.handles.debug_logger
-    plugin._persistence = result.handles.persistence
+    plugin.settings = result.stores.settings
     plugin._retrodeck_paths = result.callbacks.retrodeck_paths
     for attr, field in _BOUND_SERVICE_ATTRS.items():
         setattr(plugin, attr, getattr(services, field))

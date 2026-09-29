@@ -139,6 +139,18 @@ class TestCanaryRomIds:
 
         assert _registry(uow).canary_rom_ids(set(), 5) == [2]
 
+    def test_a_revoked_skip_still_offers_what_the_fetch_returned(self) -> None:
+        """Revoking a platform's skip says nothing about what RomM served, so its ids stay controls."""
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_generation_rom(1, "gba", "old"))
+            uow.roms.save(_generation_rom(2, "gba", "new"))
+        _stamped(uow, "gba", "new")
+        with uow:
+            uow.platform_sync_state.revoke_skip("gba")
+
+        assert _registry(uow).canary_rom_ids(set(), 5) == [2]
+
     def test_excludes_the_ids_under_question(self) -> None:
         uow = FakeUnitOfWork()
         with uow:

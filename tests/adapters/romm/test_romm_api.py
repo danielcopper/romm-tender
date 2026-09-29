@@ -19,6 +19,7 @@ from lib.errors import (
     RommServerError,
     RommSyncDisabledError,
     RommUnprocessableEntityError,
+    classify_error,
 )
 
 if TYPE_CHECKING:
@@ -67,6 +68,18 @@ class TestListPlatforms:
         result = api.list_platforms()
         client.request.assert_called_once_with("/api/platforms")
         assert result == [{"id": 1, "slug": "snes"}]
+
+    def test_non_list_raises(self):
+        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
+        api, client = _make_api()
+        client.request.return_value = {"error": "bad"}
+        with pytest.raises(RommApiError) as exc_info:
+            api.list_platforms()
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert classify_error(exc_info.value) == (
+            "server_unreachable",
+            "Unexpected response from /api/platforms: dict",
+        )
 
 
 class TestGetRom:
@@ -309,10 +322,17 @@ class TestListCollections:
         client.request.assert_called_once_with("/api/collections")
         assert result == [{"id": 1, "name": "Favorites"}]
 
-    def test_non_list_returns_empty(self):
+    def test_non_list_raises(self):
+        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
         api, client = _make_api()
         client.request.return_value = {"error": "bad"}
-        assert api.list_collections() == []
+        with pytest.raises(RommApiError) as exc_info:
+            api.list_collections()
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert classify_error(exc_info.value) == (
+            "server_unreachable",
+            "Unexpected response from /api/collections: dict",
+        )
 
 
 class TestRegisterDevice:
@@ -658,10 +678,14 @@ class TestListVirtualCollections:
         client.request.assert_called_once_with("/api/collections/virtual?type=favorites")
         assert result == [{"name": "Favorites"}]
 
-    def test_non_list_returns_empty(self):
+    def test_non_list_raises(self):
+        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
         api, client = _make_api()
         client.request.return_value = {"error": "not found"}
-        assert api.list_virtual_collections("favorites") == []
+        with pytest.raises(RommApiError) as exc_info:
+            api.list_virtual_collections("favorites")
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert str(exc_info.value) == "Unexpected response from /api/collections/virtual?type=favorites: dict"
 
 
 class TestListRomsByCollection:
@@ -704,10 +728,14 @@ class TestListSmartCollections:
         client.request.assert_called_once_with("/api/collections/smart")
         assert result == [{"id": 1, "name": "Recent"}, {"id": 2, "name": "Played"}]
 
-    def test_non_list_returns_empty(self):
+    def test_non_list_raises(self):
+        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
         api, client = _make_api()
-        client.request.return_value = {"error": "bad"}
-        assert api.list_smart_collections() == []
+        client.request.return_value = None
+        with pytest.raises(RommApiError) as exc_info:
+            api.list_smart_collections()
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert str(exc_info.value) == "Unexpected response from /api/collections/smart: NoneType"
 
     def test_empty_list(self):
         api, client = _make_api()

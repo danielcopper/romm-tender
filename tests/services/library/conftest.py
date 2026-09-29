@@ -1,33 +1,32 @@
-"""Shared fixtures for the LibraryService sub-service test files.
+"""The ``library`` fixture every test under ``tests/services/library/`` runs on.
 
-Wires a ``Plugin`` instance with the full LibraryService composition
-(fetcher + orchestrator + reporter) plus the peer services
-LibraryService coordinates with (MetadataService, ArtworkService,
-ShortcutRemovalService), whose conflict rules share the plugin's prune
-conflicts and refuse nothing unless a test holds a claim. All test files
-under ``tests/services/library/`` consume the same ``plugin`` fixture
-so coverage of the façade integration and the sub-service internals
-sits on top of an identical setup.
+It builds a :class:`LibraryService` beside the artwork, metadata and
+shortcut-removal services. All but the metadata service check conflict rules,
+and theirs share one :class:`PruneConflicts`, which refuses nothing unless a
+test holds a claim.
 """
 
 import asyncio
+from dataclasses import dataclass
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin
+from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
+from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
-from adapters.persistence import PersistenceAdapter
 from adapters.steam_config import SteamConfigAdapter
+from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -36,46 +35,63 @@ from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalSer
 from tests.services.library._helpers import rebind_loop
 
 
+@dataclass
+class LibraryHarness:
+    """The wired library services and the seams a test seeds or asserts against.
+
+    ``sync`` is the :class:`LibraryService` under test. ``uow`` is the one
+    :class:`FakeUnitOfWork` every service's factory wraps, so a row a test
+    seeds there is the row the services read.
+    """
+
+    sync: LibraryService
+    artwork: ArtworkService
+    metadata: MetadataService
+    shortcut_removal: ShortcutRemovalService
+    active_core: ActiveCoreResolver
+    uow: FakeUnitOfWork
+    romm_api: MagicMock | FakeRommApi
+    steam_config: SteamConfigAdapter
+    settings_persister: FakeSettingsPersister
+    core_info: FakeCoreInfoProvider
+    platform_core_reader: FakePlatformCoreReader
+    renderer_rss: FakeRendererRss
+    renderer_gc: FakeRendererGc
+    prune_conflicts: PruneConflicts
+    settings: dict[str, Any]
+
+
 @pytest.fixture
-def plugin(tmp_path, emit, logger, home):
-    p = _make_testable_plugin()
-    p.settings = {
+def library(tmp_path, emit, logger, home) -> LibraryHarness:
+    settings: dict[str, Any] = {
         "romm_url": "",
         "romm_user": "",
         "romm_pass": "",
         "enabled_platforms": {},
         "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}},
     }
-    p._romm_api = MagicMock()
-
-    # _persistence is wired so disk-touching tests round-trip through the real
-    # adapter (settings + firmware cache). The settings persister is faked.
-    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-    p._settings_persister = FakeSettingsPersister()
+    romm_api = MagicMock()
+    prune_conflicts = _make_prune_conflicts()
+    settings_persister = FakeSettingsPersister()
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
 
     # ONE shared FakeUnitOfWork across every sub-service + peer service so a
     # write by one (reporter upserting ``roms``) is visible to a read by
     # another (artwork resolving a cover, metadata building the app_id map).
-    # Each service gets its own factory wrapping the same unit; ``p._uow``
-    # is the handle tests seed/assert against.
     uow = FakeUnitOfWork()
-    p._uow = uow
 
     metadata_service = MetadataService(
         config=MetadataServiceConfig(
             loop=running_loop(),
             logger=logger,
-            log_debug=p._log_debug,
+            log_debug=lambda msg: None,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
     )
-    p._metadata_service = metadata_service
 
     artwork_service = ArtworkService(
         config=ArtworkServiceConfig(
-            romm_api=p._romm_api,
+            romm_api=romm_api,
             steam_config=steam_config,
             cover_art_file_store=CoverArtFileStoreAdapter(),
             cover_cache_dir=str(tmp_path / "covers"),
@@ -83,24 +99,23 @@ def plugin(tmp_path, emit, logger, home):
             logger=logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    p._artwork_service = artwork_service
 
     # Shared core-info fake so a sync-apply test can seed ``available_cores`` and
     # assert a per-game emulator_override (or per-platform core) re-bakes the
     # ``-e`` form. The real ActiveCoreResolver folds the DB override + the
     # per-platform map over this fake's es_systems default — the same seam the
     # orchestrator's bake site draws from.
-    p._core_info = FakeCoreInfoProvider()
-    p._platform_core_reader = FakePlatformCoreReader()
-    p._active_core = ActiveCoreResolver(
+    core_info = FakeCoreInfoProvider()
+    platform_core_reader = FakePlatformCoreReader()
+    active_core = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            core_info=p._core_info,
+            core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
-            platform_core_reader=p._platform_core_reader,
+            platform_core_reader=platform_core_reader,
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             logger=logger,
         ),
@@ -108,15 +123,16 @@ def plugin(tmp_path, emit, logger, home):
 
     # Session-budget seams default to "measurement unavailable" (RSS None) + a
     # no-op GC, so the gate is inert in the shared fixture; gate-specific tests
-    # reassign ``p._renderer_rss.rss_kb`` / ``.result`` to drive a pause.
-    p._renderer_rss = FakeRendererRss()
-    p._renderer_gc = FakeRendererGc()
+    # reassign ``library.renderer_rss.rss_kb`` / ``library.renderer_gc.result``
+    # to drive a pause.
+    renderer_rss = FakeRendererRss()
+    renderer_gc = FakeRendererGc()
 
-    p._sync_service = LibraryService(
+    sync_service = LibraryService(
         config=LibraryServiceConfig(
-            romm_api=p._romm_api,
+            romm_api=romm_api,
             steam_config=steam_config,
-            settings=p.settings,
+            settings=settings,
             loop=running_loop(),
             logger=logger,
             launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
@@ -124,36 +140,51 @@ def plugin(tmp_path, emit, logger, home):
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
-            settings_persister=p._settings_persister,
-            log_debug=p._log_debug,
+            settings_persister=settings_persister,
+            log_debug=lambda msg: None,
             artwork=artwork_service,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            active_core=p._active_core,
+            active_core=active_core,
             disc_resolver=FakeDiscResolver(),
-            renderer_rss=p._renderer_rss,
-            renderer_gc=p._renderer_gc,
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            renderer_rss=renderer_rss,
+            renderer_gc=renderer_gc,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
-    p._shortcut_removal_service = ShortcutRemovalService(
+    shortcut_removal_service = ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
             loop=running_loop(),
             logger=logger,
             artwork_remover=artwork_service,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    return p
+    return LibraryHarness(
+        sync=sync_service,
+        artwork=artwork_service,
+        metadata=metadata_service,
+        shortcut_removal=shortcut_removal_service,
+        active_core=active_core,
+        uow=uow,
+        romm_api=romm_api,
+        steam_config=steam_config,
+        settings_persister=settings_persister,
+        core_info=core_info,
+        platform_core_reader=platform_core_reader,
+        renderer_rss=renderer_rss,
+        renderer_gc=renderer_gc,
+        prune_conflicts=prune_conflicts,
+        settings=settings,
+    )
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop(plugin):
-    """Ensure plugin.loop matches the running event loop for async tests."""
-    plugin.loop = asyncio.get_running_loop()
-    rebind_loop(plugin._sync_service, asyncio.get_running_loop())
-    plugin._artwork_service._loop = asyncio.get_running_loop()
-    plugin._shortcut_removal_service._loop = asyncio.get_running_loop()
-    plugin._metadata_service._loop = asyncio.get_running_loop()
+async def _set_event_loop(library):
+    """Rebind every service's loop to the running event loop for async tests."""
+    rebind_loop(library.sync, asyncio.get_running_loop())
+    library.artwork._loop = asyncio.get_running_loop()
+    library.shortcut_removal._loop = asyncio.get_running_loop()
+    library.metadata._loop = asyncio.get_running_loop()

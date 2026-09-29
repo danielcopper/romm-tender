@@ -227,14 +227,15 @@ class BiosChecker(Protocol):
 class ActiveCoreReader(Protocol):
     """Per-ROM active-core resolution consumed by the read-path core consumers.
 
-    The composition root satisfies this with ``ActiveCoreResolver``. The
-    ``.so``-space read consumers (BIOS status, per-core save dir, save-emulator
-    tag, core-change detection, the cores menu) call ``active_core_for_rom`` and
-    operate entirely in ``.so`` space — ``(None, None)`` / ``(None, label)`` means
-    no libretro core (unconfigured, or a standalone emulator) and they degrade.
-    The launch-bake sites call ``active_emulator_for_rom``, which also describes
-    **standalone** emulators (PCSX2, RPCS3, …) via a full ES-DE command. Both draw
-    from the same resolution, so the read-path core never diverges from the launch.
+    The composition root satisfies this with ``ActiveCoreResolver``.
+    ``active_emulator_for_rom`` names the emulator a ROM launches with — a
+    libretro core or a **standalone** emulator (PCSX2, RPCS3, …) via its full
+    ES-DE command — and is what a consumer asks by default. ``active_core_for_rom``
+    is its ``.so``-space projection for the two save-sync reads keyed off the
+    libretro core (core-change detection and the upload's emulator tag):
+    ``(None, None)`` / ``(None, label)`` means no libretro core (unconfigured, or a
+    standalone emulator) and they degrade. Both draw from the same resolution, so
+    no read diverges from the launch.
     """
 
     def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]: ...

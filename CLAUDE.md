@@ -361,6 +361,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
+- **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
+  automatic rollback and removes it after an update whose new version answered** — test + prompt-only —
+  `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord`: no backend module but
+  `adapters/update_failure.py` and `domain/update_outcome.py` names `UPDATE_FAILURE_FILENAME` or the literal, and the
+  adapter calls nothing named like a write, move or removal and opens nothing with a writing mode, nor with a mode or
+  flags it cannot read off the call. Unseen by it: a call in `domain/update_outcome.py`, which may name the record and
+  whose calls it does not read; a write under a name not on its list; a runtime mode passed as `Path.open`'s first
+  argument; a record path assembled from pieces or handed in from elsewhere; a write through a helper in another module;
+  a call reached through `getattr`; and a subprocess
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `Plugin.run` resolves it once and hands it to `bootstrap()`, which derives nothing, and
@@ -403,6 +412,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx` ("a previous run's rows
   at the next press") and `frontend/src/utils/runUnitsStore.test.ts`; prompt-only: every start path in `useSyncPage`
   clears, and a resume is told apart only by `syncResumeState(stats).canResume` at the press
+- **Every reader that decides or predicts a platform skip — the skip gate, the plan estimate and the preview's
+  `restamp_platform_count` — reads the stamp through `domain/platform_sync_state.py::stamp_for_skip`, which answers a
+  revoked stamp with none; the resume offer's `PlatformSyncStateRepository.has_any` applies the same rule in its query;
+  removed-game discovery, the prune canaries, `reachable_count` and the recovery snapshot read the stamp raw; the
+  end-of-run stale removal revokes a skip only on a platform outside `processed_platform_slugs`** — test + prompt-only —
+  `tests/domain/test_platform_sync_state.py::TestStampForSkip`; the skip side by
+  `tests/services/library/test_fetcher.py`'s `TestIncrementalSkipFromPlatformStamp::test_a_revoked_stamp_never_skips`
+  and `TestPlanEstimates::test_a_revoked_stamp_predicts_no_skip_and_no_collapsed_count`,
+  `test_sync_orchestrator.py::TestPreviewRestampPlatformCount::test_a_platform_whose_skip_was_revoked_is_counted`,
+  `test_reporter.py::TestGetSyncStatsResumeInputs::test_a_platform_stamp_whose_skip_was_revoked_is_no_resume` and
+  `tests/adapters/repositories/test_platform_sync_state.py::TestHasAny::test_a_revoked_stamp_is_not_counted`; the raw
+  side by
+  `tests/services/prune/test_preview.py::test_a_platform_whose_skip_was_revoked_still_discovers_its_dropped_rows`,
+  `tests/services/prune/test_registry.py::TestCanaryRomIds::test_a_revoked_skip_still_offers_what_the_fetch_returned`,
+  `tests/contract/test_prune.py::test_preview_discovers_on_a_platform_whose_skip_was_revoked` and
+  `test_reporter.py::TestRegistryPlatformsReachableCount::test_a_revoked_stamp_still_rules_out_what_its_fetch_did_not_return`;
+  the stale removal by `test_reporter.py::TestFinalizePerUnitRun` and
+  `test_sync_orchestrator.py::TestPlatformTurnedOffAndBackOn`. Prompt-only: a new skip-side reader calling
+  `platform_sync_state.get` raw, the recovery snapshot's raw read (no test pins it), and `has_any`'s query agreeing with
+  `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;

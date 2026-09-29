@@ -134,8 +134,8 @@ class PersistenceAdapter:
         # ``load_settings``. ``None`` means no reset; otherwise
         # ``{"backed_up_to": <basename>}``. Bootstrap reads this after migration
         # and folds it into the settings dict as the persistent
-        # ``_settings_reset_notice`` marker (which survives a reload and clears
-        # on the next successful sign-in); this attribute itself is never
+        # ``_settings_reset_notice`` marker (which survives a backend restart
+        # and is cleared only by its dismissal); this attribute itself is never
         # written to disk.
         self._corrupt_reset: dict[str, Any] | None = None
 

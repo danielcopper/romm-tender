@@ -13,14 +13,19 @@ with (a later server-side count change invalidates the stamp).
 
 Keyed by ``platform_slug``. A thin record built whole and upserted — never a
 partial field mutation — so it carries a single ``stamp`` constructor and no
-verb-named mutators. The contract is *stamp exists ⟺ the platform's most recent
-apply attempt ran to completion*: it is deleted at a platform unit's apply start
+verb-named mutators. The contract is *a stamp may authorise a skip ⟺ the
+platform's most recent apply attempt ran to completion, and neither a local
+removal nor a stale removal on a run that did not process the platform has
+unbound one of its rows since*: it is deleted at a platform unit's apply start
 (``sync_orchestrator``) so an interrupted re-apply leaves none and the final
-chunk re-writes it, deleted per touched platform by the local destructive flows
-(``shortcut_removal``) that unbind shortcuts outside a sync, and cleared wholesale
-by Force Full Sync (the repository's ``clear``) — the stamps are the fetcher's sole
-skip authority, so clearing them arms the full re-fetch; the ``SyncRun`` history is
-preserved (it feeds no skip gate).
+chunk re-writes it, and cleared wholesale by Force Full Sync (the repository's
+``clear``) — the stamps are the fetcher's sole skip authority, so clearing them
+arms the full re-fetch; the ``SyncRun`` history is preserved (it feeds no skip
+gate). Those two removals revoke the skip instead: ``skip_revoked`` is never
+set by the aggregate — the repository's ``revoke_skip`` sets it — and a fresh
+``stamp`` never carries it. Why the stamp is kept rather than deleted, and which
+readers honour the flag, is in docs/architecture/backend-architecture.md,
+"Incremental skip".
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ class PlatformSyncState:
     completed_at: str
     rom_count: int
     fetch_id: str | None = None
+    skip_revoked: bool = False
 
     @classmethod
     def stamp(cls, *, platform_slug: str, at: str, rom_count: int, fetch_id: str | None = None) -> PlatformSyncState:
@@ -60,3 +66,18 @@ class PlatformSyncState:
         if rom_count < 0:
             raise ValueError("rom_count must be non-negative")
         return cls(platform_slug=platform_slug, completed_at=at, rom_count=rom_count, fetch_id=fetch_id)
+
+
+def stamp_for_skip(stamp: PlatformSyncState | None) -> PlatformSyncState | None:
+    """Return the stamp a skip-side reader may trust, or ``None`` when there is none.
+
+    A revoked stamp is treated as absent. The skip gate, the plan estimate and the
+    preview's re-stamp count read the stamp through here; the resume offer asks the
+    repository's ``has_any``, whose query applies the same rule, so that is the one
+    other place it lives. Readers that want the stamp's fetch generation rather than
+    its skip authority — removed-game discovery, the reachable count — read it raw,
+    because a revoked stamp still records what RomM's last complete fetch returned.
+    """
+    if stamp is None or stamp.skip_revoked:
+        return None
+    return stamp

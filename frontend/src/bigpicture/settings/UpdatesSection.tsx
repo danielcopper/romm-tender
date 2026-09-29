@@ -1,18 +1,23 @@
 /**
- * Updates — the home of the update notice on Main: the installed and the
- * available version, the daily-check switch and Check now. Pure renderer: the
- * page owns the store read, the press in flight and its result line.
+ * Updates — the home of the two update notices on Main: the installed and the
+ * available version, an update the installer rolled back, the daily-check
+ * switch and Check now. Pure renderer: the page owns the store reads, the press
+ * in flight and its result line.
  */
 
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
+import { AMBER } from "../layout/pane";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
+import { UPDATE_FAILURE_REASON, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
 /** Shown only to a run from a checkout, which is never offered an install. */
 export const NOT_INSTALLED_PROGRAM = "Development build — install updates with the installer.";
 
 interface UpdatesSectionProps {
   update: UpdateNoticeState;
+  /** A rolled-back update is stated here whether or not its notice on Main was dismissed. */
+  outcome: UpdateOutcomeState;
   /** A Check now is in flight; the button is dead and says so while it is. */
   checking: boolean;
   /** What the last Check now found, or `""`. */
@@ -28,7 +33,14 @@ function availableValue(update: UpdateNoticeState): string {
   return update.newer ? update.latestVersion : "None newer";
 }
 
-export const UpdatesSection: FC<UpdatesSectionProps> = ({ update, checking, result, onEnabledChange, onCheckNow }) => (
+export const UpdatesSection: FC<UpdatesSectionProps> = ({
+  update,
+  outcome,
+  checking,
+  result,
+  onEnabledChange,
+  onCheckNow,
+}) => (
   <PanelSection title="Updates">
     <PanelSectionRow>
       {/* Read-only rows are focusable for the reason every one on a wide pane
@@ -42,6 +54,19 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({ update, checking, resu
         <span data-testid="updates-available">{availableValue(update)}</span>
       </Field>
     </PanelSectionRow>
+    {outcome.failure !== null && (
+      <PanelSectionRow>
+        <Field
+          label={
+            <span data-testid="updates-last-update" style={{ color: AMBER }}>
+              {updateFailureSentence(outcome.failure)}
+            </span>
+          }
+          description={UPDATE_FAILURE_REASON}
+          focusable={true}
+        />
+      </PanelSectionRow>
+    )}
     {!update.installedProgram && (
       <PanelSectionRow>
         <Field label={<span data-testid="updates-not-installed">{NOT_INSTALLED_PROGRAM}</span>} focusable={true} />

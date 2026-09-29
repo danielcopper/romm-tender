@@ -55,6 +55,7 @@ import {
   useUpdateNoticeState,
   type UpdateCheckOutcome,
 } from "../utils/updateNoticeStore";
+import { useUpdateOutcomeState } from "../utils/updateOutcomeStore";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
@@ -154,6 +155,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // Updates state — the answer itself lives in the module store, which panel
   // load fills and Main's notice reads too.
   const update = useUpdateNoticeState();
+  const updateOutcome = useUpdateOutcomeState();
   const [checkingForUpdate, setCheckingForUpdate] = useState(false);
   const [updateCheckResult, setUpdateCheckResult] = useState("");
 
@@ -652,6 +654,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         return (
           <UpdatesSection
             update={update}
+            outcome={updateOutcome}
             checking={checkingForUpdate}
             result={updateCheckResult}
             onEnabledChange={handleUpdateCheckEnabledChange}

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
+from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -375,6 +376,51 @@ class TestGetSettings:
         assert result["retroarch_input_check"]["current"] == "x"
 
 
+# ── get_settings and save_server_url together ─────────────────────────
+
+
+class TestSettings:
+    @pytest.mark.asyncio
+    async def test_get_settings_reports_token_present(self, service, settings):
+        settings["romm_api_token"] = "rmm_abc"
+        result = service.get_settings()
+        assert result["has_token"] is True
+        # The token itself is never sent to the frontend.
+        assert "rmm_abc" not in str(result)
+
+    @pytest.mark.asyncio
+    async def test_save_server_url_persists_url(self, service, settings):
+        result = await service.save_server_url("http://example.com")
+        assert result["success"] is True
+        assert settings["romm_url"] == "http://example.com"
+
+    @pytest.mark.asyncio
+    async def test_save_server_url_does_not_touch_token(self, service, settings):
+        settings["romm_api_token"] = "rmm_keep"
+        await service.save_server_url("http://example.com")
+        assert settings["romm_api_token"] == "rmm_keep"
+
+
+class TestInsecureSslSetting:
+    @pytest.mark.asyncio
+    async def test_get_settings_includes_field(self, service, settings):
+        settings["romm_allow_insecure_ssl"] = True
+        result = service.get_settings()
+        assert result["romm_allow_insecure_ssl"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_settings_defaults_false(self, service, settings):
+        settings.pop("romm_allow_insecure_ssl", None)
+        result = service.get_settings()
+        assert result["romm_allow_insecure_ssl"] is False
+
+    @pytest.mark.asyncio
+    async def test_save_server_url_without_param_preserves(self, service, settings):
+        settings["romm_allow_insecure_ssl"] = True
+        await service.save_server_url("https://romm.local")
+        assert settings["romm_allow_insecure_ssl"] is True
+
+
 # ── save_log_level ─────────────────────────────────────────────────────
 
 
@@ -601,6 +647,67 @@ class TestAFrontendDebugLineIsWrittenRatherThanDropped:
         assert "a backend trace" not in (tmp_path / "state" / LOG_FILENAME).read_text()
 
 
+# ── log_level: saved, reported and applied ────────────────────────────
+
+
+class TestLogLevel:
+    @pytest.mark.asyncio
+    async def test_save_log_level_valid(self, service, settings):
+        for level in ("debug", "info", "warn", "error"):
+            result = service.save_log_level(level)
+            assert result["success"] is True
+            assert settings["log_level"] == level
+
+    @pytest.mark.asyncio
+    async def test_save_log_level_invalid(self, service, settings):
+        settings["log_level"] = "warn"
+        result = service.save_log_level("verbose")
+        assert result["success"] is False
+        assert settings["log_level"] == "warn"  # unchanged
+
+    @pytest.mark.asyncio
+    async def test_get_settings_includes_log_level(self, service, settings):
+        settings["log_level"] = "info"
+        result = service.get_settings()
+        assert result["log_level"] == "info"
+
+    @pytest.mark.asyncio
+    async def test_get_settings_defaults_log_level_warn(self, service, settings):
+        settings.pop("log_level", None)
+        result = service.get_settings()
+        assert result["log_level"] == "warn"
+
+    @pytest.mark.asyncio
+    async def test_frontend_log_respects_level(self, service, settings, caplog):
+        """frontend_log only logs when message level >= configured level."""
+        settings["log_level"] = "warn"
+        service.frontend_log("debug", "debug msg")
+        service.frontend_log("info", "info msg")
+        service.frontend_log("warn", "warn msg")
+        service.frontend_log("error", "error msg")
+
+        assert [(r.levelname, r.message) for r in caplog.records] == [
+            ("WARNING", "[FE] warn msg"),
+            ("ERROR", "[FE] error msg"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_frontend_log_debug_level_logs_all(self, service, settings, caplog):
+        """With log_level=debug, all levels are logged — each at its own."""
+        settings["log_level"] = "debug"
+        service.frontend_log("debug", "d")
+        service.frontend_log("info", "i")
+        service.frontend_log("warn", "w")
+        service.frontend_log("error", "e")
+
+        assert [(r.levelname, r.message) for r in caplog.records] == [
+            ("DEBUG", "[FE] d"),
+            ("INFO", "[FE] i"),
+            ("WARNING", "[FE] w"),
+            ("ERROR", "[FE] e"),
+        ]
+
+
 # ── save_steam_input_setting ──────────────────────────────────────────
 
 
@@ -741,6 +848,59 @@ class TestUpdateWhitelistSettings:
         assert settings["whitelist_custom_names"] == []
 
 
+class TestWhitelistSettings:
+    @pytest.mark.asyncio
+    async def test_get_whitelist_defaults_empty(self, service, settings):
+        """Returns empty lists when no whitelist keys exist in settings."""
+        settings.pop("whitelist_disabled_defaults", None)
+        settings.pop("whitelist_custom_names", None)
+        result = service.get_whitelist_settings()
+        assert result == {"disabled_defaults": [], "custom_names": []}
+
+    @pytest.mark.asyncio
+    async def test_update_and_get_whitelist(self, service):
+        """Round-trip: update then get returns the stored values."""
+
+        service.update_whitelist_settings(["chrome"], ["My App"])
+        result = service.get_whitelist_settings()
+        assert result["disabled_defaults"] == ["chrome"]
+        assert result["custom_names"] == ["My App"]
+
+    @pytest.mark.asyncio
+    async def test_update_whitelist_validates_disabled_defaults(self, service):
+        """Rejects non-list disabled_defaults."""
+        result = service.update_whitelist_settings("not-a-list", [])
+        assert result["success"] is False
+        assert "disabled_defaults" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_update_whitelist_validates_custom_names(self, service):
+        """Rejects non-list custom_names."""
+        result = service.update_whitelist_settings([], "not-a-list")
+        assert result["success"] is False
+        assert "custom_names" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_update_whitelist_validates_inner_types(self, service):
+        """Rejects lists containing non-string items."""
+        result_dd = service.update_whitelist_settings([1, 2], [])
+        assert result_dd["success"] is False
+        assert "disabled_defaults" in result_dd["message"]
+
+        result_cn = service.update_whitelist_settings([], ["valid", 42])
+        assert result_cn["success"] is False
+        assert "custom_names" in result_cn["message"]
+
+    @pytest.mark.asyncio
+    async def test_update_whitelist_persists(self, service, settings):
+        """Verifies values are stored in the settings dict after update."""
+
+        result = service.update_whitelist_settings(["moonlight"], ["Custom Game"])
+        assert result["success"] is True
+        assert settings["whitelist_disabled_defaults"] == ["moonlight"]
+        assert settings["whitelist_custom_names"] == ["Custom Game"]
+
+
 # ── save_collection_platform_groups ───────────────────────────────────
 
 
@@ -814,6 +974,42 @@ class TestSetCollectionNamingMode:
         settings_persister.save_settings.assert_not_called()
 
 
+# ── settings reset notice ─────────────────────────────────────────────
+
+
+class TestGetSettingsResetNotice:
+    """The reset notice is read off the live settings dict and never consumed by reading."""
+
+    def test_clean_boot_is_not_pending(self, service, settings):
+        settings["romm_url"] = "http://romm.local"
+        assert service.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+
+    def test_a_marker_is_pending_with_its_backup(self, service, settings):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-1781697600"}
+        assert service.get_settings_reset_notice() == {
+            "pending": True,
+            "backed_up_to": "settings.json.corrupt-1781697600",
+        }
+
+    def test_repeated_reads_stay_pending_and_write_nothing(self, service, settings, settings_persister):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
+        first = service.get_settings_reset_notice()
+        second = service.get_settings_reset_notice()
+        assert first == {"pending": True, "backed_up_to": "settings.json.corrupt-42"}
+        assert second == first
+        assert settings["_settings_reset_notice"] == {"backed_up_to": "settings.json.corrupt-42"}
+        settings_persister.save_settings.assert_not_called()
+
+    def test_a_marker_without_its_backup_is_pending_with_none(self, service, settings):
+        settings["_settings_reset_notice"] = {}
+        assert service.get_settings_reset_notice() == {"pending": True, "backed_up_to": None}
+
+    def test_after_a_dismissal_it_is_no_longer_pending(self, service, settings):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
+        service.dismiss_settings_reset_notice()
+        assert service.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+
+
 class TestDismissSettingsResetNotice:
     def test_pops_marker_and_persists(self, service, settings, settings_persister):
         settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
@@ -828,3 +1024,38 @@ class TestDismissSettingsResetNotice:
         assert result == {"success": True}
         assert "_settings_reset_notice" not in settings
         settings_persister.save_settings.assert_called_once_with()
+
+
+class TestDismissSettingsResetNoticePersistsOnce:
+    """Dismissing the settings-reset notice pops the persistent marker and
+    persists the dismissal — the user's explicit QAM acknowledgement."""
+
+    @pytest.fixture
+    def settings_persister(self) -> FakeSettingsPersister:
+        return FakeSettingsPersister()
+
+    @pytest.mark.asyncio
+    async def test_pops_marker_and_persists(self, service, settings, settings_persister):
+        settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
+        before = settings_persister.save_count
+
+        result = service.dismiss_settings_reset_notice()
+
+        assert result == {"success": True}
+        assert "_settings_reset_notice" not in settings
+        # Read-side now reports not-pending.
+        assert service.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
+        # The dismissal was persisted.
+        assert settings_persister.save_count == before + 1
+
+    @pytest.mark.asyncio
+    async def test_idempotent_when_no_marker(self, service, settings, settings_persister):
+        """Acking with no marker present is a harmless persisted no-op."""
+        assert "_settings_reset_notice" not in settings
+        before = settings_persister.save_count
+
+        result = service.dismiss_settings_reset_notice()
+
+        assert result == {"success": True}
+        assert "_settings_reset_notice" not in settings
+        assert settings_persister.save_count == before + 1

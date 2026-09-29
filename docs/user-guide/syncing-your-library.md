@@ -305,7 +305,8 @@ Steam, the emulator core it launches with, its BIOS files, and the two ways to t
 [BIOS and Emulator Core Management](bios-management.md#library-platforms).
 
 All platforms are enabled by default until you change a toggle. Turning one platform off affects only that platform —
-every other platform stays enabled and keeps syncing.
+every other platform stays enabled and keeps syncing. The turned-off platform's games leave Steam at the next sync,
+apart from any an enabled collection still holds, and turning it back on brings them all back with the sync after that.
 
 <!-- Screenshot: Library › Platforms with the list on the left and one platform's detail on the right -->
 
@@ -377,6 +378,11 @@ the Favorites switch. **Other users' collections** itself reports a failure to s
 away with the next change that works there.
 
 If the collection list cannot be read, the pane shows what went wrong. Leave the tab and come back to try again.
+
+If you have switched on any collection of a kind and RomM cannot list that kind, the sync stops with an error before it
+changes anything in Steam, rather than reading the kind as empty and removing the games only its collections brought in.
+A collection deleted in RomM is different: it is missing from a list RomM did give, so the sync removes its Steam
+collection, and the games only it brought in, as usual.
 
 The **Show collection games in platform groups** setting — whether games pulled in via a collection also get added to
 their platform's Steam group — lives on the **Settings** page under **Steam Library**, alongside the preferred-region

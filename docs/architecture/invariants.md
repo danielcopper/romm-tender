@@ -30,6 +30,27 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
+- **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
+  automatic rollback and removes it after an update whose new version answered** — test + prompt-only — the record is
+  the installer's statement that it rolled an update back, and the rolled-back notice, the row under Settings › Updates
+  and the start-up WARNING all rest on that. A backend that removed it would take the notice down before the user saw
+  it, with nothing on disk saying a rollback happened; one that wrote it would claim a rollback the installer never did.
+  So a record the backend finds no longer standing — its `restored_version` is not the running version
+  (`domain/update_outcome.py::standing_update_failure`) — is ignored rather than cleaned up.
+  `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord` reads the syntax tree of every backend
+  module outside `_vendor/`: only `adapters/update_failure.py` and `domain/update_outcome.py` (the constant's home) may
+  name `UPDATE_FAILURE_FILENAME`, by name, attribute or import, or carry the literal outside a docstring; and the
+  adapter may call nothing named like a write, move or removal (`write`, `unlink`, `remove`, `rename`, `replace`, …) and
+  may `open` nothing with a mode string that holds `w`, `a`, `x` or `+` — read wherever it stands, since `open` takes
+  the mode second and `Path.open` first, or as `mode=`. What it cannot read counts as a write: anything but a constant
+  from the second argument on, a constant second argument that is not a string (`os.open`'s flags), a `mode=` that is
+  not a constant, any `flags=`, and an argument unpacked with `*` or `**`. It sees names, calls and constants, so it
+  misses a call in `domain/update_outcome.py`, which may name the record and whose calls it does not read, a write under
+  a name not on its list, a runtime mode passed as `Path.open`'s first argument, a record path assembled from pieces or
+  handed in from elsewhere, a write through a helper in another module, a call reached through `getattr`, and a
+  subprocess. The installer's half — the write on a rollback, before the restored version starts, and the removal once a
+  later update's new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
+  `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
   defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `Plugin.run`
@@ -169,6 +190,35 @@ Format: **invariant** — tier — enforced by.
   a resume is a new run with a new id and the backend has no resume concept at all — no frame, kind or id tells the two
   apart. Both directions fail in silence: forget the clear and another run's rows read as this run's progress, clear on
   a resume and the one start whose rows are true loses them
+- **Every reader that decides or predicts a platform skip — the skip gate, the plan estimate and the preview's
+  `restamp_platform_count` — reads the stamp through `domain/platform_sync_state.py::stamp_for_skip`, which answers a
+  revoked stamp with none; the resume offer's `PlatformSyncStateRepository.has_any` applies the same rule in its query;
+  removed-game discovery, the prune canaries, `reachable_count` and the recovery snapshot read the stamp raw; the
+  end-of-run stale removal revokes a skip only on a platform outside `processed_platform_slugs`** — test + prompt-only —
+  the helper by `tests/domain/test_platform_sync_state.py`; each skip-side reader by tests over a revoked stamp
+  (`test_fetcher.py` for the gate and the estimate, `test_sync_orchestrator.py::TestPreviewRestampPlatformCount` for the
+  re-stamp count, `test_reporter.py` and the repository's `TestHasAny` for the resume offer); each raw reader but the
+  recovery snapshot by one test over a revoked stamp that still tells the rows the stamp's fetch returned from the rows
+  it did not (`tests/services/prune/test_preview.py`, `test_registry.py::TestCanaryRomIds`,
+  `tests/contract/test_prune.py` over real SQLite, and `test_reporter.py::TestRegistryPlatformsReachableCount`); the
+  stale removal by `test_reporter.py::TestFinalizePerUnitRun` and end to end by
+  `test_sync_orchestrator.py::TestPlatformTurnedOffAndBackOn`. Why the stamp is kept and why a processed platform keeps
+  its skip are in [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  "Incremental skip"; do not restate them here. **Each wrong turn is silent.** A skip gate that read the stamp raw would
+  let a platform skip over games it unbound while it was turned off: the preview says "Everything is up to date." and
+  those games never get their shortcuts back. A raw re-stamp count offers no Apply to an enabled platform with a revoked
+  stamp and an empty delta, so it is never re-stamped and full-fetches on every sync. A raw plan estimate can price such
+  a platform as a skip, so the run's progress estimate runs short while the platform full-fetches; a raw `has_any` can
+  offer "Resume Sync" on the strength of stamps that save the next run nothing. A raw reader moved behind the helper
+  blinds removed-game discovery, the canaries a 404 round asks first, or the reachable count on every platform a removal
+  touched, and for a platform whose sync stays off it stays blind, since no new complete fetch comes. A stale removal
+  that revoked on a processed platform would take the skip from the stamp that same run just wrote whenever it unbinds a
+  game RomM dropped, costing that platform one extra full fetch on the next run each time; one that skipped an
+  unprocessed platform brings the turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader
+  calling `platform_sync_state.get` raw passes every test above, because each test pins one existing call site; the
+  recovery snapshot's raw read has no test, so moving it behind the helper would drop a revoked stamp from a sealed
+  bundle unnoticed; and `has_any`'s `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is
+  pinned alone and nothing holds them equal
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

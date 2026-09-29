@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from dataclasses import asdict
-from typing import Any, Protocol
+from typing import Any
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
@@ -10,7 +10,7 @@ sys.path.insert(0, backend_dir)
 # Where the program sits, used only when nothing in the environment says. The
 # installed case always says — the installer resolves the directories once and
 # writes them into the unit — so this answers for a start by hand from a
-# checkout, where the manifest and the shipped launcher sit one level up.
+# checkout, where the built panel and the shipped launcher sit one level up.
 _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import (
@@ -38,31 +38,24 @@ from host import (
     route,
     run_backend,
 )
-
-
-class PluginEventSink(Protocol):
-    """Where an event leaves this process; answers whether anybody heard it."""
-
-    async def emit(self, name: str, payload: object, /) -> bool: ...
+from services.protocols import EventEmitter
 
 
 class Plugin:
-    settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
+    # What the process hosting this backend knows about its own run. Set by the
+    # entry point once the build is through, for the one endpoint that reads it
+    # (``get_host_status``).
+    _host_status: HostStatus
 
-    # Test-only attribute slots — production ``Plugin`` does not read
-    # these after ``_main`` (the wired services own them), but the
-    # test suite constructs ``Plugin()`` bare and pokes the same handles
-    # the production wiring would set. Annotated as ``Any`` because
-    # tests pass real adapters, ``MagicMock``s, or fakes interchangeably.
-    # Annotations alone do not create the attribute, so bare access still
-    # raises ``AttributeError`` (the ``TestPersistenceAttributeIsLoud``
-    # regression remains green).
+    # Test-only attribute slots — production never sets or reads these. The
+    # test suite constructs ``Plugin()`` bare and holds its own handles on it.
+    # Most are ``Any`` because tests pass real adapters, ``MagicMock``s, or fakes
+    # interchangeably. Annotations alone do not create the attribute, so bare
+    # access still raises ``AttributeError``.
+    settings: dict[str, Any]
     _persistence: Any
     _settings_persister: Any
-    # What the process hosting this backend knows about its own run. Set by the
-    # entry point once the build is through, for the one callable that reads it.
-    _host_status: HostStatus
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -93,8 +86,8 @@ class Plugin:
         """
         self._debug_logger(msg)
 
-    async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
-        """Bring the backend up: adapters, services, then the start-up repairs.
+    async def _main(self, *, directories, update_source, user_home, logger, emit: EventEmitter, status):
+        """Bring the backend up: adapters, services, then the start-up steps.
 
         Everything here must be through before the port is bound, which is what
         makes the port file mean "ready". The one start-up step that talks to the
@@ -111,15 +104,7 @@ class Plugin:
             user_home=user_home,
             logger=logger,
         )
-        self.settings = result.stores.settings
         self._debug_logger = result.handles.debug_logger
-        # Persistence adapter — held directly for the disk-touching callable
-        # paths that read/write settings without routing through a service.
-        self._persistence = result.handles.persistence
-        # RetroDECK path resolver — held directly so the get_retrodeck_status
-        # callable can read the resolution health without routing through a
-        # service (it's a pure adapter read, no orchestration).
-        self._retrodeck_paths = result.callbacks.retrodeck_paths
 
         # ── 4. Wire services ────────────────────────────────────────────────
         services = wire_services(
@@ -129,7 +114,7 @@ class Plugin:
                 runtime=RuntimeBundle(
                     loop=self.loop,
                     logger=logger,
-                    emit=events.emit,
+                    emit=emit,
                     clock=result.runtime_adapters.clock,
                     uuid_gen=result.runtime_adapters.uuid_gen,
                     sleeper=result.runtime_adapters.sleeper,
@@ -168,17 +153,19 @@ class Plugin:
         self._startup_healing_service = services.startup_healing_service
         self._shortcut_relocation_service = services.shortcut_relocation_service
         self._update_check_service = services.update_check_service
+        self._update_outcome_service = services.update_outcome_service
         self._launch_gate_service = services.launch_gate_service
         self._session_lifecycle_service = services.session_lifecycle_service
         self._game_process_service = services.game_process_service
         self._relaunch_options_resolver = services.relaunch_options_resolver
         self._leftover_tmp_cleanup_service = services.leftover_tmp_cleanup_service
 
-        # ── 5. Startup repairs ──────────────────────────────────────────────
-        # Each runs through the reporting wrapper: these are repairs, not
-        # prerequisites, and six of the nine catch nothing themselves — hosted,
-        # one raising would end the process and a restart policy would loop.
+        # ── 5. Startup steps ────────────────────────────────────────────────
+        # Each runs through the reporting wrapper: these are not prerequisites,
+        # and most catch nothing themselves — hosted, one raising would end the
+        # process and a restart policy would loop.
         steps = StartupSteps(logger, status.record_failed_step)
+        steps.run("note_update_outcome", self._update_outcome_service.note_start)
         # The prune may run only after a SUCCESSFUL detection: it reads the
         # pending homes the detection writes, and without them it takes every
         # install under the home RetroDECK just left for orphaned.
@@ -301,18 +288,7 @@ class Plugin:
 
     @route
     def get_retrodeck_status(self):
-        """Report RetroDECK path-resolution health for the frontend banner.
-
-        Discriminated-status union (Callable response shapes carve-out):
-        ``status`` carries one of ``ok`` / ``absent`` / ``unreadable`` /
-        ``root_missing``. The frontend owns the human-readable copy; the
-        backend returns the discriminant plus the probed paths.
-        """
-        return {
-            "status": self._retrodeck_paths.config_health().value,
-            "config_path": self._retrodeck_paths.config_path(),
-            "resolved_home": self._retrodeck_paths.retrodeck_home(),
-        }
+        return self._migration_service.get_retrodeck_status()
 
     @route
     def get_whitelist_settings(self):
@@ -324,15 +300,7 @@ class Plugin:
 
     @route
     async def get_cached_game_detail(self, app_id):
-        """Return the game page's whole payload, assembled off the loop thread.
-
-        Network-free but not free: a read UoW, a firmware-cache read, and for an
-        uninstalled ROM a ``stat`` and a directory listing on storage that may
-        have to wake up. Every game page opens this, so it goes to a worker —
-        which is also where a `SqliteUnitOfWork` connection is meant to live
-        (ADR-0004).
-        """
-        return await self.loop.run_in_executor(None, self._game_detail_service.get_cached_game_detail, app_id)
+        return await self._game_detail_service.get_cached_game_detail(app_id)
 
     @route
     async def set_system_core(self, platform_slug, core_label):
@@ -830,7 +798,7 @@ class Plugin:
         cross-device playtime" banner. Non-consuming (mirrors
         ``get_settings_reset_notice``): the durable flag is cleared only by a
         later successful reconcile GET or a fresh sign-in, so the banner stays up
-        across reloads until the user re-authenticates.
+        across backend restarts until the user re-authenticates.
         """
         return self._playtime_service.get_scope_notice()
 
@@ -916,28 +884,10 @@ class Plugin:
 
     @route
     def get_settings_reset_notice(self):
-        """Report whether a corrupt ``settings.json`` was reset at boot.
-
-        Reads the persistent ``_settings_reset_notice`` marker from the live
-        settings dict (written by bootstrap when ``load_settings`` quarantined an
-        unparseable file). Returns ``{"pending": bool, "backed_up_to": str |
-        None}``. Non-consuming — the marker survives a plugin reload and is
-        cleared only by an explicit user acknowledgement in the QAM
-        (``dismiss_settings_reset_notice``), so the frontend banner + game-detail
-        cards stay up until the user dismisses. A clean boot returns
-        ``{"pending": False, "backed_up_to": None}``.
-        """
-        notice = self.settings.get("_settings_reset_notice")
-        return {"pending": notice is not None, "backed_up_to": (notice or {}).get("backed_up_to")}
+        return self._settings_service.get_settings_reset_notice()
 
     @route
     def dismiss_settings_reset_notice(self):
-        """Acknowledge the corrupt-settings reset, clearing the persistent marker.
-
-        The user's explicit ack in the QAM — pops ``_settings_reset_notice`` and
-        persists, so the banner and game-detail cards stay down across reloads.
-        Returns ``{"success": True}``.
-        """
         return self._settings_service.dismiss_settings_reset_notice()
 
     @route
@@ -946,12 +896,12 @@ class Plugin:
 
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``available`` is the card itself: a
-        newer release with its tarball attached exists, the user has not
-        dismissed that exact version, and the check is switched on. ``newer`` is
-        the first of those alone, for the Settings section that states the
-        versions whether or not the card was dismissed. ``installed_program``
-        says whether this process is the installed program an update could
-        replace — False for a run from a checkout.
+        newer release with its tarball and checksum file attached exists, the
+        user has not dismissed that exact version, and the check is switched on.
+        ``newer`` is the first of those alone, for the Settings section that
+        states the versions whether or not the card was dismissed.
+        ``installed_program`` says whether this process is the installed program
+        an update could replace — False for a run from a checkout.
 
         GitHub is asked at most once a day and the answer is kept, so a reload
         inside that window shows the card without a request. Every failure is
@@ -992,6 +942,53 @@ class Plugin:
         value.
         """
         return self._update_check_service.set_update_check_enabled(enabled)
+
+    @route
+    async def get_update_outcome(self):
+        """Report what the panel owes the user about the last update.
+
+        Returns ``{"announce_version", "announce_direction", "toast_owed",
+        "failure", "failure_dismissed"}``. ``announce_version`` is the version
+        this process moved to, until :meth:`dismiss_update_announcement` says
+        the user waved its card away — ``None`` on every other start — and
+        ``announce_direction`` which way it moved: ``"updated"`` to a later
+        release, ``"back"`` to an earlier one, ``None`` exactly when
+        ``announce_version`` is. ``toast_owed`` is true until
+        :meth:`acknowledge_update_toast` says the panel raised its toast, and
+        false whenever ``announce_version`` is ``None``. ``failure`` is the
+        installer's record of an update it rolled back, ``{"attempted_version",
+        "restored_version", "rolled_back_at"}``, read afresh so it goes when the
+        installer removes it; ``None`` where there is none, or where the running
+        version is not the one it restored. ``failure_dismissed`` says the user
+        waved away that exact record.
+        """
+        return await self._update_outcome_service.get_update_outcome()
+
+    @route
+    def acknowledge_update_toast(self):
+        """Record that the panel raised the announcement's toast, so a reloaded panel does not raise it again.
+
+        The card stays. Returns ``{"success": True}``.
+        """
+        return self._update_outcome_service.acknowledge_update_toast()
+
+    @route
+    def dismiss_update_announcement(self):
+        """Record that the user waved away the announcement's card, for the rest of this process.
+
+        Returns ``{"success": True}``.
+        """
+        return self._update_outcome_service.dismiss_update_announcement()
+
+    @route
+    def dismiss_update_failure(self, rolled_back_at):
+        """Record that the user waved away the card for one rolled-back update.
+
+        Per record — named by its ``rolled_back_at`` — so the next rollback
+        raises the card again. Returns ``{"success": True}``, or the canonical
+        failure shape for a stamp that is not a non-empty string.
+        """
+        return self._update_outcome_service.dismiss_update_failure(rolled_back_at)
 
     @route
     async def get_shortcut_relocation(self):
@@ -1067,7 +1064,7 @@ class Plugin:
                 update_source=update_source,
                 user_home=user_home,
                 logger=logger,
-                events=events,
+                emit=events.emit,
                 status=status,
             )
             plugin._host_status = status

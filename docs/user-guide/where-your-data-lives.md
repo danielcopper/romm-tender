@@ -30,10 +30,10 @@ the next update removes it first, and does not go ahead until it can. An update 
 leave it only as `update-backup.prev/`; the next update, and going back by hand, move it back first.
 
 If the new version has not started within about a minute, the installer puts the previous version and that copy back and
-starts it again — so anything the new version recorded in that minute is gone, and nothing from before it is. It then
+starts it again — so anything the new version recorded in that minute is gone, and nothing from before it is. It also
 leaves `~/.local/state/romm-tender/update-failure.json` saying which version it tried, which one it went back to, and
-when; the next update whose new version answers removes it.
-[Troubleshooting](troubleshooting.md#an-update-was-rolled-back) has what to do next.
+when; the next update whose new version answers removes it. Tender reads that note to tell you on its main panel, and
+never changes or removes it itself. [Troubleshooting](troubleshooting.md#an-update-was-rolled-back) has what to do next.
 
 Going back to the previous version by hand (`install.sh --rollback`) puts back that same copy, but first copies the
 database and settings it is about to replace to `~/.local/share/romm-tender/rollback-backup/`, replacing the copy the

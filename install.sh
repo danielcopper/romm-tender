@@ -355,9 +355,10 @@ fancy_marks() {
 }
 
 # Whether the run may draw over what it has already written. Moving the cursor
-# is an escape sequence like any other, so a run that may write none prints each
-# row once as it finishes instead: NO_COLOR asks for a plain transcript, not for
-# a coloured one with the colour left out.
+# is an escape sequence like any other, so a run that may write none writes each
+# row as a new line instead — as it starts, as its detail changes, and as it
+# finishes: NO_COLOR asks for a plain transcript, not for a coloured one with
+# the colour left out.
 may_animate() {
     [ "$ANIMATE" = "yes" ]
 }
@@ -625,7 +626,11 @@ greeter() {
 # The run is four rows that stand for the whole of it, drawn once and then
 # rewritten in place: the plan and the progress report are the same four lines.
 # What a row says while it runs is its sub-steps as they finish, which is the
-# only honest thing a phase of no measurable length can report.
+# only honest thing a phase of no measurable length can report. Where nothing
+# may be redrawn, the same progress is a line of its own each time a row starts
+# or its detail changes, ahead of the line it ends on: a run nobody watches —
+# one whose output goes to the journal — would otherwise hold only how each row
+# ended, and a wait of a minute would be a gap with no line saying what it was.
 #
 # **A spinner is a process of its own.** It cannot see a variable this shell
 # sets after it was forked, so the rows go through a file: while a row is
@@ -735,6 +740,7 @@ row_start() {
     ROW_STATE[$1]="running"
     flush_rows
     spinner_start
+    say_progress "$1"
 }
 
 # A sub-step finished: its name joins the ones before it on the row.
@@ -745,13 +751,29 @@ row_add() {
         ROW_DETAIL[$1]="${ROW_DETAIL[$1]}$DOT_SEPARATOR$2"
     fi
     flush_rows
+    say_progress "$1"
 }
 
 # The whole detail, for a step that supersedes what it was doing rather than
-# adding to it.
+# adding to it. Saying the same detail again is not progress, so it prints
+# nothing new.
 row_detail() {
+    [ "${ROW_DETAIL[$1]}" != "$2" ] || return 0
     ROW_DETAIL[$1]="$2"
     flush_rows
+    say_progress "$1"
+}
+
+# A running row as one plain line, where the rows are not redrawn. Trailing
+# blanks are dropped: a row that has only just started has no detail yet, and
+# its label is padded for one.
+say_progress() {
+    if may_animate; then
+        return 0
+    fi
+    local line
+    line="$(print_row "$1" progress "${ROW_DETAIL[$1]}" "" "" "")"
+    printf '%s\n' "${line%"${line##*[![:space:]]}"}"
 }
 
 # One line under a row, for the thing that happened once and has to be said.
@@ -870,12 +892,14 @@ clear_line() {
 
 # The four states a row can be in. `warn` is not an error and is not red: Steam
 # not having answered yet is the ordinary case on a machine that has just been
-# installed onto.
+# installed onto. `progress` is not a state but the mark on a line
+# say_progress writes, which only a run with no fancy marks ever does.
 row_mark() {
     if ! fancy_marks; then
         case "$1" in
             ok) printf '[ok]' ;;
             fail) printf '[!!]' ;;
+            progress) printf '[..]' ;;
             *) printf '[--]' ;;
         esac
         return 0
@@ -1650,9 +1674,8 @@ restore_file() {
     fi
 }
 
-# The failed tree goes and the one it replaced comes back, with the data it had,
-# and the unit is started on it. The caller has stopped the unit; waiting for it
-# to answer is the caller's too.
+# The failed tree goes and the one it replaced comes back, with the data it had.
+# The caller has stopped the unit, and starting it again is the caller's too.
 revert_to_previous() {
     rm -rf "$CODE.new"
     [ ! -d "$CODE" ] || mv "$CODE" "$CODE.new"
@@ -1662,19 +1685,31 @@ revert_to_previous() {
         abort "could not put your data back from $(tilde "$BACKUP")" \
             "the earlier version is at $(tilde "$CODE") and the backup is untouched; copy its files back before starting $UNIT_NAME"
     fi
+}
+
+# Starts the unit on the tree revert_to_previous put back, with the unit file it
+# put back read in again. Waiting for it to answer is the caller's.
+start_the_reverted_unit() {
     systemctl --user daemon-reload || true
     systemctl --user start "$UNIT_NAME" || true
 }
 
 # Written through a temporary file and renamed, so a reader never sees half of
 # it. The versions come off tree_version, so the only characters JSON needs
-# escaped in them are the quote and the backslash.
+# escaped in them are the quote and the backslash. Non-zero where the record
+# could not be written. The steps are chained by hand because `set -e` does not
+# reach into a function whose status its caller tests. Their own errors are
+# dropped, since the caller says once that the record was not written; `2>`
+# stands before `>` so the error of a redirect that fails is dropped as well.
 record_update_failure() {
     local record="$STATE/$UPDATE_FAILURE"
-    mkdir -p "$STATE"
-    printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
-        "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$record.tmp"
-    mv "$record.tmp" "$record"
+    mkdir -p "$STATE" 2> /dev/null &&
+        printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
+            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2> /dev/null > "$record.tmp" &&
+        mv "$record.tmp" "$record" 2> /dev/null &&
+        return 0
+    rm -f "$record.tmp"
+    return 1
 }
 
 json_text() {
@@ -1964,7 +1999,14 @@ roll_back_the_update() {
             "stop it with systemctl --user stop $UNIT_NAME, then run $(tilde "$CODE")/install.sh --rollback"
     fi
     revert_to_previous
-    record_update_failure "$new" "$previous"
+    # Before the start rather than after it: the restored version logs the
+    # rollback only as it starts, from the record it finds then. A record that
+    # cannot be written costs the notice and never the service.
+    if ! record_update_failure "$new" "$previous"; then
+        row_sub "$SERVICE" "could not record the rolled-back update; Tender will not show it" fail
+        echo "install.sh: could not record the rolled-back update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2
+    fi
+    start_the_reverted_unit
     if ! wait_for_version "$previous"; then
         abort "update to $new failed, and $previous has not answered since the rollback either" \
             "what both logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME"
@@ -2022,6 +2064,7 @@ do_rollback() {
         abort "could not copy your data to $(tilde "$ROLLBACK_BACKUP")" "nothing was changed"
     fi
     revert_to_previous
+    start_the_reverted_unit
     UPDATE_STAGE=""
     row_detail "$INSTALLING" "$previous $ARROW $(tilde "$CODE")"
     row_sub "$INSTALLING" "your data from before the rollback is in $(tilde "$ROLLBACK_BACKUP")"

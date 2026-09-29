@@ -100,7 +100,12 @@ printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
 # STUB_ANSWERS_AS=<tree>=<answer> has a tree's backend answer as another
 # version. While the backend is up the unit is active, unless STUB_UNIT_ACTIVE
 # says otherwise. Every start and stop is logged with the version of the tree
-# it found.
+# it found, and with STUB_RECORD_SEEN_LOG every start also notes whether the
+# installer's record of a rolled-back update was already there. A broken
+# version run with STUB_UNREADABLE_BACKUP leaves the backup's settings.json
+# unreadable, so putting the data back fails, and one run with
+# STUB_UNWRITABLE_STATE leaves the state directory unwritable, so the record of
+# the rollback cannot be written.
 unit_value() {
     sed -n "s/^Environment=$1=//p" "$HOME/.config/systemd/user/romm-tender.service" 2> /dev/null
 }
@@ -124,6 +129,13 @@ backend_start() {
     local version
     version="$(tree_version)"
     printf 'start %s\\n' "$version" >> "$STUB_BACKEND_LOG"
+    if [ -n "${STUB_RECORD_SEEN_LOG:-}" ]; then
+        if [ -e "$(unit_value TENDER_STATE_DIR)/update-failure.json" ]; then
+            printf 'start %s with the record\\n' "$version" >> "$STUB_RECORD_SEEN_LOG"
+        else
+            printf 'start %s without it\\n' "$version" >> "$STUB_RECORD_SEEN_LOG"
+        fi
+    fi
     case " ${STUB_BROKEN_VERSIONS:-} " in
         *" $version "*)
             # As far as the data and no further: the database written to, a WAL
@@ -137,6 +149,11 @@ backend_start() {
             printf 'wal of %s\\n' "$version" > "$data/romm_sync.db-wal"
             printf 'shm of %s\\n' "$version" > "$data/romm_sync.db-shm"
             printf '{"written_by": "%s"}\\n' "$version" > "$config/settings.json"
+            [ -z "${STUB_UNREADABLE_BACKUP:-}" ] || chmod 000 "$data/update-backup/settings.json"
+            if [ -n "${STUB_UNWRITABLE_STATE:-}" ]; then
+                mkdir -p "$(unit_value TENDER_STATE_DIR)"
+                chmod 555 "$(unit_value TENDER_STATE_DIR)"
+            fi
             return 0
             ;;
     esac
@@ -826,6 +843,32 @@ class TestAFreshInstall:
         assert b"\x1b" not in result.stdout
         assert f"[ok] Installing   {_ARCHIVE}".encode() in result.stdout
 
+    def test_a_piped_run_says_each_row_as_it_starts_and_as_its_detail_changes(self, machine):
+        """The journal of a run nobody watches holds the whole run, not only how each row ended."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        checking = [line for line in lines if " Checking" in line]
+        assert checking == [
+            "[..] Checking",
+            "[..] Checking     python 3.13",
+            "[..] Checking     python 3.13 - systemd",
+            "[..] Checking     python 3.13 - systemd - Steam",
+            "[..] Checking     python 3.13 - systemd - Steam - no Tender plugin in Decky",
+            "[ok] Checking     python 3.13 - systemd - Steam - no Tender plugin in Decky",
+        ]
+        assert lines.index("[..] Service      starting romm-tender") < lines.index(
+            "[ok] Service      romm-tender.service enabled and started"
+        )
+
+    def test_a_progress_line_carries_no_trailing_blanks(self, machine):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        progress = [line for line in result.stdout.splitlines() if line.startswith("[..]")]
+        assert progress
+        assert all(line == line.rstrip() for line in progress)
+
     def test_the_closing_summary_is_one_aligned_block(self, machine):
         """A blank line, then two labelled rows on one column, then what to do next.
 
@@ -1019,6 +1062,26 @@ class TestTheAcknowledgement:
 
         assert "\033[" not in output
         assert "Coming from the Decky plugin?" in _screen(output)
+
+    def test_a_terminal_that_is_redrawn_gets_no_progress_lines(self, machine):
+        """The rows are rewritten in place there, so a progress line would be a second copy of one.
+
+        Colour without UTF-8 is the one look that redraws AND marks rows with
+        text rather than glyphs, which is where a progress line's `[..]` could
+        reach a terminal at all.
+        """
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", LANG="C")
+
+        assert code == 0, output
+        assert "[..]" not in output
+        assert "[ok] Service" in _screen(output)
+
+    def test_no_color_on_a_terminal_is_the_plain_transcript_with_its_progress(self, machine):
+        """NO_COLOR asks for the transcript a log gets, and that includes each step as it happens."""
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", NO_COLOR="1")
+
+        assert code == 0, output
+        assert "[..] Service      starting romm-tender" in output
 
     def test_an_empty_no_color_says_nothing(self, machine):
         """The other half of the convention, and the one a `-n` test gets wrong."""
@@ -1586,6 +1649,19 @@ class TestAnUpdateThatStarts:
             in result.stderr.splitlines()
         )
 
+    def test_a_piped_update_says_it_is_waiting_before_the_service_row_ends(self, machine):
+        """The wait is the longest step of an update, and in the journal it has to be a line rather than a gap."""
+        _installed(machine)
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        waiting = f"[..] Service      waiting for {_NEW} to answer"
+        ended = next(index for index, line in enumerate(lines) if line.startswith("[ok] Service"))
+        assert waiting in lines
+        assert lines.index(waiting) < ended
+
     def test_a_first_install_keeps_nothing_and_waits_for_nothing(self, machine):
         """A first install keeps no tree, makes no backup and knocks on nothing."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up")
@@ -1656,6 +1732,14 @@ class TestAnUpdateThatDoesNotStart:
         assert "Rolled back in" in result.stdout
         assert "Done in" not in result.stdout
 
+    def test_a_piped_run_says_it_is_going_back_before_the_service_row_ends(self, machine):
+        _before, result = self._failed(machine)
+
+        lines = result.stdout.splitlines()
+        ended = lines.index(f"[!!] Service      update to {_NEW} failed; back on {_VERSION}")
+        assert lines.index(f"[..] Service      waiting for {_NEW} to answer") < ended
+        assert lines.index(f"[..] Service      {_NEW} did not answer, going back to {_VERSION}") < ended
+
     def test_it_records_the_failure(self, machine):
         _before, _result = self._failed(machine)
 
@@ -1664,6 +1748,87 @@ class TestAnUpdateThatDoesNotStart:
         assert record["attempted_version"] == _NEW
         assert record["restored_version"] == _VERSION
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["rolled_back_at"])
+
+    def test_the_record_is_one_the_backend_reads(self, machine):
+        """The backend shows this record on a card at its next start, so it has to read what was written."""
+        from adapters.update_failure import UpdateFailureFileAdapter
+
+        _before, _result = self._failed(machine)
+
+        failure = UpdateFailureFileAdapter(state_dir=str(machine.state), log_debug=print).read_update_failure()
+        assert failure is not None
+        assert (failure.attempted_version, failure.restored_version) == (_NEW, _VERSION)
+
+    def test_the_record_is_there_before_the_restored_version_starts(self, machine):
+        """The restored version logs the rollback as it starts, from the record it finds then."""
+        seen = machine.tmp_path / "record-seen.log"
+        _installed(machine)
+        machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+            STUB_RECORD_SEEN_LOG=str(seen),
+        )
+
+        assert seen.read_text(encoding="utf-8").splitlines() == [
+            f"start {_NEW} without it",
+            f"start {_VERSION} with the record",
+        ]
+
+    def test_a_restore_that_fails_records_nothing_and_starts_nothing(self, machine):
+        """The record says the update was rolled back; with the data not put back, it was not."""
+        _installed(machine)
+        _seed_data(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_BROKEN_VERSIONS=_NEW,
+            STUB_UNREADABLE_BACKUP="1",
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: could not put your data back from {machine.backup}"]
+        assert not machine.failure_record.exists()
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}", f"stop {_NEW}"]
+
+    def test_a_record_that_cannot_be_written_is_said_and_the_restored_version_still_starts(self, machine):
+        """Without the record Tender shows no notice of the rollback, which costs less than a stopped service."""
+        _installed(machine)
+        machine.backend_log.write_text("", encoding="utf-8")
+
+        try:
+            result = machine.run(
+                "--from",
+                str(_build_tarball(machine.tmp_path, _NEW)),
+                "--yes",
+                STUB_BACKEND="up",
+                STUB_BROKEN_VERSIONS=_NEW,
+                STUB_UNWRITABLE_STATE="1",
+            )
+        finally:
+            machine.state.chmod(0o755)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: could not record the rolled-back update in {machine.failure_record}; Tender will not show it",
+            f"install.sh: update to {_NEW} failed; back on {_VERSION}",
+        ]
+        assert [line for line in result.stderr.splitlines() if machine.failure_record.name in line] == [
+            f"install.sh: could not record the rolled-back update in {machine.failure_record}; Tender will not show it",
+        ]
+        assert "could not record the rolled-back update; Tender will not show it" in (
+            line.strip() for line in result.stdout.splitlines()
+        )
+        assert machine.backend_events() == [f"stop {_VERSION}", f"start {_NEW}", f"stop {_NEW}", f"start {_VERSION}"]
+        assert _tree_version(machine.code) == _VERSION
+        assert not machine.failure_record.exists()
+        assert not Path(f"{machine.failure_record}.tmp").exists()
 
     def test_it_never_tries_again_on_its_own(self, machine):
         """One start of the new tree, then the old one — the order a single attempt makes."""
@@ -2623,6 +2788,11 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         from domain.identity import PACKAGE_NAME
 
         assert f'SERVER_NAME="{PACKAGE_NAME}"' in _INSTALL.read_text(encoding="utf-8")
+
+    def test_the_record_of_a_rolled_back_update_matches_the_backend(self):
+        from domain.update_outcome import UPDATE_FAILURE_FILENAME
+
+        assert f'UPDATE_FAILURE="{UPDATE_FAILURE_FILENAME}"' in _INSTALL.read_text(encoding="utf-8")
 
 
 class TestHowTheRunLooks:

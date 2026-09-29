@@ -81,8 +81,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 017_add_last_sync_server_hash + 018_rename_rom_save_states
 # + 019_add_collection_sync_state + 020_add_fetch_generation
 # + 021_add_rom_fs_size + 022_rename_collection_kind_user_to_standard
-# + 023_add_rom_install_launchable + 024_add_answered_save_directories).
-_SHIPPED_VERSION = 24
+# + 023_add_rom_install_launchable + 024_add_answered_save_directories
+# + 025_add_platform_skip_revoked).
+_SHIPPED_VERSION = 25
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp and
@@ -801,12 +802,14 @@ class Test012PlatformSyncState:
 
         assert _user_version(db_path) == _SHIPPED_VERSION
         assert "platform_sync_state" in _tables(db_path)
-        # fetch_id is added by 020 (#1504); after a full apply the table carries it.
+        # fetch_id is added by 020 (#1504) and skip_revoked by 025; after a full
+        # apply the table carries both.
         assert _columns(db_path, "platform_sync_state") == {
             "platform_slug",
             "completed_at",
             "rom_count",
             "fetch_id",
+            "skip_revoked",
         }
 
     def test_table_absent_before_012(self, tmp_path: Path):
@@ -1693,6 +1696,65 @@ class Test024AddAnsweredSaveDirectories:
         finally:
             conn.close()
         assert keys == ["device_id"]
+
+
+class Test025AddPlatformSkipRevoked:
+    """025 — adds the NOT NULL DEFAULT 0 skip_revoked column to platform_sync_state and revokes every existing stamp."""
+
+    def test_adds_skip_revoked_to_platform_sync_state_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert _user_version(db_path) == _SHIPPED_VERSION
+        assert "skip_revoked" in _columns(db_path, "platform_sync_state")
+        assert "skip_revoked" not in _columns(db_path, "collection_sync_state")
+
+    def test_skip_revoked_absent_before_025(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 24)))
+
+        assert _user_version(db_path) == 24
+        assert "skip_revoked" not in _columns(db_path, "platform_sync_state")
+
+    def test_an_existing_stamp_is_kept_with_its_skip_revoked(self, tmp_path: Path):
+        # A stamp written before 025 may stand over games a stale removal already
+        # unbound, so every one is revoked: each platform full-fetches once and its
+        # next apply re-stamps it.
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 24)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count, fetch_id) "
+                "VALUES ('n64', '2026-09-01T10:00:00', 3, 'run-1')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT rom_count, fetch_id, skip_revoked FROM platform_sync_state WHERE platform_slug = 'n64'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == (3, "run-1", 1)
+
+    def test_skip_revoked_refuses_a_null(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count, skip_revoked) "
+                    "VALUES ('n64', '2026-09-01T10:00:00', 3, NULL)"
+                )
+        finally:
+            conn.close()
 
 
 def test_shipped_migrations_dir_resolves_to_real_schema():

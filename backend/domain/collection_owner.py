@@ -40,8 +40,11 @@ def is_own_collection(collection_user_id: object, own_user_id: int | None, *, ki
 
     Returns ``True`` (own) when the collection is a virtual collection (no
     owner), when our own identity is unknown (the non-breaking fallback), or
-    when the collection's owner id equals ours. ``False`` (foreign) only when a
-    standard/smart collection is owned by a different known id.
+    when the collection's owner id equals ours; ``False`` for any other
+    standard/smart collection. The ids are compared as given, relying on
+    RomM's schema, where ``user_id`` is a required ``int`` on both kinds: a
+    missing id, or one spelled as another type (the string ``"3"`` for
+    ``3``), would read as foreign.
     """
     if kind == "virtual":
         return True

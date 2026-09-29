@@ -295,9 +295,11 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording the
+(platform_slug → display_name cache), `save_directories_recorded`, the marker that the one-time pass recording the
 installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
-with no ROM failing. The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+with no ROM failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
+and `last_run_version`, the version the previous start ran as (see _Rolled-back update_ below). The schema version is
+**not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -860,6 +862,18 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
   The **only** thing that deletes rows. **Clean Up Removed RomM Games** performs it only after fresh exact-ID 404s,
   explicit options, and any enabled recovery bundle have passed their final guards.
 
+### Completion stamp / revoked skip
+
+A platform's **completion stamp** (`PlatformSyncState`) records that its most recent apply ran to completion, with the
+fetch generation that apply marked its rows with. It has two uses: it is the incremental skip's sole authority (no
+stamp, no skip), and removed-game discovery reads its generation as the record of what RomM's last complete fetch
+returned. A stamp whose skip is **revoked** (`skip_revoked`) keeps the second use and loses the first. It is set when
+games are **unbound** in a way the skip's counts cannot see (and was set once on every stamp by the upgrade that
+introduced it), and it lasts until the platform's next apply. Distinct from deleting the stamp, which removes both uses.
+A collection's completion stamp has no revoked state. What sets it and which readers honour it:
+[backend-architecture.md](docs/architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+"Incremental skip".
+
 ### Recovery bundle
 
 A checksum-verified, atomically sealed pre-mutation snapshot created by explicit Prune. It records the affected local
@@ -1067,11 +1081,30 @@ warning, alert.
 ### Available release / installed program
 
 An **available release** is a Tender release a user could install: GitHub calls it latest, its tag is
-`tender-v<version>`, and its `romm-tender-<version>.tar.gz` is attached with a valid sha256 `digest`. A release
-published without the tarball yet — the assets job uploads it minutes later — is not available, and neither is one whose
-tarball carries no valid digest, since it could not be verified. The **update notice** on Main names only an available
-release that is strictly newer than the running version and not the version the user dismissed. The **installed
-program** is the process the installed service runs, the one an update can replace; a run from a checkout checks and
-shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which process is
-the installed program; `services/update_check.py` keeps the last available release a check saw and decides whether the
-notice shows. _Avoid_: "new version" for a release that is merely published.
+`tender-v<version>`, its `romm-tender-<version>.tar.gz` is attached with a valid sha256 `digest`, and the
+`romm-tender-<version>.tar.gz.sha256` file the installer verifies against is attached beside it. A release published
+without those files yet — the assets job uploads them minutes later — is not available, and neither is one whose tarball
+carries no valid digest or has no checksum file, since it could not be verified. The **update notice** on Main names
+only an available release that is strictly newer than the running version and not the version the user dismissed. The
+**installed program** is the process the installed service runs, the one an update can replace; a run from a checkout
+checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
+process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
+whether the notice shows. _Avoid_: "new version" for a release that is merely published.
+
+### Rolled-back update / update announcement
+
+A **rolled-back update** is an update whose new version did not answer, so the installer put the previous version and
+its data back. Its record is the installer's `update-failure.json` in the state directory — the version it tried, the
+version it went back to, and when — which the installer writes and removes and the backend only reads. The record
+**stands** only while the running version is the one it went back to; one that outlived that is a leftover and is shown
+nowhere. The **rolled-back notice** on Main states a standing record until the user dismisses it or the next update that
+answers removes it, and for that long the update notice does not name the version it tried. The **update announcement**
+is what a start on a version that moved owes the panel — an update, or a return to an earlier release — told twice over:
+one toast, raised once per process, and a card on Main that stands until dismissed. The backend compares the running
+version with the one the previous start recorded (`last_run_version`), and a rollback is never announced.
+`domain/update_outcome.py` decides which version is announced and which way it moved; `services/update_outcome.py` keeps
+the announcement for its process and reads the record. _Avoid_: "failed update" for the record alone — an update can
+fail before anything is replaced, and then nothing is rolled back or recorded. The exception is the installer's fixed
+filename, `update-failure.json`, and the code names that follow it (`UpdateFailure`, `read_update_failure`,
+`dismiss_update_failure`, `UpdateFailureNotice`, the answer's `failure` key): each of those means the record of a
+rolled-back update, never an update that failed before anything was replaced.

@@ -81,6 +81,20 @@ def test_page_counts_only_removable_rows_as_candidates() -> None:
     assert {item["rom_id"] for item in page["items"] if not item["candidate"]} == {25135, 25136}
 
 
+def test_a_platform_whose_skip_was_revoked_still_discovers_its_dropped_rows() -> None:
+    """A platform turned off, or one whose shortcuts were removed, still gets its removed games found."""
+    uow = _two_groups()
+    with uow:
+        uow.platform_sync_state.revoke_skip("dc")
+    builder = _builder(uow)
+
+    preview = builder.build("preview", "bulk", None)
+    page = builder.page(preview, 0, 50)
+
+    assert page["candidate_total"] == 2
+    assert {item["rom_id"] for item in page["items"] if item["candidate"]} == {4375, 4376}
+
+
 def test_page_orders_candidates_ahead_of_disclosed_siblings() -> None:
     builder = _builder(_two_groups())
 

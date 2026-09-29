@@ -24,8 +24,8 @@ panel nothing.
 
 **What is fatal and what is not is decided here, and the two are not the same
 question.** Without the lock, the schema, the wiring or a port there is no
-backend, so those end the process. The start-up routines are repairs: six of the
-nine contain no exception handling at all, and under the plugin loader that was
+backend, so those end the process. The start-up routines are repairs: most
+contain no exception handling at all, and under the plugin loader that was
 harmless because the lifecycle hook was a detached task. Hosted, an unhandled
 failure in a cover-cache sweep would take the whole backend down — and with a
 service manager's restart policy, do it again on every start. So each routine
@@ -60,10 +60,11 @@ if TYPE_CHECKING:
 class BackendBuild:
     """What building the backend produced that the host itself needs.
 
-    The identity comes from here rather than from the caller because it is read
-    off the package manifest during the build, and reading that file a second
-    time in the entry point would be a second spelling of the program's name,
-    free to drift from the one every outgoing request already carries.
+    The identity comes from here rather than from the caller because the build
+    composes it once for the outgoing User-Agent, and composing it a second time
+    in the entry point would be a second spelling of the program's identity,
+    free to drift from the one every request to a server off this machine
+    already carries.
     """
 
     dispatcher: CallDispatcher
@@ -99,7 +100,7 @@ async def run_backend(
     *build* performs the schema migration, the wiring and the start-up routines
     and answers with the dispatcher for the object calls reach, plus the identity
     this server answers under. *token* is this process's admission token, created
-    by the caller because the logging filter that keeps it out of the log file
+    by the caller because the logging formatter that keeps it out of the log file
     has to exist before the first line is written. *after_bind* is
     the network-touching start-up step, run once the port has been announced.
     *injection* is what the panel is loaded into Steam with, or ``None`` to serve

@@ -60,6 +60,7 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from adapters.update_failure import UpdateFailureFileAdapter
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
 from domain.user_data_location import launcher_in_bin_dir, launcher_path
@@ -113,6 +114,7 @@ if TYPE_CHECKING:
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
         UnitOfWorkFactory,
+        UpdateFailureFn,
         UuidGen,
     )
 
@@ -158,6 +160,7 @@ class AdapterBundle:
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
     latest_release: LatestReleaseFn
+    update_failure: UpdateFailureFn
 
 
 @dataclass(frozen=True)
@@ -224,36 +227,22 @@ class RuntimeAdaptersBundle:
 
 @dataclass(frozen=True)
 class BootstrapHandles:
-    """Bootstrap outputs ``main.py`` needs that don't fit the wiring bundles.
-
-    Anything ``Plugin`` itself binds (not the services) lives here:
-    the debug logger forwarded by ``Plugin._log_debug`` and the
-    persistence adapter ``Plugin`` holds for disk-touching callable paths
-    that bypass a service. The bundles already cover everything passed to
-    ``wire_services``; this struct keeps those Plugin-only handles typed
-    instead of returning them via the untyped dict shape of yore.
-    """
+    """Bootstrap outputs ``main.py`` binds on ``Plugin`` itself rather than handing to a service."""
 
     debug_logger: DebugLogger
-    persistence: PersistenceAdapter
 
 
 @dataclass(frozen=True)
 class BootstrapResult:
     """Typed return shape for :func:`bootstrap`.
 
-    The four bundles carry every Protocol-typed seam and live state
-    dict that services need; :attr:`handles` carries the small set of
-    raw outputs only ``main.py`` itself binds (debug logger);
-    :attr:`directories` is the set this run was handed, passed back so
-    every consumer reads the same six fields rather than composing any
-    of them again; :attr:`launcher` says where the shortcut launcher
-    lives beneath the data root and whether this start got it there;
-    and :attr:`user_agent` is the one manifest read, which the outgoing
-    User-Agent and the host's own identity both come from. Together
-    they replace the historical untyped
-    ``dict`` return so every consumer is caught by basedpyright
-    instead of failing silently at runtime on a typo.
+    The four bundles carry every Protocol-typed seam and live state dict that
+    services need; :attr:`handles` carries what ``main.py`` binds on ``Plugin``
+    itself; :attr:`directories` is the set this run was handed, passed back so
+    every consumer reads the same seven fields rather than composing any of them
+    again; :attr:`launcher` is this start's :class:`ShortcutLauncher`; and
+    :attr:`user_agent` is ``<package name>/<version>``, composed once and used
+    both as the outgoing User-Agent and as the identity the host answers under.
     """
 
     adapters: AdapterBundle
@@ -263,10 +252,6 @@ class BootstrapResult:
     handles: BootstrapHandles
     directories: AppDirectories
     launcher: ShortcutLauncher
-    # ``<package name>/<version>``, from the one read of the manifest that also
-    # produces the outgoing User-Agent. The host answers under it, so a second
-    # read in the entry point would be a second spelling of the program's name,
-    # free to drift from the one every request already carries.
     user_agent: str
 
 
@@ -305,9 +290,8 @@ def bootstrap(
     -------
     :class:`BootstrapResult`
         Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``, ``directories``) plus the small set of
-        Plugin-only handles ``main.py`` itself binds
-        (``handles.debug_logger``).
+        ``stores``, ``callbacks``, ``directories``) plus the ``handles``
+        ``main.py`` binds on ``Plugin`` itself.
     """
     # SystemClock is dependency-free; construct it first so the single shared
     # instance threads into PersistenceAdapter (corrupt-settings backup stamp)
@@ -430,6 +414,7 @@ def bootstrap(
         user_agent=user_agent,
         log_debug=debug_logger,
     )
+    update_failure = UpdateFailureFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
@@ -493,6 +478,7 @@ def bootstrap(
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
         latest_release=github_releases.get_latest_release,
+        update_failure=update_failure.read_update_failure,
     )
     stores = StateBundle(
         settings=settings,
@@ -516,7 +502,7 @@ def bootstrap(
         hostname_provider=hostname_provider,
         machine_id_provider=machine_id_provider,
     )
-    handles = BootstrapHandles(debug_logger=debug_logger, persistence=persistence)
+    handles = BootstrapHandles(debug_logger=debug_logger)
 
     return BootstrapResult(
         adapters=adapters,

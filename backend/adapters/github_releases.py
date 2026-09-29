@@ -80,31 +80,47 @@ class GithubReleaseAdapter:
     def _find_tarball(self, payload: dict[str, Any], version: str) -> ReleaseTarball | None:
         """Return the release's tarball asset, or ``None`` when it carries none yet.
 
-        A tarball with no sha256 digest counts as none: it could not be
-        verified before an install, so the release is not available.
+        A tarball with no sha256 digest counts as none, and so does one with no
+        ``<tarball>.sha256`` asset beside it: either way it could not be
+        verified the way the installer verifies it, so the release is not
+        available.
 
-        The address and the digest come off the SAME asset of the SAME answer:
+        The addresses and the digest come off the SAME answer:
         ``browser_download_url`` names the release it belongs to rather than
         whatever is newest, which is what makes it safe to pair with a digest.
         """
         name = tarball_name(version)
         assets = payload.get("assets")
-        if isinstance(assets, list):
-            for asset in assets:
-                if not isinstance(asset, dict) or asset.get("name") != name:
-                    continue
-                url = asset.get("browser_download_url")
-                if not isinstance(url, str) or not url:
-                    self._log_debug(f"[update] {name} states no download address")
-                    return None
-                digest = sha256_hex(asset.get("digest"))
-                if digest is None:
-                    self._log_debug(f"[update] {name} carries no sha256 digest")
-                    return None
-                return ReleaseTarball(url=url, digest=digest)
-        self._log_debug(f"[update] release {version} carries no {name} yet")
-        return None
+        by_name = (
+            {asset.get("name"): asset for asset in assets if isinstance(asset, dict)}
+            if isinstance(assets, list)
+            else {}
+        )
+        asset = by_name.get(name)
+        if asset is None:
+            self._log_debug(f"[update] release {version} carries no {name} yet")
+            return None
+        url = _download_address(asset)
+        if url is None:
+            self._log_debug(f"[update] {name} states no download address")
+            return None
+        digest = sha256_hex(asset.get("digest"))
+        if digest is None:
+            self._log_debug(f"[update] {name} carries no sha256 digest")
+            return None
+        checksum_name = f"{name}.sha256"
+        checksum = by_name.get(checksum_name)
+        checksum_url = _download_address(checksum) if checksum is not None else None
+        if checksum_url is None:
+            self._log_debug(f"[update] release {version} carries no usable {checksum_name} yet")
+            return None
+        return ReleaseTarball(url=url, digest=digest, checksum_url=checksum_url)
 
     @staticmethod
     def _ssl_context() -> ssl.SSLContext:
         return ssl.create_default_context(cafile=_ca_bundle())
+
+
+def _download_address(asset: dict[str, Any]) -> str | None:
+    url = asset.get("browser_download_url")
+    return url if isinstance(url, str) and url else None

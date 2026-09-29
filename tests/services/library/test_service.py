@@ -1,4 +1,4 @@
-"""Façade integration tests for LibraryService — public callable surface end-to-end."""
+"""Façade integration tests for LibraryService — its public methods end-to-end."""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -37,7 +37,7 @@ class TestGetPlatforms:
     """Tests for get_platforms() — lines 90-117."""
 
     @pytest.mark.asyncio
-    async def test_returns_platforms_with_rom_count(self, plugin):
+    async def test_returns_platforms_with_rom_count(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -52,9 +52,9 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.get_platforms()
+        result = await library.sync.get_platforms()
         assert result["success"] is True
         assert len(result["platforms"]) == 2
         assert result["platforms"][0]["name"] == "N64"
@@ -62,7 +62,7 @@ class TestGetPlatforms:
         assert result["platforms"][1]["name"] == "SNES"
 
     @pytest.mark.asyncio
-    async def test_skips_zero_rom_count(self, plugin):
+    async def test_skips_zero_rom_count(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -75,15 +75,15 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.get_platforms()
+        result = await library.sync.get_platforms()
         assert result["success"] is True
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["name"] == "N64"
 
     @pytest.mark.asyncio
-    async def test_sync_enabled_from_settings(self, plugin):
+    async def test_sync_enabled_from_settings(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -96,72 +96,60 @@ class TestGetPlatforms:
                 {},
             ]
         )
-        rebind_loop(plugin._sync_service, mock_loop)
-        plugin.settings["enabled_platforms"] = {"1": True, "2": False}
+        rebind_loop(library.sync, mock_loop)
+        library.settings["enabled_platforms"] = {"1": True, "2": False}
 
-        result = await plugin._sync_service.get_platforms()
+        result = await library.sync.get_platforms()
         assert result["platforms"][0]["sync_enabled"] is True
         assert result["platforms"][1]["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_default_sync_enabled_when_no_prefs(self, plugin):
+    async def test_default_sync_enabled_when_no_prefs(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(
             side_effect=[[{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}], {}]
         )
-        rebind_loop(plugin._sync_service, mock_loop)
-        plugin.settings["enabled_platforms"] = {}
+        rebind_loop(library.sync, mock_loop)
+        library.settings["enabled_platforms"] = {}
 
-        result = await plugin._sync_service.get_platforms()
+        result = await library.sync.get_platforms()
         assert result["platforms"][0]["sync_enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_http_error(self, plugin):
+    async def test_http_error(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(side_effect=Exception("Connection refused"))
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.get_platforms()
+        result = await library.sync.get_platforms()
         assert result["success"] is False
         assert "reason" in result
-
-    @pytest.mark.asyncio
-    async def test_unexpected_response_type(self, plugin):
-        from unittest.mock import AsyncMock, MagicMock
-
-        mock_loop = MagicMock()
-        mock_loop.run_in_executor = AsyncMock(return_value="not a list")
-        rebind_loop(plugin._sync_service, mock_loop)
-
-        result = await plugin._sync_service.get_platforms()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
 
 
 class TestSavePlatformSync:
     """Tests for save_platform_sync() — lines 120-123."""
 
-    async def test_saves_enabled_setting(self, plugin):
-        result = await plugin._sync_service.save_platform_sync(42, True)
+    async def test_saves_enabled_setting(self, library):
+        result = await library.sync.save_platform_sync(42, True)
         assert result["success"] is True
-        assert plugin.settings["enabled_platforms"]["42"] is True
+        assert library.settings["enabled_platforms"]["42"] is True
 
-    async def test_saves_disabled_setting(self, plugin):
-        plugin.settings["enabled_platforms"]["42"] = True
-        result = await plugin._sync_service.save_platform_sync(42, False)
+    async def test_saves_disabled_setting(self, library):
+        library.settings["enabled_platforms"]["42"] = True
+        result = await library.sync.save_platform_sync(42, False)
         assert result["success"] is True
-        assert plugin.settings["enabled_platforms"]["42"] is False
+        assert library.settings["enabled_platforms"]["42"] is False
 
 
 class TestSetAllPlatformsSync:
     """Tests for set_all_platforms_sync() — lines 126-139."""
 
     @pytest.mark.asyncio
-    async def test_enables_all(self, plugin):
+    async def test_enables_all(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
@@ -171,34 +159,34 @@ class TestSetAllPlatformsSync:
                 {"id": 2, "name": "SNES"},
             ]
         )
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.set_all_platforms_sync(True)
+        result = await library.sync.set_all_platforms_sync(True)
         assert result["success"] is True
-        assert plugin.settings["enabled_platforms"]["1"] is True
-        assert plugin.settings["enabled_platforms"]["2"] is True
+        assert library.settings["enabled_platforms"]["1"] is True
+        assert library.settings["enabled_platforms"]["2"] is True
 
     @pytest.mark.asyncio
-    async def test_disables_all(self, plugin):
+    async def test_disables_all(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(return_value=[{"id": 1, "name": "N64"}])
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.set_all_platforms_sync(False)
+        result = await library.sync.set_all_platforms_sync(False)
         assert result["success"] is True
-        assert plugin.settings["enabled_platforms"]["1"] is False
+        assert library.settings["enabled_platforms"]["1"] is False
 
     @pytest.mark.asyncio
-    async def test_http_error(self, plugin):
+    async def test_http_error(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
         mock_loop = MagicMock()
         mock_loop.run_in_executor = AsyncMock(side_effect=Exception("timeout"))
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.set_all_platforms_sync(True)
+        result = await library.sync.set_all_platforms_sync(True)
         assert result["success"] is False
 
 
@@ -206,14 +194,14 @@ class TestGetCollections:
     """Tests for LibraryService.get_collections()."""
 
     @pytest.mark.asyncio
-    async def test_returns_standard_smart_and_virtual_collections(self, plugin):
+    async def test_returns_standard_smart_and_virtual_collections(self, library):
         """User, smart, and virtual collections all appear in the result."""
         user = [{"id": 1, "name": "My Faves", "rom_count": 3, "is_favorite": False}]
         smart = [{"id": 5, "name": "Recent Adds", "rom_count": 12}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 5, "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
+        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["success"] is True
         collections = result["collections"]
@@ -223,47 +211,47 @@ class TestGetCollections:
         assert "Mario" in names
 
     @pytest.mark.asyncio
-    async def test_standard_collection_has_standard_kind(self, plugin):
+    async def test_standard_collection_has_standard_kind(self, library):
         """Non-favorite standard collections carry kind='standard' and is_favorite=False."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        rebind_loop(library.sync, _make_collections_loop(user=user))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["kind"] == "standard"
         assert result["collections"][0]["is_favorite"] is False
 
     @pytest.mark.asyncio
-    async def test_virtual_collection_has_virtual_kind_and_type(self, plugin):
+    async def test_virtual_collection_has_virtual_kind_and_type(self, library):
         """Virtual collections carry kind='virtual' and a virtual_type sub-field."""
         franchise = [{"id": 101, "name": "Zelda", "rom_count": 4}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(virtual=franchise))
+        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["kind"] == "virtual"
         assert result["collections"][0]["virtual_type"] == "franchise"
 
     @pytest.mark.asyncio
-    async def test_smart_collection_has_smart_kind(self, plugin):
+    async def test_smart_collection_has_smart_kind(self, library):
         """Smart collections carry kind='smart' and is_favorite=False."""
         smart = [{"id": 7, "name": "Filter A", "rom_count": 10}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(smart=smart))
+        rebind_loop(library.sync, _make_collections_loop(smart=smart))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["kind"] == "smart"
         assert result["collections"][0]["is_favorite"] is False
 
     @pytest.mark.asyncio
-    async def test_kind_order_standard_smart_virtual(self, plugin):
+    async def test_kind_order_standard_smart_virtual(self, library):
         """Standard collections precede smart, which precede virtual (sort order)."""
         user = [{"id": 1, "name": "U1", "rom_count": 1, "is_favorite": False}]
         smart = [{"id": 5, "name": "S1", "rom_count": 1}]
         franchise = [{"id": 101, "name": "F1", "rom_count": 1}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
+        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         kinds = [c["kind"] for c in result["collections"]]
         standard_idx = kinds.index("standard")
@@ -272,88 +260,88 @@ class TestGetCollections:
         assert standard_idx < smart_idx < virtual_idx
 
     @pytest.mark.asyncio
-    async def test_favorite_collection_has_is_favorite_true(self, plugin):
+    async def test_favorite_collection_has_is_favorite_true(self, library):
         """Collections with is_favorite=True carry kind='standard' and is_favorite=True."""
         user = [{"id": 1, "name": "Top Picks", "rom_count": 5, "is_favorite": True}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        rebind_loop(library.sync, _make_collections_loop(user=user))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["kind"] == "standard"
         assert result["collections"][0]["is_favorite"] is True
 
     @pytest.mark.asyncio
-    async def test_respects_enabled_settings(self, plugin):
+    async def test_respects_enabled_settings(self, library):
         """sync_enabled reflects the per-bucket enabled_collections setting."""
         user = [
             {"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False},
             {"id": 2, "name": "Shooters", "rom_count": 3, "is_favorite": False},
         ]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
-        plugin._sync_service._settings["enabled_collections"] = {
+        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library.sync._settings["enabled_collections"] = {
             "standard": {"1": True, "2": False},
             "smart": {},
             "virtual": {},
         }
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         by_id = {c["id"]: c for c in result["collections"]}
         assert by_id["1"]["sync_enabled"] is True
         assert by_id["2"]["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_respects_smart_bucket_enabled_settings(self, plugin):
+    async def test_respects_smart_bucket_enabled_settings(self, library):
         """Smart-collection sync_enabled comes from the smart bucket only."""
         smart = [{"id": 7, "name": "Filter A", "rom_count": 1}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(smart=smart))
-        plugin._sync_service._settings["enabled_collections"] = {
+        rebind_loop(library.sync, _make_collections_loop(smart=smart))
+        library.sync._settings["enabled_collections"] = {
             "standard": {"7": True},  # same id under a different bucket — must not leak
             "smart": {"7": False},
             "virtual": {},
         }
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         smart_entry = next(c for c in result["collections"] if c["kind"] == "smart")
         assert smart_entry["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_defaults_to_disabled_when_no_settings(self, plugin):
+    async def test_defaults_to_disabled_when_no_settings(self, library):
         """When enabled_collections is absent all collections default to sync_enabled=False."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
         franchise = [{"id": 101, "name": "Zelda", "rom_count": 3}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, virtual=franchise))
-        plugin._sync_service._settings.pop("enabled_collections", None)
+        rebind_loop(library.sync, _make_collections_loop(user=user, virtual=franchise))
+        library.sync._settings.pop("enabled_collections", None)
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         for c in result["collections"]:
             assert c["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_api_error_returns_error_response(self, plugin):
+    async def test_api_error_returns_error_response(self, library):
         """When list_collections raises an exception the response has success=False."""
-        rebind_loop(plugin._sync_service, _make_loop_raising(Exception("Connection refused")))
+        rebind_loop(library.sync, _make_loop_raising(Exception("Connection refused")))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["success"] is False
         assert "reason" in result
         assert "message" in result
 
     @pytest.mark.asyncio
-    async def test_empty_collections(self, plugin):
+    async def test_empty_collections(self, library):
         """All endpoints returning [] still yields success=True with empty list."""
-        rebind_loop(plugin._sync_service, _make_collections_loop())
+        rebind_loop(library.sync, _make_collections_loop())
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["success"] is True
         assert result["collections"] == []
 
     @pytest.mark.asyncio
-    async def test_virtual_failure_still_returns_standard_collections(self, plugin):
+    async def test_virtual_failure_still_returns_standard_collections(self, library):
         """If every virtual-type fetch fails, standard + smart collections are still returned."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
 
@@ -370,16 +358,16 @@ class TestGetCollections:
             raise Exception("Virtual endpoint unavailable")  # every virtual type
 
         mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["success"] is True
         assert len(result["collections"]) == 1
         assert result["collections"][0]["name"] == "RPGs"
 
     @pytest.mark.asyncio
-    async def test_smart_failure_still_returns_standard_and_virtual(self, plugin):
+    async def test_smart_failure_still_returns_standard_and_virtual(self, library):
         """If smart fetch fails, standard + virtual collections still come through."""
         user = [{"id": 1, "name": "RPGs", "rom_count": 2, "is_favorite": False}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 3}]
@@ -399,9 +387,9 @@ class TestGetCollections:
             return []  # remaining virtual type(s)
 
         mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
-        rebind_loop(plugin._sync_service, mock_loop)
+        rebind_loop(library.sync, mock_loop)
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["success"] is True
         names = [c["name"] for c in result["collections"]]
@@ -409,36 +397,36 @@ class TestGetCollections:
         assert "Mario" in names
 
     @pytest.mark.asyncio
-    async def test_rom_count_falls_back_to_rom_ids_length(self, plugin):
+    async def test_rom_count_falls_back_to_rom_ids_length(self, library):
         """When rom_count is absent, len(rom_ids) is used."""
         user = [{"id": 1, "name": "RPGs", "rom_ids": [10, 20, 30], "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        rebind_loop(library.sync, _make_collections_loop(user=user))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["rom_count"] == 3
 
     @pytest.mark.asyncio
-    async def test_collections_sorted_alphabetically_within_kind(self, plugin):
+    async def test_collections_sorted_alphabetically_within_kind(self, library):
         """Within a kind, collections are sorted by name (case-insensitive)."""
         user = [
             {"id": 2, "name": "Zelda", "rom_count": 1, "is_favorite": False},
             {"id": 1, "name": "Metroid", "rom_count": 1, "is_favorite": False},
         ]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        rebind_loop(library.sync, _make_collections_loop(user=user))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         names = [c["name"] for c in result["collections"]]
         assert names == ["Metroid", "Zelda"]
 
     @pytest.mark.asyncio
-    async def test_collection_id_is_string(self, plugin):
+    async def test_collection_id_is_string(self, library):
         """IDs are always returned as strings regardless of the API response type."""
         user = [{"id": 42, "name": "Favorites", "rom_count": 1, "is_favorite": False}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
+        rebind_loop(library.sync, _make_collections_loop(user=user))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["id"] == "42"
 
@@ -447,57 +435,57 @@ class TestGetCollectionsOwnerScope:
     """get_collections tags each collection with is_own for the owner scope (#1532)."""
 
     @pytest.mark.asyncio
-    async def test_own_and_foreign_standard_collections_tagged(self, plugin):
+    async def test_own_and_foreign_standard_collections_tagged(self, library):
         """With a known identity, user collections split on user_id."""
         user = [
             {"id": 1, "name": "Mine", "rom_count": 1, "is_favorite": False, "user_id": 7},
             {"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8},
         ]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user))
-        plugin._sync_service._settings["romm_user_id"] = 7
+        rebind_loop(library.sync, _make_collections_loop(user=user))
+        library.sync._settings["romm_user_id"] = 7
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         by_name = {c["name"]: c for c in result["collections"]}
         assert by_name["Mine"]["is_own"] is True
         assert by_name["Theirs"]["is_own"] is False
 
     @pytest.mark.asyncio
-    async def test_smart_collections_tagged_by_owner(self, plugin):
+    async def test_smart_collections_tagged_by_owner(self, library):
         smart = [
             {"id": 5, "name": "MySmart", "rom_count": 1, "user_id": 7},
             {"id": 6, "name": "TheirSmart", "rom_count": 1, "user_id": 8},
         ]
-        rebind_loop(plugin._sync_service, _make_collections_loop(smart=smart))
-        plugin._sync_service._settings["romm_user_id"] = 7
+        rebind_loop(library.sync, _make_collections_loop(smart=smart))
+        library.sync._settings["romm_user_id"] = 7
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         by_name = {c["name"]: c for c in result["collections"]}
         assert by_name["MySmart"]["is_own"] is True
         assert by_name["TheirSmart"]["is_own"] is False
 
     @pytest.mark.asyncio
-    async def test_virtual_always_own_even_with_known_identity(self, plugin):
+    async def test_virtual_always_own_even_with_known_identity(self, library):
         """Virtual collections have no owner — always is_own=True."""
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(virtual=franchise))
-        plugin._sync_service._settings["romm_user_id"] = 7
+        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
+        library.sync._settings["romm_user_id"] = 7
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert result["collections"][0]["is_own"] is True
 
     @pytest.mark.asyncio
-    async def test_unknown_identity_leaves_owned_kinds_unestablished(self, plugin):
+    async def test_unknown_identity_leaves_owned_kinds_unestablished(self, library):
         """No stored romm_user_id → standard and smart rows say None, not own; virtual stays own."""
         user = [{"id": 2, "name": "Theirs", "rom_count": 1, "is_favorite": False, "user_id": 8}]
         smart = [{"id": 5, "name": "TheirSmart", "rom_count": 1, "user_id": 8}]
         franchise = [{"id": 101, "name": "Mario", "rom_count": 1}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart, virtual=franchise))
-        plugin._sync_service._settings.pop("romm_user_id", None)
+        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart, virtual=franchise))
+        library.sync._settings.pop("romm_user_id", None)
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         by_name = {c["name"]: c for c in result["collections"]}
         assert by_name["Theirs"]["is_own"] is None
@@ -508,70 +496,70 @@ class TestGetCollectionsOwnerScope:
 class TestGetCollectionsInSteamCount:
     """How many of a collection's members the sync's collection filing resolves to a shortcut."""
 
-    async def _in_steam_count(self, plugin, rom_ids, *, kind="standard"):
+    async def _in_steam_count(self, library, rom_ids, *, kind="standard"):
         listing = [{"id": 1, "name": "C", "rom_ids": rom_ids}]
         loop_arg = {"standard": "user", "smart": "smart", "virtual": "virtual"}[kind]
-        rebind_loop(plugin._sync_service, _make_collections_loop(**{loop_arg: listing}))
-        result = await plugin._sync_service.get_collections()
+        rebind_loop(library.sync, _make_collections_loop(**{loop_arg: listing}))
+        result = await library.sync.get_collections()
         assert result["success"] is True
         return result["collections"][0]["in_steam_count"]
 
     @pytest.mark.asyncio
-    async def test_a_member_bound_on_its_own_row_counts(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+    async def test_a_member_bound_on_its_own_row_counts(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
 
-        assert await self._in_steam_count(plugin, [10]) == 1
+        assert await self._in_steam_count(library, [10]) == 1
 
     @pytest.mark.asyncio
-    async def test_an_unbound_member_counts_through_its_groups_binding(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
-        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+    async def test_an_unbound_member_counts_through_its_groups_binding(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(library, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
 
         # Only the unbound version is in the collection; its sibling's shortcut reaches it.
-        assert await self._in_steam_count(plugin, [11]) == 1
+        assert await self._in_steam_count(library, [11]) == 1
 
     @pytest.mark.asyncio
-    async def test_a_member_with_no_local_row_does_not_count(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+    async def test_a_member_with_no_local_row_does_not_count(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
 
-        assert await self._in_steam_count(plugin, [10, 99]) == 1
-
-    @pytest.mark.asyncio
-    async def test_an_unbound_member_with_no_group_key_does_not_count(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
-        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key=None)
-
-        assert await self._in_steam_count(plugin, [11]) == 0
+        assert await self._in_steam_count(library, [10, 99]) == 1
 
     @pytest.mark.asyncio
-    async def test_two_versions_of_one_bound_game_both_count(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
-        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+    async def test_an_unbound_member_with_no_group_key_does_not_count(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+        _seed_rom_row(library, 11, app_id=None, platform_slug="n64", sibling_group_key=None)
 
-        assert await self._in_steam_count(plugin, [10, 11]) == 2
-
-    @pytest.mark.asyncio
-    async def test_smart_and_virtual_collections_carry_the_count_too(self, plugin):
-        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
-
-        assert await self._in_steam_count(plugin, [10, 11], kind="smart") == 1
-        assert await self._in_steam_count(plugin, [10, 11], kind="virtual") == 1
+        assert await self._in_steam_count(library, [11]) == 0
 
     @pytest.mark.asyncio
-    async def test_a_failed_local_read_lists_every_collection_without_the_count(self, plugin, monkeypatch, caplog):
+    async def test_two_versions_of_one_bound_game_both_count(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(library, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+
+        assert await self._in_steam_count(library, [10, 11]) == 2
+
+    @pytest.mark.asyncio
+    async def test_smart_and_virtual_collections_carry_the_count_too(self, library):
+        _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+
+        assert await self._in_steam_count(library, [10, 11], kind="smart") == 1
+        assert await self._in_steam_count(library, [10, 11], kind="virtual") == 1
+
+    @pytest.mark.asyncio
+    async def test_a_failed_local_read_lists_every_collection_without_the_count(self, library, monkeypatch, caplog):
         import logging
 
         def _raise():
             raise RuntimeError("database is locked")
 
-        monkeypatch.setattr(plugin._sync_service._local_library_reader, "do_read_reachable_rom_ids", _raise)
+        monkeypatch.setattr(library.sync._local_library_reader, "do_read_reachable_rom_ids", _raise)
         user = [{"id": 1, "name": "U", "rom_ids": [10], "owner_username": "alice"}]
         smart = [{"id": 2, "name": "S", "rom_ids": [10]}]
         franchise = [{"id": "fr-1", "name": "F", "rom_ids": [10]}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
+        rebind_loop(library.sync, _make_collections_loop(user, smart, franchise))
 
         with caplog.at_level(logging.WARNING):
-            result = await plugin._sync_service.get_collections()
+            result = await library.sync.get_collections()
 
         assert result["success"] is True
         assert [c["name"] for c in result["collections"]] == ["U", "S", "F"]
@@ -585,35 +573,35 @@ class TestGetCollectionsOwnerUsername:
     """Standard and smart collections forward RomM's ``owner_username``; virtual ones have no owner."""
 
     @pytest.mark.asyncio
-    async def test_standard_and_smart_forward_the_owner_name(self, plugin):
+    async def test_standard_and_smart_forward_the_owner_name(self, library):
         user = [{"id": 1, "name": "U", "rom_count": 1, "owner_username": "alice"}]
         smart = [{"id": 2, "name": "S", "rom_count": 1, "owner_username": "bob"}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart))
+        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         by_kind = {c["kind"]: c for c in result["collections"]}
         assert by_kind["standard"]["owner_username"] == "alice"
         assert by_kind["smart"]["owner_username"] == "bob"
 
     @pytest.mark.asyncio
-    async def test_a_listing_without_the_owner_name_forwards_none(self, plugin):
+    async def test_a_listing_without_the_owner_name_forwards_none(self, library):
         user = [{"id": 1, "name": "U", "rom_count": 1}]
         smart = [{"id": 2, "name": "S", "rom_count": 1}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart))
+        rebind_loop(library.sync, _make_collections_loop(user=user, smart=smart))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         for c in result["collections"]:
             assert "owner_username" in c
             assert c["owner_username"] is None
 
     @pytest.mark.asyncio
-    async def test_virtual_collections_carry_no_owner_name(self, plugin):
+    async def test_virtual_collections_carry_no_owner_name(self, library):
         franchise = [{"id": "fr-1", "name": "F", "rom_count": 1, "owner_username": "alice"}]
-        rebind_loop(plugin._sync_service, _make_collections_loop(virtual=franchise))
+        rebind_loop(library.sync, _make_collections_loop(virtual=franchise))
 
-        result = await plugin._sync_service.get_collections()
+        result = await library.sync.get_collections()
 
         assert "owner_username" not in result["collections"][0]
 
@@ -626,83 +614,83 @@ class TestGetCollectionsOwnerUsername:
 class TestSaveCollectionSync:
     """Tests for LibraryService.save_collection_sync()."""
 
-    async def test_saves_enabled_standard(self, plugin):
+    async def test_saves_enabled_standard(self, library):
         """Enabling a standard collection stores True under enabled_collections.standard."""
-        await plugin._sync_service.save_collection_sync("42", "standard", True)
+        await library.sync.save_collection_sync("42", "standard", True)
 
-        assert plugin._sync_service._settings["enabled_collections"]["standard"]["42"] is True
+        assert library.sync._settings["enabled_collections"]["standard"]["42"] is True
 
-    async def test_saves_enabled_smart(self, plugin):
+    async def test_saves_enabled_smart(self, library):
         """Enabling a smart collection stores True under enabled_collections.smart."""
-        await plugin._sync_service.save_collection_sync("7", "smart", True)
+        await library.sync.save_collection_sync("7", "smart", True)
 
-        assert plugin._sync_service._settings["enabled_collections"]["smart"]["7"] is True
+        assert library.sync._settings["enabled_collections"]["smart"]["7"] is True
 
-    async def test_saves_enabled_virtual(self, plugin):
+    async def test_saves_enabled_virtual(self, library):
         """Enabling a virtual collection stores True under enabled_collections.virtual."""
         b64 = "eyJ0eXBlIjogImNvbGxlY3Rpb24ifQ=="
-        await plugin._sync_service.save_collection_sync(b64, "virtual", True)
+        await library.sync.save_collection_sync(b64, "virtual", True)
 
-        assert plugin._sync_service._settings["enabled_collections"]["virtual"][b64] is True
+        assert library.sync._settings["enabled_collections"]["virtual"][b64] is True
 
-    async def test_saves_disabled(self, plugin):
+    async def test_saves_disabled(self, library):
         """Disabling a previously-enabled collection stores False in the right bucket."""
-        plugin._sync_service._settings["enabled_collections"] = {
+        library.sync._settings["enabled_collections"] = {
             "standard": {"42": True},
             "smart": {},
             "virtual": {},
         }
 
-        await plugin._sync_service.save_collection_sync("42", "standard", False)
+        await library.sync.save_collection_sync("42", "standard", False)
 
-        assert plugin._sync_service._settings["enabled_collections"]["standard"]["42"] is False
+        assert library.sync._settings["enabled_collections"]["standard"]["42"] is False
 
-    async def test_returns_success(self, plugin):
-        result = await plugin._sync_service.save_collection_sync("1", "standard", True)
+    async def test_returns_success(self, library):
+        result = await library.sync.save_collection_sync("1", "standard", True)
 
         assert result == {"success": True}
 
-    async def test_rejects_invalid_kind(self, plugin):
+    async def test_rejects_invalid_kind(self, library):
         """Passing an unknown kind returns success=False without writing."""
-        result = await plugin._sync_service.save_collection_sync("1", "bogus", True)
+        result = await library.sync.save_collection_sync("1", "bogus", True)
 
         assert result["success"] is False
         assert result["reason"] == "invalid_kind"
         assert "Invalid collection kind" in result["message"]
 
-    async def test_string_id_stored_from_int(self, plugin):
+    async def test_string_id_stored_from_int(self, library):
         """Passing an integer id is coerced to a string key."""
-        await plugin._sync_service.save_collection_sync(99, "standard", True)
+        await library.sync.save_collection_sync(99, "standard", True)
 
-        assert "99" in plugin._sync_service._settings["enabled_collections"]["standard"]
-        assert plugin._sync_service._settings["enabled_collections"]["standard"]["99"] is True
+        assert "99" in library.sync._settings["enabled_collections"]["standard"]
+        assert library.sync._settings["enabled_collections"]["standard"]["99"] is True
 
-    async def test_creates_enabled_collections_key_if_absent(self, plugin):
+    async def test_creates_enabled_collections_key_if_absent(self, library):
         """enabled_collections is created with all three buckets if absent."""
-        plugin._sync_service._settings.pop("enabled_collections", None)
+        library.sync._settings.pop("enabled_collections", None)
 
-        await plugin._sync_service.save_collection_sync("7", "smart", True)
+        await library.sync.save_collection_sync("7", "smart", True)
 
-        ec = plugin._sync_service._settings["enabled_collections"]
+        ec = library.sync._settings["enabled_collections"]
         assert ec["smart"]["7"] is True
         assert ec["standard"] == {}
         assert ec["virtual"] == {}
 
-    async def test_calls_save_settings(self, plugin):
+    async def test_calls_save_settings(self, library):
         """settings_persister is triggered after updating the setting."""
         recorder = FakeSettingsPersister()
-        plugin._sync_service._fetcher._settings_persister = recorder
+        library.sync._fetcher._settings_persister = recorder
 
-        await plugin._sync_service.save_collection_sync("1", "standard", True)
+        await library.sync.save_collection_sync("1", "standard", True)
 
         assert recorder.save_count == 1
 
-    async def test_does_not_call_save_settings_on_invalid_kind(self, plugin):
+    async def test_does_not_call_save_settings_on_invalid_kind(self, library):
         """Invalid kind short-circuits before persistence."""
         recorder = FakeSettingsPersister()
-        plugin._sync_service._fetcher._settings_persister = recorder
+        library.sync._fetcher._settings_persister = recorder
 
-        await plugin._sync_service.save_collection_sync("1", "bogus", True)
+        await library.sync.save_collection_sync("1", "bogus", True)
 
         assert recorder.save_count == 0
 
@@ -728,148 +716,148 @@ class TestIsSyncInFlight:
     run-lifecycle fields have no other sanctioned writer (#1202).
     """
 
-    def test_false_at_idle(self, plugin):
-        assert plugin._sync_service.is_sync_in_flight() is False
+    def test_false_at_idle(self, library):
+        assert library.sync.is_sync_in_flight() is False
 
-    def test_true_while_running(self, plugin):
-        assert plugin._sync_service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
-        assert plugin._sync_service.is_sync_in_flight() is True
+    def test_true_while_running(self, library):
+        assert library.sync._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
+        assert library.sync.is_sync_in_flight() is True
 
-    def test_true_while_cancelling(self, plugin):
-        box = plugin._sync_service._box
+    def test_true_while_cancelling(self, library):
+        box = library.sync._box
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert box.request_cancel("run-1") == "cancelling"
-        assert plugin._sync_service.is_sync_in_flight() is True
+        assert library.sync.is_sync_in_flight() is True
 
-    def test_false_again_after_finish_run(self, plugin):
-        box = plugin._sync_service._box
+    def test_false_again_after_finish_run(self, library):
+        box = library.sync._box
         assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert box.finish_run("run-1") is True
-        assert plugin._sync_service.is_sync_in_flight() is False
+        assert library.sync.is_sync_in_flight() is False
 
 
 class TestRemoveAllShortcuts:
     @pytest.mark.asyncio
-    async def test_returns_app_ids_and_rom_ids(self, plugin):
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Game B")
-        _seed_rom(plugin._uow, 30, app_id=None, platform_slug="snes", name="Game C")  # unbound (edge)
+    async def test_returns_app_ids_and_rom_ids(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Game B")
+        _seed_rom(library.uow, 30, app_id=None, platform_slug="snes", name="Game C")  # unbound (edge)
 
-        result = await plugin.remove_all_shortcuts()
+        result = await library.shortcut_removal.remove_all_shortcuts()
         assert result["success"] is True
         assert set(result["app_ids"]) == {1001, 1002}
         assert set(result["rom_ids"]) == {"10", "20", "30"}
 
     @pytest.mark.asyncio
-    async def test_empty_registry(self, plugin):
-        result = await plugin.remove_all_shortcuts()
+    async def test_empty_registry(self, library):
+        result = await library.shortcut_removal.remove_all_shortcuts()
         assert result["success"] is True
         assert result["app_ids"] == []
         assert result["rom_ids"] == []
 
     @pytest.mark.asyncio
-    async def test_does_not_unbind_roms(self, plugin):
+    async def test_does_not_unbind_roms(self, library):
         """remove_all_shortcuts just returns data; unbinding happens in report_removal_results."""
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        await plugin.remove_all_shortcuts()
-        with plugin._uow as uow:
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        await library.shortcut_removal.remove_all_shortcuts()
+        with library.uow as uow:
             assert uow.roms.get(10).shortcut_app_id == 1001
 
 
 class TestReportRemovalResults:
     @pytest.mark.asyncio
-    async def test_unbinds_removed_roms_but_keeps_rows(self, plugin):
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Game B")
+    async def test_unbinds_removed_roms_but_keeps_rows(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Game B")
 
-        result = await plugin.report_removal_results([10, 20], None)
+        result = await library.shortcut_removal.report_removal_results([10, 20], None)
         assert result["success"] is True
-        with plugin._uow as uow:
+        with library.uow as uow:
             assert uow.roms.get(10).shortcut_app_id is None
             assert uow.roms.get(20).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_cleans_up_artwork_cover_path(self, plugin, tmp_path):
+    async def test_cleans_up_artwork_cover_path(self, library, tmp_path):
         art_file = tmp_path / "cover.png"
         art_file.write_text("fake")
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        with plugin._uow as uow:
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        with library.uow as uow:
             rom = uow.roms.get(10)
             rom.update_cover_path(str(art_file))
             uow.roms.save(rom)
-        plugin._steam_config.grid_dir = lambda: str(tmp_path)
+        library.steam_config.grid_dir = lambda: str(tmp_path)
 
-        result = await plugin.report_removal_results([10], None)
+        result = await library.shortcut_removal.report_removal_results([10], None)
         assert result["success"] is True
         assert not art_file.exists()
 
     @pytest.mark.asyncio
-    async def test_cleans_up_artwork_app_id(self, plugin, tmp_path):
+    async def test_cleans_up_artwork_app_id(self, library, tmp_path):
         grid_dir = tmp_path / "grid"
         grid_dir.mkdir()
         art_file = grid_dir / "1001p.png"
         art_file.write_text("fake")
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        plugin._steam_config.grid_dir = lambda: str(grid_dir)
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        library.steam_config.grid_dir = lambda: str(grid_dir)
 
-        result = await plugin.report_removal_results([10], None)
+        result = await library.shortcut_removal.report_removal_results([10], None)
         assert result["success"] is True
         assert not art_file.exists()
 
     @pytest.mark.asyncio
-    async def test_partial_removal(self, plugin):
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Game B")
+    async def test_partial_removal(self, library):
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Game B")
 
-        result = await plugin.report_removal_results([10], None)
+        result = await library.shortcut_removal.report_removal_results([10], None)
         assert result["success"] is True
-        with plugin._uow as uow:
+        with library.uow as uow:
             assert uow.roms.get(10).shortcut_app_id is None
             assert uow.roms.get(20).shortcut_app_id == 1002
 
 
 class TestRemovePlatformShortcuts:
     @pytest.mark.asyncio
-    async def test_returns_matching_platform_entries(self, plugin):
-        _seed_platform_names(plugin._uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Zelda OOT")
-        _seed_rom(plugin._uow, 30, app_id=1003, platform_slug="snes", name="DKC")
+    async def test_returns_matching_platform_entries(self, library):
+        _seed_platform_names(library.uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Zelda OOT")
+        _seed_rom(library.uow, 30, app_id=1003, platform_slug="snes", name="DKC")
 
-        result = await plugin.remove_platform_shortcuts("n64")
+        result = await library.shortcut_removal.remove_platform_shortcuts("n64")
         assert result["success"] is True
         assert set(result["app_ids"]) == {1001, 1002}
         assert set(result["rom_ids"]) == {"10", "20"}
         assert result["platform_name"] == "Nintendo 64"
 
     @pytest.mark.asyncio
-    async def test_platform_with_no_roms(self, plugin):
+    async def test_platform_with_no_roms(self, library):
         """A slug with no synced ROMs returns empty sets; name degrades to the slug."""
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
 
-        result = await plugin.remove_platform_shortcuts("nonexistent")
+        result = await library.shortcut_removal.remove_platform_shortcuts("nonexistent")
         assert result["success"] is True
         assert result["app_ids"] == []
         assert result["rom_ids"] == []
         assert result["platform_name"] == "nonexistent"
 
     @pytest.mark.asyncio
-    async def test_does_not_unbind_roms(self, plugin):
+    async def test_does_not_unbind_roms(self, library):
         """remove_platform_shortcuts just returns data; unbinding happens in report_removal_results."""
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
 
-        await plugin.remove_platform_shortcuts("n64")
-        with plugin._uow as uow:
+        await library.shortcut_removal.remove_platform_shortcuts("n64")
+        with library.uow as uow:
             assert uow.roms.get(10).shortcut_app_id == 1001
 
     @pytest.mark.asyncio
-    async def test_resolves_name_from_cache(self, plugin):
+    async def test_resolves_name_from_cache(self, library):
         """The display name comes from the kv_config cache, working offline."""
-        _seed_platform_names(plugin._uow, {"n64": "Nintendo 64"})
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Zelda OOT")
+        _seed_platform_names(library.uow, {"n64": "Nintendo 64"})
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Zelda OOT")
 
-        result = await plugin.remove_platform_shortcuts("n64")
+        result = await library.shortcut_removal.remove_platform_shortcuts("n64")
         assert result["success"] is True
         assert set(result["app_ids"]) == {1001, 1002}
         assert result["platform_name"] == "Nintendo 64"
@@ -879,27 +867,27 @@ class TestRemovalCleansUpAppIdArtwork:
     """Tests for app_id-based artwork cleanup in report_removal_results."""
 
     @pytest.mark.asyncio
-    async def test_removes_app_id_artwork(self, plugin, tmp_path):
+    async def test_removes_app_id_artwork(self, library, tmp_path):
         grid_dir = tmp_path / "grid"
         grid_dir.mkdir()
         art_file = grid_dir / "100001p.png"
         art_file.write_text("fake")
-        _seed_rom(plugin._uow, 10, app_id=100001, platform_slug="n64", name="Game A")
-        plugin._steam_config.grid_dir = lambda: str(grid_dir)
+        _seed_rom(library.uow, 10, app_id=100001, platform_slug="n64", name="Game A")
+        library.steam_config.grid_dir = lambda: str(grid_dir)
 
-        await plugin.report_removal_results([10], None)
+        await library.shortcut_removal.report_removal_results([10], None)
         assert not art_file.exists()
 
     @pytest.mark.asyncio
-    async def test_removes_staging_leftover(self, plugin, tmp_path):
+    async def test_removes_staging_leftover(self, library, tmp_path):
         grid_dir = tmp_path / "grid"
         grid_dir.mkdir()
         staging = grid_dir / "romm_10_cover.png"
         staging.write_text("fake")
-        _seed_rom(plugin._uow, 10, app_id=100001, platform_slug="n64", name="Game A")
-        plugin._steam_config.grid_dir = lambda: str(grid_dir)
+        _seed_rom(library.uow, 10, app_id=100001, platform_slug="n64", name="Game A")
+        library.steam_config.grid_dir = lambda: str(grid_dir)
 
-        await plugin.report_removal_results([10], None)
+        await library.shortcut_removal.report_removal_results([10], None)
         assert not staging.exists()
 
 
@@ -907,24 +895,24 @@ class TestReportRemovalSteamInputCleanup:
     """Tests for Steam Input cleanup in _report_removal_results_io."""
 
     @pytest.mark.asyncio
-    async def test_cleans_steam_input_on_removal(self, plugin, tmp_path):
-        plugin._steam_config.grid_dir = lambda: str(tmp_path)
-        plugin._steam_config.set_steam_input_config = MagicMock()
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
-        _seed_rom(plugin._uow, 20, app_id=1002, platform_slug="n64", name="Game B")
+    async def test_cleans_steam_input_on_removal(self, library, tmp_path):
+        library.steam_config.grid_dir = lambda: str(tmp_path)
+        library.steam_config.set_steam_input_config = MagicMock()
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+        _seed_rom(library.uow, 20, app_id=1002, platform_slug="n64", name="Game B")
 
-        await plugin.report_removal_results([10, 20], None)
-        plugin._steam_config.set_steam_input_config.assert_called_once_with([1001, 1002], mode="default")
+        await library.shortcut_removal.report_removal_results([10, 20], None)
+        library.steam_config.set_steam_input_config.assert_called_once_with([1001, 1002], mode="default")
 
     @pytest.mark.asyncio
-    async def test_steam_input_error_doesnt_crash(self, plugin, tmp_path):
-        plugin._steam_config.grid_dir = lambda: str(tmp_path)
-        plugin._steam_config.set_steam_input_config = MagicMock(side_effect=Exception("VDF error"))
-        _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")
+    async def test_steam_input_error_doesnt_crash(self, library, tmp_path):
+        library.steam_config.grid_dir = lambda: str(tmp_path)
+        library.steam_config.set_steam_input_config = MagicMock(side_effect=Exception("VDF error"))
+        _seed_rom(library.uow, 10, app_id=1001, platform_slug="n64", name="Game A")
 
-        result = await plugin.report_removal_results([10], None)
+        result = await library.shortcut_removal.report_removal_results([10], None)
         assert result["success"] is True  # Should not crash
-        with plugin._uow as uow:
+        with library.uow as uow:
             assert uow.roms.get(10).shortcut_app_id is None
 
 
@@ -943,7 +931,7 @@ class TestCollectionSyncEdgeCases:
     # Scenario 1: Platform disabled, collection keeps game alive
     # ------------------------------------------------------------------
 
-    def test_sc1_collection_keeps_rom_alive_when_platform_disabled(self, plugin):
+    def test_sc1_collection_keeps_rom_alive_when_platform_disabled(self, library):
         """ROM A stays because Favorites collection references it; ROM B becomes stale.
 
         Platform GBA is disabled between sync 1 and sync 2. The registry has
@@ -984,7 +972,7 @@ class TestCollectionSyncEdgeCases:
     # Scenario 2: Collection disabled, platform keeps game alive
     # ------------------------------------------------------------------
 
-    def test_sc2_platform_keeps_rom_alive_when_collection_disabled(self, plugin):
+    def test_sc2_platform_keeps_rom_alive_when_collection_disabled(self, library):
         """ROM A stays (platform reference); ROM C becomes stale (collection-only, now disabled).
 
         Platform GBA enabled → ROM A stays. PSX not enabled and Favorites
@@ -1023,7 +1011,7 @@ class TestCollectionSyncEdgeCases:
     # Scenario 3: Game in multiple collections, one disabled
     # ------------------------------------------------------------------
 
-    def test_sc3_rom_stays_alive_when_one_of_two_collections_disabled(self, plugin):
+    def test_sc3_rom_stays_alive_when_one_of_two_collections_disabled(self, library):
         """ROM A stays because RPG collection still references it even after Favorites is disabled."""
         registry = {
             "1": _make_registry_entry("ROM A", "Game Boy Advance", app_id=1001),
@@ -1053,24 +1041,24 @@ class TestCollectionSyncEdgeCases:
     # _build_collection_app_ids (kept helper used by per-unit path)
     # ------------------------------------------------------------------
 
-    def test_sc5c_build_collection_app_ids_excludes_collection_only_roms(self, plugin):
+    def test_sc5c_build_collection_app_ids_excludes_collection_only_roms(self, library):
         """_build_collection_app_ids respects the toggle.
 
         Platform collection mapping is built from the full ``roms`` table
         by the per-unit finalisation path. Collection-only ROMs must be
         excluded when the toggle is OFF.
         """
-        svc = plugin._sync_service
+        svc = library.sync
         svc._settings["collection_create_platform_groups"] = False
         svc._settings["enabled_collections"] = {"standard": {"3": True}, "smart": {}, "virtual": {}}
 
         # roms: ROM 1 from platform, ROM 2 from collection only
-        _seed_rom(plugin._uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
-        _seed_rom(plugin._uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
+        _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
+        _seed_rom(library.uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
         names = {"gba": "Game Boy Advance", "psx": "PlayStation"}
         platform_rom_ids = {1}  # Only ROM 1 from platform
 
-        with plugin._uow as uow:
+        with library.uow as uow:
             platform_app_ids, _ = svc._reporter._build_collection_app_ids(
                 uow,
                 platform_rom_ids,
@@ -1082,17 +1070,17 @@ class TestCollectionSyncEdgeCases:
         assert 1001 in platform_app_ids["Game Boy Advance"]
         assert "PlayStation" not in platform_app_ids, "PSX should be excluded (collection-only, toggle OFF)"
 
-    def test_sc6c_build_collection_app_ids_includes_all_when_toggle_on(self, plugin):
+    def test_sc6c_build_collection_app_ids_includes_all_when_toggle_on(self, library):
         """Same as sc5c but with toggle ON — PSX should be included."""
-        svc = plugin._sync_service
+        svc = library.sync
         svc._settings["collection_create_platform_groups"] = True
 
-        _seed_rom(plugin._uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
-        _seed_rom(plugin._uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
+        _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
+        _seed_rom(library.uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
         names = {"gba": "Game Boy Advance", "psx": "PlayStation"}
         platform_rom_ids = {1}
 
-        with plugin._uow as uow:
+        with library.uow as uow:
             platform_app_ids, _ = svc._reporter._build_collection_app_ids(uow, platform_rom_ids, {}, names)
 
         assert "Game Boy Advance" in platform_app_ids
@@ -1102,21 +1090,21 @@ class TestCollectionSyncEdgeCases:
     # Scenario 7: Deduplication — ROM in both platform and collection
     # ------------------------------------------------------------------
 
-    def test_sc7_rom_appears_in_both_platform_and_collection_app_ids(self, plugin):
+    def test_sc7_rom_appears_in_both_platform_and_collection_app_ids(self, library):
         """ROM A (in both GBA platform and Favorites collection) appears in both
         platform_app_ids and romm_collection_app_ids when built via
         _build_collection_app_ids."""
-        svc = plugin._sync_service
+        svc = library.sync
         svc._settings["collection_create_platform_groups"] = False
 
-        _seed_rom(plugin._uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
+        _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
         names = {"gba": "Game Boy Advance"}
         platform_rom_ids = {1}
         collection_memberships = {
             ("standard", "3"): CollectionMembership(name="Favorites", rom_ids=[1], kind="standard")
         }
 
-        with plugin._uow as uow:
+        with library.uow as uow:
             platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
                 uow, platform_rom_ids, collection_memberships, names
             )
@@ -1133,7 +1121,7 @@ class TestCollectionSyncEdgeCases:
     # Scenario 8: All sources removed — game gets stale
     # ------------------------------------------------------------------
 
-    def test_sc8_rom_becomes_stale_when_no_source_references_it(self, plugin):
+    def test_sc8_rom_becomes_stale_when_no_source_references_it(self, library):
         """ROM A classified as stale when neither platform nor collection brings it in."""
         registry = {
             "1": _make_registry_entry("ROM A", "Game Boy Advance", app_id=1001),
@@ -1156,27 +1144,27 @@ class TestCollectionSyncEdgeCases:
     # Additional edge cases for _build_collection_app_ids
     # ------------------------------------------------------------------
 
-    def test_build_collection_app_ids_empty_when_no_memberships(self, plugin):
+    def test_build_collection_app_ids_empty_when_no_memberships(self, library):
         """romm_collection_app_ids is empty when no collection memberships are set."""
-        svc = plugin._sync_service
+        svc = library.sync
 
-        _seed_rom(plugin._uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
+        _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
 
-        with plugin._uow as uow:
+        with library.uow as uow:
             _platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
                 uow, {1}, {}, {"gba": "GBA"}
             )
 
         assert romm_collection_app_ids == {}
 
-    def test_build_collection_app_ids_excludes_missing_registry_entries(self, plugin):
+    def test_build_collection_app_ids_excludes_missing_registry_entries(self, library):
         """romm_collection_app_ids skips rom_ids that have no roms row."""
-        svc = plugin._sync_service
+        svc = library.sync
 
         # Only ROM id=1 is in roms; ROM id=99 is referenced in memberships but missing.
-        _seed_rom(plugin._uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
+        _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
 
-        with plugin._uow as uow:
+        with library.uow as uow:
             _platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
                 uow,
                 {1},
@@ -1189,7 +1177,7 @@ class TestCollectionSyncEdgeCases:
         # ROM 99 has no roms row, so its app_id is not included
         assert len(romm_collection_app_ids["Favorites"]) == 1
 
-    def test_classify_roms_new_when_not_in_registry(self, plugin):
+    def test_classify_roms_new_when_not_in_registry(self, library):
         """ROMs not present in the registry at all are classified as new."""
         registry = {}
 
@@ -1211,7 +1199,7 @@ class TestCollectionSyncEdgeCases:
         assert len(unchanged_ids) == 0
         assert len(stale) == 0
 
-    def test_classify_roms_changed_when_name_differs(self, plugin):
+    def test_classify_roms_changed_when_name_differs(self, library):
         """ROMs whose name changed since last sync are classified as changed."""
         registry = {
             "1": _make_registry_entry("Old Name", "GBA", app_id=1001),

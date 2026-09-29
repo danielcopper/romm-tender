@@ -24,6 +24,7 @@ class TestRoundTrip:
         assert loaded == stamp
         assert loaded.completed_at == "2026-03-01T12:00:00+00:00"
         assert loaded.rom_count == 2091
+        assert loaded.skip_revoked is False
 
 
 class TestMiss:
@@ -68,6 +69,39 @@ class TestDelete:
         assert uow.platform_sync_state.get("nope") is None
 
 
+class TestRevokeSkip:
+    def test_revoke_flags_only_the_named_slug_and_keeps_the_stamp(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=3, fetch_id="run-1")
+        )
+        uow.platform_sync_state.save(_stamp("snes"))
+
+        uow.platform_sync_state.revoke_skip("n64")
+
+        n64 = uow.platform_sync_state.get("n64")
+        snes = uow.platform_sync_state.get("snes")
+        assert n64 is not None
+        assert (n64.completed_at, n64.rom_count, n64.fetch_id) == ("2026-01-01T00:00:00+00:00", 3, "run-1")
+        assert n64.skip_revoked is True
+        assert snes is not None
+        assert snes.skip_revoked is False
+
+    def test_revoke_absent_slug_is_noop(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.revoke_skip("nope")  # no row → no error, and none created
+        assert uow.platform_sync_state.get("nope") is None
+
+    def test_a_fresh_stamp_clears_the_flag(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.save(_stamp("n64", at="2026-01-01T00:00:00+00:00"))
+        uow.platform_sync_state.revoke_skip("n64")
+
+        uow.platform_sync_state.save(_stamp("n64", at="2026-02-01T00:00:00+00:00"))
+
+        loaded = uow.platform_sync_state.get("n64")
+        assert loaded is not None
+        assert loaded.completed_at == "2026-02-01T00:00:00+00:00"
+        assert loaded.skip_revoked is False
+
+
 class TestHasAny:
     def test_false_when_no_stamps(self, uow: SqliteUnitOfWork):
         assert uow.platform_sync_state.has_any() is False
@@ -87,6 +121,16 @@ class TestHasAny:
         uow.platform_sync_state.delete("snes")
         assert uow.platform_sync_state.has_any() is False
 
+    def test_a_revoked_stamp_is_not_counted(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.save(_stamp("n64"))
+        uow.platform_sync_state.save(_stamp("snes"))
+
+        uow.platform_sync_state.revoke_skip("n64")
+        assert uow.platform_sync_state.has_any() is True
+
+        uow.platform_sync_state.revoke_skip("snes")
+        assert uow.platform_sync_state.has_any() is False
+
     def test_false_after_clear(self, uow: SqliteUnitOfWork):
         uow.platform_sync_state.save(_stamp("n64"))
         uow.platform_sync_state.clear()
@@ -103,6 +147,14 @@ class TestClear:
 
         assert uow.platform_sync_state.get("n64") is None
         assert uow.platform_sync_state.get("snes") is None
+
+    def test_clear_removes_a_revoked_stamp_too(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.save(_stamp("n64"))
+        uow.platform_sync_state.revoke_skip("n64")
+
+        uow.platform_sync_state.clear()
+
+        assert uow.platform_sync_state.get("n64") is None
 
     def test_clear_is_idempotent_when_empty(self, uow: SqliteUnitOfWork):
         uow.platform_sync_state.clear()

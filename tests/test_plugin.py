@@ -1,166 +1,44 @@
-import asyncio
-import json
 import logging
-import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _conflict_rules import endpoints_with_rule
 from _factories import _make_conflict_rules, _make_prune_conflicts
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
-from fakes.fake_path_exists_reader import FakePathExistsReader
-from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
-from fakes.fake_resolved_path import FakeResolvedPath
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_settings_persister import FakeSettingsPersister
-from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
-from fakes.library_peers import FakeArtworkManager
-from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
-from adapters.debug_logger import SettingsAwareDebugLogger
-from adapters.persistence import PersistenceAdapter, SettingsPersisterAdapter
 from adapters.steam_config import SteamConfigAdapter
 from host import HostStatus
-from lib.retrodeck_health import RetroDeckConfigHealth
 from main import Plugin
-from services.connection import ConnectionService, ConnectionServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
-from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
-from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
 
 @pytest.fixture
-def plugin(logger, home, data_dir):
+def plugin(logger, home):
     p = Plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._http_adapter = MagicMock()
-    p._romm_api = MagicMock()
-    # Default to "/tmp" so the prune guard sees an existing home in tests that
-    # don't override it. Tests exercising the guard rebuild this with a
-    # non-existent path or empty string.
-    p._retrodeck_paths = FakeRetroDeckPaths(home="/tmp")
-    # Default migration service mock — no migration pending.
-    p._migration_service = MagicMock()
-    p._migration_service.is_retrodeck_migration_pending.return_value = False
-    p._prune_service = MagicMock()
-    conflict_rules = _make_conflict_rules()
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    p._settings_persister = FakeSettingsPersister()
-
-    p._sync_service = LibraryService(
-        config=LibraryServiceConfig(
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            # An emit that answers every event as heard.
-            emit=AsyncMock(return_value=True),
-            clock=FakeClock(),
-            uuid_gen=FakeUuidGen(),
-            sleeper=FakeSleeper(),
-            settings_persister=p._settings_persister,
-            log_debug=p._log_debug,
-            artwork=FakeArtworkManager(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            renderer_rss=FakeRendererRss(),
-            renderer_gc=FakeRendererGc(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._sgdb_service = SteamGridService(
-        config=SteamGridServiceConfig(
-            sgdb_api=MagicMock(),
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root=data_dir),
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            settings_persister=FakeSettingsPersister(),
-            get_pending_sync=lambda: p._sync_service._pending_sync,
-            log_debug=p._log_debug,
-            uow_factory=FakeUnitOfWorkFactory(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
     p._settings_service = SettingsService(
         config=SettingsServiceConfig(
             settings=p.settings,
             uow_factory=FakeUnitOfWorkFactory(),
             logger=logger,
-            settings_persister=p._settings_persister,
-            steam_config=steam_config,
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._connection_service = ConnectionService(
-        config=ConnectionServiceConfig(
-            settings=p.settings,
-            romm_api=p._romm_api,
-            settings_persister=p._settings_persister,
-            loop=running_loop(),
-            logger=logger,
-            min_required_version=Plugin._MIN_REQUIRED_VERSION,
-            forget_device=MagicMock(),
-            clear_playtime_scope_notice=MagicMock(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._startup_healing_service = StartupHealingService(
-        config=StartupHealingServiceConfig(
-            logger=logger,
-            clock=FakeClock(),
-            retrodeck_paths=p._retrodeck_paths,
-            path_probe=FakePathExistsReader(),
-            resolve_path=FakeResolvedPath(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            relaunch_options=FakeRelaunchOptionsResolver(),
-            loop=running_loop(),
-            conflict_rules=conflict_rules,
+            settings_persister=FakeSettingsPersister(),
+            steam_config=SteamConfigAdapter(user_home=str(home), logger=logger),
+            conflict_rules=_make_conflict_rules(),
         ),
     )
     return p
 
 
-class TestPersistenceAttributeIsLoud:
-    """Regression for #350: dropped the lazy-property fallback.
-
-    Pre-``_main()`` access to ``self._persistence`` must raise
-    ``AttributeError`` instead of silently constructing a second
-    ``PersistenceAdapter`` instance.
-    """
-
-    def test_attribute_missing_on_bare_plugin(self):
-        """Direct access to _persistence pre-_main() raises — no lazy fallback."""
-        from main import Plugin
-
-        bare = Plugin()
-
-        with pytest.raises(AttributeError, match="_persistence"):
-            _ = bare._persistence
+class TestUnsetSlotsAreLoud:
+    """A test-only slot on ``Plugin`` is an annotation, not an attribute: bare access raises."""
 
     def test_settings_persister_missing_on_bare_plugin(self):
-        """``_settings_persister`` is bound only by ``_main()``; bare access raises."""
+        """``_settings_persister`` is never set by production; bare access raises."""
         from main import Plugin
 
         bare = Plugin()
@@ -169,168 +47,7 @@ class TestPersistenceAttributeIsLoud:
             _ = bare._settings_persister
 
 
-class TestSettings:
-    @pytest.mark.asyncio
-    async def test_get_settings_reports_token_present(self, plugin):
-        plugin.settings["romm_api_token"] = "rmm_abc"
-        result = plugin.get_settings()
-        assert result["has_token"] is True
-        # The token itself is never sent to the frontend.
-        assert "rmm_abc" not in str(result)
-
-    @pytest.mark.asyncio
-    async def test_get_settings_reports_token_absent(self, plugin):
-        plugin.settings["romm_api_token"] = None
-        result = plugin.get_settings()
-        assert result["has_token"] is False
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_persists_url(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        result = await plugin.save_server_url("http://example.com")
-        assert result["success"] is True
-        assert plugin.settings["romm_url"] == "http://example.com"
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_does_not_touch_token(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_api_token"] = "rmm_keep"
-        await plugin.save_server_url("http://example.com")
-        assert plugin.settings["romm_api_token"] == "rmm_keep"
-
-
-class TestConnection:
-    @pytest.mark.asyncio
-    async def test_test_connection_sets_version_on_romm_api(self, plugin, logger):
-        plugin.loop = asyncio.get_running_loop()
-        plugin.settings["romm_url"] = "http://romm.local"
-        plugin.settings["romm_api_token"] = "rmm_token"
-        plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
-        plugin._romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
-        # Rebuild connection service with the live event loop so executor
-        # callbacks dispatch on the same loop the test awaits.
-        plugin._connection_service = ConnectionService(
-            config=ConnectionServiceConfig(
-                settings=plugin.settings,
-                romm_api=plugin._romm_api,
-                settings_persister=MagicMock(),
-                loop=plugin.loop,
-                logger=logger,
-                min_required_version=Plugin._MIN_REQUIRED_VERSION,
-                forget_device=MagicMock(),
-                clear_playtime_scope_notice=MagicMock(),
-                conflict_rules=_make_conflict_rules(),
-            ),
-        )
-        result = await plugin.test_connection()
-        assert result["success"] is True
-        plugin._romm_api.set_version.assert_called_once_with("5.3.0")
-
-
 class TestLogLevel:
-    def test_log_debug_enabled(self, plugin, logger):
-        """_log_debug logs when log_level is 'debug'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "debug"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_called_once_with("test message")
-
-    def test_log_debug_disabled_at_warn(self, plugin, logger):
-        """_log_debug does not log when log_level is 'warn' (default)."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "warn"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_disabled_at_info(self, plugin, logger):
-        """_log_debug does not log when log_level is 'info'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "info"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_disabled_at_error(self, plugin, logger):
-        """_log_debug does not log when log_level is 'error'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "error"
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    def test_log_debug_missing_setting_defaults_warn(self, plugin, logger):
-        """_log_debug does not log when log_level key is missing (defaults to warn)."""
-        from unittest.mock import patch
-
-        plugin.settings.pop("log_level", None)
-        with patch.object(logger, "info") as mock_info:
-            plugin._log_debug("test message")
-            mock_info.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_save_log_level_valid(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        for level in ("debug", "info", "warn", "error"):
-            result = plugin.save_log_level(level)
-            assert result["success"] is True
-            assert plugin.settings["log_level"] == level
-
-    @pytest.mark.asyncio
-    async def test_save_log_level_invalid(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["log_level"] = "warn"
-        result = plugin.save_log_level("verbose")
-        assert result["success"] is False
-        assert plugin.settings["log_level"] == "warn"  # unchanged
-
-    @pytest.mark.asyncio
-    async def test_get_settings_includes_log_level(self, plugin):
-        plugin.settings["log_level"] = "info"
-        result = plugin.get_settings()
-        assert result["log_level"] == "info"
-
-    @pytest.mark.asyncio
-    async def test_get_settings_defaults_log_level_warn(self, plugin):
-        plugin.settings.pop("log_level", None)
-        result = plugin.get_settings()
-        assert result["log_level"] == "warn"
-
-    @pytest.mark.asyncio
-    async def test_frontend_log_respects_level(self, plugin, caplog):
-        """frontend_log only logs when message level >= configured level."""
-        plugin.settings["log_level"] = "warn"
-        plugin.frontend_log("debug", "debug msg")
-        plugin.frontend_log("info", "info msg")
-        plugin.frontend_log("warn", "warn msg")
-        plugin.frontend_log("error", "error msg")
-
-        assert [(r.levelname, r.message) for r in caplog.records] == [
-            ("WARNING", "[FE] warn msg"),
-            ("ERROR", "[FE] error msg"),
-        ]
-
-    @pytest.mark.asyncio
-    async def test_frontend_log_debug_level_logs_all(self, plugin, caplog):
-        """With log_level=debug, all levels are logged — each at its own."""
-        plugin.settings["log_level"] = "debug"
-        plugin.frontend_log("debug", "d")
-        plugin.frontend_log("info", "i")
-        plugin.frontend_log("warn", "w")
-        plugin.frontend_log("error", "e")
-
-        assert [(r.levelname, r.message) for r in caplog.records] == [
-            ("DEBUG", "[FE] d"),
-            ("INFO", "[FE] i"),
-            ("WARNING", "[FE] w"),
-            ("ERROR", "[FE] e"),
-        ]
-
     @pytest.mark.asyncio
     async def test_debug_log_backward_compat(self, plugin, caplog):
         """debug_log reaches the log as a debug line of its own."""
@@ -340,303 +57,6 @@ class TestLogLevel:
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] test backward compat"),
         ]
-
-    def test_migration_debug_logging_true(self, plugin, tmp_path):
-        """Old debug_logging=True migrates to log_level='debug'."""
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-        from domain.state_migrations import migrate_settings
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": True, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in plugin.settings
-        assert plugin.settings["log_level"] == "debug"
-
-    def test_migration_debug_logging_false(self, plugin, tmp_path):
-        """Old debug_logging=False migrates to log_level='warn' (default)."""
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-        from domain.state_migrations import migrate_settings
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": False, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in plugin.settings
-        assert plugin.settings["log_level"] == "warn"
-
-    @pytest.mark.asyncio
-    async def test_sgdb_artwork_silent_when_debug_off(self, plugin, tmp_path, logger):
-        """SGDB artwork info calls should not log when log_level is 'warn'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "warn"
-        with patch.object(logger, "info") as mock_info:
-            result = await plugin.get_sgdb_artwork_base64(1, 99)
-            assert result["base64"] is None
-            for call in mock_info.call_args_list:
-                assert "SGDB artwork" not in str(call)
-
-    @pytest.mark.asyncio
-    async def test_sgdb_artwork_logs_when_debug_enabled(self, plugin, tmp_path, logger):
-        """SGDB artwork info calls should log when log_level is 'debug'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "debug"
-        plugin.settings["steamgriddb_api_key"] = ""
-        with patch.object(logger, "info") as mock_info:
-            result = await plugin.get_sgdb_artwork_base64(1, 1)
-            assert result["no_api_key"] is True
-            logged_msgs = [str(c) for c in mock_info.call_args_list]
-            assert any("SGDB artwork" in m for m in logged_msgs)
-
-
-class TestInsecureSslSetting:
-    def test_load_settings_defaults_false(self, plugin, tmp_path):
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "https://romm.local"}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        plugin.settings = persistence.load_settings()
-        assert plugin.settings["romm_allow_insecure_ssl"] is False
-
-    @pytest.mark.asyncio
-    async def test_get_settings_includes_field(self, plugin):
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        result = plugin.get_settings()
-        assert result["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_get_settings_defaults_false(self, plugin):
-        plugin.settings.pop("romm_allow_insecure_ssl", None)
-        result = plugin.get_settings()
-        assert result["romm_allow_insecure_ssl"] is False
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_with_insecure_ssl(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        await plugin.save_server_url("https://romm.local", True)
-        assert plugin.settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_without_param_preserves(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        await plugin.save_server_url("https://romm.local")
-        assert plugin.settings["romm_allow_insecure_ssl"] is True
-
-    @pytest.mark.asyncio
-    async def test_save_server_url_explicit_false(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.settings["romm_allow_insecure_ssl"] = True
-        await plugin.save_server_url("https://romm.local", False)
-        assert plugin.settings["romm_allow_insecure_ssl"] is False
-
-
-class TestGetSettingsResetNotice:
-    """The get_settings_reset_notice callable reads the persistent
-    ``_settings_reset_notice`` marker from the live settings dict (non-consuming).
-    """
-
-    @pytest.mark.asyncio
-    async def test_no_marker_returns_not_pending(self, plugin):
-        plugin.settings = {"romm_url": "http://romm.local"}
-        result = plugin.get_settings_reset_notice()
-        assert result == {"pending": False, "backed_up_to": None}
-
-    @pytest.mark.asyncio
-    async def test_marker_present_returns_pending_with_backup(self, plugin):
-        plugin.settings = {"_settings_reset_notice": {"backed_up_to": "settings.json.corrupt-1781697600"}}
-        result = plugin.get_settings_reset_notice()
-        assert result == {"pending": True, "backed_up_to": "settings.json.corrupt-1781697600"}
-
-    @pytest.mark.asyncio
-    async def test_non_consuming_repeated_reads_stay_pending(self, plugin):
-        """Unlike the old one-shot drain, repeated reads keep reporting pending —
-        the marker is cleared only by an explicit ack, not by reading."""
-        plugin.settings = {"_settings_reset_notice": {"backed_up_to": "settings.json.corrupt-42"}}
-        first = plugin.get_settings_reset_notice()
-        second = plugin.get_settings_reset_notice()
-        assert first == {"pending": True, "backed_up_to": "settings.json.corrupt-42"}
-        assert second == first
-
-    @pytest.mark.asyncio
-    async def test_marker_without_backup_key_returns_none_backup(self, plugin):
-        """A malformed marker (missing backed_up_to) still reports pending with a
-        None backup rather than raising."""
-        plugin.settings = {"_settings_reset_notice": {}}
-        result = plugin.get_settings_reset_notice()
-        assert result == {"pending": True, "backed_up_to": None}
-
-
-class TestDismissSettingsResetNotice:
-    """The dismiss_settings_reset_notice callable pops the persistent marker and
-    persists the dismissal — the user's explicit QAM acknowledgement."""
-
-    @pytest.mark.asyncio
-    async def test_pops_marker_and_persists(self, plugin):
-        # Mutate the live dict in place (the SettingsService binds this same ref).
-        plugin.settings["_settings_reset_notice"] = {"backed_up_to": "settings.json.corrupt-42"}
-        before = plugin._settings_persister.save_count
-
-        result = plugin.dismiss_settings_reset_notice()
-
-        assert result == {"success": True}
-        assert "_settings_reset_notice" not in plugin.settings
-        # Read-side now reports not-pending.
-        assert plugin.get_settings_reset_notice() == {"pending": False, "backed_up_to": None}
-        # The dismissal was persisted.
-        assert plugin._settings_persister.save_count == before + 1
-
-    @pytest.mark.asyncio
-    async def test_idempotent_when_no_marker(self, plugin):
-        """Acking with no marker present is a harmless persisted no-op."""
-        assert "_settings_reset_notice" not in plugin.settings
-        before = plugin._settings_persister.save_count
-
-        result = plugin.dismiss_settings_reset_notice()
-
-        assert result == {"success": True}
-        assert "_settings_reset_notice" not in plugin.settings
-        assert plugin._settings_persister.save_count == before + 1
-
-
-class TestSettingsFilePermissions:
-    def test_save_settings_creates_file_with_0600(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        plugin.settings = {"romm_url": "http://example.com"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-        settings_path = tmp_path / "settings.json"
-        mode = os.stat(settings_path).st_mode & 0o777
-        assert mode == 0o600
-
-    def test_load_settings_fixes_permissions(self, plugin, tmp_path):
-        import logging
-
-        from adapters.persistence import PersistenceAdapter
-
-        settings_path = tmp_path / "settings.json"
-        import json as _json
-
-        with open(settings_path, "w") as f:
-            _json.dump({"romm_url": "http://example.com"}, f)
-        os.chmod(settings_path, 0o644)
-        assert os.stat(settings_path).st_mode & 0o777 == 0o644
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        persistence.load_settings()
-        assert os.stat(settings_path).st_mode & 0o777 == 0o600
-
-
-class TestAtomicSettingsWrite:
-    def test_settings_written_atomically(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        plugin.settings = {"romm_url": "http://example.com", "romm_user": "user"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-
-        settings_path = tmp_path / "settings.json"
-        with open(settings_path) as f:
-            data = json.load(f)
-        assert data["romm_url"] == "http://example.com"
-        assert data["romm_user"] == "user"
-
-    def test_settings_no_tmp_left_after_write(self, plugin, tmp_path, logger, data_dir):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        plugin.settings = {"romm_url": "http://example.com"}
-        SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
-
-        tmp_file = tmp_path / "settings.json.tmp"
-        assert not tmp_file.exists()
-
-    def test_settings_crash_preserves_original(self, plugin, tmp_path, logger, data_dir):
-        from unittest.mock import patch
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-
-        # Write initial settings
-        plugin.settings = {"romm_url": "http://original.com"}
-        persister = SettingsPersisterAdapter(plugin._persistence, plugin.settings)
-        persister.save_settings()
-
-        # Now simulate a crash during json.dump
-        plugin.settings["romm_url"] = "http://corrupted.com"
-        with patch("json.dump", side_effect=OSError("disk full")), pytest.raises(OSError):
-            persister.save_settings()
-
-        # Original file should still be intact
-        settings_path = tmp_path / "settings.json"
-        with open(settings_path) as f:
-            data = json.load(f)
-        assert data["romm_url"] == "http://original.com"
-
-
-class TestWhitelistSettings:
-    @pytest.mark.asyncio
-    async def test_get_whitelist_defaults_empty(self, plugin):
-        """Returns empty lists when no whitelist keys exist in settings."""
-        plugin.settings.pop("whitelist_disabled_defaults", None)
-        plugin.settings.pop("whitelist_custom_names", None)
-        result = plugin.get_whitelist_settings()
-        assert result == {"disabled_defaults": [], "custom_names": []}
-
-    @pytest.mark.asyncio
-    async def test_update_and_get_whitelist(self, plugin, tmp_path, logger, data_dir):
-        """Round-trip: update then get returns the stored values."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        plugin.update_whitelist_settings(["chrome"], ["My App"])
-        result = plugin.get_whitelist_settings()
-        assert result["disabled_defaults"] == ["chrome"]
-        assert result["custom_names"] == ["My App"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_disabled_defaults(self, plugin):
-        """Rejects non-list disabled_defaults."""
-        result = plugin.update_whitelist_settings("not-a-list", [])
-        assert result["success"] is False
-        assert "disabled_defaults" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_custom_names(self, plugin):
-        """Rejects non-list custom_names."""
-        result = plugin.update_whitelist_settings([], "not-a-list")
-        assert result["success"] is False
-        assert "custom_names" in result["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_validates_inner_types(self, plugin):
-        """Rejects lists containing non-string items."""
-        result_dd = plugin.update_whitelist_settings([1, 2], [])
-        assert result_dd["success"] is False
-        assert "disabled_defaults" in result_dd["message"]
-
-        result_cn = plugin.update_whitelist_settings([], ["valid", 42])
-        assert result_cn["success"] is False
-        assert "custom_names" in result_cn["message"]
-
-    @pytest.mark.asyncio
-    async def test_update_whitelist_persists(self, plugin, tmp_path, logger, data_dir):
-        """Verifies values are stored in plugin.settings dict after update."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
-        result = plugin.update_whitelist_settings(["moonlight"], ["Custom Game"])
-        assert result["success"] is True
-        assert plugin.settings["whitelist_disabled_defaults"] == ["moonlight"]
-        assert plugin.settings["whitelist_custom_names"] == ["Custom Game"]
 
 
 class TestRefreshMigrationState:
@@ -725,6 +145,17 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "check_for_update_now",
     "dismiss_update_notice",
     "set_update_check_enabled",
+    # What the last update did: the read the panel makes at load, its
+    # acknowledgement of the announcement's one toast, the announcement card's
+    # Dismiss, and the rolled-back card's per-record Dismiss. None touches
+    # RetroDECK state — the read is the installer's record in the state
+    # directory and this process's own memory, the writes are memory and a
+    # settings key — and the read is fired at panel load whatever page the
+    # panel is showing.
+    "get_update_outcome",
+    "acknowledge_update_toast",
+    "dismiss_update_announcement",
+    "dismiss_update_failure",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.
     # Touches no RetroDECK state and reads nothing from disk. It has to answer
@@ -1001,6 +432,8 @@ class TestMainStartupOrdering:
         connection_service = MagicMock()
         connection_service.migrate_legacy_credentials = AsyncMock()
 
+        update_outcome_service = MagicMock()
+
         wired_services = ServicesBundle(
             prune_conflicts=_make_prune_conflicts(),
             save_sync_service=save_sync_service,
@@ -1028,6 +461,7 @@ class TestMainStartupOrdering:
             startup_healing_service=startup_healing_service,
             shortcut_relocation_service=MagicMock(),
             update_check_service=MagicMock(),
+            update_outcome_service=update_outcome_service,
             launch_gate_service=MagicMock(),
             session_lifecycle_service=MagicMock(),
             game_process_service=MagicMock(),
@@ -1065,6 +499,7 @@ class TestMainStartupOrdering:
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
                 latest_release=MagicMock(),
+                update_failure=MagicMock(return_value=None),
             ),
             stores=StateBundle(
                 settings={},
@@ -1088,7 +523,7 @@ class TestMainStartupOrdering:
                 hostname_provider=MagicMock(),
                 machine_id_provider=MagicMock(),
             ),
-            handles=BootstrapHandles(debug_logger=MagicMock(), persistence=MagicMock()),
+            handles=BootstrapHandles(debug_logger=MagicMock()),
             directories=AppDirectories(
                 config_dir="/fake/config",
                 data_dir="/fake/data",
@@ -1112,7 +547,7 @@ class TestMainStartupOrdering:
                 update_source=UpdateSource(release_api="http://127.0.0.1:9/", installed_program=False),
                 user_home="/fake/home",
                 logger=logging.getLogger("test_startup_order"),
-                events=events,
+                emit=events.emit,
                 status=HostStatus(),
             )
 
@@ -1130,43 +565,5 @@ class TestMainStartupOrdering:
         events.delivers = True
         assert await service_emit("probe", {"n": 2}) is True
         assert events.events == [("probe", {"n": 1}), ("probe", {"n": 2})]
-
-
-class TestRetroDeckStatus:
-    @pytest.mark.asyncio
-    async def test_ok_status_carries_paths(self, plugin):
-        plugin._retrodeck_paths = FakeRetroDeckPaths(
-            home="/retrodeck",
-            config_path="/cfg/retrodeck.json",
-            health=RetroDeckConfigHealth.OK,
-        )
-        result = plugin.get_retrodeck_status()
-        assert result == {
-            "status": "ok",
-            "config_path": "/cfg/retrodeck.json",
-            "resolved_home": "/retrodeck",
-        }
-
-    @pytest.mark.asyncio
-    async def test_status_is_plain_string_not_enum(self, plugin):
-        """The discriminant must serialize as a plain str for the WebSocket bridge."""
-        plugin._retrodeck_paths = FakeRetroDeckPaths(health=RetroDeckConfigHealth.UNREADABLE)
-        result = plugin.get_retrodeck_status()
-        assert result["status"] == "unreadable"
-        assert type(result["status"]) is str
-
-    @pytest.mark.asyncio
-    async def test_root_missing_status(self, plugin):
-        plugin._retrodeck_paths = FakeRetroDeckPaths(
-            home="/missing",
-            health=RetroDeckConfigHealth.ROOT_MISSING,
-        )
-        result = plugin.get_retrodeck_status()
-        assert result["status"] == "root_missing"
-        assert result["resolved_home"] == "/missing"
-
-    @pytest.mark.asyncio
-    async def test_absent_status(self, plugin):
-        plugin._retrodeck_paths = FakeRetroDeckPaths(health=RetroDeckConfigHealth.ABSENT)
-        result = plugin.get_retrodeck_status()
-        assert result["status"] == "absent"
+        # A start compares its version with the last one's once, before the port.
+        update_outcome_service.note_start.assert_called_once_with()

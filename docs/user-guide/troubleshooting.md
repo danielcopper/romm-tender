@@ -69,12 +69,18 @@ panel went with it but the new one did not arrive — so the missing panel, not 
 ## An Update Was Rolled Back
 
 **Symptom**: An update marks the **Service** row failed, says **Rolled back** instead of **Done**, and ends with
-`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log and at the journal.
+`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log and at the journal. Tender's
+main panel says the same — that the update to the new version failed and you are still on the one you had — until you
+dismiss it there or a later update goes through.
 
 **Explanation**: The new version did not start within about a minute, so the installer put the version you had back,
 together with the library database and settings it had before the update, and started it again. Tender is running as it
 was. Anything the new version wrote in that minute is gone. The installer does not try again by itself, and it leaves
-`~/.local/state/romm-tender/update-failure.json` naming both versions and the time.
+`~/.local/state/romm-tender/update-failure.json` naming both versions and the time. That note is what the panel's notice
+and **Settings › Updates** show, and what Tender's log repeats in one line each time it starts
+(`the update to <new> was rolled back at <time>; back on <previous> — …`); the next update whose new version answers
+removes it. Where the installer also said `could not record the rolled-back update`, there is no note of this rollback,
+and neither the panel nor Tender's log says anything about it.
 
 **Fix**: Look at what the new version logged — the log is shared by both versions, so the lines just before the previous
 version's start are the new version's. A version that failed before it could open its log left nothing there, and its

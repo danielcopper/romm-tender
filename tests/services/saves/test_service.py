@@ -1,22 +1,27 @@
-"""Tests for SaveService aggregate root — public callable surface and cross-service coordination."""
+"""Tests for SaveService — the use cases the endpoints call and the coordination across its sub-services."""
 
 import asyncio
 import hashlib
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_hostname_reader import FakeHostnameReader
+from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_api import FakeSaveApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import RommConnectionError, RommNotFoundError
+from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
 from tests.services.saves._helpers import (
     _create_save,
@@ -28,6 +33,31 @@ from tests.services.saves._helpers import (
     _set_device_id,
     make_service,
 )
+
+
+@dataclass
+class SavesHarness:
+    """The save service, the fake RomM saves API behind it, and the settings dict it reads.
+
+    Save sync is on, and the saves root is ``<tmp_path>/retrodeck/saves``.
+    """
+
+    service: SaveService
+    api: FakeSaveApi
+    settings: dict[str, Any]
+
+
+@pytest.fixture
+def saves(tmp_path) -> SavesHarness:
+    saves_root = str(tmp_path / "retrodeck" / "saves")
+    settings: dict[str, Any] = {"log_level": "debug", "save_sync_enabled": True}
+    service, api = make_service(
+        tmp_path,
+        settings=settings,
+        retrodeck_paths=FakeRetroDeckPaths(saves=saves_root, roms=str(tmp_path / "retrodeck" / "roms")),
+        save_locations=FakeSaveLocationReader(saves_root=saves_root),
+    )
+    return SavesHarness(service=service, api=api, settings=settings)
 
 
 class TestDeviceRegistration:
@@ -250,6 +280,56 @@ class TestDeviceRegistrationServer:
         assert fake.heartbeat_calls == 0
 
 
+class TestEnsureDeviceRegistered:
+    """Tests for ensure_device_registered (server registration)."""
+
+    @pytest.mark.asyncio
+    async def test_registers_with_server(self, saves, tmp_path):
+        """First call registers with server and stores device_id."""
+        result = await saves.service.ensure_device_registered()
+
+        assert result["success"] is True
+        assert result["device_id"]
+        assert result.get("server_device_id") is not None
+        assert _get_device_id(saves.service) == result["device_id"]
+
+    @pytest.mark.asyncio
+    async def test_already_registered_returns_cached(self, saves):
+        """If a device id is already persisted, returns immediately."""
+        _set_device_id(saves.service, "server-uuid")
+        saves.settings["device_name"] = "myhost"
+
+        result = await saves.service.ensure_device_registered()
+
+        assert result["success"] is True
+        assert result["device_id"] == "server-uuid"
+        assert result["device_name"] == "myhost"
+        assert result["server_device_id"] == "server-uuid"
+
+    @pytest.mark.asyncio
+    async def test_sets_hostname_as_device_name(self, saves):
+        """Device name is set to the local hostname."""
+        saves.service._sync_engine._hostname_provider = FakeHostnameReader(hostname="steamdeck")
+
+        result = await saves.service.ensure_device_registered()
+
+        assert result["device_name"] == "steamdeck"
+        assert saves.settings["device_name"] == "steamdeck"
+
+    @pytest.mark.asyncio
+    async def test_generates_unique_ids(self, saves):
+        """Each new registration generates a unique device ID."""
+        result1 = await saves.service.ensure_device_registered()
+        id1 = result1["device_id"]
+
+        # Reset state to force new registration
+        _set_device_id(saves.service, None)
+        result2 = await saves.service.ensure_device_registered()
+        id2 = result2["device_id"]
+
+        assert id1 != id2
+
+
 class TestListDevices:
     @pytest.mark.asyncio
     async def test_list_devices_marks_own_device(self, tmp_path):
@@ -345,6 +425,30 @@ class TestListDevices:
         # compares truthy, so is_current_device must be False
         assert result["devices"][0]["is_current_device"] is False
 
+    @pytest.mark.asyncio
+    async def test_list_devices_returns_devices(self, saves):
+        """list_devices returns the registered devices, the current one marked."""
+        saves.api._registered_devices = [
+            {"id": "device-1", "name": "steamdeck"},
+        ]
+        _set_device_id(saves.service, "device-1")
+
+        result = await saves.service.list_devices()
+
+        assert result["success"] is True
+        assert len(result["devices"]) == 1
+        assert result["devices"][0]["is_current_device"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_devices_disabled_when_sync_off(self, saves):
+        """Returns disabled=True when save sync is disabled."""
+        saves.settings["save_sync_enabled"] = False
+
+        result = await saves.service.list_devices()
+
+        assert result["success"] is False
+        assert result.get("disabled") is True
+
 
 class TestRetroDeckMigrationBlocksSaveSync:
     @pytest.mark.asyncio
@@ -382,24 +486,19 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_respects_migration_block_via_its_conflict_rules(self, tmp_path):
-        """End-to-end chain check: Plugin.sync_all_saves must be refused by the
-        migration rule SaveService.sync_all_saves checks at its entry, so the
-        internal do_sync_rom_saves call path is never reached when migration is
-        pending. Protects against the rule being dropped from the use case."""
-        from main import Plugin
-
+        """sync_all_saves must be refused by the migration rule it checks at its
+        entry, so the internal do_sync_rom_saves call path is never reached when
+        migration is pending. Protects against the rule being dropped from the
+        use case."""
         svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(migration_pending=True))
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        plugin = Plugin()
-        plugin._save_sync_service = svc
-
         spy = MagicMock(name="do_sync_rom_saves_spy")
         svc._sync_engine.do_sync_rom_saves = spy  # type: ignore[method-assign]
 
-        result = await plugin.sync_all_saves()
+        result = await svc.sync_all_saves()
 
         assert result == {
             "success": False,
@@ -563,6 +662,148 @@ class TestSettings:
         assert "unknown_key" not in result["settings"]
 
 
+class TestSaveSyncSettings:
+    """Tests for get/update save sync settings."""
+
+    @pytest.mark.asyncio
+    async def test_get_returns_current(self, saves):
+        """Returns current settings."""
+        result = saves.service.get_save_sync_settings()
+
+        assert result["save_sync_enabled"] is True
+        assert result["sync_before_launch"] is True
+        assert result["sync_after_exit"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_changes_settings(self, saves, tmp_path):
+        """Updates and persists settings."""
+        result = await saves.service.update_save_sync_settings(
+            {
+                "save_sync_enabled": True,
+                "sync_before_launch": False,
+            }
+        )
+
+        assert result["success"] is True
+        assert result["settings"]["save_sync_enabled"] is True
+        assert result["settings"]["sync_before_launch"] is False
+        # sync_after_exit unchanged
+        assert result["settings"]["sync_after_exit"] is True
+
+        # Written into the live settings dict the settings persister flushes.
+        assert saves.settings["save_sync_enabled"] is True
+        assert saves.settings["sync_before_launch"] is False
+
+    @pytest.mark.asyncio
+    async def test_unknown_keys_ignored(self, saves):
+        """Unknown settings keys are silently ignored."""
+        result = await saves.service.update_save_sync_settings(
+            {
+                "unknown_key": "value",
+                "sync_before_launch": True,
+            }
+        )
+
+        assert result["success"] is True
+        assert result["settings"]["sync_before_launch"] is True
+        assert "unknown_key" not in result["settings"]
+
+    @pytest.mark.asyncio
+    async def test_boolean_coercion(self, saves):
+        """sync toggles coerced to bool."""
+        result = await saves.service.update_save_sync_settings(
+            {
+                "sync_before_launch": 0,
+                "sync_after_exit": 1,
+            }
+        )
+
+        assert result["settings"]["sync_before_launch"] is False
+        assert result["settings"]["sync_after_exit"] is True
+
+
+class TestSaveSyncFeatureFlag:
+    """Tests for the save_sync_enabled feature flag (off by default)."""
+
+    @pytest.mark.asyncio
+    async def test_default_disabled(self, saves):
+        """save_sync_enabled defaults to False when absent from settings.json."""
+        saves.settings.pop("save_sync_enabled", None)
+        assert saves.service.is_save_sync_enabled() is False
+
+    @pytest.mark.asyncio
+    async def test_ensure_device_disabled(self, saves):
+        """ensure_device_registered returns disabled marker when save sync off."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.ensure_device_registered()
+        assert result["success"] is False
+        assert result.get("disabled") is True
+        assert _get_device_id(saves.service) is None
+
+    @pytest.mark.asyncio
+    async def test_pre_launch_sync_disabled(self, saves):
+        """pre_launch_sync skips when save sync disabled."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.pre_launch_sync(42)
+        assert result["success"] is True
+        assert result["synced"] == 0
+        assert "disabled" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_post_exit_sync_disabled(self, saves):
+        """post_exit_sync skips when save sync disabled."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.post_exit_sync(42)
+        assert result["success"] is True
+        assert result["synced"] == 0
+        assert "disabled" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_sync_rom_saves_disabled(self, saves):
+        """sync_rom_saves returns error when save sync disabled."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.sync_rom_saves(42)
+        assert result["success"] is False
+        assert "disabled" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_sync_all_saves_disabled(self, saves):
+        """sync_all_saves returns error when save sync disabled."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.sync_all_saves()
+        assert result["success"] is False
+        assert "disabled" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_enable_via_settings_update(self, saves):
+        """save_sync_enabled can be toggled via update_save_sync_settings."""
+        saves.settings["save_sync_enabled"] = False
+        result = await saves.service.update_save_sync_settings({"save_sync_enabled": True})
+        assert result["success"] is True
+        assert saves.settings["save_sync_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_disable_via_settings_update(self, saves):
+        """save_sync_enabled can be disabled via update_save_sync_settings."""
+        result = await saves.service.update_save_sync_settings({"save_sync_enabled": False})
+        assert result["success"] is True
+        assert saves.settings["save_sync_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_settings_includes_flag(self, saves):
+        """get_save_sync_settings returns save_sync_enabled field."""
+        result = saves.service.get_save_sync_settings()
+        assert "save_sync_enabled" in result
+
+    @pytest.mark.asyncio
+    async def test_is_save_sync_enabled_helper(self, saves):
+        """is_save_sync_enabled reflects the settings value."""
+        saves.settings["save_sync_enabled"] = True
+        assert saves.service.is_save_sync_enabled() is True
+        saves.settings["save_sync_enabled"] = False
+        assert saves.service.is_save_sync_enabled() is False
+
+
 class TestDeleteSaves:
     @pytest.mark.asyncio
     async def test_delete_local_saves(self, tmp_path):
@@ -650,6 +891,157 @@ class TestDeleteSaves:
         result = await svc.delete_local_saves(42)
         assert result["success"] is True
         assert result["deleted_count"] == 0
+
+
+class TestDeleteLocalAndPlatformSaves:
+    """Deleting a ROM's or a platform's local saves removes the files; each entry survives with an empty file map."""
+
+    @pytest.mark.asyncio
+    async def test_delete_local_saves_happy_path(self, saves, tmp_path):
+        """Deleting local saves removes the files and empties the entry's file map; the entry survives."""
+        rom_id = 100
+        system = "snes"
+        rom_name = "TestGame"
+
+        _install_rom(saves.service, tmp_path, rom_id=100, system=system, file_name=f"{rom_name}.sfc")
+
+        # Save files in the system's folder under the saves root
+        saves_dir = tmp_path / "retrodeck" / "saves" / system
+        saves_dir.mkdir(parents=True)
+        srm = saves_dir / f"{rom_name}.srm"
+        rtc = saves_dir / f"{rom_name}.rtc"
+        srm.write_bytes(b"\x00" * 32)
+        rtc.write_bytes(b"\x00" * 16)
+
+        # Set up sync state
+        _seed_save_state(
+            saves.service,
+            100,
+            RomSaveSyncState(
+                files={
+                    f"{rom_name}.srm": FileSyncState(last_sync_hash="abc123"),
+                    f"{rom_name}.rtc": FileSyncState(last_sync_hash="def456"),
+                },
+                system=system,
+            ),
+            platform_slug="snes",
+        )
+
+        result = await saves.service.delete_local_saves(rom_id)
+        assert result["success"] is True
+        assert result["deleted_count"] == 2
+        assert not srm.exists()
+        assert not rtc.exists()
+        # Entry survives — only files are cleared (#279).
+        entry = _get_save_state(saves.service, 100)
+        assert entry is not None
+        assert entry.files == {}
+        assert entry.system == system
+
+    @pytest.mark.asyncio
+    async def test_delete_local_saves_preserves_slot_config(self, saves, tmp_path):
+        """Slot config / attribution metadata survive a delete (#279)."""
+        rom_id = 101
+        system = "snes"
+        rom_name = "SlotGame"
+
+        _install_rom(saves.service, tmp_path, rom_id=101, system=system, file_name=f"{rom_name}.sfc")
+
+        saves_dir = tmp_path / "retrodeck" / "saves" / system
+        saves_dir.mkdir(parents=True)
+        srm = saves_dir / f"{rom_name}.srm"
+        srm.write_bytes(b"\x00" * 32)
+
+        _seed_save_state(
+            saves.service,
+            101,
+            RomSaveSyncState(
+                files={f"{rom_name}.srm": FileSyncState(last_sync_hash="hash")},
+                active_slot="desktop",
+                slot_confirmed=True,
+                emulator="retroarch-snes9x",
+                last_synced_core="snes9x_libretro",
+                own_upload_ids=[9],
+                slots={"default": {}, "desktop": {}},
+                system=system,
+            ),
+            platform_slug="snes",
+        )
+
+        result = await saves.service.delete_local_saves(rom_id)
+        assert result["success"] is True
+        assert result["deleted_count"] == 1
+        assert not srm.exists()
+
+        entry = _get_save_state(saves.service, 101)
+        assert entry is not None
+        assert entry.files == {}
+        assert entry.active_slot == "desktop"
+        assert entry.slot_confirmed is True
+        assert entry.emulator == "retroarch-snes9x"
+        assert entry.last_synced_core == "snes9x_libretro"
+        assert entry.own_upload_ids == [9]
+        assert entry.slots == {"default": {}, "desktop": {}}
+        assert entry.system == system
+
+    @pytest.mark.asyncio
+    async def test_delete_local_saves_no_files(self, saves, tmp_path):
+        """Deleting saves when none exist returns success with 0."""
+        _install_rom(saves.service, tmp_path, rom_id=200, system="snes", file_name="NoSaves.sfc")
+
+        result = await saves.service.delete_local_saves(200)
+        assert result["success"] is True
+        assert result["deleted_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_local_saves_not_installed(self, saves):
+        """Deleting saves for a non-installed ROM returns success with 0."""
+        result = await saves.service.delete_local_saves(999)
+        assert result["success"] is True
+        assert result["deleted_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_platform_saves(self, saves, tmp_path):
+        """Deleting platform saves removes files for all ROMs on that platform."""
+        saves_dir = tmp_path / "retrodeck" / "saves" / "snes"
+        saves_dir.mkdir(parents=True)
+
+        srm1 = saves_dir / "Game1.srm"
+        srm2 = saves_dir / "Game2.srm"
+        srm1.write_bytes(b"\x00" * 32)
+        srm2.write_bytes(b"\x00" * 32)
+
+        _install_rom(saves.service, tmp_path, rom_id=10, system="snes", file_name="Game1.sfc")
+        _install_rom(saves.service, tmp_path, rom_id=20, system="snes", file_name="Game2.sfc")
+        _install_rom(saves.service, tmp_path, rom_id=30, system="gba", file_name="GBAGame.gba")
+
+        _seed_save_state(
+            saves.service,
+            10,
+            RomSaveSyncState(files={"Game1.srm": FileSyncState(last_sync_hash="h")}, system="snes"),
+            platform_slug="snes",
+        )
+        _seed_save_state(
+            saves.service,
+            20,
+            RomSaveSyncState(files={"Game2.srm": FileSyncState(last_sync_hash="h")}, system="snes"),
+            platform_slug="snes",
+        )
+
+        result = await saves.service.delete_platform_saves("snes")
+        assert result["success"] is True
+        assert result["deleted_count"] == 2
+        assert not srm1.exists()
+        assert not srm2.exists()
+        # Entries survive — only files are cleared (#279).
+        entry10 = _get_save_state(saves.service, 10)
+        assert entry10 is not None
+        assert entry10.files == {}
+        assert entry10.system == "snes"
+        entry20 = _get_save_state(saves.service, 20)
+        assert entry20 is not None
+        assert entry20.files == {}
+        assert entry20.system == "snes"
 
 
 class TestPlatformSaves:
@@ -1578,3 +1970,161 @@ class TestBuildSaveInventory:
         _seed_save_state(svc, 42, state)
 
         assert svc.build_save_inventory(rom_id=42) == []
+
+
+class TestPreLaunchSync:
+    """Tests for pre_launch_sync."""
+
+    @pytest.mark.asyncio
+    async def test_skips_when_disabled(self, saves):
+        """Returns early when sync_before_launch is false."""
+        saves.settings["sync_before_launch"] = False
+
+        result = await saves.service.pre_launch_sync(42)
+
+        assert result["synced"] == 0
+        assert "disabled" in result["message"].lower()
+
+
+class TestPostExitSync:
+    """Tests for post_exit_sync."""
+
+    @pytest.mark.asyncio
+    async def test_skips_when_disabled(self, saves):
+        """Returns early when sync_after_exit is false."""
+        saves.settings["sync_after_exit"] = False
+
+        result = await saves.service.post_exit_sync(42)
+
+        assert result["synced"] == 0
+        assert "disabled" in result["message"].lower()
+
+
+class TestSyncAllSaves:
+    """Tests for sync_all_saves."""
+
+    @pytest.mark.asyncio
+    async def test_no_installed_roms(self, saves):
+        """With no installed ROM, the sync succeeds having checked none."""
+        _set_device_id(saves.service, "dev-1")
+
+        result = await saves.service.sync_all_saves()
+
+        assert result["success"] is True
+        assert result["roms_checked"] == 0
+        assert result["synced"] == 0
+
+
+class TestSyncRomSaves:
+    """Tests for sync_rom_saves (bidirectional per-ROM sync)."""
+
+    @pytest.mark.asyncio
+    async def test_rom_not_installed(self, saves):
+        """Non-installed ROM returns 0 synced."""
+        _set_device_id(saves.service, "dev-1")
+
+        result = await saves.service.sync_rom_saves(999)
+
+        assert result["success"] is True
+        assert result["synced"] == 0
+
+
+class TestSavesVersionHistory:
+    """Listing a save's older versions and rolling back to one."""
+
+    @pytest.mark.asyncio
+    async def test_saves_list_file_versions_happy_path(self, saves, tmp_path):
+        """list_file_versions returns filtered older versions."""
+        _seed_save_state(
+            saves.service,
+            42,
+            RomSaveSyncState(
+                system="gba",
+                active_slot="default",
+                files={"pokemon.srm": FileSyncState(tracked_save_id=100, last_sync_hash="h")},
+            ),
+        )
+        saves.api.saves[100] = {
+            "id": 100,
+            "rom_id": 42,
+            "file_name": "pokemon.srm",
+            "updated_at": "2026-03-10T00:00:00Z",
+            "file_size_bytes": 1024,
+            "slot": "default",
+            "download_path": "/saves/pokemon.srm",
+        }
+        saves.api.saves[50] = {
+            "id": 50,
+            "rom_id": 42,
+            "file_name": "pokemon.srm",
+            "updated_at": "2026-03-01T00:00:00Z",
+            "file_size_bytes": 512,
+            "slot": "default",
+            "download_path": "/saves/pokemon.srm",
+        }
+
+        result = await saves.service.list_file_versions(42, "default", "pokemon.srm")
+
+        assert result["status"] == "ok"
+        assert len(result["versions"]) == 1
+        assert result["versions"][0]["id"] == 50
+
+    @pytest.mark.asyncio
+    async def test_saves_rollback_to_version_happy_path(self, saves, tmp_path):
+        """rollback_to_version downloads the target save on success."""
+        _install_rom(saves.service, tmp_path)
+        _set_device_id(saves.service, "dev-1")
+
+        # Create local save file with content matching last_sync_hash
+        saves_dir = tmp_path / "retrodeck" / "saves" / "gba"
+        saves_dir.mkdir(parents=True, exist_ok=True)
+        save_file = saves_dir / "pokemon.srm"
+        save_file.write_bytes(b"\x00" * 1024)
+
+        import hashlib
+
+        local_hash = hashlib.md5(b"\x00" * 1024).hexdigest()
+
+        _seed_save_state(
+            saves.service,
+            42,
+            RomSaveSyncState(
+                system="gba",
+                active_slot="default",
+                files={"pokemon.srm": FileSyncState(tracked_save_id=100, last_sync_hash=local_hash)},
+            ),
+        )
+        saves.api.saves[100] = {
+            "id": 100,
+            "rom_id": 42,
+            "file_name": "pokemon.srm",
+            "updated_at": "2026-03-10T00:00:00Z",
+            "file_size_bytes": 1024,
+            "slot": "default",
+            "download_path": "/saves/pokemon.srm",
+        }
+        saves.api.saves[50] = {
+            "id": 50,
+            "rom_id": 42,
+            "file_name": "pokemon.srm",
+            "updated_at": "2026-03-01T00:00:00Z",
+            "file_size_bytes": 1024,
+            "slot": "default",
+            "download_path": "/saves/pokemon.srm",
+        }
+
+        result = await saves.service.rollback_to_version(42, "default", 50)
+
+        assert result["status"] == "ok"
+        download_calls = [c for c in saves.api.call_log if c[0] == "download_save_content"]
+        assert any(c[1][0] == 50 for c in download_calls)
+
+    @pytest.mark.asyncio
+    async def test_saves_rollback_to_version_signature(self, saves):
+        """rollback_to_version's signature is (rom_id, slot, save_id) — no force flag and no
+        filename (the canonical local path is derived from the target save + ROM)."""
+        import inspect
+
+        sig = inspect.signature(saves.service.rollback_to_version)
+        params = list(sig.parameters.keys())
+        assert params == ["rom_id", "slot", "save_id"]

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
+from fakes.running_loop import running_loop
 
 from lib.errors import (
     PairingCodeInvalidError,
@@ -19,6 +21,8 @@ from lib.errors import (
     RommConnectionError,
     RommForbiddenError,
     RommServerError,
+    RommSSLError,
+    RommTimeoutError,
 )
 from lib.list_result import ErrorCode
 from services.connection import (
@@ -87,6 +91,30 @@ def _make_service(
             conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
         ),
     )
+
+
+@dataclass
+class ConnectionHarness:
+    """The connection service, the RomM API stand-in it asks, and the settings dict it reads."""
+
+    service: ConnectionService
+    romm_api: MagicMock
+    settings: dict[str, Any]
+
+
+@pytest.fixture
+def connection(logger) -> ConnectionHarness:
+    settings: dict[str, Any] = {"romm_url": "", "enabled_platforms": {}}
+    romm_api = MagicMock()
+    service = _make_service(settings=settings, romm_api=romm_api, loop=running_loop(), logger=logger)
+    return ConnectionHarness(service=service, romm_api=romm_api, settings=settings)
+
+
+def _configure_server(settings: dict[str, Any]) -> None:
+    """Fill in the server URL, token and SSL flag a connection test connects with."""
+    settings["romm_url"] = "http://romm.local"
+    settings["romm_api_token"] = "rmm_token"
+    settings["romm_allow_insecure_ssl"] = False
 
 
 class TestTestConnectionHappyPath:
@@ -163,7 +191,7 @@ class TestTestConnectionBadPath:
         assert result["message"].startswith("Server reachable but API request failed: ")
 
     def test_list_platforms_auth_error_not_prefixed(self, event_loop, romm_api, logger):
-        """auth_error / forbidden_error keep their original message — no prefix."""
+        """auth_failed keeps its original message — no prefix."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.list_platforms.side_effect = RommAuthError("bad credentials")
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
@@ -171,6 +199,25 @@ class TestTestConnectionBadPath:
         assert result["success"] is False
         assert result["reason"] == "auth_failed"
         assert not result["message"].startswith("Server reachable")
+
+    def test_a_platform_listing_that_is_not_a_list_fails(self, event_loop, logger):
+        """The adapter raises on a non-list platform listing, so the connection test does not pass over it."""
+        from adapters.romm.romm_api import RommApiAdapter
+
+        settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
+        answers = {"/api/heartbeat": {"SYSTEM": {"VERSION": "5.3.0"}}, "/api/platforms": {"detail": "not a list"}}
+        client = MagicMock()
+        client.request.side_effect = lambda path: answers[path]
+        romm_api = MagicMock(wraps=RommApiAdapter(client))
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+
+        result = event_loop.run_until_complete(service.test_connection())
+
+        assert result == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Server reachable but API request failed: Unexpected response from /api/platforms: dict",
+        }
 
 
 class TestTestConnectionVersionGate:
@@ -285,6 +332,220 @@ class TestTestConnectionEdgeCases:
         result = event_loop.run_until_complete(service.test_connection())
         assert result["reason"] == "version_error"
         assert "5.4.0" in result["message"]
+
+
+class TestTestConnectionRecordsVersion:
+    @pytest.mark.asyncio
+    async def test_test_connection_sets_version_on_romm_api(self, romm_api, logger):
+        settings: dict[str, Any] = {"romm_url": "", "enabled_platforms": {}}
+        settings["romm_url"] = "http://romm.local"
+        settings["romm_api_token"] = "rmm_token"
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
+        service = _make_service(settings=settings, romm_api=romm_api, loop=asyncio.get_running_loop(), logger=logger)
+        result = await service.test_connection()
+        assert result["success"] is True
+        romm_api.set_version.assert_called_once_with("5.3.0")
+
+
+class TestTestConnectionOutcomes:
+    """test_connection's answer per outcome: a canonical ``reason`` slug on failure, the version on success."""
+
+    @pytest.mark.asyncio
+    async def test_config_error_when_url_empty(self, connection):
+        """Returns config_error when no URL is configured."""
+        connection.settings["romm_url"] = ""
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "config_error"
+        assert "No server URL" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_auth_error_on_401(self, connection):
+        """Returns auth_failed when the platforms request answers 401."""
+        _configure_server(connection.settings)
+        # Heartbeat succeeds, platforms raises auth error
+        connection.romm_api.heartbeat.return_value = {"status": "ok"}
+        connection.romm_api.list_platforms.side_effect = RommAuthError("401")
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "auth_failed"
+        assert "Authentication failed" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_connection_error_on_refused(self, connection):
+        """Returns server_unreachable when the server refuses the connection."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.side_effect = RommConnectionError("refused")
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "server_unreachable"
+        assert "unreachable" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_ssl_error(self, connection):
+        """Returns server_unreachable, naming SSL, on a certificate failure."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.side_effect = RommSSLError("cert fail")
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "server_unreachable"
+        assert "SSL" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_success_on_happy_path(self, connection):
+        """Returns success when both heartbeat and platforms succeed."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}, "status": "ok"}
+        connection.romm_api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
+        result = await connection.service.test_connection()
+        assert result["success"] is True
+        assert "Connected to RomM 5.3.0" in result["message"]
+        assert result["romm_version"] == "5.3.0"
+        connection.romm_api.set_version.assert_called_with("5.3.0")
+
+    @pytest.mark.asyncio
+    async def test_server_reachable_but_api_failed(self, connection):
+        """When heartbeat succeeds but platforms fails with non-auth error, message is prefixed."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        connection.romm_api.list_platforms.side_effect = RommServerError("500", status_code=500)
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "server_unreachable"
+        assert "Server reachable but API request failed" in result["message"]
+
+
+class TestVersionDetection:
+    """test_connection detects and reports RomM server version."""
+
+    @pytest.mark.asyncio
+    async def test_version_extracted_from_heartbeat(self, connection):
+        """Extracts version from SYSTEM.VERSION in heartbeat response."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["romm_version"] == "5.3.0"
+        connection.romm_api.set_version.assert_called_with("5.3.0")
+
+    @pytest.mark.asyncio
+    async def test_old_version_rejected(self, connection):
+        """Versions below 5.3.0 are rejected with version_error."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+        assert result["romm_version"] == "4.5.0"
+
+    @pytest.mark.asyncio
+    async def test_46_version_rejected(self, connection):
+        """RomM 4.6.x is below the 5.3.0 minimum and is rejected."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.6.1"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+
+    @pytest.mark.asyncio
+    async def test_47_version_rejected(self, connection):
+        """RomM 4.7.x is below the 5.3.0 minimum and is rejected."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.7.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+
+    @pytest.mark.asyncio
+    async def test_minimum_version_accepted(self, connection):
+        """RomM 5.3.0 meets the minimum version requirement."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_49_version_rejected(self, connection):
+        """RomM 4.9.0, below the 5.3.0 floor, is rejected."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+
+    @pytest.mark.asyncio
+    async def test_release_below_minimum_rejected(self, connection):
+        """RomM 5.2.0, the last release before the 5.3.0 minimum, is rejected."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.2.0"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+
+    @pytest.mark.asyncio
+    async def test_prerelease_at_minimum_rejected(self, connection):
+        """A 5.3.0 pre-release ranks below the 5.3.0 release and is rejected."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0-beta.1"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "version_error"
+
+    @pytest.mark.asyncio
+    async def test_prerelease_above_minimum_accepted(self, connection):
+        """A pre-release whose core is above 5.3.0 passes the gate."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.1-beta"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_development_version_accepted(self, connection):
+        """Development builds pass through without version check."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "development"}}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is True
+        assert result.get("romm_version") == "development"
+
+    @pytest.mark.asyncio
+    async def test_missing_version_in_heartbeat(self, connection):
+        """Handles heartbeat without SYSTEM.VERSION gracefully."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.return_value = {"status": "ok"}
+        connection.romm_api.list_platforms.return_value = []
+        result = await connection.service.test_connection()
+        assert result["success"] is True
+        connection.romm_api.set_version.assert_called_with(None)
+
+    @pytest.mark.asyncio
+    async def test_version_cleared_on_connection_failure(self, connection):
+        """Version is cleared when heartbeat fails."""
+        _configure_server(connection.settings)
+        connection.romm_api.get_version.return_value = "5.3.0"  # previously detected
+        connection.romm_api.heartbeat.side_effect = RommConnectionError("refused")
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        connection.romm_api.set_version.assert_called_with(None)
+
+    @pytest.mark.asyncio
+    async def test_timeout_error(self, connection):
+        """Returns server_unreachable on a request timeout."""
+        _configure_server(connection.settings)
+        connection.romm_api.heartbeat.side_effect = RommTimeoutError("timed out")
+        result = await connection.service.test_connection()
+        assert result["success"] is False
+        assert result["reason"] == "server_unreachable"
 
 
 class TestEstablishTokenHappyPath:

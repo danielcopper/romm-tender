@@ -1168,10 +1168,11 @@ export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_pl
 /**
  * What the backend knows about a newer release of this program.
  *
- * `available` is the card on Main: a newer release with its tarball attached
- * exists, this exact version was not dismissed, and the check is switched on.
- * `newer` is the first of those alone, for the Settings section, which states
- * the versions whether or not the card was dismissed. Every failure is silent.
+ * `available` is the card on Main: a newer release with its tarball and
+ * checksum file attached exists, this exact version was not dismissed, and the
+ * check is switched on. `newer` is the first of those alone, for the Settings
+ * section, which states the versions whether or not the card was dismissed.
+ * Every failure is silent.
  */
 export interface UpdateNotice {
   available: boolean;
@@ -1203,6 +1204,47 @@ export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismi
 
 /** Switch the daily release check on or off. On by default. */
 export const setUpdateCheckEnabled = callable<[boolean], UpdateSettingWrite>("set_update_check_enabled");
+
+/** An update the installer rolled back, as its record states it. `rolled_back_at` is ISO-8601 UTC text. */
+export interface UpdateFailure {
+  attempted_version: string;
+  restored_version: string;
+  rolled_back_at: string;
+}
+
+/** Which way the version moved: to a later release, or back to an earlier one. */
+export type UpdateDirection = "updated" | "back";
+
+/**
+ * What the panel owes the user about the last update.
+ *
+ * `announce_version` is the version this backend process moved to, until the
+ * user dismissed its card — `null` on every other start — and
+ * `announce_direction` which way it moved, `null` exactly when the version is.
+ * `toast_owed` says its toast has not been raised yet, and is `false` whenever
+ * there is no version to name. `failure` is the installer's record of an update
+ * it rolled back, read afresh on every call, so it is gone once the installer
+ * removes it, and `null` too where the running version is not the one it
+ * restored. `failure_dismissed` says the user waved away that exact record.
+ */
+export type UpdateOutcome = (
+  | { announce_version: null; announce_direction: null; toast_owed: false }
+  | { announce_version: string; announce_direction: UpdateDirection; toast_owed: boolean }
+) & {
+  failure: UpdateFailure | null;
+  failure_dismissed: boolean;
+};
+
+export const getUpdateOutcome = callable<[], UpdateOutcome>("get_update_outcome");
+
+/** Tell the backend the announcement's toast was raised, so a reloaded panel does not raise it again. */
+export const acknowledgeUpdateToast = callable<[], { success: true }>("acknowledge_update_toast");
+
+/** Wave the announcement's card away for the rest of this backend process. */
+export const dismissUpdateAnnouncement = callable<[], { success: true }>("dismiss_update_announcement");
+
+/** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */
+export const dismissUpdateFailure = callable<[string], UpdateSettingWrite>("dismiss_update_failure");
 
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.

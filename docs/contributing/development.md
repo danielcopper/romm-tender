@@ -266,17 +266,27 @@ order:
    takes the version off the `Server: romm-tender/<version>` field the refusal carries. A missing or stale note and a
    port nobody answers on mean "not yet". The answer costs one `refused GET /: no token` WARNING in `backend.log`.
 
+On a terminal the run is four rows redrawn in place. Where nothing may be redrawn — output piped into a file or the
+journal, or `NO_COLOR` set — each row is a line of its own when it starts and again each time what it is doing changes,
+marked `[..]`, before the line it ends on; so a log holds the whole run, the wait above included — the Service row's
+`waiting for 1.3.0 to answer` — rather than only how each row ended.
+
 When the answer does not come, the installer stops the unit, puts the kept tree back and deletes the failed one, and
-restores the backup — deleting any of those database and settings files the backup does not hold. It then starts the
-previous version, waits for it the same way, says `update to <new> failed; back on <previous>` and exits non-zero. It
-never tries again on its own. It leaves `~/.local/state/romm-tender/update-failure.json`, written through a temporary
-file and renamed, with three keys:
+restores the backup — deleting any of those database and settings files the backup does not hold. It then writes
+`~/.local/state/romm-tender/update-failure.json`, through a temporary file and renamed, and only after that starts the
+previous version, so the record is there when that version logs the rollback at its start. It waits for it the same way,
+says `update to <new> failed; back on <previous>` and exits non-zero, and never tries again on its own. A restore that
+fails ends the run before either: no record, and nothing started. A record that cannot be written — a full disk, a state
+directory it may not write to — does not stop the start: the run says
+`could not record the rolled-back update in <path>; Tender will not show it`, starts the previous version anyway and
+ends as any rollback does, and Tender shows no notice of that rollback. The record has three keys:
 
 ```json
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
 
-`rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file.
+`rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file. The backend reads it and
+never writes it ([UpdateOutcomeService notes](../architecture/backend-architecture.md#updateoutcomeservice-notes)).
 
 `~/.local/lib/romm-tender/install.sh --rollback` does the same restore by hand — the release tarball ships the
 installer, so every tree whose tarball ships `install.sh` carries one — and writes no record, because going back by
@@ -318,6 +328,46 @@ asks is the lock, not a process name, and the one holder it lets through is the 
 The refusal names the holder where it can find one — its pid, command line and the directory it was started in: stop it
 where you started it with Ctrl-C, or `kill <pid>`, then install again. `--uninstall` and `--disable` do not ask, because
 neither starts a backend.
+
+### Trying an update against a fake GitHub
+
+`mise run dev:fake-github` serves the release tarballs in `build/` — what `mise run package` writes — as a GitHub of its
+own on `127.0.0.1:8765`, bound to that address only, and prints the two variables that point Tender at it:
+
+```text
+TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest
+TENDER_DOWNLOAD_BASE=http://127.0.0.1:8765/download
+```
+
+The first answers the way GitHub's latest-release route does, with the tarball's `digest` and the `.sha256` file among
+its assets; under the second, every tarball in the directory is served under its own tag with its `.sha256` beside it,
+so `install.sh --version` reaches an older one too. With more than one tarball in the directory, name the one to call
+latest: `mise run dev:fake-github -- --latest 1.3.0`. `--dir` serves another directory and `--port` listens on another
+port. Four flags make the latest release one an update has to refuse: `--no-digest` (the tarball's asset states no
+digest), `--no-tarball`, `--no-checksum-file`, and `--corrupt-tarball` (the bytes served do not match the digest; the
+update check still offers such a release, and only the download's check finds it). `--corrupt-tarball` does so for every
+tag it serves, not only the latest, so `install.sh --version` fails on an older one too. `--help` lists them.
+
+**The installed service** reads `TENDER_RELEASE_API` from its unit. Add it in a drop-in rather than in the unit itself,
+which the installer writes again on every update:
+
+```bash
+mkdir -p ~/.config/systemd/user/romm-tender.service.d
+printf '[Service]\nEnvironment=TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest\n' \
+    > ~/.config/systemd/user/romm-tender.service.d/fake-github.conf
+systemctl --user daemon-reload
+systemctl --user restart romm-tender
+```
+
+The check asks at most once a day, so press **Check now** in Settings › Updates to ask at once. To point the service
+back at GitHub, remove `fake-github.conf`, then `daemon-reload` and restart again.
+
+**`install.sh`** reads both variables from its own environment:
+
+```bash
+TENDER_RELEASE_API=http://127.0.0.1:8765/api/releases/latest \
+    TENDER_DOWNLOAD_BASE=http://127.0.0.1:8765/download bash install.sh
+```
 
 ## Linting
 

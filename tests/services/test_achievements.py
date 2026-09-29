@@ -1,26 +1,20 @@
 import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_path_exists_reader import FakePathExistsReader
-from fakes.fake_renderer_gc import FakeRendererGc
-from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
+from fakes.system_time import FakeClock
 
-from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from lib.errors import RommConnectionError, RommNotFoundError
 from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 
 
 def _seed_rom(uow: FakeUnitOfWork, rom_id: int, *, app_id=None, ra_id=None, name="Game", platform_slug="snes") -> None:
@@ -52,70 +46,54 @@ def clock():
     return FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC))
 
 
+@dataclass
+class AchievementsHarness:
+    """The achievements service, the game-detail service that reads it, and their seams.
+
+    ``uow`` is the one :class:`FakeUnitOfWork` both services read, so a
+    ``roms`` row a test seeds there is visible to the achievements reads and
+    to the game-detail aggregation alike.
+    """
+
+    service: AchievementsService
+    game_detail: GameDetailService
+    uow: FakeUnitOfWork
+    romm_api: MagicMock
+
+
 @pytest.fixture
-def plugin(clock, emit, logger, home):
-    p = _make_testable_plugin()
-    p.settings = {
+def achievements(clock, logger) -> AchievementsHarness:
+    settings = {
         "romm_url": "http://romm.local",
         "romm_user": "user",
         "romm_pass": "pass",
         "enabled_platforms": {},
         "log_level": "warn",
     }
-    p._http_adapter = MagicMock()
-    p._romm_api = MagicMock()
-
-    # Shared UoW: ra_id / save / install rows a test seeds are visible to both
-    # the achievements reader and the game-detail aggregation.
+    romm_api = MagicMock()
     uow = FakeUnitOfWork()
-    p._uow = uow
 
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    p._sync_service = LibraryService(
-        config=LibraryServiceConfig(
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            emit=emit,
-            clock=clock,
-            uuid_gen=FakeUuidGen(),
-            sleeper=FakeSleeper(),
-            settings_persister=MagicMock(),
-            log_debug=p._log_debug,
-            artwork=FakeArtworkManager(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            disc_resolver=FakeDiscResolver(),
-            renderer_rss=FakeRendererRss(),
-            renderer_gc=FakeRendererGc(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
-        ),
-    )
-    p._achievements_service = AchievementsService(
+    service = AchievementsService(
         config=AchievementsServiceConfig(
-            romm_api=p._romm_api,
+            romm_api=romm_api,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             loop=running_loop(),
             logger=logger,
             clock=clock,
-            log_debug=p._log_debug,
+            log_debug=lambda msg: None,
         ),
     )
     bios_checker = MagicMock()
     bios_checker.check_platform_bios = AsyncMock(return_value={"needs_bios": False})
-    p._game_detail_service = GameDetailService(
+    game_detail = GameDetailService(
         config=GameDetailServiceConfig(
-            settings=p.settings,
+            settings=settings,
+            loop=running_loop(),
             logger=logger,
             clock=clock,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             bios_checker=bios_checker,
-            achievements=p._achievements_service,
+            achievements=service,
             active_core=FakeActiveCoreResolver(default=(None, None)),
             path_exists=FakePathExistsReader(),
             retrodeck_paths=FakeRetroDeckPaths(),
@@ -123,20 +101,18 @@ def plugin(clock, emit, logger, home):
             candidate_probe=lambda platform_slug, fs_name: False,
         ),
     )
-    return p
+    return AchievementsHarness(service=service, game_detail=game_detail, uow=uow, romm_api=romm_api)
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop(plugin):
-    """Ensure service loops match the running event loop for async tests."""
-    plugin._achievements_service._loop = asyncio.get_running_loop()
-    # ``get_cached_game_detail`` runs its work on an executor worker.
-    plugin.loop = asyncio.get_running_loop()
+async def _set_event_loop(achievements):
+    """Bind the achievements service to the running event loop."""
+    achievements.service._loop = asyncio.get_running_loop()
 
 
 @pytest.fixture
-def svc(plugin):
-    return plugin._achievements_service
+def svc(achievements):
+    return achievements.service
 
 
 # ── Sample data helpers ──────────────────────────────────────
@@ -239,48 +215,48 @@ class TestGetRaUsername:
 
 class TestFetchRaUsername:
     @pytest.mark.asyncio
-    async def test_fetches_and_caches(self, svc, plugin):
+    async def test_fetches_and_caches(self, svc, achievements):
         user_data = {"ra_username": "  RetroPlayer  "}
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc._fetch_ra_username()
 
         assert result == "RetroPlayer"
         assert svc._achievements_cache["_ra_user"]["username"] == "RetroPlayer"
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_ra_username_on_user(self, svc, plugin):
+    async def test_returns_empty_when_no_ra_username_on_user(self, svc, achievements):
         user_data = {"ra_username": None}
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc._fetch_ra_username()
 
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_returns_empty_on_api_error(self, svc, plugin):
-        plugin._romm_api.get_current_user.side_effect = Exception("Network error")
+    async def test_returns_empty_on_api_error(self, svc, achievements):
+        achievements.romm_api.get_current_user.side_effect = Exception("Network error")
         result = await svc._fetch_ra_username()
 
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_returns_stale_cache_on_api_error(self, svc, plugin):
+    async def test_returns_stale_cache_on_api_error(self, svc, achievements):
         svc._achievements_cache["_ra_user"] = {
             "username": "OldUser",
             "cached_at": svc._clock.time() - (2 * 3600),  # expired
         }
 
-        plugin._romm_api.get_current_user.side_effect = Exception("Network error")
+        achievements.romm_api.get_current_user.side_effect = Exception("Network error")
         result = await svc._fetch_ra_username()
 
         assert result == "OldUser"
 
     @pytest.mark.asyncio
-    async def test_empty_string_ra_username(self, svc, plugin):
+    async def test_empty_string_ra_username(self, svc, achievements):
         user_data = {"ra_username": ""}
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc._fetch_ra_username()
 
         assert result == ""
@@ -399,12 +375,12 @@ class TestProgressCacheEntry:
 
 class TestGetAchievements:
     @pytest.mark.asyncio
-    async def test_happy_path_fetches_and_caches(self, svc, plugin):
+    async def test_happy_path_fetches_and_caches(self, svc, achievements):
         """Fetches from API, returns achievements, caches result."""
-        _seed_rom(plugin._uow, 42, ra_id=9999, app_id=100)
+        _seed_rom(achievements.uow, 42, ra_id=9999, app_id=100)
         rom_data = _sample_rom_data()
 
-        plugin._romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_rom.return_value = rom_data
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
@@ -417,32 +393,32 @@ class TestGetAchievements:
         assert svc._achievements_cache["42"]["ra_id"] == 9999
 
     @pytest.mark.asyncio
-    async def test_cache_hit_returns_without_api_call(self, svc, plugin):
+    async def test_cache_hit_returns_without_api_call(self, svc, achievements):
         """Returns cached data without calling get_rom."""
         svc._achievements_cache["42"] = {
             "achievements": [{"ra_id": 1001, "title": "Cached"}],
             "cached_at": svc._clock.time(),
         }
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
         result = await svc.get_achievements(42)
 
-        plugin._romm_api.get_rom.assert_not_called()
+        achievements.romm_api.get_rom.assert_not_called()
         assert result["success"] is True
         assert result["total"] == 1
         assert result["achievements"][0]["title"] == "Cached"
 
     @pytest.mark.asyncio
-    async def test_cache_expired_refetches(self, svc, plugin):
+    async def test_cache_expired_refetches(self, svc, achievements):
         """Refetches from API when cache is older than TTL."""
         svc._achievements_cache["42"] = {
             "achievements": [{"ra_id": 1001, "title": "Old"}],
             "cached_at": svc._clock.time() - (25 * 3600),
         }
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
 
-        plugin._romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_rom.return_value = rom_data
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
@@ -450,9 +426,9 @@ class TestGetAchievements:
         assert result["achievements"][0]["title"] == "First Blood"
 
     @pytest.mark.asyncio
-    async def test_no_ra_id_returns_empty(self, svc, plugin):
+    async def test_no_ra_id_returns_empty(self, svc, achievements):
         """When no ra_id in registry, returns empty with no_ra_id flag."""
-        _seed_rom(plugin._uow, 42, app_id=100)  # no ra_id
+        _seed_rom(achievements.uow, 42, app_id=100)  # no ra_id
 
         result = await svc.get_achievements(42)
 
@@ -471,15 +447,15 @@ class TestGetAchievements:
         assert result["no_ra_id"] is True
 
     @pytest.mark.asyncio
-    async def test_api_error_returns_stale_cache(self, svc, plugin):
+    async def test_api_error_returns_stale_cache(self, svc, achievements):
         """On API error, returns stale cache if available."""
         svc._achievements_cache["42"] = {
             "achievements": [{"ra_id": 1001, "title": "Stale"}],
             "cached_at": svc._clock.time() - (25 * 3600),  # expired
         }
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
-        plugin._romm_api.get_rom.side_effect = Exception("Connection refused")
+        achievements.romm_api.get_rom.side_effect = Exception("Connection refused")
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
@@ -487,11 +463,11 @@ class TestGetAchievements:
         assert result["achievements"][0]["title"] == "Stale"
 
     @pytest.mark.asyncio
-    async def test_api_error_no_cache_returns_error(self, svc, plugin):
+    async def test_api_error_no_cache_returns_error(self, svc, achievements):
         """On API error with no cache, returns error with empty list."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
-        plugin._romm_api.get_rom.side_effect = Exception("Connection refused")
+        achievements.romm_api.get_rom.side_effect = Exception("Connection refused")
         result = await svc.get_achievements(42)
 
         assert result["success"] is False
@@ -500,26 +476,26 @@ class TestGetAchievements:
         assert "Connection refused" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_transport_error_reason_is_server_unreachable(self, svc, plugin):
+    async def test_transport_error_reason_is_server_unreachable(self, svc, achievements):
         """A genuine transport failure keeps the offline slug the tab routes on."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
-        plugin._romm_api.get_rom.side_effect = RommConnectionError("Connection refused")
+        achievements.romm_api.get_rom.side_effect = RommConnectionError("Connection refused")
         result = await svc.get_achievements(42)
 
         assert result["success"] is False
         assert result["reason"] == "server_unreachable"
 
     @pytest.mark.asyncio
-    async def test_definitive_404_reason_is_not_found(self, svc, plugin):
+    async def test_definitive_404_reason_is_not_found(self, svc, achievements):
         """A 404 must not drive the achievements tab's offline line (#1570).
 
         RomMGameInfoPanel feeds the global connection store on
         reason == "server_unreachable" from this very call.
         """
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
-        plugin._romm_api.get_rom.side_effect = RommNotFoundError("HTTP 404: Not Found")
+        achievements.romm_api.get_rom.side_effect = RommNotFoundError("HTTP 404: Not Found")
         result = await svc.get_achievements(42)
 
         assert result["success"] is False
@@ -527,24 +503,24 @@ class TestGetAchievements:
         assert result["reason"] != "server_unreachable"
 
     @pytest.mark.asyncio
-    async def test_rom_id_cast_to_int(self, svc, plugin):
+    async def test_rom_id_cast_to_int(self, svc, achievements):
         """rom_id is cast to int, so string input works too."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
 
-        plugin._romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_rom.return_value = rom_data
         result = await svc.get_achievements("42")
 
         assert result["success"] is True
         assert result["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_empty_achievements_from_api(self, svc, plugin):
+    async def test_empty_achievements_from_api(self, svc, achievements):
         """API returns ROM with no achievements."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = {"id": 42, "ra_metadata": {"achievements": []}}
 
-        plugin._romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_rom.return_value = rom_data
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
@@ -557,15 +533,15 @@ class TestGetAchievements:
 
 class TestGetAchievementProgress:
     @pytest.mark.asyncio
-    async def test_happy_path(self, svc, plugin):
+    async def test_happy_path(self, svc, achievements):
         """Fetches user progression, returns earned/total."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = _sample_user_data(ra_id=9999, earned=5, total=10, earned_hardcore=3)
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is True
@@ -575,15 +551,15 @@ class TestGetAchievementProgress:
         assert len(result["earned_achievements"]) == 5
 
     @pytest.mark.asyncio
-    async def test_no_ra_username_fetches_from_romm(self, svc, plugin):
+    async def test_no_ra_username_fetches_from_romm(self, svc, achievements):
         """When no cached RA username, fetches from get_current_user."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data_with_username = _sample_user_data(ra_id=9999, earned=5, total=10)
 
-        plugin._romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_rom.return_value = rom_data
         # First call: _fetch_ra_username, second call: progression fetch
-        plugin._romm_api.get_current_user.side_effect = [
+        achievements.romm_api.get_current_user.side_effect = [
             {"ra_username": "RetroPlayer"},
             user_data_with_username,
         ]
@@ -595,11 +571,11 @@ class TestGetAchievementProgress:
         assert svc._achievements_cache["_ra_user"]["username"] == "RetroPlayer"
 
     @pytest.mark.asyncio
-    async def test_no_ra_username_anywhere_returns_error(self, svc, plugin):
+    async def test_no_ra_username_anywhere_returns_error(self, svc, achievements):
         """When no RA username in cache and RomM user has none, returns error."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
-        plugin._romm_api.get_current_user.return_value = {"ra_username": None}
+        achievements.romm_api.get_current_user.return_value = {"ra_username": None}
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is False
@@ -607,10 +583,10 @@ class TestGetAchievementProgress:
         assert result["earned"] == 0
 
     @pytest.mark.asyncio
-    async def test_no_ra_id_returns_zeros(self, svc, plugin):
+    async def test_no_ra_id_returns_zeros(self, svc, achievements):
         """When no ra_id in registry, returns zeros with no_ra_id flag."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, app_id=100)  # no ra_id
+        _seed_rom(achievements.uow, 42, app_id=100)  # no ra_id
 
         result = await svc.get_achievement_progress(42)
 
@@ -620,10 +596,10 @@ class TestGetAchievementProgress:
         assert result["no_ra_id"] is True
 
     @pytest.mark.asyncio
-    async def test_cache_hit(self, svc, plugin):
+    async def test_cache_hit(self, svc, achievements):
         """Returns cached progress without API call."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {
             "user_progress": {
                 "earned": 3,
@@ -636,17 +612,17 @@ class TestGetAchievementProgress:
 
         result = await svc.get_achievement_progress(42)
 
-        plugin._romm_api.get_rom.assert_not_called()
-        plugin._romm_api.get_current_user.assert_not_called()
+        achievements.romm_api.get_rom.assert_not_called()
+        achievements.romm_api.get_current_user.assert_not_called()
         assert result["success"] is True
         assert result["earned"] == 3
         assert result["total"] == 10
 
     @pytest.mark.asyncio
-    async def test_game_not_found_in_progression(self, svc, plugin):
+    async def test_game_not_found_in_progression(self, svc, achievements):
         """When the game's ra_id is not in progression results, returns zeros."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         # User data has progression for a different game
         user_data = {
@@ -654,8 +630,8 @@ class TestGetAchievementProgress:
             "ra_progression": {"results": [{"rom_ra_id": 1111, "num_awarded": 5}]},
         }
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is True
@@ -663,10 +639,10 @@ class TestGetAchievementProgress:
         assert result["total"] == 2  # total from achievements list
 
     @pytest.mark.asyncio
-    async def test_api_error_returns_stale_cache(self, svc, plugin):
+    async def test_api_error_returns_stale_cache(self, svc, achievements):
         """On API error, returns stale progress cache if available."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         # Pre-populate achievements cache so get_achievements succeeds from cache
         svc._achievements_cache["42"] = {
             "achievements": _sample_achievements(),
@@ -681,7 +657,7 @@ class TestGetAchievementProgress:
         }
 
         # get_achievements cache hit, then get_current_user fails
-        plugin._romm_api.get_current_user.side_effect = Exception("Network error")
+        achievements.romm_api.get_current_user.side_effect = Exception("Network error")
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is True
@@ -689,17 +665,17 @@ class TestGetAchievementProgress:
         assert result["earned"] == 2
 
     @pytest.mark.asyncio
-    async def test_api_error_no_cache_returns_error(self, svc, plugin):
+    async def test_api_error_no_cache_returns_error(self, svc, achievements):
         """On API error with no stale cache, returns error."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         # Pre-populate achievements cache so get_achievements succeeds
         svc._achievements_cache["42"] = {
             "achievements": _sample_achievements(),
             "cached_at": svc._clock.time(),
         }
 
-        plugin._romm_api.get_current_user.side_effect = Exception("Network error")
+        achievements.romm_api.get_current_user.side_effect = Exception("Network error")
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is False
@@ -708,16 +684,16 @@ class TestGetAchievementProgress:
         assert "Network error" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_definitive_404_reason_is_not_found(self, svc, plugin):
+    async def test_definitive_404_reason_is_not_found(self, svc, achievements):
         """The progress call's 404 twin — same store-feed hazard (#1570)."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {
             "achievements": _sample_achievements(),
             "cached_at": svc._clock.time(),
         }
 
-        plugin._romm_api.get_current_user.side_effect = RommNotFoundError("HTTP 404: Not Found")
+        achievements.romm_api.get_current_user.side_effect = RommNotFoundError("HTTP 404: Not Found")
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is False
@@ -725,15 +701,15 @@ class TestGetAchievementProgress:
         assert result["reason"] != "server_unreachable"
 
     @pytest.mark.asyncio
-    async def test_empty_ra_progression(self, svc, plugin):
+    async def test_empty_ra_progression(self, svc, achievements):
         """User data with empty ra_progression returns zeros."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = {"ra_username": "RetroPlayer", "ra_progression": {"results": []}}
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is True
@@ -741,30 +717,30 @@ class TestGetAchievementProgress:
         assert result["total"] == 2  # from achievement list count
 
     @pytest.mark.asyncio
-    async def test_none_ra_progression(self, svc, plugin):
+    async def test_none_ra_progression(self, svc, achievements):
         """User data with None ra_progression returns zeros."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = {"ra_username": "RetroPlayer", "ra_progression": None}
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert result["success"] is True
         assert result["earned"] == 0
 
     @pytest.mark.asyncio
-    async def test_progress_caches_result(self, svc, plugin):
+    async def test_progress_caches_result(self, svc, achievements):
         """Successful progress fetch is cached in _achievements_cache."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = _sample_user_data(ra_id=9999, earned=7, total=10)
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         await svc.get_achievement_progress(42)
 
         cached = svc._achievements_cache["42"]["user_progress"]
@@ -773,24 +749,24 @@ class TestGetAchievementProgress:
         assert "cached_at" in cached
 
     @pytest.mark.asyncio
-    async def test_cached_at_not_in_response(self, svc, plugin):
+    async def test_cached_at_not_in_response(self, svc, achievements):
         """The cached_at timestamp is not leaked into the response."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = _sample_user_data(ra_id=9999, earned=7, total=10)
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert "cached_at" not in result
 
     @pytest.mark.asyncio
-    async def test_max_possible_fallback_to_total(self, svc, plugin):
+    async def test_max_possible_fallback_to_total(self, svc, achievements):
         """When max_possible is None/0, falls back to total from achievements list."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = {
             "ra_username": "RetroPlayer",
@@ -801,18 +777,18 @@ class TestGetAchievementProgress:
             },
         }
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         # Fallback: total should be len(achievements) = 2
         assert result["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_none_num_awarded_treated_as_zero(self, svc, plugin):
+    async def test_none_num_awarded_treated_as_zero(self, svc, achievements):
         """When num_awarded is None in progression, treat as 0."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = {
             "ra_username": "RetroPlayer",
@@ -828,23 +804,23 @@ class TestGetAchievementProgress:
             },
         }
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.get_achievement_progress(42)
 
         assert result["earned"] == 0
         assert result["earned_hardcore"] == 0
 
     @pytest.mark.asyncio
-    async def test_caches_ra_username_from_users_me_response(self, svc, plugin):
+    async def test_caches_ra_username_from_users_me_response(self, svc, achievements):
         """The get_current_user call in progress fetch also caches ra_username."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = _sample_user_data(ra_id=9999, earned=5, total=10, ra_username="NewUser")
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         await svc.get_achievement_progress(42)
 
         # RA username should have been updated from the users/me response
@@ -856,10 +832,10 @@ class TestGetAchievementProgress:
 
 class TestSyncAchievementsAfterSession:
     @pytest.mark.asyncio
-    async def test_invalidates_cache_and_refetches(self, svc, plugin):
+    async def test_invalidates_cache_and_refetches(self, svc, achievements):
         """Invalidates progress cache and fetches fresh data."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
 
         # Pre-populate cache with old progress
         svc._achievements_cache["42"] = {
@@ -874,7 +850,7 @@ class TestSyncAchievementsAfterSession:
 
         user_data = _sample_user_data(ra_id=9999, earned=5, total=10)
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.sync_achievements_after_session(42)
 
         assert result["success"] is True
@@ -883,10 +859,10 @@ class TestSyncAchievementsAfterSession:
         assert svc._achievements_cache["42"]["user_progress"]["earned"] == 5
 
     @pytest.mark.asyncio
-    async def test_cache_cleared_before_refetch(self, svc, plugin):
+    async def test_cache_cleared_before_refetch(self, svc, achievements):
         """Verifies that user_progress is deleted before get_achievement_progress is called."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {
             "achievements": _sample_achievements(),
             "cached_at": svc._clock.time(),
@@ -909,32 +885,32 @@ class TestSyncAchievementsAfterSession:
 
         user_data = _sample_user_data(ra_id=9999, earned=5, total=10)
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         with patch.object(svc, "get_achievement_progress", side_effect=spy_get_progress):
             await svc.sync_achievements_after_session(42)
 
         assert call_order == [True], "user_progress should have been deleted before refetch"
 
     @pytest.mark.asyncio
-    async def test_works_when_no_prior_cache(self, svc, plugin):
+    async def test_works_when_no_prior_cache(self, svc, achievements):
         """Works correctly when no prior cache exists."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         rom_data = _sample_rom_data()
         user_data = _sample_user_data(ra_id=9999, earned=3, total=10)
 
-        plugin._romm_api.get_rom.return_value = rom_data
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_rom.return_value = rom_data
+        achievements.romm_api.get_current_user.return_value = user_data
         result = await svc.sync_achievements_after_session(42)
 
         assert result["success"] is True
         assert result["earned"] == 3
 
     @pytest.mark.asyncio
-    async def test_preserves_achievements_cache_on_invalidation(self, svc, plugin):
+    async def test_preserves_achievements_cache_on_invalidation(self, svc, achievements):
         """Invalidating progress cache preserves the achievements list cache."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {
             "achievements": _sample_achievements(),
             "cached_at": svc._clock.time(),
@@ -948,7 +924,7 @@ class TestSyncAchievementsAfterSession:
 
         user_data = _sample_user_data(ra_id=9999, earned=5, total=10)
 
-        plugin._romm_api.get_current_user.return_value = user_data
+        achievements.romm_api.get_current_user.return_value = user_data
         await svc.sync_achievements_after_session(42)
 
         # Achievements list should still be cached
@@ -961,10 +937,10 @@ class TestSyncAchievementsAfterSession:
 
 class TestGetCachedGameDetailAchievements:
     @pytest.mark.asyncio
-    async def test_includes_ra_id_and_summary_with_cache(self, svc, plugin):
+    async def test_includes_ra_id_and_summary_with_cache(self, svc, achievements):
         """When ra_id exists, RA username cached, and progress cached: includes achievement_summary."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
+        _seed_rom(achievements.uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
         svc._achievements_cache["42"] = {
             "user_progress": {
                 "earned": 5,
@@ -974,7 +950,7 @@ class TestGetCachedGameDetailAchievements:
             },
         }
 
-        result = await plugin.get_cached_game_detail(100)
+        result = await achievements.game_detail.get_cached_game_detail(100)
 
         assert result["found"] is True
         assert result["ra_id"] == 9999
@@ -984,46 +960,46 @@ class TestGetCachedGameDetailAchievements:
         assert result["achievement_summary"]["earned_hardcore"] == 3
 
     @pytest.mark.asyncio
-    async def test_no_ra_username_returns_none_summary(self, svc, plugin):
+    async def test_no_ra_username_returns_none_summary(self, svc, achievements):
         """When ra_id exists but no RA username cached, achievement_summary is None."""
         _ = svc
-        _seed_rom(plugin._uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
+        _seed_rom(achievements.uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
 
-        result = await plugin.get_cached_game_detail(100)
+        result = await achievements.game_detail.get_cached_game_detail(100)
 
         assert result["found"] is True
         assert result["ra_id"] == 9999
         assert result["achievement_summary"] is None
 
     @pytest.mark.asyncio
-    async def test_no_ra_id_returns_none(self, svc, plugin):
+    async def test_no_ra_id_returns_none(self, svc, achievements):
         """When no ra_id on the ROM, ra_id is None and achievement_summary is None."""
         _ = svc
-        _seed_rom(plugin._uow, 42, app_id=100, name="Test Game", platform_slug="")  # no ra_id
+        _seed_rom(achievements.uow, 42, app_id=100, name="Test Game", platform_slug="")  # no ra_id
 
-        result = await plugin.get_cached_game_detail(100)
+        result = await achievements.game_detail.get_cached_game_detail(100)
 
         assert result["found"] is True
         assert result["ra_id"] is None
         assert result["achievement_summary"] is None
 
     @pytest.mark.asyncio
-    async def test_ra_username_cached_but_no_progress(self, svc, plugin):
+    async def test_ra_username_cached_but_no_progress(self, svc, achievements):
         """When RA username cached and ra_id exists but no progress cache, summary is None."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
+        _seed_rom(achievements.uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
 
-        result = await plugin.get_cached_game_detail(100)
+        result = await achievements.game_detail.get_cached_game_detail(100)
 
         assert result["found"] is True
         assert result["ra_id"] == 9999
         assert result["achievement_summary"] is None
 
     @pytest.mark.asyncio
-    async def test_expired_progress_cache_returns_none_summary(self, svc, plugin):
+    async def test_expired_progress_cache_returns_none_summary(self, svc, achievements):
         """Expired progress cache returns None for achievement_summary."""
         _seed_ra_username_cache(svc)
-        _seed_rom(plugin._uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
+        _seed_rom(achievements.uow, 42, ra_id=9999, app_id=100, name="Test Game", platform_slug="")
         svc._achievements_cache["42"] = {
             "user_progress": {
                 "earned": 5,
@@ -1033,7 +1009,7 @@ class TestGetCachedGameDetailAchievements:
             },
         }
 
-        result = await plugin.get_cached_game_detail(100)
+        result = await achievements.game_detail.get_cached_game_detail(100)
 
         assert result["found"] is True
         assert result["achievement_summary"] is None
@@ -1046,10 +1022,10 @@ class TestReadsRaIdFromRoms:
     """The ra_id the sync stamps on the ``Rom`` row drives the achievements reads."""
 
     @pytest.mark.asyncio
-    async def test_rom_with_ra_id_unlocks_fetch(self, svc, plugin):
+    async def test_rom_with_ra_id_unlocks_fetch(self, svc, achievements):
         """A ROM whose ``Rom.ra_id`` is set is fetched (not short-circuited as no_ra_id)."""
-        _seed_rom(plugin._uow, 42, ra_id=9999)
-        plugin._romm_api.get_rom.return_value = _sample_rom_data()
+        _seed_rom(achievements.uow, 42, ra_id=9999)
+        achievements.romm_api.get_rom.return_value = _sample_rom_data()
 
         result = await svc.get_achievements(42)
 
@@ -1058,21 +1034,21 @@ class TestReadsRaIdFromRoms:
         assert "no_ra_id" not in result
 
     @pytest.mark.asyncio
-    async def test_rom_without_ra_id_short_circuits(self, svc, plugin):
+    async def test_rom_without_ra_id_short_circuits(self, svc, achievements):
         """A ROM row with NULL ``ra_id`` short-circuits to the no_ra_id response."""
-        _seed_rom(plugin._uow, 42, app_id=100)  # ra_id stays None
+        _seed_rom(achievements.uow, 42, app_id=100)  # ra_id stays None
 
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
         assert result["no_ra_id"] is True
-        plugin._romm_api.get_rom.assert_not_called()
+        achievements.romm_api.get_rom.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_missing_rom_row_short_circuits(self, svc, plugin):
+    async def test_missing_rom_row_short_circuits(self, svc, achievements):
         """No ``roms`` row at all short-circuits to the no_ra_id response."""
         result = await svc.get_achievements(42)
 
         assert result["success"] is True
         assert result["no_ra_id"] is True
-        plugin._romm_api.get_rom.assert_not_called()
+        achievements.romm_api.get_rom.assert_not_called()

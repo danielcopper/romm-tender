@@ -13,7 +13,6 @@ via the root conftest, the same way ``fakes/`` is reached.
 """
 
 import logging
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -70,51 +69,7 @@ def _make_conflict_rules(
 
 
 def _make_testable_plugin():
-    """Return a TestablePlugin instance with test-only attributes declared.
-
-    Pre-wires a no-op ``_debug_logger`` so any service that consumes
-    ``Plugin._log_debug`` (which forwards through ``_debug_logger``) works
-    out of the box. Tests that want to assert on debug-log behaviour can
-    override ``_debug_logger`` after construction (e.g. with the real
-    ``SettingsAwareDebugLogger`` bound to a settings dict they control).
-    """
+    """Return a bare ``Plugin`` for the endpoint delegation tests to hang their mocked services on."""
     from main import Plugin
 
-    class TestablePlugin(Plugin):
-        """Plugin subclass that declares test-only attributes for type safety.
-
-        Genuinely test-fixture-only attributes live here: ``_fake_api``,
-        ``_resolve_system``, ``_save_settings``, plus the Unit-of-Work
-        handles tests seed and assert against (``_uow``, ``_uow_factory``),
-        the prune conflicts the services a test wires share
-        (``_prune_conflicts``) and the per-test ``_tmp_path`` scratch dir.
-        Test-fixture handles shared with production wiring (``_state``,
-        ``_http_adapter``, ...) are declared on ``Plugin`` itself as
-        ``Any``-typed annotation slots so test-only construction paths
-        type-check uniformly.
-        ``_save_settings`` is a test-only handle for the settings dict tests
-        thread into ``SaveService`` / ``PlaytimeService``; production threads
-        its settings store as ``self.settings``, never under this name.
-        """
-
-        _fake_api: Any
-        _resolve_system: Any
-        _save_settings: Any
-        _uow: Any
-        _uow_factory: Any
-        _prune_conflicts: Any
-        _tmp_path: Any
-        _core_info: Any
-        _platform_core_reader: Any
-        _active_core: Any
-        _m3u_supported: Any
-        _system_extensions: Any
-        _install_recorder: Any
-        _renderer_rss: Any
-        _renderer_gc: Any
-        _save_directories: Any
-
-    instance = TestablePlugin()
-    instance._prune_conflicts = _make_prune_conflicts()
-    instance._debug_logger = lambda msg: None
-    return instance
+    return Plugin()

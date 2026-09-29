@@ -1,0 +1,39 @@
+-- =============================================================================
+-- 025_add_platform_skip_revoked.sql — a platform stamp that may no longer skip
+-- #2094 (a platform turned off and back on skips without its unbound games)
+-- =============================================================================
+--
+-- A platform's completion stamp is read for two different things: the
+-- incremental skip trusts it to say the local mirror is complete, and bulk
+-- discovery of removed games trusts its fetch generation to say which rows
+-- RomM's last complete fetch returned. The local removals, and the end-of-run
+-- stale removal on a platform the run did not process, unbind rows in a way
+-- the skip's counts cannot see: they break the first and leave the second
+-- intact — the rows keep their generation, and the generation still records
+-- what RomM served.
+--
+-- Deleting the stamp answered the first and threw the second away: a platform
+-- whose stamp is gone produces no removal candidates, and one whose sync stays
+-- turned off never gets a stamp back. This column lets the stamp stay for the
+-- readers that want its generation while the skip treats it as absent:
+--
+--   * platform_sync_state.skip_revoked — 1 once one of those unbinds touched
+--     the platform; the skip-side readers then read no stamp.
+--
+-- The platform's next apply deletes the row when it starts, so the flag lasts
+-- until then, and no skip is possible again until that apply completes and
+-- writes a fresh stamp with 0. Force Full Sync still clears the table.
+--
+-- Every existing stamp is revoked here. One written before this migration may
+-- stand over games a stale removal already unbound while the platform was
+-- turned off, and would keep skipping them once it is turned back on. Revoking
+-- them all costs each enabled platform one full fetch on the first sync after
+-- the upgrade, and the preview offers Apply for it even with nothing else to
+-- do; that apply re-stamps the platform. A platform whose sync is off is not
+-- fetched until it is turned back on.
+--
+-- Transaction-safe DDL/DML only — the runner (adapters/sqlite_migrations.py)
+-- wraps BEGIN/COMMIT and stamps PRAGMA user_version = 25.
+-- -----------------------------------------------------------------------------
+ALTER TABLE platform_sync_state ADD COLUMN skip_revoked INTEGER NOT NULL DEFAULT 0;  -- 1 = the skip reads no stamp
+UPDATE platform_sync_state SET skip_revoked = 1 WHERE skip_revoked = 0;

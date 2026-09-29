@@ -2,34 +2,27 @@ import asyncio
 import json
 import logging
 import os
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin, _record_operations_at_lease
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
-from fakes.fake_renderer_gc import FakeRendererGc
-from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
-from adapters.firmware_file import FirmwareFileAdapter
 from adapters.migration_file import MigrationFileAdapter
-from adapters.persistence import PersistenceAdapter
-from adapters.steam_config import SteamConfigAdapter
+from lib.prune_conflicts import PruneConflicts
+from lib.retrodeck_health import RetroDeckConfigHealth
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
-from services.firmware import FirmwareService, FirmwareServiceConfig
-from services.library import LibraryService, LibraryServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 
@@ -76,113 +69,81 @@ class RecordingSaveDirectories:
             raise self._error
 
 
+@dataclass
+class MigrationHarness:
+    """The migration service and the seams its tests seed or assert against.
+
+    ``uow`` is the one :class:`FakeUnitOfWork` the migration service and the
+    relaunch resolvers behind it read and write, so a row a test seeds there is
+    the row the migration sees. ``core_info`` is the core-info fake the relaunch
+    commands are baked through, so a test can seed ``available_cores``.
+    """
+
+    service: MigrationService
+    uow: FakeUnitOfWork
+    core_info: FakeCoreInfoProvider
+    save_directories: RecordingSaveDirectories
+    prune_conflicts: PruneConflicts
+
+
 @pytest.fixture
-def plugin(tmp_path, fake_romm_api, emit, logger, home):
-    p = _make_testable_plugin()
-    p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._http_adapter = MagicMock()
-
-    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    p._romm_api = fake_romm_api
-    p._settings_persister = FakeSettingsPersister()
-
-    # ONE shared FakeUnitOfWork the migration service reads/writes and tests
-    # seed/assert against. Markers (retrodeck_home_path*) and install records
-    # both live in this unit now.
+def migration(logger) -> MigrationHarness:
+    settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
+    prune_conflicts = _make_prune_conflicts()
     uow = FakeUnitOfWork()
-    p._uow = uow
-    # Shared core-info fake so a relaunch test can seed ``available_cores`` and
-    # assert a per-game emulator_override re-bakes the ``-e`` form post-move. The
-    # real ActiveCoreResolver folds the DB override over this fake's es_systems
-    # default — the seam MigrationService re-bakes through on relocation.
-    p._core_info = FakeCoreInfoProvider()
-    p._active_core = ActiveCoreResolver(
+    # The real ActiveCoreResolver folds the DB override over this fake's
+    # es_systems default — the seam MigrationService re-bakes through on
+    # relocation, so a relaunch test can assert a per-game emulator_override
+    # re-bakes the ``-e`` form post-move.
+    core_info = FakeCoreInfoProvider()
+    active_core = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            core_info=p._core_info,
+            core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             logger=logger,
         ),
     )
-    p._firmware_service = FirmwareService(
-        config=FirmwareServiceConfig(
-            romm_api=fake_romm_api,
-            loop=running_loop(),
-            logger=logger,
-            clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-            firmware_file_store=FirmwareFileAdapter(),
-            firmware_resolver=FakeFirmwareResolver(),
-            platform_firmware_resolver=FakeFirmwareResolver(),
-            retrodeck_paths=FakeRetroDeckPaths(),
-            core_info=FakeCoreInfoProvider(),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
-            platform_core_reader=FakePlatformCoreReader(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
-        ),
-    )
 
-    p._sync_service = LibraryService(
-        config=LibraryServiceConfig(
-            romm_api=fake_romm_api,
-            steam_config=steam_config,
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            emit=emit,
-            clock=FakeClock(),
-            uuid_gen=FakeUuidGen(),
-            sleeper=FakeSleeper(),
-            settings_persister=p._settings_persister,
-            log_debug=p._log_debug,
-            artwork=FakeArtworkManager(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            active_core=p._active_core,
-            disc_resolver=FakeDiscResolver(),
-            renderer_rss=FakeRendererRss(),
-            renderer_gc=FakeRendererGc(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
-        ),
-    )
-
-    # Real RelaunchOptionsResolver over the shared fake UoW + p._active_core so
-    # the migration relaunch-emit integration tests still bake real launch
+    # Real RelaunchOptionsResolver over the shared fake UoW + the active-core
+    # resolver so the migration relaunch-emit integration tests bake real launch
     # commands from the relocated rom_installs.file_path.
     relaunch_options = RelaunchOptionsResolver(
         config=RelaunchOptionsResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            active_core=p._active_core,
+            active_core=active_core,
             disc_resolver=FakeDiscResolver(),
             loop=running_loop(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
 
-    firmware_resolver = FakeFirmwareResolver()
-    p._save_directories = RecordingSaveDirectories()
-    p._migration_service = MigrationService(
+    save_directories = RecordingSaveDirectories()
+    service = MigrationService(
         config=MigrationServiceConfig(
             migration_file_store=MigrationFileAdapter(),
-            settings=p.settings,
+            settings=settings,
             loop=running_loop(),
             logger=logger,
-            settings_persister=p._settings_persister,
+            settings_persister=FakeSettingsPersister(),
             emit=RecordingEmitter(),
-            firmware_resolver=firmware_resolver,
+            firmware_resolver=FakeFirmwareResolver(),
             retrodeck_paths=FakeRetroDeckPaths(),
             relaunch_options=relaunch_options,
-            save_directories=p._save_directories.provide,
+            save_directories=save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    return p
+    return MigrationHarness(
+        service=service,
+        uow=uow,
+        core_info=core_info,
+        save_directories=save_directories,
+        prune_conflicts=prune_conflicts,
+    )
 
 
 def _seed_install(uow, rom_id, *, file_path, rom_dir=None, system="n64", platform_slug="", app_id=None):
@@ -241,11 +202,9 @@ def _seed_bios(uow, *, platform_slug, file_name, file_path, firmware_id=None):
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop(plugin):
-    """Ensure plugin.loop and migration service loop match the running event loop."""
-    loop = asyncio.get_running_loop()
-    plugin.loop = loop
-    plugin._migration_service._loop = loop
+async def _set_event_loop(migration):
+    """Bind the migration service to the running event loop."""
+    migration.service._loop = asyncio.get_running_loop()
 
 
 class _RecordingLoop:
@@ -269,45 +228,41 @@ class _RecordingLoop:
 
 
 class TestPathChangeDetection:
-    def test_first_run_stores_path(self, plugin, tmp_path, logger):
+    def test_first_run_stores_path(self, migration, tmp_path):
         """First run (empty stored path) stores current path, no event."""
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-
         loop = _RecordingLoop()
-        plugin._migration_service._loop = loop
+        migration.service._loop = loop
 
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
+        migration.service.detect_retrodeck_path_change()
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == fake_home
         # No event emitted on first run
         assert loop.tasks == []
-        assert plugin._migration_service._emit.calls == []
+        assert migration.service._emit.calls == []
 
-    def test_no_change_no_notification(self, plugin, tmp_path, logger):
+    def test_no_change_no_notification(self, migration, tmp_path):
         """Same path as stored — no event, no state change."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", fake_home)
         loop = _RecordingLoop()
-        plugin._migration_service._loop = loop
+        migration.service._loop = loop
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
+        migration.service.detect_retrodeck_path_change()
 
         assert loop.tasks == []
-        assert plugin._migration_service._emit.calls == []
+        assert migration.service._emit.calls == []
 
-    def test_two_spellings_of_one_home_are_not_a_move(self, plugin, tmp_path, logger):
+    def test_two_spellings_of_one_home_are_not_a_move(self, migration, tmp_path):
         """#1838: a marker naming the live home through a symlink is the same directory.
 
         A home stored before the roots were resolved is spelled the way
@@ -316,8 +271,6 @@ class TestPathChangeDetection:
         Overwrite branch deletes the destination first.
         """
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-
         base = tmp_path.resolve()
         real_home = base / "var" / "home" / "player" / "retrodeck"
         real_home.mkdir(parents=True)
@@ -325,31 +278,29 @@ class TestPathChangeDetection:
         stored_home = str(base / "home" / "player" / "retrodeck")
         assert stored_home != str(real_home)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", stored_home)
         loop = _RecordingLoop()
-        plugin._migration_service._loop = loop
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+        migration.service._loop = loop
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
 
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service.detect_retrodeck_path_change()
 
         assert loop.tasks == []
-        assert plugin._migration_service._emit.calls == []
-        with plugin._uow as uow:
+        assert migration.service._emit.calls == []
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
             assert uow.kv_config.get("retrodeck_home_path_hops") is None
             # Nothing moved, so nothing is written — the marker keeps the
             # spelling it was stored with and is resolved again next startup.
             assert uow.kv_config.get("retrodeck_home_path") == stored_home
 
-    def test_a_pending_marker_naming_the_live_home_is_cleared(self, plugin, tmp_path, logger):
+    def test_a_pending_marker_naming_the_live_home_is_cleared(self, migration, tmp_path):
         """A marker naming the home RetroDECK is already on is dropped.
 
         Otherwise it stands until the user migrates or dismisses, over a home
         that was never left.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         real_home = base / "var" / "home" / "player" / "retrodeck"
@@ -357,42 +308,40 @@ class TestPathChangeDetection:
         (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
         linked_home = str(base / "home" / "player" / "retrodeck")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", linked_home)
             uow.kv_config.set("retrodeck_home_path_previous", linked_home)
         loop = _RecordingLoop()
-        plugin._migration_service._loop = loop
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+        migration.service._loop = loop
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
 
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service.detect_retrodeck_path_change()
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
             assert uow.kv_config.get("retrodeck_home_path_hops") is None
-        assert plugin._migration_service.is_retrodeck_migration_pending() is False
+        assert migration.service.is_retrodeck_migration_pending() is False
         assert loop.tasks == []
 
-    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, plugin, tmp_path, logger):
+    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, migration, tmp_path):
         """Only the marker naming the live home is dropped; a genuine hop stays pending."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         home = str(tmp_path / "retrodeck")
         os.makedirs(home, exist_ok=True)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", home)
             uow.kv_config.set("retrodeck_home_path_previous", home)
             uow.kv_config.set("retrodeck_home_path_hops", json.dumps([str(tmp_path / "sd-card" / "retrodeck")]))
-        plugin._migration_service._loop = _RecordingLoop()
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+        migration.service._loop = _RecordingLoop()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=home)
 
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service.detect_retrodeck_path_change()
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") == str(tmp_path / "sd-card" / "retrodeck")
             assert uow.kv_config.get("retrodeck_home_path_hops") is None
 
-    async def test_a_home_that_really_moved_is_still_a_change(self, plugin, tmp_path, logger):
+    async def test_a_home_that_really_moved_is_still_a_change(self, migration, tmp_path):
         """Comparing directories must not swallow a real move, including one already gone.
 
         The gone home sits under a symlinked prefix, so ``realpath`` really does
@@ -401,8 +350,6 @@ class TestPathChangeDetection:
         directory from the one RetroDECK reports now, which is what makes this a
         move rather than a spelling.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         (base / "var" / "home" / "player").mkdir(parents=True)
@@ -416,47 +363,45 @@ class TestPathChangeDetection:
         assert resolved_gone != gone_home
         assert resolved_gone != new_home
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", gone_home)
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
 
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service.detect_retrodeck_path_change()
         await asyncio.sleep(0)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == new_home
             # What is recorded as pending is the directory the marker named,
             # not the spelling it was stored under.
             assert uow.kv_config.get("retrodeck_home_path_previous") == resolved_gone
-        event, payload = plugin._migration_service._emit.calls[0]
+        event, payload = migration.service._emit.calls[0]
         assert event == "retrodeck_path_changed"
         assert payload["old_path"] == resolved_gone
         assert payload["new_path"] == new_home
 
-    async def test_path_change_emits_event(self, plugin, tmp_path, logger):
+    async def test_path_change_emits_event(self, migration, tmp_path):
         """Path changed — stores both old and new, emits event."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
         os.makedirs(new_home, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == new_home
             assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
 
-        emit_calls = plugin._migration_service._emit.calls
+        emit_calls = migration.service._emit.calls
         assert len(emit_calls) == 1
         event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
@@ -466,45 +411,43 @@ class TestPathChangeDetection:
         # Path-change emit does NOT carry ``cleared`` — only the auto-clear emit does.
         assert "cleared" not in payload
 
-    def test_empty_current_home_no_action(self, plugin, tmp_path):
+    def test_empty_current_home_no_action(self, migration, tmp_path):
         """If ``retrodeck_paths`` returns empty string, do nothing."""
 
         loop = _RecordingLoop()
-        plugin._migration_service._loop = loop
+        migration.service._loop = loop
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home="")
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home="")
+        migration.service.detect_retrodeck_path_change()
 
         assert loop.tasks == []
-        assert plugin._migration_service._emit.calls == []
-        with plugin._uow as uow:
+        assert migration.service._emit.calls == []
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") is None
 
-    async def test_detect_path_change_auto_clears_when_reverted_to_previous(self, plugin, tmp_path, logger):
+    async def test_detect_path_change_auto_clears_when_reverted_to_previous(self, migration, tmp_path):
         """User reverted RetroDECK to the previous home — drop the marker, emit cleared event."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
         os.makedirs(old_home, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", new_home)
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
+        migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == old_home
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
-        emit_calls = plugin._migration_service._emit.calls
+        emit_calls = migration.service._emit.calls
         assert len(emit_calls) == 1
         event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
@@ -513,28 +456,26 @@ class TestPathChangeDetection:
         assert payload["old_path"] == old_home
         assert payload["new_path"] == old_home
 
-    async def test_detect_path_change_auto_clear_emits_cleared_event(self, plugin, tmp_path, logger):
+    async def test_detect_path_change_auto_clear_emits_cleared_event(self, migration, tmp_path):
         """Auto-clear MUST emit retrodeck_path_changed with cleared=True so the
         frontend listener can dismiss any pending migration UI."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
         os.makedirs(old_home, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", new_home)
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
+        migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
-        emit_calls = plugin._migration_service._emit.calls
+        emit_calls = migration.service._emit.calls
         assert len(emit_calls) == 1
         event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
@@ -544,63 +485,92 @@ class TestPathChangeDetection:
         assert payload["new_path"] == old_home
 
 
+class TestGetRetroDeckStatus:
+    """The banner's answer: the health discriminant as a plain string, plus the probed paths."""
+
+    def test_ok_status_carries_paths(self, migration):
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(
+            home="/retrodeck",
+            config_path="/cfg/retrodeck.json",
+            health=RetroDeckConfigHealth.OK,
+        )
+        assert migration.service.get_retrodeck_status() == {
+            "status": "ok",
+            "config_path": "/cfg/retrodeck.json",
+            "resolved_home": "/retrodeck",
+        }
+
+    @pytest.mark.parametrize(
+        ("health", "status"),
+        [
+            (RetroDeckConfigHealth.OK, "ok"),
+            (RetroDeckConfigHealth.ABSENT, "absent"),
+            (RetroDeckConfigHealth.UNREADABLE, "unreadable"),
+            (RetroDeckConfigHealth.ROOT_MISSING, "root_missing"),
+        ],
+    )
+    def test_each_health_answers_its_discriminant_as_a_plain_string(self, migration, health, status):
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(
+            home="/missing",
+            config_path="/cfg/retrodeck.json",
+            health=health,
+        )
+        result = migration.service.get_retrodeck_status()
+        assert result == {"status": status, "config_path": "/cfg/retrodeck.json", "resolved_home": "/missing"}
+        assert type(result["status"]) is str
+
+
 class TestIsRetroDeckMigrationPending:
-    def test_is_retrodeck_migration_pending_returns_false_when_unset(self, plugin):
-        with plugin._uow as uow:
+    def test_is_retrodeck_migration_pending_returns_false_when_unset(self, migration):
+        with migration.uow as uow:
             uow.kv_config.delete("retrodeck_home_path_previous")
-        assert plugin._migration_service.is_retrodeck_migration_pending() is False
+        assert migration.service.is_retrodeck_migration_pending() is False
 
-    def test_is_retrodeck_migration_pending_returns_true_when_set(self, plugin):
-        with plugin._uow as uow:
+    def test_is_retrodeck_migration_pending_returns_true_when_set(self, migration):
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/some/old/path")
-        assert plugin._migration_service.is_retrodeck_migration_pending() is True
+        assert migration.service.is_retrodeck_migration_pending() is True
 
-    def test_is_retrodeck_migration_pending_returns_false_for_empty_string(self, plugin):
-        with plugin._uow as uow:
+    def test_is_retrodeck_migration_pending_returns_false_for_empty_string(self, migration):
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", "")
-        assert plugin._migration_service.is_retrodeck_migration_pending() is False
+        assert migration.service.is_retrodeck_migration_pending() is False
 
 
 class TestDismissRetroDeckMigration:
-    def test_dismiss_retrodeck_migration_clears_marker(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        with plugin._uow as uow:
+    def test_dismiss_retrodeck_migration_clears_marker(self, migration):
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/old/path")
 
-        result = plugin._migration_service.dismiss_retrodeck_migration()
+        result = migration.service.dismiss_retrodeck_migration()
 
         assert result == {"success": True}
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
-    def test_dismiss_retrodeck_migration_idempotent_when_no_marker(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        with plugin._uow as uow:
+    def test_dismiss_retrodeck_migration_idempotent_when_no_marker(self, migration):
+        with migration.uow as uow:
             uow.kv_config.delete("retrodeck_home_path_previous")
 
-        result = plugin._migration_service.dismiss_retrodeck_migration()
+        result = migration.service.dismiss_retrodeck_migration()
 
         assert result == {"success": True}
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
 
 class TestMigrateRetroDeckFiles:
     @pytest.mark.asyncio
-    async def test_no_migration_needed(self, plugin, tmp_path, logger):
+    async def test_no_migration_needed(self, migration):
         """No previous path — nothing to migrate."""
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is False
         assert "No path migration needed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_migrate_roms(self, plugin, tmp_path, logger):
+    async def test_migrate_roms(self, migration, tmp_path):
         """Moves ROM files from old to new path, updates state."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -611,25 +581,25 @@ class TestMigrateRetroDeckFiles:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
         assert result["roms_moved"] == 1
         assert os.path.exists(new_rom)
         assert not os.path.exists(old_rom)
-        assert plugin._uow.committed is True
-        with plugin._uow as uow:
+        assert migration.uow.committed is True
+        with migration.uow as uow:
             install = uow.rom_installs.get(1)
             assert install.file_path == new_rom
             # Single-file ROM owns no folder before or after migration.
             assert install.rom_dir is None
 
     @pytest.mark.asyncio
-    async def test_a_pending_home_that_is_the_live_home_moves_and_destroys_nothing(self, plugin, tmp_path, logger):
+    async def test_a_pending_home_that_is_the_live_home_moves_and_destroys_nothing(self, migration, tmp_path):
         """Acting on such a marker must not treat the live home as a move source.
 
         Source and destination would be the same path, and Overwrite removes the
@@ -638,8 +608,6 @@ class TestMigrateRetroDeckFiles:
         because both sides are resolved.
         """
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-
         base = tmp_path.resolve()
         rom = base / "var" / "home" / "player" / "retrodeck" / "roms" / "n64" / "zelda.z64"
         rom.parent.mkdir(parents=True)
@@ -647,19 +615,19 @@ class TestMigrateRetroDeckFiles:
         (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
         linked_home = str(base / "home" / "player" / "retrodeck")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", linked_home)
             uow.kv_config.set("retrodeck_home_path_previous", linked_home)
-        _seed_install(plugin._uow, 1, file_path=str(rom), system="n64")
+        _seed_install(migration.uow, 1, file_path=str(rom), system="n64")
 
-        result = await plugin.migrate_retrodeck_files("overwrite")
+        result = await migration.service.migrate_retrodeck_files("overwrite")
 
         assert result["success"] is True
         assert result["roms_moved"] == 0
         assert rom.read_text() == "rom data"
 
     @pytest.mark.asyncio
-    async def test_migrating_into_a_symlinked_home_records_the_resolved_path(self, plugin, tmp_path, logger):
+    async def test_migrating_into_a_symlinked_home_records_the_resolved_path(self, migration, tmp_path):
         """#1838: both markers name directories, so what is recorded is the resolved path.
 
         A migration left pending across the upgrade carries markers spelled the
@@ -667,8 +635,6 @@ class TestMigrateRetroDeckFiles:
         gets is built from the destination marker, and a path recorded through a
         symlink is one the uninstall guard later refuses.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         old_rom = base / "old" / "roms" / "n64" / "zelda.z64"
@@ -679,25 +645,23 @@ class TestMigrateRetroDeckFiles:
         linked_new_home = str(base / "home" / "new" / "retrodeck")
         assert linked_new_home != os.path.realpath(linked_new_home)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", str(base / "old"))
             uow.kv_config.set("retrodeck_home_path", linked_new_home)
-        _seed_install(plugin._uow, 1, file_path=str(old_rom), system="n64")
+        _seed_install(migration.uow, 1, file_path=str(old_rom), system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 1
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == str(base / "new" / "retrodeck" / "roms" / "n64" / "zelda.z64")
 
     @pytest.mark.asyncio
-    async def test_migration_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path, logger):
+    async def test_migration_records_applied_launch_options_for_bound_rom(self, migration, tmp_path):
         """After the home-move re-bake, each bound ROM's recorded applied state is
         updated to the emitted relaunch command, so the next sync skips the
         now-correct (relocated) shortcut instead of re-touching it (#1383)."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -706,28 +670,28 @@ class TestMigrateRetroDeckFiles:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=9001)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=9001)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
         # The emitted migration_relaunch_options item and the recorded applied match.
         relaunch = [
-            payload for event, payload in plugin._migration_service._emit.calls if event == "migration_relaunch_options"
+            payload for event, payload in migration.service._emit.calls if event == "migration_relaunch_options"
         ]
         assert len(relaunch) == 1
         item = next(i for i in relaunch[0]["items"] if i["app_id"] == 9001)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             rom = uow.roms.get(1)
         assert rom is not None
         assert rom.applied_launch_options == item["launch_options"]
         assert rom.applied_launch_options != ""  # a real re-baked command, not the placeholder
 
     @pytest.mark.asyncio
-    async def test_migrate_multi_file_moves_whole_rom_dir_with_siblings(self, plugin, tmp_path, logger):
+    async def test_migrate_multi_file_moves_whole_rom_dir_with_siblings(self, migration, tmp_path):
         """Regression (#784 data-loss): a multi-file ROM moves its WHOLE rom_dir.
 
         The launch file (an auto-generated ``.m3u``) sits directly in the
@@ -737,8 +701,6 @@ class TestMigrateRetroDeckFiles:
         the whole directory migrates as a unit — every sibling (here
         ``disc2.bin``) must land at the new location.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -757,12 +719,12 @@ class TestMigrateRetroDeckFiles:
         with open(old_disc2, "w") as f:
             f.write("disc2 data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_launch, rom_dir=old_rom_dir, system="psx", platform_slug="psx")
+        _seed_install(migration.uow, 1, file_path=old_launch, rom_dir=old_rom_dir, system="psx", platform_slug="psx")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         # One ROM moved — the moved directory counts as a single ROM.
@@ -774,21 +736,19 @@ class TestMigrateRetroDeckFiles:
         # The sibling disc the data-loss bug orphaned is at the new location.
         with open(new_disc2) as f:
             assert f.read() == "disc2 data"
-        assert plugin._uow.committed is True
-        with plugin._uow as uow:
+        assert migration.uow.committed is True
+        with migration.uow as uow:
             install = uow.rom_installs.get(1)
             assert install.rom_dir == new_rom_dir
             assert install.file_path == new_launch
 
     @pytest.mark.asyncio
-    async def test_migrate_single_file_moves_only_the_file(self, plugin, tmp_path, logger):
+    async def test_migrate_single_file_moves_only_the_file(self, migration, tmp_path):
         """A single-file ROM (``rom_dir`` is ``None``) moves only its launch file.
 
         Sibling ROMs sharing the platform's flat ``<roms>/<system>`` directory
         must NOT be dragged along — only this ROM's file moves.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -803,12 +763,12 @@ class TestMigrateRetroDeckFiles:
         with open(sibling, "w") as f:
             f.write("mario")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, rom_dir=None, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, rom_dir=None, system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 1
@@ -816,16 +776,14 @@ class TestMigrateRetroDeckFiles:
         assert not os.path.exists(old_rom)
         # The unrelated sibling ROM stays in the old shared dir — not dragged along.
         assert os.path.exists(sibling)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             install = uow.rom_installs.get(1)
             assert install.file_path == new_rom
             assert install.rom_dir is None
 
     @pytest.mark.asyncio
-    async def test_migrate_bios(self, plugin, tmp_path, logger):
+    async def test_migrate_bios(self, migration, tmp_path):
         """Moves tracked BIOS files from old to new path."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -836,28 +794,26 @@ class TestMigrateRetroDeckFiles:
         with open(old_bios, "w") as f:
             f.write("bios data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_bios(plugin._uow, platform_slug="psx", file_name="scph5501.bin", file_path=old_bios, firmware_id=42)
+        _seed_bios(migration.uow, platform_slug="psx", file_name="scph5501.bin", file_path=old_bios, firmware_id=42)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
         assert result["bios_moved"] == 1
         # File physically moved to the new RetroDECK home.
         assert os.path.exists(new_bios)
         # Persisted BiosFile.file_path updated in SQLite, and the write committed.
-        with plugin._uow as uow:
+        with migration.uow as uow:
             persisted = uow.bios_files.get("psx", "scph5501.bin")
             assert persisted is not None
             assert persisted.file_path == new_bios
-        assert plugin._uow.committed is True
+        assert migration.uow.committed is True
 
     @pytest.mark.asyncio
-    async def test_migrate_conflicts_need_confirmation(self, plugin, tmp_path, logger):
+    async def test_migrate_conflicts_need_confirmation(self, migration, tmp_path):
         """Destination file already exists — first call returns conflicts for user decision."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -871,13 +827,13 @@ class TestMigrateRetroDeckFiles:
         with open(new_rom, "w") as f:
             f.write("new data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
         # First call with no strategy returns conflicts
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["needs_confirmation"] is True
         assert result["conflict_count"] == 1
         assert "zelda.z64" in result["conflicts"]
@@ -888,10 +844,8 @@ class TestMigrateRetroDeckFiles:
             assert f.read() == "old data"
 
     @pytest.mark.asyncio
-    async def test_migrate_conflict_overwrite(self, plugin, tmp_path, logger):
+    async def test_migrate_conflict_overwrite(self, migration, tmp_path):
         """Overwrite strategy replaces destination with source."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -905,24 +859,22 @@ class TestMigrateRetroDeckFiles:
         with open(new_rom, "w") as f:
             f.write("new data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        result = await plugin.migrate_retrodeck_files("overwrite")
+        result = await migration.service.migrate_retrodeck_files("overwrite")
         assert result["success"] is True
         assert result["roms_moved"] == 1
         with open(new_rom) as f:
             assert f.read() == "old data"
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_migrate_conflict_skip(self, plugin, tmp_path, logger):
+    async def test_migrate_conflict_skip(self, migration, tmp_path):
         """Skip strategy keeps destination file, updates state path."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -936,23 +888,23 @@ class TestMigrateRetroDeckFiles:
         with open(new_rom, "w") as f:
             f.write("new data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        result = await plugin.migrate_retrodeck_files("skip")
+        result = await migration.service.migrate_retrodeck_files("skip")
         assert result["success"] is True
         assert result["roms_moved"] == 1
         # Destination file preserved
         with open(new_rom) as f:
             assert f.read() == "new data"
         # Install record updated to new path
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @staticmethod
-    def _conflicting_rom(plugin, tmp_path) -> None:
+    def _conflicting_rom(migration, tmp_path) -> None:
         """A pending home move whose one ROM exists at both ends."""
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -962,41 +914,41 @@ class TestMigrateRetroDeckFiles:
             os.makedirs(os.path.dirname(path))
             with open(path, "w") as f:
                 f.write(data)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
     @pytest.mark.asyncio
-    async def test_the_save_directories_are_recorded_again_once_the_files_moved(self, plugin, tmp_path):
-        self._conflicting_rom(plugin, tmp_path)
+    async def test_the_save_directories_are_recorded_again_once_the_files_moved(self, migration, tmp_path):
+        self._conflicting_rom(migration, tmp_path)
 
-        result = await plugin.migrate_retrodeck_files("skip")
+        result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
-        assert plugin._save_directories.calls == 1
+        assert migration.save_directories.calls == 1
 
     @pytest.mark.asyncio
-    async def test_a_sync_during_the_re_record_still_finds_the_migration_pending(self, plugin, tmp_path):
+    async def test_a_sync_during_the_re_record_still_finds_the_migration_pending(self, migration, tmp_path):
         # The markers clear with the relocations, before the re-record: without
         # holding the gate, a sync in that window meets the old home's record.
-        self._conflicting_rom(plugin, tmp_path)
-        service = plugin._migration_service
+        self._conflicting_rom(migration, tmp_path)
+        service = migration.service
         watching = RecordingSaveDirectories(gate=service.is_retrodeck_migration_pending)
         service._save_directories = watching.provide
 
-        result = await plugin.migrate_retrodeck_files("skip")
+        result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
         assert watching.pending_while_recording == [True]
         assert service.is_retrodeck_migration_pending() is False
 
     @pytest.mark.asyncio
-    async def test_the_status_stays_pending_during_the_re_record(self, plugin, tmp_path):
+    async def test_the_status_stays_pending_during_the_re_record(self, migration, tmp_path):
         # The panel reads this status; answering "not pending" while syncs are
         # still held off would let it drop the migration mid-run.
-        self._conflicting_rom(plugin, tmp_path)
-        service = plugin._migration_service
+        self._conflicting_rom(migration, tmp_path)
+        service = migration.service
         seen: list[dict[str, Any]] = []
 
         class _Watching(RecordingSaveDirectories):
@@ -1005,7 +957,7 @@ class TestMigrateRetroDeckFiles:
 
         service._save_directories = _Watching().provide
 
-        await plugin.migrate_retrodeck_files("skip")
+        await migration.service.migrate_retrodeck_files("skip")
 
         assert seen[0]["pending"] is True
         assert seen[0]["old_path"] == str(tmp_path / "old")
@@ -1013,7 +965,7 @@ class TestMigrateRetroDeckFiles:
         assert await service.get_migration_status() == {"pending": False}
 
     @pytest.mark.asyncio
-    async def test_the_status_keeps_the_counts_the_run_started_with_for_the_whole_run(self, plugin, tmp_path):
+    async def test_the_status_keeps_the_counts_the_run_started_with_for_the_whole_run(self, migration, tmp_path):
         # Counted again once a file has moved, the blocked page would read fewer
         # files, and after the run has cleared the markers "0 ROM(s), 0 BIOS,
         # 0 save(s) to migrate". Asked twice: after the files moved while the
@@ -1026,11 +978,11 @@ class TestMigrateRetroDeckFiles:
             os.makedirs(os.path.dirname(path))
             with open(path, "w") as f:
                 f.write("data")
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
-        service = plugin._migration_service
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
+        service = migration.service
         service._retrodeck_paths = FakeRetroDeckPaths(
             home=new_home,
             saves=os.path.join(new_home, "saves"),
@@ -1054,7 +1006,7 @@ class TestMigrateRetroDeckFiles:
         service._apply_relocations = _asking_after_the_moves
         service._save_directories = _Watching().provide
 
-        result = await plugin.migrate_retrodeck_files("skip")
+        result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
         assert os.path.exists(os.path.join(new_home, "saves", "n64", "zelda.srm"))
@@ -1063,11 +1015,11 @@ class TestMigrateRetroDeckFiles:
         assert seen == [before, before]
 
     @pytest.mark.asyncio
-    async def test_a_run_that_raises_leaves_nothing_in_flight(self, plugin, tmp_path):
+    async def test_a_run_that_raises_leaves_nothing_in_flight(self, migration, tmp_path):
         # Left behind, the counter would hold every sync off and the status would
         # report a migration nobody is running, until the process restarts.
-        self._conflicting_rom(plugin, tmp_path)
-        service = plugin._migration_service
+        self._conflicting_rom(migration, tmp_path)
+        service = migration.service
 
         async def _failing_run(*_args: Any) -> dict[str, Any]:
             assert service.is_retrodeck_migration_pending() is True
@@ -1076,55 +1028,51 @@ class TestMigrateRetroDeckFiles:
         service._run_migration = _failing_run
 
         with pytest.raises(RuntimeError, match="boom"):
-            await plugin.migrate_retrodeck_files("skip")
+            await migration.service.migrate_retrodeck_files("skip")
 
         assert service._migrations_in_flight == 0
         assert service._status_in_flight is None
 
     @pytest.mark.asyncio
-    async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
-        self._conflicting_rom(plugin, tmp_path)
+    async def test_nothing_is_recorded_while_the_user_is_still_asked(self, migration, tmp_path):
+        self._conflicting_rom(migration, tmp_path)
 
-        result = await plugin.migrate_retrodeck_files(None)
+        result = await migration.service.migrate_retrodeck_files(None)
 
         assert result["reason"] == "needs_confirmation"
-        assert plugin._save_directories.calls == 0
+        assert migration.save_directories.calls == 0
 
     @pytest.mark.asyncio
-    async def test_a_failed_recording_leaves_the_finished_migration_standing(self, plugin, tmp_path, caplog):
-        self._conflicting_rom(plugin, tmp_path)
+    async def test_a_failed_recording_leaves_the_finished_migration_standing(self, migration, tmp_path, caplog):
+        self._conflicting_rom(migration, tmp_path)
         failing = RecordingSaveDirectories(error=RuntimeError("database gone"))
-        plugin._migration_service._save_directories = failing.provide
+        migration.service._save_directories = failing.provide
 
-        result = await plugin.migrate_retrodeck_files("skip")
+        result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
         assert failing.calls == 1
         assert any("save directories after the home migration failed" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_migrate_source_missing(self, plugin, tmp_path, logger):
+    async def test_migrate_source_missing(self, migration, tmp_path):
         """Source file gone — skip silently."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=os.path.join(old_home, "roms", "n64", "gone.z64"), system="n64")
+        _seed_install(migration.uow, 1, file_path=os.path.join(old_home, "roms", "n64", "gone.z64"), system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["roms_moved"] == 0
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_migrate_creates_subdirs(self, plugin, tmp_path, logger):
+    async def test_migrate_creates_subdirs(self, migration, tmp_path):
         """Target subdirectories are created as needed."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1134,33 +1082,31 @@ class TestMigrateRetroDeckFiles:
         with open(old_bios, "w") as f:
             f.write("bios")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_bios(plugin._uow, platform_slug="dc", file_name="dc_boot.bin", file_path=old_bios, firmware_id=7)
+        _seed_bios(migration.uow, platform_slug="dc", file_name="dc_boot.bin", file_path=old_bios, firmware_id=7)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["bios_moved"] == 1
         new_bios = os.path.join(new_home, "bios", "dc", "dc_boot.bin")
         assert os.path.exists(new_bios)
 
     @pytest.mark.asyncio
-    async def test_clears_previous_on_success(self, plugin, tmp_path, logger):
+    async def test_clears_previous_on_success(self, migration, tmp_path):
         """After successful migration, retrodeck_home_path_previous is cleared."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
         # No files to move — success with 0 moved
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
 
@@ -1168,10 +1114,8 @@ class TestMigrateSaveFiles:
     """Tests for save file migration."""
 
     @pytest.mark.asyncio
-    async def test_migrate_saves(self, plugin, tmp_path, logger):
+    async def test_migrate_saves(self, migration, tmp_path):
         """Save files are moved from old to new saves directory."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1182,12 +1126,12 @@ class TestMigrateSaveFiles:
         with open(old_save, "w") as f:
             f.write("save data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        result = await plugin.migrate_retrodeck_files()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["saves_moved"] == 1
@@ -1197,10 +1141,8 @@ class TestMigrateSaveFiles:
             assert f.read() == "save data"
 
     @pytest.mark.asyncio
-    async def test_save_conflict_needs_confirmation(self, plugin, tmp_path, logger):
+    async def test_save_conflict_needs_confirmation(self, migration, tmp_path):
         """Save files at both locations trigger conflict confirmation."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1214,22 +1156,20 @@ class TestMigrateSaveFiles:
         with open(new_save, "w") as f:
             f.write("new save")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        result = await plugin.migrate_retrodeck_files()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["needs_confirmation"] is True
         assert result["conflict_count"] == 1
         assert "gba/game.srm" in result["conflicts"]
 
     @pytest.mark.asyncio
-    async def test_save_conflict_overwrite(self, plugin, tmp_path, logger):
+    async def test_save_conflict_overwrite(self, migration, tmp_path):
         """Overwrite strategy replaces destination save with source."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1243,12 +1183,12 @@ class TestMigrateSaveFiles:
         with open(new_save, "w") as f:
             f.write("new save")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        result = await plugin.migrate_retrodeck_files("overwrite")
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        result = await migration.service.migrate_retrodeck_files("overwrite")
 
         assert result["success"] is True
         assert result["saves_moved"] == 1
@@ -1256,10 +1196,8 @@ class TestMigrateSaveFiles:
             assert f.read() == "old save"
 
     @pytest.mark.asyncio
-    async def test_save_conflict_skip(self, plugin, tmp_path, logger):
+    async def test_save_conflict_skip(self, migration, tmp_path):
         """Skip strategy keeps destination save file."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1273,12 +1211,12 @@ class TestMigrateSaveFiles:
         with open(new_save, "w") as f:
             f.write("new save")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        result = await plugin.migrate_retrodeck_files("skip")
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
         assert result["saves_moved"] == 1
@@ -1286,10 +1224,8 @@ class TestMigrateSaveFiles:
             assert f.read() == "new save"
 
     @pytest.mark.asyncio
-    async def test_hidden_dirs_skipped(self, plugin, tmp_path, logger):
+    async def test_hidden_dirs_skipped(self, migration, tmp_path):
         """Hidden directories like .romm-backup are not migrated."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1303,20 +1239,18 @@ class TestMigrateSaveFiles:
         with open(old_backup, "w") as f:
             f.write("backup data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        result = await plugin.migrate_retrodeck_files()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["saves_moved"] == 1  # only the real save, not the backup
 
     @pytest.mark.asyncio
-    async def test_status_includes_saves_count(self, plugin, tmp_path, logger):
+    async def test_status_includes_saves_count(self, migration, tmp_path):
         """get_migration_status includes saves_count."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1326,21 +1260,19 @@ class TestMigrateSaveFiles:
         with open(old_save, "w") as f:
             f.write("save data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
-        status = await plugin.get_migration_status()
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        status = await migration.service.get_migration_status()
 
         assert status["pending"] is True
         assert status["saves_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_status_counts_tracked_bios_from_sqlite(self, plugin, tmp_path, logger):
+    async def test_status_counts_tracked_bios_from_sqlite(self, migration, tmp_path):
         """get_migration_status counts tracked BIOS from the SQLite ``BiosFile`` snapshot."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1350,12 +1282,12 @@ class TestMigrateSaveFiles:
         with open(old_bios, "w") as f:
             f.write("bios data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_bios(plugin._uow, platform_slug="psx", file_name="scph5501.bin", file_path=old_bios, firmware_id=42)
+        _seed_bios(migration.uow, platform_slug="psx", file_name="scph5501.bin", file_path=old_bios, firmware_id=42)
 
-        status = await plugin.get_migration_status()
+        status = await migration.service.get_migration_status()
 
         assert status["pending"] is True
         assert status["bios_count"] == 1
@@ -1371,9 +1303,9 @@ class TestMigrationRelaunchOptions:
     """
 
     @staticmethod
-    def _relaunch_emit(plugin):
+    def _relaunch_emit(migration):
         """Return the single ``migration_relaunch_options`` payload, or ``None``."""
-        for event, payload in plugin._migration_service._emit.calls:
+        for event, payload in migration.service._emit.calls:
             if event == "migration_relaunch_options":
                 return payload
         return None
@@ -1396,12 +1328,10 @@ class TestMigrationRelaunchOptions:
             )
 
     @pytest.mark.asyncio
-    async def test_relocated_installed_bound_rom_emits_new_launch_options(self, plugin, tmp_path, logger):
+    async def test_relocated_installed_bound_rom_emits_new_launch_options(self, migration, tmp_path):
         """Happy path: a relocated installed+bound ROM emits its app_id + NEW-path command."""
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1412,15 +1342,15 @@ class TestMigrationRelaunchOptions:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=4242)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), new_rom)
         assert payload["items"] == [{"app_id": 4242, "launch_options": expected_cmd}]
@@ -1429,11 +1359,10 @@ class TestMigrationRelaunchOptions:
         assert old_rom not in payload["items"][0]["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_relocated_rom_with_override_rebakes_e_form(self, plugin, tmp_path, logger):
+    async def test_relocated_rom_with_override_rebakes_e_form(self, migration, tmp_path):
         """A relocated ROM with a resolvable ``emulator_override`` re-bakes the ``-e`` form."""
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        plugin._core_info.available_cores = [
+        migration.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
 
@@ -1445,17 +1374,17 @@ class TestMigrationRelaunchOptions:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
-        with plugin._uow as uow:
+        _seed_install(migration.uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
+        with migration.uow as uow:
             uow.roms.set_emulator_override(1, "PCSX ReARMed")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         assert payload["items"] == [
             {
@@ -1469,13 +1398,12 @@ class TestMigrationRelaunchOptions:
         ]
 
     @pytest.mark.asyncio
-    async def test_relocated_rom_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog, logger):
+    async def test_relocated_rom_with_stale_override_rebakes_plain_and_warns(self, migration, tmp_path, caplog):
         """A stale override LABEL re-bakes the PLAIN launch + WARNs (B4) — never ``None.so``."""
         import logging
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         # available_cores does not carry the pinned label → resolution returns None.
-        plugin._core_info.available_cores = [
+        migration.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
 
@@ -1487,18 +1415,18 @@ class TestMigrationRelaunchOptions:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
-        with plugin._uow as uow:
+        _seed_install(migration.uow, 1, file_path=old_rom, system="psx", platform_slug="psx", app_id=4242)
+        with migration.uow as uow:
             uow.roms.set_emulator_override(1, "Removed Core")
 
         with caplog.at_level(logging.WARNING):
-            result = await plugin.migrate_retrodeck_files()
+            result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         # Stale → PLAIN launch at the NEW path, never -e None.so.
         assert payload["items"] == [
@@ -1509,10 +1437,8 @@ class TestMigrationRelaunchOptions:
         assert "no longer resolves" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_installed_unbound_rom_excluded(self, plugin, tmp_path, logger):
+    async def test_installed_unbound_rom_excluded(self, migration, tmp_path):
         """Edge: installed but UNBOUND (shortcut_app_id None) is excluded from items."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1522,49 +1448,45 @@ class TestMigrationRelaunchOptions:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=None)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=None)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
         # Event still fires (matches sync_stale always-emit convention) but the
         # unbound install is not in the items.
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_bound_uninstalled_rom_excluded(self, plugin, tmp_path, logger):
+    async def test_bound_uninstalled_rom_excluded(self, migration, tmp_path):
         """Edge: bound but NOT installed (no rom_installs row) is excluded."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
         # Bound Rom row, but no install — nothing on disk, no rom_installs row.
-        self._seed_bound_uninstalled(plugin._uow, 7, app_id=9999)
+        self._seed_bound_uninstalled(migration.uow, 7, app_id=9999)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_includes_only_installed_and_bound(self, plugin, tmp_path, logger):
+    async def test_mixed_batch_includes_only_installed_and_bound(self, migration, tmp_path):
         """Edge: mixed batch — only the installed+bound ROM appears in items."""
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1578,54 +1500,50 @@ class TestMigrationRelaunchOptions:
         with open(unbound_rom, "w") as f:
             f.write("unbound data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
         # 1) installed + bound  → included
-        _seed_install(plugin._uow, 1, file_path=bound_rom, system="n64", app_id=1111)
+        _seed_install(migration.uow, 1, file_path=bound_rom, system="n64", app_id=1111)
         # 2) installed + unbound → excluded
-        _seed_install(plugin._uow, 2, file_path=unbound_rom, system="n64", app_id=None)
+        _seed_install(migration.uow, 2, file_path=unbound_rom, system="n64", app_id=None)
         # 3) bound + uninstalled → excluded
-        self._seed_bound_uninstalled(plugin._uow, 3, app_id=3333)
+        self._seed_bound_uninstalled(migration.uow, 3, app_id=3333)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), new_bound_rom)
         assert payload["items"] == [{"app_id": 1111, "launch_options": expected_cmd}]
 
     @pytest.mark.asyncio
-    async def test_zero_eligible_roms_emits_empty_items(self, plugin, tmp_path, logger):
+    async def test_zero_eligible_roms_emits_empty_items(self, migration, tmp_path):
         """Edge: zero eligible ROMs — still emits (sync_stale convention) with empty items."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
         # No installs, no bound ROMs.
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["success"] is True
 
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_no_relaunch_emit_on_needs_confirmation(self, plugin, tmp_path, logger):
+    async def test_no_relaunch_emit_on_needs_confirmation(self, migration, tmp_path):
         """The needs-confirmation early return must NOT emit relaunch options.
 
         Nothing was relocated and no paths were persisted, so re-resolving and
         rewriting shortcuts would point them at files that did not move.
         """
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1639,18 +1557,18 @@ class TestMigrationRelaunchOptions:
         with open(new_rom, "w") as f:
             f.write("new data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=4242)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
         assert result["needs_confirmation"] is True
 
-        assert self._relaunch_emit(plugin) is None
+        assert self._relaunch_emit(migration) is None
 
     @pytest.mark.asyncio
-    async def test_relaunch_options_built_from_persisted_new_paths(self, plugin, tmp_path, logger):
+    async def test_relaunch_options_built_from_persisted_new_paths(self, migration, tmp_path):
         """The event fires only after the relocated path is persisted to rom_installs.
 
         Asserting the emitted command equals the command for the persisted
@@ -1660,8 +1578,6 @@ class TestMigrationRelaunchOptions:
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
         old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
@@ -1670,17 +1586,17 @@ class TestMigrationRelaunchOptions:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=4242)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
 
-        await plugin.migrate_retrodeck_files()
+        await migration.service.migrate_retrodeck_files()
 
         # The persisted install now points at the new path.
-        with plugin._uow as uow:
+        with migration.uow as uow:
             persisted_path = uow.rom_installs.get(1).file_path
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         expected_cmd = build_launch_options(resolve_emulator_invocation({"id": 1}), persisted_path)
         assert payload["items"][0]["launch_options"] == expected_cmd
@@ -1760,8 +1676,8 @@ class TestRefreshState:
     """
 
     @pytest.mark.asyncio
-    async def test_detects_and_returns_the_home_migration_status(self, plugin):
-        mig = plugin._migration_service
+    async def test_detects_and_returns_the_home_migration_status(self, migration):
+        mig = migration.service
         mig.detect_retrodeck_path_change = MagicMock()
 
         retrodeck_status = {"pending": True, "old_path": "/a", "new_path": "/b"}
@@ -1773,8 +1689,8 @@ class TestRefreshState:
         assert result == {"retrodeck": retrodeck_status}
 
     @pytest.mark.asyncio
-    async def test_short_circuits_when_first_detect_raises(self, plugin):
-        mig = plugin._migration_service
+    async def test_short_circuits_when_first_detect_raises(self, migration):
+        mig = migration.service
         mig.detect_retrodeck_path_change = MagicMock(side_effect=RuntimeError("boom"))
         mig.get_migration_status = AsyncMock()
 
@@ -1788,66 +1704,63 @@ class TestBackgroundTaskTracking:
     """Coverage for the background-task tracking + ``shutdown()`` lifecycle.
 
     The path-change detection schedules a ``retrodeck_path_changed`` emit
-    via ``loop.create_task``. Without strong refs into ``_background_tasks``
-    and a cancellation hook in ``shutdown()``, those tasks leak across
-    plugin unload. These tests pin the contract.
+    via ``loop.create_task``. Without a strong ref in ``_background_tasks``
+    such a task can be collected before it runs, and without a cancellation
+    hook in ``shutdown()`` it is still pending when the backend shuts down.
+    These tests pin the contract.
     """
 
     @pytest.mark.asyncio
-    async def test_spawned_task_added_to_background_set(self, plugin, tmp_path, logger):
+    async def test_spawned_task_added_to_background_set(self, migration, tmp_path):
         """``detect_retrodeck_path_change`` adds its emit task to the set."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
         os.makedirs(new_home, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
 
-        assert plugin._migration_service._background_tasks == set()
+        assert migration.service._background_tasks == set()
 
-        plugin._migration_service.detect_retrodeck_path_change()
+        migration.service.detect_retrodeck_path_change()
 
         # The spawned task must be tracked before any await yields control.
-        assert len(plugin._migration_service._background_tasks) == 1
-        (task,) = plugin._migration_service._background_tasks
+        assert len(migration.service._background_tasks) == 1
+        (task,) = migration.service._background_tasks
         assert isinstance(task, asyncio.Task)
 
         # Drain so no pending-task warning fires at loop teardown.
-        await asyncio.gather(*plugin._migration_service._background_tasks, return_exceptions=True)
+        await asyncio.gather(*migration.service._background_tasks, return_exceptions=True)
 
     @pytest.mark.asyncio
-    async def test_done_callback_removes_task_on_natural_completion(self, plugin, tmp_path, logger):
+    async def test_done_callback_removes_task_on_natural_completion(self, migration, tmp_path):
         """When the spawned coro completes naturally, the done-callback prunes the set."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
         os.makedirs(new_home, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
 
-        plugin._migration_service.detect_retrodeck_path_change()
-        assert len(plugin._migration_service._background_tasks) == 1
+        migration.service.detect_retrodeck_path_change()
+        assert len(migration.service._background_tasks) == 1
 
         # Yield until the spawned emit coroutine finishes; the done-callback
         # then discards the task from the set.
-        (task,) = plugin._migration_service._background_tasks
+        (task,) = migration.service._background_tasks
         await task
 
-        assert plugin._migration_service._background_tasks == set()
+        assert migration.service._background_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_shutdown_cancels_pending_tasks_and_empties_set(self, plugin):
+    async def test_shutdown_cancels_pending_tasks_and_empties_set(self, migration):
         """``shutdown()`` cancels in-flight tasks and the set is empty after."""
         loop = asyncio.get_running_loop()
-        plugin._migration_service._loop = loop
+        migration.service._loop = loop
 
         # Spawn a task that blocks forever via an unset Event.
         blocker = asyncio.Event()
@@ -1855,24 +1768,24 @@ class TestBackgroundTaskTracking:
         async def _block_forever() -> None:
             await blocker.wait()
 
-        plugin._migration_service._spawn_background_task(_block_forever())
-        assert len(plugin._migration_service._background_tasks) == 1
-        (task,) = plugin._migration_service._background_tasks
+        migration.service._spawn_background_task(_block_forever())
+        assert len(migration.service._background_tasks) == 1
+        (task,) = migration.service._background_tasks
 
-        await plugin._migration_service.shutdown()
+        await migration.service.shutdown()
 
         assert task.cancelled()
-        assert plugin._migration_service._background_tasks == set()
+        assert migration.service._background_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_shutdown_with_empty_set_is_noop(self, plugin):
+    async def test_shutdown_with_empty_set_is_noop(self, migration):
         """``shutdown()`` on an untouched service returns immediately."""
-        assert plugin._migration_service._background_tasks == set()
+        assert migration.service._background_tasks == set()
 
         # Must not raise, must not block.
-        await plugin._migration_service.shutdown()
+        await migration.service.shutdown()
 
-        assert plugin._migration_service._background_tasks == set()
+        assert migration.service._background_tasks == set()
 
 
 def _read_pending(uow) -> tuple[str, list[str]]:
@@ -1890,108 +1803,108 @@ class TestChainedPathChangeDetection:
     are never stranded.
     """
 
-    async def _detect_at(self, plugin, home: str) -> None:
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
-        plugin._migration_service.detect_retrodeck_path_change()
+    async def _detect_at(self, migration, home: str) -> None:
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+        migration.service.detect_retrodeck_path_change()
         # Drain the spawned ``retrodeck_path_changed`` emit coroutine.
         await asyncio.sleep(0)
 
-    async def test_chained_change_appends_hop_and_keeps_previous(self, plugin, tmp_path):
+    async def test_chained_change_appends_hop_and_keeps_previous(self, migration, tmp_path):
         """A→B→C before migrating: previous stays A, B lands in hops, home is C."""
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for d in (a, b, c):
             os.makedirs(d, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", a)
 
-        await self._detect_at(plugin, b)
-        await self._detect_at(plugin, c)
+        await self._detect_at(migration, b)
+        await self._detect_at(migration, c)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == c
             previous, hops = _read_pending(uow)
         assert previous == a
         assert hops == [b]
         # The re-emit still points the banner at the ORIGINAL home → current.
-        event, payload = plugin._migration_service._emit.calls[-1]
+        event, payload = migration.service._emit.calls[-1]
         assert event == "retrodeck_path_changed"
         assert (payload["old_path"], payload["new_path"]) == (a, c)
         assert "cleared" not in payload
 
-    async def test_triple_chain_accumulates_all_homes(self, plugin, tmp_path):
+    async def test_triple_chain_accumulates_all_homes(self, migration, tmp_path):
         """A→B→C→D: previous stays A, hops = [B, C]."""
 
         a, b, c, d = (str(tmp_path / x) for x in ("A", "B", "C", "D"))
         for path in (a, b, c, d):
             os.makedirs(path, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", a)
-        await self._detect_at(plugin, b)
-        await self._detect_at(plugin, c)
-        await self._detect_at(plugin, d)
+        await self._detect_at(migration, b)
+        await self._detect_at(migration, c)
+        await self._detect_at(migration, d)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == d
             previous, hops = _read_pending(uow)
         assert previous == a
         assert hops == [b, c]
 
-    async def test_simple_revert_still_auto_clears(self, plugin, tmp_path):
+    async def test_simple_revert_still_auto_clears(self, migration, tmp_path):
         """A→B then back to A (no hops) still fully clears — shipped UX preserved."""
 
         a, b = (str(tmp_path / x) for x in ("A", "B"))
         for path in (a, b):
             os.makedirs(path, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", a)
-        await self._detect_at(plugin, b)
-        await self._detect_at(plugin, a)
+        await self._detect_at(migration, b)
+        await self._detect_at(migration, a)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == a
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
-        assert plugin._migration_service._emit.calls[-1][1]["cleared"] is True
+        assert migration.service._emit.calls[-1][1]["cleared"] is True
 
-    async def test_chained_revert_keeps_pending(self, plugin, tmp_path):
+    async def test_chained_revert_keeps_pending(self, migration, tmp_path):
         """A→B→C then back to A while B remains a hop → NOT cleared; pending = [B, C]."""
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for path in (a, b, c):
             os.makedirs(path, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", a)
-        await self._detect_at(plugin, b)
-        await self._detect_at(plugin, c)
-        await self._detect_at(plugin, a)
+        await self._detect_at(migration, b)
+        await self._detect_at(migration, c)
+        await self._detect_at(migration, a)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == a
             previous, hops = _read_pending(uow)
         assert previous == b
         assert hops == [c]
-        assert "cleared" not in plugin._migration_service._emit.calls[-1][1]
+        assert "cleared" not in migration.service._emit.calls[-1][1]
 
-    async def test_move_back_to_hop_removes_it(self, plugin, tmp_path):
+    async def test_move_back_to_hop_removes_it(self, migration, tmp_path):
         """A→B→C then back to B: B leaves the pending set, pending = [A, C]."""
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for path in (a, b, c):
             os.makedirs(path, exist_ok=True)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", a)
-        await self._detect_at(plugin, b)
-        await self._detect_at(plugin, c)
-        await self._detect_at(plugin, b)
+        await self._detect_at(migration, b)
+        await self._detect_at(migration, c)
+        await self._detect_at(migration, b)
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == b
             previous, hops = _read_pending(uow)
         assert previous == a
@@ -2002,104 +1915,99 @@ class TestTheMigrationsConflictRules:
     """The migration checks its prune rule, and leases the relaunch items it emits inside it."""
 
     @staticmethod
-    def _stage_one_relocation(plugin, tmp_path, *, app_id: int | None = 4242) -> None:
+    def _stage_one_relocation(migration, tmp_path, *, app_id: int | None = 4242) -> None:
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
         old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
         os.makedirs(os.path.dirname(old_rom))
         with open(old_rom, "w") as f:
             f.write("rom data")
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=app_id)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=app_id)
 
     @staticmethod
-    def _relaunch_emit(plugin):
+    def _relaunch_emit(migration):
         return next(
-            payload for event, payload in plugin._migration_service._emit.calls if event == "migration_relaunch_options"
+            payload for event, payload in migration.service._emit.calls if event == "migration_relaunch_options"
         )
 
     @pytest.mark.asyncio
     async def test_the_relaunch_items_carry_a_lease_taken_inside_the_migrations_operation(
-        self, plugin, tmp_path, logger, monkeypatch
+        self, migration, tmp_path, monkeypatch
     ):
         """No cleanup can start between the migration's operation and the lease its Steam writes run under."""
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        self._stage_one_relocation(plugin, tmp_path)
-        seen = _record_operations_at_lease(plugin._prune_conflicts, monkeypatch)
+        self._stage_one_relocation(migration, tmp_path)
+        seen = _record_operations_at_lease(migration.prune_conflicts, monkeypatch)
 
-        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+        assert (await migration.service.migrate_retrodeck_files())["success"] is True
 
         assert seen == [["migrate_retrodeck_files"]]
-        token = self._relaunch_emit(plugin)["prune_lease_token"]
+        token = self._relaunch_emit(migration)["prune_lease_token"]
         assert token.startswith("migration_relaunch_options:")
-        assert plugin._prune_conflicts.conflicting_operations == 1
-        await plugin._prune_conflicts.release_lease(token)
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert migration.prune_conflicts.conflicting_operations == 1
+        await migration.prune_conflicts.release_lease(token)
+        assert migration.prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.asyncio
-    async def test_no_relaunch_items_carry_no_lease(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        self._stage_one_relocation(plugin, tmp_path, app_id=None)
+    async def test_no_relaunch_items_carry_no_lease(self, migration, tmp_path):
+        self._stage_one_relocation(migration, tmp_path, app_id=None)
 
-        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+        assert (await migration.service.migrate_retrodeck_files())["success"] is True
 
-        assert self._relaunch_emit(plugin) == {"items": []}
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert self._relaunch_emit(migration) == {"items": []}
+        assert migration.prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.asyncio
-    async def test_relaunch_items_nobody_heard_give_their_lease_back(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        self._stage_one_relocation(plugin, tmp_path)
+    async def test_relaunch_items_nobody_heard_give_their_lease_back(self, migration, tmp_path):
+        self._stage_one_relocation(migration, tmp_path)
         heard: list[str] = []
 
         async def unheard(event: str, payload: object, /) -> bool:
             heard.append(event)
             return False
 
-        plugin._migration_service._emit = unheard
+        migration.service._emit = unheard
 
-        assert (await plugin._migration_service.migrate_retrodeck_files())["success"] is True
+        assert (await migration.service.migrate_retrodeck_files())["success"] is True
 
         assert heard == ["migration_relaunch_options"]
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert migration.prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.asyncio
-    async def test_relaunch_items_whose_emit_raises_give_their_lease_back(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        self._stage_one_relocation(plugin, tmp_path)
+    async def test_relaunch_items_whose_emit_raises_give_their_lease_back(self, migration, tmp_path):
+        self._stage_one_relocation(migration, tmp_path)
 
         async def rejected(event: str, payload: object, /) -> bool:
             raise RuntimeError("transport rejected event")
 
-        plugin._migration_service._emit = rejected
+        migration.service._emit = rejected
 
         with pytest.raises(RuntimeError, match="transport rejected event"):
-            await plugin._migration_service.migrate_retrodeck_files()
+            await migration.service.migrate_retrodeck_files()
 
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert migration.prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.asyncio
-    async def test_a_running_cleanup_refuses_the_migration_and_moves_nothing(self, plugin, tmp_path, logger):
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
-        self._stage_one_relocation(plugin, tmp_path)
-        plugin._prune_conflicts.register_run("held-run")
+    async def test_a_running_cleanup_refuses_the_migration_and_moves_nothing(self, migration, tmp_path):
+        self._stage_one_relocation(migration, tmp_path)
+        migration.prune_conflicts.register_run("held-run")
 
-        result = await plugin._migration_service.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["reason"] == "prune_active"
         assert os.path.exists(os.path.join(str(tmp_path / "old"), "roms", "n64", "zelda.z64"))
-        assert plugin._migration_service._emit.calls == []
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert migration.service._emit.calls == []
+        assert migration.prune_conflicts.conflicting_operations == 0
 
 
 class TestChainedMigration:
     """Migrating a chained pending set (#1042) — files drain from every home."""
 
     @staticmethod
-    def _relaunch_emit(plugin):
-        for event, payload in plugin._migration_service._emit.calls:
+    def _relaunch_emit(migration):
+        for event, payload in migration.service._emit.calls:
             if event == "migration_relaunch_options":
                 return payload
         return None
@@ -2112,12 +2020,10 @@ class TestChainedMigration:
         uow.kv_config.set("retrodeck_home_path", home)
 
     @pytest.mark.asyncio
-    async def test_rows_and_files_at_oldest_home_migrate_to_current(self, plugin, tmp_path, logger):
+    async def test_rows_and_files_at_oldest_home_migrate_to_current(self, migration, tmp_path):
         """Headline #1042 fix: rows+files at A after A→B→C reach C, both keys cleared."""
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2126,33 +2032,31 @@ class TestChainedMigration:
         with open(old_rom, "w") as f:
             f.write("rom data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64", app_id=4242)
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 1
         assert os.path.exists(new_rom)
         assert not os.path.exists(old_rom)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
             # BOTH markers gone after a clean migration.
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
         # Relaunch options rebaked at the NEW (C) path.
-        payload = self._relaunch_emit(plugin)
+        payload = self._relaunch_emit(migration)
         assert payload is not None
         expected = build_launch_options(resolve_emulator_invocation({"id": 1}), new_rom)
         assert payload["items"] == [{"app_id": 4242, "launch_options": expected}]
 
     @pytest.mark.asyncio
-    async def test_file_already_at_current_is_bookkept(self, plugin, tmp_path, logger):
+    async def test_file_already_at_current_is_bookkept(self, migration, tmp_path):
         """Row says A but the file is already at C → DB path updated, counted, no move error."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2161,23 +2065,21 @@ class TestChainedMigration:
         with open(new_rom, "w") as f:
             f.write("already here")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 1
         assert result["missing_count"] == 0
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_file_stranded_at_hop_is_found_and_moved(self, plugin, tmp_path, logger):
+    async def test_file_stranded_at_hop_is_found_and_moved(self, migration, tmp_path):
         """Row says A but the file physically sits at hop B → probed, moved A-mapped path to C."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         recorded_rom = os.path.join(a, "roms", "n64", "zelda.z64")  # DB path (missing on disk)
@@ -2187,11 +2089,11 @@ class TestChainedMigration:
         with open(stranded_rom, "w") as f:
             f.write("stranded data")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=recorded_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=recorded_rom, system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 1
@@ -2200,37 +2102,33 @@ class TestChainedMigration:
         assert not os.path.exists(stranded_rom)
         with open(new_rom) as f:
             assert f.read() == "stranded data"
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_file_missing_everywhere_is_surfaced_marker_cleared(self, plugin, tmp_path, logger):
+    async def test_file_missing_everywhere_is_surfaced_marker_cleared(self, migration, tmp_path):
         """Row exists but the file is at no known home → missing surfaced, marker still clears."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=os.path.join(a, "roms", "n64", "gone.z64"), system="n64")
+        _seed_install(migration.uow, 1, file_path=os.path.join(a, "roms", "n64", "gone.z64"), system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 0
         assert result["missing_count"] == 1
         assert "missing" in result["message"]
-        with plugin._uow as uow:
+        with migration.uow as uow:
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
 
     @pytest.mark.asyncio
-    async def test_mixed_rows_at_two_homes_drained_in_one_run(self, plugin, tmp_path, logger):
+    async def test_mixed_rows_at_two_homes_drained_in_one_run(self, migration, tmp_path):
         """One row under A, another under hop B → both drain to C in a single migrate."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         rom_a = os.path.join(a, "roms", "n64", "a.z64")
@@ -2244,26 +2142,24 @@ class TestChainedMigration:
         with open(rom_b, "w") as f:
             f.write("b")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=rom_a, system="n64")
-        _seed_install(plugin._uow, 2, file_path=rom_b, system="n64")
+        _seed_install(migration.uow, 1, file_path=rom_a, system="n64")
+        _seed_install(migration.uow, 2, file_path=rom_b, system="n64")
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["roms_moved"] == 2
         assert os.path.exists(new_a)
         assert os.path.exists(new_b)
-        with plugin._uow as uow:
+        with migration.uow as uow:
             assert uow.rom_installs.get(1).file_path == new_a
             assert uow.rom_installs.get(2).file_path == new_b
 
     @pytest.mark.asyncio
-    async def test_same_save_under_two_homes_newest_wins(self, plugin, tmp_path, logger):
+    async def test_same_save_under_two_homes_newest_wins(self, migration, tmp_path):
         """Same save rel-path under A and B → only the newest-mtime copy migrates."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         save_a = os.path.join(a, "saves", "gba", "game.srm")
@@ -2279,11 +2175,11 @@ class TestChainedMigration:
         os.utime(save_a, (1_700_000_000, 1_700_000_000))
         os.utime(save_b, (1_700_000_500, 1_700_000_500))
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["saves_moved"] == 1
@@ -2291,10 +2187,8 @@ class TestChainedMigration:
             assert f.read() == "fresh"
 
     @pytest.mark.asyncio
-    async def test_untracked_bios_probed_across_homes(self, plugin, tmp_path, logger):
+    async def test_untracked_bios_probed_across_homes(self, migration, tmp_path):
         """An untracked BIOS file living under a hop home is found and migrated."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         bios_b = os.path.join(b, "bios", "scph5501.bin")
@@ -2306,23 +2200,21 @@ class TestChainedMigration:
         # A single declared file, so the sweep has exactly one candidate to find.
         resolver = FakeFirmwareResolver()
         resolver.declare("scph5501.bin", required_by=["mednafen_psx_libretro"])
-        plugin._migration_service._firmware_resolver = resolver
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(bios=os.path.join(c, "bios"))
+        migration.service._firmware_resolver = resolver
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(bios=os.path.join(c, "bios"))
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
 
-        result = await plugin.migrate_retrodeck_files()
+        result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
         assert result["bios_moved"] == 1
         assert os.path.exists(new_bios)
 
     @pytest.mark.asyncio
-    async def test_status_counts_across_homes(self, plugin, tmp_path, logger):
+    async def test_status_counts_across_homes(self, migration, tmp_path):
         """get_migration_status counts a row under A and a save under B; old_path = A."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         rom_a = os.path.join(a, "roms", "n64", "a.z64")
@@ -2334,12 +2226,12 @@ class TestChainedMigration:
         with open(save_b, "w") as f:
             f.write("s")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=rom_a, system="n64")
-        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
+        _seed_install(migration.uow, 1, file_path=rom_a, system="n64")
+        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
 
-        status = await plugin.get_migration_status()
+        status = await migration.service.get_migration_status()
 
         assert status["pending"] is True
         assert status["old_path"] == a
@@ -2347,25 +2239,23 @@ class TestChainedMigration:
         assert status["roms_count"] == 1
         assert status["saves_count"] == 1
 
-    def test_dismiss_clears_both_keys(self, plugin):
+    def test_dismiss_clears_both_keys(self, migration):
         """Dismiss drops the previous marker AND the hops array."""
-        with plugin._uow as uow:
+        with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/a")
             uow.kv_config.set("retrodeck_home_path_hops", json.dumps(["/b"]))
 
-        result = plugin._migration_service.dismiss_retrodeck_migration()
+        result = migration.service.dismiss_retrodeck_migration()
 
         assert result == {"success": True}
-        with plugin._uow as uow:
+        with migration.uow as uow:
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
 
     @pytest.mark.asyncio
-    async def test_rerun_converges_to_no_migration_needed(self, plugin, tmp_path, logger):
+    async def test_rerun_converges_to_no_migration_needed(self, migration, tmp_path):
         """After a clean migrate clears the markers, a second run is a no-op."""
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2373,13 +2263,13 @@ class TestChainedMigration:
         with open(old_rom, "w") as f:
             f.write("rom")
 
-        with plugin._uow as uow:
+        with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+        _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        first = await plugin.migrate_retrodeck_files()
+        first = await migration.service.migrate_retrodeck_files()
         assert first["success"] is True
 
-        second = await plugin.migrate_retrodeck_files()
+        second = await migration.service.migrate_retrodeck_files()
         assert second["success"] is False
         assert second["reason"] == "no_migration_needed"

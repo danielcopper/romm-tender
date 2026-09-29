@@ -20,6 +20,8 @@ import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-b
 import {
   getSettingsResetNotice,
   getUpdateNotice,
+  getUpdateOutcome,
+  acknowledgeUpdateToast,
   getAllPlaytime,
   getAppIdRomIdMap,
   getInstalledRelaunchOptions,
@@ -32,6 +34,7 @@ import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
+import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
 import { estimateApplySeconds } from "./utils/syncEstimate";
@@ -141,6 +144,13 @@ vi.mock("./utils/steamShortcuts", () => ({
   removeShortcut: (...args: unknown[]) => removeShortcut(...args),
   setLaunchOptionsConfirmed: (...args: unknown[]) => setLaunchOptionsConfirmed(...args),
 }));
+
+// Steam's globals the update announcement waits on are not stubbed here, so
+// the wait answers at once; what it waits for is tested beside the store.
+vi.mock("./utils/steamReadyForToasts", async () => {
+  const actual = await vi.importActual<typeof import("./utils/steamReadyForToasts")>("./utils/steamReadyForToasts");
+  return { ...actual, waitUntilSteamCanShowToasts: vi.fn().mockResolvedValue({ inTime: true, unmet: [] }) };
+});
 
 // Observe the surfaced error message (post-catch side effect).
 const logError = vi.fn();
@@ -1507,6 +1517,60 @@ describe("index.tsx — the release check at panel load", () => {
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for a newer release"));
     expect(getUpdateNoticeState().available).toBe(false);
+    plugin.onDismount();
+  });
+});
+
+describe("index.tsx — what the last update did, at panel load", () => {
+  beforeEach(() => {
+    logError.mockClear();
+    vi.mocked(toaster.toast).mockClear();
+    vi.mocked(getUpdateOutcome).mockReset();
+    vi.mocked(acknowledgeUpdateToast).mockReset().mockResolvedValue({ success: true });
+    resetUpdateOutcomeStoreForTests();
+  });
+
+  it("announces an update that went through in one toast and acknowledges it", async () => {
+    vi.mocked(getUpdateOutcome).mockResolvedValue({
+      announce_version: "1.3.0",
+      announce_direction: "updated",
+      toast_owed: true,
+      failure: null,
+      failure_dismissed: false,
+    });
+    const plugin = pluginFactory();
+    await flush();
+
+    expect(getUpdateOutcome).toHaveBeenCalledTimes(1);
+    expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
+    expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(1);
+    expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
+    plugin.onDismount();
+  });
+
+  it("fills the store the rolled-back notice reads", async () => {
+    vi.mocked(getUpdateOutcome).mockResolvedValue({
+      announce_version: null,
+      announce_direction: null,
+      toast_owed: false,
+      failure: { attempted_version: "1.3.0", restored_version: "1.2.3", rolled_back_at: "2026-09-25T10:15:00Z" },
+      failure_dismissed: false,
+    });
+    const plugin = pluginFactory();
+    await flush();
+
+    expect(getUpdateOutcomeState().failure?.attemptedVersion).toBe("1.3.0");
+    expect(acknowledgeUpdateToast).not.toHaveBeenCalled();
+    plugin.onDismount();
+  });
+
+  it("logs a read that rejected and announces nothing", async () => {
+    vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("boom"));
+    const plugin = pluginFactory();
+    await flush();
+
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to read what the last update did"));
+    expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(0);
     plugin.onDismount();
   });
 });

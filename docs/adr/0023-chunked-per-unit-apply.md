@@ -119,6 +119,27 @@ mid-unit failure forfeits only the in-flight chunk.**
   > fetch did not return is now fully fetched instead of skipped. The current rule is in
   > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
   > "Incremental skip".
+  >
+  > **Amendment (2026-09-29, #2094).** Rule (2) and the stale-removal exception no longer hold as written. The stale
+  > removal also unbinds rows on a platform the run did not process — its sync turned off, or RomM no longer listing it
+  > — and there RomM's `rom_count` does not move. Where an enabled collection kept one of its games bound, the platform
+  > skipped on its old stamp once it was processed again and never re-created the unbound games' shortcuts. The stale
+  > removal now revokes that platform's skip. The local destructive flows revoke instead of deleting too: a revoked
+  > stamp (`platform_sync_state.skip_revoked`, migration `025`) is kept, because removed-game discovery reads its fetch
+  > generation, and it reads as no stamp to the skip gate, the plan estimate, the preview's `restamp_platform_count` and
+  > the resume offer. Rule (1) is unchanged: the apply start still deletes the stamp. The local flows still delete a
+  > collection stamp, so a collection stamp is no longer cleared "on the same events as a platform stamp", as the
+  > collection-stamp bullet below says. The current rule is in
+  > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  > "Incremental skip".
+  >
+  > **Amendment (2026-09-29, #2106).** The stale removal now deletes collection stamps as well: every stamp whose member
+  > set holds a row the stale removal unbinds, the same rule the local flows and removed-game cleanup already applied.
+  > Take a collection whose games sat on a platform whose sync was off. While the collection was off, the stale removal
+  > unbound those games' shortcuts; once the collection was back on, the collection skipped on its old stamp, whose
+  > replay passes over unbound members, so the shortcuts never came back. The current rule is in
+  > [Backend Architecture](../architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+  > "Incremental skip".
 
 - **The row-count condition counts by fetch generation, not by every persisted row (#1504).** The skip requires RomM's
   platform `rom_count` to equal the local row count, and that count originally included every `roms` row for the

@@ -51,6 +51,7 @@ from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalSer
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
+from services.update_outcome import UpdateOutcomeService, UpdateOutcomeServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
 if TYPE_CHECKING:
@@ -128,6 +129,7 @@ class ServicesBundle:
     startup_healing_service: StartupHealingService
     shortcut_relocation_service: ShortcutRelocationService
     update_check_service: UpdateCheckService
+    update_outcome_service: UpdateOutcomeService
     launch_gate_service: LaunchGateService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
@@ -494,6 +496,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=GameDetailServiceConfig(
             candidate_probe=rom_adoption_service.has_adoption_candidate,
             settings=cfg.stores.settings,
+            loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             clock=cfg.runtime.clock,
             uow_factory=cfg.callbacks.uow_factory,
@@ -693,6 +696,18 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    update_outcome_service = UpdateOutcomeService(
+        config=UpdateOutcomeServiceConfig(
+            current_version=VERSION,
+            read_update_failure=cfg.adapters.update_failure,
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
     return ServicesBundle(
         prune_conflicts=prune_conflicts,
         save_sync_service=save_sync_service,
@@ -720,6 +735,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         startup_healing_service=startup_healing_service,
         shortcut_relocation_service=shortcut_relocation_service,
         update_check_service=update_check_service,
+        update_outcome_service=update_outcome_service,
         launch_gate_service=launch_gate_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,

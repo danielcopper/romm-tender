@@ -193,6 +193,10 @@ run = "mkdocs serve"
 description = "Build the documentation site (strict mode fails on broken links)"
 run = "mkdocs build --strict"
 
+[tasks."dev:fake-github"]
+description = "Serve the release tarballs in build/ as a fake GitHub on 127.0.0.1:8765, for the update check and install.sh — prints the two variables to set; flags after -- (see --help)"
+run = "python scripts/fake_github.py"
+
 [tasks."dev:ui-scale"]
 description = "Emulate Game Mode's metrics in Big Picture — size the window to the Deck's 1280x800 AND force its display scale (the dev loop otherwise lies about QAM height)"
 raw = true

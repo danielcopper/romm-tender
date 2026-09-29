@@ -732,6 +732,7 @@ class SyncOrchestrator:
             # threaded into finalize so collections key on display names and
             # the offline name cache stays current as of this sync.
             platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
+            processed_platform_slugs = frozenset(u.slug for u in work_queue if u.type == "platform" and u.slug)
             # The run's denominator for the paused banner's "X of Y games done" — the
             # same planned total the ``sync_plan`` event carries (#1383).
             box.run_total_items = total_roms_planned
@@ -810,6 +811,7 @@ class SyncOrchestrator:
                 collection_memberships=collection_memberships,
                 platform_rom_ids=platform_rom_ids,
                 platform_names=platform_names,
+                processed_platform_slugs=processed_platform_slugs,
                 cancelled=cancelled,
             )
 
@@ -1106,7 +1108,10 @@ class SyncOrchestrator:
         # A dedicated short write UoW (not folded into the first chunk's commit)
         # so the clear is unconditional at apply start — even a first-chunk
         # heartbeat-timeout, whose late ack commits without the stamp, leaves no
-        # stale stamp behind (ADR-0023 / #1025).
+        # stale stamp behind (ADR-0023 / #1025). A delete, not ``revoke_skip``:
+        # the chunks re-mark rows with this run's generation, and a kept stamp
+        # naming the old one would make removed-game discovery read every
+        # re-marked row as gone from RomM.
         if unit.type == "platform" and unit.slug:
             await self._loop.run_in_executor(None, self._clear_platform_stamp_io, unit.slug)
 
@@ -1197,6 +1202,7 @@ class SyncOrchestrator:
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
         platform_names: dict[str, str],
+        processed_platform_slugs: frozenset[str],
         cancelled: bool,
     ) -> FinalizeOutcome:
         """Emit stale-removal + collection mappings; measure the run's memory delta.
@@ -1265,6 +1271,7 @@ class SyncOrchestrator:
             pending_collection_memberships=collection_memberships,
             pending_platform_rom_ids=platform_rom_ids,
             platform_names=platform_names,
+            processed_platform_slugs=processed_platform_slugs,
             stale_rom_ids=[rom_id for rom_id, _app_id in stale],
         )
         return FinalizeOutcome(

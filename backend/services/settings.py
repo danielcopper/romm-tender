@@ -421,12 +421,23 @@ class SettingsService:
 
     # ── Corrupt-settings reset notice ───────────────────────────────────
 
+    def get_settings_reset_notice(self) -> dict[str, Any]:
+        """Report whether a corrupt ``settings.json`` was reset at boot.
+
+        Returns ``{"pending": bool, "backed_up_to": str | None}`` from the
+        persistent ``_settings_reset_notice`` marker; a clean boot answers
+        ``{"pending": False, "backed_up_to": None}``. Non-consuming: only
+        ``dismiss_settings_reset_notice`` clears the marker.
+        """
+        notice = self._settings.get("_settings_reset_notice")
+        return {"pending": notice is not None, "backed_up_to": (notice or {}).get("backed_up_to")}
+
     def dismiss_settings_reset_notice(self) -> dict[str, Any]:
         """Acknowledge the corrupt-settings reset and persist the dismissal.
 
         Pops the persistent ``_settings_reset_notice`` marker from the live
         settings dict and saves, so the QAM banner and game-detail cards stay
-        down across reloads. Idempotent — a no-op save when no marker is set.
+        down across backend restarts. Idempotent — a no-op save when no marker is set.
         """
         self._settings.pop("_settings_reset_notice", None)
         self._settings_persister.save_settings()

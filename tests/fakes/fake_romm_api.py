@@ -147,8 +147,7 @@ class FakeRommApi:
         self.list_virtual_collections_side_effect: Exception | None = None
         # Per-type failure injection: raise only for a specific virtual type
         # (``{"collection": RuntimeError(...)}``), so a test can fail one
-        # supported type while the other still returns — exercising the
-        # per-type fail-open in the fetcher's virtual-collection loop.
+        # supported type while the other still returns.
         self.list_virtual_collections_side_effect_by_type: dict[str, Exception] = {}
         self.list_smart_collections_side_effect: Exception | None = None
         self.list_roms_by_collection_side_effect: Exception | None = None

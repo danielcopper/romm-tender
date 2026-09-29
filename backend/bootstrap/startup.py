@@ -1,13 +1,14 @@
-"""Running the start-up routines so one failing repair cannot take the backend down.
+"""Running the start-up routines so one failing step cannot take the backend down.
 
-Contract: the wrapper the start-up REPAIRS are called through, and nothing else.
-Eight of the nine steps go through it; the ninth, ``migrate_legacy_credentials``,
-does not — it runs after the port is announced (``host/runtime.py``) and
-swallows its own failures. It belongs to the composition root rather than to the services, so the
-distinction it draws — this step is a repair, not a prerequisite — is visible at
-the call site rather than buried in each service.
+Contract: the wrapper the start-up steps that are not prerequisites are called
+through, and nothing else. Every step goes through it but
+``migrate_legacy_credentials``, which runs after the port is announced
+(``host/runtime.py``) and swallows its own failures. It belongs to the
+composition root rather than to the services, so the distinction it draws — this
+step is not a prerequisite — is visible at the call site rather than buried in
+each service.
 
-The distinction is not decorative. Six of the nine routines contain no exception
+The distinction is not decorative. Most of the routines contain no exception
 handling at all. Under the plugin loader that cost nothing, because the lifecycle
 hook was a detached task nobody awaited; hosting the backend ourselves, an
 unhandled failure in an artwork sweep ends the process, and a service manager's
@@ -19,7 +20,7 @@ has *succeeded*: the prune reads the pending homes the detection writes into
 ``kv_config``, and if the detection broke off, the prune takes every install
 under the home RetroDECK has just left for orphaned and deletes its rows. The
 guard the prune carries covers "the home is missing", not "the detection
-failed". The other seven steps have no such edge.
+failed". No other pair of steps has such an edge.
 """
 
 from __future__ import annotations

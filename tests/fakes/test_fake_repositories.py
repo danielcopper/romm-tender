@@ -418,6 +418,32 @@ class TestFakePlatformSyncStateRepository:
         repo.clear()
         assert repo.has_any() is False
 
+    def test_revoke_skip_flags_the_stored_stamp_and_hides_it_from_has_any(self):
+        """Mirrors the SQLite ``UPDATE``: the stamp stays, flagged, and a fresh save clears it."""
+        repo = FakePlatformSyncStateRepository()
+        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-01-01T00:00:00+00:00", rom_count=3))
+        repo.save(PlatformSyncState.stamp(platform_slug="snes", at="2026-01-01T00:00:00+00:00", rom_count=200))
+
+        repo.revoke_skip("n64")
+        repo.revoke_skip("nope")  # absent slug is a no-op, and creates nothing
+
+        n64 = repo.get("n64")
+        snes = repo.get("snes")
+        assert n64 is not None
+        assert (n64.rom_count, n64.skip_revoked) == (3, True)
+        assert snes is not None
+        assert snes.skip_revoked is False
+        assert repo.get("nope") is None
+        assert repo.has_any() is True
+        repo.revoke_skip("snes")
+        assert repo.has_any() is False
+
+        repo.save(PlatformSyncState.stamp(platform_slug="n64", at="2026-02-01T00:00:00+00:00", rom_count=3))
+        refreshed = repo.get("n64")
+        assert refreshed is not None
+        assert refreshed.skip_revoked is False
+        assert repo.has_any() is True
+
 
 def _collection_stamp(collection_id: str, kind: str, *, members: tuple[int, ...] = (1,)) -> CollectionSyncState:
     return CollectionSyncState.stamp(
@@ -436,13 +462,23 @@ class TestFakeCollectionSyncStateRepository:
         same id under two kinds is two stamps and the last delete empties it."""
         repo = FakeCollectionSyncStateRepository()
         assert repo.has_any() is False
-        repo.save(_collection_stamp("7", "standard"))
-        repo.save(_collection_stamp("7", "smart"))
+        repo.save(_collection_stamp("7", "standard", members=(1,)))
+        repo.save(_collection_stamp("7", "smart", members=(2,)))
         assert repo.has_any() is True
-        repo.delete("7", "standard")
+        repo.delete_intersecting({1})
         assert repo.has_any() is True
-        repo.delete("7", "smart")
+        repo.delete_intersecting({2})
         assert repo.has_any() is False
+
+    def test_delete_intersecting_drops_only_the_stamps_holding_one_of_the_ids(self):
+        repo = FakeCollectionSyncStateRepository()
+        repo.save(_collection_stamp("7", "standard", members=(1, 2)))
+        repo.save(_collection_stamp("7", "smart", members=(3,)))
+        repo.save(_collection_stamp("9", "smart", members=(4,)))
+        repo.delete_intersecting({2, 4})
+        assert repo.get("7", "standard") is None
+        assert repo.get("7", "smart") is not None
+        assert repo.get("9", "smart") is None
 
     def test_clear_empties_it(self):
         repo = FakeCollectionSyncStateRepository()

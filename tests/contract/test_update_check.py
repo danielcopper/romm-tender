@@ -23,7 +23,9 @@ def _release(version: str) -> LatestRelease:
     url = (
         f"https://github.com/danielcopper/romm-tender/releases/download/tender-v{version}/romm-tender-{version}.tar.gz"
     )
-    return LatestRelease(version=version, tarball=ReleaseTarball(url=url, digest="ab99" * 16))
+    return LatestRelease(
+        version=version, tarball=ReleaseTarball(url=url, digest="ab99" * 16, checksum_url=f"{url}.sha256")
+    )
 
 
 def _settings_on_disk(harness) -> dict[str, Any]:
@@ -51,6 +53,41 @@ async def test_a_release_without_its_tarball_raises_nothing(harness):
 
     assert notice["available"] is False
     assert notice["latest_version"] is None
+
+
+async def test_an_answer_stored_before_the_checksum_file_was_required_raises_no_card(harness):
+    """The stamp still holds the read off for the day; only a check that finds the file brings the card."""
+    with harness.uow_factory() as uow:
+        uow.kv_config.set(
+            "update_check_last_seen",
+            json.dumps(
+                {
+                    "checked_at": harness.clock.time(),
+                    "version": "99.0.0",
+                    "tarball_url": "https://x.test/romm-tender-99.0.0.tar.gz",
+                    "digest": "ab99" * 16,
+                }
+            ),
+        )
+    harness.releases.answer = _release("99.0.0")
+
+    notice = await harness.plugin.get_update_notice()
+
+    assert harness.releases.calls == 0
+    assert (notice["available"], notice["latest_version"]) == (False, None)
+
+    harness.clock.advance(_A_DAY)
+    assert (await harness.plugin.get_update_notice())["available"] is True
+
+
+async def test_the_checksum_address_outlives_the_call_in_the_database(harness):
+    harness.releases.answer = _release("99.0.0")
+
+    await harness.plugin.get_update_notice()
+
+    with harness.uow_factory() as uow:
+        stored = json.loads(uow.kv_config.get("update_check_last_seen"))
+    assert stored["checksum_url"].endswith("/romm-tender-99.0.0.tar.gz.sha256")
 
 
 async def test_a_check_that_reached_nothing_reports_no_update(harness):

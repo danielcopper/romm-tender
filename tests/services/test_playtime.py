@@ -1,7 +1,8 @@
-"""Tests for PlaytimeService — SQLite ``rom_playtime`` aggregate + native play-session ingest."""
+"""Tests for PlaytimeService — the ``Playtime`` aggregate and native play-session ingest."""
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -630,6 +631,136 @@ class TestGetPlaytime:
         result = svc.get_all_playtime()
 
         assert result == {"playtime": {}}
+
+
+@dataclass
+class PlaytimeHarness:
+    """The playtime service and the unit of work its tests seed and read back.
+
+    No device is registered, so a session end is folded into the local total and never enqueued for RomM.
+    """
+
+    service: PlaytimeService
+    uow: FakeUnitOfWork
+
+
+@pytest.fixture
+def playtime() -> PlaytimeHarness:
+    service, _, uow = make_service(device_id=None)
+    return PlaytimeHarness(service=service, uow=uow)
+
+
+def _get_playtime(uow: FakeUnitOfWork, rom_id: int) -> Playtime | None:
+    """Read back the persisted ``Playtime`` for *rom_id*, or ``None``."""
+    with uow:
+        return uow.playtime.get(rom_id)
+
+
+class TestPlaytimeTracking:
+    """Tests for session playtime recording into a ROM's ``Playtime`` aggregate."""
+
+    @pytest.mark.asyncio
+    async def test_session_start_records_timestamp(self, playtime):
+        """record_session_start opens the session marker on the aggregate."""
+        _seed_rom(playtime.uow, 42)
+
+        result = await playtime.service.record_session_start(42)
+
+        assert result["success"] is True
+        entry = _get_playtime(playtime.uow, 42)
+        assert entry is not None
+        assert entry.last_session_start is not None
+        # Should be a valid ISO datetime
+        datetime.fromisoformat(entry.last_session_start)
+
+    @pytest.mark.asyncio
+    async def test_session_end_calculates_delta(self, playtime):
+        """record_session_end computes correct duration."""
+        start_time = playtime.service._clock.now() - timedelta(seconds=600)
+        _seed_playtime(playtime.uow, 42, Playtime(last_session_start=start_time.isoformat()))
+
+        result = await playtime.service.record_session_end(42)
+
+        assert result["success"] is True
+        assert result["duration_sec"] == 600
+        assert result["total_seconds"] == 600
+
+    @pytest.mark.asyncio
+    async def test_delta_accumulated(self, playtime):
+        """Playtime delta added to existing total."""
+        start_time = playtime.service._clock.now() - timedelta(seconds=300)
+        _seed_playtime(
+            playtime.uow,
+            42,
+            Playtime(total_seconds=1000, session_count=5, last_session_start=start_time.isoformat()),
+        )
+
+        await playtime.service.record_session_end(42)
+
+        entry = _get_playtime(playtime.uow, 42)
+        assert entry is not None
+        assert entry.total_seconds == 1300  # 1000 + 300
+
+    @pytest.mark.asyncio
+    async def test_session_count_incremented(self, playtime):
+        """Session count goes up on end."""
+        start_time = playtime.service._clock.now() - timedelta(seconds=10)
+        _seed_playtime(playtime.uow, 42, Playtime(session_count=5, last_session_start=start_time.isoformat()))
+
+        result = await playtime.service.record_session_end(42)
+
+        assert result["session_count"] == 6
+
+    @pytest.mark.asyncio
+    async def test_end_without_start(self, playtime):
+        """record_session_end without active session returns failure."""
+        result = await playtime.service.record_session_end(42)
+
+        assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_session_start_clears_on_end(self, playtime):
+        """last_session_start is cleared after session end."""
+        start_time = playtime.service._clock.now() - timedelta(seconds=10)
+        _seed_playtime(playtime.uow, 42, Playtime(last_session_start=start_time.isoformat()))
+
+        await playtime.service.record_session_end(42)
+
+        entry = _get_playtime(playtime.uow, 42)
+        assert entry is not None
+        assert entry.last_session_start is None
+
+    @pytest.mark.asyncio
+    async def test_duration_clamped_to_24h(self, playtime):
+        """Duration clamped to max 24 hours."""
+        start_time = playtime.service._clock.now() - timedelta(hours=48)
+        _seed_playtime(playtime.uow, 42, Playtime(last_session_start=start_time.isoformat()))
+
+        result = await playtime.service.record_session_end(42)
+
+        assert result["duration_sec"] == 86400  # 24h max
+
+
+class TestGetAllPlaytime:
+    """Tests for get_all_playtime."""
+
+    @pytest.mark.asyncio
+    async def test_returns_all_playtime_entries(self, playtime):
+        """Returns the stored playtime of every ROM that has one."""
+        _seed_playtime(playtime.uow, 42, Playtime(total_seconds=3000, session_count=5))
+        _seed_playtime(playtime.uow, 99, Playtime(total_seconds=600, session_count=1))
+
+        result = playtime.service.get_all_playtime()
+
+        assert result["playtime"]["42"]["total_seconds"] == 3000
+        assert result["playtime"]["42"]["session_count"] == 5
+        assert result["playtime"]["99"]["total_seconds"] == 600
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_playtime(self, playtime):
+        """Returns empty dict when no playtime data exists."""
+        result = playtime.service.get_all_playtime()
+        assert result["playtime"] == {}
 
 
 # ---------------------------------------------------------------------------

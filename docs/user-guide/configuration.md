@@ -14,7 +14,7 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
 | **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
 | **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
-| **Updates**       | the version you have and the release the last successful check found, the daily update check, and **Check now**                                               |
+| **Updates**       | the version you have and the release the last successful check found, an update that was rolled back, the daily update check, and **Check now**               |
 | **Advanced**      | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
@@ -27,13 +27,14 @@ accounts.
 
 ### Getting there from a notice
 
-Three of the notices on the plugin's main panel are doors into a section, and the action they are about lives only
-behind that door:
+Four of the notices on the plugin's main panel are doors into a section, and the action they are about lives only behind
+that door:
 
 | The notice says               | Its button           | Where it takes you     |
 | ----------------------------- | -------------------- | ---------------------- |
 | RetroArch: input_driver issue | **Open Controller**  | Settings › Controller  |
 | Cross-device playtime         | **Open Connections** | Settings › Connections |
+| Update to X failed            | **Open Updates**     | Settings › Updates     |
 | Tender X is available         | **Open Updates**     | Settings › Updates     |
 
 The main panel only names the condition — it no longer carries a Fix button, so there is one place to do each of these
@@ -284,20 +285,37 @@ Each time Steam loads Tender, it asks GitHub whether a newer release is out — 
 notice on the main panel says **Tender X is available** and names the version you have; **Open Updates** takes you to
 **Settings › Updates**, and **Dismiss** puts the notice away for that version only — the next release brings it back.
 
+After an update, once Steam has finished starting, it says **Tender updated to X** in a message that goes by itself;
+after installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or
+restarting Steam, does not bring it back. The main panel also shows a notice, **Tender was updated to X.** or **Tender
+is back on X.**, which stays — above the other update notices — until you press **Dismiss**, or until the Deck restarts
+(which restarts Tender).
+
+If the new version did not start after an update, and the installer went back to the version you had, a notice on the
+main panel says **Update to X failed — you are still on Y.**, and under it where the reason is.
+[Troubleshooting](troubleshooting.md#an-update-was-rolled-back) says what to look at there. **Open Updates** takes you
+to **Settings › Updates**, and **Dismiss** puts the notice away for that failed update only; another one brings it back.
+It also goes away by itself once a later update goes through. While it is there, the main panel does not also call X
+available — you have just seen it fail — although a release newer than X brings back an **is available** notice for that
+release.
+
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
 - **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
   yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
+- **Update to X failed — you are still on Y.**, with where the reason is under it, while the installer's note of a
+  rolled-back update is there and you are still on Y — whether or not you dismissed the notice on the main panel.
 - **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
   press **Check now**.
 - **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
   The line under the button says what it found: a newer release, that you have the newest one, or that GitHub gave no
   usable answer.
 
-A release counts as out only once its download is attached together with GitHub's checksum for it, which happens a few
-minutes after the release is published; until then Tender says nothing about it. A release whose download comes without
-a valid checksum does not count as out while it has none, because it could not be verified.
+A release counts as out only once its download is attached together with GitHub's checksum for it and the checksum file
+the installer verifies it against, which happens a few minutes after the release is published; until then Tender says
+nothing about it. A release whose download comes without a valid checksum, or without that file, does not count as out
+while either is missing, because it could not be verified.
 
 **What the check sends where.** When Steam loads Tender and a day has passed since the last check, and whenever you
 press **Check now**, Tender asks GitHub's public API for the newest release of `danielcopper/romm-tender`. The request

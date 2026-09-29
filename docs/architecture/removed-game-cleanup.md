@@ -110,6 +110,15 @@ produces no candidates at all, because absence from an incomplete fetch is not e
 an already-vanished version-picker row needs no generation — the row is already known vanished — but still takes the
 same fresh exact-id proof.
 
+Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
+unbinds the rows of a platform the run did not process — its sync turned off, or RomM no longer listing it — all but
+those an enabled collection holds, and "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's
+own UI unbind rows too; each of those revokes the platform's skip and keeps the stamp
+([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"). The
+rows keep their fetch generation and the stamp still records the fetch that set it, so Gone from RomM keeps naming the
+rows that fetch did not return — including for as long as the platform's sync stays off, while no new complete fetch
+replaces the stamp. The canary ids a 404 round asks first are read the same way.
+
 The preview discloses **every** member of an affected group, not only the candidates. A member carrying the platform
 stamp's current fetch generation is not evidence that RomM still serves it: whole-game removal is decided by the run's
 fresh probe of every id in the group, never by the stored generation, so a generation-current row can still be taken and
@@ -122,15 +131,15 @@ option, because `selected_prune_ids` returns a non-candidate only under that opt
 describe an outcome that cannot occur, so the dialog hides them and drops any installed-content selection they carried;
 every page is still fetched, and the completeness gate before confirmation is unchanged.
 
-Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp. It does not need to.
-Under a stamp that records its fetch generation, a row it removes that the stamp's fetch did not return was never
-counted by the incremental skip, and while it was bound it made the skip full-fetch the platform instead
-([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"), so
-removing it can only let the platform skip again. A row it removes that the fetch did return is one RomM dropped
-afterwards, which moves RomM's `rom_count` away from the stamp's, and the fetcher's stamp-count guard forces the
+Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp, nor revoke its skip. It
+does not need to. Under a stamp that records its fetch generation, a row it removes that the stamp's fetch did not
+return was never counted by the incremental skip, and while it was bound it made the skip full-fetch the platform
+instead ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
+skip"), so removing it can only let the platform skip again. A row it removes that the fetch did return is one RomM
+dropped afterwards, which moves RomM's `rom_count` away from the stamp's, and the fetcher's stamp-count guard forces the
 re-fetch. Under a stamp with no generation every row counts, so removing one RomM no longer serves can only bring that
 count back to RomM's. Clearing the stamp would cost the platform its incremental skip and disable further bulk discovery
-until a new complete fetch landed.
+until a new complete fetch landed; revoking its skip would cost the first of those.
 
 ## Prune conflicts
 

@@ -1,6 +1,7 @@
 import { FC } from "react";
-import { PanelSectionRow, DialogButton, Focusable } from "@decky/ui";
+import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 import { dismissUpdateForVersion, useUpdateNoticeState } from "../utils/updateNoticeStore";
+import { failureTakesThePlaceOf, useUpdateOutcomeState } from "../utils/updateOutcomeStore";
 import { logError } from "../api/backend";
 
 /**
@@ -8,14 +9,17 @@ import { logError } from "../api/backend";
  *
  * A notice and nothing more: it names the release and jumps to its home,
  * Settings › Updates, which states both versions and holds the check's
- * controls. Dismiss is per version, so the next release raises it again.
+ * controls. Dismiss is per version, so the next release raises it again. It
+ * gives way to the rolled-back notice for the version that update tried.
  */
 export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates }) => {
   const state = useUpdateNoticeState();
+  const outcome = useUpdateOutcomeState();
 
   // `available` is decided by comparing a version, so it implies one; this is
   // the type narrowing, not a second condition.
   if (!state.available || state.latestVersion === null) return null;
+  if (failureTakesThePlaceOf(state.latestVersion, outcome)) return null;
   const latestVersion = state.latestVersion;
 
   const handleDismiss = () => {
@@ -44,14 +48,16 @@ export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates 
         </Focusable>
       </PanelSectionRow>
       <PanelSectionRow>
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
-            Open Updates
-          </DialogButton>
-          <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
-            Dismiss
-          </DialogButton>
-        </Focusable>
+        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
+          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={onOpenUpdates}>
+              Open Updates
+            </DialogButton>
+            <DialogButton style={{ flex: 1, minWidth: 0, padding: "8px 0" }} onClick={handleDismiss}>
+              Dismiss
+            </DialogButton>
+          </Focusable>
+        </Field>
       </PanelSectionRow>
     </>
   );

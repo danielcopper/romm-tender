@@ -6,12 +6,14 @@ unbinds the rows) and the sync-start reconcile against Steam's live shortcut
 set (a shortcut the user deleted through Steam's own UI is unbound so the next
 sync recreates it — #1046). Unbinding clears ``shortcut_app_id`` and keeps the
 row and its per-ROM children (ADR-0007), never deletes. Every unbind here also
-invalidates the touched platforms' completion stamps (ADR-0023) — and any
-collection stamp whose member set contained a removed ROM (#742) — so the next
-sync's incremental-skip gate can't skip a platform/collection whose shortcuts
-were removed locally and leave the removal never recreated. Reads the synced-shortcut binding
-from ``uow.roms``; the offline ``platform_slug → display_name`` label comes from
-the ``kv_config`` cache the library sync refreshes each run.
+revokes the skip of the touched platforms' completion stamps (ADR-0023) — and
+deletes any collection stamp whose member set contained a removed ROM (#742) — so
+the next sync's incremental-skip gate can't skip a platform/collection whose
+shortcuts were removed locally and leave the removal never recreated. Why the
+platform stamp is kept is in docs/architecture/backend-architecture.md,
+"Incremental skip". Reads the synced-shortcut binding from ``uow.roms``; the offline
+``platform_slug → display_name`` label comes from the ``kv_config`` cache the
+library sync refreshes each run.
 """
 
 from __future__ import annotations
@@ -171,16 +173,16 @@ class ShortcutRemovalService:
                 self._artwork_remover.remove_artwork_files(grid, rom_id, self._artwork_entry(rom))
 
         # Unbind the removed ROMs — clear the Steam link, keep the row (ADR-0007) —
-        # and invalidate the completion stamp (ADR-0023) of every platform this
-        # removal touched. Unbinding keeps the row, so the platform's persisted-row
-        # count is unchanged and a still-valid stamp would let the next sync's
+        # and revoke the skip (ADR-0023) of every platform this removal touched.
+        # Unbinding keeps the row, so the platform's persisted-row count is
+        # unchanged and a stamp that may still skip would let the next sync's
         # incremental-skip gate skip the platform wholesale and never recreate the
         # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
         # Management's remove-all and the per-platform removal on the Library
-        # page's Platforms tab — funnel their unbind here, so deleting the stamp per
-        # touched slug covers each: remove-all reports every ROM (all platforms
-        # invalidated), a per-platform removal reports only that platform's ROMs
-        # (only its slug invalidated). Same write UoW as the unbind.
+        # page's Platforms tab — funnel their unbind here, so revoking per touched
+        # slug covers each: remove-all reports every ROM (every platform revoked),
+        # a per-platform removal reports only that platform's ROMs (only its slug
+        # revoked). Same write UoW as the unbind.
         removed_ids: set[int] = set()
         with self._uow_factory() as uow:
             touched_slugs: set[str] = set()
@@ -195,27 +197,8 @@ class ShortcutRemovalService:
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
             for slug in touched_slugs:
-                uow.platform_sync_state.delete(slug)
-            self._invalidate_collection_stamps_for(uow, removed_ids)
-
-    @staticmethod
-    def _invalidate_collection_stamps_for(uow, removed_ids: set[int]) -> None:
-        """Drop any collection stamp whose member set intersects the removed ROMs.
-
-        The collection sibling of the platform-stamp invalidation (#742 /
-        ADR-0023): a collection member losing its Steam shortcut (removed locally)
-        must re-fetch + re-apply that collection next sync, else the collection's
-        incremental skip would rebuild the Steam collection from a stale member
-        set and never recreate the removed shortcut. Surgical — only collections
-        that actually contained a removed ROM lose their stamp (a collection id
-        can't be mapped from a platform slug, so this scans the stamps' stored
-        member sets). Shares the caller's write UoW.
-        """
-        if not removed_ids:
-            return
-        for stamp in list(uow.collection_sync_state.iter_all()):
-            if removed_ids.intersection(stamp.member_rom_ids):
-                uow.collection_sync_state.delete(stamp.collection_id, stamp.collection_kind)
+                uow.platform_sync_state.revoke_skip(slug)
+            uow.collection_sync_state.delete_intersecting(removed_ids)
 
     @staticmethod
     def _artwork_entry(rom) -> ShortcutRegistryEntry:
@@ -281,12 +264,12 @@ class ShortcutRemovalService:
             # count unchanged, so its platform's completion stamp (ADR-0023) would
             # still let the next sync skip the platform and never recreate the
             # shortcut — the same silent-gap class as the bulk removals (#1025).
-            # Invalidate the stamp of every platform we unbound here, in the same
+            # Revoke the skip of every platform we unbound here, in the same
             # write UoW, so the platform full-fetches and recreates the shortcut
             # (completing the #1046 recovery under the persisted-count skip).
             for slug in touched_slugs:
-                uow.platform_sync_state.delete(slug)
-            self._invalidate_collection_stamps_for(uow, unbound_ids)
+                uow.platform_sync_state.revoke_skip(slug)
+            uow.collection_sync_state.delete_intersecting(unbound_ids)
         return unbound
 
     async def reconcile_live_shortcuts(self, live_app_ids: list[int | str]) -> dict[str, Any]:

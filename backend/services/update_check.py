@@ -97,9 +97,10 @@ class UpdateCheckService:
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``latest_version`` is the last
         available release a check saw — the release GitHub called latest, with
-        its tarball attached — ``None`` where none was established. ``newer``
-        says it is strictly newer than the running version. ``available`` is
-        the card: newer, not the dismissed version, and the check switched on.
+        its tarball and checksum file attached — ``None`` where none was
+        established. ``newer`` says it is strictly newer than the running
+        version. ``available`` is the card: newer, not the dismissed version,
+        and the check switched on.
 
         Reads GitHub at most once a day: inside that window the answer comes
         from the stored marker, so a reload shows the card again without a

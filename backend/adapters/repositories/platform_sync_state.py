@@ -3,8 +3,8 @@
 One row per platform, keyed by ``platform_slug`` — the per-platform completion
 stamp the incremental-skip gate reads (ADR-0023). A leaf table with no cascade
 children, so ``save`` upserts with ``INSERT OR REPLACE``, ``delete`` drops one
-platform's row (apply-start clear + local destructive flows), and ``clear`` drops
-the whole table (Force Full Sync).
+platform's row (apply-start clear), ``revoke_skip`` flags one in place, and
+``clear`` drops the whole table (Force Full Sync).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from domain.platform_sync_state import PlatformSyncState
 if TYPE_CHECKING:
     import sqlite3
 
-_COLUMNS = "platform_slug, completed_at, rom_count, fetch_id"
+_COLUMNS = "platform_slug, completed_at, rom_count, fetch_id, skip_revoked"
 
 
 def _row_to_state(row: sqlite3.Row) -> PlatformSyncState:
@@ -26,6 +26,7 @@ def _row_to_state(row: sqlite3.Row) -> PlatformSyncState:
         completed_at=row["completed_at"],
         rom_count=row["rom_count"],
         fetch_id=row["fetch_id"],
+        skip_revoked=bool(row["skip_revoked"]),
     )
 
 
@@ -41,15 +42,21 @@ class SqlitePlatformSyncStateRepository(BaseRepository):
 
     def save(self, state: PlatformSyncState) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO platform_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?)",
-            (state.platform_slug, state.completed_at, state.rom_count, state.fetch_id),
+            f"INSERT OR REPLACE INTO platform_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?, ?)",
+            (state.platform_slug, state.completed_at, state.rom_count, state.fetch_id, int(state.skip_revoked)),
         )
 
     def delete(self, platform_slug: str) -> None:
         self._conn.execute("DELETE FROM platform_sync_state WHERE platform_slug = ?", (platform_slug,))
 
+    def revoke_skip(self, platform_slug: str) -> None:
+        self._conn.execute("UPDATE platform_sync_state SET skip_revoked = 1 WHERE platform_slug = ?", (platform_slug,))
+
     def has_any(self) -> bool:
-        return self._conn.execute("SELECT 1 FROM platform_sync_state LIMIT 1").fetchone() is not None
+        return (
+            self._conn.execute("SELECT 1 FROM platform_sync_state WHERE skip_revoked = 0 LIMIT 1").fetchone()
+            is not None
+        )
 
     def clear(self) -> None:
         self._conn.execute("DELETE FROM platform_sync_state")

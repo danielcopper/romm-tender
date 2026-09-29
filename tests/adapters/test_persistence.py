@@ -1,10 +1,11 @@
-"""Tests for the PersistenceAdapter: locking, version stamping, and load edge cases."""
+"""Tests for adapters/persistence.py."""
 
 import json
 import logging
 import os
 import threading
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 import pytest
 from fakes.system_time import FakeClock
@@ -14,7 +15,9 @@ from adapters.persistence import (
     DEFAULT_SETTINGS,
     PersistenceAdapter,
     PlatformCoreReaderAdapter,
+    SettingsPersisterAdapter,
 )
+from domain.state_migrations import migrate_settings
 
 
 @pytest.fixture
@@ -217,6 +220,43 @@ class TestLoadingEdgeCases:
         assert mode == 0o600
 
 
+class TestInsecureSslSetting:
+    def test_load_settings_defaults_false(self, tmp_path):
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"romm_url": "https://romm.local"}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = persistence.load_settings()
+        assert settings["romm_allow_insecure_ssl"] is False
+
+
+class TestDebugLoggingMigration:
+    """A settings.json carrying the old ``debug_logging`` flag, loaded and then migrated."""
+
+    def test_migration_debug_logging_true(self, tmp_path):
+        """Old debug_logging=True migrates to log_level='debug'."""
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"debug_logging": True, "romm_url": ""}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = migrate_settings(persistence.load_settings())
+        assert "debug_logging" not in settings
+        assert settings["log_level"] == "debug"
+
+    def test_migration_debug_logging_false(self, tmp_path):
+        """Old debug_logging=False migrates to log_level='warn' (default)."""
+        settings_path = os.path.join(str(tmp_path), "settings.json")
+        os.makedirs(str(tmp_path), exist_ok=True)
+        with open(settings_path, "w") as f:
+            json.dump({"debug_logging": False, "romm_url": ""}, f)
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        settings = migrate_settings(persistence.load_settings())
+        assert "debug_logging" not in settings
+        assert settings["log_level"] == "warn"
+
+
 # ── Crash-safe write: fsync(tmp) before rename, fsync(dir) after ─────────────────
 
 
@@ -284,6 +324,68 @@ class TestCrashSafeWrite:
             adapter.save_settings({"romm_url": "http://example.com"})
         assert not os.path.exists(tmp_path)
         assert not os.path.exists(settings_path)
+
+
+# ── settings.json's file mode and atomic replacement ───────────────────────────
+
+
+class TestSettingsFilePermissions:
+    def test_save_settings_creates_file_with_0600(self, tmp_path, logger):
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        settings = {"romm_url": "http://example.com"}
+        SettingsPersisterAdapter(persistence, settings).save_settings()
+        settings_path = tmp_path / "settings.json"
+        mode = os.stat(settings_path).st_mode & 0o777
+        assert mode == 0o600
+
+    def test_load_settings_fixes_permissions(self, tmp_path):
+        settings_path = tmp_path / "settings.json"
+        with open(settings_path, "w") as f:
+            json.dump({"romm_url": "http://example.com"}, f)
+        os.chmod(settings_path, 0o644)
+        assert os.stat(settings_path).st_mode & 0o777 == 0o644
+        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+        persistence.load_settings()
+        assert os.stat(settings_path).st_mode & 0o777 == 0o600
+
+
+class TestAtomicSettingsWrite:
+    def test_settings_written_atomically(self, tmp_path, logger, data_dir):
+        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+
+        settings = {"romm_url": "http://example.com", "romm_user": "user"}
+        SettingsPersisterAdapter(persistence, settings).save_settings()
+
+        settings_path = tmp_path / "settings.json"
+        with open(settings_path) as f:
+            data = json.load(f)
+        assert data["romm_url"] == "http://example.com"
+        assert data["romm_user"] == "user"
+
+    def test_settings_no_tmp_left_after_write(self, tmp_path, logger, data_dir):
+        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+
+        settings = {"romm_url": "http://example.com"}
+        SettingsPersisterAdapter(persistence, settings).save_settings()
+
+        tmp_file = tmp_path / "settings.json.tmp"
+        assert not tmp_file.exists()
+
+    def test_settings_crash_preserves_original(self, tmp_path, logger, data_dir):
+        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+
+        settings = {"romm_url": "http://original.com"}
+        persister = SettingsPersisterAdapter(persistence, settings)
+        persister.save_settings()
+
+        settings["romm_url"] = "http://corrupted.com"
+        with patch("json.dump", side_effect=OSError("disk full")), pytest.raises(OSError):
+            persister.save_settings()
+
+        settings_path = tmp_path / "settings.json"
+        with open(settings_path) as f:
+            data = json.load(f)
+        assert data["romm_url"] == "http://original.com"
 
 
 # ── Version stamping never down-stamps ───────────────────────────────────────────

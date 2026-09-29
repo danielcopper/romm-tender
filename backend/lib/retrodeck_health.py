@@ -1,12 +1,10 @@
 """Health classification for RetroDECK path resolution from ``retrodeck.json``.
 
 Cross-cutting enum shared by the adapter that reads ``retrodeck.json``
-(``adapters/retrodeck_paths.py``), the Protocol services depend on
-(``services/protocols/paths.py``), and the ``main.py`` callable that
-surfaces the state to the frontend banner. It lives in ``lib/`` because
-all three layers must import it and ``import-linter`` forbids the
-adapter→service and service→adapter directions; ``lib/`` is the only
-namespace importable from every layer.
+(``adapters/retrodeck_paths.py``) and the Protocol services depend on
+(``services/protocols/paths.py``). It lives in ``lib/`` because both
+layers import it and ``import-linter`` forbids the adapter→service and
+service→adapter directions.
 """
 
 from __future__ import annotations
