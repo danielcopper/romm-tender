@@ -16,7 +16,11 @@ import type { RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
 import { pendingEdits } from "./settings/TextInputModal";
-import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
+import {
+  resetUpdateNoticeStoreForTests,
+  setUpdateNoticeState,
+  takePushedUpdateNotice,
+} from "../utils/updateNoticeStore";
 
 // Type-only imports — vi.mock(...) below replaces the runtime implementations,
 // but capturing props off the real prop interfaces keeps assertions in sync as
@@ -1910,6 +1914,24 @@ describe("SettingsPage", () => {
       expect(lastUpdates().update).toMatchObject({ latestVersion: "0.34.0", installedProgram: false });
       expect(lastUpdates().checking).toBe(false);
       expect(lastUpdates().result).toBe("");
+    });
+
+    it("hands the section a notice the backend pushed while the page is open", async () => {
+      renderPage();
+      await flushAsync();
+
+      act(() =>
+        takePushedUpdateNotice({
+          available: true,
+          newer: true,
+          latest_version: "0.35.0",
+          current_version: "0.33.0",
+          enabled: true,
+          installed_program: true,
+        }),
+      );
+
+      expect(lastUpdates().update).toMatchObject({ newer: true, latestVersion: "0.35.0", installedProgram: true });
     });
 
     it.each([

@@ -35,6 +35,7 @@ import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
+import { getUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
 import { estimateApplySeconds } from "./utils/syncEstimate";
@@ -1518,6 +1519,58 @@ describe("index.tsx — the release check at panel load", () => {
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for a newer release"));
     expect(getUpdateNoticeState().available).toBe(false);
     plugin.onDismount();
+  });
+});
+
+describe("index.tsx — what the backend pushes about updates", () => {
+  beforeEach(() => {
+    resetUpdateNoticeStoreForTests();
+    setUpdateInstallAttempt(null);
+  });
+
+  it("takes a notice from the backend's own check into the store the card and the section read", () => {
+    const plugin = pluginFactory();
+
+    act(() =>
+      emitHostEvent("update_notice", {
+        available: true,
+        newer: true,
+        latest_version: "0.35.0",
+        current_version: "0.33.0",
+        enabled: true,
+        installed_program: true,
+      }),
+    );
+
+    expect(getUpdateNoticeState()).toMatchObject({ available: true, latestVersion: "0.35.0" });
+    plugin.onDismount();
+  });
+
+  it("takes an install frame into the store Settings › Updates reads", () => {
+    const plugin = pluginFactory();
+    const frame = {
+      version: "0.35.0",
+      step: "verifying",
+      bytes_done: 100,
+      bytes_total: 100,
+      failure: null,
+    };
+
+    act(() => emitHostEvent("update_install_progress", frame));
+
+    expect(getUpdateInstallAttempt()).toEqual(frame);
+    plugin.onDismount();
+  });
+
+  it("stops listening for both on dismount", () => {
+    const plugin = pluginFactory();
+    expect(hostEventListenerCount("update_notice")).toBe(1);
+    expect(hostEventListenerCount("update_install_progress")).toBe(1);
+
+    plugin.onDismount();
+
+    expect(hostEventListenerCount("update_notice")).toBe(0);
+    expect(hostEventListenerCount("update_install_progress")).toBe(0);
   });
 });
 

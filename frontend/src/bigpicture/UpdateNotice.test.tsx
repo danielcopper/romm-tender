@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, fireEvent, waitFor } from "@testing-library/react";
 import { UpdateNotice } from "./UpdateNotice";
 import * as backend from "../api/backend";
 import { dismissUpdateNotice } from "../api/backend";
@@ -8,6 +8,7 @@ import {
   getUpdateNoticeState,
   resetUpdateNoticeStoreForTests,
   setUpdateNoticeState,
+  takePushedUpdateNotice,
   type UpdateNoticeState,
 } from "../utils/updateNoticeStore";
 import {
@@ -41,6 +42,24 @@ describe("UpdateNotice", () => {
   it("shows nothing while no update is available", () => {
     const { container } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
     expect(container.textContent).toBe("");
+  });
+
+  it("comes up when the backend pushes a notice while it is mounted, without a reload", () => {
+    const { queryByTestId, getByTestId } = render(<UpdateNotice onOpenUpdates={vi.fn()} />);
+    expect(queryByTestId("update-notice")).toBeNull();
+
+    act(() =>
+      takePushedUpdateNotice({
+        available: true,
+        newer: true,
+        latest_version: "0.34.0",
+        current_version: "0.33.0",
+        enabled: true,
+        installed_program: true,
+      }),
+    );
+
+    expect(getByTestId("update-notice").textContent).toContain("Tender 0.34.0 is available");
   });
 
   it("shows nothing for a dismissed release the section still names", () => {
