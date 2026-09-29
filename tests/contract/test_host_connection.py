@@ -149,8 +149,8 @@ class TestARealCallableOverTheRealConnection:
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
     async def test_a_private_method_of_the_real_plugin_is_unreachable(self, served):
-        """`_main` exists on the loaded class and is not callable surface."""
-        answer = await served.call("_main")
+        """`__init__` exists on the loaded class and is not callable surface."""
+        answer = await served.call("__init__")
 
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
