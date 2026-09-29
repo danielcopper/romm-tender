@@ -198,9 +198,9 @@ class SessionLifecycleService:
     async def shutdown(self) -> None:
         """Cancel any in-flight background tasks and await their completion.
 
-        Called from ``main._unload`` so detached achievement-refresh
-        coroutines do not leak across the plugin unload boundary. No-op
-        when no tasks are pending.
+        Called from ``Application.shutdown`` so detached achievement-refresh
+        coroutines do not outlive the backend. No-op when no tasks are
+        pending.
         """
         for task in self._background_tasks:
             task.cancel()

@@ -2,10 +2,11 @@
 
 Contract: which methods a caller may reach, and what comes back when one is
 called. Owns the name resolution, the exception boundary and the payload cap.
-It holds the plugin object and nothing else about the connection, so a call can
-be dispatched and judged without a socket in sight.
+It holds the object calls land on — ``main.Endpoints`` in production — and
+nothing else about the connection, so a call can be dispatched and judged
+without a socket in sight.
 
-**Reachable is exactly the endpoints of the plugin object** — a method on the
+**Reachable is exactly the endpoints on that object's class** — a method on the
 class with no leading underscore that carries ``@route``, ``def`` or
 ``async def`` alike, which is the same set ``scripts/check_callable_manifest.py``
 derives from the source. The two are asserted equal by a test rather than kept
@@ -84,7 +85,7 @@ def reachable_methods(target: object) -> dict[str, Any]:
 
 
 class CallDispatcher:
-    """Resolves a call onto the plugin object and answers with one wire message."""
+    """Resolves a call onto the object calls land on and answers with one wire message."""
 
     def __init__(self, target: object, logger: logging.Logger, payload_limit: int = DEFAULT_PAYLOAD_LIMIT) -> None:
         self._methods = reachable_methods(target)

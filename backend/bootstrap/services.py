@@ -1,11 +1,11 @@
 """Service half of the composition root — bundles in, live services out.
 
 Service construction is separated from adapter construction because it
-needs runtime state only ``main.py`` can supply (the event loop, the event
-sink's emit) plus plugin state that exists once ``bootstrap()`` has
-run. Services never reach each other by import: every cross-service
-reference is threaded through a ``*ServiceConfig`` here, or deferred
-through a ``LateBinding`` when the two constructors form a cycle.
+needs runtime state only the entry point can supply (the event loop, the
+event sink's emit) plus state that exists once ``bootstrap()`` has run.
+Services never reach each other by import: every cross-service reference is
+threaded through a ``*ServiceConfig`` here, or deferred through a
+``LateBinding`` when the two constructors form a cycle.
 """
 
 from __future__ import annotations
@@ -138,11 +138,11 @@ class ServicesBundle:
 
 
 def wire_services(cfg: WiringConfig) -> ServicesBundle:
-    """Create service instances after plugin state is initialised.
+    """Create service instances once ``bootstrap()`` has loaded the state they share.
 
-    Called from ``Plugin._main()`` after save-sync state is populated
-    so that services receive live references to the fully-populated
-    state dicts.
+    Called from ``build_application`` after ``bootstrap()`` has loaded
+    and migrated the settings, so that services receive live references
+    to the fully-populated state dicts.
 
     Returns
     -------

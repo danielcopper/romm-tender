@@ -2,7 +2,7 @@
 
 Contract: ``@route`` sets a marker on the function it decorates and returns that
 same function, so it changes nothing about how the method runs. What reads the
-marker is :func:`host.dispatch.reachable_methods`, and
+marker is :func:`host.dispatch.route_names`, and
 ``scripts/check_callable_manifest.py`` reads the same decorator off the source.
 
 It is the topmost decorator on the method. Placed beneath another decorator

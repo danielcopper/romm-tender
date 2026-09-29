@@ -135,9 +135,9 @@ class MigrationService:
     async def shutdown(self) -> None:
         """Cancel any in-flight background tasks and await their completion.
 
-        Called from ``main._unload`` so RetroDECK path-change notification
-        coroutines do not leak across the plugin unload boundary. No-op
-        when no tasks are pending.
+        Called from ``Application.shutdown`` so RetroDECK path-change
+        notification coroutines do not outlive the backend. No-op when no
+        tasks are pending.
         """
         for task in self._background_tasks:
             task.cancel()
