@@ -1699,7 +1699,7 @@ class Test024AddAnsweredSaveDirectories:
 
 
 class Test025AddPlatformSkipRevoked:
-    """025 — adds the NOT NULL DEFAULT 0 skip_revoked column to platform_sync_state only."""
+    """025 — adds the NOT NULL DEFAULT 0 skip_revoked column to platform_sync_state and revokes every existing stamp."""
 
     def test_adds_skip_revoked_to_platform_sync_state_only(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")
@@ -1717,7 +1717,10 @@ class Test025AddPlatformSkipRevoked:
         assert _user_version(db_path) == 24
         assert "skip_revoked" not in _columns(db_path, "platform_sync_state")
 
-    def test_an_existing_stamp_keeps_its_skip_across_the_migration(self, tmp_path: Path):
+    def test_an_existing_stamp_is_kept_with_its_skip_revoked(self, tmp_path: Path):
+        # A stamp written before 025 may stand over games a stale removal already
+        # unbound, so every one is revoked: each platform full-fetches once and its
+        # next apply re-stamps it.
         db_path = str(tmp_path / "romm_sync.db")
         apply_migrations(db_path, str(_only_migrations_through(tmp_path, 24)))
         conn = sqlite3.connect(db_path, isolation_level=None)
@@ -1738,7 +1741,7 @@ class Test025AddPlatformSkipRevoked:
             ).fetchone()
         finally:
             conn.close()
-        assert row == (3, "run-1", 0)
+        assert row == (3, "run-1", 1)
 
     def test_skip_revoked_refuses_a_null(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")

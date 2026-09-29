@@ -6,28 +6,33 @@
 -- A platform's completion stamp is read for two different things: the
 -- incremental skip trusts it to say the local mirror is complete, and bulk
 -- discovery of removed games trusts its fetch generation to say which rows
--- RomM's last complete fetch returned. Unbinding a row outside that platform's
--- own apply breaks the first and leaves the second intact — the row keeps its
--- generation, and the generation still records what RomM served.
+-- RomM's last complete fetch returned. The local removals, and the end-of-run
+-- stale removal on a platform the run did not process, unbind rows in a way
+-- the skip's counts cannot see: they break the first and leave the second
+-- intact — the rows keep their generation, and the generation still records
+-- what RomM served.
 --
 -- Deleting the stamp answered the first and threw the second away: a platform
 -- whose stamp is gone produces no removal candidates, and one whose sync stays
 -- turned off never gets a stamp back. This column lets the stamp stay for the
 -- readers that want its generation while the skip treats it as absent:
 --
---   * platform_sync_state.skip_revoked — 1 once something unbound a row on the
---     platform outside its apply; the skip-side readers then read no stamp.
+--   * platform_sync_state.skip_revoked — 1 once one of those unbinds touched
+--     the platform; the skip-side readers then read no stamp.
 --
--- A final-chunk stamp write replaces the whole row with 0, and the apply start
--- deletes it before that, so the flag lives exactly until the platform's next
--- completed apply. Force Full Sync still clears the table.
+-- The platform's next apply deletes the row when it starts, so the flag lasts
+-- until then, and no skip is possible again until that apply completes and
+-- writes a fresh stamp with 0. Force Full Sync still clears the table.
 --
--- NOT NULL DEFAULT 0 — an existing stamp keeps its skip. Nothing this DDL can
--- read says whether a row was unbound since the stamp was written, and a
--- platform whose stamp was deleted by an earlier removal has no row here to
--- flag.
+-- Every existing stamp is revoked here. One written before this migration may
+-- stand over games a stale removal already unbound while the platform was
+-- turned off, and would keep skipping them once it is turned back on. Revoking
+-- them all costs each platform one full fetch on the first sync after the
+-- upgrade, and the preview offers Apply for it even with nothing else to do;
+-- that apply re-stamps the platform.
 --
--- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
--- BEGIN/COMMIT and stamps PRAGMA user_version = 25.
+-- Transaction-safe DDL/DML only — the runner (adapters/sqlite_migrations.py)
+-- wraps BEGIN/COMMIT and stamps PRAGMA user_version = 25.
 -- -----------------------------------------------------------------------------
 ALTER TABLE platform_sync_state ADD COLUMN skip_revoked INTEGER NOT NULL DEFAULT 0;  -- 1 = the skip reads no stamp
+UPDATE platform_sync_state SET skip_revoked = 1;
