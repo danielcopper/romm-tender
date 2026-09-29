@@ -862,6 +862,20 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
   The **only** thing that deletes rows. **Clean Up Removed RomM Games** performs it only after fresh exact-ID 404s,
   explicit options, and any enabled recovery bundle have passed their final guards.
 
+### Completion stamp / revoked skip
+
+A platform's **completion stamp** (`PlatformSyncState`, `platform_sync_state`) records that its most recent apply ran to
+completion, with the fetch generation that apply marked its rows with. It has two readers: the incremental skip, for
+which it is the sole authority (no stamp, no skip), and removed-game discovery, which takes the generation as the record
+of what RomM's last complete fetch returned. A **revoked skip** (`skip_revoked`) is a stamp that keeps the second job
+and loses the first. Any **unbind** outside the platform's own apply sets it — the **stale** removal on a platform the
+run did not process, "Remove shortcuts", a shortcut deleted in Steam's own UI — and the platform full-fetches until a
+completed apply writes a fresh stamp. Distinct from deleting the stamp, which the apply start does and which leaves
+discovery nothing to read. A collection's completion stamp (`CollectionSyncState`) has no revoked state; it is deleted.
+The rule and its readers:
+[backend-architecture.md](docs/architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
+"Incremental skip".
+
 ### Recovery bundle
 
 A checksum-verified, atomically sealed pre-mutation snapshot created by explicit Prune. It records the affected local

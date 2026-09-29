@@ -1108,7 +1108,10 @@ class SyncOrchestrator:
         # A dedicated short write UoW (not folded into the first chunk's commit)
         # so the clear is unconditional at apply start — even a first-chunk
         # heartbeat-timeout, whose late ack commits without the stamp, leaves no
-        # stale stamp behind (ADR-0023 / #1025).
+        # stale stamp behind (ADR-0023 / #1025). A delete, not ``revoke_skip``:
+        # the chunks re-mark rows with this run's generation, and a kept stamp
+        # naming the old one would make removed-game discovery read every
+        # re-marked row as gone from RomM.
         if unit.type == "platform" and unit.slug:
             await self._loop.run_in_executor(None, self._clear_platform_stamp_io, unit.slug)
 

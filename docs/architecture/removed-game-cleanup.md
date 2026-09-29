@@ -110,6 +110,14 @@ produces no candidates at all, because absence from an incomplete fetch is not e
 an already-vanished version-picker row needs no generation — the row is already known vanished — but still takes the
 same fresh exact-id proof.
 
+Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
+unbinds the rows of a platform whose sync is turned off, all but those an enabled collection holds, and "Remove
+shortcuts" and a shortcut deleted in Steam's own UI unbind rows too; each of those revokes the platform's skip and keeps
+the stamp ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
+skip"). The rows keep their fetch generation and the stamp still records the fetch that set it, so Gone from RomM keeps
+naming the rows that fetch did not return — for as long as the platform's sync stays off, when no new complete fetch
+comes to replace the stamp. The canary ids a 404 round asks first are read the same way.
+
 The preview discloses **every** member of an affected group, not only the candidates. A member carrying the platform
 stamp's current fetch generation is not evidence that RomM still serves it: whole-game removal is decided by the run's
 fresh probe of every id in the group, never by the stored generation, so a generation-current row can still be taken and

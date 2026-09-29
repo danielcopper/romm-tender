@@ -535,8 +535,9 @@ ack re-binds the chunk without re-writing it (the late-ack path never passes a `
 gate then full-fetches that platform on every future sync (no stamp = no skip authority), and — because its shortcut
 delta is otherwise empty — the QAM's preview would short-circuit on "no changes", so the re-walk that would re-stamp it
 never runs and the run's `interrupted` status lingers indefinitely (only an apply run records a fresh `SyncRun`).
-`sync_preview` therefore counts the enabled platforms lacking a `PlatformSyncState` stamp
-(`LocalLibraryReader.do_count_unstamped_platforms`, a side-effect-free read) and rides it as the additive summary field
+`sync_preview` therefore counts the enabled platforms holding no `PlatformSyncState` stamp that may skip — no stamp at
+all, or one whose skip was revoked ("Incremental skip" below) — through
+`LocalLibraryReader.do_count_unstamped_platforms`, a side-effect-free read, and rides it as the additive summary field
 `restamp_platform_count` (absent/0 tolerated by old consumers). The frontend treats a restamp-only preview (all diffs
 zero, count > 0) as apply-able — "No changes — finishing an interrupted sync." with the normal Apply/Cancel confirm —
 mirroring the cover-only flow. The gated apply then runs the unstamped platform (the skip gate never skips it), and its
@@ -850,7 +851,7 @@ standard and smart listings (`CollectionSchema` / `SmartCollectionSchema` in eve
 forwarded as `null` where a listing lacks it; virtual rows carry no such key, since they have no owner.
 
 **Incremental skip — the per-platform completion stamp is the sole authority.** A platform unit skips only when its
-`PlatformSyncState` stamp exists
+`PlatformSyncState` stamp exists and its skip has not been revoked
 ([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)); the stamp's
 `completed_at` is the "unchanged since" reference for the `updated_after` server-delta probe. A completed `SyncRun`'s
 `last_sync` is deliberately **not** a fallback: a run-scoped timestamp cannot see a platform whose shortcuts were
@@ -879,27 +880,43 @@ instead would unbind on a stored marker rather than on RomM's answer: the genera
 not what RomM serves now, and a full fetch lets the stale-removal scan decide from a fresh listing. A stamp with no
 generation predates the contract and cannot say what its fetch returned, so it skips as before.
 
-The stamp's contract is **stamp exists ⟺ the platform's most recent apply attempt ran to completion**, so a stale stamp
-can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a platform's persisted-row
-count survives a partial re-apply or a local removal, so a surviving stamp with a matching `rom_count` would otherwise
-let the skip drop the un-recreated games (the #1025 silent gap). Three rules keep the contract true: the orchestrator
-**clears the stamp at a platform unit's apply start** (once the fetch succeeded and the apply is about to emit its first
-chunk) and only the final chunk re-writes it, so an apply interrupted by a crash / cancel / heartbeat-timeout before the
-final chunk leaves none; the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
-`report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) — delete the touched
-platforms' stamps in the same write UoW as the unbind; and the reporter's server-side **stale removal deletes the stamp
-of a platform the run did not process** — one that was not among the run's platform units, because its sync is turned
-off — once it has unbound a row there, in the same write UoW as the unbind. Left in place, that stamp would let the
-platform skip once it is turned back on: the rows an enabled collection still holds keep the zero-bound guard quiet, and
-the unbound rows still carry the stamp's generation, so they still count towards the skip, which rebuilds the unit from
-the bound rows alone and never re-creates the unbound games' shortcuts. With the stamp gone the platform full-fetches
-once and gets them back. On a platform the run processed, skipped or fetched alike, the stale removal leaves the stamp,
-because nothing the skip reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so
-none of them is stale, and a fetched platform was stamped by that run with a generation no stale row carries. "Force
-Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL), which is
-the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The `sync_runs` history
-is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync" display, so deleting
-it forced nothing and only blanked the panel to "Never" right after a reset.
+The stamp's contract is **a stamp may authorise a skip ⟺ the platform's most recent apply attempt ran to completion and
+nothing has unbound one of its rows outside that apply since**, so a stale stamp can never skip a half-mirrored
+platform. Because unbinding keeps the `roms` row (ADR-0007), a platform's persisted-row count survives a partial
+re-apply or a local removal, so a stamp still able to skip with a matching `rom_count` would otherwise let the skip drop
+the un-recreated games (the #1025 silent gap). Two rules keep the contract true. The orchestrator **deletes the stamp at
+a platform unit's apply start** (once the fetch succeeded and the apply is about to emit its first chunk) and only the
+final chunk re-writes it, so an apply interrupted by a crash / cancel / heartbeat-timeout before the final chunk leaves
+none. Every other unbind **revokes the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the `skip_revoked`
+column of migration `025`) in the same write UoW as the unbind: the **local destructive flows** — "Remove all shortcuts"
+and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion reconcile
+(`reconcile_live_shortcuts`) — for every platform they touch, and the reporter's server-side **stale removal** for every
+platform the run did not process that it unbinds a row on. A platform the run did not process is one that was not among
+its platform units: its sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of that
+platform's games bound, a stamp still able to skip would let the platform skip once it is processed again: the bound
+rows keep the zero-bound guard quiet, and the unbound rows still carry the stamp's generation, so they still count
+towards the skip, which rebuilds the unit from the bound rows alone and never re-creates the unbound games' shortcuts.
+On a platform the run processed, skipped or fetched alike, the stale removal leaves the skip, because nothing the skip
+reads changes: a skipped platform's rebuilt rows are all among the rows the run returned, so none of them is stale, and
+a fetched platform was stamped by that run with a generation no stale row carries.
+
+**A revoked stamp is kept rather than deleted, because the skip is not its only reader.** Removed-game discovery
+([Removed-game cleanup](removed-game-cleanup.md#discovery)), its canary ids (`PruneRegistry.canary_rom_ids`) and the
+Library page's `reachable_count` read the stamp's fetch generation to tell the rows RomM's last complete fetch returned
+from the ones it did not. An unbind changes neither side of that: the rows keep their generation, and the generation
+still records what RomM served. Deleting the stamp would blind discovery on the platform until its next completed apply,
+which never comes while its sync stays off. Every reader that decides, predicts or offers a skip reads the stamp through
+`domain/platform_sync_state.py::stamp_for_skip`, which answers a revoked stamp with none: the skip gate, the plan
+estimate (`predicted_skip` and the stamp-gated `collapsed_count`), and the preview's `restamp_platform_count` — without
+which an enabled platform holding a revoked stamp and an empty delta would be offered no Apply and full-fetch on every
+sync. The resume offer's `has_any` counts no revoked stamp either. The final chunk's fresh stamp replaces the row, which
+clears the flag. The apply start deletes rather than revokes, because its chunks re-mark rows with the new run's
+generation and a kept stamp naming the old one would make discovery read every re-marked row as gone from RomM.
+
+"Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
+which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The
+`sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync"
+display, so deleting it forced nothing and only blanked the panel to "Never" right after a reset.
 
 That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
 history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that
@@ -927,17 +944,17 @@ row down the NEW branch — `if not reg or not reg.get("app_id")` — before it 
 run has to mint the shortcut regardless. Requiring the binding is what makes the count fall to zero after "Remove all
 shortcuts", where unbinding deliberately keeps the row and its recorded command (ADR-0007) — a count over every row
 would keep offering to resume shortcuts that no longer exist. The panel keeps `roms > 0` as a conjunct on top, and it is
-**load-bearing rather than a restatement**: `has_completion_stamp` asks whether any stamp survives anywhere, while the
-removal path is surgical — it deletes only the platform slugs its removed rows name, and only the collection stamps
-whose member set intersects those rows. A stamp naming nothing the `roms` table still holds outlives a remove-all. Prune
-makes that reachable: it deletes `roms` rows and never touches `platform_sync_state` (`PruneRegistry.delete_rows`
-invalidates intersecting collection stamps only), so a platform whose games RomM dropped keeps its stamp with no rows
-left to name it, and the next remove-all cannot see that slug to invalidate it. Verified end to end: with such a stamp
-standing, a remove-all leaves `roms == 0` and `has_completion_stamp == true`, so without the conjunct the panel would
-offer a resume over zero shortcuts. It carries the boundary rule too — a run stopped before a single shortcut was
-written begins from scratch. `resumable_games` is a count of what is **done**, never of what is left — naming the
-remainder needs the server's library — so the QAM line under the button states what a resume would skip, and is omitted
-when the count is zero.
+**load-bearing rather than a restatement**: `has_completion_stamp` asks whether any stamp that may still skip survives
+anywhere, while the removal path is surgical — it revokes the skip of only the platform slugs its removed rows name, and
+deletes only the collection stamps whose member set intersects those rows. A stamp naming nothing the `roms` table still
+holds outlives a remove-all. Prune makes that reachable: it deletes `roms` rows and never touches `platform_sync_state`
+(`PruneRegistry.delete_rows` invalidates intersecting collection stamps only), so a platform whose games RomM dropped
+keeps its stamp with no rows left to name it, and the next remove-all cannot see that slug to revoke its skip. Verified
+end to end: with such a stamp standing, a remove-all leaves `roms == 0` and `has_completion_stamp == true`, so without
+the conjunct the panel would offer a resume over zero shortcuts. It carries the boundary rule too — a run stopped before
+a single shortcut was written begins from scratch. `resumable_games` is a count of what is **done**, never of what is
+left — naming the remainder needs the server's library — so the QAM line under the button states what a resume would
+skip, and is omitted when the count is zero.
 
 **Single-owner run lifecycle (#1202).** The run-lifecycle pair — `sync_state` (idle/running/cancelling) and
 `current_sync_id` — is mutated **only** through four verb methods on `LibrarySyncStateBox`, never by direct field
