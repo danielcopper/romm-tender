@@ -1,0 +1,33 @@
+-- =============================================================================
+-- 025_add_platform_skip_revoked.sql — a platform stamp that may no longer skip
+-- #2094 (a platform turned off and back on skips without its unbound games)
+-- =============================================================================
+--
+-- A platform's completion stamp is read for two different things: the
+-- incremental skip trusts it to say the local mirror is complete, and bulk
+-- discovery of removed games trusts its fetch generation to say which rows
+-- RomM's last complete fetch returned. Unbinding a row outside that platform's
+-- own apply breaks the first and leaves the second intact — the row keeps its
+-- generation, and the generation still records what RomM served.
+--
+-- Deleting the stamp answered the first and threw the second away: a platform
+-- whose stamp is gone produces no removal candidates, and one whose sync stays
+-- turned off never gets a stamp back. This column lets the stamp stay for the
+-- readers that want its generation while the skip treats it as absent:
+--
+--   * platform_sync_state.skip_revoked — 1 once something unbound a row on the
+--     platform outside its apply; the skip-side readers then read no stamp.
+--
+-- A final-chunk stamp write replaces the whole row with 0, and the apply start
+-- deletes it before that, so the flag lives exactly until the platform's next
+-- completed apply. Force Full Sync still clears the table.
+--
+-- NOT NULL DEFAULT 0 — an existing stamp keeps its skip. Nothing this DDL can
+-- read says whether a row was unbound since the stamp was written, and a
+-- platform whose stamp was deleted by an earlier removal has no row here to
+-- flag.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 25.
+-- -----------------------------------------------------------------------------
+ALTER TABLE platform_sync_state ADD COLUMN skip_revoked INTEGER NOT NULL DEFAULT 0;  -- 1 = the skip reads no stamp

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,8 +27,13 @@ class FakePlatformSyncStateRepository:
     def delete(self, platform_slug: str) -> None:
         self._stamps.pop(platform_slug, None)
 
+    def revoke_skip(self, platform_slug: str) -> None:
+        stamp = self._stamps.get(platform_slug)
+        if stamp is not None:
+            self._stamps[platform_slug] = replace(stamp, skip_revoked=True)
+
     def has_any(self) -> bool:
-        return bool(self._stamps)
+        return any(not stamp.skip_revoked for stamp in self._stamps.values())
 
     def clear(self) -> None:
         self._stamps = {}
