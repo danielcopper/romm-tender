@@ -16,7 +16,6 @@ from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_settings_persister import FakeSettingsPersister
-from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
@@ -30,7 +29,6 @@ from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
-from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
 
 @pytest.fixture
@@ -76,23 +74,6 @@ def plugin(logger, home, data_dir):
             disc_resolver=FakeDiscResolver(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    p._sgdb_service = SteamGridService(
-        config=SteamGridServiceConfig(
-            sgdb_api=MagicMock(),
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root=data_dir),
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            settings_persister=FakeSettingsPersister(),
-            get_pending_sync=lambda: p._sync_service._pending_sync,
-            log_debug=p._log_debug,
-            uow_factory=FakeUnitOfWorkFactory(),
             conflict_rules=conflict_rules,
         ),
     )
@@ -189,31 +170,6 @@ class TestLogLevel:
         assert [(r.levelname, r.message) for r in caplog.records] == [
             ("DEBUG", "[FE] test backward compat"),
         ]
-
-    @pytest.mark.asyncio
-    async def test_sgdb_artwork_silent_when_debug_off(self, plugin, tmp_path, logger):
-        """SGDB artwork info calls should not log when log_level is 'warn'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "warn"
-        with patch.object(logger, "info") as mock_info:
-            result = await plugin.get_sgdb_artwork_base64(1, 99)
-            assert result["base64"] is None
-            for call in mock_info.call_args_list:
-                assert "SGDB artwork" not in str(call)
-
-    @pytest.mark.asyncio
-    async def test_sgdb_artwork_logs_when_debug_enabled(self, plugin, tmp_path, logger):
-        """SGDB artwork info calls should log when log_level is 'debug'."""
-        from unittest.mock import patch
-
-        plugin.settings["log_level"] = "debug"
-        plugin.settings["steamgriddb_api_key"] = ""
-        with patch.object(logger, "info") as mock_info:
-            result = await plugin.get_sgdb_artwork_base64(1, 1)
-            assert result["no_api_key"] is True
-            logged_msgs = [str(c) for c in mock_info.call_args_list]
-            assert any("SGDB artwork" in m for m in logged_msgs)
 
 
 class TestRefreshMigrationState:

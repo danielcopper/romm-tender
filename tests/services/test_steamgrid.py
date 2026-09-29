@@ -373,6 +373,33 @@ class TestGetSgdbArtworkBase64:
         assert result["base64"] is not None
 
 
+class TestLogLevel:
+    @pytest.mark.asyncio
+    async def test_sgdb_artwork_silent_when_debug_off(self, steamgrid, logger):
+        """SGDB artwork info calls should not log when log_level is 'warn'."""
+        from unittest.mock import patch
+
+        steamgrid.settings["log_level"] = "warn"
+        with patch.object(logger, "info") as mock_info:
+            result = await steamgrid.service.get_sgdb_artwork_base64(1, 99)
+            assert result["base64"] is None
+            for call in mock_info.call_args_list:
+                assert "SGDB artwork" not in str(call)
+
+    @pytest.mark.asyncio
+    async def test_sgdb_artwork_logs_when_debug_enabled(self, steamgrid, logger):
+        """SGDB artwork info calls should log when log_level is 'debug'."""
+        from unittest.mock import patch
+
+        steamgrid.settings["log_level"] = "debug"
+        steamgrid.settings["steamgriddb_api_key"] = ""
+        with patch.object(logger, "info") as mock_info:
+            result = await steamgrid.service.get_sgdb_artwork_base64(1, 1)
+            assert result["no_api_key"] is True
+            logged_msgs = [str(c) for c in mock_info.call_args_list]
+            assert any("SGDB artwork" in m for m in logged_msgs)
+
+
 class TestConflictRulesAtTheUseCase:
     """Each SteamGridDB use case checks its endpoint's prune rule, and the artwork answer's lease is taken inside it."""
 
