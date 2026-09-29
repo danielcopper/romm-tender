@@ -3,36 +3,33 @@ import concurrent.futures
 import logging
 import os
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_testable_plugin, _record_operations_at_lease
+from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_renderer_gc import FakeRendererGc
-from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
-from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
+from fakes.system_time import FakeClock, FakeSleeper
 
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
-from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from lib.list_result import ErrorCode
+from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig, _DownloadControl
-from services.library import LibraryService, LibraryServiceConfig
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
@@ -115,136 +112,117 @@ def _seed_group_member(
             )
 
 
+@dataclass
+class DownloadsHarness:
+    """The download service, the two services it works with, and the seams a test drives.
+
+    ``uow`` is the one :class:`FakeUnitOfWork` every service's factory wraps;
+    install records flow through it, and tests inspect ``uow.rom_installs``
+    after the service has run. ``core_info`` is the core-info fake the launch
+    command is baked through, so a test can seed ``available_cores``.
+    ``m3u_supported`` answers the ``m3u_support`` seam of the download and
+    adoption services; a test that simulates a non-m3u platform (Switch/Xbox
+    360) flips it to False.
+    """
+
+    service: DownloadService
+    removal: RomRemovalService
+    adoption: RomAdoptionService
+    uow: FakeUnitOfWork
+    romm_api: MagicMock
+    core_info: FakeCoreInfoProvider
+    prune_conflicts: PruneConflicts
+    m3u_supported: bool = True
+
+
 @pytest.fixture
-def plugin(emit, logger, home):
-    p = _make_testable_plugin()
-    p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    p._http_adapter = MagicMock()
-    p._romm_api = MagicMock()
-    p._resolve_system = MagicMock(side_effect=lambda slug, fs_slug=None: fs_slug or slug)
-    # Default platform m3u-support for the DownloadService ``m3u_support`` seam.
-    # Tests that simulate a non-m3u platform (Switch/Xbox 360) flip this to False.
-    p._m3u_supported = True
-    # Per-system ES-DE accept-lists for the DownloadService ``system_extensions``
-    # seam. Empty by default — an unseeded system reads as "cannot tell", which
-    # the launch-target check treats as launchable.
-    p._system_extensions = {}
-
-    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
-    p._steam_config = steam_config
-
-    # Shared fake Unit of Work — install records flow through it, and tests
-    # inspect ``uow.rom_installs`` after the service has run. Exposed as
-    # ``p._uow`` for assertions.
-    p._uow = FakeUnitOfWork()
-    # Shared core-info fake so a test can seed ``available_cores`` and assert the
-    # per-game override re-bakes the ``-e`` form on download_complete. The real
-    # ActiveCoreResolver folds the DB override over this fake's es_systems default
-    # — the same seam DownloadService re-bakes through on download-complete.
-    p._core_info = FakeCoreInfoProvider()
-    p._active_core = ActiveCoreResolver(
+def downloads(emit, logger) -> DownloadsHarness:
+    romm_api = MagicMock()
+    resolve_system = MagicMock(side_effect=lambda slug, fs_slug=None: fs_slug or slug)
+    prune_conflicts = _make_prune_conflicts()
+    uow = FakeUnitOfWork()
+    # The real ActiveCoreResolver folds the DB override over this fake's
+    # es_systems default — the same seam DownloadService re-bakes through on
+    # download-complete, so a test can assert the per-game override re-bakes
+    # the ``-e`` form.
+    core_info = FakeCoreInfoProvider()
+    active_core = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
-            uow_factory=FakeUnitOfWorkFactory(p._uow),
-            core_info=p._core_info,
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
-            resolve_system=p._resolve_system,
+            resolve_system=resolve_system,
             logger=logger,
         ),
     )
 
-    p._sync_service = LibraryService(
-        config=LibraryServiceConfig(
-            romm_api=p._romm_api,
-            steam_config=steam_config,
-            settings=p.settings,
-            loop=running_loop(),
-            logger=logger,
-            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
-            emit=emit,
-            clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-            uuid_gen=FakeUuidGen(),
-            sleeper=FakeSleeper(),
-            settings_persister=MagicMock(),
-            log_debug=p._log_debug,
-            artwork=FakeArtworkManager(),
-            uow_factory=FakeUnitOfWorkFactory(),
-            active_core=p._active_core,
-            disc_resolver=FakeDiscResolver(),
-            renderer_rss=FakeRendererRss(),
-            renderer_gc=FakeRendererGc(),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
-        ),
-    )
     retrodeck_paths = FakeRetroDeckPaths(
         roms=os.path.join(os.path.expanduser("~"), "retrodeck", "roms"),
         bios=os.path.join(os.path.expanduser("~"), "retrodeck", "bios"),
     )
     download_file_store = DownloadFileAdapter()
-    p._install_recorder = RomInstallRecorder(
+    install_recorder = RomInstallRecorder(
         config=RomInstallRecorderConfig(
             logger=logger,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-            uow_factory=FakeUnitOfWorkFactory(p._uow),
-            # Default-empty ("ES-DE could not answer") so the launch-target check
-            # accepts every existing test's install; a test that exercises the
-            # check seeds ``p._system_extensions`` with a real accept-list.
-            system_extensions=lambda system_name: p._system_extensions.get(system_name, frozenset()),
-            active_core=p._active_core,
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            # Empty ("ES-DE could not answer"), which the launch-target check
+            # reads as launchable, so it accepts every install.
+            system_extensions=lambda system_name: frozenset(),
+            active_core=active_core,
             disc_resolver=FakeDiscResolver(),
         ),
     )
-    p._rom_adoption_service = RomAdoptionService(
+    adoption = RomAdoptionService(
         config=RomAdoptionServiceConfig(
-            romm_api=p._romm_api,
+            romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=p._resolve_system,
+            resolve_system=resolve_system,
             retrodeck_paths=retrodeck_paths,
-            install_recorder=p._install_recorder,
+            install_recorder=install_recorder,
             adoption_move=AdoptionMoveAdapter(),
             quarantine_save=lambda saves_dir, filename: False,
-            m3u_support=lambda system_name: p._m3u_supported,
-            system_extensions=lambda system_name: p._system_extensions.get(system_name, frozenset()),
+            m3u_support=lambda system_name: harness.m3u_supported,
+            system_extensions=lambda system_name: frozenset(),
             # ``None`` is "es_systems.xml could not answer", which the search
             # reads as permission to proceed — the behaviour these tests predate.
             system_known=lambda system_name: None,
             save_locations=FakeSaveLocationReader(saves_root=retrodeck_paths.saves_path()),
-            active_core=p._active_core,
-            # Late-bound like production: DownloadService is constructed below.
-            sibling_supersede=lambda: p._download_service.supersede_sibling_installs,
-            uow_factory=FakeUnitOfWorkFactory(p._uow),
+            active_core=active_core,
+            # Late-bound like production: the download service is constructed below.
+            sibling_supersede=lambda: harness.service.supersede_sibling_installs,
+            uow_factory=FakeUnitOfWorkFactory(uow),
             loop=running_loop(),
             logger=logger,
             log_debug=lambda msg: None,
             emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    p._download_service = DownloadService(
+    service = DownloadService(
         config=DownloadServiceConfig(
-            romm_api=p._romm_api,
+            romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=p._resolve_system,
+            resolve_system=resolve_system,
             loop=running_loop(),
             logger=logger,
             emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             sleeper=FakeSleeper(),
             retrodeck_paths=retrodeck_paths,
-            install_recorder=p._install_recorder,
-            target_gate=p._rom_adoption_service.check_download_target,
-            # Default-True so the existing M3U/launch-file tests are unaffected;
-            # a test that exercises a non-m3u platform repoints this seam.
-            m3u_support=lambda system_name: p._m3u_supported,
-            uow_factory=FakeUnitOfWorkFactory(p._uow),
+            install_recorder=install_recorder,
+            target_gate=adoption.check_download_target,
+            m3u_support=lambda system_name: harness.m3u_supported,
+            uow_factory=FakeUnitOfWorkFactory(uow),
             # Late-bound remover for the #1298 sibling supersede — resolved at call
-            # time, by which point ``p._rom_removal_service`` is constructed below.
-            rom_remover=lambda: p._rom_removal_service.remove_rom_unchecked,
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            # time, by which point the removal service is constructed below.
+            rom_remover=lambda: harness.removal.remove_rom_unchecked,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    p._rom_removal_service = RomRemovalService(
+    removal = RomRemovalService(
         config=RomRemovalServiceConfig(
             logger=logger,
             loop=running_loop(),
@@ -254,38 +232,46 @@ def plugin(emit, logger, home):
             retrodeck_paths=FakeRetroDeckPaths(
                 roms=os.path.join(os.path.expanduser("~"), "retrodeck", "roms"),
             ),
-            download_queue_cleanup=p._download_service,
-            uow_factory=FakeUnitOfWorkFactory(p._uow),
-            conflict_rules=_make_conflict_rules(prune_conflicts=p._prune_conflicts),
+            download_queue_cleanup=service,
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
         ),
     )
-    return p
+    harness = DownloadsHarness(
+        service=service,
+        removal=removal,
+        adoption=adoption,
+        uow=uow,
+        romm_api=romm_api,
+        core_info=core_info,
+        prune_conflicts=prune_conflicts,
+    )
+    return harness
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop(plugin):
-    """Ensure plugin.loop matches the running event loop for async tests.
+async def _set_event_loop(downloads):
+    """Bind the services to the running event loop for async tests.
 
     The adoption service is in the list because the download's occupancy gate
     awaits it, and it offloads onto *its own* loop — a stale one raises "attached
     to a different loop" from inside the gate rather than at the seam.
     """
-    plugin.loop = asyncio.get_running_loop()
-    plugin._download_service._loop = asyncio.get_running_loop()
-    plugin._rom_removal_service._loop = asyncio.get_running_loop()
-    plugin._rom_adoption_service._loop = asyncio.get_running_loop()
+    downloads.service._loop = asyncio.get_running_loop()
+    downloads.removal._loop = asyncio.get_running_loop()
+    downloads.adoption._loop = asyncio.get_running_loop()
 
 
 class TestStartDownload:
     @pytest.mark.asyncio
-    async def test_starts_download_task(self, plugin, tmp_path):
+    async def test_starts_download_task(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -298,8 +284,8 @@ class TestStartDownload:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
         _create_task_calls = []
 
         def _close_coro_task(coro):
@@ -307,48 +293,48 @@ class TestStartDownload:
             _create_task_calls.append(coro)
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
-        result = await plugin.start_download(42)
+        result = await downloads.service.start_download(42)
 
         assert result["success"] is True
-        assert 42 in plugin._download_service._download_queue
+        assert 42 in downloads.service._download_queue
         # The initial status is "queued" (#1053) — the task flips it to
         # "downloading" only once it acquires the concurrency semaphore.
-        assert plugin._download_service._download_queue[42]["status"] == "queued"
+        assert downloads.service._download_queue[42]["status"] == "queued"
         assert len(_create_task_calls) == 1
         # The download's required bytes are reserved so a sibling's pre-flight
         # accounts for the outstanding claim.
-        assert 42 in plugin._download_service._reserved_bytes
+        assert 42 in downloads.service._reserved_bytes
 
     @pytest.mark.asyncio
-    async def test_rejects_already_downloading(self, plugin):
-        plugin._download_service._download_in_progress.add(42)
-        result = await plugin.start_download(42)
+    async def test_rejects_already_downloading(self, downloads):
+        downloads.service._download_in_progress.add(42)
+        result = await downloads.service.start_download(42)
         assert result["success"] is False
         assert "Already downloading" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_rejects_if_rom_not_found(self, plugin):
+    async def test_rejects_if_rom_not_found(self, downloads):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(side_effect=Exception("HTTP Error 404: Not Found"))
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(side_effect=Exception("HTTP Error 404: Not Found"))
 
-        result = await plugin.start_download(9999)
+        result = await downloads.service.start_download(9999)
         assert result["success"] is False
         assert "reason" in result
 
     @pytest.mark.asyncio
-    async def test_checks_disk_space(self, plugin, tmp_path):
+    async def test_checks_disk_space(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -361,11 +347,11 @@ class TestStartDownload:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 50 * 1024 * 1024
-        result = await plugin.start_download(42)
+        downloads.service._download_file_store.disk_free = lambda _path: 50 * 1024 * 1024
+        result = await downloads.service.start_download(42)
 
         assert result["success"] is False
         assert "disk space" in result["message"].lower()
@@ -373,31 +359,31 @@ class TestStartDownload:
 
 class TestCancelDownload:
     @pytest.mark.asyncio
-    async def test_cancels_active_download(self, plugin):
+    async def test_cancels_active_download(self, downloads):
         # Create a real future that raises CancelledError when awaited
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
         fut.cancel()
 
-        plugin._download_service._download_tasks[42] = fut
-        plugin._download_service._download_queue[42] = {"status": "downloading"}
+        downloads.service._download_tasks[42] = fut
+        downloads.service._download_queue[42] = {"status": "downloading"}
 
-        result = plugin.cancel_download(42)
+        result = downloads.service.cancel_download(42)
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_cancel_nonexistent_returns_error(self, plugin):
-        result = plugin.cancel_download(999)
+    async def test_cancel_nonexistent_returns_error(self, downloads):
+        result = downloads.service.cancel_download(999)
         assert result["success"] is False
         assert "No active download" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_cancels_paused_download_deletes_tmp_evicts_and_emits(self, plugin, tmp_path, emit):
+    async def test_cancels_paused_download_deletes_tmp_evicts_and_emits(self, downloads, tmp_path, emit):
         """A paused download has no live task: cancel deletes the partial .tmp,
         emits the terminal cancelled frame, and evicts the entry (#149
         downloads-round finding A/B). Previously this was a silent no-op."""
 
-        plugin._download_service._loop = asyncio.get_running_loop()
+        downloads.service._loop = asyncio.get_running_loop()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -406,7 +392,7 @@ class TestCancelDownload:
         with open(tmp_file, "wb") as f:
             f.write(b"\x00" * 256)  # the partial the pause kept for resume
 
-        plugin._download_service._download_queue[42] = {
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "rom_name": "Zelda",
             "platform_name": "Nintendo 64",
@@ -419,11 +405,11 @@ class TestCancelDownload:
             "_target_path": target_path,
         }
 
-        result = plugin.cancel_download(42)
+        result = downloads.service.cancel_download(42)
         await asyncio.sleep(0)  # let the scheduled cancelled-frame emit run + drain
 
         assert result == {"success": True, "message": "Download cancelled"}
-        assert 42 not in plugin._download_service._download_queue  # evicted, no residue
+        assert 42 not in downloads.service._download_queue  # evicted, no residue
         assert not os.path.exists(tmp_file)  # partial deleted (no resume)
         cancelled = [
             c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
@@ -432,13 +418,13 @@ class TestCancelDownload:
         assert cancelled[0][0][1]["rom_id"] == 42
 
     @pytest.mark.asyncio
-    async def test_cancels_paused_download_without_recorded_target_still_evicts(self, plugin, emit):
+    async def test_cancels_paused_download_without_recorded_target_still_evicts(self, downloads, emit):
         """A paused entry lacking ``_target_path`` (defensive) still cancels: no
         tmp removal attempted, entry evicted, success returned. The startup sweep
         reaps any orphaned .tmp."""
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "rom_name": "Zelda",
             "platform_name": "Nintendo 64",
@@ -446,75 +432,75 @@ class TestCancelDownload:
             "status": "paused",
         }
 
-        result = plugin.cancel_download(42)
+        result = downloads.service.cancel_download(42)
         await asyncio.sleep(0)
 
         assert result == {"success": True, "message": "Download cancelled"}
-        assert 42 not in plugin._download_service._download_queue
+        assert 42 not in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_cancel_no_task_and_not_paused_returns_failure(self, plugin):
+    async def test_cancel_no_task_and_not_paused_returns_failure(self, downloads):
         """No live task AND the entry isn't paused → canonical failure shape, and
         the non-paused entry is left untouched (not evicted)."""
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading"}
-        result = plugin.cancel_download(42)
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading"}
+        result = downloads.service.cancel_download(42)
         assert result == {
             "success": False,
             "reason": "no_active_download",
             "message": "No active download for this ROM",
         }
-        assert 42 in plugin._download_service._download_queue
+        assert 42 in downloads.service._download_queue
 
 
 class TestGetDownloadQueue:
     @pytest.mark.asyncio
-    async def test_returns_empty_queue(self, plugin):
-        result = plugin.get_download_queue()
+    async def test_returns_empty_queue(self, downloads):
+        result = downloads.service.get_download_queue()
         assert result["downloads"] == []
 
     @pytest.mark.asyncio
-    async def test_returns_active_downloads(self, plugin):
-        plugin._download_service._download_queue[1] = {
+    async def test_returns_active_downloads(self, downloads):
+        downloads.service._download_queue[1] = {
             "rom_id": 1,
             "rom_name": "Game A",
             "status": "downloading",
             "progress": 0.5,
         }
-        result = plugin.get_download_queue()
+        result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 1
         assert result["downloads"][0]["status"] == "downloading"
         assert result["downloads"][0]["progress"] == pytest.approx(0.5)
 
     @pytest.mark.asyncio
-    async def test_returns_completed_downloads(self, plugin):
-        plugin._download_service._download_queue[1] = {
+    async def test_returns_completed_downloads(self, downloads):
+        downloads.service._download_queue[1] = {
             "rom_id": 1,
             "rom_name": "Game A",
             "status": "downloading",
             "progress": 0.5,
         }
-        plugin._download_service._download_queue[2] = {
+        downloads.service._download_queue[2] = {
             "rom_id": 2,
             "rom_name": "Game B",
             "status": "completed",
             "progress": 1.0,
         }
-        result = plugin.get_download_queue()
+        result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 2
         statuses = {d["status"] for d in result["downloads"]}
         assert statuses == {"downloading", "completed"}
 
     @pytest.mark.asyncio
-    async def test_strips_internal_underscore_keys_from_wire_shape(self, plugin):
+    async def test_strips_internal_underscore_keys_from_wire_shape(self, downloads):
         """Internal ``_``-prefixed keys (e.g. ``_target_path`` on a paused entry,
         kept only for the paused-cancel cleanup) never cross the wire."""
-        plugin._download_service._download_queue[1] = {
+        downloads.service._download_queue[1] = {
             "rom_id": 1,
             "rom_name": "Game A",
             "status": "paused",
             "_target_path": "/games/n64/game.z64",
         }
-        result = plugin.get_download_queue()
+        result = downloads.service.get_download_queue()
         assert len(result["downloads"]) == 1
         assert "_target_path" not in result["downloads"][0]
         assert result["downloads"][0] == {"rom_id": 1, "rom_name": "Game A", "status": "paused"}
@@ -522,10 +508,10 @@ class TestGetDownloadQueue:
 
 class TestClearCompletedDownloads:
     @pytest.mark.asyncio
-    async def test_evicts_terminal_keeps_active_and_returns_count(self, plugin):
+    async def test_evicts_terminal_keeps_active_and_returns_count(self, downloads):
         # One entry per status: the three terminal ones evict, the four
         # non-terminal ones (active/queued/paused/extracting) stay.
-        queue = plugin._download_service._download_queue
+        queue = downloads.service._download_queue
         queue[1] = {"rom_id": 1, "status": "completed"}
         queue[2] = {"rom_id": 2, "status": "failed", "error": "boom"}
         queue[3] = {"rom_id": 3, "status": "cancelled"}
@@ -534,25 +520,25 @@ class TestClearCompletedDownloads:
         queue[6] = {"rom_id": 6, "status": "paused"}
         queue[7] = {"rom_id": 7, "status": "extracting"}
 
-        result = plugin.clear_completed_downloads()
+        result = downloads.service.clear_completed_downloads()
 
         assert result == {"success": True, "cleared": 3}
         assert set(queue.keys()) == {4, 5, 6, 7}
         assert {item["status"] for item in queue.values()} == {"downloading", "queued", "paused", "extracting"}
 
     @pytest.mark.asyncio
-    async def test_idempotent_on_empty_queue(self, plugin):
-        result = plugin.clear_completed_downloads()
+    async def test_idempotent_on_empty_queue(self, downloads):
+        result = downloads.service.clear_completed_downloads()
         assert result == {"success": True, "cleared": 0}
-        assert plugin._download_service._download_queue == {}
+        assert downloads.service._download_queue == {}
 
     @pytest.mark.asyncio
-    async def test_no_terminal_entries_clears_nothing(self, plugin):
-        queue = plugin._download_service._download_queue
+    async def test_no_terminal_entries_clears_nothing(self, downloads):
+        queue = downloads.service._download_queue
         queue[1] = {"rom_id": 1, "status": "downloading"}
         queue[2] = {"rom_id": 2, "status": "paused"}
 
-        result = plugin.clear_completed_downloads()
+        result = downloads.service.clear_completed_downloads()
 
         assert result == {"success": True, "cleared": 0}
         assert set(queue.keys()) == {1, 2}
@@ -560,9 +546,9 @@ class TestClearCompletedDownloads:
 
 class TestGetInstalledRom:
     @pytest.mark.asyncio
-    async def test_returns_installed_rom(self, plugin):
-        _seed_rom(plugin._uow, 42)
-        plugin._uow.rom_installs.save(
+    async def test_returns_installed_rom(self, downloads):
+        _seed_rom(downloads.uow, 42)
+        downloads.uow.rom_installs.save(
             RomInstall.mark_installed(
                 rom_id=42,
                 file_path="/roms/n64/zelda.z64",
@@ -572,7 +558,7 @@ class TestGetInstalledRom:
                 installed_at="2026-01-01T00:00:00+00:00",
             )
         )
-        result = plugin.get_installed_rom(42)
+        result = downloads.service.get_installed_rom(42)
         assert result is not None
         assert result["rom_id"] == 42
         assert result["system"] == "n64"
@@ -582,8 +568,8 @@ class TestGetInstalledRom:
         assert result["platform_slug"] == "n64"
 
     @pytest.mark.asyncio
-    async def test_returns_none_not_installed(self, plugin):
-        result = plugin.get_installed_rom(999)
+    async def test_returns_none_not_installed(self, downloads):
+        result = downloads.service.get_installed_rom(999)
         assert result is None
 
 
@@ -595,8 +581,8 @@ class TestRomInstallForeignKey:
     install slice can't silently persist an orphan.
     """
 
-    def test_orphan_install_save_raises_integrity_error_at_commit(self, plugin):
-        uow = plugin._uow
+    def test_orphan_install_save_raises_integrity_error_at_commit(self, downloads):
+        uow = downloads.uow
         with pytest.raises(sqlite3.IntegrityError, match="rom_installs"), uow:
             uow.rom_installs.save(
                 RomInstall.mark_installed(
@@ -638,19 +624,19 @@ class TestOccupiedTargetPreFlight:
     The pre-flight sits with ``insufficient_space``: it runs before any directory
     is created and before the transfer task exists, so a refusal leaves nothing
     behind — including the in-progress claim, which a stuck download would
-    otherwise hold until a plugin reload.
+    otherwise hold until a backend restart.
     """
 
-    def _stage(self, plugin, detail, *, occupied_path, is_dir=False, size=4096):
+    def _stage(self, downloads, detail, *, occupied_path, is_dir=False, size=4096):
         """Point the detail fetch at *detail* and stage one occupied path."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=detail)
         # Close the coroutine the real create_task would have owned; leaving it
         # unawaited makes pytest raise a RuntimeWarning at collection time.
-        plugin._download_service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
-        store = plugin._download_service._download_file_store
+        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        store = downloads.service._download_file_store
         store.describe_path = lambda path: (
             {
                 "path": path,
@@ -663,15 +649,15 @@ class TestOccupiedTargetPreFlight:
         )
         return store
 
-    def _roms_path(self, plugin, system):
-        return os.path.join(plugin._download_service._retrodeck_paths.roms_path(), system)
+    def _roms_path(self, downloads, system):
+        return os.path.join(downloads.service._retrodeck_paths.roms_path(), system)
 
     @pytest.mark.asyncio
-    async def test_single_file_refuses_with_the_comparison(self, plugin):
-        target = os.path.join(self._roms_path(plugin, "n64"), "game1.z64")
-        self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
+    async def test_single_file_refuses_with_the_comparison(self, downloads):
+        target = os.path.join(self._roms_path(downloads, "n64"), "game1.z64")
+        self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result["success"] is False
         assert result["reason"] == "target_occupied"
@@ -680,25 +666,25 @@ class TestOccupiedTargetPreFlight:
         assert result["sizes_match"] is False
 
     @pytest.mark.asyncio
-    async def test_a_refusal_starts_nothing_and_releases_the_claim(self, plugin):
-        target = os.path.join(self._roms_path(plugin, "n64"), "game1.z64")
-        store = self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
+    async def test_a_refusal_starts_nothing_and_releases_the_claim(self, downloads):
+        target = os.path.join(self._roms_path(downloads, "n64"), "game1.z64")
+        store = self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
         made_dirs = []
         store.make_dirs = made_dirs.append
 
-        await plugin.start_download(1)
+        await downloads.service.start_download(1)
 
         assert made_dirs == []
-        assert plugin._download_service._download_queue == {}
-        assert plugin._download_service.active_download_rom_ids() == set()
-        plugin._download_service._loop.create_task.assert_not_called()
+        assert downloads.service._download_queue == {}
+        assert downloads.service.active_download_rom_ids() == set()
+        downloads.service._loop.create_task.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_multi_file_checks_the_extract_directory_not_the_archive(self, plugin):
-        extract_dir = os.path.join(self._roms_path(plugin, "psx"), "Game 1")
-        self._stage(plugin, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True, size=2048)
+    async def test_multi_file_checks_the_extract_directory_not_the_archive(self, downloads):
+        extract_dir = os.path.join(self._roms_path(downloads, "psx"), "Game 1")
+        self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True, size=2048)
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result["reason"] == "target_occupied"
         assert result["existing"]["path"] == extract_dir
@@ -706,59 +692,59 @@ class TestOccupiedTargetPreFlight:
         assert result["sizes_match"] is True
 
     @pytest.mark.asyncio
-    async def test_a_free_target_proceeds(self, plugin):
-        self._stage(plugin, _SINGLE_DETAIL, occupied_path="/nowhere")
-        plugin._download_service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
+    async def test_a_free_target_proceeds(self, downloads):
+        self._stage(downloads, _SINGLE_DETAIL, occupied_path="/nowhere")
+        downloads.service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result == {"success": True, "message": "Download started"}
 
     @pytest.mark.asyncio
-    async def test_replace_clears_an_occupied_directory_and_proceeds(self, plugin):
-        extract_dir = os.path.join(self._roms_path(plugin, "psx"), "Game 1")
-        store = self._stage(plugin, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True)
+    async def test_replace_clears_an_occupied_directory_and_proceeds(self, downloads):
+        extract_dir = os.path.join(self._roms_path(downloads, "psx"), "Game 1")
+        store = self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True)
         store.disk_free = lambda _path: 900 * 1024 * 1024
         removed = []
         store.remove_tree = removed.append
 
-        result = await plugin.start_download(1, True)
+        result = await downloads.service.start_download(1, True)
 
         assert result == {"success": True, "message": "Download started"}
         assert removed == [extract_dir]
 
     @pytest.mark.asyncio
-    async def test_replace_leaves_a_single_file_to_the_atomic_rename(self, plugin):
-        target = os.path.join(self._roms_path(plugin, "n64"), "game1.z64")
-        store = self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
+    async def test_replace_leaves_a_single_file_to_the_atomic_rename(self, downloads):
+        target = os.path.join(self._roms_path(downloads, "n64"), "game1.z64")
+        store = self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
         store.disk_free = lambda _path: 900 * 1024 * 1024
         removed = []
         store.remove_file = removed.append
         store.remove_tree = removed.append
 
-        result = await plugin.start_download(1, True)
+        result = await downloads.service.start_download(1, True)
 
         assert result == {"success": True, "message": "Download started"}
         assert removed == []
 
     @pytest.mark.asyncio
-    async def test_a_failed_replace_aborts_the_download(self, plugin):
-        extract_dir = os.path.join(self._roms_path(plugin, "psx"), "Game 1")
-        store = self._stage(plugin, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True)
+    async def test_a_failed_replace_aborts_the_download(self, downloads):
+        extract_dir = os.path.join(self._roms_path(downloads, "psx"), "Game 1")
+        store = self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True)
 
         def _boom(_path):
             raise OSError("read-only filesystem")
 
         store.remove_tree = _boom
 
-        result = await plugin.start_download(1, True)
+        result = await downloads.service.start_download(1, True)
 
         assert result["success"] is False
         assert result["reason"] == "replace_failed"
-        assert plugin._download_service.active_download_rom_ids() == set()
+        assert downloads.service.active_download_rom_ids() == set()
 
     @pytest.mark.asyncio
-    async def test_a_refusal_leaves_an_installed_sibling_untouched(self, plugin, tmp_path):
+    async def test_a_refusal_leaves_an_installed_sibling_untouched(self, downloads, tmp_path):
         # The #1298 supersede deletes ANOTHER version's files, so it must not run
         # until the gate has passed. Otherwise the user who opens the dialog and
         # presses Cancel is left with one version uninstalled and nothing in its
@@ -767,9 +753,9 @@ class TestOccupiedTargetPreFlight:
 
         roms = tmp_path / "retrodeck" / "roms"
         paths = FakeRetroDeckPaths(roms=str(roms), bios=str(tmp_path / "retrodeck" / "bios"))
-        plugin._download_service._retrodeck_paths = paths
-        plugin._rom_adoption_service._retrodeck_paths = paths
-        plugin._rom_removal_service._retrodeck_paths = paths
+        downloads.service._retrodeck_paths = paths
+        downloads.adoption._retrodeck_paths = paths
+        downloads.removal._retrodeck_paths = paths
 
         (roms / "n64").mkdir(parents=True)
         sibling_file = roms / "n64" / "game_2.z64"
@@ -777,10 +763,10 @@ class TestOccupiedTargetPreFlight:
         # What the user put where rom 1 would download (``_SINGLE``'s fs_name).
         (roms / "n64" / "game1.z64").write_bytes(b"user's own copy")
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
-        with plugin._uow:
-            plugin._uow.rom_installs.save(
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
+        with downloads.uow:
+            downloads.uow.rom_installs.save(
                 RomInstall.mark_installed(
                     rom_id=2,
                     file_path=str(sibling_file),
@@ -791,15 +777,15 @@ class TestOccupiedTargetPreFlight:
                 )
             )
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=_SINGLE_DETAIL)
-        plugin._download_service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=_SINGLE_DETAIL)
+        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result["reason"] == "target_occupied"
         assert sibling_file.read_bytes() == b"the other version"
-        assert plugin._uow.rom_installs.get(2) is not None
+        assert downloads.uow.rom_installs.get(2) is not None
 
 
 class TestResumingAReplaceDownload:
@@ -814,14 +800,14 @@ class TestResumingAReplaceDownload:
     content the user has never seen and must be asked about, not deleted.
     """
 
-    def _stage(self, plugin, detail, *, occupied_path):
+    def _stage(self, downloads, detail, *, occupied_path):
         """Point the detail fetch at *detail* and hold one path permanently occupied."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=detail)
-        plugin._download_service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
-        store = plugin._download_service._download_file_store
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=detail)
+        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        store = downloads.service._download_file_store
         store.describe_path = lambda path: (
             {
                 "path": path,
@@ -836,73 +822,73 @@ class TestResumingAReplaceDownload:
         store.remove_tree = lambda _path: None
         return store
 
-    def _roms(self, plugin, system):
-        return os.path.join(plugin._download_service._retrodeck_paths.roms_path(), system)
+    def _roms(self, downloads, system):
+        return os.path.join(downloads.service._retrodeck_paths.roms_path(), system)
 
     @pytest.mark.asyncio
-    async def test_a_paused_single_file_replace_resumes(self, plugin):
-        target = os.path.join(self._roms(plugin, "n64"), "game1.z64")
-        self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
+    async def test_a_paused_single_file_replace_resumes(self, downloads):
+        target = os.path.join(self._roms(downloads, "n64"), "game1.z64")
+        self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
 
-        assert (await plugin.start_download(1, True))["success"] is True
+        assert (await downloads.service.start_download(1, True))["success"] is True
         # The file the user chose to replace is still there — os.replace swaps it
         # at the end — so a resume that forgot the answer would be refused by it.
-        plugin._download_service._download_queue[1]["status"] = "paused"
+        downloads.service._download_queue[1]["status"] = "paused"
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
 
         assert result == {"success": True, "message": "Download started"}
 
     @pytest.mark.asyncio
-    async def test_a_resume_without_a_replace_answer_is_still_refused(self, plugin):
+    async def test_a_resume_without_a_replace_answer_is_still_refused(self, downloads):
         # The stored answer is scoped to the download that was admitted — it is
         # not a blanket exemption for the path.
-        target = os.path.join(self._roms(plugin, "n64"), "game1.z64")
-        self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "paused"}
+        target = os.path.join(self._roms(downloads, "n64"), "game1.z64")
+        self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused"}
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
 
         assert result["reason"] == "target_occupied"
 
     @pytest.mark.asyncio
-    async def test_a_multi_file_replace_answer_is_spent_and_not_carried(self, plugin):
+    async def test_a_multi_file_replace_answer_is_spent_and_not_carried(self, downloads):
         # Its directory was removed at admission. A directory found there on
         # resume is new content the user has never been shown, so the resume is
         # refused rather than deleting it — this PR's own failure mode arriving
         # through the back door.
-        extract_dir = os.path.join(self._roms(plugin, "psx"), "Game 1")
-        store = self._stage(plugin, _MULTI_DETAIL, occupied_path=extract_dir)
-        assert (await plugin.start_download(1, True))["success"] is True
-        assert plugin._download_service._download_queue[1]["_replace_existing"] is False
-        plugin._download_service._download_queue[1]["status"] = "paused"
+        extract_dir = os.path.join(self._roms(downloads, "psx"), "Game 1")
+        store = self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir)
+        assert (await downloads.service.start_download(1, True))["success"] is True
+        assert downloads.service._download_queue[1]["_replace_existing"] is False
+        downloads.service._download_queue[1]["status"] = "paused"
         removed: list[str] = []
         store.remove_tree = removed.append
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
 
         assert result["reason"] == "target_occupied"
         assert removed == []
 
     @pytest.mark.asyncio
-    async def test_the_stored_answer_never_crosses_the_wire(self, plugin):
-        target = os.path.join(self._roms(plugin, "n64"), "game1.z64")
-        self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
-        await plugin.start_download(1, True)
+    async def test_the_stored_answer_never_crosses_the_wire(self, downloads):
+        target = os.path.join(self._roms(downloads, "n64"), "game1.z64")
+        self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
+        await downloads.service.start_download(1, True)
 
-        (item,) = plugin.get_download_queue()["downloads"]
+        (item,) = downloads.service.get_download_queue()["downloads"]
 
         assert "_replace_existing" not in item
 
 
 class TestRemoveRom:
     @pytest.mark.asyncio
-    async def test_deletes_file_and_clears_state(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_deletes_file_and_clears_state(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -911,34 +897,34 @@ class TestRemoveRom:
         rom_file.write_text("fake rom data")
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             42,
             file_path=str(rom_file),
             rom_dir=None,
         )
-        plugin._download_service._download_queue[42] = {"status": "completed"}
+        downloads.service._download_queue[42] = {"status": "completed"}
 
-        result = await plugin.remove_rom(42)
+        result = await downloads.removal.remove_rom(42)
         assert result["success"] is True
         assert not rom_file.exists()
-        assert plugin._uow.rom_installs.get(42) is None
-        assert 42 not in plugin._download_service._download_queue
+        assert downloads.uow.rom_installs.get(42) is None
+        assert 42 not in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_returns_error_not_installed(self, plugin):
-        result = await plugin.remove_rom(999)
+    async def test_returns_error_not_installed(self, downloads):
+        result = await downloads.removal.remove_rom(999)
         assert result["success"] is False
         assert "not installed" in result["message"].lower()
 
 
 class TestUninstallAllRoms:
     @pytest.mark.asyncio
-    async def test_removes_all_installed(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_removes_all_installed(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -949,151 +935,151 @@ class TestUninstallAllRoms:
         file_a.write_text("data a")
         file_b.write_text("data b")
 
-        _seed_install(plugin._uow, 1, file_path=str(file_a), rom_dir=None)
-        _seed_install(plugin._uow, 2, file_path=str(file_b), rom_dir=None)
+        _seed_install(downloads.uow, 1, file_path=str(file_a), rom_dir=None)
+        _seed_install(downloads.uow, 2, file_path=str(file_b), rom_dir=None)
 
-        result = await plugin.uninstall_all_roms()
+        result = await downloads.removal.uninstall_all_roms()
         assert result["success"] is True
         assert result["removed_count"] == 2
         assert not file_a.exists()
         assert not file_b.exists()
 
     @pytest.mark.asyncio
-    async def test_clears_state(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_clears_state(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             1,
             file_path=str(tmp_path / "retrodeck" / "roms" / "n64" / "nonexistent.z64"),
             rom_dir=None,
         )
 
-        await plugin.uninstall_all_roms()
-        assert list(plugin._uow.rom_installs.iter_all()) == []
+        await downloads.removal.uninstall_all_roms()
+        assert list(downloads.uow.rom_installs.iter_all()) == []
 
     @pytest.mark.asyncio
-    async def test_handles_missing_files(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_handles_missing_files(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
         roms_base = tmp_path / "retrodeck" / "roms"
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             1,
             file_path=str(roms_base / "n64" / "missing.z64"),
             rom_dir=None,
         )
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             2,
             file_path=str(roms_base / "snes" / "also_missing.z64"),
             rom_dir=None,
             system="snes",
         )
 
-        result = await plugin.uninstall_all_roms()
+        result = await downloads.removal.uninstall_all_roms()
         assert result["success"] is True
-        assert list(plugin._uow.rom_installs.iter_all()) == []
+        assert list(downloads.uow.rom_installs.iter_all()) == []
 
 
 class TestDetectLaunchFile:
-    def test_prefers_m3u(self, plugin, tmp_path):
+    def test_prefers_m3u(self, downloads, tmp_path):
         (tmp_path / "game.m3u").write_text("disc1.cue")
         (tmp_path / "disc1.cue").write_text("cue data")
         (tmp_path / "disc1.bin").write_bytes(b"\x00" * 1000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".m3u")
 
-    def test_falls_back_to_cue(self, plugin, tmp_path):
+    def test_falls_back_to_cue(self, downloads, tmp_path):
         (tmp_path / "disc1.cue").write_text("cue data")
         (tmp_path / "disc1.bin").write_bytes(b"\x00" * 1000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".cue")
 
-    def test_falls_back_to_largest(self, plugin, tmp_path):
+    def test_falls_back_to_largest(self, downloads, tmp_path):
         (tmp_path / "small.bin").write_bytes(b"\x00" * 100)
         (tmp_path / "large.bin").write_bytes(b"\x00" * 10000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith("large.bin")
 
-    def test_wiiu_rpx_in_code_subdir(self, plugin, tmp_path):
+    def test_wiiu_rpx_in_code_subdir(self, downloads, tmp_path):
         code_dir = tmp_path / "code"
         code_dir.mkdir()
         (code_dir / "game.rpx").write_bytes(b"\x00" * 500)
         (tmp_path / "meta" / "meta.xml").parent.mkdir()
         (tmp_path / "meta" / "meta.xml").write_text("<xml/>")
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".rpx")
 
-    def test_wiiu_disc_image(self, plugin, tmp_path):
+    def test_wiiu_disc_image(self, downloads, tmp_path):
         (tmp_path / "game.wux").write_bytes(b"\x00" * 1000)
         (tmp_path / "readme.txt").write_text("info")
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".wux")
 
-    def test_wiiu_wud_format(self, plugin, tmp_path):
+    def test_wiiu_wud_format(self, downloads, tmp_path):
         (tmp_path / "game.wud").write_bytes(b"\x00" * 1000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".wud")
 
-    def test_wiiu_wua_format(self, plugin, tmp_path):
+    def test_wiiu_wua_format(self, downloads, tmp_path):
         (tmp_path / "game.wua").write_bytes(b"\x00" * 1000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".wua")
 
-    def test_ps3_eboot_bin(self, plugin, tmp_path):
+    def test_ps3_eboot_bin(self, downloads, tmp_path):
         usrdir = tmp_path / "PS3_GAME" / "USRDIR"
         usrdir.mkdir(parents=True)
         (usrdir / "EBOOT.BIN").write_bytes(b"\x00" * 500)
         (tmp_path / "PS3_GAME" / "PARAM.SFO").write_bytes(b"\x00" * 100)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith("EBOOT.BIN")
 
-    def test_3ds_prefers_3ds_over_cia(self, plugin, tmp_path):
+    def test_3ds_prefers_3ds_over_cia(self, downloads, tmp_path):
         (tmp_path / "game.3ds").write_bytes(b"\x00" * 500)
         (tmp_path / "game.cia").write_bytes(b"\x00" * 500)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".3ds")
 
-    def test_3ds_falls_back_to_cia(self, plugin, tmp_path):
+    def test_3ds_falls_back_to_cia(self, downloads, tmp_path):
         (tmp_path / "game.cia").write_bytes(b"\x00" * 500)
         (tmp_path / "game.cxi").write_bytes(b"\x00" * 500)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".cia")
 
-    def test_m3u_still_preferred_over_platform_specific(self, plugin, tmp_path):
+    def test_m3u_still_preferred_over_platform_specific(self, downloads, tmp_path):
         """M3U takes priority even when platform-specific files exist."""
         (tmp_path / "game.m3u").write_text("disc1.cue")
         code_dir = tmp_path / "code"
         code_dir.mkdir()
         (code_dir / "game.rpx").write_bytes(b"\x00" * 500)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), True)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), True)
         assert result.endswith(".m3u")
 
-    def test_bundled_m3u_ignored_when_platform_unsupported(self, plugin, tmp_path):
+    def test_bundled_m3u_ignored_when_platform_unsupported(self, downloads, tmp_path):
         """#1111: a RomM-bundled .m3u must NOT be chosen on a non-m3u platform.
 
         With ``m3u_supported=False`` the .m3u is skipped and selection falls
@@ -1102,29 +1088,29 @@ class TestDetectLaunchFile:
         (tmp_path / "Zelda.m3u").write_text("Zelda.nsp")
         (tmp_path / "Zelda.nsp").write_bytes(b"\x00" * 5000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), False)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), False)
         assert result.endswith(".nsp")
 
-    def test_bundled_m3u_ignored_unsupported_falls_back_to_cue(self, plugin, tmp_path):
+    def test_bundled_m3u_ignored_unsupported_falls_back_to_cue(self, downloads, tmp_path):
         """When unsupported, a bundled .m3u is ignored and a .cue is preferred next."""
         (tmp_path / "game.m3u").write_text("disc1.cue")
         (tmp_path / "disc1.cue").write_text("cue data")
         (tmp_path / "disc1.bin").write_bytes(b"\x00" * 1000)
 
-        result = plugin._download_service._collect_and_detect_launch_file(str(tmp_path), False)
+        result = downloads.service._collect_and_detect_launch_file(str(tmp_path), False)
         assert result.endswith(".cue")
 
 
 class TestDiskSpaceMultiFile:
     @pytest.mark.asyncio
-    async def test_multi_file_rom_requires_double_space(self, plugin, tmp_path):
+    async def test_multi_file_rom_requires_double_space(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1139,25 +1125,25 @@ class TestDiskSpaceMultiFile:
             "has_multiple_files": True,
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         # 700MB free: enough for single-file (600MB) but not multi-file (1100MB)
-        plugin._download_service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
-        result = await plugin.start_download(42)
+        downloads.service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
+        result = await downloads.service.start_download(42)
 
         assert result["success"] is False
         assert "disk space" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_single_file_rom_uses_normal_space_check(self, plugin, tmp_path):
+    async def test_single_file_rom_uses_normal_space_check(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1172,8 +1158,8 @@ class TestDiskSpaceMultiFile:
             "has_multiple_files": False,
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             # Consume the fire-and-forget _do_download coroutine so it isn't left
@@ -1182,24 +1168,24 @@ class TestDiskSpaceMultiFile:
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
+        downloads.service._loop.create_task = _close_coro_task
 
         # 700MB free: enough for single-file (600MB)
-        plugin._download_service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
-        result = await plugin.start_download(43)
+        downloads.service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
+        result = await downloads.service.start_download(43)
 
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_rom_requires_double_space(self, plugin, tmp_path):
+    async def test_nested_multi_file_rom_requires_double_space(self, downloads, tmp_path):
         """#855: nested-multi (has_multiple_files=False, len(files) > 1) reserves 2x."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1219,14 +1205,14 @@ class TestDiskSpaceMultiFile:
             ],
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         # 700MB free: enough for single-file (600MB) but not multi-file (1100MB).
         # If the gate only read has_multiple_files (False), this would pass —
         # the 2x reservation is what makes it fail.
-        plugin._download_service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
-        result = await plugin.start_download(44)
+        downloads.service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
+        result = await downloads.service.start_download(44)
 
         assert result["success"] is False
         assert "disk space" in result["message"].lower()
@@ -1234,14 +1220,14 @@ class TestDiskSpaceMultiFile:
 
 class TestMultiFileRomDeletion:
     @pytest.mark.asyncio
-    async def test_remove_rom_deletes_rom_dir(self, plugin, tmp_path):
+    async def test_remove_rom_deletes_rom_dir(self, downloads, tmp_path):
         """Multi-file ROM with rom_dir should delete the entire directory."""
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1252,28 +1238,28 @@ class TestMultiFileRomDeletion:
         (rom_dir / "disc1.bin").write_bytes(b"\x00" * 100)
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             42,
             file_path=str(rom_dir / "FF7.m3u"),
             rom_dir=str(rom_dir),
             system="psx",
         )
 
-        result = await plugin.remove_rom(42)
+        result = await downloads.removal.remove_rom(42)
         assert result["success"] is True
         assert not rom_dir.exists()
         # Parent system dir should still exist
         assert (tmp_path / "retrodeck" / "roms" / "psx").exists()
 
     @pytest.mark.asyncio
-    async def test_uninstall_all_deletes_rom_dirs(self, plugin, tmp_path):
+    async def test_uninstall_all_deletes_rom_dirs(self, downloads, tmp_path):
         """uninstall_all_roms should delete multi-file ROM directories."""
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1282,21 +1268,21 @@ class TestMultiFileRomDeletion:
         (rom_dir / "disc1.bin").write_bytes(b"\x00" * 100)
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             1,
             file_path=str(rom_dir / "FF7.m3u"),
             rom_dir=str(rom_dir),
             system="psx",
         )
 
-        result = await plugin.uninstall_all_roms()
+        result = await downloads.removal.uninstall_all_roms()
         assert result["success"] is True
         assert result["removed_count"] == 1
         assert not rom_dir.exists()
 
 
 class TestMaybeGenerateM3u:
-    def test_generates_m3u_for_multiple_cue_files(self, plugin, tmp_path):
+    def test_generates_m3u_for_multiple_cue_files(self, downloads, tmp_path):
         """When multiple .cue files exist and no .m3u, auto-generate one."""
         (tmp_path / "Game - Disc 1.cue").write_text("cue disc 1")
         (tmp_path / "Game - Disc 1.bin").write_bytes(b"\x00" * 1000)
@@ -1304,7 +1290,7 @@ class TestMaybeGenerateM3u:
         (tmp_path / "Game - Disc 2.bin").write_bytes(b"\x00" * 1000)
 
         rom_detail = {"fs_name_no_ext": "Final Fantasy VII", "name": "Final Fantasy VII"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         m3u_path = tmp_path / "Final Fantasy VII.m3u"
         assert m3u_path.exists()
@@ -1314,84 +1300,84 @@ class TestMaybeGenerateM3u:
         assert lines[0] == "Game - Disc 1.cue"
         assert lines[1] == "Game - Disc 2.cue"
 
-    def test_generates_m3u_for_multiple_chd_files(self, plugin, tmp_path):
+    def test_generates_m3u_for_multiple_chd_files(self, downloads, tmp_path):
         """CHD multi-disc should also get an M3U."""
         (tmp_path / "Game (Disc 1).chd").write_bytes(b"\x00" * 100)
         (tmp_path / "Game (Disc 2).chd").write_bytes(b"\x00" * 100)
 
         rom_detail = {"fs_name_no_ext": "Game", "name": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         m3u_path = tmp_path / "Game.m3u"
         assert m3u_path.exists()
         lines = m3u_path.read_text().strip().split("\n")
         assert len(lines) == 2
 
-    def test_skips_if_m3u_exists(self, plugin, tmp_path):
+    def test_skips_if_m3u_exists(self, downloads, tmp_path):
         """Should not overwrite an existing M3U."""
         (tmp_path / "existing.m3u").write_text("original content")
         (tmp_path / "disc1.cue").write_text("cue 1")
         (tmp_path / "disc2.cue").write_text("cue 2")
 
         rom_detail = {"fs_name_no_ext": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         # Only the original M3U should exist, unchanged
         assert (tmp_path / "existing.m3u").read_text() == "original content"
         assert not (tmp_path / "Game.m3u").exists()
 
-    def test_single_cue_generates_game_named_m3u(self, plugin, tmp_path):
+    def test_single_cue_generates_game_named_m3u(self, downloads, tmp_path):
         """Single-disc bin/cue generates a game-named M3U so the dir collapses in ES-DE."""
         (tmp_path / "disc1.cue").write_text("FILE disc1.bin BINARY")
         (tmp_path / "disc1.bin").write_bytes(b"\x00" * 1000)
 
         rom_detail = {"fs_name_no_ext": "Metal Gear Solid"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         m3u = tmp_path / "Metal Gear Solid.m3u"
         assert m3u.exists()
         assert m3u.read_text().strip() == "disc1.cue"
 
-    def test_skips_single_chd(self, plugin, tmp_path):
+    def test_skips_single_chd(self, downloads, tmp_path):
         """Single-disc chd is out of scope (cue-only) — no M3U generated."""
         (tmp_path / "game.chd").write_bytes(b"\x00" * 1000)
 
         rom_detail = {"fs_name_no_ext": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         assert not (tmp_path / "Game.m3u").exists()
 
-    def test_skips_single_iso(self, plugin, tmp_path):
+    def test_skips_single_iso(self, downloads, tmp_path):
         """Single-disc iso is out of scope (cue-only) — no M3U generated."""
         (tmp_path / "game.iso").write_bytes(b"\x00" * 1000)
 
         rom_detail = {"fs_name_no_ext": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         assert not (tmp_path / "Game.m3u").exists()
 
-    def test_uses_name_fallback(self, plugin, tmp_path):
+    def test_uses_name_fallback(self, downloads, tmp_path):
         """Falls back to rom name when fs_name_no_ext is missing."""
         (tmp_path / "d1.chd").write_bytes(b"\x00" * 100)
         (tmp_path / "d2.chd").write_bytes(b"\x00" * 100)
 
         rom_detail = {"name": "My Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         assert (tmp_path / "My Game.m3u").exists()
 
-    def test_skips_generation_when_platform_unsupported(self, plugin, tmp_path):
+    def test_skips_generation_when_platform_unsupported(self, downloads, tmp_path):
         """#1111: no M3U is generated when the platform does not support .m3u,
         even for a multi-disc layout that would otherwise warrant one."""
         (tmp_path / "Game - Disc 1.cue").write_text("cue 1")
         (tmp_path / "Game - Disc 2.cue").write_text("cue 2")
 
         rom_detail = {"fs_name_no_ext": "Game", "name": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, False)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, False)
 
         assert not (tmp_path / "Game.m3u").exists()
 
-    def test_folder_boot_layout_suppresses_m3u(self, plugin, tmp_path):
+    def test_folder_boot_layout_suppresses_m3u(self, downloads, tmp_path):
         """#1212: a folder-boot dump (PS3) never gets a playlist, even on an
         .m3u-supported platform with disc-suffixed payload files that would
         otherwise warrant one — it launches the game directory directly."""
@@ -1403,18 +1389,18 @@ class TestMaybeGenerateM3u:
         (tmp_path / "PS3_GAME" / "USRDIR" / "part2.iso").write_bytes(b"\x00" * 100)
 
         rom_detail = {"fs_name_no_ext": "MyGame", "name": "MyGame"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         assert not (tmp_path / "MyGame.m3u").exists()
         assert list(tmp_path.rglob("*.m3u")) == []
 
-    def test_genuine_multi_disc_still_generates_when_not_folder_boot(self, plugin, tmp_path):
+    def test_genuine_multi_disc_still_generates_when_not_folder_boot(self, downloads, tmp_path):
         """The folder-boot gate does not suppress a genuine multi-disc set (no marker)."""
         (tmp_path / "Game (Disc 1).chd").write_bytes(b"\x00" * 100)
         (tmp_path / "Game (Disc 2).chd").write_bytes(b"\x00" * 100)
 
         rom_detail = {"fs_name_no_ext": "Game", "name": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         assert (tmp_path / "Game.m3u").exists()
 
@@ -1429,11 +1415,11 @@ class TestMaybeHealPs3Sfb:
         eboot.write_bytes(b"\x00" * 16)
         return tmp_path
 
-    def test_heals_txt_suffixed_sfb(self, plugin, tmp_path):
+    def test_heals_txt_suffixed_sfb(self, downloads, tmp_path):
         root = self._seed_ps3_layout(tmp_path)
         (root / "PS3_DISC.SFB.txt").write_bytes(b"SFB-BYTES")
 
-        plugin._download_service._maybe_heal_ps3_sfb_io(str(root))
+        downloads.service._maybe_heal_ps3_sfb_io(str(root))
 
         sfb = root / "PS3_DISC.SFB"
         assert sfb.exists()
@@ -1441,7 +1427,7 @@ class TestMaybeHealPs3Sfb:
         # The original .txt is preserved (copy, not move).
         assert (root / "PS3_DISC.SFB.txt").exists()
 
-    def test_heals_at_one_level_deeper_root(self, plugin, tmp_path):
+    def test_heals_at_one_level_deeper_root(self, downloads, tmp_path):
         # An extract that nests PS3_GAME one level below the extract dir: the SFB
         # heals at the inner game root, not the extract dir.
         inner = tmp_path / "MyGame"
@@ -1450,32 +1436,32 @@ class TestMaybeHealPs3Sfb:
         eboot.write_bytes(b"\x00" * 16)
         (inner / "PS3_DISC.SFB.txt").write_bytes(b"SFB")
 
-        plugin._download_service._maybe_heal_ps3_sfb_io(str(tmp_path))
+        downloads.service._maybe_heal_ps3_sfb_io(str(tmp_path))
 
         assert (inner / "PS3_DISC.SFB").exists()
 
-    def test_existing_sfb_is_not_overwritten(self, plugin, tmp_path):
+    def test_existing_sfb_is_not_overwritten(self, downloads, tmp_path):
         root = self._seed_ps3_layout(tmp_path)
         (root / "PS3_DISC.SFB").write_bytes(b"REAL")
         (root / "PS3_DISC.SFB.txt").write_bytes(b"WRONG")
 
-        plugin._download_service._maybe_heal_ps3_sfb_io(str(root))
+        downloads.service._maybe_heal_ps3_sfb_io(str(root))
 
         assert (root / "PS3_DISC.SFB").read_bytes() == b"REAL"
 
-    def test_no_sfb_txt_does_nothing(self, plugin, tmp_path):
+    def test_no_sfb_txt_does_nothing(self, downloads, tmp_path):
         root = self._seed_ps3_layout(tmp_path)
 
-        plugin._download_service._maybe_heal_ps3_sfb_io(str(root))
+        downloads.service._maybe_heal_ps3_sfb_io(str(root))
 
         assert not (root / "PS3_DISC.SFB").exists()
 
-    def test_non_folder_boot_layout_does_nothing(self, plugin, tmp_path):
+    def test_non_folder_boot_layout_does_nothing(self, downloads, tmp_path):
         # A stray PS3_DISC.SFB.txt without the folder-boot marker is left untouched.
         (tmp_path / "PS3_DISC.SFB.txt").write_bytes(b"SFB")
         (tmp_path / "game.iso").write_bytes(b"\x00" * 100)
 
-        plugin._download_service._maybe_heal_ps3_sfb_io(str(tmp_path))
+        downloads.service._maybe_heal_ps3_sfb_io(str(tmp_path))
 
         assert not (tmp_path / "PS3_DISC.SFB").exists()
 
@@ -1484,14 +1470,14 @@ class TestDoDownloadSingleFile:
     """Tests for _do_download happy path — single file."""
 
     @pytest.mark.asyncio
-    async def test_single_file_happy_path(self, plugin, tmp_path, emit):
+    async def test_single_file_happy_path(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1512,18 +1498,18 @@ class TestDoDownloadSingleFile:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 512)
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 42)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # File ends up at target_path (not .tmp)
         assert os.path.exists(target_path)
         assert not os.path.exists(target_path + ".tmp")
         # RomInstall record persisted via the Unit of Work.
-        installed = plugin._uow.rom_installs.get(42)
+        installed = downloads.uow.rom_installs.get(42)
         assert installed is not None
         assert installed.rom_id == 42
         assert installed.file_path == target_path
@@ -1544,10 +1530,10 @@ class TestDoDownloadSingleFile:
         # launch_options carries the full RetroDECK launch command for the resolved path.
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
         # download_queue status is completed
-        assert plugin._download_service._download_queue[42]["status"] == "completed"
+        assert downloads.service._download_queue[42]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_download_complete_app_id_null_when_unbound(self, plugin, tmp_path, emit):
+    async def test_download_complete_app_id_null_when_unbound(self, downloads, tmp_path, emit):
         """A ROM downloaded before it's synced (no Steam shortcut) emits ``app_id: None``.
 
         The ROM row exists (FK parent for the install) but its
@@ -1556,7 +1542,7 @@ class TestDoDownloadSingleFile:
         """
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1579,8 +1565,8 @@ class TestDoDownloadSingleFile:
                 f.write(b"\x00" * 512)
 
         # Unbound ROM row (FK parent for the install) — no Steam shortcut yet.
-        with plugin._uow:
-            plugin._uow.roms.save(
+        with downloads.uow:
+            downloads.uow.roms.save(
                 Rom(
                     rom_id=7,
                     platform_slug="n64",
@@ -1590,24 +1576,24 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(7, rom_detail, target_path, "n64", "metroid.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(7, rom_detail, target_path, "n64", "metroid.z64")
 
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         assert emit_calls[0][0][1]["app_id"] is None
 
     @pytest.mark.asyncio
-    async def test_download_complete_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path, emit):
+    async def test_download_complete_records_applied_launch_options_for_bound_rom(self, downloads, tmp_path, emit):
         """A bound ROM's freshly baked launch command (the value the frontend
         confirm-sets onto its shortcut) is recorded as the applied state, so the
         next sync skips the now-correct shortcut instead of re-touching it (#1383)."""
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1621,27 +1607,27 @@ class TestDoDownloadSingleFile:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 512)
 
-        _seed_rom(plugin._uow, 42)  # bound (app_id 1042)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 42)  # bound (app_id 1042)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "download_complete")
-        with plugin._uow as uow:
+        with downloads.uow as uow:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.applied_launch_options == payload["launch_options"]
         assert rom.applied_launch_options == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
 
     @pytest.mark.asyncio
-    async def test_download_complete_does_not_record_applied_for_unbound_rom(self, plugin, tmp_path, emit):
+    async def test_download_complete_does_not_record_applied_for_unbound_rom(self, downloads, tmp_path, emit):
         """A ROM downloaded before it is synced (no shortcut) records nothing — there
         is no shortcut to reflect; the next sync creates it and records the value."""
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1661,8 +1647,8 @@ class TestDoDownloadSingleFile:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 512)
 
-        with plugin._uow:
-            plugin._uow.roms.save(
+        with downloads.uow:
+            downloads.uow.roms.save(
                 Rom(
                     rom_id=7,
                     platform_slug="n64",
@@ -1672,13 +1658,13 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(7, rom_detail, target_path, "n64", "metroid.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(7, rom_detail, target_path, "n64", "metroid.z64")
 
-        with plugin._uow as uow:
+        with downloads.uow as uow:
             rom = uow.roms.get(7)
         assert rom is not None
         assert rom.applied_launch_options is None
@@ -1691,11 +1677,11 @@ class TestDoDownloadOverrideRebake:
     it survives uninstall → reinstall, and reinstall flows through ``_do_download``.
     """
 
-    async def _run_single_download(self, plugin, tmp_path, emit, *, rom_id, override):
+    async def _run_single_download(self, downloads, tmp_path, emit, *, rom_id, override):
         """Download one single-file ROM (bound) with ``override`` pre-pinned; return payload."""
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1716,28 +1702,28 @@ class TestDoDownloadOverrideRebake:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 512)
 
-        _seed_rom(plugin._uow, rom_id, platform_slug="psx")
+        _seed_rom(downloads.uow, rom_id, platform_slug="psx")
         if override is not None:
-            with plugin._uow:
-                plugin._uow.roms.set_emulator_override(rom_id, override)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+            with downloads.uow:
+                downloads.uow.roms.set_emulator_override(rom_id, override)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(rom_id, rom_detail, target_path, "psx", "game.chd")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(rom_id, rom_detail, target_path, "psx", "game.chd")
 
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         return emit_calls[0][0][1], target_path
 
     @pytest.mark.asyncio
-    async def test_reinstall_with_override_rebakes_e_form(self, plugin, tmp_path, emit):
+    async def test_reinstall_with_override_rebakes_e_form(self, downloads, tmp_path, emit):
         """An override-set ROM's reinstall emits ``-e`` baked launch_options (B2)."""
-        plugin._core_info.available_cores = [
+        downloads.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
         payload, target_path = await self._run_single_download(
-            plugin, tmp_path, emit, rom_id=42, override="PCSX ReARMed"
+            downloads, tmp_path, emit, rom_id=42, override="PCSX ReARMed"
         )
         assert payload["app_id"] == 1042
         assert payload["launch_options"] == (
@@ -1747,26 +1733,26 @@ class TestDoDownloadOverrideRebake:
         )
 
     @pytest.mark.asyncio
-    async def test_reinstall_without_override_is_plain(self, plugin, tmp_path, emit):
+    async def test_reinstall_without_override_is_plain(self, downloads, tmp_path, emit):
         """A NULL-override ROM's reinstall emits the plain launch — no ``-e`` (B2)."""
-        plugin._core_info.available_cores = [
+        downloads.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
-        payload, target_path = await self._run_single_download(plugin, tmp_path, emit, rom_id=43, override=None)
+        payload, target_path = await self._run_single_download(downloads, tmp_path, emit, rom_id=43, override=None)
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_reinstall_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog, emit):
+    async def test_reinstall_with_stale_override_rebakes_plain_and_warns(self, downloads, tmp_path, caplog, emit):
         """A stale override LABEL reinstall emits the PLAIN launch + WARNs (B4)."""
 
         # available_cores does not carry the pinned label → resolution returns None.
-        plugin._core_info.available_cores = [
+        downloads.core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
         with caplog.at_level(logging.WARNING):
             payload, target_path = await self._run_single_download(
-                plugin, tmp_path, emit, rom_id=44, override="Removed Core"
+                downloads, tmp_path, emit, rom_id=44, override="Removed Core"
             )
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
@@ -1778,15 +1764,15 @@ class TestDoDownloadMultiFile:
     """Tests for _do_download happy path — multi-file (ZIP)."""
 
     @pytest.mark.asyncio
-    async def test_multi_file_happy_path(self, plugin, tmp_path, emit):
+    async def test_multi_file_happy_path(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1817,12 +1803,12 @@ class TestDoDownloadMultiFile:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 55, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
 
         # ES-DE collapse: the extract dir is renamed after the auto-generated
         # M3U (incl. extension) so ES-DE shows one game entry, not a folder.
@@ -1835,7 +1821,7 @@ class TestDoDownloadMultiFile:
         # .zip.tmp is cleaned up
         assert not os.path.exists(target_path + ".zip.tmp")
         # RomInstall record has rom_dir pointing at the renamed dir.
-        installed = plugin._uow.rom_installs.get(55)
+        installed = downloads.uow.rom_installs.get(55)
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         # Launch file detection: M3U generated from 2 cue files, so prefer M3U > CUE
@@ -1849,10 +1835,10 @@ class TestDoDownloadMultiFile:
         assert payload["file_path"] == installed.file_path
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{installed.file_path}"'
         # Status is completed
-        assert plugin._download_service._download_queue[55]["status"] == "completed"
+        assert downloads.service._download_queue[55]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_takes_extract_path(self, plugin, tmp_path, emit):
+    async def test_nested_multi_file_takes_extract_path(self, downloads, tmp_path, emit):
         """#855: one top-level file but len(files) > 1 → RomM zips → EXTRACT path.
 
         Switch base/update/DLC: ``has_multiple_files=False`` (single top-level
@@ -1863,11 +1849,11 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1903,12 +1889,12 @@ class TestDoDownloadMultiFile:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 99, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 99, platform_slug="switch")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(99, rom_detail, target_path, "switch", "Zelda.nsp")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(99, rom_detail, target_path, "switch", "Zelda.nsp")
 
         # ZIP is extracted into a per-game folder (not written verbatim into one
         # .nsp). ES-DE collapse renames the dir after the launch file (the root
@@ -1929,14 +1915,14 @@ class TestDoDownloadMultiFile:
         assert not os.path.exists(target_path + ".zip.tmp")
         # RomInstall record registers rom_dir (renamed extract path), and the
         # launch file_path points inside it — not a flat file written verbatim.
-        installed = plugin._uow.rom_installs.get(99)
+        installed = downloads.uow.rom_installs.get(99)
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "Zelda.nsp")
-        assert plugin._download_service._download_queue[99]["status"] == "completed"
+        assert downloads.service._download_queue[99]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_cleanup_removes_extract_dir(self, plugin, tmp_path, emit):
+    async def test_nested_multi_file_cleanup_removes_extract_dir(self, downloads, tmp_path, emit):
         """#855: a nested-multi download failure must remove the extract dir.
 
         The partial-download cleanup keys on the same multi-file gate, so a
@@ -1945,11 +1931,11 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1980,18 +1966,18 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(99, rom_detail, target_path, "switch", "Zelda.nsp")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(99, rom_detail, target_path, "switch", "Zelda.nsp")
 
         # Failure path keyed on the multi-file gate → extract dir torn down.
         assert not extract_dir.exists()
-        assert plugin._download_service._download_queue[99]["status"] == "failed"
+        assert downloads.service._download_queue[99]["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_names_dir_from_identity_not_files_zero(self, plugin, tmp_path, emit):
+    async def test_nested_multi_file_names_dir_from_identity_not_files_zero(self, downloads, tmp_path, emit):
         """#1292: a folder game served as a nested-single ZIP (PS3 MGS4) must name
         its extract dir after the ROM identity, never after ``files[0]``.
 
@@ -2004,11 +1990,11 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2047,14 +2033,12 @@ class TestDoDownloadMultiFile:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 4778, platform_slug="ps3")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 4778, platform_slug="ps3")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(
-                4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm"
-            )
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm")
 
         # The extract dir carries the ROM identity, NOT the files[0] asset name.
         extract_dir = roms_dir / "Metal Gear Solid 4"
@@ -2064,14 +2048,14 @@ class TestDoDownloadMultiFile:
         assert not (roms_dir / "AttackoftheDwarfGekko").exists()
         # EBOOT.BIN is nested, so no ES-DE collapse rename — the dir keeps the
         # identity name and the launch file points inside it.
-        installed = plugin._uow.rom_installs.get(4778)
+        installed = downloads.uow.rom_installs.get(4778)
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "PS3_GAME" / "USRDIR" / "EBOOT.BIN")
-        assert plugin._download_service._download_queue[4778]["status"] == "completed"
+        assert downloads.service._download_queue[4778]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, plugin, tmp_path, emit):
+    async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, downloads, tmp_path, emit):
         """#1292: a failed folder-game download tears down the identity-named
         extract dir, not a ``files[0]``-derived stale name.
 
@@ -2081,11 +2065,11 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2116,21 +2100,19 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(
-                4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm"
-            )
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(4778, rom_detail, target_path, "ps3", "AttackoftheDwarfGekko.dbm")
 
         # The identity-named dir is torn down; the files[0]-derived name was never
         # the target, so nothing orphans.
         assert not extract_dir.exists()
-        assert plugin._download_service._download_queue[4778]["status"] == "failed"
+        assert downloads.service._download_queue[4778]["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_multi_file_emits_extracting_progress(self, plugin, tmp_path, emit):
+    async def test_multi_file_emits_extracting_progress(self, downloads, tmp_path, emit):
         """A multi-file download emits ``download_progress`` ``status:"extracting"``
         frames after the byte transfer, then ``download_complete`` after.
 
@@ -2143,7 +2125,7 @@ class TestDoDownloadMultiFile:
 
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -2156,7 +2138,7 @@ class TestDoDownloadMultiFile:
         fake.make_dirs(roms_base)
         # The ZIP the fake "extracts": two members so total > any single member.
         fake.set_zip_members(tmp_zip, {"disc1.bin": b"\x00" * 600, "disc2.bin": b"\x00" * 400})
-        plugin._download_service._download_file_store = fake
+        downloads.service._download_file_store = fake
 
         rom_detail = {
             "id": 55,
@@ -2173,9 +2155,9 @@ class TestDoDownloadMultiFile:
             # the subsequent extract_zip finds it and drives the callback.
             fake.files[dest] = b"ZIPDATA"
 
-        _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[55] = {
+        _seed_rom(downloads.uow, 55, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[55] = {
             "rom_id": 55,
             "rom_name": "Final Fantasy VII",
             "platform_name": "PlayStation",
@@ -2187,8 +2169,8 @@ class TestDoDownloadMultiFile:
             "resumable": False,
         }
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
 
         # Drain the create_task-scheduled emits marshaled onto the loop.
         await asyncio.sleep(0)
@@ -2211,7 +2193,7 @@ class TestDoDownloadMultiFile:
         # download_complete still fires after extraction.
         complete = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(complete) == 1
-        assert plugin._download_service._download_queue[55]["status"] == "completed"
+        assert downloads.service._download_queue[55]["status"] == "completed"
 
 
 class TestDoDownloadBundledM3uPlatformGate:
@@ -2225,21 +2207,21 @@ class TestDoDownloadBundledM3uPlatformGate:
     """
 
     @pytest.mark.asyncio
-    async def test_bundled_m3u_ignored_on_non_m3u_platform(self, plugin, tmp_path, emit):
+    async def test_bundled_m3u_ignored_on_non_m3u_platform(self, downloads, tmp_path, emit):
         """Switch ZIP with a bundled .m3u + real .nsp, m3u unsupported → launch
         is the .nsp and the collapse dir is ``<Game>.nsp/``, NOT ``<Game>.m3u/``."""
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
         # Switch does not list .m3u in ES-DE's es_systems.xml.
-        plugin._m3u_supported = False
+        downloads.m3u_supported = False
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "switch"
         roms_dir.mkdir(parents=True)
@@ -2266,12 +2248,12 @@ class TestDoDownloadBundledM3uPlatformGate:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 111, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[111] = {"rom_id": 111, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 111, platform_slug="switch")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[111] = {"rom_id": 111, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(111, rom_detail, target_path, "switch", "Zelda.nsp")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(111, rom_detail, target_path, "switch", "Zelda.nsp")
 
         # Collapse dir is named after the real launch file, not the bundled m3u.
         nsp_dir = roms_dir / "Zelda.nsp"
@@ -2279,29 +2261,29 @@ class TestDoDownloadBundledM3uPlatformGate:
         assert not (roms_dir / "Zelda.m3u").exists()
         # The bundled .m3u is left inert on disk (no destructive op), but is NOT
         # the launch file.
-        installed = plugin._uow.rom_installs.get(111)
+        installed = downloads.uow.rom_installs.get(111)
         assert installed is not None
         assert installed.rom_dir == str(nsp_dir)
         assert installed.file_path == str(nsp_dir / "Zelda.nsp")
         assert (nsp_dir / "Zelda.m3u").exists()
-        assert plugin._download_service._download_queue[111]["status"] == "completed"
+        assert downloads.service._download_queue[111]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_disc_platform_still_generates_and_uses_m3u(self, plugin, tmp_path, emit):
+    async def test_disc_platform_still_generates_and_uses_m3u(self, downloads, tmp_path, emit):
         """Mirror positive: a disc system (m3u supported) still generates/keeps
         the m3u and names the collapse dir ``<Game>.m3u/``."""
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
         # psx lists .m3u in ES-DE's es_systems.xml.
-        plugin._m3u_supported = True
+        downloads.m3u_supported = True
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -2329,39 +2311,39 @@ class TestDoDownloadBundledM3uPlatformGate:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 112, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[112] = {"rom_id": 112, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 112, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[112] = {"rom_id": 112, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(112, rom_detail, target_path, "psx", "FF7.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(112, rom_detail, target_path, "psx", "FF7.zip")
 
         m3u_dir = roms_dir / "FF7.m3u"
         assert m3u_dir.is_dir()
-        installed = plugin._uow.rom_installs.get(112)
+        installed = downloads.uow.rom_installs.get(112)
         assert installed is not None
         assert installed.rom_dir == str(m3u_dir)
         assert installed.file_path == str(m3u_dir / "FF7.m3u")
-        assert plugin._download_service._download_queue[112]["status"] == "completed"
+        assert downloads.service._download_queue[112]["status"] == "completed"
 
 
 class TestEsDeCollapseRename:
     """Tests for the ES-DE directory-collapse rename on new multi-file downloads (#943)."""
 
-    def _wire_paths(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    def _wire_paths(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
-    async def _run_multi(self, plugin, tmp_path, *, rom_id, platform, archive_name, zip_members, rom_detail):
+    async def _run_multi(self, downloads, tmp_path, *, rom_id, platform, archive_name, zip_members, rom_detail):
         import zipfile as zf
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / platform
         roms_dir.mkdir(parents=True, exist_ok=True)
         target_path = str(roms_dir / archive_name)
@@ -2376,19 +2358,19 @@ class TestEsDeCollapseRename:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, rom_id, platform_slug=platform)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, rom_id, platform_slug=platform)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(rom_id, rom_detail, target_path, platform, archive_name)
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(rom_id, rom_detail, target_path, platform, archive_name)
         return roms_dir
 
     @pytest.mark.asyncio
-    async def test_explicit_m3u_dir_named_after_launch_file(self, plugin, tmp_path):
+    async def test_explicit_m3u_dir_named_after_launch_file(self, downloads, tmp_path):
         """A multi-file ZIP shipping its own .m3u → dir renamed to '<name>.m3u/'."""
         roms_dir = await self._run_multi(
-            plugin,
+            downloads,
             tmp_path,
             rom_id=70,
             platform="psx",
@@ -2413,17 +2395,17 @@ class TestEsDeCollapseRename:
         extract_dir = roms_dir / "FF7.m3u"
         assert extract_dir.is_dir()
         assert not (roms_dir / "FF7").exists()
-        installed = plugin._uow.rom_installs.get(70)
+        installed = downloads.uow.rom_installs.get(70)
         assert installed is not None
         assert os.path.basename(installed.rom_dir) == "FF7.m3u"
         assert installed.file_path == str(extract_dir / "FF7.m3u")
         assert installed.file_path.endswith(".m3u")
 
     @pytest.mark.asyncio
-    async def test_auto_generated_m3u_names_dir(self, plugin, tmp_path):
+    async def test_auto_generated_m3u_names_dir(self, downloads, tmp_path):
         """No .m3u in the ZIP but multiple disc files → dir named after the generated <name>.m3u."""
         roms_dir = await self._run_multi(
-            plugin,
+            downloads,
             tmp_path,
             rom_id=71,
             platform="psx",
@@ -2447,13 +2429,13 @@ class TestEsDeCollapseRename:
         extract_dir = roms_dir / "Chrono Cross.m3u"
         assert extract_dir.is_dir()
         assert not (roms_dir / "Chrono Cross").exists()
-        installed = plugin._uow.rom_installs.get(71)
+        installed = downloads.uow.rom_installs.get(71)
         assert installed is not None
         assert os.path.basename(installed.rom_dir) == "Chrono Cross.m3u"
         assert installed.file_path == str(extract_dir / "Chrono Cross.m3u")
 
     @pytest.mark.asyncio
-    async def test_single_cue_dir_named_after_generated_m3u(self, plugin, tmp_path):
+    async def test_single_cue_dir_named_after_generated_m3u(self, downloads, tmp_path):
         """A single .cue auto-generates a game-named M3U → dir renamed to '<name>.m3u/'.
 
         The generically-named ``disc1.cue`` would make a ``disc1.cue/`` folder,
@@ -2462,7 +2444,7 @@ class TestEsDeCollapseRename:
         single game-named entry.
         """
         roms_dir = await self._run_multi(
-            plugin,
+            downloads,
             tmp_path,
             rom_id=72,
             platform="psx",
@@ -2486,17 +2468,17 @@ class TestEsDeCollapseRename:
         assert not (roms_dir / "Metal Gear Solid").exists()
         # The generated playlist references the original cue.
         assert (extract_dir / "Metal Gear Solid.m3u").read_text().strip() == "disc1.cue"
-        installed = plugin._uow.rom_installs.get(72)
+        installed = downloads.uow.rom_installs.get(72)
         assert installed is not None
         assert os.path.basename(installed.rom_dir) == "Metal Gear Solid.m3u"
         assert installed.file_path == str(extract_dir / "Metal Gear Solid.m3u")
         assert installed.file_path.endswith(".m3u")
 
     @pytest.mark.asyncio
-    async def test_nested_launch_file_keeps_staging_dir_name(self, plugin, tmp_path):
+    async def test_nested_launch_file_keeps_staging_dir_name(self, downloads, tmp_path):
         """Launch file nested in a subdir (WiiU loadiine) → no rename, staging name kept."""
         roms_dir = await self._run_multi(
-            plugin,
+            downloads,
             tmp_path,
             rom_id=75,
             platform="wiiu",
@@ -2520,17 +2502,17 @@ class TestEsDeCollapseRename:
         # collapse the dir anyway — the staging name is kept unchanged.
         extract_dir = roms_dir / "Loadiine Game"
         assert extract_dir.is_dir()
-        installed = plugin._uow.rom_installs.get(75)
+        installed = downloads.uow.rom_installs.get(75)
         assert installed is not None
         assert installed.rom_dir == str(extract_dir)
         assert installed.file_path == str(extract_dir / "code" / "Game.rpx")
 
     @pytest.mark.asyncio
-    async def test_single_file_rom_no_rename(self, plugin, tmp_path):
+    async def test_single_file_rom_no_rename(self, downloads, tmp_path):
         """Single-file ROM: no extract dir, no rename — rom_dir stays None."""
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "gba"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "Game.gba")
@@ -2549,14 +2531,14 @@ class TestEsDeCollapseRename:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 100)
 
-        _seed_rom(plugin._uow, 73, platform_slug="gba")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[73] = {"rom_id": 73, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 73, platform_slug="gba")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[73] = {"rom_id": 73, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
 
-        installed = plugin._uow.rom_installs.get(73)
+        installed = downloads.uow.rom_installs.get(73)
         assert installed is not None
         assert installed.rom_dir is None
         assert installed.file_path == target_path
@@ -2564,12 +2546,12 @@ class TestEsDeCollapseRename:
         assert os.path.isfile(target_path)
 
     @pytest.mark.asyncio
-    async def test_collision_skips_rename_and_keeps_staging_dir(self, plugin, tmp_path, caplog):
+    async def test_collision_skips_rename_and_keeps_staging_dir(self, downloads, tmp_path, caplog):
         """Pre-existing rename target → rename skipped, no clobber, install under the staging name."""
         import zipfile as zf
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "FF8.zip")
@@ -2601,15 +2583,15 @@ class TestEsDeCollapseRename:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 74, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[74] = {"rom_id": 74, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 74, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[74] = {"rom_id": 74, "status": "downloading", "progress": 0}
 
         with (
             caplog.at_level(logging.WARNING),
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download),
         ):
-            await plugin._download_service._do_download(74, rom_detail, target_path, "psx", "FF8.zip")
+            await downloads.service._do_download(74, rom_detail, target_path, "psx", "FF8.zip")
 
         # The pre-existing dir is untouched — never clobbered or merged.
         assert (collision_dir / "PREEXISTING.txt").read_text() == "do not clobber"
@@ -2618,11 +2600,11 @@ class TestEsDeCollapseRename:
         assert staging_dir.is_dir()
         assert (staging_dir / "FF8.m3u").exists()
         # Install still recorded, under the staging dir.
-        installed = plugin._uow.rom_installs.get(74)
+        installed = downloads.uow.rom_installs.get(74)
         assert installed is not None
         assert installed.rom_dir == str(staging_dir)
         assert installed.file_path == str(staging_dir / "FF8.m3u")
-        assert plugin._download_service._download_queue[74]["status"] == "completed"
+        assert downloads.service._download_queue[74]["status"] == "completed"
         # Observable side effect of the collision guard: a warning was logged.
         assert any(
             "ES-DE collapse rename skipped" in rec.message and "already exists" in rec.message for rec in caplog.records
@@ -2633,15 +2615,15 @@ class TestDoDownloadNestedSingleFile:
     """Tests for has_nested_single_file: fs_name is the parent folder, not the file (#226)."""
 
     @pytest.mark.asyncio
-    async def test_simple_single_file_unchanged(self, plugin, tmp_path):
+    async def test_simple_single_file_unchanged(self, downloads, tmp_path):
         """Regression: simple-single-file still uses fs_name as the local filename."""
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2665,29 +2647,29 @@ class TestDoDownloadNestedSingleFile:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 64)
 
-        _seed_rom(plugin._uow, 1, platform_slug="gba")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 1, platform_slug="gba")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(1, rom_detail, target_path, "gba", "Game.gba")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(1, rom_detail, target_path, "gba", "Game.gba")
 
         assert os.path.exists(target_path)
-        installed = plugin._uow.rom_installs.get(1)
+        installed = downloads.uow.rom_installs.get(1)
         assert installed is not None
         assert os.path.basename(installed.file_path) == "Game.gba"
         assert installed.file_path == target_path
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_uses_files_entry(self, plugin, tmp_path):
+    async def test_nested_single_file_uses_files_entry(self, downloads, tmp_path):
         """Happy path: has_nested_single_file derives the local filename from files[0].file_name."""
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2710,15 +2692,15 @@ class TestDoDownloadNestedSingleFile:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 128)
 
-        _seed_rom(plugin._uow, 7, platform_slug="dc")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 7, platform_slug="dc")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(7, rom_detail, target_path, "dc", "My Game.chd")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(7, rom_detail, target_path, "dc", "My Game.chd")
 
         assert os.path.exists(target_path)
-        installed = plugin._uow.rom_installs.get(7)
+        installed = downloads.uow.rom_installs.get(7)
         assert installed is not None
         assert os.path.basename(installed.file_path) == "My Game.chd"
         assert installed.file_path == target_path
@@ -2730,15 +2712,15 @@ class TestDoDownloadNestedSingleFile:
         assert installed.rom_dir is None
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_start_download_uses_files_entry(self, plugin, tmp_path):
+    async def test_nested_single_file_start_download_uses_files_entry(self, downloads, tmp_path):
         """start_download: nested-single-file enters the queue with the resolved filename."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2754,31 +2736,31 @@ class TestDoDownloadNestedSingleFile:
             "files": [{"file_name": "Resident Evil.chd"}],
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
+        downloads.service._loop.create_task = _close_coro_task
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
-        result = await plugin.start_download(7)
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        result = await downloads.service.start_download(7)
 
         assert result["success"] is True
-        assert plugin._download_service._download_queue[7]["file_name"] == "Resident Evil.chd"
+        assert downloads.service._download_queue[7]["file_name"] == "Resident Evil.chd"
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_empty_files_falls_back(self, plugin, tmp_path, caplog, logger):
+    async def test_nested_single_file_empty_files_falls_back(self, downloads, tmp_path, caplog, logger):
         """Defensive: empty files list falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2794,33 +2776,33 @@ class TestDoDownloadNestedSingleFile:
             "files": [],
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            result = await plugin.start_download(8)
+            result = await downloads.service.start_download(8)
 
         assert result["success"] is True
-        assert plugin._download_service._download_queue[8]["file_name"] == "My Game"
+        assert downloads.service._download_queue[8]["file_name"] == "My Game"
         assert any("has_nested_single_file" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_missing_files_key_falls_back(self, plugin, tmp_path, caplog, logger):
+    async def test_nested_single_file_missing_files_key_falls_back(self, downloads, tmp_path, caplog, logger):
         """Defensive: missing files key falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2836,33 +2818,33 @@ class TestDoDownloadNestedSingleFile:
             # no "files" key at all
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            result = await plugin.start_download(9)
+            result = await downloads.service.start_download(9)
 
         assert result["success"] is True
-        assert plugin._download_service._download_queue[9]["file_name"] == "My Game"
+        assert downloads.service._download_queue[9]["file_name"] == "My Game"
         assert any("has_nested_single_file" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_traversal_sanitized(self, plugin, tmp_path):
+    async def test_nested_single_file_traversal_sanitized(self, downloads, tmp_path):
         """Defensive: path traversal in files[0].file_name is sanitized via os.path.basename."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2878,20 +2860,20 @@ class TestDoDownloadNestedSingleFile:
             "files": [{"file_name": "../evil.chd"}],
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
+        downloads.service._loop.create_task = _close_coro_task
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
-        result = await plugin.start_download(13)
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        result = await downloads.service.start_download(13)
 
         assert result["success"] is True
-        queue_entry = plugin._download_service._download_queue[13]
+        queue_entry = downloads.service._download_queue[13]
         assert queue_entry["file_name"] == "evil.chd"
         assert ".." not in queue_entry["file_name"]
 
@@ -2900,12 +2882,12 @@ class TestPathTraversalDeleteRomFiles:
     """Tests for path traversal safety in _delete_rom_files."""
 
     @pytest.mark.asyncio
-    async def test_rejects_rom_dir_outside_roms_base(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_rejects_rom_dir_outside_roms_base(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2916,27 +2898,27 @@ class TestPathTraversalDeleteRomFiles:
         evil_file.write_text("do not delete")
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             99,
             file_path=str(evil_file),
             rom_dir=str(evil_dir),
         )
 
-        result = await plugin.remove_rom(99)
+        result = await downloads.removal.remove_rom(99)
         # The evil dir/file should NOT be deleted
         assert evil_dir.exists()
         assert evil_file.exists()
         assert result["success"] is False
         # Unsafe paths are failures: retain the record so the user can repair it.
-        assert plugin._uow.rom_installs.get(99) is not None
+        assert downloads.uow.rom_installs.get(99) is not None
 
     @pytest.mark.asyncio
-    async def test_rejects_file_path_outside_roms_base(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_rejects_file_path_outside_roms_base(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2945,30 +2927,30 @@ class TestPathTraversalDeleteRomFiles:
         evil_file.write_text("root:x:0:0")
 
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             99,
             file_path=str(evil_file),
             rom_dir=None,
         )
 
-        result = await plugin.remove_rom(99)
+        result = await downloads.removal.remove_rom(99)
         assert evil_file.exists()
         assert result["success"] is False
-        assert plugin._uow.rom_installs.get(99) is not None
+        assert downloads.uow.rom_installs.get(99) is not None
 
 
 class TestPathTraversalFsName:
     """Tests for path traversal safety in download — fs_name sanitization."""
 
     @pytest.mark.asyncio
-    async def test_fs_name_traversal_sanitized(self, plugin, tmp_path):
+    async def test_fs_name_traversal_sanitized(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2981,37 +2963,37 @@ class TestPathTraversalFsName:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
+        downloads.service._loop.create_task = _close_coro_task
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
-        result = await plugin.start_download(77)
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        result = await downloads.service.start_download(77)
 
         assert result["success"] is True
         # The target path should use sanitized basename only
-        queue_entry = plugin._download_service._download_queue[77]
+        queue_entry = downloads.service._download_queue[77]
         assert queue_entry["file_name"] == "passwd"
         # The coroutine was created — just verify the queue entry is safe
         assert ".." not in queue_entry["file_name"]
 
     @pytest.mark.asyncio
-    async def test_fs_name_degenerate_falls_back_to_synthetic(self, plugin, tmp_path):
+    async def test_fs_name_degenerate_falls_back_to_synthetic(self, downloads, tmp_path):
         """A degenerate fs_name ("..") basenames to ".." — the file_name guard
         must fall back to the synthetic rom_<id>, so target_path can never
         resolve to the platform dir's parent (the roms root)."""
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3024,20 +3006,20 @@ class TestPathTraversalFsName:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
-        result = await plugin.start_download(77)
+        result = await downloads.service.start_download(77)
 
         assert result["success"] is True
-        queue_entry = plugin._download_service._download_queue[77]
+        queue_entry = downloads.service._download_queue[77]
         assert queue_entry["file_name"] == "rom_77"
 
 
@@ -3045,9 +3027,9 @@ class TestPathTraversalPlatformSlug:
     """#967: an unmapped server platform slug must not escape roms_path."""
 
     @pytest.mark.asyncio
-    async def test_traversal_slug_rejected_before_make_dirs(self, plugin, tmp_path, emit):
+    async def test_traversal_slug_rejected_before_make_dirs(self, downloads, tmp_path, emit):
         roms_root = tmp_path / "retrodeck" / "roms"
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(roms_root),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3062,16 +3044,16 @@ class TestPathTraversalPlatformSlug:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = asyncio.get_running_loop()
+        downloads.service._loop = asyncio.get_running_loop()
 
         # Track make_dirs to prove the slug is rejected BEFORE any directory work.
         made_dirs: list[str] = []
-        plugin._download_service._download_file_store.make_dirs = lambda p: made_dirs.append(p)
+        downloads.service._download_file_store.make_dirs = lambda p: made_dirs.append(p)
 
         from unittest.mock import patch
 
-        with patch.object(plugin._romm_api, "get_rom", return_value=rom_detail):
-            result = await plugin._download_service.start_download(77)
+        with patch.object(downloads.romm_api, "get_rom", return_value=rom_detail):
+            result = await downloads.service.start_download(77)
 
         # Canonical path_traversal failure shape.
         assert result["success"] is False
@@ -3083,7 +3065,7 @@ class TestPathTraversalPlatformSlug:
         escape_dir = tmp_path / "etc"
         assert not escape_dir.exists()
         # The rom is no longer marked in-progress (cleaned up on rejection).
-        assert 77 not in plugin._download_service._download_in_progress
+        assert 77 not in downloads.service._download_in_progress
         # download_failed event fired so the UI doesn't hang on "downloading".
         failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(failed) == 1
@@ -3093,40 +3075,40 @@ class TestPathTraversalPlatformSlug:
 class TestCleanupPartialDownload:
     """Tests for _cleanup_partial_download — all paths."""
 
-    def test_cleans_tmp_file_single(self, plugin, tmp_path):
+    def test_cleans_tmp_file_single(self, downloads, tmp_path):
         target = str(tmp_path / "game.z64")
         tmp_file = tmp_path / "game.z64.tmp"
         tmp_file.write_text("partial")
 
         # Single-file: no extract dir, so extract_dir_name is unused ("").
-        plugin._download_service._cleanup_partial_download(target, False, "")
+        downloads.service._cleanup_partial_download(target, False, "")
         assert not tmp_file.exists()
 
-    def test_cleans_zip_tmp_multi(self, plugin, tmp_path):
+    def test_cleans_zip_tmp_multi(self, downloads, tmp_path):
         target = str(tmp_path / "game.zip")
         zip_tmp = tmp_path / "game.zip.zip.tmp"
         zip_tmp.write_text("partial zip")
 
-        plugin._download_service._cleanup_partial_download(target, True, "game")
+        downloads.service._cleanup_partial_download(target, True, "game")
         assert not zip_tmp.exists()
 
-    def test_cleans_extract_dir(self, plugin, tmp_path):
+    def test_cleans_extract_dir(self, downloads, tmp_path):
         target = str(tmp_path / "game.zip")
         extract_dir = tmp_path / "game"
         extract_dir.mkdir()
         (extract_dir / "disc1.bin").write_bytes(b"\x00" * 100)
 
-        plugin._download_service._cleanup_partial_download(target, True, "game")
+        downloads.service._cleanup_partial_download(target, True, "game")
         assert not extract_dir.exists()
 
-    def test_cleanup_errors_are_caught(self, plugin, tmp_path):
+    def test_cleanup_errors_are_caught(self, downloads, tmp_path):
         """Cleanup should not raise even if files don't exist."""
         target = str(tmp_path / "nonexistent.z64")
         # Should not raise
-        plugin._download_service._cleanup_partial_download(target, False, "")
-        plugin._download_service._cleanup_partial_download(target, True, "nonexistent")
+        downloads.service._cleanup_partial_download(target, False, "")
+        downloads.service._cleanup_partial_download(target, True, "nonexistent")
 
-    def test_cleans_renamed_extract_dir_via_final_path(self, plugin, tmp_path):
+    def test_cleans_renamed_extract_dir_via_final_path(self, downloads, tmp_path):
         """A failure after the ES-DE collapse rename must clean the renamed dir, not just the staging name."""
         target = str(tmp_path / "game.zip")
         # The staging dir (the ROM-identity extract_dir_name) no longer exists —
@@ -3136,47 +3118,47 @@ class TestCleanupPartialDownload:
         (renamed_dir / "game.m3u").write_text("disc1.cue\n")
         final_path = str(renamed_dir / "game.m3u")
 
-        plugin._download_service._cleanup_partial_download(target, True, "game", final_path)
+        downloads.service._cleanup_partial_download(target, True, "game", final_path)
         assert not renamed_dir.exists()
 
 
 class TestResolveSafeExtractDirName:
     """#1292: the extract-dir base name is ROM-identity-derived and traversal-safe."""
 
-    def test_returns_fs_name_no_ext(self, plugin):
-        name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name_no_ext": "Metal Gear Solid 4"})
+    def test_returns_fs_name_no_ext(self, downloads):
+        name = downloads.service._resolve_safe_extract_dir_name({"fs_name_no_ext": "Metal Gear Solid 4"})
         assert name == "Metal Gear Solid 4"
 
-    def test_sanitizes_relative_traversal(self, plugin, caplog, logger):
+    def test_sanitizes_relative_traversal(self, downloads, caplog, logger):
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name_no_ext": "../../etc/pwned"})
+            name = downloads.service._resolve_safe_extract_dir_name({"fs_name_no_ext": "../../etc/pwned"})
         assert name == "pwned"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
-    def test_sanitizes_absolute_path(self, plugin, caplog, logger):
+    def test_sanitizes_absolute_path(self, downloads, caplog, logger):
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name": "/etc/passwd"})
+            name = downloads.service._resolve_safe_extract_dir_name({"fs_name": "/etc/passwd"})
         assert name == "passwd"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
     @pytest.mark.parametrize("degenerate", ["..", ".", "foo/", "   "])
-    def test_degenerate_component_falls_back_to_synthetic(self, plugin, caplog, degenerate, logger):
+    def test_degenerate_component_falls_back_to_synthetic(self, downloads, caplog, degenerate, logger):
         """A server-supplied name that basenames to ``..``/``.``/empty/whitespace
         must NOT resolve to the roms root or platform dir — it falls back to the
         synthetic rom_<id> identity + one warning (the HIGH-severity guard)."""
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            name = plugin._download_service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": degenerate})
+            name = downloads.service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": degenerate})
         assert name == "rom_4778"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
-    def test_empty_fs_name_no_ext_yields_synthetic_without_warning(self, plugin, caplog, logger):
+    def test_empty_fs_name_no_ext_yields_synthetic_without_warning(self, downloads, caplog, logger):
         """An empty ``fs_name_no_ext`` is upstream-handled by
         ``resolve_extract_dir_name`` (it falls through to the synthetic name), so
         the guard sees an already-clean component — safe result, no coercion warning."""
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            name = plugin._download_service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": ""})
+            name = downloads.service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": ""})
         assert name == "rom_4778"
         assert not any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
@@ -3185,14 +3167,14 @@ class TestDoDownloadCancelled:
     """Tests for _do_download — cancelled mid-download."""
 
     @pytest.mark.asyncio
-    async def test_cancelled_sets_status_and_cleans_up(self, plugin, tmp_path):
+    async def test_cancelled_sets_status_and_cleans_up(self, downloads, tmp_path):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3212,34 +3194,34 @@ class TestDoDownloadCancelled:
         def fake_download_cancel(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download_cancel),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # A cancel is an explicit discard: the entry is evicted, not left as a
         # lingering "cancelled" row (#149 downloads-round).
-        assert 42 not in plugin._download_service._download_queue
+        assert 42 not in downloads.service._download_queue
         assert not os.path.exists(target_path)
-        assert plugin._uow.rom_installs.get(42) is None
+        assert downloads.uow.rom_installs.get(42) is None
 
 
 class TestDoDownloadZipFailure:
     """Tests for _do_download — ZIP extraction failure."""
 
     @pytest.mark.asyncio
-    async def test_zip_failure_sets_failed_and_cleans_up(self, plugin, tmp_path):
+    async def test_zip_failure_sets_failed_and_cleans_up(self, downloads, tmp_path):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3261,13 +3243,13 @@ class TestDoDownloadZipFailure:
             with open(dest, "wb") as f:
                 f.write(b"not a zip file")
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[66] = {"rom_id": 66, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[66] = {"rom_id": 66, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(66, rom_detail, target_path, "psx", "game.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(66, rom_detail, target_path, "psx", "game.zip")
 
-        assert plugin._download_service._download_queue[66]["status"] == "failed"
+        assert downloads.service._download_queue[66]["status"] == "failed"
         # .zip.tmp should be cleaned up
         assert not os.path.exists(target_path + ".zip.tmp")
 
@@ -3276,15 +3258,15 @@ class TestDoDownloadPostDecodeTraversal:
     """#968: a ZIP member that passes the ZIP-slip check but decodes to a traversal."""
 
     @pytest.mark.asyncio
-    async def test_decoded_traversal_aborts_cleans_up_and_emits(self, plugin, tmp_path, emit):
+    async def test_decoded_traversal_aborts_cleans_up_and_emits(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3316,12 +3298,12 @@ class TestDoDownloadPostDecodeTraversal:
             "has_multiple_files": True,
         }
 
-        _seed_rom(plugin._uow, 88, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[88] = {"rom_id": 88, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 88, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[88] = {"rom_id": 88, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(88, rom_detail, target_path, "psx", "Evil.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(88, rom_detail, target_path, "psx", "Evil.zip")
 
         # The traversal target must NOT exist anywhere outside the extraction dir.
         assert not (roms_dir / "evil.sh").exists()
@@ -3333,9 +3315,9 @@ class TestDoDownloadPostDecodeTraversal:
         # .zip.tmp cleaned up.
         assert not os.path.exists(target_path + ".zip.tmp")
         # Nothing persisted.
-        assert plugin._uow.rom_installs.get(88) is None
+        assert downloads.uow.rom_installs.get(88) is None
         # Queue marked failed.
-        assert plugin._download_service._download_queue[88]["status"] == "failed"
+        assert downloads.service._download_queue[88]["status"] == "failed"
         # download_failed fired (UI doesn't hang); offending name surfaced.
         failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(failed) == 1
@@ -3345,16 +3327,16 @@ class TestDoDownloadPostDecodeTraversal:
         assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
     @pytest.mark.asyncio
-    async def test_legit_multi_file_subdir_still_extracts(self, plugin, tmp_path, emit):
+    async def test_legit_multi_file_subdir_still_extracts(self, downloads, tmp_path, emit):
         """The #968 fix must not break a legitimate nested-subdir multi-file ROM."""
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3383,17 +3365,17 @@ class TestDoDownloadPostDecodeTraversal:
             "has_multiple_files": True,
         }
 
-        _seed_rom(plugin._uow, 91, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[91] = {"rom_id": 91, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 91, platform_slug="switch")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[91] = {"rom_id": 91, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(91, rom_detail, target_path, "switch", "Game.nsp")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(91, rom_detail, target_path, "switch", "Game.nsp")
 
         # The encoded names decoded correctly (per-basename) and the install
         # succeeded — the legit nested ROM is intact.
-        assert plugin._download_service._download_queue[91]["status"] == "completed"
-        install = plugin._uow.rom_installs.get(91)
+        assert downloads.service._download_queue[91]["status"] == "completed"
+        install = downloads.uow.rom_installs.get(91)
         assert install is not None
         rom_dir = install.rom_dir
         assert rom_dir is not None
@@ -3406,14 +3388,14 @@ class TestDoDownloadFailureEmit:
     """Tests for _do_download — ``download_failed`` event emission."""
 
     @pytest.mark.asyncio
-    async def test_failure_emits_download_failed(self, plugin, tmp_path, emit):
+    async def test_failure_emits_download_failed(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3433,11 +3415,11 @@ class TestDoDownloadFailureEmit:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("simulated network drop")
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # download_failed event emitted with the expected payload shape
         emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
@@ -3450,8 +3432,8 @@ class TestDoDownloadFailureEmit:
         # No download_complete in the failure path
         assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         # Queue status reflects the failure
-        assert plugin._download_service._download_queue[42]["status"] == "failed"
-        assert plugin._download_service._download_queue[42]["error"] == "simulated network drop"
+        assert downloads.service._download_queue[42]["status"] == "failed"
+        assert downloads.service._download_queue[42]["error"] == "simulated network drop"
 
 
 class TestDoDownloadInvariantFailure:
@@ -3463,10 +3445,10 @@ class TestDoDownloadInvariantFailure:
     """
 
     @pytest.mark.asyncio
-    async def test_single_file_invariant_failure_cleans_up_and_persists_nothing(self, plugin, tmp_path, emit):
+    async def test_single_file_invariant_failure_cleans_up_and_persists_nothing(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3488,31 +3470,31 @@ class TestDoDownloadInvariantFailure:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 64)
 
-        plugin._download_service._loop = asyncio.get_running_loop()
+        downloads.service._loop = asyncio.get_running_loop()
         # rom_id=0 violates RomInstall's invariant (rom_id must be positive).
-        plugin._download_service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
+        downloads.service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(0, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(0, rom_detail, target_path, "n64", "zelda.z64")
 
         # Download reported as failed via the canonical failure path.
-        assert plugin._download_service._download_queue[0]["status"] == "failed"
-        assert "Invalid install metadata" in plugin._download_service._download_queue[0]["error"]
+        assert downloads.service._download_queue[0]["status"] == "failed"
+        assert "Invalid install metadata" in downloads.service._download_queue[0]["error"]
         # The just-renamed file was cleaned up — nothing left dangling.
         assert not os.path.exists(target_path)
         # No RomInstall record persisted.
-        assert plugin._uow.rom_installs.get(0) is None
-        assert list(plugin._uow.rom_installs.iter_all()) == []
+        assert downloads.uow.rom_installs.get(0) is None
+        assert list(downloads.uow.rom_installs.iter_all()) == []
         # download_failed emitted, no download_complete.
         assert [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
     @pytest.mark.asyncio
-    async def test_multi_file_invariant_failure_removes_extract_dir(self, plugin, tmp_path, emit):
+    async def test_multi_file_invariant_failure_removes_extract_dir(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3541,14 +3523,14 @@ class TestDoDownloadInvariantFailure:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(0, rom_detail, target_path, "psx", "FF7.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(0, rom_detail, target_path, "psx", "FF7.zip")
 
-        assert plugin._download_service._download_queue[0]["status"] == "failed"
-        assert "Invalid install metadata" in plugin._download_service._download_queue[0]["error"]
+        assert downloads.service._download_queue[0]["status"] == "failed"
+        assert "Invalid install metadata" in downloads.service._download_queue[0]["error"]
         # Single-disc cue auto-generates FF7.m3u, so the launch file is the M3U
         # and the dir was renamed to FF7.m3u/ before the invariant failure; the
         # cleanup must tear down that *renamed* dir. Asserting FF7/ alone would
@@ -3556,22 +3538,22 @@ class TestDoDownloadInvariantFailure:
         assert not (roms_dir / "FF7.m3u").exists()
         assert not (roms_dir / "FF7").exists()
         # No RomInstall record persisted.
-        assert plugin._uow.rom_installs.get(0) is None
-        assert list(plugin._uow.rom_installs.iter_all()) == []
+        assert downloads.uow.rom_installs.get(0) is None
+        assert list(downloads.uow.rom_installs.iter_all()) == []
 
 
 class TestStartDownloadReDownload:
     """Test start_download allows re-download after completion."""
 
     @pytest.mark.asyncio
-    async def test_re_download_after_completed(self, plugin, tmp_path):
+    async def test_re_download_after_completed(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3584,35 +3566,35 @@ class TestStartDownloadReDownload:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
+        downloads.service._loop.create_task = _close_coro_task
 
         # Set status to completed (previous download)
-        plugin._download_service._download_queue[42] = {"status": "completed"}
+        downloads.service._download_queue[42] = {"status": "completed"}
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
-        result = await plugin.start_download(42)
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        result = await downloads.service.start_download(42)
 
         assert result["success"] is True
         # Re-download re-enters the queue as "queued" (#1053).
-        assert plugin._download_service._download_queue[42]["status"] == "queued"
+        assert downloads.service._download_queue[42]["status"] == "queued"
 
 
 class TestMaybeGenerateM3uMixedFormats:
     """Test M3U generation with mixed disc formats."""
 
-    def test_mixed_cue_and_chd(self, plugin, tmp_path):
+    def test_mixed_cue_and_chd(self, downloads, tmp_path):
         (tmp_path / "disc1.cue").write_text("cue 1")
         (tmp_path / "disc2.chd").write_bytes(b"\x00" * 100)
 
         rom_detail = {"fs_name_no_ext": "Mixed Game", "name": "Mixed Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         m3u_path = tmp_path / "Mixed Game.m3u"
         assert m3u_path.exists()
@@ -3628,7 +3610,7 @@ class TestMaybeGenerateM3uMixedFormats:
 class TestMaybeGenerateM3uSpecialCharacters:
     """Test M3U preserves special characters in filenames."""
 
-    def test_special_characters_preserved(self, plugin, tmp_path):
+    def test_special_characters_preserved(self, downloads, tmp_path):
         names = [
             "Game (Disc 1) [Japan].cue",
             "Game (Disc 2) [Japan].cue",
@@ -3637,7 +3619,7 @@ class TestMaybeGenerateM3uSpecialCharacters:
             (tmp_path / name).write_text("cue data")
 
         rom_detail = {"fs_name_no_ext": "Game", "name": "Game"}
-        plugin._download_service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
+        downloads.service._maybe_generate_m3u_io(str(tmp_path), rom_detail, True)
 
         m3u_path = tmp_path / "Game.m3u"
         assert m3u_path.exists()
@@ -3653,12 +3635,12 @@ class TestUninstallAllRomsMixedResults:
     """Test uninstall_all_roms with mixed success/failure."""
 
     @pytest.mark.asyncio
-    async def test_mixed_success_and_failure(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_mixed_success_and_failure(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3673,10 +3655,10 @@ class TestUninstallAllRomsMixedResults:
         bad_file.parent.mkdir(parents=True)
         bad_file.write_text("data")
 
-        _seed_install(plugin._uow, 1, file_path=str(good_file), rom_dir=None)
-        _seed_install(plugin._uow, 2, file_path=str(bad_file), rom_dir=None, system="snes")
+        _seed_install(downloads.uow, 1, file_path=str(good_file), rom_dir=None)
+        _seed_install(downloads.uow, 2, file_path=str(bad_file), rom_dir=None, system="snes")
 
-        result = await plugin.uninstall_all_roms()
+        result = await downloads.removal.uninstall_all_roms()
         assert result["success"] is False
         # good_file should be deleted
         assert not good_file.exists()
@@ -3685,49 +3667,49 @@ class TestUninstallAllRomsMixedResults:
         assert result["removed_count"] == 1
         assert len(result["errors"]) == 1
         assert result["errors"][0]["rom_id"] == "2"
-        assert plugin._uow.rom_installs.get(1) is None
-        assert plugin._uow.rom_installs.get(2) is not None
+        assert downloads.uow.rom_installs.get(1) is None
+        assert downloads.uow.rom_installs.get(2) is not None
 
 
 class TestRemoveRomFileAlreadyGone:
     """Test remove_rom when file is already deleted."""
 
     @pytest.mark.asyncio
-    async def test_file_already_gone_cleans_state(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    async def test_file_already_gone_cleans_state(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
         # Install record exists but the file is gone on disk.
         _seed_install(
-            plugin._uow,
+            downloads.uow,
             42,
             file_path=str(tmp_path / "retrodeck" / "roms" / "n64" / "gone.z64"),
             rom_dir=None,
         )
 
-        result = await plugin.remove_rom(42)
+        result = await downloads.removal.remove_rom(42)
         assert result["success"] is True
-        assert plugin._uow.rom_installs.get(42) is None
+        assert downloads.uow.rom_installs.get(42) is None
 
 
 class TestUrlEncodedFilenameRename:
     """Tests for URL-encoded filename fix after ZIP extraction."""
 
     @pytest.mark.asyncio
-    async def test_renames_url_encoded_files_after_extract(self, plugin, tmp_path, emit):
+    async def test_renames_url_encoded_files_after_extract(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3756,12 +3738,12 @@ class TestUrlEncodedFilenameRename:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 99, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 99, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(99, rom_detail, target_path, "psx", "Vagrant Story (USA).zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(99, rom_detail, target_path, "psx", "Vagrant Story (USA).zip")
 
         # ES-DE collapse renames the dir after the decoded .m3u launch file.
         extract_dir = roms_dir / "Vagrant Story (USA).m3u"
@@ -3773,15 +3755,15 @@ class TestUrlEncodedFilenameRename:
         assert not (extract_dir / "Vagrant%20Story%20%28USA%29%20%28Disc%201%29.chd").exists()
 
     @pytest.mark.asyncio
-    async def test_leaves_normal_filenames_alone(self, plugin, tmp_path, emit):
+    async def test_leaves_normal_filenames_alone(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3811,12 +3793,12 @@ class TestUrlEncodedFilenameRename:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 55, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
 
         # ES-DE collapse renames the dir after the auto-generated FF7.m3u.
         extract_dir = roms_dir / "FF7.m3u"
@@ -3828,87 +3810,87 @@ class TestUrlEncodedFilenameRename:
 
 
 class TestPruneDownloadQueue:
-    def test_keeps_active_downloads(self, plugin):
+    def test_keeps_active_downloads(self, downloads):
         """Active (downloading) items are never pruned."""
         for i in range(60):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "downloading"}
-        plugin._download_service._prune_download_queue()
-        assert len(plugin._download_service._download_queue) == 60
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "downloading"}
+        downloads.service._prune_download_queue()
+        assert len(downloads.service._download_queue) == 60
 
-    def test_removes_oldest_terminal_when_over_limit(self, plugin):
+    def test_removes_oldest_terminal_when_over_limit(self, downloads):
         """When there are more than 50 terminal items, remove the oldest."""
         # Insert 60 completed items (rom_id 0..59)
         for i in range(60):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "completed"}
-        plugin._download_service._prune_download_queue()
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "completed"}
+        downloads.service._prune_download_queue()
         # Should keep the 50 most recent (10..59)
-        assert len(plugin._download_service._download_queue) == 50
+        assert len(downloads.service._download_queue) == 50
         for i in range(10):
-            assert i not in plugin._download_service._download_queue
+            assert i not in downloads.service._download_queue
         for i in range(10, 60):
-            assert i in plugin._download_service._download_queue
+            assert i in downloads.service._download_queue
 
-    def test_does_nothing_when_under_limit(self, plugin):
+    def test_does_nothing_when_under_limit(self, downloads):
         """No pruning if terminal count is at or below the limit."""
         for i in range(30):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "completed"}
-        plugin._download_service._prune_download_queue()
-        assert len(plugin._download_service._download_queue) == 30
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "completed"}
+        downloads.service._prune_download_queue()
+        assert len(downloads.service._download_queue) == 30
 
-    def test_does_nothing_at_exactly_limit(self, plugin):
+    def test_does_nothing_at_exactly_limit(self, downloads):
         """No pruning when terminal count is exactly 50."""
         for i in range(50):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "failed"}
-        plugin._download_service._prune_download_queue()
-        assert len(plugin._download_service._download_queue) == 50
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "failed"}
+        downloads.service._prune_download_queue()
+        assert len(downloads.service._download_queue) == 50
 
-    def test_mixed_active_and_terminal(self, plugin):
+    def test_mixed_active_and_terminal(self, downloads):
         """Active items are kept; only terminal items count toward the limit."""
         # 5 active + 55 completed = 55 terminal -> prune 5 oldest terminal
         for i in range(5):
-            plugin._download_service._download_queue[1000 + i] = {"rom_id": 1000 + i, "status": "downloading"}
+            downloads.service._download_queue[1000 + i] = {"rom_id": 1000 + i, "status": "downloading"}
         for i in range(55):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "completed"}
-        plugin._download_service._prune_download_queue()
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "completed"}
+        downloads.service._prune_download_queue()
         # 5 active + 50 terminal = 55 total
-        assert len(plugin._download_service._download_queue) == 55
+        assert len(downloads.service._download_queue) == 55
         # All active still present
         for i in range(5):
-            assert 1000 + i in plugin._download_service._download_queue
+            assert 1000 + i in downloads.service._download_queue
         # Oldest 5 terminal removed (0..4)
         for i in range(5):
-            assert i not in plugin._download_service._download_queue
+            assert i not in downloads.service._download_queue
         # Remaining terminal still present (5..54)
         for i in range(5, 55):
-            assert i in plugin._download_service._download_queue
+            assert i in downloads.service._download_queue
 
-    def test_handles_all_terminal_statuses(self, plugin):
+    def test_handles_all_terminal_statuses(self, downloads):
         """Completed, failed, and cancelled items are all treated as terminal."""
         for i in range(20):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "completed"}
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "completed"}
         for i in range(20, 40):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "failed"}
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "failed"}
         for i in range(40, 60):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "cancelled"}
-        plugin._download_service._prune_download_queue()
-        assert len(plugin._download_service._download_queue) == 50
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "cancelled"}
+        downloads.service._prune_download_queue()
+        assert len(downloads.service._download_queue) == 50
         # Oldest 10 (all completed, 0..9) should be removed
         for i in range(10):
-            assert i not in plugin._download_service._download_queue
+            assert i not in downloads.service._download_queue
 
 
 class TestStartDownloadCreateTaskFailure:
     """Tests for start_download when create_task raises."""
 
     @pytest.mark.asyncio
-    async def test_create_task_failure_returns_error(self, plugin, tmp_path):
+    async def test_create_task_failure_returns_error(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3921,8 +3903,8 @@ class TestStartDownloadCreateTaskFailure:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _raise_after_closing(coro):
             # Close the fire-and-forget _do_download coroutine before raising so it
@@ -3931,46 +3913,46 @@ class TestStartDownloadCreateTaskFailure:
             coro.close()
             raise RuntimeError("loop closed")
 
-        plugin._download_service._loop.create_task = _raise_after_closing
+        downloads.service._loop.create_task = _raise_after_closing
 
-        plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
-        result = await plugin.start_download(42)
+        downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+        result = await downloads.service.start_download(42)
 
         assert result["success"] is False
         assert "Failed to start download" in result["message"]
         # Should not remain in download_in_progress
-        assert 42 not in plugin._download_service._download_in_progress
+        assert 42 not in downloads.service._download_in_progress
 
 
 class TestShutdown:
     """Tests for DownloadService.shutdown — cancel active tasks + clear tracking."""
 
     @pytest.mark.asyncio
-    async def test_shutdown_cancels_active_tasks_and_clears(self, plugin):
+    async def test_shutdown_cancels_active_tasks_and_clears(self, downloads):
         task_a = MagicMock()
         task_b = MagicMock()
-        plugin._download_service._download_tasks[1] = task_a
-        plugin._download_service._download_tasks[2] = task_b
+        downloads.service._download_tasks[1] = task_a
+        downloads.service._download_tasks[2] = task_b
 
-        await plugin._download_service.shutdown()
+        await downloads.service.shutdown()
 
         task_a.cancel.assert_called_once_with()
         task_b.cancel.assert_called_once_with()
-        assert plugin._download_service._download_tasks == {}
+        assert downloads.service._download_tasks == {}
 
     @pytest.mark.asyncio
-    async def test_shutdown_no_tasks_is_noop(self, plugin):
+    async def test_shutdown_no_tasks_is_noop(self, downloads):
         # No tasks registered — must not raise.
-        await plugin._download_service.shutdown()
-        assert plugin._download_service._download_tasks == {}
+        await downloads.service.shutdown()
+        assert downloads.service._download_tasks == {}
 
 
 class TestMakeProgressCallback:
     """Tests for _make_progress_callback — throttling, logging, emission."""
 
-    def test_progress_callback_updates_queue_and_dispatches_emit(self, plugin):
+    def test_progress_callback_updates_queue_and_dispatches_emit(self, downloads):
         # Pre-populate the queue entry the callback updates in place.
-        plugin._download_service._download_queue[7] = {
+        downloads.service._download_queue[7] = {
             "rom_id": 7,
             "rom_name": "Mario",
             "platform_name": "N64",
@@ -3981,7 +3963,7 @@ class TestMakeProgressCallback:
             "total_bytes": 0,
         }
         fake_clock = FakeClock()
-        plugin._download_service._clock = fake_clock
+        downloads.service._clock = fake_clock
 
         # Replace the event loop with a MagicMock so call_soon_threadsafe
         # is observable without actually scheduling on the real loop.
@@ -3994,9 +3976,9 @@ class TestMakeProgressCallback:
             scheduled_calls.append(1)
             return fn(*args, **kwargs)
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = _eager_call_soon_threadsafe
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = _eager_call_soon_threadsafe
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
         emit_calls = []
 
         def _record_emit(event, payload):
@@ -4009,9 +3991,9 @@ class TestMakeProgressCallback:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
 
-        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64")
+        cb = downloads.service._make_progress_callback(7, "Mario", "N64", "mario.z64")
         # Advance the clock so both branches fire (log-throttle >= 30s
         # AND emit-throttle >= 0.5s — both gated on now - last_<x>).
         fake_clock.advance(60)
@@ -4019,7 +4001,7 @@ class TestMakeProgressCallback:
         cb(512, 1024)
 
         # Queue entry must have been updated in place.
-        entry = plugin._download_service._download_queue[7]
+        entry = downloads.service._download_queue[7]
         assert entry["progress"] == 0.5
         assert entry["bytes_downloaded"] == 512
         assert entry["total_bytes"] == 1024
@@ -4036,8 +4018,8 @@ class TestMakeProgressCallback:
         assert payload["bytes_downloaded"] == 512
         assert payload["total_bytes"] == 1024
 
-    def test_progress_callback_throttles_intermediate_emits(self, plugin):
-        plugin._download_service._download_queue[8] = {
+    def test_progress_callback_throttles_intermediate_emits(self, downloads):
+        downloads.service._download_queue[8] = {
             "rom_id": 8,
             "status": "downloading",
             "progress": 0,
@@ -4045,21 +4027,21 @@ class TestMakeProgressCallback:
             "total_bytes": 0,
         }
         fake_clock = FakeClock()
-        plugin._download_service._clock = fake_clock
+        downloads.service._clock = fake_clock
         # The queue mutation now happens inside the function marshaled onto the
         # loop thread via call_soon_threadsafe (#973), so run it eagerly to
         # observe the in-place update; create_task just consumes the coroutine.
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *args, **kwargs: fn(*args, **kwargs)
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
         call_soon_count = [0]
-        _orig_css = plugin._download_service._loop.call_soon_threadsafe
+        _orig_css = downloads.service._loop.call_soon_threadsafe
 
         def _counting_css(fn, *args, **kwargs):
             call_soon_count[0] += 1
             return _orig_css(fn, *args, **kwargs)
 
-        plugin._download_service._loop.call_soon_threadsafe = _counting_css
+        downloads.service._loop.call_soon_threadsafe = _counting_css
 
         def _record_emit(_event, _payload):
             async def _noop():
@@ -4067,27 +4049,27 @@ class TestMakeProgressCallback:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
 
-        cb = plugin._download_service._make_progress_callback(8, "Game", "Plat", "game.bin")
+        cb = downloads.service._make_progress_callback(8, "Game", "Plat", "game.bin")
 
         # First call: monotonic == 0; last_emit starts at 0.0 too, but
         # downloaded < total so the throttle check (now - last_emit <
         # 0.5 AND downloaded < total) returns early. No update.
         cb(100, 1000)
-        assert plugin._download_service._download_queue[8]["bytes_downloaded"] == 0
+        assert downloads.service._download_queue[8]["bytes_downloaded"] == 0
         assert call_soon_count[0] == 0
 
         # Final call: downloaded == total bypasses the throttle even
         # when no time elapsed — the closure always emits the final
         # completion frame.
         cb(1000, 1000)
-        assert plugin._download_service._download_queue[8]["bytes_downloaded"] == 1000
+        assert downloads.service._download_queue[8]["bytes_downloaded"] == 1000
         assert call_soon_count[0] == 1
 
-    def test_progress_callback_handles_zero_total(self, plugin):
+    def test_progress_callback_handles_zero_total(self, downloads):
         """total == 0 must not divide-by-zero — pct/progress fall back to 0."""
-        plugin._download_service._download_queue[9] = {
+        downloads.service._download_queue[9] = {
             "rom_id": 9,
             "status": "downloading",
             "progress": 0,
@@ -4095,22 +4077,22 @@ class TestMakeProgressCallback:
             "total_bytes": 0,
         }
         fake_clock = FakeClock()
-        plugin._download_service._clock = fake_clock
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._emit = MagicMock(return_value=None)
+        downloads.service._clock = fake_clock
+        downloads.service._loop = MagicMock()
+        downloads.service._emit = MagicMock(return_value=None)
 
-        cb = plugin._download_service._make_progress_callback(9, "Game", "Plat", "game.bin")
+        cb = downloads.service._make_progress_callback(9, "Game", "Plat", "game.bin")
         # Advance past both throttles so the log + emit branches both
         # execute with total == 0 — exercises the zero-guard branches.
         fake_clock.advance(60)
         cb(0, 0)
 
-        entry = plugin._download_service._download_queue[9]
+        entry = downloads.service._download_queue[9]
         assert entry["progress"] == 0
         assert entry["total_bytes"] == 0
         # Emit was still scheduled — final-frame path triggers when
         # downloaded >= total (both zero satisfies the >= check).
-        assert plugin._download_service._loop.call_soon_threadsafe.call_count == 1
+        assert downloads.service._loop.call_soon_threadsafe.call_count == 1
 
 
 class TestProgressPhase:
@@ -4118,11 +4100,11 @@ class TestProgressPhase:
     the frame's ``status``, what they do to the entry's status, the ``resumable``
     they report, and the log line's label."""
 
-    def _eager_loop(self, plugin):
+    def _eager_loop(self, downloads):
         """Run the marshaled update synchronously; return the recorded emits."""
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
         emit_calls: list[tuple[str, dict[str, Any]]] = []
 
         def _record_emit(event, payload):
@@ -4133,14 +4115,14 @@ class TestProgressPhase:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
         fake_clock = FakeClock()
         fake_clock.advance(60)  # clear both throttles
-        plugin._download_service._clock = fake_clock
+        downloads.service._clock = fake_clock
         return emit_calls
 
-    def _seed_entry(self, plugin, rom_id, *, status):
-        plugin._download_service._download_queue[rom_id] = {
+    def _seed_entry(self, downloads, rom_id, *, status):
+        downloads.service._download_queue[rom_id] = {
             "rom_id": rom_id,
             "status": status,
             "progress": 0,
@@ -4149,14 +4131,14 @@ class TestProgressPhase:
             "resumable": True,
         }
 
-    def test_extracting_flips_the_entry_and_is_never_resumable(self, plugin):
-        emit_calls = self._eager_loop(plugin)
-        self._seed_entry(plugin, 7, status="downloading")
+    def test_extracting_flips_the_entry_and_is_never_resumable(self, downloads):
+        emit_calls = self._eager_loop(downloads)
+        self._seed_entry(downloads, 7, status="downloading")
 
-        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.zip", phase="extracting")
+        cb = downloads.service._make_progress_callback(7, "Mario", "N64", "mario.zip", phase="extracting")
         cb(512, 1024)
 
-        entry = plugin._download_service._download_queue[7]
+        entry = downloads.service._download_queue[7]
         assert entry["status"] == "extracting"
         assert entry["bytes_downloaded"] == 512
         assert emit_calls == [
@@ -4176,14 +4158,14 @@ class TestProgressPhase:
             )
         ]
 
-    def test_downloading_leaves_the_entry_status_and_reports_its_resumable(self, plugin):
-        emit_calls = self._eager_loop(plugin)
-        self._seed_entry(plugin, 7, status="paused")
+    def test_downloading_leaves_the_entry_status_and_reports_its_resumable(self, downloads):
+        emit_calls = self._eager_loop(downloads)
+        self._seed_entry(downloads, 7, status="paused")
 
-        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64")
+        cb = downloads.service._make_progress_callback(7, "Mario", "N64", "mario.z64")
         cb(512, 1024)
 
-        entry = plugin._download_service._download_queue[7]
+        entry = downloads.service._download_queue[7]
         assert entry["status"] == "paused"
         assert emit_calls == [
             (
@@ -4203,11 +4185,11 @@ class TestProgressPhase:
         ]
 
     @pytest.mark.parametrize(("phase", "label"), [("downloading", "Download"), ("extracting", "Extract")])
-    def test_the_log_line_names_the_phase(self, plugin, caplog, phase, label):
-        self._eager_loop(plugin)
-        self._seed_entry(plugin, 7, status="downloading")
+    def test_the_log_line_names_the_phase(self, downloads, caplog, phase, label):
+        self._eager_loop(downloads)
+        self._seed_entry(downloads, 7, status="downloading")
 
-        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64", phase=phase)
+        cb = downloads.service._make_progress_callback(7, "Mario", "N64", "mario.z64", phase=phase)
         with caplog.at_level(logging.INFO):
             cb(512 * 1024 * 1024, 1024 * 1024 * 1024)
 
@@ -4223,7 +4205,7 @@ class TestCleanupPartialDownloadFailureInjection:
     warning, no re-raise).
     """
 
-    def test_remove_failures_are_logged_and_other_paths_still_removed(self, plugin, caplog, logger):
+    def test_remove_failures_are_logged_and_other_paths_still_removed(self, downloads, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
         fake = FakeDownloadFileStore()
@@ -4235,10 +4217,10 @@ class TestCleanupPartialDownloadFailureInjection:
         fake.files[target + TMP_EXT] = b"junk2"
         fake.files[target] = b"preexisting install"
         fake.remove_failures.add(target + TMP_EXT)
-        plugin._download_service._download_file_store = fake
+        downloads.service._download_file_store = fake
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
-            plugin._download_service._cleanup_partial_download(target, False, "")
+            downloads.service._cleanup_partial_download(target, False, "")
 
         # The failing transient is still in the fake (remove raised); the
         # other transient was successfully removed.
@@ -4250,7 +4232,7 @@ class TestCleanupPartialDownloadFailureInjection:
         # Warning mentions the failing path.
         assert any("Cleanup failed for" in rec.message and (target + TMP_EXT) in rec.message for rec in caplog.records)
 
-    def test_remove_tree_failure_is_logged_and_swallowed(self, plugin, caplog, logger):
+    def test_remove_tree_failure_is_logged_and_swallowed(self, downloads, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
         fake = FakeDownloadFileStore()
@@ -4261,11 +4243,11 @@ class TestCleanupPartialDownloadFailureInjection:
         # Inject a remove_tree failure for the extract dir; remove on
         # the three tmp paths is a no-op (paths absent).
         fake.remove_tree_failures.add(extract_dir)
-        plugin._download_service._download_file_store = fake
+        downloads.service._download_file_store = fake
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
             # Must NOT raise even though remove_tree raises.
-            plugin._download_service._cleanup_partial_download(target, True, "game")
+            downloads.service._cleanup_partial_download(target, True, "game")
 
         # The dir is still present (remove_tree raised before clearing).
         assert extract_dir in fake.dirs
@@ -4279,22 +4261,22 @@ class TestStartDownloadInProgressLeak:
     """#1048: an early exception in start_download must release the in-progress flag.
 
     Before the fix, a raise between ``_download_in_progress.add`` and the
-    create_task block left the ROM stuck "Already downloading" until a plugin
-    reload (SD card unmounted → OSError in make_dirs / disk_free; roms_path()
+    create_task block left the ROM stuck "Already downloading" until a backend
+    restart (SD card unmounted → OSError in make_dirs / disk_free; roms_path()
     returning None → TypeError in the path join).
     """
 
-    def _wire(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    def _wire(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
     @pytest.mark.asyncio
-    async def test_make_dirs_oserror_releases_flag(self, plugin, tmp_path):
+    async def test_make_dirs_oserror_releases_flag(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        self._wire(plugin, tmp_path)
+        self._wire(downloads, tmp_path)
         rom_detail = {
             "id": 42,
             "name": "Zelda",
@@ -4303,33 +4285,33 @@ class TestStartDownloadInProgressLeak:
             "platform_slug": "n64",
             "platform_name": "Nintendo 64",
         }
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _boom(_path):
             raise OSError("SD card unmounted")
 
-        plugin._download_service._download_file_store.make_dirs = _boom
+        downloads.service._download_file_store.make_dirs = _boom
 
-        result = await plugin.start_download(42)
+        result = await downloads.service.start_download(42)
 
         # Canonical failure shape.
         assert result["success"] is False
         assert result["reason"] == ErrorCode.UNKNOWN.value
         assert "Failed to start download" in result["message"]
         # The flag is released — the ROM is not stuck "Already downloading".
-        assert 42 not in plugin._download_service._download_in_progress
+        assert 42 not in downloads.service._download_in_progress
         # A second attempt is not rejected as already-downloading; it fails the
         # same way (make_dirs still boom) — proving the flag was discarded.
-        result2 = await plugin.start_download(42)
+        result2 = await downloads.service.start_download(42)
         assert result2["success"] is False
         assert "Already downloading" not in result2["message"]
 
     @pytest.mark.asyncio
-    async def test_disk_free_oserror_releases_flag(self, plugin, tmp_path):
+    async def test_disk_free_oserror_releases_flag(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        self._wire(plugin, tmp_path)
+        self._wire(downloads, tmp_path)
         rom_detail = {
             "id": 43,
             "name": "Mario",
@@ -4338,28 +4320,28 @@ class TestStartDownloadInProgressLeak:
             "platform_slug": "n64",
             "platform_name": "Nintendo 64",
         }
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
         def _boom(_path):
             raise OSError("statvfs failed: SD card gone")
 
-        plugin._download_service._download_file_store.disk_free = _boom
+        downloads.service._download_file_store.disk_free = _boom
 
-        result = await plugin.start_download(43)
+        result = await downloads.service.start_download(43)
         assert result["success"] is False
         assert result["reason"] == ErrorCode.UNKNOWN.value
-        assert 43 not in plugin._download_service._download_in_progress
+        assert 43 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_roms_path_none_releases_flag(self, plugin, tmp_path):
+    async def test_roms_path_none_releases_flag(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
         # roms_path() returns None → the os.path.realpath inside safe_join raises
         # a TypeError that must be caught and the flag released.
         paths = FakeRetroDeckPaths(roms="", bios="")
         paths.roms_path = lambda: None  # type: ignore[method-assign,return-value]
-        plugin._download_service._retrodeck_paths = paths
+        downloads.service._retrodeck_paths = paths
         rom_detail = {
             "id": 44,
             "name": "DK",
@@ -4368,14 +4350,14 @@ class TestStartDownloadInProgressLeak:
             "platform_slug": "n64",
             "platform_name": "Nintendo 64",
         }
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
 
-        result = await plugin.start_download(44)
+        result = await downloads.service.start_download(44)
         assert result["success"] is False
         assert result["reason"] == ErrorCode.UNKNOWN.value
         assert "Failed to start download" in result["message"]
-        assert 44 not in plugin._download_service._download_in_progress
+        assert 44 not in downloads.service._download_in_progress
 
 
 class TestProgressCallbackEvictionSafe:
@@ -4387,14 +4369,14 @@ class TestProgressCallbackEvictionSafe:
     executor thread.
     """
 
-    def _eager_loop(self, plugin):
+    def _eager_loop(self, downloads):
         """Make call_soon_threadsafe run its target synchronously so the marshaled
         ``_apply_progress`` executes in-test; create_task consumes the
         coroutine. Returns the recorded emit calls list.
         """
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
         emit_calls: list[tuple[str, dict[str, Any]]] = []
 
         def _record_emit(event, payload):
@@ -4405,33 +4387,33 @@ class TestProgressCallbackEvictionSafe:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
         return emit_calls
 
-    def test_evicted_entry_progress_tick_is_noop(self, plugin):
-        emit_calls = self._eager_loop(plugin)
+    def test_evicted_entry_progress_tick_is_noop(self, downloads):
+        emit_calls = self._eager_loop(downloads)
         fake_clock = FakeClock()
         fake_clock.advance(60)  # clear both throttles
-        plugin._download_service._clock = fake_clock
+        downloads.service._clock = fake_clock
 
         # No queue entry for rom_id 99 — the callback's _apply_progress
         # hits the ``.get`` guard. Before the #973 fix this was ``self._download_queue[99]
         # .update(...)`` on the worker thread → KeyError.
-        cb = plugin._download_service._make_progress_callback(99, "Ghost", "N64", "ghost.z64")
+        cb = downloads.service._make_progress_callback(99, "Ghost", "N64", "ghost.z64")
         cb(256, 512)  # must NOT raise
 
         # The entry is not resurrected and no emit was scheduled for it.
-        assert 99 not in plugin._download_service._download_queue
+        assert 99 not in downloads.service._download_queue
         assert emit_calls == []
 
-    def test_present_entry_still_updates(self, plugin):
+    def test_present_entry_still_updates(self, downloads):
         """Control: a present entry is still updated + an emit scheduled (the guard
         only suppresses the evicted case)."""
-        emit_calls = self._eager_loop(plugin)
+        emit_calls = self._eager_loop(downloads)
         fake_clock = FakeClock()
         fake_clock.advance(60)
-        plugin._download_service._clock = fake_clock
-        plugin._download_service._download_queue[7] = {
+        downloads.service._clock = fake_clock
+        downloads.service._download_queue[7] = {
             "rom_id": 7,
             "status": "downloading",
             "progress": 0,
@@ -4439,10 +4421,10 @@ class TestProgressCallbackEvictionSafe:
             "total_bytes": 0,
         }
 
-        cb = plugin._download_service._make_progress_callback(7, "Mario", "N64", "mario.z64")
+        cb = downloads.service._make_progress_callback(7, "Mario", "N64", "mario.z64")
         cb(512, 1024)
 
-        entry = plugin._download_service._download_queue[7]
+        entry = downloads.service._download_queue[7]
         assert entry["bytes_downloaded"] == 512
         assert entry["total_bytes"] == 1024
         assert len(emit_calls) == 1
@@ -4484,19 +4466,19 @@ class TestAProgressTickAfterTheDownloadEnded:
         for _ in range(3):
             await asyncio.sleep(0)
 
-    def _wire_paths(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    def _wire_paths(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
     @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_completed_multi_file_download_stays_completed(self, plugin, tmp_path, emit):
+    async def test_a_completed_multi_file_download_stays_completed(self, downloads, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "FF9.zip")
@@ -4520,24 +4502,24 @@ class TestAProgressTickAfterTheDownloadEnded:
                 f.write(zip_bytes)
             progress_callback(len(zip_bytes), len(zip_bytes))
 
-        _seed_rom(plugin._uow, 75, platform_slug="psx")
-        plugin._download_service._download_queue[75] = {"rom_id": 75, "status": "downloading", "progress": 0}
+        _seed_rom(downloads.uow, 75, platform_slug="psx")
+        downloads.service._download_queue[75] = {"rom_id": 75, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(75, rom_detail, target_path, "psx", "FF9.zip")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(75, rom_detail, target_path, "psx", "FF9.zip")
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
-        entry = plugin._download_service._download_queue[75]
+        entry = downloads.service._download_queue[75]
         assert entry["status"] == "completed"
         assert entry["progress"] == 1.0
 
     @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_failed_download_keeps_its_progress(self, plugin, tmp_path, emit):
+    async def test_a_failed_download_keeps_its_progress(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "zelda.z64")
@@ -4554,23 +4536,23 @@ class TestAProgressTickAfterTheDownloadEnded:
             progress_callback(1024, 1024)
             raise OSError("simulated network drop")
 
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_failed"]
-        entry = plugin._download_service._download_queue[42]
+        entry = downloads.service._download_queue[42]
         assert entry["status"] == "failed"
         assert entry["progress"] == 0
 
     @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_late_resumability_verdict_is_not_applied(self, plugin, tmp_path, emit):
+    async def test_a_late_resumability_verdict_is_not_applied(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        self._wire_paths(plugin, tmp_path)
+        self._wire_paths(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "gba"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "Game.gba")
@@ -4589,35 +4571,35 @@ class TestAProgressTickAfterTheDownloadEnded:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 100)
 
-        _seed_rom(plugin._uow, 73, platform_slug="gba")
-        plugin._download_service._download_queue[73] = {
+        _seed_rom(downloads.uow, 73, platform_slug="gba")
+        downloads.service._download_queue[73] = {
             "rom_id": 73,
             "status": "downloading",
             "progress": 0,
             "resumable": False,
         }
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
-        entry = plugin._download_service._download_queue[73]
+        entry = downloads.service._download_queue[73]
         assert entry["status"] == "completed"
         assert entry["resumable"] is False
 
     @pytest.mark.parametrize("status", ["completed", "failed", "cancelled"])
     @pytest.mark.parametrize("phase", ["downloading", "extracting"])
     @pytest.mark.asyncio
-    async def test_an_ended_entry_is_left_alone(self, plugin, emit, status, phase):
+    async def test_an_ended_entry_is_left_alone(self, downloads, emit, status, phase):
         entry = {"rom_id": 7, "status": status, "progress": 0.25, "bytes_downloaded": 256, "total_bytes": 1024}
-        plugin._download_service._download_queue[7] = entry
+        downloads.service._download_queue[7] = entry
         before = dict(entry)
 
-        plugin._download_service._apply_progress(phase, 7, "Mario", "N64", "mario.z64", 0.5, 512, 1024)
+        downloads.service._apply_progress(phase, 7, "Mario", "N64", "mario.z64", 0.5, 512, 1024)
         await self._drain()
 
-        assert plugin._download_service._download_queue[7] == before
+        assert downloads.service._download_queue[7] == before
         emit.assert_not_called()
 
 
@@ -4625,10 +4607,10 @@ class TestDoDownloadRedownloadPreservesExisting:
     """#1049 scenario 2: a re-download that fails mid-transfer must NOT delete the existing install."""
 
     @pytest.mark.asyncio
-    async def test_failed_redownload_keeps_preexisting_file(self, plugin, tmp_path, emit):
+    async def test_failed_redownload_keeps_preexisting_file(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4652,17 +4634,17 @@ class TestDoDownloadRedownloadPreservesExisting:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-redownload")
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # The pre-existing install must SURVIVE — this was the data-loss bug.
         assert os.path.exists(target_path)
         with open(target_path, "rb") as f:
             assert f.read() == b"REAL INSTALLED ROM DATA"
-        assert plugin._download_service._download_queue[42]["status"] == "failed"
+        assert downloads.service._download_queue[42]["status"] == "failed"
 
 
 class TestDoDownloadCancelReconcile:
@@ -4678,11 +4660,11 @@ class TestDoDownloadCancelReconcile:
     """
 
     @pytest.mark.asyncio
-    async def test_cancel_during_commit_surfaces_completed_single_file(self, plugin, tmp_path, emit):
+    async def test_cancel_during_commit_surfaces_completed_single_file(self, downloads, tmp_path, emit):
         import threading
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4700,9 +4682,9 @@ class TestDoDownloadCancelReconcile:
             "has_multiple_files": False,
         }
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        _seed_rom(downloads.uow, 42)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0,
@@ -4719,7 +4701,7 @@ class TestDoDownloadCancelReconcile:
         # then let the real rename + DB save run to completion.
         started = threading.Event()
         release = threading.Event()
-        real_post_io = plugin._download_service._post_download_single_io
+        real_post_io = downloads.service._post_download_single_io
 
         def blocking_post_io(*args):
             started.set()
@@ -4727,11 +4709,11 @@ class TestDoDownloadCancelReconcile:
             return real_post_io(*args)
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_transfer),
-            patch.object(plugin._download_service, "_post_download_single_io", side_effect=blocking_post_io),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
+            patch.object(downloads.service, "_post_download_single_io", side_effect=blocking_post_io),
         ):
             task = asyncio.ensure_future(
-                plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+                downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
             )
             while not started.is_set():
                 await asyncio.sleep(0.01)
@@ -4742,22 +4724,22 @@ class TestDoDownloadCancelReconcile:
                 await task
 
         # Committed before the cancel landed → surfaced COMPLETED, file kept, row saved.
-        assert plugin._download_service._download_queue[42]["status"] == "completed"
+        assert downloads.service._download_queue[42]["status"] == "completed"
         assert os.path.exists(target_path)
-        installed = plugin._uow.rom_installs.get(42)
+        installed = downloads.uow.rom_installs.get(42)
         assert installed is not None
         assert installed.file_path == target_path
         assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert not [c for c in emit.call_args_list if c[0][0] == "download_failed"]
 
     @pytest.mark.asyncio
-    async def test_cancel_during_commit_keeps_committed_install_multi_file(self, plugin, tmp_path, emit):
+    async def test_cancel_during_commit_keeps_committed_install_multi_file(self, downloads, tmp_path, emit):
         """The data-loss path: a committed multi-file extract dir must SURVIVE a
         racing cancel — cleanup would otherwise ``remove_tree`` the live install."""
         import threading
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4779,9 +4761,9 @@ class TestDoDownloadCancelReconcile:
             "files": [{"file_name": "a.bin"}, {"file_name": "b.bin"}],
         }
 
-        _seed_rom(plugin._uow, 77, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[77] = {
+        _seed_rom(downloads.uow, 77, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[77] = {
             "rom_id": 77,
             "status": "downloading",
             "progress": 0,
@@ -4806,7 +4788,7 @@ class TestDoDownloadCancelReconcile:
             launch_file = os.path.join(rom_dir, "game.m3u")
             with open(launch_file, "wb") as f:
                 f.write(b"playlist")
-            with plugin._download_service._uow_factory() as uow:
+            with downloads.service._uow_factory() as uow:
                 uow.rom_installs.save(
                     RomInstall.mark_installed(
                         rom_id=rom_id,
@@ -4820,12 +4802,10 @@ class TestDoDownloadCancelReconcile:
             return (launch_file, None)
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_transfer),
-            patch.object(plugin._download_service, "_post_download_multi_io", side_effect=blocking_post_io_multi),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
+            patch.object(downloads.service, "_post_download_multi_io", side_effect=blocking_post_io_multi),
         ):
-            task = asyncio.ensure_future(
-                plugin._download_service._do_download(77, rom_detail, target_path, "psx", file_name)
-            )
+            task = asyncio.ensure_future(downloads.service._do_download(77, rom_detail, target_path, "psx", file_name))
             while not started.is_set():
                 await asyncio.sleep(0.01)
             task.cancel()
@@ -4838,8 +4818,8 @@ class TestDoDownloadCancelReconcile:
         assert os.path.isdir(committed_dir)
         assert os.path.exists(os.path.join(committed_dir, "game.m3u"))
         # Surfaced as completed, install row present, download_complete emitted.
-        assert plugin._download_service._download_queue[77]["status"] == "completed"
-        assert plugin._uow.rom_installs.get(77) is not None
+        assert downloads.service._download_queue[77]["status"] == "completed"
+        assert downloads.uow.rom_installs.get(77) is not None
         assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
 
@@ -4847,10 +4827,10 @@ class TestDoDownloadCancelEmitsEvent:
     """#1017: a clean cancel must emit a terminal download_progress(cancelled) frame."""
 
     @pytest.mark.asyncio
-    async def test_cancel_emits_cancelled_progress_event(self, plugin, tmp_path, emit):
+    async def test_cancel_emits_cancelled_progress_event(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4871,8 +4851,8 @@ class TestDoDownloadCancelEmitsEvent:
         def fake_download_cancel(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0.3,
@@ -4881,10 +4861,10 @@ class TestDoDownloadCancelEmitsEvent:
         }
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download_cancel),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # A terminal cancelled frame reached the frontend (was silent before #1017).
         cancelled = [
@@ -4898,23 +4878,23 @@ class TestDoDownloadCancelEmitsEvent:
         assert payload["total_bytes"] == 1000
         # The terminal frame carries the final progress values from the entry,
         # which is then evicted (#149 downloads-round) — the emit happens first.
-        assert 42 not in plugin._download_service._download_queue
+        assert 42 not in downloads.service._download_queue
 
 
 class TestConcurrencyReservation:
     """#1053: bounded concurrency + reserved-bytes preflight + queued status."""
 
-    def _wire(self, plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    def _wire(self, downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
     @pytest.mark.asyncio
-    async def test_reservation_blocks_sibling_that_fits_alone(self, plugin, tmp_path):
+    async def test_reservation_blocks_sibling_that_fits_alone(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        self._wire(plugin, tmp_path)
+        self._wire(downloads, tmp_path)
 
         # Each ROM is 400MB (+100MB buffer = 500MB required). Free space is
         # 900MB: one fits, two do not (1000MB required, but only 900 free once
@@ -4931,36 +4911,36 @@ class TestConcurrencyReservation:
                 "platform_name": "Nintendo 64",
             }
 
-        plugin._download_service._loop = MagicMock()
+        downloads.service._loop = MagicMock()
 
         def _close_coro_task(coro):
             coro.close()
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _close_coro_task
-        plugin._download_service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
+        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
 
         # First download: fits (900 free, needs 500) → reserved.
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=_detail(1))
-        r1 = await plugin.start_download(1)
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=_detail(1))
+        r1 = await downloads.service.start_download(1)
         assert r1["success"] is True
-        assert plugin._download_service._reserved_bytes[1] == 500 * 1024 * 1024
+        assert downloads.service._reserved_bytes[1] == 500 * 1024 * 1024
 
         # Second download: 900 free - 500 reserved = 400 < 500 needed → rejected.
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=_detail(2))
-        r2 = await plugin.start_download(2)
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=_detail(2))
+        r2 = await downloads.service.start_download(2)
         assert r2["success"] is False
         assert r2["reason"] == "insufficient_space"
         assert "disk space" in r2["message"].lower()
         # The rejected ROM holds no reservation and no in-progress flag.
-        assert 2 not in plugin._download_service._reserved_bytes
-        assert 2 not in plugin._download_service._download_in_progress
+        assert 2 not in downloads.service._reserved_bytes
+        assert 2 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_reservation_released_after_download(self, plugin, tmp_path, emit):
+    async def test_reservation_released_after_download(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4982,23 +4962,23 @@ class TestConcurrencyReservation:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 512)
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._reserved_bytes[42] = 999
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "queued", "progress": 0}
+        _seed_rom(downloads.uow, 42)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._reserved_bytes[42] = 999
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "queued", "progress": 0}
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
-        assert plugin._download_service._download_queue[42]["status"] == "completed"
+        assert downloads.service._download_queue[42]["status"] == "completed"
         # The reservation is released in the finally.
-        assert 42 not in plugin._download_service._reserved_bytes
+        assert 42 not in downloads.service._reserved_bytes
 
     @pytest.mark.asyncio
-    async def test_third_download_emits_queued_while_two_run(self, plugin, tmp_path, emit):
+    async def test_third_download_emits_queued_while_two_run(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5008,7 +4988,7 @@ class TestConcurrencyReservation:
 
         # Hold the semaphore so it is fully locked, forcing the third download to
         # emit a "queued" frame before it can acquire.
-        sem = plugin._download_service._download_semaphore
+        sem = downloads.service._download_semaphore
         await sem.acquire()
         await sem.acquire()
         assert sem.locked()
@@ -5028,16 +5008,14 @@ class TestConcurrencyReservation:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 64)
 
-        _seed_rom(plugin._uow, 3)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[3] = {"rom_id": 3, "status": "queued", "progress": 0}
+        _seed_rom(downloads.uow, 3)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[3] = {"rom_id": 3, "status": "queued", "progress": 0}
 
         # Run the third download as a task — it must emit "queued" then block on
         # the semaphore (which we hold).
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            task = asyncio.ensure_future(
-                plugin._download_service._do_download(3, rom_detail, target_path, "n64", "third.z64")
-            )
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            task = asyncio.ensure_future(downloads.service._do_download(3, rom_detail, target_path, "n64", "third.z64"))
             # Let it reach the semaphore wait.
             await asyncio.sleep(0)
             await asyncio.sleep(0)
@@ -5048,14 +5026,14 @@ class TestConcurrencyReservation:
             ]
             assert len(queued) == 1
             assert queued[0][0][1]["rom_id"] == 3
-            assert plugin._download_service._download_queue[3]["status"] == "queued"
+            assert downloads.service._download_queue[3]["status"] == "queued"
 
             # Release the semaphore so the third can proceed and finish.
             sem.release()
             sem.release()
             await task
 
-        assert plugin._download_service._download_queue[3]["status"] == "completed"
+        assert downloads.service._download_queue[3]["status"] == "completed"
 
 
 class TestCooperativeCancel:
@@ -5065,11 +5043,11 @@ class TestCooperativeCancel:
     executor worker thread; the token is what really stops the bytes.
     """
 
-    def test_progress_callback_raises_once_token_cancelled(self, plugin):
+    def test_progress_callback_raises_once_token_cancelled(self, downloads):
         """The callback runs clean while the token is unset; raises after it flips."""
         token = _DownloadControl()
         # The queue entry the callback would update if it didn't bail early.
-        plugin._download_service._download_queue[42] = {
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0,
@@ -5077,10 +5055,10 @@ class TestCooperativeCancel:
             "total_bytes": 0,
         }
         fake_clock = FakeClock()
-        plugin._download_service._clock = fake_clock
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._clock = fake_clock
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
 
         def _record_emit(_event, _payload):
             async def _noop():
@@ -5088,14 +5066,14 @@ class TestCooperativeCancel:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
 
-        cb = plugin._download_service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", token)
+        cb = downloads.service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", token)
 
         # Unset token: a normal tick proceeds (no raise). Advance so the
         # final-frame throttle bypass fires and the queue entry updates.
         cb(1024, 1024)
-        assert plugin._download_service._download_queue[42]["bytes_downloaded"] == 1024
+        assert downloads.service._download_queue[42]["bytes_downloaded"] == 1024
 
         # Flip the token; the very next tick aborts the transfer thread.
         token.cancelled = True
@@ -5103,7 +5081,7 @@ class TestCooperativeCancel:
             cb(2048, 4096)
 
     @pytest.mark.asyncio
-    async def test_transfer_loop_aborts_when_token_cancelled_mid_stream(self, plugin, tmp_path):
+    async def test_transfer_loop_aborts_when_token_cancelled_mid_stream(self, downloads, tmp_path):
         """A real transfer LOOP stops once its token flips — the bytes really halt.
 
         Models ``download_rom_content`` as a 500-iteration loop calling
@@ -5113,7 +5091,7 @@ class TestCooperativeCancel:
         """
         from unittest.mock import patch
 
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5132,7 +5110,7 @@ class TestCooperativeCancel:
         }
 
         token = _DownloadControl()
-        plugin._download_service._control_tokens[42] = token
+        downloads.service._control_tokens[42] = token
         captured: list[int] = []
 
         def fake_transfer(_rom_id, _filename, _dest, progress_callback=None, *, resume=False, on_meta=None):
@@ -5145,37 +5123,37 @@ class TestCooperativeCancel:
                 # the loop never runs to completion — the transfer aborts.
                 progress_callback(i, 500)
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_transfer),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_transfer),
             pytest.raises(asyncio.CancelledError),
         ):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", token)
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", token)
 
         # The loop stopped near tick 3/4 — nowhere near 500. The transfer
         # really halted instead of running to completion.
         assert len(captured) <= 5
         # Cancel evicts its entry rather than leaving a "cancelled" row (#149
         # downloads-round).
-        assert 42 not in plugin._download_service._download_queue
+        assert 42 not in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_cancel_download_sets_token_and_cancels_task(self, plugin):
+    async def test_cancel_download_sets_token_and_cancels_task(self, downloads):
         """``cancel_download`` flips the token AND cancels the asyncio task."""
         loop = asyncio.get_running_loop()
         token = _DownloadControl()
-        plugin._download_service._control_tokens[42] = token
+        downloads.service._control_tokens[42] = token
 
         async def _never_ending():
             await asyncio.Event().wait()
 
         task = loop.create_task(_never_ending())
         await asyncio.sleep(0)  # let it start waiting
-        plugin._download_service._download_tasks[42] = task
+        downloads.service._download_tasks[42] = task
 
-        result = plugin.cancel_download(42)
+        result = downloads.service.cancel_download(42)
         assert result["success"] is True
         # The token is flipped so the executor transfer thread aborts (#144) —
         # not just the asyncio wrapper.
@@ -5186,14 +5164,14 @@ class TestCooperativeCancel:
         with pytest.raises(asyncio.CancelledError):
             await task
 
-    def test_per_attempt_token_isolation(self, plugin):
+    def test_per_attempt_token_isolation(self, downloads):
         """A zombie's callback (old token) aborts; a fresh download's continues.
 
         Each callback closes over its OWN token. A re-download installs a NEW
         token, so the zombie's cancelled token raises while the fresh token's
         callback runs clean — no parallel-download flicker.
         """
-        plugin._download_service._download_queue[42] = {
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0,
@@ -5201,10 +5179,10 @@ class TestCooperativeCancel:
             "total_bytes": 0,
         }
         fake_clock = FakeClock()
-        plugin._download_service._clock = fake_clock
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        plugin._download_service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._clock = fake_clock
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
+        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
 
         def _record_emit(_event, _payload):
             async def _noop():
@@ -5212,37 +5190,37 @@ class TestCooperativeCancel:
 
             return _noop()
 
-        plugin._download_service._emit = _record_emit
+        downloads.service._emit = _record_emit
 
         old_token = _DownloadControl()
         old_token.cancelled = True  # the cancelled zombie's token
         new_token = _DownloadControl()  # the fresh re-download's token
 
-        cb_old = plugin._download_service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", old_token)
-        cb_new = plugin._download_service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", new_token)
+        cb_old = downloads.service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", old_token)
+        cb_new = downloads.service._make_progress_callback(42, "Zelda", "N64", "zelda.z64", new_token)
 
         # The zombie's callback aborts; the fresh download's proceeds.
         with pytest.raises(asyncio.CancelledError):
             cb_old(512, 1024)
         cb_new(1024, 1024)  # no raise
-        assert plugin._download_service._download_queue[42]["bytes_downloaded"] == 1024
+        assert downloads.service._download_queue[42]["bytes_downloaded"] == 1024
 
 
 class TestPauseResume:
     """#1124: pause keeps the partial .tmp; resume re-begins with resume=True."""
 
     @staticmethod
-    def _retrodeck(plugin, tmp_path):
-        plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
+    def _retrodeck(downloads, tmp_path):
+        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
     @pytest.mark.asyncio
-    async def test_pause_sets_status_and_keeps_tmp(self, plugin, tmp_path, emit):
+    async def test_pause_sets_status_and_keeps_tmp(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5267,8 +5245,8 @@ class TestPauseResume:
             control.paused = True
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0.25,
@@ -5278,13 +5256,13 @@ class TestPauseResume:
         }
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_pause),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_pause),
             pytest.raises(asyncio.CancelledError),
         ):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", control)
 
         # Status flips to "paused" and the partial .tmp is KEPT for resume.
-        assert plugin._download_service._download_queue[42]["status"] == "paused"
+        assert downloads.service._download_queue[42]["status"] == "paused"
         assert os.path.exists(target_path + TMP_EXT)
         # A terminal "paused" frame reached the frontend, carrying resumable.
         paused_frames = [
@@ -5295,11 +5273,11 @@ class TestPauseResume:
         assert paused_frames[0][0][1]["bytes_downloaded"] == 256
 
     @pytest.mark.asyncio
-    async def test_cancel_still_deletes_tmp(self, plugin, tmp_path):
+    async def test_cancel_still_deletes_tmp(self, downloads, tmp_path):
         """Contrast with pause: a cancel deletes the partial .tmp (no resume)."""
         from unittest.mock import patch
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
         target_path = str(roms_dir / "zelda.z64")
@@ -5321,26 +5299,26 @@ class TestPauseResume:
             control.cancelled = True
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_cancel),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_cancel),
             pytest.raises(asyncio.CancelledError),
         ):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", control)
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64", control)
 
         # Cancel evicts its entry (#149 downloads-round) and deletes the partial
         # .tmp — the contrast with pause, which keeps both for resume.
-        assert 42 not in plugin._download_service._download_queue
+        assert 42 not in downloads.service._download_queue
         assert not os.path.exists(target_path + TMP_EXT)
 
     @pytest.mark.asyncio
-    async def test_on_meta_sets_resumable_and_emits(self, plugin, tmp_path, emit):
+    async def test_on_meta_sets_resumable_and_emits(self, downloads, tmp_path, emit):
         """The adapter's on_meta(True) callback flips resumable and emits it live."""
         from unittest.mock import patch
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5361,9 +5339,9 @@ class TestPauseResume:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 256)
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        _seed_rom(downloads.uow, 42)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0,
@@ -5372,11 +5350,11 @@ class TestPauseResume:
             "resumable": False,
         }
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # on_meta flipped the queue entry's resumable flag...
-        assert plugin._download_service._download_queue[42]["resumable"] is True
+        assert downloads.service._download_queue[42]["resumable"] is True
         # ...and emitted a download_progress frame carrying resumable: True.
         meta_frames = [
             c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("resumable") is True
@@ -5384,11 +5362,11 @@ class TestPauseResume:
         assert meta_frames
 
     @pytest.mark.asyncio
-    async def test_non_resumable_stays_false(self, plugin, tmp_path, emit):
+    async def test_non_resumable_stays_false(self, downloads, tmp_path, emit):
         """on_meta(False) leaves resumable False (mod_zip / Cloudflare path)."""
         from unittest.mock import patch
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5409,9 +5387,9 @@ class TestPauseResume:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 256)
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_running_loop()
-        plugin._download_service._download_queue[42] = {
+        _seed_rom(downloads.uow, 42)
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
             "progress": 0,
@@ -5420,17 +5398,17 @@ class TestPauseResume:
             "resumable": False,
         }
 
-        with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
-            await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
-        assert plugin._download_service._download_queue[42]["resumable"] is False
+        assert downloads.service._download_queue[42]["resumable"] is False
 
     @pytest.mark.asyncio
-    async def test_resume_rebegins_with_resume_true(self, plugin, tmp_path):
+    async def test_resume_rebegins_with_resume_true(self, downloads, tmp_path):
         """resume_download calls the transfer with resume=True (appends, not restarts)."""
         from unittest.mock import AsyncMock
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5448,7 +5426,7 @@ class TestPauseResume:
         }
 
         # The entry exists in "paused" state (what a prior pause left behind).
-        plugin._download_service._download_queue[42] = {
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "paused",
             "progress": 0.25,
@@ -5457,8 +5435,8 @@ class TestPauseResume:
             "resumable": True,
         }
 
-        plugin._download_service._loop = MagicMock()
-        plugin._download_service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
         captured_coros = []
 
         def _capture_task(coro):
@@ -5466,23 +5444,23 @@ class TestPauseResume:
             coro.close()  # don't actually run the download
             return MagicMock()
 
-        plugin._download_service._loop.create_task = _capture_task
-        plugin._download_service._download_file_store.disk_free = lambda _p: 500 * 1024 * 1024
+        downloads.service._loop.create_task = _capture_task
+        downloads.service._download_file_store.disk_free = lambda _p: 500 * 1024 * 1024
 
-        result = await plugin.resume_download(42)
+        result = await downloads.service.resume_download(42)
 
         assert result["success"] is True
         # A fresh task was scheduled (the resumed download).
         assert len(captured_coros) == 1
         # The re-begun download carried resumable across (verdict re-confirmed live).
-        assert plugin._download_service._download_queue[42]["resumable"] is True
+        assert downloads.service._download_queue[42]["resumable"] is True
 
     @pytest.mark.asyncio
-    async def test_resume_threads_resume_true_into_do_download(self, plugin, tmp_path, emit):
+    async def test_resume_threads_resume_true_into_do_download(self, downloads, tmp_path, emit):
         """End-to-end: the resumed transfer reaches download_rom_content with resume=True."""
         from unittest.mock import patch
 
-        self._retrodeck(plugin, tmp_path)
+        self._retrodeck(downloads, tmp_path)
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5499,8 +5477,8 @@ class TestPauseResume:
             "platform_name": "Nintendo 64",
         }
 
-        _seed_rom(plugin._uow, 42)
-        plugin._download_service._download_queue[42] = {
+        _seed_rom(downloads.uow, 42)
+        downloads.service._download_queue[42] = {
             "rom_id": 42,
             "status": "paused",
             "progress": 0.25,
@@ -5508,7 +5486,7 @@ class TestPauseResume:
             "total_bytes": 1024,
             "resumable": True,
         }
-        plugin._download_service._loop = asyncio.get_running_loop()
+        downloads.service._loop = asyncio.get_running_loop()
 
         # get_rom is fetched via run_in_executor; the real loop runs it.
         captured_resume: list[bool] = []
@@ -5519,23 +5497,23 @@ class TestPauseResume:
                 f.write(b"\x00" * 1024)
 
         with (
-            patch.object(plugin._romm_api, "get_rom", return_value=rom_detail),
-            patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download),
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download),
         ):
-            result = await plugin.resume_download(42)
+            result = await downloads.service.resume_download(42)
             assert result["success"] is True
             # Drain the scheduled task so the transfer actually runs.
-            task = plugin._download_service._download_tasks.get(42)
+            task = downloads.service._download_tasks.get(42)
             assert task is not None
             await task
 
         assert captured_resume == [True]
-        assert plugin._download_service._download_queue[42]["status"] == "completed"
+        assert downloads.service._download_queue[42]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_resume_non_paused_returns_not_paused(self, plugin):
+    async def test_resume_non_paused_returns_not_paused(self, downloads):
         """resume on a missing or non-paused entry returns the not_paused shape."""
-        result = await plugin.resume_download(999)
+        result = await downloads.service.resume_download(999)
         assert result == {
             "success": False,
             "reason": "not_paused",
@@ -5543,14 +5521,14 @@ class TestPauseResume:
         }
 
         # A downloading (not paused) entry is also rejected.
-        plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading"}
-        result = await plugin.resume_download(7)
+        downloads.service._download_queue[7] = {"rom_id": 7, "status": "downloading"}
+        result = await downloads.service.resume_download(7)
         assert result["success"] is False
         assert result["reason"] == "not_paused"
 
     @pytest.mark.asyncio
-    async def test_pause_no_active_returns_no_active_download(self, plugin):
-        result = plugin.pause_download(999)
+    async def test_pause_no_active_returns_no_active_download(self, downloads):
+        result = downloads.service.pause_download(999)
         assert result == {
             "success": False,
             "reason": "no_active_download",
@@ -5558,20 +5536,20 @@ class TestPauseResume:
         }
 
     @pytest.mark.asyncio
-    async def test_pause_download_sets_paused_flag_and_cancels_task(self, plugin):
+    async def test_pause_download_sets_paused_flag_and_cancels_task(self, downloads):
         """pause_download flips control.paused (not cancelled) and cancels the task."""
         loop = asyncio.get_running_loop()
         control = _DownloadControl()
-        plugin._download_service._control_tokens[42] = control
+        downloads.service._control_tokens[42] = control
 
         async def _never_ending():
             await asyncio.Event().wait()
 
         task = loop.create_task(_never_ending())
         await asyncio.sleep(0)
-        plugin._download_service._download_tasks[42] = task
+        downloads.service._download_tasks[42] = task
 
-        result = plugin.pause_download(42)
+        result = downloads.service.pause_download(42)
         assert result["success"] is True
         assert result["message"] == "Download paused"
         # paused flag set (not cancelled) so the terminal handler keeps the .tmp.
@@ -5583,20 +5561,20 @@ class TestPauseResume:
             await task
 
     @pytest.mark.asyncio
-    async def test_paused_entry_not_pruned(self, plugin):
+    async def test_paused_entry_not_pruned(self, downloads):
         """A 'paused' entry survives queue pruning (only terminal states are pruned)."""
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "paused"}
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused"}
         for i in range(2, 60):
-            plugin._download_service._download_queue[i] = {"rom_id": i, "status": "completed"}
-        plugin._download_service._prune_download_queue()
-        assert 1 in plugin._download_service._download_queue
-        assert plugin._download_service._download_queue[1]["status"] == "paused"
+            downloads.service._download_queue[i] = {"rom_id": i, "status": "completed"}
+        downloads.service._prune_download_queue()
+        assert 1 in downloads.service._download_queue
+        assert downloads.service._download_queue[1]["status"] == "paused"
 
 
 _SUPERSEDE_GROUP = "igdb:100:99"
 
 
-def _stage_download_prologue(plugin, rom_id: int = 1) -> list[Any]:
+def _stage_download_prologue(downloads, rom_id: int = 1) -> list[Any]:
     """Let the real ``_begin_download`` run its pre-flights without transferring.
 
     The #1298 supersede lives inside ``_begin_download``, behind the occupancy
@@ -5615,8 +5593,8 @@ def _stage_download_prologue(plugin, rom_id: int = 1) -> list[Any]:
         started.append(coro)
         return MagicMock()
 
-    plugin._download_service._loop = MagicMock()
-    plugin._download_service._loop.run_in_executor = AsyncMock(
+    downloads.service._loop = MagicMock()
+    downloads.service._loop.run_in_executor = AsyncMock(
         return_value={
             "id": rom_id,
             "name": f"Game {rom_id}",
@@ -5626,144 +5604,144 @@ def _stage_download_prologue(plugin, rom_id: int = 1) -> list[Any]:
             "platform_name": "Nintendo 64",
         }
     )
-    plugin._download_service._loop.create_task = _close_coro_task
-    plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
+    downloads.service._loop.create_task = _close_coro_task
+    downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
     return started
 
 
 class TestSiblingSupersedeSelection:
     """`_conflicting_sibling_install_ids` — which downloaded siblings a download supersedes."""
 
-    def test_selects_unbound_installed_sibling(self, plugin):
+    def test_selects_unbound_installed_sibling(self, downloads):
         # X (rom 1) is the bound group rep; a fellow unbound version is on disk.
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
 
-        assert plugin._download_service._conflicting_sibling_install_ids(1) == [2]
+        assert downloads.service._conflicting_sibling_install_ids(1) == [2]
 
-    def test_skips_grandfathered_and_uninstalled(self, plugin):
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)  # X, bound rep
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # → selected
+    def test_skips_grandfathered_and_uninstalled(self, downloads):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)  # X, bound rep
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # → selected
         _seed_group_member(
-            plugin._uow, 3, group_key=_SUPERSEDE_GROUP, app_id=99, installed=True
+            downloads.uow, 3, group_key=_SUPERSEDE_GROUP, app_id=99, installed=True
         )  # grandfathered → skip
         _seed_group_member(
-            plugin._uow, 4, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False
+            downloads.uow, 4, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False
         )  # not on disk → skip
 
-        assert plugin._download_service._conflicting_sibling_install_ids(1) == [2]
+        assert downloads.service._conflicting_sibling_install_ids(1) == [2]
 
-    def test_solo_group_returns_empty(self, plugin):
+    def test_solo_group_returns_empty(self, downloads):
         # No sibling_group_key → no siblings, nothing to strip.
-        _seed_group_member(plugin._uow, 1, group_key=None, app_id=42, installed=False)
-        assert plugin._download_service._conflicting_sibling_install_ids(1) == []
+        _seed_group_member(downloads.uow, 1, group_key=None, app_id=42, installed=False)
+        assert downloads.service._conflicting_sibling_install_ids(1) == []
 
-    def test_unknown_rom_returns_empty(self, plugin):
-        assert plugin._download_service._conflicting_sibling_install_ids(999) == []
+    def test_unknown_rom_returns_empty(self, downloads):
+        assert downloads.service._conflicting_sibling_install_ids(999) == []
 
-    def test_unbound_downloaded_target_still_supersedes_unbound_sibling(self, plugin):
+    def test_unbound_downloaded_target_still_supersedes_unbound_sibling(self, downloads):
         # X itself unbound (app_id None); a fellow unbound installed sibling is
         # still superseded (both share the "no separate shortcut" state).
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
 
-        assert plugin._download_service._conflicting_sibling_install_ids(1) == [2]
+        assert downloads.service._conflicting_sibling_install_ids(1) == [2]
 
 
 class TestSiblingSupersedeRemoval:
     """`supersede_sibling_installs` + `start_download` — the removal + abort flow."""
 
     @pytest.mark.asyncio
-    async def test_removes_superseded_sibling(self, plugin):
+    async def test_removes_superseded_sibling(self, downloads):
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         remover = AsyncMock(return_value={"success": True, "message": "ROM removed"})
-        plugin._download_service._rom_remover = lambda: remover
+        downloads.service._rom_remover = lambda: remover
 
-        result = await plugin._download_service.supersede_sibling_installs(1)
+        result = await downloads.service.supersede_sibling_installs(1)
 
         assert result is None
         remover.assert_awaited_once_with(2)
 
     @pytest.mark.asyncio
-    async def test_not_installed_result_is_clean_not_abort(self, plugin):
+    async def test_not_installed_result_is_clean_not_abort(self, downloads):
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         # A concurrent removal already cleaned it — not_installed is a no-op, not an abort.
         remover = AsyncMock(return_value={"success": False, "reason": "not_installed", "message": "ROM not installed"})
-        plugin._download_service._rom_remover = lambda: remover
+        downloads.service._rom_remover = lambda: remover
 
-        result = await plugin._download_service.supersede_sibling_installs(1)
+        result = await downloads.service.supersede_sibling_installs(1)
 
         assert result is None
         remover.assert_awaited_once_with(2)
 
     @pytest.mark.asyncio
-    async def test_removal_failure_returns_failure_shape(self, plugin):
+    async def test_removal_failure_returns_failure_shape(self, downloads):
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        plugin._download_service._rom_remover = lambda: failing
+        downloads.service._rom_remover = lambda: failing
 
-        result = await plugin._download_service.supersede_sibling_installs(1)
+        result = await downloads.service.supersede_sibling_installs(1)
 
         assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
 
     @pytest.mark.asyncio
-    async def test_clean_group_no_remover_call(self, plugin):
+    async def test_clean_group_no_remover_call(self, downloads):
 
         # Solo ROM (no group) — the remover provider is never even resolved.
-        _seed_group_member(plugin._uow, 1, group_key=None, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 1, group_key=None, app_id=42, installed=False)
         provider = MagicMock(side_effect=AssertionError("remover must not be resolved when nothing is superseded"))
-        plugin._download_service._rom_remover = provider
+        downloads.service._rom_remover = provider
 
-        assert await plugin._download_service.supersede_sibling_installs(1) is None
+        assert await downloads.service.supersede_sibling_installs(1) is None
         provider.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_start_download_removes_sibling_then_proceeds(self, plugin):
+    async def test_start_download_removes_sibling_then_proceeds(self, downloads):
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         remover = AsyncMock(return_value={"success": True, "message": "ROM removed"})
-        plugin._download_service._rom_remover = lambda: remover
-        started = _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: remover
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result == {"success": True, "message": "Download started"}
         remover.assert_awaited_once_with(2)
         assert len(started) == 1
 
     @pytest.mark.asyncio
-    async def test_start_download_aborts_without_starting_when_removal_fails(self, plugin):
+    async def test_start_download_aborts_without_starting_when_removal_fails(self, downloads):
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        plugin._download_service._rom_remover = lambda: failing
-        started = _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: failing
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
 
         assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
         assert started == []
 
     @pytest.mark.asyncio
-    async def test_start_download_second_call_rejected_while_first_mid_supersede(self, plugin):
+    async def test_start_download_second_call_rejected_while_first_mid_supersede(self, downloads):
         # B1: the in-progress slot is claimed BEFORE the supersede await, so a
         # second start_download racing in while the first is suspended inside the
         # removal await is rejected with the existing already-downloading shape.
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
 
         entered = asyncio.Event()
         release = asyncio.Event()
@@ -5773,102 +5751,102 @@ class TestSiblingSupersedeRemoval:
             await release.wait()
             return {"success": True, "message": "ROM removed"}
 
-        plugin._download_service._rom_remover = lambda: _blocking_remove
-        _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: _blocking_remove
+        _stage_download_prologue(downloads)
 
-        first = asyncio.create_task(plugin.start_download(1))
+        first = asyncio.create_task(downloads.service.start_download(1))
         await entered.wait()  # first call is now suspended inside the removal await
 
-        second = await plugin.start_download(1)
+        second = await downloads.service.start_download(1)
         assert second == {"success": False, "reason": "already_downloading", "message": "Already downloading"}
 
         release.set()
         assert await first == {"success": True, "message": "Download started"}
 
     @pytest.mark.asyncio
-    async def test_start_download_releases_in_progress_on_supersede_exception(self, plugin):
+    async def test_start_download_releases_in_progress_on_supersede_exception(self, downloads):
         # B1: an exception out of the supersede await releases the in-progress
         # claim so the ROM isn't stuck "already downloading" until a reload.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        plugin._download_service._rom_remover = lambda: AsyncMock(side_effect=RuntimeError("kaboom"))
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=RuntimeError("kaboom"))
 
         with pytest.raises(RuntimeError):
-            await plugin.start_download(1)
-        assert 1 not in plugin._download_service._download_in_progress
+            await downloads.service.start_download(1)
+        assert 1 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_start_download_releases_in_progress_on_removal_failure(self, plugin):
+    async def test_start_download_releases_in_progress_on_removal_failure(self, downloads):
         # B1: the removal-abort return path also releases the in-progress claim.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        plugin._download_service._rom_remover = lambda: failing
-        _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: failing
+        _stage_download_prologue(downloads)
 
-        result = await plugin.start_download(1)
+        result = await downloads.service.start_download(1)
         assert result["reason"] == ErrorCode.UNKNOWN.value
-        assert 1 not in plugin._download_service._download_in_progress
+        assert 1 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_supersede_evicts_paused_sibling_queue_entry(self, plugin):
+    async def test_supersede_evicts_paused_sibling_queue_entry(self, downloads):
         # S1: superseding a sibling's install drops its stale paused queue entry
         # too, so a resume can't re-create the version we just removed.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        plugin._download_service._download_queue[2] = {"rom_id": 2, "status": "paused"}
-        plugin._download_service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._download_queue[2] = {"rom_id": 2, "status": "paused"}
+        downloads.service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
 
-        result = await plugin._download_service.supersede_sibling_installs(1)
+        result = await downloads.service.supersede_sibling_installs(1)
         assert result is None
-        assert 2 not in plugin._download_service._download_queue
+        assert 2 not in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_supersede_keeps_non_paused_sibling_queue_entry(self, plugin):
+    async def test_supersede_keeps_non_paused_sibling_queue_entry(self, downloads):
         # Only a PAUSED sibling row is evicted; a terminal/live row is untouched.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        plugin._download_service._download_queue[2] = {"rom_id": 2, "status": "completed"}
-        plugin._download_service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._download_queue[2] = {"rom_id": 2, "status": "completed"}
+        downloads.service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
 
-        await plugin._download_service.supersede_sibling_installs(1)
-        assert 2 in plugin._download_service._download_queue
+        await downloads.service.supersede_sibling_installs(1)
+        assert 2 in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_supersede_logs_both_rom_ids_on_success(self, plugin, caplog):
+    async def test_supersede_logs_both_rom_ids_on_success(self, downloads, caplog):
         # S7: a successful supersede logs both the sibling id and the group's rom id.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        plugin._download_service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
 
         with caplog.at_level(logging.INFO):
-            await plugin._download_service.supersede_sibling_installs(1)
+            await downloads.service.supersede_sibling_installs(1)
         assert any("rom 2" in r.message and "rom 1" in r.message and r.levelno == logging.INFO for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_supersede_logs_failure_with_message(self, plugin, caplog):
+    async def test_supersede_logs_failure_with_message(self, downloads, caplog):
         # S7: a failed supersede logs at ERROR with both rom ids and the failure message.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         failing = AsyncMock(
             return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "delete blew up"}
         )
-        plugin._download_service._rom_remover = lambda: failing
+        downloads.service._rom_remover = lambda: failing
 
         with caplog.at_level(logging.INFO):
-            await plugin._download_service.supersede_sibling_installs(1)
+            await downloads.service.supersede_sibling_installs(1)
         assert any(
             "rom 2" in r.message
             and "rom 1" in r.message
@@ -5882,79 +5860,77 @@ class TestResumeSupersede:
     """`resume_download` — the #1298 S1 stale-resume refusal + supersede-on-resume."""
 
     @pytest.mark.asyncio
-    async def test_resume_refused_when_binding_moved_to_sibling(self, plugin):
+    async def test_resume_refused_when_binding_moved_to_sibling(self, downloads):
         # A switch moved the shortcut to sibling 2 while the download of 3 was
         # paused. Resuming 3 would strand a second install → refused, entry dropped.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=True)
-        _seed_group_member(plugin._uow, 3, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
-        plugin._download_service._download_queue[3] = {"rom_id": 3, "status": "paused"}
-        plugin._download_service._begin_download = AsyncMock()
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=True)
+        _seed_group_member(downloads.uow, 3, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
+        downloads.service._download_queue[3] = {"rom_id": 3, "status": "paused"}
+        downloads.service._begin_download = AsyncMock()
 
-        result = await plugin.resume_download(3)
+        result = await downloads.service.resume_download(3)
         assert result["success"] is False
         assert result["reason"] == "superseded"
         assert isinstance(result["message"], str) and len(result["message"]) <= 45
         assert "error" not in result and "error_code" not in result
-        assert 3 not in plugin._download_service._download_queue
-        assert 3 not in plugin._download_service._download_in_progress
-        plugin._download_service._begin_download.assert_not_awaited()
+        assert 3 not in downloads.service._download_queue
+        assert 3 not in downloads.service._download_in_progress
+        downloads.service._begin_download.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_resume_runs_supersede_then_rebegins(self, plugin):
+    async def test_resume_runs_supersede_then_rebegins(self, downloads):
         # No member owns the shortcut → not superseded; the paused resume still
         # strips a conflicting sibling install first (same guard as start_download).
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)  # resume target
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # to strip
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "paused", "resumable": True}
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)  # resume target
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)  # to strip
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused", "resumable": True}
         remover = AsyncMock(return_value={"success": True, "message": "removed"})
-        plugin._download_service._rom_remover = lambda: remover
-        started = _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: remover
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
         assert result["success"] is True
         remover.assert_awaited_once_with(2)
         assert len(started) == 1
 
     @pytest.mark.asyncio
-    async def test_resume_bound_target_is_not_superseded(self, plugin):
+    async def test_resume_bound_target_is_not_superseded(self, downloads):
         # The paused target itself owns the shortcut → not superseded, resumes.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
-        plugin._download_service._download_queue[2] = {"rom_id": 2, "status": "paused", "resumable": True}
-        plugin._download_service._begin_download = AsyncMock(
-            return_value={"success": True, "message": "Download started"}
-        )
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        downloads.service._download_queue[2] = {"rom_id": 2, "status": "paused", "resumable": True}
+        downloads.service._begin_download = AsyncMock(return_value={"success": True, "message": "Download started"})
 
-        result = await plugin.resume_download(2)
+        result = await downloads.service.resume_download(2)
         assert result["success"] is True
         # No stored replace answer on this entry, so the resume carries False —
         # the exemption is scoped to the download that was actually admitted.
-        plugin._download_service._begin_download.assert_awaited_once_with(2, resume=True, replace_existing=False)
+        downloads.service._begin_download.assert_awaited_once_with(2, resume=True, replace_existing=False)
 
     @pytest.mark.asyncio
-    async def test_resume_aborts_and_releases_in_progress_on_removal_failure(self, plugin):
+    async def test_resume_aborts_and_releases_in_progress_on_removal_failure(self, downloads):
         # S1 + B1: a removal failure aborts the resume and releases the in-progress claim.
         from unittest.mock import AsyncMock
 
-        _seed_group_member(plugin._uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
-        _seed_group_member(plugin._uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "paused"}
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused"}
         failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        plugin._download_service._rom_remover = lambda: failing
-        started = _stage_download_prologue(plugin)
+        downloads.service._rom_remover = lambda: failing
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
         assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
         assert started == []
-        assert 1 not in plugin._download_service._download_in_progress
+        assert 1 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_resume_tells_the_gate_it_is_a_resume(self, plugin):
+    async def test_resume_tells_the_gate_it_is_a_resume(self, downloads):
         # A paused multi-file transfer has no extract directory yet, so the gate
         # sees a free path and would run the candidate search — handing back the
         # very file the user declined when they admitted this download, with
@@ -5968,18 +5944,18 @@ class TestResumeSupersede:
                 return None
             return {"success": False, "reason": "adoption_candidates", "message": "already on this device"}
 
-        plugin._download_service._target_gate = gate
-        plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "paused", "resumable": True}
-        started = _stage_download_prologue(plugin)
+        downloads.service._target_gate = gate
+        downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused", "resumable": True}
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.resume_download(1)
+        result = await downloads.service.resume_download(1)
 
         assert result["success"] is True
         assert seen == [True]
         assert len(started) == 1
 
     @pytest.mark.asyncio
-    async def test_a_fresh_download_still_faces_the_candidate_search(self, plugin):
+    async def test_a_fresh_download_still_faces_the_candidate_search(self, downloads):
         # The counterpart: the skip is scoped to a resume, and a first attempt is
         # still refused by the same gate.
         async def gate(rom_detail, checked_path, *, replace, resume=False, **answer):
@@ -5987,24 +5963,24 @@ class TestResumeSupersede:
                 return None
             return {"success": False, "reason": "adoption_candidates", "message": "already on this device"}
 
-        plugin._download_service._target_gate = gate
-        started = _stage_download_prologue(plugin)
+        downloads.service._target_gate = gate
+        started = _stage_download_prologue(downloads)
 
-        result = await plugin.start_download(1, False)
+        result = await downloads.service.start_download(1, False)
 
         assert result["reason"] == "adoption_candidates"
         assert started == []
 
     @pytest.mark.asyncio
-    async def test_resume_non_paused_short_circuits_before_supersede(self, plugin):
+    async def test_resume_non_paused_short_circuits_before_supersede(self, downloads):
         # A non-paused entry returns not_paused without touching the supersede seam.
         from unittest.mock import MagicMock
 
         provider = MagicMock(side_effect=AssertionError("supersede must not run for a non-paused resume"))
-        plugin._download_service._rom_remover = provider
-        plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading"}
+        downloads.service._rom_remover = provider
+        downloads.service._download_queue[7] = {"rom_id": 7, "status": "downloading"}
 
-        result = await plugin.resume_download(7)
+        result = await downloads.service.resume_download(7)
         assert result["reason"] == "not_paused"
         provider.assert_not_called()
 
@@ -6040,20 +6016,20 @@ async def _let_the_task_end(service: DownloadService, rom_id: int, prune_conflic
 class TestAStartedDownloadHoldsAnOperation:
     """The task a start or resume leaves running holds an operation until it ends."""
 
-    async def test_a_started_download_holds_its_operation_until_its_task_ends(self, plugin, monkeypatch):
-        service = plugin._download_service
+    async def test_a_started_download_holds_its_operation_until_its_task_ends(self, downloads, monkeypatch):
+        service = downloads.service
         release = asyncio.Event()
         monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release))
 
         result = await service.start_download(42)
 
         assert result["success"] is True
-        assert _operation_labels(plugin._prune_conflicts) == ["start_download"]
-        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert _operation_labels(downloads.prune_conflicts) == ["start_download"]
+        await _let_the_task_end(service, 42, downloads.prune_conflicts, release)
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
-    async def test_a_resumed_download_holds_its_operation_until_its_task_ends(self, plugin, monkeypatch):
-        service = plugin._download_service
+    async def test_a_resumed_download_holds_its_operation_until_its_task_ends(self, downloads, monkeypatch):
+        service = downloads.service
         service._download_queue[42] = {"rom_id": 42, "status": "paused"}
         release = asyncio.Event()
         monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release))
@@ -6061,18 +6037,18 @@ class TestAStartedDownloadHoldsAnOperation:
         result = await service.resume_download(42)
 
         assert result["success"] is True
-        assert _operation_labels(plugin._prune_conflicts) == ["resume_download"]
-        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert _operation_labels(downloads.prune_conflicts) == ["resume_download"]
+        await _let_the_task_end(service, 42, downloads.prune_conflicts, release)
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
-    async def test_a_start_that_failed_holds_nothing(self, plugin):
-        service = plugin._download_service
+    async def test_a_start_that_failed_holds_nothing(self, downloads):
+        service = downloads.service
         service._download_in_progress.add(42)
 
         result = await service.start_download(42)
 
         assert result["reason"] == "already_downloading"
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.parametrize("call", ["start_download", "resume_download"])
     @pytest.mark.parametrize(
@@ -6080,9 +6056,9 @@ class TestAStartedDownloadHoldsAnOperation:
         [(True, False, "blocked_by_migration"), (False, True, "prune_active")],
     )
     async def test_a_download_its_rules_refuse_begins_nothing(
-        self, plugin, monkeypatch, call, migration_pending, cleanup_running, reason
+        self, downloads, monkeypatch, call, migration_pending, cleanup_running, reason
     ):
-        service = plugin._download_service
+        service = downloads.service
         service._download_queue[42] = {"rom_id": 42, "status": "paused"}
         begun: list[int] = []
 
@@ -6092,16 +6068,16 @@ class TestAStartedDownloadHoldsAnOperation:
 
         monkeypatch.setattr(service, "_begin_download", begin)
         if cleanup_running:
-            plugin._prune_conflicts.register_run("held-run")
+            downloads.prune_conflicts.register_run("held-run")
         service._rules = _make_conflict_rules(
-            prune_conflicts=plugin._prune_conflicts, migration_pending=migration_pending
+            prune_conflicts=downloads.prune_conflicts, migration_pending=migration_pending
         )
 
         result = await getattr(service, call)(42)
 
         assert result["reason"] == reason
         assert begun == []
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
 
 class TestTheDownloadCompleteLease:
@@ -6112,8 +6088,8 @@ class TestTheDownloadCompleteLease:
     """
 
     @staticmethod
-    async def _finish(plugin, rom_id: int) -> None:
-        service = plugin._download_service
+    async def _finish(downloads, rom_id: int) -> None:
+        service = downloads.service
         service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
         detail = {"id": rom_id, "name": "Zelda", "fs_name": "zelda.z64", "platform_slug": "n64"}
         await service._finalize_download_complete(rom_id, detail, "/roms/n64/zelda.z64", "Zelda", "N64")
@@ -6123,18 +6099,18 @@ class TestTheDownloadCompleteLease:
         (payload,) = [c.args[1] for c in emit.call_args_list if c.args[0] == "download_complete"]
         return payload
 
-    async def test_a_bound_roms_event_carries_a_lease(self, plugin, emit):
-        _seed_rom(plugin._uow, 42)
+    async def test_a_bound_roms_event_carries_a_lease(self, downloads, emit):
+        _seed_rom(downloads.uow, 42)
         emit.return_value = True
 
-        await self._finish(plugin, 42)
+        await self._finish(downloads, 42)
 
         assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
-        assert plugin._prune_conflicts.conflicting_operations == 1
+        assert downloads.prune_conflicts.conflicting_operations == 1
 
-    async def test_an_unbound_roms_event_carries_none(self, plugin, emit):
-        with plugin._uow:
-            plugin._uow.roms.save(
+    async def test_an_unbound_roms_event_carries_none(self, downloads, emit):
+        with downloads.uow:
+            downloads.uow.roms.save(
                 Rom(
                     rom_id=7,
                     platform_slug="n64",
@@ -6145,34 +6121,34 @@ class TestTheDownloadCompleteLease:
                 )
             )
 
-        await self._finish(plugin, 7)
+        await self._finish(downloads, 7)
 
         assert "prune_lease_token" not in self._payload(emit)
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
-    async def test_an_event_nobody_heard_gives_its_lease_back(self, plugin, emit):
-        _seed_rom(plugin._uow, 42)
+    async def test_an_event_nobody_heard_gives_its_lease_back(self, downloads, emit):
+        _seed_rom(downloads.uow, 42)
         emit.return_value = False
 
-        await self._finish(plugin, 42)
+        await self._finish(downloads, 42)
 
         assert self._payload(emit)["prune_lease_token"].startswith("download_complete:")
-        assert plugin._prune_conflicts.conflicting_operations == 0
+        assert downloads.prune_conflicts.conflicting_operations == 0
 
-    async def test_the_lease_is_taken_while_the_downloads_operation_still_holds(self, plugin, emit, monkeypatch):
+    async def test_the_lease_is_taken_while_the_downloads_operation_still_holds(self, downloads, emit, monkeypatch):
         """No cleanup can start between the download's own operation and the lease that outlasts it."""
-        _seed_rom(plugin._uow, 42)
+        _seed_rom(downloads.uow, 42)
         emit.return_value = True
-        service = plugin._download_service
+        service = downloads.service
         release = asyncio.Event()
 
         async def finish(rom_id: int) -> None:
-            await self._finish(plugin, rom_id)
+            await self._finish(downloads, rom_id)
 
         monkeypatch.setattr(service, "_begin_download", _begin_leaving_a_task(service, release, finish))
-        seen = _record_operations_at_lease(plugin._prune_conflicts, monkeypatch)
+        seen = _record_operations_at_lease(downloads.prune_conflicts, monkeypatch)
 
         await service.start_download(42)
-        await _let_the_task_end(service, 42, plugin._prune_conflicts, release)
+        await _let_the_task_end(service, 42, downloads.prune_conflicts, release)
 
         assert seen == [["start_download"]]
