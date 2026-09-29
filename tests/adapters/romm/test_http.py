@@ -1673,6 +1673,17 @@ class TestRetryLogic:
         assert fn.call_count == 2
 
 
+class TestRetryMRO:
+    """Verify with_retry is reachable on the RomM HTTP adapter."""
+
+    def test_with_retry_accessible_via_http_adapter(self, romm_http):
+        """with_retry should be accessible via the HTTP adapter."""
+        fn = MagicMock(return_value="ok")
+        result = romm_http.adapter.with_retry(fn, "arg1")
+        assert result == "ok"
+        fn.assert_called_once_with("arg1")
+
+
 # ============================================================================
 # test_connection structured errors
 # ============================================================================
