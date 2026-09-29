@@ -73,11 +73,10 @@ class RecordingSaveDirectories:
 class MigrationHarness:
     """The migration service and the seams its tests seed or assert against.
 
-    ``uow`` is the one :class:`FakeUnitOfWork` the migration service reads and
-    writes; the home markers and the install records both live in it.
-    ``core_info`` is the core-info fake the relaunch commands are baked
-    through, so a test can seed ``available_cores``. ``save_directories``
-    counts the calls that record the save directories again.
+    ``uow`` is the one :class:`FakeUnitOfWork` the migration service and the
+    relaunch resolvers behind it read and write, so a row a test seeds there is
+    the row the migration sees. ``core_info`` is the core-info fake the relaunch
+    commands are baked through, so a test can seed ``available_cores``.
     """
 
     service: MigrationService
@@ -109,8 +108,8 @@ def migration(logger) -> MigrationHarness:
     )
 
     # Real RelaunchOptionsResolver over the shared fake UoW + the active-core
-    # resolver so the migration relaunch-emit integration tests still bake real
-    # launch commands from the relocated rom_installs.file_path.
+    # resolver so the migration relaunch-emit integration tests bake real launch
+    # commands from the relocated rom_installs.file_path.
     relaunch_options = RelaunchOptionsResolver(
         config=RelaunchOptionsResolverConfig(
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -1706,8 +1705,8 @@ class TestBackgroundTaskTracking:
 
     The path-change detection schedules a ``retrodeck_path_changed`` emit
     via ``loop.create_task``. Without strong refs into ``_background_tasks``
-    and a cancellation hook in ``shutdown()``, those tasks leak across
-    a backend shutdown. These tests pin the contract.
+    and a cancellation hook in ``shutdown()``, those tasks are still pending
+    when the backend shuts down. These tests pin the contract.
     """
 
     @pytest.mark.asyncio

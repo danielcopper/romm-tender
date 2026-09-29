@@ -61,8 +61,8 @@ class GameDetailHarness:
 
     ``uow`` is the one :class:`FakeUnitOfWork` the service reads, so a row a
     test seeds there is the row the page is built from. The candidate probe
-    answers ``candidate_present`` (off unless a test stages it, so every case
-    that predates it keeps the page it had) and records each call on
+    answers ``candidate_present`` (off unless a test stages it, so a test that
+    does not finds no adoption candidate) and records each call on
     ``candidate_probe_calls`` — which is how "an installed ROM does no folder
     read" is stated as an absence rather than inferred.
     """

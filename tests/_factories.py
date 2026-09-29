@@ -74,9 +74,7 @@ def _make_testable_plugin():
 
     Pre-wires a no-op ``_debug_logger`` so any service that consumes
     ``Plugin._log_debug`` (which forwards through ``_debug_logger``) works
-    out of the box. Tests that want to assert on debug-log behaviour can
-    override ``_debug_logger`` after construction (e.g. with the real
-    ``SettingsAwareDebugLogger`` bound to a settings dict they control).
+    out of the box.
     """
     from main import Plugin
 

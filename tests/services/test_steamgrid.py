@@ -58,8 +58,8 @@ class SteamGridHarness:
     """The SteamGridDB service and what its tests seed or assert against beside it.
 
     ``library`` is the library service whose pending sync the SteamGridDB
-    service reads for a ROM not yet in ``roms``. ``settings`` is the dict both
-    services read, the SteamGridDB API key included.
+    service reads when the ``roms`` row carries no SGDB id. ``settings`` is the
+    dict both services read, the SteamGridDB API key included.
     """
 
     service: SteamGridService
@@ -889,9 +889,9 @@ def _forbidden_vdf(*_args, **_kwargs):
 class TestSaveShortcutIcon:
     """Tests for the icon-save path (``_save_icon_to_grid`` / ``save_shortcut_icon``).
 
-    ``save_shortcut_icon`` writes the icon PNG into Steam's grid directory and returns
-    its path; pointing the shortcut at that file is the frontend's job via
-    SteamClient, so this path never touches shortcuts.vdf.
+    ``save_shortcut_icon`` writes the icon PNG into Steam's grid directory
+    and returns its path; pointing the shortcut at that file is the frontend's
+    job via SteamClient, so this path never touches shortcuts.vdf.
     """
 
     def test_save_icon_to_grid_writes_file_and_returns_path(self, steamgrid, tmp_path):
@@ -1003,7 +1003,7 @@ class TestDebugLoggerProtocolSeam:
     def steamgrid_with_captured_log(
         self, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, emit, logger, home
     ) -> tuple[SteamGridHarness, list[str]]:
-        """The SteamGridDB services with ``log_debug`` a list-capturing fake."""
+        """The harness with ``log_debug`` a list-capturing fake on both services, and the list."""
 
         settings: dict[str, Any] = {"log_level": "debug", "steamgriddb_api_key": ""}
         prune_conflicts = _make_prune_conflicts()
@@ -1293,9 +1293,9 @@ class TestReadFileAsBase64:
 class TestSaveSgdbApiKey:
     """``save_sgdb_api_key`` happy / masked / empty paths.
 
-    It stores a real key and ignores the masked sentinel (set
-    by the frontend modal when the user leaves the input untouched) and
-    the empty string (no input given).
+    It stores a real key and ignores the masked sentinel (set by the frontend
+    modal when the user leaves the input untouched) and the empty string (no
+    input given).
     """
 
     def test_stores_real_key(self, steamgrid):

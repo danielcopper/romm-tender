@@ -106,7 +106,7 @@ def achievements(clock, logger) -> AchievementsHarness:
 
 @pytest.fixture(autouse=True)
 async def _set_event_loop(achievements):
-    """Ensure service loops match the running event loop for async tests."""
+    """Bind the achievements service to the running event loop."""
     achievements.service._loop = asyncio.get_running_loop()
 
 

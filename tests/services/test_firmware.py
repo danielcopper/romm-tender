@@ -316,9 +316,8 @@ class FirmwareHarness:
     """The firmware service and the seams its tests seed or assert against.
 
     ``uow`` is the fake unit of work firmware persistence flows through; tests
-    inspect its repos (``bios_files`` / ``firmware_cache`` / ``roms``) after the
-    service has run. ``romm_api`` is the RomM API the service lists and fetches
-    firmware from.
+    inspect its repositories after the service has run. ``romm_api`` is the
+    RomM API the service lists and fetches firmware from.
     """
 
     service: FirmwareService
@@ -345,7 +344,6 @@ async def _set_event_loop(fw):
     _set_loop(fw, asyncio.get_running_loop())
 
 
-# Shorthand to access the firmware service
 @pytest.fixture
 def fw(firmware):
     return firmware.service
@@ -5396,8 +5394,8 @@ class TestFirmwareListCache:
     def test_firmware_cache_ttl_uses_wall_clock_across_restart(self):
         """Cache restored from the DB with stale ``cached_at`` must re-fetch.
 
-        Regression for #344: monotonic-based TTL reset on every backend
-        restart, making a restored cache appear fresh forever.
+        The TTL is measured on the wall clock ``cached_at`` is stamped with, so
+        a cache restored after a backend restart is as old as its row says.
         """
         clock = _make_clock()
         # Pin the cache epoch two hours before the clock's current wall time —

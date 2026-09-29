@@ -4258,12 +4258,13 @@ class TestCleanupPartialDownloadFailureInjection:
 
 
 class TestStartDownloadInProgressLeak:
-    """#1048: an early exception in start_download must release the in-progress flag.
+    """An early exception in start_download must release the in-progress flag.
 
-    Before the fix, a raise between ``_download_in_progress.add`` and the
-    create_task block left the ROM stuck "Already downloading" until a backend
-    restart (SD card unmounted → OSError in make_dirs / disk_free; roms_path()
-    returning None → TypeError in the path join).
+    A raise between ``_download_in_progress.add`` and the create_task block —
+    an OSError from make_dirs or disk_free (SD card unmounted), a TypeError from
+    the path join when roms_path() returns None — fails the call and leaves the
+    ROM free to be downloaded again, not stuck "Already downloading" until the
+    backend restarts.
     """
 
     def _wire(self, downloads, tmp_path):
@@ -5766,7 +5767,7 @@ class TestSiblingSupersedeRemoval:
     @pytest.mark.asyncio
     async def test_start_download_releases_in_progress_on_supersede_exception(self, downloads):
         # B1: an exception out of the supersede await releases the in-progress
-        # claim so the ROM isn't stuck "already downloading" until a reload.
+        # claim so the ROM isn't stuck "already downloading" until the backend restarts.
         from unittest.mock import AsyncMock
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
