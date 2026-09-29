@@ -51,28 +51,36 @@ if TYPE_CHECKING:
 DEFAULT_PAYLOAD_LIMIT = 12 * 1024 * 1024
 
 
-def reachable_methods(target: object) -> dict[str, Any]:
-    """Map every reachable method name on *target* to its bound method.
+def route_names(cls: type) -> frozenset[str]:
+    """Every method name a caller may reach on an instance of *cls*.
 
-    Reachability is read off the **class**, not the instance, and only off the
-    classes in its own hierarchy above ``object``: an instance attribute that
-    happens to hold a marked function is state, not surface, and exposing it
-    would mean a name became reachable because of something a test poked in.
-    The most-derived definition of a name decides, so an unmarked override of a
-    marked method is not reachable.
+    Read off the class, and only off the classes in its own hierarchy above
+    ``object``. The most-derived definition of a name decides, so an unmarked
+    override of a marked method is not reachable.
     """
-    names: dict[str, Any] = {}
-    for klass in reversed(type(target).__mro__):
+    names: set[str] = set()
+    for klass in reversed(cls.__mro__):
         if klass is object:
             continue
         for name, value in vars(klass).items():
             if name.startswith("_"):
                 continue
             if is_route(value):
-                names[name] = getattr(target, name)
+                names.add(name)
             else:
-                names.pop(name, None)
-    return names
+                names.discard(name)
+    return frozenset(names)
+
+
+def reachable_methods(target: object) -> dict[str, Any]:
+    """Map every reachable method name on *target* to its bound method.
+
+    The names are :func:`route_names` of its **class**, never of the instance:
+    an instance attribute that happens to hold a marked function is state, not
+    surface, and exposing it would mean a name became reachable because of
+    something a test poked in.
+    """
+    return {name: getattr(target, name) for name in route_names(type(target))}
 
 
 class CallDispatcher:
