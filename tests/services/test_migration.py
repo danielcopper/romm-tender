@@ -1704,9 +1704,10 @@ class TestBackgroundTaskTracking:
     """Coverage for the background-task tracking + ``shutdown()`` lifecycle.
 
     The path-change detection schedules a ``retrodeck_path_changed`` emit
-    via ``loop.create_task``. Without strong refs into ``_background_tasks``
-    and a cancellation hook in ``shutdown()``, those tasks are still pending
-    when the backend shuts down. These tests pin the contract.
+    via ``loop.create_task``. Without a strong ref in ``_background_tasks``
+    such a task can be collected before it runs, and without a cancellation
+    hook in ``shutdown()`` it is still pending when the backend shuts down.
+    These tests pin the contract.
     """
 
     @pytest.mark.asyncio

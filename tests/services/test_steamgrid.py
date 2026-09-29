@@ -58,7 +58,7 @@ class SteamGridHarness:
     """The SteamGridDB service and what its tests seed or assert against beside it.
 
     ``library`` is the library service whose pending sync the SteamGridDB
-    service reads when the ``roms`` row carries no SGDB id. ``settings`` is the
+    service reads when ``roms`` holds no SGDB id for the ROM. ``settings`` is the
     dict both services read, the SteamGridDB API key included.
     """
 
