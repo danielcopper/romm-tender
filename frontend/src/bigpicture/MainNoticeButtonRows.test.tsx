@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { createElement as ce } from "react";
+import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { UpdateAnnouncementNotice } from "./UpdateAnnouncementNotice";
 import { UpdateFailureNotice } from "./UpdateFailureNotice";
 import { UpdateNotice } from "./UpdateNotice";
@@ -10,12 +11,13 @@ import { resetUpdateOutcomeStoreForTests, setUpdateOutcomeState } from "../utils
 // Re-mocked so Field and ButtonItem echo the props that place their children:
 // the global stub in test-setup.ts drops them. Steam's ButtonItem draws a Field
 // row (`@decky/ui`'s components/ButtonItem.js finds it by Field's
-// `childrenContainerWidth` among its props), so on all three cards the space
-// above the buttons is the Field's.
+// `childrenContainerWidth` among its props), so on every one of these cards the
+// space above the buttons is the Field's.
 vi.mock("@decky/ui", () => {
   type AnyProps = Record<string, unknown> & { children?: unknown };
   const passThrough = (p: AnyProps) => ce("div", null, p.children as never);
   return {
+    PanelSection: passThrough,
     PanelSectionRow: passThrough,
     Focusable: passThrough,
     DialogButton: (p: AnyProps) => ce("button", null, p.children as never),
@@ -38,7 +40,7 @@ vi.mock("@decky/ui", () => {
   };
 });
 
-describe("the update cards' button rows", () => {
+describe("the button rows of the notices on Main", () => {
   beforeEach(() => {
     resetUpdateNoticeStoreForTests();
     resetUpdateOutcomeStoreForTests();
@@ -71,6 +73,7 @@ describe("the update cards' button rows", () => {
         });
         return <UpdateNotice onOpenUpdates={() => {}} />;
       },
+      ["Open Updates", "Dismiss"],
     ],
     [
       "the rolled-back card",
@@ -82,11 +85,13 @@ describe("the update cards' button rows", () => {
         });
         return <UpdateFailureNotice onOpenUpdates={() => {}} />;
       },
+      ["Open Updates", "Dismiss"],
     ],
-  ])("%s puts both buttons in one Field below, with no separator", (_name, card) => {
+    ["the playtime card", () => <PlaytimeScopeBanner onOpenConnections={() => {}} />, ["Open Connections", "Dismiss"]],
+  ])("%s puts both buttons in one Field below, with no separator", (_name, card, labels) => {
     const { container } = render(card());
     const buttons = [...container.querySelectorAll("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual(["Open Updates", "Dismiss"]);
+    expect(buttons.map((b) => b.textContent)).toEqual(labels);
     const fields = new Set(buttons.map((b) => b.closest("[data-testid='field']")));
     expect(fields.size).toBe(1);
     const [field] = fields;

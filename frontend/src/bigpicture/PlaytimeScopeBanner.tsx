@@ -1,5 +1,5 @@
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, DialogButton, Focusable } from "@decky/ui";
+import { PanelSection, PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 
 /** Title of the account-wide QAM playtime-scope banner. */
@@ -52,17 +52,19 @@ export const PlaytimeScopeBanner: FC<{ onOpenConnections: () => void }> = ({ onO
         </div>
       </PanelSectionRow>
       <PanelSectionRow>
-        {/* Two buttons on one row rather than two full-width rows: Main is the
-            narrow page, and a notice that costs three rows pushes the status
-            block it sits above off the screen. */}
-        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
-          <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={onOpenConnections}>
-            Open Connections
-          </DialogButton>
-          <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={handleDismiss}>
-            Dismiss
-          </DialogButton>
-        </Focusable>
+        <Field bottomSeparator="none" childrenLayout="below" childrenContainerWidth="max">
+          {/* Two buttons on one row rather than two full-width rows: Main is the
+              narrow page, and a notice that costs three rows pushes the status
+              block it sits above off the screen. */}
+          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+            <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={onOpenConnections}>
+              Open Connections
+            </DialogButton>
+            <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={handleDismiss}>
+              Dismiss
+            </DialogButton>
+          </Focusable>
+        </Field>
       </PanelSectionRow>
     </PanelSection>
   );
