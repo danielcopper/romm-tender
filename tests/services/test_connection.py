@@ -111,10 +111,8 @@ def connection(logger) -> ConnectionHarness:
 
 
 def _configure_server(settings: dict[str, Any]) -> None:
-    """Fill in the server, credentials and token a connection test connects with."""
+    """Fill in the server URL, token and SSL flag a connection test connects with."""
     settings["romm_url"] = "http://romm.local"
-    settings["romm_user"] = "user"
-    settings["romm_pass"] = "pass"
     settings["romm_api_token"] = "rmm_token"
     settings["romm_allow_insecure_ssl"] = False
 
