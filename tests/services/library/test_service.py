@@ -129,18 +129,6 @@ class TestGetPlatforms:
         assert result["success"] is False
         assert "reason" in result
 
-    @pytest.mark.asyncio
-    async def test_unexpected_response_type(self, library):
-        from unittest.mock import AsyncMock, MagicMock
-
-        mock_loop = MagicMock()
-        mock_loop.run_in_executor = AsyncMock(return_value="not a list")
-        rebind_loop(library.sync, mock_loop)
-
-        result = await library.sync.get_platforms()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-
 
 class TestSavePlatformSync:
     """Tests for save_platform_sync() — lines 120-123."""

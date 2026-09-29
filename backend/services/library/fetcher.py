@@ -26,7 +26,6 @@ from domain.sync_state import SyncCancelled, SyncState
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
 from lib.errors import classify_error
-from lib.list_result import ErrorCode
 from lib.romm_paging import LIST_PAGE_SIZE
 
 if TYPE_CHECKING:
@@ -147,22 +146,11 @@ class LibraryFetcher:
 
     async def get_platforms(self):
         try:
-            # Typed ``object`` so the isinstance guard below is genuine
-            # narrowing — the RomM API return type is a JSON-shape promise
-            # the server can break (malformed payload, schema drift).
-            platforms: object = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+            platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
         except Exception as e:
             self._logger.error(f"Failed to fetch platforms: {e}")
             _reason, _msg = classify_error(e)
             return {"success": False, "reason": _reason, "message": _msg}
-
-        if not isinstance(platforms, list):
-            self._logger.error(f"Unexpected platforms response type: {type(platforms).__name__}")
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": "Invalid server response",
-            }
 
         # Only platforms with ROMs are shown (and thus toggleable), so the
         # materialized map covers exactly the set the user can act on.
