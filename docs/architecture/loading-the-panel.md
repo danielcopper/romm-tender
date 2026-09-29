@@ -101,7 +101,10 @@ Decky starting beside us does not rebuild the context.
 
 The expression claims the marker BEFORE it imports anything, so a second evaluation cannot load the panel twice. It
 holds the marker even when the import fails, which is what stops a broken bundle being retried into the same context —
-the [load-failure card](#the-load-failure-card) explains that state instead.
+the [load-failure card](#the-load-failure-card) explains that state instead. It also keeps a restarted backend out of
+that context: a failed load can leave the modules `@decky/ui`'s sweep re-executed, and part of the panel, behind, and a
+marker naming an earlier backend is what sends the new one to
+[the recovery's rebuild](#a-panel-an-earlier-backend-left-behind) instead.
 
 The marker is an object: the version of Tender that wrote it, which panel bundle it loaded, and an **instance** — a
 random value each backend process makes for itself at start-up. The instance is what lets a process tell its own panel

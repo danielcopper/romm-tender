@@ -80,8 +80,7 @@ new code in it.
 - `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-callable failure shapes, the
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
-  each fails green** (the one exception is the injection marker, which a test pins) — the redaction one did exactly
-  that, and only an assertion on stderr's own output caught it.
+  each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
 - `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
   method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a

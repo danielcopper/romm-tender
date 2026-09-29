@@ -12,8 +12,7 @@ imports it**. The second half is the one that rots without a check: the first se
 reaches in here for the sink, and from then on the composition root is no longer the only place that knows a transport
 exists.
 
-None of the seven below has a mechanical check. Each of them fails green, with one exception: the marker property in
-rule 7 is pinned by a test.
+None of the seven below has a mechanical check. Each of them fails green.
 
 ## 1. A transport error is not a callable's failure shape
 
@@ -78,8 +77,7 @@ Every request path goes through `lib.path_safety.safe_join`, which resolves syml
 
 ## 7. The injection puts the token in one place and the panel in one context
 
-`host/inject/` evaluates one expression into Steam's renderer. Of the four properties below, only the marker's is pinned
-by a test; the other three have no check at all.
+`host/inject/` evaluates one expression into Steam's renderer. Four properties of it have no check at all.
 
 **The token goes into the addresses and one field beside them, and nowhere a press or a log can reach it.** The panel
 reads its port and its token off the URL it was imported from (`api/host.ts` hands `import.meta.url` to
@@ -92,11 +90,10 @@ covers stderr and the page, which it does not.
 **The marker is claimed before anything is imported, and kept when the import fails.** `window.__tender_panel__` is the
 whole of how a context says it already carries the panel — a JS-context rebuild wipes it and nothing short of one does —
 so claiming it afterwards lets a second evaluation load the panel twice, and dropping it on failure retries a broken
-bundle into the same context for ever. A later backend is no exception: a failed load can leave `@decky/ui`'s sweep and
-part of the panel behind, so the kept marker is what sends it to
-[the recovery's rebuild](../../docs/architecture/loading-the-panel.md#a-panel-an-earlier-backend-left-behind) rather
-than into that context. Pinned in `tests/host/inject/test_bootstrap.py` — `TestTheMarker` for the order,
-`TestWhoseMarkerItIs::test_a_load_that_failed_keeps_the_marker` for both failure paths, run under node.
+bundle into the same context for ever. It keeps a restarted backend out of that context too
+([the marker](../../docs/architecture/loading-the-panel.md#the-marker)). Pinned in `tests/host/inject/test_bootstrap.py`
+— `TestTheMarker` for the order, `TestWhoseMarkerItIs::test_a_load_that_failed_keeps_the_marker` for two causes of a
+failed load, a refused global and a panel that throws, run under node.
 
 **The load-failure card may not take the machine over.** Whether Steam's controller focus reaches a node appended to its
 document from outside its React tree is not established here, so the card is built so that it does not matter: drawn
