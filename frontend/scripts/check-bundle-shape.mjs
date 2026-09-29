@@ -29,6 +29,7 @@
  */
 
 import { globSync, readFileSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const DIST = new URL("../../dist/", import.meta.url);
 
@@ -113,13 +114,14 @@ const report = [];
 // can reach — so the gap is harmless, and saying so is cheaper than a reader
 // discovering the sweep is narrower than the sentence.
 {
-  const sources = globSync("src/**/*.{ts,tsx}", { cwd: new URL("..", import.meta.url).pathname });
+  const sources = globSync("src/**/*.{ts,tsx}", { cwd: fileURLToPath(new URL("..", import.meta.url)) });
   if (sources.length === 0) {
     findings.push("found no sources under src/ to check the probe strings against — the sweep proves nothing empty.");
   }
   const contaminated = new Map();
   for (const relative of sources) {
-    const text = readFileSync(new URL(`../src/${relative.split("src/").pop() ?? relative}`, import.meta.url), "utf8");
+    const normalized = relative.replace(/\\/g, "/");
+    const text = readFileSync(new URL(`../${normalized}`, import.meta.url), "utf8");
     for (const needle of DECKY_UI_IMPLEMENTATION) {
       if (text.includes(needle)) contaminated.set(needle, relative);
     }
