@@ -4875,6 +4875,70 @@ class TestFailedCollectionListing:
             assert uow.sync_runs.get("run-1") is None
 
 
+class TestPlatformListingThatIsNotAList:
+    """A platform listing that answers with something but a list stops the run before it changes anything.
+
+    Read as "no platforms" instead, a run with a collection enabled would still
+    complete, and the end-of-run stale removal would unbind every game only a
+    platform brings in.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_run_fails_and_leaves_every_binding_as_it_was(self, library, fake_romm_api, emit):
+        from adapters.romm.romm_api import RommApiAdapter
+
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+        )
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        fake_romm_api.collections.append(
+            {"id": 7, "name": "Faves", "rom_count": 2, "updated_at": "2025-01-01T00:00:00+00:00"}
+        )
+        for rom_id in (1, 2):
+            fake_romm_api.roms[rom_id].setdefault("collection_ids", []).append(7)
+        library.settings["enabled_platforms"] = {"1": False, "2": True}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"collection": {"1": 5001, "2": 5002}, "platform": {"4": 5004}}[unit.type]
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def run_to_its_end(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        def bindings():
+            with library.uow as uow:
+                return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2, 4)}
+
+        # Run 1: both listings answer; the collection binds its games and the platform its own.
+        await run_to_its_end("run-1")
+        assert bindings() == {1: 5001, 2: 5002, 4: 5004}
+
+        # Run 2: the platform listing answers with an object; the collection listing still answers.
+        client = MagicMock()
+        client.request.return_value = {"detail": "not a list"}
+        fake_romm_api.list_platforms = RommApiAdapter(client).list_platforms  # type: ignore[method-assign]
+        emit.reset_mock()
+        await run_to_its_end("run-2")
+
+        progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+        assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
+            ("error", "Unexpected response from /api/platforms: dict", False)
+        ]
+        assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
+        with library.uow as uow:
+            assert uow.sync_runs.get("run-2") is None
+        assert bindings() == {1: 5001, 2: 5002, 4: 5004}
+
+
 class TestStoppedRunLeavesNoHiddenStaleRow:
     """A version deleted on RomM loses its shortcut at the next completed run (#2084).
 

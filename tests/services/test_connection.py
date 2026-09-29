@@ -200,6 +200,25 @@ class TestTestConnectionBadPath:
         assert result["reason"] == "auth_failed"
         assert not result["message"].startswith("Server reachable")
 
+    def test_a_platform_listing_that_is_not_a_list_fails(self, event_loop, logger):
+        """The adapter raises on a non-list platform listing, so the connection test does not pass over it."""
+        from adapters.romm.romm_api import RommApiAdapter
+
+        settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
+        answers = {"/api/heartbeat": {"SYSTEM": {"VERSION": "5.3.0"}}, "/api/platforms": {"detail": "not a list"}}
+        client = MagicMock()
+        client.request.side_effect = lambda path: answers[path]
+        romm_api = MagicMock(wraps=RommApiAdapter(client))
+        service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+
+        result = event_loop.run_until_complete(service.test_connection())
+
+        assert result == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Server reachable but API request failed: Unexpected response from /api/platforms: dict",
+        }
+
 
 class TestTestConnectionVersionGate:
     def test_version_below_minimum_rejected(self, event_loop, romm_api, logger):

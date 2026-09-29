@@ -18,6 +18,7 @@ import pytest
 
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
+from lib.errors import RommApiError, RommNotFoundError
 from lib.romm_paging import LIST_PAGE_SIZE
 
 
@@ -83,15 +84,17 @@ class TestFetchEnabledPlatforms:
         assert len(result) == 2
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_non_list_response(self, library, fake_romm_api):
-        """When ``list_platforms`` returns a non-list, treat as empty."""
-        _wire_fake(library, fake_romm_api)
-        # Override ``list_platforms`` to return a dict (the real adapter
-        # might surface error envelopes shaped this way).
-        fake_romm_api.list_platforms = lambda: {"error": "bad response"}  # type: ignore[method-assign]
+    async def test_a_listing_that_is_not_a_list_raises(self, library):
+        """A non-list answer raises instead of reading as no platforms, and never as a 404 verdict."""
+        from adapters.romm.romm_api import RommApiAdapter
 
-        result = await library.sync._fetcher._fetch_enabled_platforms()
-        assert result == []
+        client = MagicMock()
+        client.request.return_value = {"error": "bad response"}
+        library.sync._fetcher._romm_api = RommApiAdapter(client)
+
+        with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$") as exc_info:
+            await library.sync._fetcher._fetch_enabled_platforms()
+        assert not isinstance(exc_info.value, RommNotFoundError)
 
 
 class TestGetPlatformsMaterialization:
@@ -451,6 +454,44 @@ class TestGetCollectionsMalformedListing:
             "reason": "server_unreachable",
             "message": "Unexpected response from /api/collections: dict",
         }
+
+
+class TestPlatformListingThatIsNotAList:
+    """The Library page's two platform reads answer a non-list listing with the failure shape."""
+
+    @staticmethod
+    def _wire_malformed_listing(library):
+        from adapters.romm.romm_api import RommApiAdapter
+
+        client = MagicMock()
+        client.request.return_value = {"detail": "not a list"}
+        library.sync._fetcher._romm_api = RommApiAdapter(client)
+
+    @pytest.mark.asyncio
+    async def test_get_platforms_fails(self, library):
+        self._wire_malformed_listing(library)
+
+        result = await library.sync._fetcher.get_platforms()
+
+        assert result == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Unexpected response from /api/platforms: dict",
+        }
+
+    @pytest.mark.asyncio
+    async def test_set_all_platforms_sync_fails_and_writes_nothing(self, library):
+        self._wire_malformed_listing(library)
+        library.settings["enabled_platforms"] = {"1": True}
+
+        result = await library.sync._fetcher.set_all_platforms_sync(False)
+
+        assert result == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Unexpected response from /api/platforms: dict",
+        }
+        assert library.settings["enabled_platforms"] == {"1": True}
 
 
 class TestSaveCollectionsSync:

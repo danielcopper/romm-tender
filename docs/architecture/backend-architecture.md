@@ -805,8 +805,8 @@ are **intentionally excluded** — RomM treats `genre`/`company` as ROM _filter 
 neither, so they never appear in RomM's Collections view. The supported set is a single constant
 (`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); `get_collections` fetches each supported type and merges them
 under the one `virtual` bucket. Which types a sync fetches, and what a failed one does to the sync and to
-`get_collections`, is under "A collection listing that fails stops the run" below. Because the type is baked into the
-base64 id, ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
+`get_collections`, is under "A listing that fails stops the run" below. Because the type is baked into the base64 id,
+ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
 stamp-exclusion, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per
 type. On disk the enabled-collections bucket was renamed `franchise → virtual` by the lossless `settings.json` migration
 **v10 → v11** (`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket key while preserving every enabled
@@ -930,23 +930,26 @@ stamped member on a skip, every fetched one on a full fetch — so none of its c
 member the stale removal unbinds therefore belongs to a collection the run built no unit for, and that collection
 full-fetches once a run builds one for it again instead of skipping over the member.
 
-**A collection listing that fails stops the run.** The standard, smart and virtual listings are read while the work
-queue is built, before any unit is fetched, and a failure there raises to the handler a failed platform listing reaches.
-A failure is any error the transport raises — a transient one only once its retry ladder gives up — and also an answer
-that is not a list: the adapter's three collection listings (`adapters/romm/romm_api.py`) raise that as a plain
-`RommApiError`, never an empty list and never `RommNotFoundError`, which downstream reads as proof that one entity is
-gone, and a listing is about no single entity. Apply emits a `sync_progress` frame at stage `error` carrying the
-`classify_error` message and returns before it opens a `SyncRun`, so no stale removal runs and neither
+**A listing that fails stops the run.** The platform listing and the standard, smart and virtual collection listings are
+read while the work queue is built, before any unit is fetched, and a failure of any of them raises to one handler. A
+failure is any error the transport raises — a transient one only once its retry ladder gives up — and also an answer
+that is not a list: the adapter's platform listing and its three collection listings (`adapters/romm/romm_api.py`) raise
+that as a plain `RommApiError`, never an empty list and never `RommNotFoundError`, which downstream reads as proof that
+one entity is gone, and a listing is about no single entity. Apply emits a `sync_progress` frame at stage `error`
+carrying the `classify_error` message and returns before it opens a `SyncRun`, so no stale removal runs and neither
 `sync_collections` nor `sync_complete` is emitted; the preview discards its delta and answers with the canonical failure
-shape. Read as an empty listing instead, the run would build no unit for an enabled collection, the stale removal would
-unbind the games only that collection brings in and delete its stamp (a standard or smart one has one), and the
-frontend's stale-collection cleanup would delete its Steam collection. A collection absent from a list RomM did answer
-with is a real removal and still goes that way. Only a kind with an enabled id is listed, and of the virtual kind only a
-type an enabled id encodes (`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode
-lists every supported type), so an endpoint that keeps failing blocks the sync only for a user who has switched on a
-collection it serves — switched on, not synced: a foreign collection the owner scope drops from the queue still needs
-its kind listed. The Library page's `get_collections` reads the same listings only to display them: a failed standard
-listing fails it, while a failed smart listing or virtual type is left out and the rest is listed.
+shape. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any
+other unit keeps the run from ending as "Nothing to sync", the stale removal would unbind the games only it brings in; a
+collection would also lose its stamp (a standard or smart one has one), and the frontend's stale-collection cleanup
+would delete its Steam collection. A collection absent from a list RomM did answer with is a real removal and still goes
+that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
+(`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode lists every supported type), so
+an endpoint that keeps failing blocks the sync only for a user who has switched on a collection it serves — switched on,
+not synced: a foreign collection the owner scope drops from the queue still needs its kind listed. The platform listing
+is always read. The Library page's `get_collections` reads the same collection listings only to display them: a failed
+standard listing fails it, while a failed smart listing or virtual type is left out and the rest is listed. The platform
+listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and the connection test —
+answer its failure, a non-list answer included, with the failure shape.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The

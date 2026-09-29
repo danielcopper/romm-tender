@@ -69,6 +69,18 @@ class TestListPlatforms:
         client.request.assert_called_once_with("/api/platforms")
         assert result == [{"id": 1, "slug": "snes"}]
 
+    def test_non_list_raises(self):
+        """A non-list answer is a failed listing, never an empty one, and never a 404 verdict."""
+        api, client = _make_api()
+        client.request.return_value = {"error": "bad"}
+        with pytest.raises(RommApiError) as exc_info:
+            api.list_platforms()
+        assert not isinstance(exc_info.value, RommNotFoundError)
+        assert classify_error(exc_info.value) == (
+            "server_unreachable",
+            "Unexpected response from /api/platforms: dict",
+        )
+
 
 class TestGetRom:
     def test_calls_rom_endpoint(self):

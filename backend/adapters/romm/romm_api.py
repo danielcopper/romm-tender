@@ -119,7 +119,7 @@ class RommApiAdapter:
         return self._client.request_once("/api/heartbeat", timeout=self._PROBE_TIMEOUT_SECONDS)
 
     def list_platforms(self) -> list[dict[str, Any]]:
-        return self._client.request("/api/platforms")
+        return self._request_listing("/api/platforms")
 
     def get_current_user(self) -> dict[str, Any]:
         return self._client.request("/api/users/me")
@@ -185,19 +185,19 @@ class RommApiAdapter:
     # ── Collections ───────────────────────────────────────────────────
 
     def list_collections(self) -> list[dict[str, Any]]:
-        return self._request_collection_listing("/api/collections")
+        return self._request_listing("/api/collections")
 
     def list_virtual_collections(self, collection_type: str) -> list[dict[str, Any]]:
-        return self._request_collection_listing(f"/api/collections/virtual?type={collection_type}")
+        return self._request_listing(f"/api/collections/virtual?type={collection_type}")
 
     def list_smart_collections(self) -> list[dict[str, Any]]:
-        return self._request_collection_listing("/api/collections/smart")
+        return self._request_listing("/api/collections/smart")
 
-    def _request_collection_listing(self, path: str) -> list[dict[str, Any]]:
+    def _request_listing(self, path: str) -> list[dict[str, Any]]:
         """Return the listing at *path*, raising :class:`RommApiError` when RomM answers with anything but a list.
 
         Never an empty list in its place: why is in docs/architecture/backend-architecture.md,
-        "A collection listing that fails stops the run".
+        "A listing that fails stops the run".
         """
         result = self._client.request(path)
         if not isinstance(result, list):
