@@ -160,13 +160,12 @@ class SyncEngineConfig:
     SQLite repositories), the peer save sub-services (rom_info and the
     shared :class:`DeviceRegistry` that owns the server device id), the
     Protocol-typed RomM adapter and retry strategy, the two save-sync
-    decision kernels (``compute_sync_action`` and its upload-409
-    backstop ``resolve_upload_conflict``), runtime
-    infrastructure (loop, logger, clock), the Protocol-typed filesystem
-    adapter, the ``DebugLogger`` seam, the per-ROM active-core resolver,
-    the hostname provider + machine-id provider passed through to device
-    registration, and the update-in-progress and migration-pending callbacks
-    SyncEngine consults at the entry of every public flow.
+    decision kernels (``compute_sync_action`` and its upload-409 backstop
+    ``resolve_upload_conflict``), runtime infrastructure (loop, logger,
+    clock), the Protocol-typed filesystem adapter, the ``DebugLogger`` seam,
+    the per-ROM active-core resolver, the hostname and machine-id providers
+    passed through to device registration, and the update-in-progress and
+    migration-pending callbacks its sync backstops and follow ask.
     """
 
     settings: dict[str, Any]
@@ -486,17 +485,14 @@ class SyncEngine:
     async def follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
         """Carry this ROM's save files to the directory *answer* names, where it moved.
 
-        The caller holds ``rom_lock`` and hands over the reading it already
-        took, and calls this before it looks at any local file. Public
-        (peer-called): the peer services' write, delete, count and status paths
-        follow first as well; ``resolve_sync_conflict`` does so here.
-        The follow belongs to the sync, so it does nothing while save sync is
-        off, nothing while an update is being installed — that stops this
-        process without waiting for a move — and nothing while a RetroDECK home
-        migration is pending or still running: the files are that migration's
-        to move, and a follow then would get past the user's overwrite-or-skip
-        choice. A failure is logged and leaves the record as it was, so the
-        caller goes on and the next caller tries again.
+        The caller holds ``rom_lock``, hands over the reading it already took,
+        and calls this before it looks at any local file. Public (peer-called):
+        the peer services' write, delete, count and status paths follow first
+        as well; ``resolve_sync_conflict`` does so here. It does nothing while
+        save sync is off, an update is being installed, or a RetroDECK home
+        migration is pending or still running — why is
+        ``docs/architecture/save-file-sync-architecture.md``'s. A failure is
+        logged and leaves the record as it was, so the next caller tries again.
         """
         if answer is None or not self.is_save_sync_enabled():
             return
