@@ -59,26 +59,27 @@ Format: **invariant** — tier — enforced by.
   about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
   AST walk for an attribute in `{config_dir, data_dir, cache_dir, state_dir, runtime_dir,
   code_dir, bin_dir}` whose
-  base ends in `directories`): **18 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 5,
-  `cache_dir` 4, `data_dir` 4, `state_dir` 2, and one each for `config_dir`, `runtime_dir` and `bin_dir`. Re-derive it
-  rather than trusting the number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the
-  logging setup opens and which the injection's crash record lives under, and `runtime_dir`, which the port file lives
-  in. `config_dir` has exactly one reader, `PersistenceAdapter`, and `bin_dir` exactly one, the launcher install in
-  `bootstrap/adapters.py`. The pairing that matters is `cache_dir` against `data_dir` — covers, artwork and the SGDB
-  artwork cache on the first because they are re-derivable from the server and the database on the second because it is
-  not; a system that clears caches must be able to clear one and not the other. The launcher's home is the read whose
-  mix-up a user would see rather than the next start only, since `launcher_in_bin_dir(directories.bin_dir)` is carried
-  on as `ShortcutLauncher.path` and baked into every shortcut's `exe`. `bin_dir` is one of the two fields not named
-  after this program (the other is `code_dir`, wherever the program was installed; CONTEXT.md's "The program's
-  directories" is the home of that split) — it is the directory every program a user installs for themselves puts a
-  binary in, which is why nothing under it may be treated as ours to remove. Nothing mechanical tells the seven apart:
-  they are seven `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in
-  whichever direction it happened to point. **One raw read of `TENDER_CODE_DIR` is deliberate and is not a directory
-  read**: `domain/update_release.py::resolve_update_source`, called once by `main.run()` beside `resolve_directories`,
-  asks whether the variable was SET and whether it names the directory this process's code sits in — which decides
-  whether this is the installed program an update may replace. `AppDirectories.code_dir` cannot answer that, because the
-  ladder has already folded "set" and "fell back to where the code sits" into one value; the function derives no
-  directory
+  base ends in `directories`): **19 reads over three modules**, `main.py`, `bootstrap/adapters.py` and
+  `bootstrap/services.py` — `code_dir` 5, `cache_dir` 4, `data_dir` 4, `state_dir` 3, and one each for `config_dir`,
+  `runtime_dir` and `bin_dir`. Re-derive it rather than trusting the number. **One field is read in `main.py` alone**
+  and nowhere else: `runtime_dir`, which the port file lives in. `state_dir` is read there twice, by the logging setup
+  that opens it and by the injection whose crash record lives under it, and once in `bootstrap/adapters.py`, for the
+  record of a rolled-back update. `config_dir` has exactly one reader, `PersistenceAdapter`, and `bin_dir` exactly one,
+  the launcher install in `bootstrap/adapters.py`. The pairing that matters is `cache_dir` against `data_dir` — covers,
+  artwork and the SGDB artwork cache on the first because they are re-derivable from the server and the database on the
+  second because it is not; a system that clears caches must be able to clear one and not the other. The launcher's home
+  is the read whose mix-up a user would see rather than the next start only, since
+  `launcher_in_bin_dir(directories.bin_dir)` is carried on as `ShortcutLauncher.path` and baked into every shortcut's
+  `exe`. `bin_dir` is one of the two fields not named after this program (the other is `code_dir`, wherever the program
+  was installed; CONTEXT.md's "The program's directories" is the home of that split) — it is the directory every program
+  a user installs for themselves puts a binary in, which is why nothing under it may be treated as ours to remove.
+  Nothing mechanical tells the seven apart: they are seven `str` fields on one frozen struct, so a read of the wrong one
+  is a rename away and fails silently in whichever direction it happened to point. **One raw read of `TENDER_CODE_DIR`
+  is deliberate and is not a directory read**: `domain/update_release.py::resolve_update_source`, called once by
+  `main.run()` beside `resolve_directories`, asks whether the variable was SET and whether it names the directory this
+  process's code sits in — which decides whether this is the installed program an update may replace.
+  `AppDirectories.code_dir` cannot answer that, because the ladder has already folded "set" and "fell back to where the
+  code sits" into one value; the function derives no directory
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only — the
   three homes and the question each answers are enumerated in `backend/domain/identity.py`'s module docstring.

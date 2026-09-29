@@ -927,14 +927,14 @@ time one of the paths above touches that game's saves. Two spellings of one dire
 open across a file operation or a resolver reading.
 
 **Filling the record in.** A one-time background task on the first start with the record
-(`SaveService.record_save_directories_once`, started from `main.py`, cancelled at unload) walks the installed ROMs one
-at a time under each ROM's lock and records today's answer where none is recorded — subject to the first rule above. The
-`save_directories_recorded` marker in `kv_config` makes it one-time. It is written only once the pass has finished over
-a detected emulator installation with no ROM failing: a pass cut short, one that found no installation to ask, or one in
-which a ROM's recording failed (logged, and the pass goes on to the rest) runs again at the next start. A save-sort
-migration left pending by an older version cannot be followed: nothing records the directory its files are still in.
-Saves that were synced can be downloaded again at the game's next sync; a save that exists only on the device stays in
-the old folder.
+(`SaveService.record_save_directories_once`, started by `Application.run_startup_repairs`, cancelled by
+`Application.shutdown`) walks the installed ROMs one at a time under each ROM's lock and records today's answer where
+none is recorded — subject to the first rule above. The `save_directories_recorded` marker in `kv_config` makes it
+one-time. It is written only once the pass has finished over a detected emulator installation with no ROM failing: a
+pass cut short, one that found no installation to ask, or one in which a ROM's recording failed (logged, and the pass
+goes on to the rest) runs again at the next start. A save-sort migration left pending by an older version cannot be
+followed: nothing records the directory its files are still in. Saves that were synced can be downloaded again at the
+game's next sync; a save that exists only on the device stays in the old folder.
 
 ### Relationship to `retrodeck_path_migration`
 

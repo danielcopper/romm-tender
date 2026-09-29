@@ -66,7 +66,7 @@ passes → XPASS → CI fails → the marker must be removed. A property is neve
 
 `tests/contract/` crosses the frontend↔backend wire: it builds the **real** `Endpoints` through the **real**
 `bootstrap()` and `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under
-`tmp_path`) and drives the actual `main.py` callables. Only the outermost edges are faked (`romm_api`, `sgdb_adapter`,
+`tmp_path`) and drives the actual endpoints. Only the outermost edges are faked (`romm_api`, `sgdb_adapter`,
 Clock/UuidGen/Sleeper, `emit`, and `http_adapter.with_retry` as a single-attempt pass-through). Harness lives in
 `tests/contract/_harness.py`; seeding helpers in `tests/contract/_seed.py`. The harness constructs the `Application`
 itself from the wired services and runs none of its start-up repairs, `open_network` or `shutdown`; a test reaches a

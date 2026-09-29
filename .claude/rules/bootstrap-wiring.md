@@ -34,9 +34,9 @@ and the fallback it answers with travels all the way out to a server's token lis
 
 **`run()` is synchronous, and that is load-bearing.** Everything it does is path and environment work that belongs
 before a loop exists — and the admission token has to be minted before the first log line, since the formatter that
-keeps it out of the log file is built with the file handler and takes the token as its argument. The `build` closure it
-hands the host is `async` only because the host awaits it; it stays in `main.py`, which Sonar's S7503 exclusion covers,
-and an `async def` that never awaits is not put into `bootstrap/`, which has none.
+keeps it out of the log file is built with the file handler and takes the token as its argument. `build_backend`, which
+it hands the host, is `async` only because the host awaits it; it stays in `main.py`, which Sonar's S7503 exclusion
+covers, and an `async def` that never awaits is not put into `bootstrap/`, which has none.
 
 `main.py` grows with the callable surface it describes; that is unavoidable density, not god-class, and it is
 deliberately out of scope for the module-size gate.

@@ -107,12 +107,12 @@ backend never reaches the port fallback — the lock refused it first — so a f
 holds the port. The port file is a hint; connecting to it is the proof.
 
 **A start-up routine's failure is counted, not fatal** (`bootstrap/startup.py`). `Application.run_startup_repairs` runs
-them all, in one order, and takes the host's failure recorder as a callback because `bootstrap/` may not import `host/`.
-One edge binds two of them: `prune_stale_installed_roms` runs only after `detect_retrodeck_path_change` **succeeded**,
-because the prune reads the pending homes the detection writes. `build_application` runs none of them; the entry point
-runs them after building and before the port is bound. The network step (`Application.open_network`) and the shutdown
-(`Application.shutdown`) reach the host on the `BackendBuild` the build answers with, so a build that failed has nothing
-to shut down.
+them all, in one order, and reports each failure to the recorder it is handed. One edge binds two of them:
+`prune_stale_installed_roms` runs only after `detect_retrodeck_path_change` **succeeded**, because the prune reads the
+pending homes the detection writes. `build_application` runs none of them; the entry point runs them after building and
+before the port is bound. The network step (`Application.open_network`) and the shutdown (`Application.shutdown`) reach
+the host only on the `BackendBuild` the build answers with; a build that failed answers none, and the host shuts nothing
+down.
 
 ## Dependency Diagram
 
@@ -2457,9 +2457,9 @@ whether a later start re-reads Steam's file at all.
 
 ## Composition Root (`bootstrap/`)
 
-The composition root is a package of two halves, one per phase, the `Application` that composes them, and an
-`__init__.py` that is namespace and re-exports only — consumers write `from bootstrap import …` and never deep-import a
-submodule:
+The composition root is a package of two halves, one per phase, the `Application` that composes them, the wrapper each
+start-up repair runs through (`startup.py`), and an `__init__.py` that is namespace and re-exports only — consumers
+write `from bootstrap import …` and never deep-import a submodule:
 
 1. **`adapters.py`** — owns `bootstrap()`, which is **told** where the directories are, and where releases are asked
    for, rather than deriving them, then builds every adapter, applies the SQLite schema migrations, and loads + migrates

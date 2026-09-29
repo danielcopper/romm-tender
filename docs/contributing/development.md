@@ -559,6 +559,7 @@ backend/
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles
     application.py                   # build_application() composes both into the Application
+    startup.py                       # The wrapper each start-up repair runs through
   services/                          # Orchestration / business logic (Protocol-typed deps via *ServiceConfig);
                                      #   every module is in Backend Architecture → Services
   adapters/                          # I/O boundaries — implement Protocols

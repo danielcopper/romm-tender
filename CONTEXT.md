@@ -269,11 +269,10 @@ Two objects the backend is made of, built in this order:
 - **Application** — the backend as `bootstrap/` builds it (`build_application()`): every wired service, plus what the
   process does with them as a whole — the start-up repairs, the one start-up step that talks to the network, and the
   shutdown. It runs none of them by itself; the entry point calls each at its moment.
-- **Endpoints** — the class in `main.py` that holds every Tender endpoint. It takes the Application and the host's
-  status record when it is constructed and holds nothing else, and each endpoint calls one use case on a service.
+- **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application and the host's status
+  record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
 
-_Avoid_: **Plugin** for either — the name of the class that was all three things at once (the wiring, the lifecycle and
-the endpoints) while a plugin loader hosted the backend.
+_Avoid_: **Plugin** for either — "the plugin" is Tender itself ([What Tender is](#what-tender-is)).
 
 ### Persistence boundary (settings.json / SQLite)
 
