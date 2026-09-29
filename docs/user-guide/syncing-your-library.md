@@ -403,6 +403,11 @@ as its owner. If more than one favorites collection counts as yours — which ca
 account — the **Favorites** row is greyed out with "more than one, listed under Collections", and each of them has its
 own switch under **Collections**. If your account has no favorites collection, the row is greyed out with a dash.
 
+If RomM cannot list a kind of collection you sync any of, the sync stops with an error before it changes anything,
+rather than reading that kind as empty and removing the games only its collections brought in. A collection deleted in
+RomM is different: it is missing from a list RomM did give, so the sync removes it, and the games only it brought in, as
+usual.
+
 #### Collections that share a name
 
 If two enabled collections share the same name — for example a hand-picked collection and a smart or virtual collection

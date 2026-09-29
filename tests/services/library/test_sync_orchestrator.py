@@ -1267,6 +1267,35 @@ class TestSyncPreviewErrorHandling:
         # Error path evicts any pending delta.
         assert library.sync._pending_delta is None
 
+    @pytest.mark.parametrize(
+        ("kind", "failing_listing"),
+        [
+            ("standard", "list_collections_side_effect"),
+            ("smart", "list_smart_collections_side_effect"),
+            ("virtual", "list_virtual_collections_side_effect"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_failed_collection_listing_fails_the_preview(
+        self, library, fake_romm_api, emit, kind, failing_listing
+    ):
+        """A collection listing that fails fails the preview as a failed platform listing does (#2112)."""
+        from lib.errors import RommConnectionError
+
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_collections"] = {kind: {"7": True}}
+        setattr(fake_romm_api, failing_listing, RommConnectionError("Connection refused"))
+
+        result = await library.sync.sync_preview()
+
+        message = "Server unreachable — check your URL and ensure RomM is running"
+        assert result == {"success": False, "reason": "server_unreachable", "message": message}
+        progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+        assert (progress[-1]["stage"], progress[-1]["message"], progress[-1]["running"]) == ("error", message, False)
+        assert library.sync._pending_delta is None
+
     @pytest.mark.asyncio
     async def test_cancelled_error_returns_canonical_failure(self, library, fake_romm_api, emit):
         """A cooperative cancel during sync_preview RETURNS the canonical failure
@@ -4725,18 +4754,18 @@ class TestCollectionTurnedOffAndBackOn:
 
 
 class TestFailedCollectionListing:
-    """A collection listing that fails leaves the games only that collection brings in bound (#2112).
+    """A collection listing that fails stops the run before it changes anything (#2112).
 
     The games sit on a platform whose own sync is off, so no platform unit covers
     them. When RomM cannot be reached for the listing, the run has no unit for the
     collection; that must not read as "the collection holds nothing", which the
-    end-of-run stale removal would act on by unbinding its games.
+    end-of-run stale removal would act on by unbinding its games and the frontend
+    by deleting the Steam collection.
     """
 
-    @pytest.mark.xfail(strict=True, reason="#2112: a failed collection listing unbinds the games only it brings in")
-    @pytest.mark.parametrize("kind", ["standard", "smart"])
+    @pytest.mark.parametrize("kind", ["standard", "smart", "virtual"])
     @pytest.mark.asyncio
-    async def test_the_games_only_the_collection_brings_in_stay_bound(self, library, fake_romm_api, kind):
+    async def test_the_run_fails_and_leaves_the_collection_as_it_was(self, library, fake_romm_api, emit, kind):
         from lib.errors import RommConnectionError
 
         _use_fake_romm(library, fake_romm_api)
@@ -4744,16 +4773,23 @@ class TestFailedCollectionListing:
             fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
         )
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
-        entry = {"id": 7, "name": "Faves", "rom_count": 2, "updated_at": "2025-01-01T00:00:00+00:00"}
+        collection_id = "fr-7" if kind == "virtual" else 7
+        entry = {"id": collection_id, "name": "Faves", "rom_count": 2, "updated_at": "2025-01-01T00:00:00+00:00"}
+        membership_key = {
+            "standard": "collection_ids",
+            "smart": "smart_collection_ids",
+            "virtual": "virtual_collection_ids",
+        }[kind]
         if kind == "standard":
             fake_romm_api.collections.append(entry)
-        else:
+        elif kind == "smart":
             fake_romm_api.smart_collections.append(entry)
-        membership_key = "collection_ids" if kind == "standard" else "smart_collection_ids"
+        else:
+            fake_romm_api.virtual_collections["franchise"] = [entry]
         for rom_id in (1, 2):
-            fake_romm_api.roms[rom_id].setdefault(membership_key, []).append(7)
+            fake_romm_api.roms[rom_id].setdefault(membership_key, []).append(collection_id)
         library.settings["enabled_platforms"] = {"1": False, "2": True}
-        library.settings["enabled_collections"] = {kind: {"7": True}}
+        library.settings["enabled_collections"] = {kind: {str(collection_id): True}}
 
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
         box = library.sync._box
@@ -4773,22 +4809,38 @@ class TestFailedCollectionListing:
             with library.uow as uow:
                 return {rom_id: uow.roms.get(rom_id).shortcut_app_id for rom_id in (1, 2)}
 
+        def stamp():
+            with library.uow as uow:
+                return uow.collection_sync_state.get(str(collection_id), kind)
+
         # Run 1: the listing answers and the collection binds both of its games.
         await run_to_its_end("run-1")
         assert bindings() == {1: 5001, 2: 5002}
-        with library.uow as uow:
-            assert uow.collection_sync_state.get("7", kind) is not None
+        stamp_after_run_1 = stamp()
+        # A virtual collection is never stamped; the other two are.
+        assert (stamp_after_run_1 is None) == (kind == "virtual")
 
         # Run 2: RomM cannot be reached for the listing; nothing changed on RomM or in the settings.
         failure = RommConnectionError("Connection refused")
         if kind == "standard":
             fake_romm_api.list_collections_side_effect = failure
-        else:
+        elif kind == "smart":
             fake_romm_api.list_smart_collections_side_effect = failure
+        else:
+            fake_romm_api.list_virtual_collections_side_effect = failure
+        emit.reset_mock()
         await run_to_its_end("run-2")
-        assert bindings() == {1: 5001, 2: 5002}
+
+        progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+        assert [(f["stage"], f["message"], f["running"]) for f in progress] == [
+            ("error", "Server unreachable — check your URL and ensure RomM is running", False)
+        ]
+        # Nothing the frontend removes a shortcut or a Steam collection on.
+        assert {c.args[0] for c in emit.call_args_list} == {"sync_progress"}
         with library.uow as uow:
-            assert uow.collection_sync_state.get("7", kind) is not None
+            assert uow.sync_runs.get("run-2") is None
+        assert bindings() == {1: 5001, 2: 5002}
+        assert stamp() == stamp_after_run_1
 
 
 class TestStoppedRunLeavesNoHiddenStaleRow:

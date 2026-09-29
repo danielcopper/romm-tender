@@ -382,6 +382,10 @@ class LibraryFetcher:
         ``collapsed_count`` (#1382) and ``new_shortcut_count`` (#1517) on
         platform units, ``bound_count`` on both kinds (#1511). Estimate-only:
         they never feed the actual skip decision (ADR-0023).
+
+        A collection listing that fails raises rather than reading as empty.
+        Why is in docs/architecture/backend-architecture.md, "A collection
+        listing that fails stops the run".
         """
         units: list[WorkUnit] = []
 
@@ -442,11 +446,7 @@ class LibraryFetcher:
         """
         if not enabled_ids:
             return []
-        try:
-            collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
-        except Exception as e:
-            self._logger.warning(f"Failed to fetch standard collections for work queue: {e}")
-            collections = []
+        collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
         return collection_units(
             collections, enabled_ids, "standard", own_user_id=own_user_id, filter_to_own=filter_to_own
         )
@@ -461,11 +461,7 @@ class LibraryFetcher:
         """
         if not enabled_ids:
             return []
-        try:
-            collections = await self._loop.run_in_executor(None, self._romm_api.list_smart_collections)
-        except Exception as e:
-            self._logger.warning(f"Failed to fetch smart collections for work queue: {e}")
-            collections = []
+        collections = await self._loop.run_in_executor(None, self._romm_api.list_smart_collections)
         return collection_units(collections, enabled_ids, "smart", own_user_id=own_user_id, filter_to_own=filter_to_own)
 
     async def _build_virtual_collection_units(self, enabled_ids: set[str]) -> list[WorkUnit]:
@@ -473,19 +469,13 @@ class LibraryFetcher:
 
         The ids are globally unique across virtual types (RomM bakes the type
         into the base64 id), so a single enabled-id set selects across the merged
-        listing. A failed type-fetch is fail-open (warn + skip that type).
+        listing.
         """
         if not enabled_ids:
             return []
         units: list[WorkUnit] = []
         for virtual_type in _SUPPORTED_VIRTUAL_TYPES:
-            try:
-                collections = await self._loop.run_in_executor(
-                    None, self._romm_api.list_virtual_collections, virtual_type
-                )
-            except Exception as e:
-                self._logger.warning(f"Failed to fetch {virtual_type} collections for work queue: {e}")
-                continue
+            collections = await self._loop.run_in_executor(None, self._romm_api.list_virtual_collections, virtual_type)
             units.extend(collection_units(collections, enabled_ids, "virtual", virtual_type=virtual_type))
         return units
 

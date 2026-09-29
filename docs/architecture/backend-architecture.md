@@ -803,18 +803,19 @@ collections. RomM's `VirtualCollection` has five `type` values, but the plugin s
 as browsable collections**: IGDB `franchise` and the default IGDB `collection` (series). `genre`, `company`, and `mode`
 are **intentionally excluded** — RomM treats `genre`/`company` as ROM _filter facets_ (not collections) and `mode` as
 neither, so they never appear in RomM's Collections view. The supported set is a single constant
-(`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); the fetcher fetches each supported type (per-type fail-open) and
-merges them under the one `virtual` bucket. Because the type is baked into the base64 id, ids are globally unique across
-types, so one enabled-bucket keyed by id cannot collide. The owner scope, stamp-exclusion, and per-unit ROM-fetch
-dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per type. On disk the enabled-collections
-bucket was renamed `franchise → virtual` by the lossless `settings.json` migration **v10 → v11**
-(`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket key while preserving every enabled id, so a
-previously-enabled franchise collection stays enabled and no re-login is required. (The historical v2 → v3 split still
-produces the `franchise` bucket; the v10 → v11 step renames it afterwards, so that frozen step is untouched.) The
-ownership-carrying bucket was likewise renamed `user → standard` by the lossless `settings.json` migration **v12 → v13**
-(`domain/state_migrations._migrate_v12_to_v13`, same merge-into-existing semantics), and old `collection_sync_state`
-completion stamps keyed `collection_kind = 'user'` are rewritten to `'standard'` by SQLite migration **022** so an
-unchanged standard collection still takes the incremental skip across the upgrade (#1539).
+(`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); the fetcher fetches each supported type and merges them under the
+one `virtual` bucket — for a sync, a type that fails to list fails the run (see "A collection listing that fails stops
+the run" below), while `get_collections` skips that type and lists the rest. Because the type is baked into the base64
+id, ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
+stamp-exclusion, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per
+type. On disk the enabled-collections bucket was renamed `franchise → virtual` by the lossless `settings.json` migration
+**v10 → v11** (`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket key while preserving every enabled
+id, so a previously-enabled franchise collection stays enabled and no re-login is required. (The historical v2 → v3
+split still produces the `franchise` bucket; the v10 → v11 step renames it afterwards, so that frozen step is
+untouched.) The ownership-carrying bucket was likewise renamed `user → standard` by the lossless `settings.json`
+migration **v12 → v13** (`domain/state_migrations._migrate_v12_to_v13`, same merge-into-existing semantics), and old
+`collection_sync_state` completion stamps keyed `collection_kind = 'user'` are rewritten to `'standard'` by SQLite
+migration **022** so an unchanged standard collection still takes the incremental skip across the upgrade (#1539).
 
 **Batch collection enable — `save_collections_sync` (#1539).** A single settings write that stamps every id it is given
 into one `kind` bucket and touches nothing else in it; the Collections tab's **Enable all / Disable all** send it the
@@ -928,6 +929,18 @@ processed, unlike its platform rule: a processed collection adds every member to
 stamped member on a skip, every fetched one on a full fetch — so none of its current members is stale. A collection
 member the stale removal unbinds therefore belongs to a collection the run built no unit for, and that collection
 full-fetches once a run builds one for it again instead of skipping over the member.
+
+**A collection listing that fails stops the run.** The standard, smart and virtual listings are read while the work
+queue is built, before any unit, and a failure there — what is left once the transport's retry ladder gives up — raises
+to the handler a failed platform listing reaches. Apply emits an `error` frame carrying the `classify_error` message and
+returns before it opens a `SyncRun`, so no stale removal runs and neither `sync_collections` nor `sync_complete` is
+emitted; the preview discards its delta and answers with the canonical failure shape. Read as an empty listing instead,
+the run would build no unit for an enabled collection, the stale removal would unbind the games only that collection
+brings in and delete its stamp (a standard or smart one has one), and the frontend's stale-collection cleanup would
+delete its Steam collection. A collection absent from a listing that answered is a real removal and still goes that way.
+Only a kind with an enabled id is listed, so an endpoint that keeps failing blocks the sync only for a user who syncs
+that kind. The Library page's `get_collections` reads the same listings only to display them, and keeps failing open for
+smart and virtual.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The
