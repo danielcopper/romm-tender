@@ -138,10 +138,12 @@ class TestParseFrontendEndpoints:
             $endpoint<[], A>("dollar");
             v2endpoint<[], A>("digit");
             endpoint<[], A>("declared");
+            api.endpoint<[], A>("dotted");
+            f(endpoint<[], A>("paren"));
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_endpoints(src) == {"declared": 0}
+        assert check.parse_frontend_endpoints(src) == {"declared": 0, "dotted": 0, "paren": 0}
 
 
 class TestParserHardening:
