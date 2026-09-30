@@ -18,6 +18,7 @@ import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
+import { syncFailedMessage } from "./utils/syncFailed";
 import { updateDownload, getDownloadState, removeDownload } from "./utils/downloadStore";
 import { handleGlobalDownloadFailure } from "./utils/downloadFailure";
 import { registerGameDetailPatch, unregisterGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
@@ -897,9 +898,22 @@ const tender = definePlugin(() => {
   // module-level store. The backend frame carries no etaSeconds (that ceiling is
   // frontend-computed from sync_plan), so carry the current value across each
   // frame rather than letting the full-object replace wipe it.
+  //
+  // An apply run that fails emits no `sync_complete`, so its error frame is the
+  // only word of its end and the toast is raised from here instead. A preview's
+  // failure is not toasted: the Sync page that asked for it says it, or Main's
+  // transient line if the reader has left, and only while Main is open.
+  const failedRunsAnnounced = new Set<string>();
   const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
     setSyncProgress(etaSeconds !== undefined ? { ...progress, etaSeconds } : progress);
+    if (progress.running || progress.stage !== "error" || progress.runKind !== "apply") return;
+    const runId = progress.runId ?? "";
+    if (runId !== "") {
+      if (failedRunsAnnounced.has(runId)) return;
+      failedRunsAnnounced.add(runId);
+    }
+    showToast(syncFailedMessage(progress.message));
   });
 
   const downloadProgressListener = addEventListener<DownloadProgressEvent>(

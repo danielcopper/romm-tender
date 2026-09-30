@@ -149,32 +149,34 @@ Format: **invariant** — tier — enforced by.
   through an aliased callable, slips past it; its own scope tests pin the producers and the root it reaches, so a
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
   `services/artwork.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight" from
-  `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read and the Sync page's
-  three — on the stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending
-  nothing. The panel cannot defend against it: a bare `running: false` is exactly what the Sync page's own retraction of
-  an optimistic start looks like. Since #1814 the frontend's frame store reads the same discrimination for a rule of its
-  own — a run whose stopping frame carried a terminal stage AND a run id can never be put back in flight, which is what
-  stops the apply loop's next item from resurrecting a run that has already ended — so a stopping frame emitted without
-  a terminal stage would record no ending there either, and the freeze that rule removes comes back
+  `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read, the Sync page's
+  three, the failure toast, and the Sync page's failure line — on the stage, so a stopping frame with a non-terminal
+  stage would collapse the in-progress rows while ending nothing. The panel cannot defend against it: a bare
+  `running: false` is exactly what the Sync page's own retraction of an optimistic start looks like. Since #1814 the
+  frontend's frame store reads the same discrimination for a rule of its own — a run whose stopping frame carried a
+  terminal stage AND a run id can never be put back in flight, which is what stops the apply loop's next item from
+  resurrecting a run that has already ended — so a stopping frame emitted without a terminal stage would record no
+  ending there either, and the freeze that rule removes comes back
 - **The KIND of run a `sync_progress` frame belongs to is stated on it (`runKind`), never inferred from it — and a frame
   that states none is rendered as neither of the two answers** — test + prompt-only — the backend half is pinned end to
   end by `tests/services/library/test_sync_orchestrator.py::TestRunKindOnTheWire` (every frame of a preview run and of
   an apply run, both terminal frames, and the `get_sync_status` snapshot) and
   `tests/services/library/test_state.py::TestRunKind` (claimed with the run slot, cleared with it); the frontend half by
   `frontend/src/utils/syncRunView.test.ts` and the slot's three labels in `frontend/src/bigpicture/MainPage.test.tsx`.
-  **Nothing joins the eleven sites it passes through**, counted one per site at the granularity this list names them:
+  **Nothing joins the thirteen sites it passes through**, counted one per site at the granularity this list names them:
   `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders carry it (`emit_progress`,
   `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`), three frontend
   start paths stamp it themselves on the optimistic frame they show before the first real one arrives (`useSyncPage`'s
   `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`), `SyncProgress.runKind` and
-  `useSyncRunView` pass it through, and `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at
-  mount and maps it to the slot's label. **Nothing mechanical stands behind the seam between them**: a fourth frame
-  builder that omits the key, a fourth start path that stamps the kind it is not, or a reader that spends the absent
-  case on one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes
-  green, because each test above pins one half and none of them pins the join. The failure is silent and worst exactly
-  where the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the snapshot is the only
-  thing that can say what the run is doing, and Main then tells the reader a real apply run is merely checking for
-  changes. Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in
+  `useSyncRunView` pass it through, `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at mount
+  and maps it to the slot's label, and two readers announce an apply run's failure off it — the `sync_progress`
+  listener's toast in `index.tsx` and `useSyncPage`'s status line. **Nothing mechanical stands behind the seam between
+  them**: a fourth frame builder that omits the key, a fourth start path that stamps the kind it is not, or a reader
+  that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral
+  branch was — goes green, because each test above pins one half and none of them pins the join. The failure is silent
+  and worst exactly where the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the
+  snapshot is the only thing that can say what the run is doing, and Main then tells the reader a real apply run is
+  merely checking for changes. Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in
   `docs/architecture/qam-panel.md`'s Main section; do not restate it here
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx`'s "a previous run's rows

@@ -95,8 +95,9 @@ import type { SearchingCopy } from "./searchingCopy";
  *   mounts. This is the status quo answer, and staying here costs no evidence:
  *   it is what the check did for every name.
  * - `feature` — the panel renders whole and something OUTSIDE it is lost: a
- *   function the reader would otherwise have, with every page still intact and
- *   every result still readable on one of them.
+ *   function the reader would otherwise have, with every page still intact.
+ *   Which results are then readable on a page and which are not is answered
+ *   in `docs/architecture/qam-panel.md`, "Notices and homes".
  * - `appearance` — the panel renders and only looks poorer, because the one
  *   place that reads the name already draws something else when it is missing.
  * - `diagnostic` — nothing a user can see changes at all. Every read of the
@@ -293,9 +294,10 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // What a toast is drawn and pushed through (`utils/steamToaster.tsx`). All
   // three cost a `feature` and none costs the panel: with any one absent no
   // toast appears and nothing else changes — every sync, download and cleanup
-  // runs, and its result is on the page it belongs to. The toaster declines to
-  // push at all while one is missing; why, and why the error boundary is one of
-  // the three, is on `docs/architecture/frontend-bundles.md`.
+  // runs; which results are on their page as well is answered in
+  // `docs/architecture/qam-panel.md`, "Notices and homes". The toaster
+  // declines to push at all while one is missing; why, and why the error
+  // boundary is one of the three, is on `docs/architecture/frontend-bundles.md`.
   //
   // The renderer is a module probe of ours and the store is a global Steam
   // installs, so neither is a `@decky/ui` export. The error boundary is one.

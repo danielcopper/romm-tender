@@ -712,8 +712,13 @@ The notifications row is the one condition read from the **start-up check's repo
 or an event. What a toast is raised through is two searches into Steam's bundle and a global Steam installs at module
 scope ([how the panel is built and loaded](frontend-bundles.md)), so a miss is settled before anything mounts and cannot
 change afterwards: there is nothing to subscribe to and nothing to poll. It is a notice rather than a refusal to mount
-because the panel is entirely intact without it: syncs and downloads run, and every result a toast would have announced
-is on the page it belongs to.
+because the panel is entirely intact without it: syncs and downloads run, and most results a toast would have announced
+are on the page they belong to as well. Not all of them, and the cases known to be said only by a toast, or by a line on
+a page that has to be open at the time, are these — known cases, not a complete list: a sync that fails before its work
+queue is built, which writes no run, so only the Sync page's status line and Main's transient line say it, each only if
+it is open when the sync fails (§ Sync); a removed-game cleanup that the game page's version picker cannot prepare for
+one version, which it answers with a toast alone; and a play-button download that is refused or fails before it is
+queued, which never reaches the download queue.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
@@ -861,7 +866,8 @@ sync" has to reach the reader under the rows it is about. The Sync page passes n
 numbers; what it keys on the run's end for is its own three reads — the run list, the stats and the session-budget
 reading all describe the run that just stopped — taken on a stop that carries a **terminal stage** rather than through a
 second announcement of it. The stage is what separates a run's end from that page retracting its own optimistic frame
-after a preview: both stop the store's `running`, and only one of them ended a run.
+after a preview: both stop the store's `running`, and only one of them ended a run. The one end that page does say is an
+apply run's failure, on its status line, because, on that page, the only other word of its reason is a toast (§ Sync).
 
 **Steam memory is not on Main.** The reading and the session-budget card are on the Sync page, at the home of the button
 they are about; what stays on Main is the notice naming a paused run and pointing at it. Main reads the session-budget
@@ -987,6 +993,18 @@ nobody asked for: a heartbeat timeout, a budget pause, a backend error. What the
 terminal stage AND a run id, because neither half alone is one: a stop without a terminal stage is a page retracting the
 optimistic frame it wrote itself, and a frame naming no run is one the backend has not stamped yet, so recording that
 would make every later optimistic start a resurrection of it.
+
+**An apply run that stops at stage `error` is reported whichever page is open.** It emits no `sync_complete`, whether it
+failed before its work queue was built or part-way through, so the toast that announces a finished run never comes; its
+one word is a `sync_progress` frame at `error`. Two places read it for this, both keyed on the frame's `runKind` and
+both worded by `utils/syncFailed.ts` — "Sync failed — " and the frame's message, never the prefix twice. The
+`sync_progress` listener in `index.tsx`, which lives as long as the panel, raises it as a toast, once per run id. If the
+Sync page is open when the frame arrives, it puts the same sentence on its status line under the start button, the line
+a failed preview writes; it stays until the next press of that button clears it, and it is held in the page's own state,
+so it is gone once the page is left. A preview's failure gets neither: its own answer writes that line, and a preview is
+asked for only from this page — one that fails after the reader has left is said only by Main's transient line, and only
+while Main is open. Main's transient line says an apply run's failure as well, while Main is open. A failure before the
+work queue is built writes no sync run, so the run list and Last sync do not change.
 
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
 which seeds none, a run whose plan was lost to a plugin reload, or the window between a press that cleared the rows and

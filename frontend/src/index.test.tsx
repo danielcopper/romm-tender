@@ -2192,6 +2192,113 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 });
 
+describe("index.tsx — an apply run that ends at stage error is toasted", () => {
+  const UNREACHABLE = "Server unreachable — check your URL and ensure RomM is running";
+
+  function toastBodies(): (string | undefined)[] {
+    return vi.mocked(toaster.toast).mock.calls.map((call) => (call[0] as { body?: string }).body);
+  }
+
+  function errorFrame(overrides: Partial<SyncProgress> = {}): SyncProgress {
+    return {
+      running: false,
+      stage: "error",
+      current: 0,
+      total: 0,
+      message: UNREACHABLE,
+      runId: "run-err",
+      runKind: "apply",
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(toaster.toast).mockClear();
+  });
+
+  it("names the failure when the run's work queue could not be built", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame());
+    });
+
+    expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`]);
+    expect(getSyncProgress().stage).toBe("error");
+    plugin.onDismount();
+  });
+
+  it("does not say it twice when the frame already does", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: `Sync failed — ${UNREACHABLE}` }));
+    });
+
+    expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`]);
+    plugin.onDismount();
+  });
+
+  it("still says the sync failed when the frame carries no message", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: "" }));
+    });
+
+    expect(toastBodies()).toEqual(["Sync failed."]);
+    plugin.onDismount();
+  });
+
+  it("toasts a run once, however often its error frame arrives", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame());
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame());
+    });
+
+    expect(toastBodies()).toHaveLength(1);
+    plugin.onDismount();
+  });
+
+  it("toasts the next run's failure too", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runId: "run-1" }));
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runId: "run-2", message: "Authentication failed" }));
+    });
+
+    expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`, "Sync failed — Authentication failed"]);
+    plugin.onDismount();
+  });
+
+  it("leaves a preview's failure to the Sync page", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runKind: "preview" }));
+    });
+
+    expect(toastBodies()).toEqual([]);
+    plugin.onDismount();
+  });
+
+  it("raises nothing for a frame that does not stop a run at stage error", () => {
+    const plugin = pluginFactory();
+
+    act(() => {
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ stage: "done", message: "Sync complete" }));
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ stage: "cancelled", message: "Sync cancelled" }));
+      emitHostEvent<SyncProgress>("sync_progress", errorFrame({ running: true }));
+    });
+
+    expect(toastBodies()).toEqual([]);
+    plugin.onDismount();
+  });
+});
+
 describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estimate)", () => {
   it("writes the composition-priced seed (unbound rows as creates) into the sync progress store", async () => {
     const plugin = pluginFactory();
