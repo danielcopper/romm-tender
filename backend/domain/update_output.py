@@ -82,9 +82,9 @@ class OutputSection:
 def decode_journal_entry(raw: str) -> JournalEntry | None:
     """One line of ``journalctl --output=json``, or ``None`` where it holds no timestamp.
 
-    ``MESSAGE`` arrives as a list of byte values where it is not valid UTF-8 —
-    ``journalctl(1)``, ``--output=json`` — and is decoded with the bad bytes
-    replaced. A line without one reads as an empty message.
+    ``MESSAGE`` arrives as a list of byte values where it holds bytes that are
+    not printable UTF-8 — ``journalctl(1)``, ``--output=json`` — and is decoded
+    with the bad ones replaced. A line without one reads as an empty message.
     """
     try:
         decoded = json.loads(raw)

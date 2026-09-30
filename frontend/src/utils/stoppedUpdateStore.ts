@@ -3,11 +3,12 @@
  * updating, as the backend found it at start.
  *
  * Updated by:
- *   - panel load in index.tsx (fetchStoppedUpdateAttempt), detached
+ *   - panel load in index.tsx (fetchStoppedUpdateAttempt), detached, which
+ *     raises the attempt's toast where the backend still owes it
  *   - the `update_attempt_stopped` listener in index.tsx
  *     (takePushedStoppedAttempt), for a judgement the backend could make only
- *     once the installer's unit had ended, after the panel had loaded
- *   Both raise the attempt's toast where the backend still owes it.
+ *     once the installer's unit had ended, after the panel had loaded — which
+ *     raises the toast the same way
  *   - the card's Dismiss (dismissStoppedUpdateCard), after the backend removed
  *     its record
  *   - a press of Install the backend accepted (endStoppedAttempt,
