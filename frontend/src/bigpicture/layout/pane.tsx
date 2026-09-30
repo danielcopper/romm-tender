@@ -54,8 +54,9 @@ export const ROW_MARKER_WIDTH = 3;
 export const ROW_MARKER_GAP = 5;
 export const ROW_CONTENT_INSET = ROW_MARKER_WIDTH + ROW_MARKER_GAP;
 
-/** What the marker is drawn in while its row is the selected one. Outside the
- *  verdict palette above: it reports where the reader is, not how anything is. */
+/** What the marker is drawn in while its row is the selected one, and the
+ *  update install's current step is marked in. Outside the verdict palette
+ *  above: it reports where the reader or an attempt is, not how anything is. */
 export const SELECTION_ACCENT = "#1a9fff";
 
 /** The fill behind a row that holds focus — the colour Steam paints a focused
