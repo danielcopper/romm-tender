@@ -4,7 +4,8 @@
 hands on; ``services.py`` turns those bundles into the live service
 instances; ``application.py`` composes the two into the
 :class:`Application` ``main.py`` runs, whose start-up repairs each run
-through the wrapper in ``startup.py``. The names re-exported below are
+through the wrapper in ``startup.py``; ``check.py`` copies the live data a
+pre-install check builds on. The names re-exported below are
 the composition root's whole public surface — consumers import them
 from ``bootstrap``, never from a submodule.
 """
@@ -19,6 +20,7 @@ from .adapters import (
     bootstrap,
 )
 from .application import Application, build_application
+from .check import copy_live_data
 from .services import ServicesBundle, WiringConfig, wire_services
 
 __all__ = [
@@ -33,5 +35,6 @@ __all__ = [
     "WiringConfig",
     "bootstrap",
     "build_application",
+    "copy_live_data",
     "wire_services",
 ]

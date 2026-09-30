@@ -109,11 +109,27 @@ def configure_logging(log_dir: str, token: str, level: int = logging.INFO) -> lo
     # this is the handler the start-up address is printed FOR.
     stream_handler = logging.StreamHandler(sys.stderr)
     stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return _replace_root_handlers(level, file_handler, stream_handler)
 
+
+def configure_stderr_logging(level: int = logging.INFO) -> logging.Logger:
+    """Configure the root logger to write to stderr alone; return it.
+
+    For the pre-install check, which runs while the installed backend may be
+    writing ``backend.log``: a second process rotating that file would lose
+    lines of the first. Replaces the root's handlers as :func:`configure_logging`
+    does.
+    """
+    stream_handler = logging.StreamHandler(sys.stderr)
+    stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return _replace_root_handlers(level, stream_handler)
+
+
+def _replace_root_handlers(level: int, *handlers: logging.Handler) -> logging.Logger:
     root = logging.getLogger()
     for existing in list(root.handlers):
         root.removeHandler(existing)
-    root.addHandler(file_handler)
-    root.addHandler(stream_handler)
+    for handler in handlers:
+        root.addHandler(handler)
     root.setLevel(level)
     return root

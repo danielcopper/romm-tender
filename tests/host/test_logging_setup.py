@@ -13,6 +13,7 @@ from host.logging_setup import (
     MAX_LOG_BYTES,
     RedactingFormatter,
     configure_logging,
+    configure_stderr_logging,
 )
 
 
@@ -74,6 +75,38 @@ class TestConfigureLogging:
         root.info("once")
 
         assert (tmp_path / LOG_FILENAME).read_text().count("once") == 1
+
+
+class TestConfigureStderrLogging:
+    """The pre-install check's logging: stderr alone, beside a backend that may be writing the log file."""
+
+    def test_its_one_handler_writes_to_stderr(self, restore_root_logger):
+        root = configure_stderr_logging()
+
+        (handler,) = root.handlers
+        assert type(handler) is logging.StreamHandler
+        assert handler.stream is sys.stderr
+
+    def test_it_writes_the_format_saved_walk_throughs_grep_for(self, restore_root_logger, capsys):
+        configure_stderr_logging().warning("careful")
+
+        captured = capsys.readouterr()
+        assert captured.err.rstrip().endswith("[WARNING]: careful")
+        assert captured.out == ""
+
+    def test_it_replaces_a_file_handler_already_there(self, tmp_path, restore_root_logger):
+        configure_logging(str(tmp_path), "tok")
+        root = configure_stderr_logging()
+        root.info("not in the file")
+
+        assert not any(isinstance(h, RotatingFileHandler) for h in root.handlers)
+        assert "not in the file" not in (tmp_path / LOG_FILENAME).read_text()
+
+    def test_info_lines_are_kept(self, restore_root_logger, capsys):
+        configure_stderr_logging()
+        logging.getLogger("some.module.that.fetched.its.own").info("schema migration ran")
+
+        assert "schema migration ran" in capsys.readouterr().err
 
 
 class TestTokenRedaction:

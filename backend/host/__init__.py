@@ -20,7 +20,7 @@ from host.access import new_token
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.inject import InjectionSetup
-from host.logging_setup import configure_logging
+from host.logging_setup import configure_logging, configure_stderr_logging
 from host.route import route
 from host.runtime import AlreadyRunningError, BackendBuild, run_backend
 from host.single_instance import LOCK_FILENAME, PORT_FILENAME
@@ -36,6 +36,7 @@ __all__ = [
     "HostStatus",
     "InjectionSetup",
     "configure_logging",
+    "configure_stderr_logging",
     "new_token",
     "route",
     "run_backend",
