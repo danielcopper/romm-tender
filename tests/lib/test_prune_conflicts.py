@@ -399,8 +399,8 @@ async def test_detached_retention_is_labelled_by_its_originating_endpoint() -> N
 @pytest.mark.asyncio
 async def test_a_new_frontend_disowns_a_lease_its_predecessor_stranded() -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
-    # The double mount at plugin load: mount 1 acquires, its context dies before
-    # the continuation that would release, so nothing ever releases or renews.
+    # A frontend context that dies mid-call: it acquired, and the continuation
+    # that would release never runs, so nothing ever releases or renews.
     await conflicts.acquire_lease("installed_reconcile")
     assert (await endpoints.start_prune())["reason"] == "operation_active"
 
