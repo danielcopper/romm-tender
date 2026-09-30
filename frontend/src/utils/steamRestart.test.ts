@@ -7,9 +7,9 @@ vi.mock("./toast", () => ({ showToast: vi.fn() }));
 const restartPC = vi.fn();
 const startRestart = vi.fn();
 
-function stubSteam({ withRestartPC = true, running = [] as Array<{ appid: number; display_name: string }> } = {}) {
+function stubSteam({ running = [] as Array<{ appid: number; display_name: string }> } = {}) {
   vi.stubGlobal("SteamClient", {
-    System: withRestartPC ? { RestartPC: restartPC } : {},
+    System: { RestartPC: restartPC },
     User: { StartRestart: startRestart },
   });
   vi.stubGlobal("SteamUIStore", { RunningApps: running });

@@ -1,8 +1,7 @@
 /**
- * {@link restartSteam} restarts the Steam **client**. The frontend reloads;
- * Tender's backend keeps running (`services/library/_state.py` states the same
- * fact from the backend side). That is exactly right for freeing the renderer's
- * per-session heap budget.
+ * {@link restartSteam} restarts the Steam **client**. Steam rebuilds its JS
+ * context, so the frontend starts over; Tender's backend keeps running
+ * (`services/library/_state.py` states the same fact from the backend side).
  */
 
 import { showToast } from "./toast";
