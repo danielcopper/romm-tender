@@ -54,6 +54,7 @@ import {
   clearPlatformCollection,
   getHostname,
 } from "./utils/collections";
+import { foldCollectionName } from "./utils/collectionName";
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
@@ -257,7 +258,7 @@ function buildSyncCompleteToast(
   return { body };
 }
 
-const ROMM_COLLECTION_NAME = /^RomM: \[([^\]]+)\]/;
+const ROMM_COLLECTION_NAME = /^RomM: \[([^\]]+)\]/i;
 const COLLECTION_HOST_SUFFIX = /\s\([^)]+\)$/;
 
 /** The platform a "RomM: <platform> (host)" collection is named after. */
@@ -267,16 +268,18 @@ function platformOfCollection(displayName: string): string {
 
 /** Whether a platform collection on this host no longer has a platform behind it. */
 function isStalePlatformCollection(displayName: string, suffix: string, activePlatforms: Set<string>): boolean {
-  if (!displayName.startsWith("RomM: ") || displayName.slice(6).startsWith("[")) return false;
-  if (!displayName.endsWith(suffix)) return false;
-  return !activePlatforms.has(platformOfCollection(displayName).toLowerCase());
+  const folded = foldCollectionName(displayName);
+  if (!folded.startsWith("romm: ") || folded.slice(6).startsWith("[")) return false;
+  if (!folded.endsWith(foldCollectionName(suffix))) return false;
+  return !activePlatforms.has(foldCollectionName(platformOfCollection(displayName)));
 }
 
 /** Whether a "RomM: [name] (host)" collection on this host no longer has a RomM collection behind it. */
 function isStaleRomMCollection(displayName: string, suffix: string, activeNames: Set<string>): boolean {
-  if (!displayName.startsWith("RomM: [") || !displayName.endsWith(suffix)) return false;
+  const folded = foldCollectionName(displayName);
+  if (!folded.startsWith("romm: [") || !folded.endsWith(foldCollectionName(suffix))) return false;
   const match = ROMM_COLLECTION_NAME.exec(displayName);
-  return match ? !activeNames.has(match[1]!.toLowerCase()) : false;
+  return match ? !activeNames.has(foldCollectionName(match[1]!)) : false;
 }
 
 /**
@@ -292,7 +295,7 @@ async function removeStaleCollections(
   const hostname = await getHostname();
   if (isPruneLeaseCancelled(signal)) return;
   const suffix = ` (${hostname})`;
-  const activePlatforms = new Set(activePlatformNames.map((name) => name.toLowerCase()));
+  const activePlatforms = new Set(activePlatformNames.map(foldCollectionName));
   for (const collection of collectionStore.userCollections.filter((candidate) =>
     isStalePlatformCollection(candidate.displayName, suffix, activePlatforms),
   )) {
@@ -301,7 +304,7 @@ async function removeStaleCollections(
     await clearPlatformCollection(platformName, signal);
     if (isPruneLeaseCancelled(signal)) return;
   }
-  const activeNames = new Set(activeCollectionNames.map((name) => name.toLowerCase()));
+  const activeNames = new Set(activeCollectionNames.map(foldCollectionName));
   for (const collection of collectionStore.userCollections.filter((candidate) =>
     isStaleRomMCollection(candidate.displayName, suffix, activeNames),
   )) {

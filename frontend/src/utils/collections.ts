@@ -7,6 +7,7 @@
  */
 
 import { logInfo, logWarn, logError } from "../api/backend";
+import { foldCollectionName } from "./collectionName";
 
 let _hostname = "";
 
@@ -81,12 +82,11 @@ async function saveCollection(
   appCount: number,
   signal?: AbortSignal,
 ): Promise<boolean> {
-  // Case-insensitive match: Steam collapses collection names by a
-  // case-insensitive identity, so a case-variant collection ("RomM: [7 Up]
-  // (host)" vs "RomM: [7 up] (host)") must be UPDATED, not shadowed by a
-  // colliding new create that then overwrites it and loses its games (#1569).
-  const target = collectionName.toLowerCase();
-  const existing = collectionStore.userCollections.find((c) => c.displayName.toLowerCase() === target);
+  // A collection Steam holds as the same one ("RomM: [7 Up] (host)" vs
+  // "RomM: [7 up] (host)") must be UPDATED, not shadowed by a colliding new
+  // create that then overwrites it and loses its games (#1569).
+  const target = foldCollectionName(collectionName);
+  const existing = collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === target);
 
   if (existing) {
     logInfo(`Updating ${noun} "${collectionName}" with ${appCount} apps`);
@@ -193,14 +193,13 @@ export async function clearPlatformCollection(platformName: string, signal?: Abo
     const scopedName = `RomM: ${platformName} (${hostname})`;
     const legacyName = `RomM: ${platformName}`;
 
-    // Case-insensitive match on the full name: Steam's collection identity is
-    // case-insensitive, so a case-variant of this platform's collection is the
-    // SAME Steam collection and must still be found for deletion (#1569).
-    const scopedTarget = scopedName.toLowerCase();
-    const legacyTarget = legacyName.toLowerCase();
+    // A case variant of this platform's collection is the SAME Steam
+    // collection and must still be found for deletion (#1569).
+    const scopedTarget = foldCollectionName(scopedName);
+    const legacyTarget = foldCollectionName(legacyName);
 
     // Delete the machine-scoped collection
-    const scoped = collectionStore.userCollections.find((c) => c.displayName.toLowerCase() === scopedTarget);
+    const scoped = collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === scopedTarget);
     if (scoped) {
       logInfo(`Deleting collection "${scopedName}" (id=${scoped.id})`);
       if (signal?.aborted) return;
@@ -208,7 +207,7 @@ export async function clearPlatformCollection(platformName: string, signal?: Abo
     }
 
     // Also clean up legacy collection (without hostname suffix) if it exists
-    const legacy = collectionStore.userCollections.find((c) => c.displayName.toLowerCase() === legacyTarget);
+    const legacy = collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === legacyTarget);
     if (legacy) {
       logInfo(`Deleting legacy collection "${legacyName}" (id=${legacy.id})`);
       if (signal?.aborted) return;
@@ -232,21 +231,20 @@ export async function clearAllRomMCollections(signal?: AbortSignal): Promise<voi
     const hostname = await getHostname();
     if (signal?.aborted) return;
     const suffix = ` (${hostname})`;
-    const lowerSuffix = suffix.toLowerCase();
+    const foldedSuffix = foldCollectionName(suffix);
 
     // Match collections belonging to this machine OR legacy ones without any hostname suffix.
     // Covers both platform collections ("RomM: PlatformName (hostname)") and
     // RomM collection-based collections ("RomM: [CollectionName] (hostname)").
     // Legacy collections match "RomM: ..." but do NOT have a parenthesized suffix.
     // This avoids deleting collections from other devices like "RomM: N64 (othermachine)".
-    // Prefix + host-suffix are compared case-insensitively (Steam's collection
-    // identity is case-insensitive, so a case-variant of one of our names is the
-    // same collection and must still be swept, #1569).
+    // Prefix + host-suffix are folded too: a case variant of one of our names
+    // is the same Steam collection and must still be swept (#1569).
     const rommCollections = collectionStore.userCollections.filter((c) => {
-      const lower = c.displayName.toLowerCase();
-      if (!lower.startsWith("romm: ")) return false;
+      const folded = foldCollectionName(c.displayName);
+      if (!folded.startsWith("romm: ")) return false;
       // This machine's scoped collections (both platform and RomM collection style)
-      if (lower.endsWith(lowerSuffix)) return true;
+      if (folded.endsWith(foldedSuffix)) return true;
       // Legacy collections: start with "RomM: " but have no " (...)" suffix at all
       if (!/\s\([^)]+\)$/.test(c.displayName)) return true;
       return false;

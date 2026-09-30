@@ -1742,9 +1742,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     plugin.onDismount();
   });
 
-  // Known gap (#2131): the prefix and the host suffix are matched exactly, so a
-  // case variant of one of our names is not swept, while "remove all" finds it.
-  it.fails("sweeps a stale RomM collection whose prefix is a case variant of ours (#2131)", async () => {
+  it("sweeps a stale RomM collection whose prefix is a case variant of ours (#2131)", async () => {
     const shouted = { id: "shouted-id", displayName: "ROMM: [Faves] (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [shouted] });
     const plugin = pluginFactory();
@@ -1756,7 +1754,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     plugin.onDismount();
   });
 
-  it.fails("sweeps a stale RomM collection whose host suffix is a case variant of ours (#2131)", async () => {
+  it("sweeps a stale RomM collection whose host suffix is a case variant of ours (#2131)", async () => {
     const shouted = { id: "shouted-id", displayName: "RomM: [Faves] (STEAMDECK)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [shouted] });
     const plugin = pluginFactory();
@@ -1768,45 +1766,51 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     plugin.onDismount();
   });
 
-  it.fails(
-    "clears a stale platform collection whose prefix and host suffix are case variants of ours (#2131)",
-    async () => {
-      const shouted = { id: "shouted-id", displayName: "ROMM: Super Nintendo (STEAMDECK)", Delete: vi.fn() };
-      vi.stubGlobal("collectionStore", { userCollections: [shouted] });
-      const plugin = pluginFactory();
+  it("spares a case variant of our prefix that carries another host's suffix (#2131)", async () => {
+    const theirs = { id: "theirs-id", displayName: "ROMM: [Faves] (othermachine)", Delete: vi.fn() };
+    const ours = { id: "ours-id", displayName: "ROMM: [Gone] (STEAMDECK)", Delete: vi.fn() };
+    vi.stubGlobal("collectionStore", { userCollections: [theirs, ours] });
+    const plugin = pluginFactory();
 
-      emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
-      await flush();
+    emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
+    await flush();
 
-      expect(clearPlatformCollection).toHaveBeenCalledWith("Super Nintendo", expect.any(AbortSignal));
-      plugin.onDismount();
-    },
-  );
+    expect(theirs.Delete).not.toHaveBeenCalled();
+    // Non-vacuous: the cleanup ran and swept this host's case variant.
+    expect(ours.Delete).toHaveBeenCalledTimes(1);
+    plugin.onDismount();
+  });
 
-  // Known gap (#2131): the backend folds names with str.casefold(), which joins
-  // "STRASSE" and "Straße"; toLowerCase() keeps them apart, so the collection
-  // the backend reports active under the other spelling is swept as stale.
-  it.fails(
-    "keeps an active RomM collection whose name differs from the active key only by case folding (#2131)",
-    async () => {
-      const strasse = { id: "strasse-id", displayName: "RomM: [STRASSE] (steamdeck)", Delete: vi.fn() };
-      const gone = { id: "gone-id", displayName: "RomM: [Gone] (steamdeck)", Delete: vi.fn() };
-      vi.stubGlobal("collectionStore", { userCollections: [strasse, gone] });
-      const plugin = pluginFactory();
+  it("clears a stale platform collection whose prefix and host suffix are case variants of ours (#2131)", async () => {
+    const shouted = { id: "shouted-id", displayName: "ROMM: Super Nintendo (STEAMDECK)", Delete: vi.fn() };
+    vi.stubGlobal("collectionStore", { userCollections: [shouted] });
+    const plugin = pluginFactory();
 
-      emitSyncComplete({
-        platform_app_ids: { "Nintendo 64": [1] },
-        romm_collection_app_ids: { Straße: [1] },
-        total_games: 1,
-      });
-      await flush();
+    emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
+    await flush();
 
-      expect(strasse.Delete).not.toHaveBeenCalled();
-      // Non-vacuous: the cleanup ran and still sweeps a collection with no key.
-      expect(gone.Delete).toHaveBeenCalledTimes(1);
-      plugin.onDismount();
-    },
-  );
+    expect(clearPlatformCollection).toHaveBeenCalledWith("Super Nintendo", expect.any(AbortSignal));
+    plugin.onDismount();
+  });
+
+  it("keeps an active RomM collection whose name differs from the active key only by case folding (#2131)", async () => {
+    const strasse = { id: "strasse-id", displayName: "RomM: [STRASSE] (steamdeck)", Delete: vi.fn() };
+    const gone = { id: "gone-id", displayName: "RomM: [Gone] (steamdeck)", Delete: vi.fn() };
+    vi.stubGlobal("collectionStore", { userCollections: [strasse, gone] });
+    const plugin = pluginFactory();
+
+    emitSyncComplete({
+      platform_app_ids: { "Nintendo 64": [1] },
+      romm_collection_app_ids: { Straße: [1] },
+      total_games: 1,
+    });
+    await flush();
+
+    expect(strasse.Delete).not.toHaveBeenCalled();
+    // Non-vacuous: the cleanup ran and still sweeps a collection with no key.
+    expect(gone.Delete).toHaveBeenCalledTimes(1);
+    plugin.onDismount();
+  });
 
   it("removes a RomM collection whose key lost its label and keeps the bare-named one", async () => {
     // Steam still holds a standard collection under a "(Standard)"-labelled
