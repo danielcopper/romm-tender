@@ -31,8 +31,8 @@ _PROC = "/proc"
 
 # Per-user flatpak instance registry: ``$XDG_RUNTIME_DIR/.flatpak/<instance>/``,
 # one directory per LIVE instance, torn down when the instance exits. The
-# runtime dir is derived from the real uid rather than the environment because
-# the plugin backend runs headless, where ``XDG_RUNTIME_DIR`` may be unset.
+# runtime dir is derived from the real uid rather than the environment, so the
+# answer does not depend on how the backend was started.
 _RUNTIME_BASE = "/run/user"
 _FLATPAK_INSTANCES = ".flatpak"
 

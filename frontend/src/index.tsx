@@ -455,7 +455,7 @@ const tender = definePlugin(() => {
     }
 
     initDone = true;
-    // Backend is now reachable — log via the endpoint so it appears in plugin log
+    // Backend is now reachable — log via the endpoint so it appears in the backend's log
     const attempts = initAttempt + 1;
     if (attempts > 1) {
       logInfo(`App ID init succeeded after ${attempts} attempts (backend was slow to start)`);
@@ -480,10 +480,10 @@ const tender = definePlugin(() => {
       // After backend reachability is confirmed, reconcile launch_options for
       // all installed+bound ROMs to heal any drift from a missed bake (#1043).
       // This lease-issuing call must stay behind the awaited init round-trips:
-      // the orphan-lease disown dispatched at the start of the panel load has to land
-      // before any lease is issued to this mount — a lease issued earlier
-      // would be disowned while live, and its refused renewal would abort the
-      // continuation's Steam work mid-flight.
+      // the orphan-lease disown dispatched at the start of the panel load has
+      // to land before any lease is issued to this mount — a lease issued
+      // earlier would be disowned while live, and its refused renewal would
+      // abort the continuation's Steam work mid-flight.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- `initDone` is flipped to true inside the awaited `loadAppIdsAndMetadata()`; TS's control-flow analysis can't see that cross-function mutation and narrows it to the `false` literal here. The guard is real: it gates the reconcile on the loop having actually reached a reachable backend.
       if (initDone) {
         try {

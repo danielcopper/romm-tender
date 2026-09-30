@@ -44,8 +44,10 @@ export function pickLastSyncer(syncs: DeviceSyncInfo[] | undefined): DeviceSyncI
 
 /**
  * Return an attribution label based on the uploaded_by_us flag, or null if unknown.
- * NOTE: "this device" is really "this plugin installation" — if state.json is
- * copied to another machine, the label would incorrectly claim local ownership.
+ * NOTE: "this device" is really "this Tender installation": the flag asks
+ * whether this install's recorded upload ids (`own_upload_ids`) include the
+ * save, so a data root copied to another machine would claim local ownership
+ * there too.
  */
 export function attributionLabel(uploadedByUs: boolean | null | undefined): string | null {
   if (uploadedByUs === true) return "(this device)";

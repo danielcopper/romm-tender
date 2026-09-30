@@ -340,7 +340,7 @@ def bootstrap(
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)
     except Exception:
-        logger.exception("SQLite schema migration failed; plugin cannot start")
+        logger.exception("SQLite schema migration failed; the backend cannot start")
         raise
 
     # The runtime Unit-of-Work factory: each call opens a fresh sync sqlite3

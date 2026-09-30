@@ -223,10 +223,11 @@ Steam rebuild its JS context.
 ### Backend restart / JS-context rebuild / panel load
 
 Three events, never one word for them. A **backend restart** loses the backend's memory and runs the start-up repairs
-again (`Application.run_startup_repairs`). It leads to a JS-context rebuild once no app is running — the panel the
-earlier process loaded is stranded (→ Stranded panel) — and never the reverse: a JS-context rebuild leaves the backend
-running. A **JS-context rebuild** (→ Injection) loses everything the frontend held. A **panel load** is the panel's
-factory running, once per JS context.
+again (`Application.run_startup_repairs`). The backend then has Steam rebuild its JS context once no app is running, to
+replace the panel the earlier process loaded (→ Stranded panel) — never the reverse: a JS-context rebuild leaves the
+backend running. A **JS-context rebuild** (→ Injection) loses everything the frontend held in memory; `localStorage`
+outlives it, which is what reload-adoption rests on. A **panel load** is the panel's factory running, once per JS
+context.
 
 _Avoid_: **plugin reload**, **plugin load**, **plugin start** — each names a host that loads Tender, and none says which
 of the three events is meant.
@@ -435,7 +436,7 @@ irrelevant because the baked target is the game directory.
 ### Adopt
 
 To take something already present into the plugin's records without having produced it. The object varies — a local save
-file becomes a tracked baseline (`adopt_baseline(...)`), a play session survives a frontend reload, an identity-only
+file becomes a tracked baseline (`adopt_baseline(...)`), a play session survives a JS-context rebuild, an identity-only
 claim picks up the debris of an interrupted removal
 ([ADR-0027](docs/adr/0027-claim-discipline-follows-the-recovery-bundle.md)), a ROM already on disk becomes an install —
 but the rule does not: the recorded state derives from what was found, not from what the plugin did. _Avoid_: claim
@@ -869,8 +870,8 @@ One play session the frontend is currently tracking: `{appId, romId, startMs}` i
 Steam app that opened it. There is one entry **per running app**, not one overall — two RomM games at once are two
 active sessions, each finalizing on its own app's exit. An active session is opened by a game-start notification or by
 reload-adoption, and its durable counterpart is the `last_session_start` marker on the ROM's `rom_playtime` row plus the
-`romm-tender:active-session` breadcrumb that lets a reload adopt it. "Active" is about the frontend's tracking, not
-about foreground/focus — a backgrounded game's session is still active.
+`romm-tender:active-session` breadcrumb that lets the panel load after a JS-context rebuild adopt it. "Active" is about
+the frontend's tracking, not about foreground/focus — a backgrounded game's session is still active.
 
 ### Unbind / stale / prune
 

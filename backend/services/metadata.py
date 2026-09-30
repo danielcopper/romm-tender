@@ -1,8 +1,8 @@
 """MetadataService — ROM metadata read surface.
 
 Owns the frontend-facing reads of cached ROM metadata: the per-ROM
-``get_rom_metadata`` lookup, the paged ``get_metadata_cache_page`` read
-the frontend reads at each panel load, and the ``app_id -> rom_id`` mapping
+``get_rom_metadata`` lookup, the paged ``get_metadata_cache_page`` the
+frontend pages through at each panel load, and the ``app_id -> rom_id`` mapping
 the launcher uses to resolve session ROMs. Cached metadata is persisted
 by the library sync (the per-unit ``roms`` + ``rom_metadata`` commit);
 this service only reads it back. Ad-hoc detail HTTP calls are not this

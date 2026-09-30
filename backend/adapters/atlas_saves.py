@@ -178,7 +178,7 @@ class AtlasSaveLocationAdapter:
         """The chosen installation, memoised, or ``None`` when nothing was detected.
 
         A detection that found nothing is deliberately NOT memoised, so a
-        RetroDECK installed while the plugin runs is picked up on the next call —
+        RetroDECK installed while the backend runs is picked up on the next call —
         the same policy :mod:`adapters.atlas_catalogue` follows, for the same
         reason.
         """

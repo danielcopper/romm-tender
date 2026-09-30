@@ -113,8 +113,8 @@ class ConnectionServiceConfig:
     server-origin change, the playtime scope-notice clear callback fired on
     a fresh sign-in, and the ``ConflictRules`` the sign-in, sign-out and
     connection-test use cases check at their entry. Bundled here so the ctor
-    stays within the S107 parameter budget and so the version constant stays
-    declared once, as ``MIN_ROMM_VERSION`` in ``domain/identity.py``.
+    stays within the S107 parameter budget, and so the minimum version
+    arrives from the composition root rather than being declared here.
     """
 
     settings: dict[str, Any]

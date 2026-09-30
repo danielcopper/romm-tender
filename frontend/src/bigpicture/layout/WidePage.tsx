@@ -186,10 +186,10 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  * by a different amount is already handled. What is assumed is that the boxes
  * between the body and the scroller FOLLOW our content — the wrapper's bottom
  * tracks ours plus its own inset, at every body height — so pulling the root's
- * margin box up by the overhang moves those bottoms up with it. It holds
- * because the overhang is the wrapper's own padding rather than anything
- * derived from what we put inside, and it was checked at several body heights
- * in two panel geometries.
+ * margin box up by the overhang moves those bottoms up with it. It held where
+ * it was measured, under Decky, because the overhang there was the wrapper's own
+ * padding rather than anything derived from what we put inside; it was checked
+ * at several body heights in two panel geometries.
  *
  * **If that ever stops holding, this is what it looks like.** A wrapper pinned
  * to a height of its own — a future Steam nesting the panel differently —

@@ -7,10 +7,10 @@
  * while the run keeps going. A page opened mid-run therefore sees the plan only
  * if something outside the page kept it, and sees a finished unit's created and
  * updated counts only if something outside the page recorded them — the apply
- * events they were derived from are long gone. This store is that something. The
- * one case it cannot cover is a JS-context rebuild mid-run: the plan arrives once
- * per run, so a store that starts empty after a rebuild stays empty for the rest of
- * the run and refuses every frame that follows.
+ * events they were derived from are long gone. This store is that something.
+ * The one case it cannot cover is a JS-context rebuild mid-run: the plan
+ * arrives once per run, so a store that starts empty after a rebuild stays
+ * empty for the rest of the run and refuses every frame that follows.
  *
  * **Four writers.** {@link seedRunUnits} takes the plan (`sync_plan`, once per
  * run, before any unit); {@link clearRunUnits} empties the rows at a press that

@@ -1124,7 +1124,7 @@ export const dismissSettingsResetNotice = endpoint<[], { success: boolean }>("di
  * more; the transition is over and no file was read to say so.
  * `outstanding` — those `app_ids` still carry a launcher path that is not
  * `exe`. Write `exe` and `start_dir` on each; the backend stamps the transition
- * complete on the next start whose own reading finds nothing left.
+ * complete on the next panel load whose own reading finds nothing left.
  * `blocked` — nothing may be rewritten yet, and the reason is the backend's
  * (the launcher is not at its home, or Steam's shortcut file could not be
  * read). Rewriting anyway would point games at a file that is not there.

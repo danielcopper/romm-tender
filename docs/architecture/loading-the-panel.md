@@ -129,10 +129,11 @@ in Steam.
 **What it does about it** (`backend/host/inject/recovery.py`):
 
 1. **Waits until no app is running.** It reads `SteamUIStore.RunningApps` — the source the panel itself reads running
-   apps from — every five seconds, and only two empty lists in a row let it act: a freshly rebuilt context can list none
-   for a few seconds while a game is still up. A store it cannot read, a shape it does not know, or no renderer attached
-   is no answer, and it keeps waiting. Then it asks the page whose panel it carries, rather than trusting the last
-   reading, and acts only if it is still the earlier backend's. The same gate stands in front of the fallback.
+   apps from — every five seconds, and only two empty lists in a row let it act: the store has been measured listing
+   none for several seconds with a game still up, under a condition the reader's own module comment names
+   (`frontend/src/utils/runningApps.ts`). A store it cannot read, a shape it does not know, or no renderer attached is
+   no answer, and it keeps waiting. Then it asks the page whose panel it carries, rather than trusting the last reading,
+   and acts only if it is still the earlier backend's. The same gate stands in front of the fallback.
 2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
    `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
    [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader

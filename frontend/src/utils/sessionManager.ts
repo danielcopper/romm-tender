@@ -81,10 +81,10 @@ async function refreshAppIdMap(): Promise<void> {
   }
 }
 
-// Durable attestation of the open sessions — survives a JS-context rebuild so the
-// re-initialized manager can adopt the still-running games and finalize their
-// stops. A single versioned localStorage row; every access is wrapped so a
-// storage failure degrades to the no-attestation path instead of throwing.
+// Durable attestation of the open sessions — survives a JS-context rebuild so
+// the re-initialized manager can adopt the still-running games and finalize
+// their stops. A single versioned localStorage row; every access is wrapped so
+// a storage failure degrades to the no-attestation path instead of throwing.
 const SESSION_BREADCRUMB_KEY = "romm-tender:active-session";
 const SESSION_BREADCRUMB_VERSION = 2;
 
@@ -185,9 +185,9 @@ function dispatchSessionChanged(running: boolean, appId: number, romId: number):
  * The idempotency is load-bearing (#1589). `record_session_start` RE-OPENS the
  * durable marker rather than extending it, so a second call for a live session
  * silently discards the span already played. Steam can report an app as started
- * twice (notably when a launch lands inside the plugin's own startup window and
- * reload-adoption has already opened the session), and the re-open is deliberate
- * backend behaviour that adoption relies on — so the guard belongs here.
+ * twice (notably when a launch lands during the panel load and reload-adoption
+ * has already opened the session), and the re-open is deliberate backend
+ * behaviour that adoption relies on — so the guard belongs here.
  *
  * It is keyed on the appId and checked BEFORE the romId lookup: a map that
  * emptied mid-session must not be able to drop a live entry.

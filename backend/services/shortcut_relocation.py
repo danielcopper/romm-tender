@@ -1,8 +1,8 @@
 """ShortcutRelocationService — pointing the existing shortcuts at the launcher's home.
 
-Owns one question the frontend asks at start-up: which of our Steam shortcuts
-name a launcher somewhere other than the launcher's installed home, and may they
-be repointed. A shortcut is ours by one ending and nothing else
+Owns one question the frontend asks at each panel load: which of our Steam
+shortcuts name a launcher somewhere other than the launcher's installed home,
+and may they be repointed. A shortcut is ours by one ending and nothing else
 (``domain/user_data_location.py``), so what this service repoints is a shortcut
 of ours that is not yet at that home; a shortcut naming any other launcher is
 foreign and is left alone. Nothing here writes to Steam — the frontend owns
@@ -11,8 +11,8 @@ composition root settles that and hands the answer in.
 
 A one-time transition task with a recorded completion, in the shape of a schema
 migration: once a reading of Steam's shortcut file finds nothing of ours outside
-the launcher's home, the completion is stamped and no later start reads that
-file again.
+the launcher's home, the completion is stamped and no later panel load reads
+that file again.
 """
 
 from __future__ import annotations
@@ -40,10 +40,11 @@ class ShortcutRelocationServiceConfig:
     """Frozen wiring bundle handed to ``ShortcutRelocationService.__init__``.
 
     ``launcher_exe`` is where the launcher belongs and ``launcher_at_home``
-    whether this start's install actually got it there — two answers the
+    whether this backend start's install actually got it there — two answers the
     composition root settles, threaded in rather than re-derived. The second is
     what makes a blocked answer possible: repointing a shortcut at a launcher
-    this start did not manage to write would stop its game from starting.
+    this backend start did not manage to write would stop its game from
+    starting.
     """
 
     launcher_exe: str
@@ -80,29 +81,29 @@ class ShortcutRelocationService:
           app IDs carry a launcher path that is not ``exe``. The frontend writes
           both fields on each and reports; it records nothing.
         - ``{"status": "blocked", "message"}`` — nothing may be repointed yet:
-          the launcher is not at its home (this start's install failed), or
-          Steam's shortcut file could not be read. Never stamped, so the next
-          start asks again.
+          the launcher is not at its home (this backend start's install failed),
+          or Steam's shortcut file could not be read. Never stamped, so the next
+          panel load asks again.
 
         The blocked answer is the one that matters. Repointing a shortcut at a
         launcher that is not there stops its game from starting and nothing here
         could put the file back, so every uncertainty resolves to it.
 
-        **A completed rewrite is therefore stamped on the FOLLOWING start**, and
-        that is the design rather than a delay that slipped in. Steam holds its
-        shortcuts in memory and rewrites the file from them when it chooses, so
-        the writes a run just issued are not in the file it was planned from —
-        measured 2026-09-10, where a read-back of one rewritten shortcut through
-        ``RegisterForAppDetails`` disagreed with the write seconds after a run
-        that had in fact repointed all 826 of them correctly, and Steam answered
-        with the new path a minute later. The cost is one start on which this
-        service reads the file and finds nothing to do; what it buys is a stamp
-        that no in-flight state can make wrong.
+        **A completed rewrite is therefore stamped on the FOLLOWING panel
+        load**, and that is the design rather than a delay that slipped in.
+        Steam holds its shortcuts in memory and rewrites the file from them when
+        it chooses, so the writes a run just issued are not in the file it was
+        planned from — measured 2026-09-10, where a read-back of one rewritten
+        shortcut through ``RegisterForAppDetails`` disagreed with the write
+        seconds after a run that had in fact repointed all 826 of them
+        correctly, and Steam answered with the new path a minute later. The cost
+        is one panel load on which this service reads the file and finds nothing
+        to do; what it buys is a stamp that no in-flight state can make wrong.
 
         **The gap this leaves, deliberately.** The stamp is permanent and
         nothing clears it: a shortcut of ours that turns up later somewhere
         other than the home — restored from a backup, written by a downgraded
-        build — stays where it is, and no start will look again. It keeps
+        build — stays where it is, and no panel load will look again. It keeps
         launching for as long as a launcher is at the path it names; what it
         does NOT keep is agreement with this service, which goes on answering
         ``done``. Clearing the stamp on Force Full Sync was considered and

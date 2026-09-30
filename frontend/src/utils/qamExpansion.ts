@@ -35,10 +35,9 @@ const WIDE_PANEL_STYLE_ID = "romm-wide-qam-styles";
 // on that same element — which is why walking the DOM by id lands where the CSS
 // below matches by class. **The prefix is the whole of what is matched**, and
 // deliberately so: the key belongs to whichever entry rendered the page —
-// Tender's own (`qam/installEntry.tsx`), not the 999 measured under Decky — so a
-// selector naming one key would stop matching under another. What
-// id a string key produces has not been measured, and nothing here needs it to
-// be.
+// Tender's own (`qam/installEntry.tsx`), not the 999 measured under Decky — so
+// a selector naming one key would stop matching under another. What id a string
+// key produces has not been measured, and nothing here needs it to be.
 const PANEL_ID_SELECTOR = '[id^="quickaccess_content_"]';
 
 const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
