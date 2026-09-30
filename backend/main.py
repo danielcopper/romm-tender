@@ -729,8 +729,8 @@ class Endpoints:
         "enabled", "installed_program"}``. ``available`` is the card itself: a
         newer release with its tarball and checksum file attached exists, and
         the user has not dismissed that exact version — whatever the check's
-        switch says. ``newer`` is the first of those alone, for the Settings section that
-        states the versions whether or not the card was dismissed.
+        switch says. ``newer`` is the first of those alone, for the Settings
+        section that states the versions whether or not the card was dismissed.
         ``installed_program`` says whether this process is the installed program
         an update could replace — False for a run from a checkout.
 
@@ -769,9 +769,8 @@ class Endpoints:
         """Persist whether the daily release check may ask GitHub.
 
         On by default; with it off nothing is fetched but what Check now asks
-        for. Returns
-        ``{"success": True}``, or the canonical failure shape for a non-boolean
-        value.
+        for. Returns ``{"success": True}``, or the canonical failure shape for
+        a non-boolean value.
         """
         return self._services.update_check_service.set_update_check_enabled(enabled)
 
@@ -831,10 +830,10 @@ class Endpoints:
 
         Returns ``{"offered", "version", "wait_reasons", "paused_downloads",
         "attempt", "try_again"}``. ``offered`` holds only on the installed
-        program with a stored release newer than the running version, whatever
-        the check's switch says, which ``version`` names. ``wait_reasons`` lists, as
-        ``{"reason", ...}``, everything a press would be refused for now —
-        ``app_running`` (with ``apps``), ``running_apps_unknown``,
+        program with a stored release newer than the running version, which
+        ``version`` names, whatever the check's switch says. ``wait_reasons``
+        lists, as ``{"reason", ...}``, everything a press would be refused for
+        now — ``app_running`` (with ``apps``), ``running_apps_unknown``,
         ``library_sync``, ``rom_downloads``, ``save_sync``,
         ``firmware_downloads``, ``save_directory_move``,
         ``removed_games_cleanup``, ``retrodeck_migration``, ``other_work``,

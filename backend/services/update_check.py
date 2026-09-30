@@ -166,9 +166,8 @@ class UpdateCheckService:
         one this loop saw last is emitted as ``update_notice``, carrying what
         :meth:`get_update_notice` answers, unless the switch went off while it
         was worked out: switched off, this program says nothing by itself.
-        Runs until cancelled; a round that raises, its
-        emit included, is logged and the next one comes as usual, pushing again
-        what did not go out.
+        Runs until cancelled; a round that raises, its emit included, is logged
+        and the next one comes as usual, pushing again what did not go out.
         """
         last: dict[str, Any] | None = None
         while True:

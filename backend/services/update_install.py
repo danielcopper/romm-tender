@@ -321,17 +321,17 @@ class UpdateInstallService:
 
         Returns ``{"offered", "version", "wait_reasons", "paused_downloads",
         "attempt", "try_again"}``. ``offered`` holds on the installed program
-        with a stored release newer than the running version, whatever the
-        check's switch says, which ``version`` names (``None`` where nothing is offered).
-        ``wait_reasons`` lists every reason a press would be refused now, each
-        ``{"reason"}`` plus ``apps`` for ``app_running`` and ``frees_at`` for
-        ``interface_reload_limit``; empty where nothing is offered or an
-        attempt holds the rule. ``paused_downloads`` counts the paused ROM
-        downloads a restart would lose. ``attempt`` is the latest attempt's
-        ``{"version", "step", "bytes_done", "bytes_total", "failure"}``, or
-        ``None``. ``try_again`` says the offered version already failed once —
-        an attempt in this process, or an update the installer rolled back or
-        its pre-install check refused.
+        with a stored release newer than the running version, which ``version``
+        names (``None`` where nothing is offered), whatever the check's switch
+        says. ``wait_reasons`` lists every reason a press would be refused
+        now, each ``{"reason"}`` plus ``apps`` for ``app_running`` and
+        ``frees_at`` for ``interface_reload_limit``; empty where nothing is
+        offered or an attempt holds the rule. ``paused_downloads`` counts the
+        paused ROM downloads a restart would lose. ``attempt`` is the latest
+        attempt's ``{"version", "step", "bytes_done", "bytes_total",
+        "failure"}``, or ``None``. ``try_again`` says the offered version
+        already failed once — an attempt in this process, or an update the
+        installer rolled back or its pre-install check refused.
         """
         release = await self._offered_release()
         waits = await self._waits() if release is not None and not self._holding else []
