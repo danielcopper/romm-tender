@@ -679,7 +679,7 @@ class TestSavesEndpointDelegation:
         assert result == {"ok": True}
 
 
-# ── SteamGridDB endpoints ──────────────────────────────────────────────
+# ── Endpoints that reach SteamGridDB ───────────────────────────────────
 
 
 class TestSgdbEndpointDelegation:

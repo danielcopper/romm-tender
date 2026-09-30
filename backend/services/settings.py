@@ -270,11 +270,11 @@ class SettingsService:
 
         User intent, stored for a reader to choose between ``sync_preview`` and
         ``start_sync`` when the sync button is pressed. The backend's own sync
-        behaviour does not depend on it: both endpoints stay reachable and
-        neither consults this value. Persisted so the choice can survive the
-        panel closing; Main's toggle holds its own local state today and does
-        not read this value. A non-bool from the untrusted frontend wire is
-        rejected.
+        behaviour does not depend on it: the backend answers both whatever it
+        says, and neither consults this value. Persisted so the choice can
+        survive the panel closing; Main's toggle holds its own local state today
+        and does not read this value. A non-bool from the untrusted frontend
+        wire is rejected.
         """
         if not isinstance(enabled, bool):
             return {"success": False, "reason": "invalid_value", "message": "Invalid value"}

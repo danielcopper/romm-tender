@@ -445,12 +445,13 @@ class SyncOrchestrator:
 
             return answer
         except SyncCancelled:
-            # sync_preview is an endpoint, and a user's cancel is its own
-            # outcome, not a transport failure: re-raising would reach the
-            # frontend as a ``backend_exception`` error (host/dispatch.py) where
-            # the canonical failure shape belongs. The clause order is what
-            # routes it here — SyncCancelled is an Exception, so it must stay
-            # above the generic ``except Exception`` below.
+            # sync_preview is the use case behind an endpoint, and a user's
+            # cancel is its own outcome, not a transport failure: re-raising
+            # would reach the frontend as a ``backend_exception`` error
+            # (host/dispatch.py) where the canonical failure shape belongs. The
+            # clause order is what routes it here — SyncCancelled is an
+            # Exception, so it must stay above the generic ``except Exception``
+            # below.
             box.discard_preview()
             await self._finish_sync(_SYNC_CANCELLED)
             return {"success": False, "reason": "cancelled", "message": _SYNC_CANCELLED}

@@ -2,9 +2,9 @@
  * The one module the panel imports for what it gets from its host: `endpoint`,
  * `addEventListener`, `removeEventListener`, `toaster` and `definePlugin`.
  * Three of them are the wire — they go over the WebSocket in `hostSocket.ts`.
- * **Two of them reach no socket at all**, and they live here anyway: making the
- * reader distinguish would put two imports at every call site for a
- * distinction the call sites do not have.
+ * **Two of them reach no socket at all**, and they live here anyway: `index.tsx`
+ * takes both kinds, and splitting the module would give it two imports for a
+ * distinction it does not have.
  *
  * ## The two that are not the wire
  *
@@ -22,10 +22,11 @@
  * ## The types
  *
  * Written from what this project's call sites actually require, not copied from
- * upstream's declarations. A copied declaration would carry upstream's licence
- * for no benefit, and a derived one describes what we use rather than what they
- * offer — so when a call site needs a field that is not here, the compiler says
- * so, which is a better conversation than inheriting fields nobody reads.
+ * another library's declarations. A copied declaration would carry that
+ * library's licence for no benefit, and a derived one describes what we use
+ * rather than what it offers — so when a call site needs a field that is not
+ * here, the compiler says so, which is a better conversation than inheriting
+ * fields nobody reads.
  */
 
 import type { ReactNode } from "react";
@@ -41,8 +42,7 @@ export { HostTransportError } from "./hostSocket";
  * What a toast carries.
  *
  * Four fields, because four are passed: `title` and `body` by `showToast`,
- * `subtext` by the cleanup summary, `duration` by the launch prompts. Upstream
- * declares fourteen.
+ * `subtext` by the cleanup summary, `duration` by the launch prompts.
  */
 export interface ToastData {
   title: ReactNode;
@@ -158,8 +158,7 @@ export const removeEventListener = <Payload = unknown>(
  * `index.tsx` hands it to `qam/installEntry.tsx`, which calls it exactly once
  * and mounts what it answers with behind Tender's own Quick Access entry. That
  * seam is where it is so this module stays the wire and reaches no view — the
- * name is upstream's contract and the declaration is all of it that belongs
- * here.
+ * declaration is all of it that belongs here.
  */
 export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
 

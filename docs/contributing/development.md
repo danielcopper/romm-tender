@@ -137,8 +137,7 @@ retry backoff. Run them like any other test:
 python -m pytest tests/contract/ -q
 ```
 
-A `backend.ts` manifest gate (Phase 2) that pins the frontend and backend to one parsed artifact is a forthcoming
-separate change. See `.claude/rules/testing-backend.md` for the full contract-tier rules.
+See `.claude/rules/testing-backend.md` for the full contract-tier rules.
 
 ### Gavel conformance vectors
 

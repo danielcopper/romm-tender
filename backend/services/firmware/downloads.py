@@ -139,8 +139,9 @@ class FirmwareDownloader:
     async def download_firmware(self, firmware_id) -> dict[str, Any]:
         """Download one firmware file — with none of the batch's eligibility checks.
 
-        The folder-declaration refusal is among them, and no endpoint calls
-        this method, which is the only reason that gap is unreachable.
+        The folder-declaration refusal is among them, and no endpoint reaches
+        this method — ``FirmwareService.download_firmware``, the use case over
+        it, has none — which is the only reason that gap is unreachable.
         """
         placements = await self._loop.run_in_executor(None, self._demand.placement_index)
         return await self._download_one(firmware_id, placements)

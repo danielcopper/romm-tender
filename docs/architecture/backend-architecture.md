@@ -2767,9 +2767,9 @@ enum) plus bespoke plain-string reasons for non-server-reachability guards.
 
 ### 5. Enforced: underscore prefix
 
-All internal methods use a `_` prefix; public endpoints (declared on the frontend through `endpoint()`) have none. The
-endpoints in `main.py` delegate directly to the corresponding service method. An endpoint is reachable because it is
-marked `@route`, not because it is `async def`; `.claude/rules/endpoints.md` owns when one is a `def`.
+All internal methods use a `_` prefix; public ones — the endpoints on `Endpoints` and the use cases on a service — have
+none. The endpoints in `main.py` delegate directly to the corresponding service method. An endpoint is reachable because
+it is marked `@route`, not because it is `async def`; `.claude/rules/endpoints.md` owns when one is a `def`.
 
 This is no longer just a convention — basedpyright enforces it with `reportPrivateUsage = "error"`, so accessing a
 `_`-prefixed name from outside its owning class is a hard type error. Tests are exempt via an `executionEnvironments`

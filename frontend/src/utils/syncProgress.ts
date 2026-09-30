@@ -138,8 +138,8 @@ const _terminatedRunIds = new Set<string>();
  * Notify every subscriber, each inside its own try/catch — a throwing subscriber
  * can neither starve later listeners nor break the emitting call site (e.g. the
  * per-item apply loop in syncManager, where a subscriber throw would otherwise
- * skip that game's shortcut creation). Console, not the ``logError`` backend
- * endpoint, at this store layer.
+ * skip that game's shortcut creation). Console, not ``logError`` (which calls
+ * the ``frontend_log`` endpoint), at this store layer.
  */
 function notify(): void {
   _listeners.forEach((fn) => {

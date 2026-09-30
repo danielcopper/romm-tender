@@ -172,16 +172,16 @@ locally with `mise run docs`.
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for what the panel gets from its
-  host — it replaces `@decky/api`, which is no longer a dependency, so nothing imports that package. Three of its five
-  exports go over the backend's WebSocket (`endpoint` and the event pair); `definePlugin` sits beside them and opens no
-  socket. `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever
-  already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth
-  name `@decky/api` forwarded was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches
-  Steam's game page through a seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
-  `docs/architecture/frontend-bundles.md`, "Tender's section on Steam's game page". The toaster does not reach Decky's
-  loader API when one is present, and what decides that is not purity: it was the loader's own, and one that borrowed
-  the loader's wherever it found it would behave differently on a machine with Decky from one without — which is the
-  difference this program exists not to depend on. **The reference machine runs the loader** (measured:
+  host — it replaces `@decky/api`, which is no longer a dependency, so nothing imports that package. Three of the five
+  things the panel takes from it go over the backend's WebSocket (`endpoint` and the event pair); `definePlugin` sits
+  beside them and opens no socket. `toaster` pushes into Steam's own notification store and draws its entries itself,
+  chained behind whatever already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to
+  the backend"). `@decky/api`'s `routerHook`, Decky Loader's route installer, has no counterpart here: Tender's section
+  reaches Steam's game page through a seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`,
+  documented at `docs/architecture/frontend-bundles.md`, "Tender's section on Steam's game page". The toaster does not
+  reach Decky's loader API when one is present, and what decides that is not purity: it was the loader's own, and one
+  that borrowed the loader's wherever it found it would behave differently on a machine with Decky from one without —
+  which is the difference this program exists not to depend on. **The reference machine runs the loader** (measured:
   `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.

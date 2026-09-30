@@ -1,5 +1,5 @@
 /**
- * The five exports, against the real module.
+ * The five things the panel takes from `api/host`, against the real module.
  *
  * `test-setup.ts` replaces `api/host` for the whole suite, so this file has to
  * take the stub off again — otherwise it would assert that a `vi.fn()` behaves

@@ -662,7 +662,8 @@ function scheduleFailedLoadRetry(appId: number, entry: Entry): void {
  * and no event arrives, so the entry stays on the neutral default until a
  * version switch or the next page visit. And a read that HANGS rather than
  * rejects: `endpoint()` carries no timeout of its own — which is why index.tsx
- * and utils/connectionProbe.ts race every attempt against `ENDPOINT_TIMEOUT` —
+ * and utils/connectionProbe.ts race every attempt against a deadline
+ * (`ENDPOINT_TIMEOUT`, `CONNECTION_ENDPOINT_TIMEOUT`) —
  * and this load awaits it bare, so the catch never runs, the flag both lanes
  * read is never set, and neither fires.
  */

@@ -300,7 +300,7 @@ Decky's copy carries a name whose value this check never reads.
 ## Talking to the backend
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,
-`addEventListener`, `removeEventListener`, `toaster`, `definePlugin`.
+`addEventListener`, `removeEventListener`, `definePlugin`, `toaster`.
 
 **Three of them are the wire.** `endpoint`, `addEventListener` and `removeEventListener` go through
 `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
@@ -322,9 +322,9 @@ Three properties are worth knowing before changing anything there:
 **A fourth opens no socket and is the one the panel reaches the screen through.** `definePlugin` answers with the
 factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once
 and mounts what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The entry). The
-seam is arranged that way so this module stays the wire and reaches no view — the name is upstream's contract and the
-declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in the tree makes it,
-so without that line the panel is built for nobody.
+seam is arranged that way so this module stays the wire and reaches no view — the declaration is all of it that belongs
+here. Under Decky Loader the call was Decky's; nothing else in the tree makes it, so without that line the panel is
+built for nobody.
 
 **The fifth reaches Steam instead.** `toaster` has no host answer, so it is Tender's own rather than a backend route:
 `utils/steamToaster.tsx` pushes a notification into Steam's own `NotificationStore`, which then owns the popup window

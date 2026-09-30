@@ -216,8 +216,9 @@ class BiosChecker(Protocol):
     caller can pair one emulator's identity with another's name
     (``domain.emulator_commands.LaunchingEmulator``). Its identity names a
     standalone emulator as readily as a libretro core. ``None`` means "use the
-    platform's own pick" — the ``check_platform_bios`` use case passes it, and
-    so does the per-game path when nothing could be resolved for the ROM.
+    platform's own pick" — the ``check_platform_bios`` endpoint passes it (by
+    leaving it out), and so does the per-game path when nothing could be
+    resolved for the ROM.
     """
 
     async def check_platform_bios(
