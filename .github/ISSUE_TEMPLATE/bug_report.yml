@@ -22,7 +22,7 @@ body:
     attributes:
       label: Tender version
       description: "`cat ~/.local/lib/romm-tender/version.txt` prints it. Required for triage."
-      placeholder: "0.18.0"
+      placeholder: "0.33.0"
     validations:
       required: true
 
@@ -51,7 +51,7 @@ body:
     attributes:
       label: RetroDECK version
       description: Shown in the RetroDECK Configurator. If you can't find it quickly, leave blank.
-      placeholder: "0.9.0b"
+      placeholder: "0.10.9b"
     validations:
       required: false
 
