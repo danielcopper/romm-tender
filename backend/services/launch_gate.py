@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 # Every notice comes from the same plugin, so they all carry the same sender
 # (``DISPLAY_NAME``) and the body is what tells them apart.
-_TOAST_BODY_NOT_INSTALLED = "ROM not downloaded. Open the game page to download it first."
+_TOAST_BODY_NOT_INSTALLED = "ROM not downloaded. Download it from its game page first."
 _TOAST_BODY_SAVE_CONFLICT = "Save conflict detected — open game page to resolve before playing"
 _TOAST_BODY_SAVE_STATUS_FAILED = "Save-status check failed — retry?"
 
