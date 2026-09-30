@@ -7,8 +7,8 @@ import externalGlobals from "rollup-plugin-external-globals";
 import ts from "typescript";
 
 // The three globals Steam's own React lives under. They are not Steam's doing —
-// Decky's loader installs them, and since #1899 so does `src/boot/steamGlobals.ts`,
-// which is why one of the builds below exists only to produce that bootstrap.
+// Decky's loader installs them, and so does `src/boot/steamGlobals.ts`, which is
+// why one of the builds below exists only to produce that bootstrap.
 const STEAM_REACT_GLOBALS = {
   react: "SP_REACT",
   "react/jsx-runtime": "SP_JSX",
@@ -22,7 +22,7 @@ const STEAM_REACT_GLOBALS = {
 // job (`rm -rf ../dist && rollup -c`), not this file's.
 const OUT_DIR = "../dist";
 
-// TREE-SHAKING, and the answer this file owes rather than inherits.
+// TREE-SHAKING.
 //
 // `@decky/ui` declares `"sideEffects": false` in its manifest and then runs
 // `initModuleCache()` at module scope — a sweep that executes every module in
@@ -33,18 +33,12 @@ const OUT_DIR = "../dist";
 // the panel renders holes, and the start-up check reports a Steam client update
 // that never happened.
 //
-// **`@decky/rollup` answered this for us and is being removed here**, so it has
-// to be answered again. Its answer was `treeshake: { preset: "smallest",
-// pureExternalImports: { pure: ["@decky/ui", "@decky/api"] } }`, which was moot
-// there: the package was EXTERNAL, mapped onto the `DFL` global, so no byte of
-// it was in the output for any setting to remove.
-//
-// **The answer here is Rollup's default, and it is measured rather than
-// reasoned.** Three builds of `src/index.tsx` with `@decky/ui` BUNDLED, against
-// rollup 4.62.2 and `@decky/ui` 4.12.0:
+// **The answer is Rollup's default, and it is measured rather than reasoned.**
+// Three builds of `src/index.tsx` with `@decky/ui` BUNDLED, against rollup
+// 4.62.2 and `@decky/ui` 4.12.0:
 //
 //   default treeshake                         initModuleCache present, 759,413 B
-//   preset "smallest" (what the preset set)   initModuleCache present, 759,092 B
+//   preset "smallest"                         initModuleCache present, 759,092 B
 //   every @decky/ui module forced side-       initModuleCache present, 770,208 B
 //     effectful via a resolveId plugin
 //
@@ -67,9 +61,7 @@ const OUT_DIR = "../dist";
  * Ship `@decky/ui`'s licence beside the bundle that carries its code.
  *
  * Bundling the package makes this project a DISTRIBUTOR of it, and it is
- * LGPL-2.1: the licence text travels with the work. Until #1899 this project
- * shipped not one byte of it — the package was mapped onto Decky's global — so
- * nothing was owed and nothing was carried.
+ * LGPL-2.1: the licence text travels with the work.
  *
  * **Two of the three builds ship the package's code**, not one: `dist/index.js`
  * carries the components, and `dist/globals.js` carries its module-cache half.
@@ -212,10 +204,6 @@ const plugins = ({ sourcemap }) => [
 // `context: "window"` is Steam's: a bundle evaluated through `import()` in the
 // SharedJSContext has no module `this`, and a dependency reading top-level
 // `this` expecting the global object would see `undefined`.
-//
-// `output.exports` is deliberately absent. `@decky/rollup` set it to "default",
-// which Rollup ignores for `format: "esm"` — it applies to cjs/amd/umd/iife
-// only — so carrying it over would have looked like a decision and been a no-op.
 const build = ({ input, file, external, bundleKind, extraPlugins = [], sourcemap }) => ({
   input,
   external,
@@ -224,16 +212,6 @@ const build = ({ input, file, external, bundleKind, extraPlugins = [], sourcemap
   output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap },
 });
 
-// Four more of the Rollup plugins `@decky/rollup` brought are not here, beside
-// `@rollup/plugin-typescript` (which `transpileTypeScript` above replaces), and
-// each absence was checked rather than assumed: no module under `src/` imports a
-// `.json` file (`@rollup/plugin-json`) or an asset (`rollup-plugin-import-assets`,
-// which also pointed its public path at a `127.0.0.1:1337` plugin server that
-// serves nothing for us); no module under `src/`, in `@decky/ui` or in
-// `react-icons` reads `process.env` (`@rollup/plugin-replace`); and
-// `rollup-plugin-delete` was aimed at `./dist/*`, which resolves against the
-// working directory and cleaned this package's own unused `dist` rather than the
-// real one.
 export const configure = ({ sourcemap }) => [
   // The React bootstrap. Its own bundle, and that is load-bearing rather than
   // tidy: `@decky/ui`'s component half reads React internals while its modules
@@ -261,7 +239,7 @@ export const configure = ({ sourcemap }) => [
   }),
 
   // COEXISTENCE — `@decky/ui` taken from Decky's already-loaded copy through the
-  // `DFL` global, which is what the whole build did before #1899.
+  // `DFL` global.
   //
   // It is not a legacy form kept for politeness. Importing `@decky/ui` re-runs
   // `initModuleCache()`, which re-executes every module in Steam's live webpack
@@ -275,8 +253,8 @@ export const configure = ({ sourcemap }) => [
   // where a component was. Steam's own interface is not such a consumer;
   // Decky's is. This build carries no `initModuleCache` call at all.
   //
-  // WHICH of the two is loaded is the injector's decision (#1900) and is not made
-  // here; what is made here is the pair, and two file names to tell them apart.
+  // WHICH of the two is loaded is the injector's decision and is not made here;
+  // what is made here is the pair, and two file names to tell them apart.
   build({
     input: "./src/index.tsx",
     file: "index-coexistence.js",
