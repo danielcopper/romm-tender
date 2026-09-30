@@ -1212,6 +1212,25 @@ class TestAnInstallerStillRunningAtTheNextStart:
         assert asked_on
         assert threading.get_ident() not in asked_on
 
+    async def test_the_record_is_read_off_the_loop(self, rigs, tmp_path, monkeypatch):
+        """The record is a file under the state root; a slow disk must not hold up the start steps after this one."""
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        attempts = rig.service._attempts
+        read_on: list[int] = []
+
+        def read(read: Callable[[], UpdateAttemptRecord | None] = attempts.read) -> UpdateAttemptRecord | None:
+            read_on.append(threading.get_ident())
+            return read()
+
+        monkeypatch.setattr(attempts, "read", read)
+
+        rig.service.note_start()
+
+        assert len(await _judged(rig)) == 1
+        assert len(read_on) == 2
+        assert threading.get_ident() not in read_on
+
     async def test_a_press_while_the_unit_is_being_asked_ends_the_question(self, rigs, tmp_path, monkeypatch):
         """The unit is asked off the loop; a press can land before its answer is back."""
         _leave_record(tmp_path)
