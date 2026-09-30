@@ -335,7 +335,7 @@ class DownloadService:
         # pre-flight can all raise (SD card unmounted → OSError; ``roms_path()``
         # returning None → TypeError in the join). Any raise across the three
         # blocks below must release the in-progress flag so the ROM isn't stuck
-        # "Already downloading" until a plugin reload (#1048). The explicit
+        # "Already downloading" until a backend restart (#1048). The explicit
         # early-return guards inside still ``return`` (not raise) and discard the
         # flag themselves; a ``return`` does not trip the except.
         try:

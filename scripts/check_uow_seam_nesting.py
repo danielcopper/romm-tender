@@ -241,10 +241,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "_resolve_system",
         # SteamConfigStore.read_shortcut_exes (services/protocols/transport.py) —
         # parses Steam's whole shortcuts.vdf (315 KB and 828 entries on the
-        # reference machine) to answer which shortcuts still name a launcher
-        # inside a plugin folder. Object-shaped, so the method name is the whole
-        # entry — but its one consumer reaches it through run_in_executor as a
-        # BOUND METHOD, the blind spot documented above, so this entry catches
+        # reference machine) to answer which shortcuts of ours still name a
+        # launcher other than the bin root's. Object-shaped, so the method name is
+        # the whole entry — but its one consumer reaches it through run_in_executor
+        # as a BOUND METHOD, the blind spot documented above, so this entry catches
         # nothing today and is here for the call site that writes it plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
         # judgement: grid_dir() is called from services/artwork.py (six sites),

@@ -187,7 +187,7 @@ class DiscService:
             # shortcut — then names the directory the ROM has left. It is
             # self-correcting rather than sticky: the startup launch-options
             # reconcile (#1043) re-bakes every installed+bound ROM from the
-            # current rows on the next plugin load.
+            # current rows on the next panel load.
             rom = uow.roms.get(rom_id)
             current_install = uow.rom_installs.get(rom_id)
             if rom is None or current_install is None or current_install.rom_dir is None:

@@ -70,7 +70,7 @@ const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu 
 
 /**
  * Watcher variant of the tracking-setup gate. On a cold grid launch there is no
- * plugin page open, so — unlike the Play button — this MUST NOT route the user
+ * game page open, so — unlike the Play button — this MUST NOT route the user
  * to the saves tab. Instead it silently auto-adopts the default/recommended
  * slot (via `confirmSlotChoice`) and proceeds. A direct launch is never blocked
  * on setup — it always proceeds (the gate op below maps this to "proceed"); any
@@ -96,8 +96,8 @@ async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
   // other (abort) branch is irrelevant here because the watcher never aborts a
   // direct launch on tracking — an unconfigured slot the user can't resolve on
-  // a cold launch must still let the game start (the next plugin-page visit
-  // configures it).
+  // a cold launch must still let the game start (the next visit to the game
+  // page's saves tab configures it).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
     confirmSlotChoice,

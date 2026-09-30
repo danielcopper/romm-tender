@@ -882,7 +882,7 @@ class Endpoints:
         """Report which Steam shortcuts still have to be pointed at the launcher.
 
         Returns a discriminated status union: ``{"status": "done"}`` when no
-        shortcut of ours names a plugin folder any more;
+        shortcut of ours names a launcher other than the bin root's any more;
         ``{"status": "outstanding", "exe", "start_dir", "app_ids"}`` naming
         exactly the shortcuts to rewrite and what to write on them; or
         ``{"status": "blocked", "message"}`` when nothing may be rewritten yet,

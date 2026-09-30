@@ -623,7 +623,7 @@ const FAILED_LOAD_RETRY_MS = 5000;
  * spent where it is scheduled, so a retry that throws too schedules nothing
  * further, and a timer already pending when the event lane re-derives is not
  * withdrawn (that entry can see both). One rather than a ladder because the
- * plugin runs a readiness ladder at init already; a per-page lane that grew one
+ * panel load runs a readiness ladder already; a per-page lane that grew one
  * of its own would be racing it, page by page.
  *
  * Inert unless the entry is still the one this was scheduled for and is still

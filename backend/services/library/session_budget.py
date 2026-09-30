@@ -304,9 +304,9 @@ class SessionBudgetMonitor:
         Also carries the last run's progress — ``run_done_items`` of
         ``run_total_items`` — so the paused banner can say "X of Y games done". They
         ride this payload rather than a new endpoint because the QAM already polls it
-        while a paused banner shows, and they live in the BACKEND because the plugin
+        while a paused banner shows, and they live in the BACKEND because the backend
         process survives the Steam restart the banner asks for. Both are ``None`` when
-        no run has reached its plan in this process (a plugin reload wipes the
+        no run has reached its plan in this process (a backend restart wipes the
         in-memory counters); the banner then omits the sentence.
         """
         rss_kb: int | None = None

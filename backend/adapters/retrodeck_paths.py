@@ -4,8 +4,8 @@ Provides path resolution for saves, ROMs, BIOS, and the RetroDECK home
 directory. The adapter reads ``retrodeck.json`` (RetroDECK's user-facing
 configurator output) once and caches the result for 30 seconds — long
 enough to amortize repeated reads during a sync run, short enough to
-pick up edits made via the RetroDECK configurator within a single
-plugin session.
+pick up edits made via the RetroDECK configurator without a backend
+restart.
 
 Path getters are best-effort and never raise: a missing, unreadable, or
 malformed ``retrodeck.json`` falls back to ``<user_home>/retrodeck/*``.

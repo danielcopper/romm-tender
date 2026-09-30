@@ -165,7 +165,7 @@ export interface SessionBudgetStatus {
    * EVERY terminal — completed, paused, cancelled, or interrupted — so the row
    * reflects that run's consumption, not a prior clean run's. Retained in backend
    * memory so a QAM remount can show "last run: ±X GB" without a live run. ``null``
-   * when either reading was unmeasurable (or after a plugin reload). Rendered
+   * when either reading was unmeasurable (or after a backend restart). Rendered
    * sign-formatted (#1383 / #36).
    */
   memory_delta_kb: number | null;
@@ -181,7 +181,7 @@ export interface SessionBudgetStatus {
    * Items of the last run already done — its skipped (already-correct) entries plus
    * every committed chunk's applied shortcuts. Counted in the backend, which
    * survives the Steam restart the paused banner asks for. ``null`` when unknown
-   * (no run has reached its plan in the backend process — a plugin reload wipes the
+   * (no run has reached its plan in the backend process — a backend restart wipes the
    * in-memory counters), in which case the banner omits the progress sentence
    * rather than showing a placeholder (#1383).
    */

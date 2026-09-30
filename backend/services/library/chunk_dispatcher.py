@@ -84,8 +84,8 @@ class ChunkDispatcherConfig:
 
     What is absent is the contract: no Unit-of-Work factory (the dispatcher
     opens no transaction), no event loop (it offloads nothing), no settings and
-    no plugin directory (every decision it acts on was made before the round-trip
-    began).
+    none of the program's directories (every decision it acts on was made before
+    the round-trip began).
     """
 
     logger: logging.Logger

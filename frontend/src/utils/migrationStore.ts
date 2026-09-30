@@ -2,7 +2,7 @@
  * Module-level migration state store.
  *
  * Updated by:
- *   - plugin load init in index.tsx (getMigrationStatus endpoint)
+ *   - panel load init in index.tsx (getMigrationStatus endpoint)
  *   - refreshMigrationState return value in MainPage, RomMGameInfoPanel,
  *     launchInterceptor, sessionManager
  *   - clearMigration() from MigrationBlockedPage, on a successful migration and

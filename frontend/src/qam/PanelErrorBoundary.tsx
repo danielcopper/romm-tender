@@ -72,8 +72,8 @@ export class PanelErrorBoundary extends Component<PanelErrorBoundaryProps, Panel
    * factory. Re-evaluating is the injector's (`backend/host/inject/`) and
    * nothing in this tree can ask for it; re-running the factory would install a
    * second copy of every listener and patch it registers, which are
-   * process-wide and already installed — so the "reload" that sounds most
-   * thorough is the one that would leave the process worse than the failure did.
+   * context-wide and already installed — so the "reload" that sounds most
+   * thorough is the one that would leave the context worse than the failure did.
    *
    * What survives is therefore the panel's module-level state — the open page,
    * the sync progress, the caches. That is on purpose for the page: a reader

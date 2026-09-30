@@ -3,8 +3,9 @@
  *
  * `relocated` is true once a pass has pointed every shortcut the backend named
  * at the launcher's home — the one fact that says no shortcut of ours still
- * names a plugin folder. Only the frontend can answer it: the backend knows
- * which shortcuts need the write, never whether the write happened.
+ * names a launcher other than the bin root's. Only the frontend can answer it:
+ * the backend knows which shortcuts need the write, never whether the write
+ * happened.
  *
  * It starts false and is never set back. False therefore means "not established
  * this session" — the pass has not finished, or the backend said nothing may be
@@ -41,7 +42,7 @@ export function setLauncherRelocated(relocated: boolean): void {
   _listeners.forEach((fn) => fn());
 }
 
-/** Test seam: drop the answer, as a fresh plugin load has it. */
+/** Test seam: drop the answer, as a fresh panel load has it. */
 export function resetLauncherStoreForTests(): void {
   setLauncherRelocated(false);
 }

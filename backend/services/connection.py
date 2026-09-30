@@ -10,9 +10,9 @@ pairing code for a token (the same OIDC path without pasting), and
 stored-password install to a token on startup. Pure I/O happens through the ``RommConnectionApi``
 Protocol and disk writes through the ``SettingsPersister`` Protocol; this
 service composes that I/O with the response-shape contract the frontend
-depends on. The minimum version is injected so the policy stays anchored
-at the plugin entrypoint while this service remains a pure orchestration
-layer.
+depends on. The minimum version is injected — ``MIN_ROMM_VERSION`` in
+``domain/identity.py``, passed in by bootstrap — so this service remains a
+pure orchestration layer.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ class ConnectionServiceConfig:
     a fresh sign-in, and the ``ConflictRules`` the sign-in, sign-out and
     connection-test use cases check at their entry. Bundled here so the ctor
     stays within the S107 parameter budget and so the version constant stays
-    declared once at the plugin entrypoint.
+    declared once, as ``MIN_ROMM_VERSION`` in ``domain/identity.py``.
     """
 
     settings: dict[str, Any]

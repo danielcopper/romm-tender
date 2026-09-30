@@ -80,8 +80,8 @@ class StartupHealingService:
         """Remove ``rom_installs`` rows whose files no longer exist on disk.
 
         Skipped when the RetroDECK home is not yet available on disk —
-        almost always a boot-time SD-card-mount race; the next plugin
-        reload, with the filesystem ready, will run the prune normally.
+        almost always a boot-time SD-card-mount race; the next backend
+        start, with the filesystem ready, will run the prune normally.
         Installs living under any pending migration home (the previous
         home plus any additional hops, #1042) are also preserved because
         RetroDECK has moved away from those paths but the user hasn't

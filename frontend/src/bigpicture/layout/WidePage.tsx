@@ -174,15 +174,15 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  *
  * **Measured, never a constant.** The overhang comes from someone else's markup,
  * and a constant would pin every wide page to today's value of it. That it has
- * so far read the same 50 px in every environment tried — it is Decky's inset
- * and padding in CSS pixels, so it does not scale with the viewport, and a
- * 1.5-scale panel three fifths the height (440 against 750) reports it
- * unchanged — is evidence for the
- * arithmetic, **not a value to hardcode**: the smaller the panel, the larger the
- * same 50 px looms in it.
+ * so far read the same 50 px in every environment tried — measured under Decky,
+ * where it is the wrapper's own inset and padding in CSS pixels, so it does not
+ * scale with the viewport, and a 1.5-scale panel three fifths the height (440
+ * against 750) reports it unchanged — is evidence for the arithmetic, **not a
+ * value to hardcode**: the smaller the panel, the larger the same 50 px looms in
+ * it.
  *
  * **What the arithmetic assumes is a SHAPE, not a value.** Every value here is
- * re-measured, so another display, scale or Decky release that merely overhangs
+ * re-measured, so another display, scale or Steam release that merely overhangs
  * by a different amount is already handled. What is assumed is that the boxes
  * between the body and the scroller FOLLOW our content — the wrapper's bottom
  * tracks ours plus its own inset, at every body height — so pulling the root's
@@ -192,10 +192,10 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  * in two panel geometries.
  *
  * **If that ever stops holding, this is what it looks like.** A wrapper pinned
- * to a height of its own — a future Decky or Steam nesting the plugin
- * differently — would not follow the body up: growing the body would then
- * overflow the wrapper instead of the wrapper's parent, the negative margin
- * would cancel nothing that was in the way, and the panel would scroll again,
+ * to a height of its own — a future Steam nesting the panel differently —
+ * would not follow the body up: growing the body would then overflow the
+ * wrapper instead of the wrapper's parent, the negative margin would cancel
+ * nothing that was in the way, and the panel would scroll again,
  * which the reader meets as the Back row leaving the top. The check is one
  * reading: the lowest ancestor bottom in this chain should equal the body's own
  * once the margin is applied, and it should sit an overhang below it without.

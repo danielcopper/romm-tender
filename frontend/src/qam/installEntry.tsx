@@ -94,7 +94,7 @@ export interface QuickAccessEntryHandle {
  *
  * Takes the FACTORY rather than a built panel, because calling it exactly once
  * is part of the contract `definePlugin` describes: it registers Steam patches,
- * backend listeners and interceptors that are process-wide, and a second call
+ * backend listeners and interceptors that are context-wide, and a second call
  * would install a second set of them.
  *
  * **There is no unpatch, and that is a consequence of how the panel is loaded

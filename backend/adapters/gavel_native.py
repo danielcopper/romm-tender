@@ -45,7 +45,7 @@ from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
 
 # Module-relative path to the vendored shared object, mirroring
 # ``adapters.sqlite_migrations.MIGRATIONS_DIR``: resolving off ``__file__``
-# (not the plugin dir) locates the artifact wherever the backend tree is
+# (not the code root) locates the artifact wherever the backend tree is
 # placed — an install and the repo checkout tests run from alike — so the
 # no-fallback load succeeds in both.
 _BUNDLED_LIB_PATH = os.path.normpath(

@@ -115,7 +115,7 @@ function findNativeOverviewIndex(children: any[]): number {
 
 /**
  * One-time diagnostic dump of the InnerContainer subtree. Runs at most once
- * per plugin load (guarded by module-level `treeDumped`). No-op when the
+ * per panel load (guarded by module-level `treeDumped`). No-op when the
  * appId is not a RomM shortcut.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship

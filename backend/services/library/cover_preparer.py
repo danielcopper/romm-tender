@@ -58,8 +58,8 @@ class CoverPreparerConfig:
     through.
 
     What is absent is the contract: no Unit-of-Work factory, no event loop, no
-    settings and no plugin directory — reaching for one would mean this module
-    had started doing artwork's own job rather than asking for it.
+    settings and none of the program's directories — reaching for one would mean
+    this module had started doing artwork's own job rather than asking for it.
     """
 
     artwork: ArtworkManager

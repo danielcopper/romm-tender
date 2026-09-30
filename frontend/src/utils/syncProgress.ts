@@ -130,7 +130,7 @@ let _listeners: Array<() => void> = [];
  * stamped an id on yet, and recording ``""`` would make every later optimistic
  * start — ``running: true`` with no id — a resurrection of it.
  *
- * It grows by one short string per run that ends while the plugin is loaded.
+ * It grows by one short string per run that ends within one JS context.
  */
 const _terminatedRunIds = new Set<string>();
 

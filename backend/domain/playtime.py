@@ -2,7 +2,7 @@
 
 One Playtime per Rom (referenced by id). Tracks cumulative play seconds and
 session count, the open session's start timestamp (durable so a session
-survives a plugin reload mid-game), the most recent session's duration, the
+survives a JS-context rebuild mid-game), the most recent session's duration, the
 last-played timestamp, and a pending-session outbox (closed sessions awaiting
 ingest into RomM's native ``/api/play-sessions``, keyed by start timestamp).
 Individual completed sessions are not entities once ingested — only their start

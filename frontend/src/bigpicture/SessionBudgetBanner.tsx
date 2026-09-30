@@ -113,7 +113,7 @@ interface SessionBudgetBannerProps {
   /**
    * ``run_done_items`` from ``get_session_budget_status`` — how many of the paused
    * run's games are already done. ``null``/absent when the backend doesn't know (a
-   * plugin reload wipes the in-memory counters), which drops the progress sentence.
+   * backend restart wipes the in-memory counters), which drops the progress sentence.
    */
   runDoneItems?: number | null | undefined;
   /** ``run_total_items`` — the denominator of {@link runDoneItems}; the sentence needs both. */

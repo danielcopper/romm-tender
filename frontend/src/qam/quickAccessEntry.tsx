@@ -27,7 +27,7 @@
  * 1. **No tab array is held at all.** The spike kept every array it had ever
  *    pushed into, so that it could take its entries back out; that set only
  *    grows — one dead array per remount, each holding the strip's entries and
- *    the React elements hanging off them, for the life of the process. There is
+ *    the React elements hanging off them, for the life of the JS context. There is
  *    nothing to take back out here ({@link installQuickAccessEntry} states why),
  *    so the strongest form of the rule is available: this module holds no array,
  *    and every dead one is collectable the moment its view is.

@@ -43,7 +43,7 @@ function applyDirectMutations(appId: number, metadata: RomMetadata): boolean {
 /**
  * Initialize metadata state: the app_id→rom_id map and the registered-appId set.
  * Pure setup — the overview mutations themselves happen in {@link applyAllMetadata},
- * which retries until Steam's appStore is populated. Call on plugin load (before
+ * which retries until Steam's appStore is populated. Call at panel load (before
  * applyAllMetadata) after fetching the metadata cache and app ID map.
  */
 export function registerMetadataPatches(cache: Record<string, RomMetadata>, appIdMap: Record<string, number>) {
@@ -191,8 +191,8 @@ function playtimeItemsToApply(
 /**
  * Apply playtime data for all known apps from the bulk playtime map.
  * Retries apps whose appStore overview isn't available yet (Steam may
- * still be loading shortcuts into its MobX store at plugin init).
- * Called at plugin load and after sync_complete.
+ * still be loading shortcuts into its MobX store at panel load).
+ * Called at panel load and after sync_complete.
  */
 export async function applyAllPlaytime(
   playtimeMap: Record<string, { total_seconds: number }>,

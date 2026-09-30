@@ -7,7 +7,7 @@
  * cleared only by an explicit user ack in the QAM (dismiss_settings_reset_notice).
  *
  * Updated by:
- *   - plugin load init in index.tsx (fetchSettingsResetState)
+ *   - panel load init in index.tsx (fetchSettingsResetState)
  *   - SettingsResetBanner Dismiss button (setSettingsResetState on ack success)
  *
  * Read by:

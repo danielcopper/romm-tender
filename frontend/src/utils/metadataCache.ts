@@ -11,7 +11,7 @@ import type { RomMetadata } from "../types";
  * is raced against ``timeoutMs`` so a hung endpoint call throws out of the loop — init
  * lets its retry driver restart from offset 0, the sync_complete re-apply logs
  * and moves on. The empty-page guard stops the loop even if ``total`` overshoots
- * the rows actually returned. Shared by plugin-load init and the sync_complete
+ * the rows actually returned. Shared by panel-load init and the sync_complete
  * re-apply so the pagination lives in exactly one place (#1207).
  */
 export async function fetchMetadataCachePages(

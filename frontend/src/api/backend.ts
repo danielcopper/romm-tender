@@ -1074,7 +1074,7 @@ export const checkCoreChange = endpoint<
   { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string }
 >("check_core_change");
 
-// Bulk playtime for plugin-load UI update. last_played is the ISO end time of
+// Bulk playtime for the panel-load UI update. last_played is the ISO end time of
 // the newest recorded/reconciled session (null until one exists).
 export const getAllPlaytime = endpoint<
   [],
@@ -1120,8 +1120,8 @@ export const dismissSettingsResetNotice = endpoint<[], { success: boolean }>("di
 /**
  * What the backend says is left of pointing the shortcuts at the launcher.
  *
- * `done` — nothing of ours names a plugin folder any more; the transition is
- * over and no file was read to say so.
+ * `done` — nothing of ours names a launcher other than the bin root's any
+ * more; the transition is over and no file was read to say so.
  * `outstanding` — those `app_ids` still carry a launcher path that is not
  * `exe`. Write `exe` and `start_dir` on each; the backend stamps the transition
  * complete on the next start whose own reading finds nothing left.

@@ -9,10 +9,10 @@ reading is unavailable).
 
 Max-child heuristic — why the largest ``steamwebhelper`` IS the renderer:
 ``steamwebhelper`` spawns many child processes (GPU, utility, several renderers)
-and the ``SharedJSContext`` renderer that hosts the plugin UI is the memory-heavy
-one. Filtering by cmdline ``--type=renderer`` is impossible: the renderers are
-forked from a zygote and inherit the zygote's cmdline, so ``--type`` is absent
-from the forked process. The max-RSS process is the discriminator instead —
+and the ``SharedJSContext`` renderer — Steam's UI renderer, which the panel is
+loaded into — is the memory-heavy one. Filtering by cmdline ``--type=renderer``
+is impossible: the renderers are forked from a zygote and inherit the zygote's
+cmdline, so ``--type`` is absent from the forked process. The max-RSS process is the discriminator instead —
 validated on-device 2026-07-11: the max-RSS ``steamwebhelper`` grew 438 → 2528 MB
 across a sync, crashed at the cliff, and respawned at the fresh baseline, exactly
 tracking the ``SharedJSContext`` lifecycle. The heuristic only ever misidentifies

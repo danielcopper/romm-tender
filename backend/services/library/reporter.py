@@ -467,7 +467,7 @@ class SyncReporter:
         PLANNED total (the sync_plan count stamped in the box) so "N of M games
         processed" compares against the plan, not the bound-ROM registry count
         (which equals N on a first sync); the registry count is only the
-        fallback when the box was wiped before plan time (plugin reload).
+        fallback when the box was wiped before plan time (backend restart).
         """
         planned_total = self._sync_state.run_total_items
         total = (

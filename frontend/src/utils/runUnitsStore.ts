@@ -8,8 +8,8 @@
  * if something outside the page kept it, and sees a finished unit's created and
  * updated counts only if something outside the page recorded them — the apply
  * events they were derived from are long gone. This store is that something. The
- * one case it cannot cover is a plugin reload mid-run: the plan arrives once per
- * run, so a store that starts empty after a reload stays empty for the rest of
+ * one case it cannot cover is a JS-context rebuild mid-run: the plan arrives once
+ * per run, so a store that starts empty after a rebuild stays empty for the rest of
  * the run and refuses every frame that follows.
  *
  * **Four writers.** {@link seedRunUnits} takes the plan (`sync_plan`, once per
@@ -200,8 +200,8 @@ function recordUnitOutcome(unitIndex: number, created: number, updated: number):
 }
 
 /** Start mirroring the frame stream into the rows. Called once where the
- *  plugin's other long-lived listeners are installed, so the store's lifetime
- *  is the plugin's and its writers stay explicit. */
+ *  panel's other long-lived listeners are installed, so the store's lifetime
+ *  is the JS context's and its writers stay explicit. */
 export function attachRunUnitsMirror(): void {
   onSyncProgressChange(() => observeRunFrame(getSyncProgress()));
 }

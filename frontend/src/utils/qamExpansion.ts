@@ -34,9 +34,9 @@ const WIDE_PANEL_STYLE_ID = "romm-wide-qam-styles";
 // and whose panel is `#quickaccess_content_999`, with the `TabGroupPanel` class
 // on that same element — which is why walking the DOM by id lands where the CSS
 // below matches by class. **The prefix is the whole of what is matched**, and
-// deliberately so: the key belongs to whichever entry rendered the page — Decky's
-// there, Tender's own (`qam/installEntry.tsx`) behind its entry — so a
-// selector naming one would stop matching the moment the other rendered it. What
+// deliberately so: the key belongs to whichever entry rendered the page —
+// Tender's own (`qam/installEntry.tsx`), not the 999 measured under Decky — so a
+// selector naming one key would stop matching under another. What
 // id a string key produces has not been measured, and nothing here needs it to
 // be.
 const PANEL_ID_SELECTOR = '[id^="quickaccess_content_"]';
@@ -163,9 +163,9 @@ function expandWidePanel(root: HTMLElement): void {
  *
  * **Which tab that is, is never asked.** The question is answered by walking up
  * from the page's own root to the panel around it and reading Steam's
- * active-tab class off that panel's parent — so it is true of Tender's own
- * entry and of Decky's, and of anything else that might one day render this
- * panel, without naming any of them.
+ * active-tab class off that panel's parent — so it holds behind Tender's own
+ * entry, and behind anything else that might one day render this panel,
+ * without naming any of them.
  *
  * It is answered from the DOM inside the effect rather than from React state
  * because a panel can be rendered while its tab is not the active one, so a page

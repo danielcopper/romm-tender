@@ -2,7 +2,7 @@
 
 Owns the frontend-facing reads of cached ROM metadata: the per-ROM
 ``get_rom_metadata`` lookup, the paged ``get_metadata_cache_page`` read
-the frontend loads on plugin start, and the ``app_id -> rom_id`` mapping
+the frontend reads at each panel load, and the ``app_id -> rom_id`` mapping
 the launcher uses to resolve session ROMs. Cached metadata is persisted
 by the library sync (the per-unit ``roms`` + ``rom_metadata`` commit);
 this service only reads it back. Ad-hoc detail HTTP calls are not this
@@ -110,7 +110,7 @@ class MetadataService:
         return _empty_metadata_entry()
 
     def get_metadata_cache_page(self, offset, limit):
-        """Return one ``rom_id``-ordered page of the metadata cache for plugin start.
+        """Return one ``rom_id``-ordered page of the metadata cache for a panel load.
 
         The frontend loads the cache in pages so a large library never
         sends a multi-MB dump as a single answer, which the host caps

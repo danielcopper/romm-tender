@@ -23,10 +23,11 @@
  * observable (array-like/iterable). Any of those degrades to "nothing running",
  * never a throw out of the reader.
  *
- * The store can also legitimately report EMPTY while a game is running: after a
- * `plugin_loader` restart the reloaded JS context sees `RunningApps` empty for
- * several seconds with the game still up (#1054 / #1148 round 2 device
- * evidence). So a single empty round proves nothing — the adoption path polls,
+ * The store can also legitimately report EMPTY while a game is running: it
+ * reported `RunningApps` empty for several seconds with the game still up —
+ * measured when Decky Loader's `plugin_loader` restarted (#1054 / #1148 round 2
+ * device evidence) — and a JS-context rebuild under a running game is guarded
+ * the same way. So a single empty round proves nothing — the adoption path polls,
  * and every round reports what the store said (`diagnostics`: absent / empty /
  * threw / the appids found) so the on-device log can tell those cases apart.
  */

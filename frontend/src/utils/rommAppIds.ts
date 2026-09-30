@@ -3,7 +3,7 @@
  *
  * Shared knowledge rather than a surface's, with four consumers: the launch
  * interceptor asks it before it touches a launch; the sync manager fills it in
- * as shortcuts are written; the plugin entry (`index.tsx`) fills it in too —
+ * as shortcuts are written; the panel's entry module (`index.tsx`) fills it in too —
  * from the appId map at start-up, and again from a finished run's maps as the
  * net for an appId the unit loop did not reach — and is the only caller of
  * {@link unregisterRomMAppId}, on the appIds a finished prune reports removed;

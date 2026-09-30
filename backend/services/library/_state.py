@@ -134,7 +134,7 @@ class LibrarySyncStateBox:
     # already sent, and a panel that merely FINDS one on a later mount is
     # required to ignore it (#1019) — so leaving it here answered every mount
     # with a run that ended, message and run id included, for as long as the
-    # plugin stayed loaded.
+    # backend kept running.
     sync_progress: dict[str, Any] = field(default_factory=_default_progress)
     pending_sync: dict[int, dict[str, Any]] = field(default_factory=dict)
     # Every fetched ROM of the active unit (built shortcut-shape, keyed by
@@ -257,8 +257,8 @@ class LibrarySyncStateBox:
     # (delta then unmeasurable). Set at the start of each run (#1383).
     run_start_rss_kb: int | None = None
     # The run's planned ROM count — the same total the ``sync_plan`` event carries.
-    # ``None`` until a run reaches its plan (no run made yet, or the plugin reloaded
-    # and wiped the box). Set once per run, reset at the start of each run (#1383).
+    # ``None`` until a run reaches its plan (no run made yet, or a backend restart
+    # wiped the box). Set once per run, reset at the start of each run (#1383).
     run_total_items: int | None = None
     # Items of the run already correct in Steam: the delta-restricted apply's
     # per-unit SKIPPED entries (unchanged — the shortcut is already right) plus each
@@ -266,8 +266,8 @@ class LibrarySyncStateBox:
     # emitted-but-uncommitted chunk (cancelled / abandoned) never counts. Read
     # against ``run_total_items`` by ``get_session_budget_status`` so the paused
     # banner can say "X of Y games done" — the counters live here, in the backend,
-    # precisely because the plugin process survives the Steam restart the banner
-    # asks for (only the frontend reloads). A plugin/backend reload DOES lose them
+    # precisely because the backend process survives the Steam restart the banner
+    # asks for (only the frontend reloads). A backend restart DOES lose them
     # (in-memory, no migration); the banner then omits the sentence rather than
     # showing a wrong number. Reset at the start of each run (#1383).
     run_done_items: int = 0
@@ -276,7 +276,7 @@ class LibrarySyncStateBox:
     # overwrite it with THEIR OWN delta (#36), so ``get_session_budget_status``
     # can surface "last run: ±X GB" on a QAM remount. An errored run aborts
     # before the finalize and keeps the prior value. In-memory only — lost on
-    # plugin reload, which is acceptable (no migration). ``None`` when either
+    # a backend restart, which is acceptable (no migration). ``None`` when either
     # reading of that run was unmeasurable.
     last_run_delta_kb: int | None = None
 

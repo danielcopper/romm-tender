@@ -132,8 +132,8 @@ def pending_homes_from_kv(previous: str, hops_raw: str | None) -> list[str]:
 def _decode_hops(hops_raw: str | None) -> list[str]:
     """Decode the ``_hops`` JSON array defensively into a list of homes.
 
-    This runs on every plugin startup (the detect path and the install prune),
-    so a hand-edited or truncated kv value must never crash the load. Returns
+    This runs on every backend start (the detect path and the install prune),
+    so a hand-edited or truncated kv value must never crash the start. Returns
     ``[]`` on any of: absent value, JSON decode error, a decoded value that is
     not a list, or a list carrying a non-string / empty-string entry. In
     particular a bare JSON string (``'"str"'``) decodes to a str and is

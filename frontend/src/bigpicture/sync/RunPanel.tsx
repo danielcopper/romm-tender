@@ -168,7 +168,7 @@ export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {
       </ButtonRow>
       {state.units.length === 0 ? (
         // The plan arrives once per run, so a store that started empty after a
-        // plugin reload stays empty for the rest of it. The frames still carry
+        // JS-context rebuild stays empty for the rest of it. The frames still carry
         // the fine-detail line the whole panel is reading, so that is what the
         // column shows; the sentence is for the run that has neither.
         <Muted>{run.hasFineDetail ? run.fineDetailText : "Per-unit detail is not available for this run."}</Muted>

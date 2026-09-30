@@ -116,7 +116,7 @@ class FirmwareListing:
         """Return firmware list, using cache if TTL has not expired.
 
         TTL is checked against the wall-clock cache epoch so a cache
-        restored from disk after a plugin restart still expires.
+        restored from disk after a backend restart still expires.
 
         On HTTP error, falls back to cached data if there is any and RAISES
         otherwise. Returning an empty list instead would be indistinguishable

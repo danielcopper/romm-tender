@@ -1,7 +1,7 @@
 """Filesystem adapter for the SteamGridDB artwork cache.
 
 Owns the raw POSIX calls used by SteamGridService to manage cached SGDB
-artwork (heroes, logos, grids, icons) under the plugin runtime directory.
+artwork (heroes, logos, grids, icons) under the cache root's ``artwork/``.
 Path construction and pruning policy remain a service concern; this
 adapter exposes only the I/O seams declared by
 ``services.protocols.SgdbArtworkCache``.
