@@ -352,7 +352,7 @@ class UpdateInstallService:
         by itself and reports through ``update_install_progress``, and the
         answer is ``{"success": True}``.
         """
-        if self._holding:
+        if self.is_update_in_progress():
             return self._in_progress_refusal()
         release = await self._offered_release()
         if release is None or release.tarball is None:
@@ -367,7 +367,7 @@ class UpdateInstallService:
         limit = await self._reload_limit_waits()
         # Asked again after the readings: a second press may have started an
         # attempt while this one waited for them.
-        if self._holding:
+        if self.is_update_in_progress():
             return self._in_progress_refusal()
         waits = [*_app_waits(apps), *self._work_waits(), *limit]
         if waits:

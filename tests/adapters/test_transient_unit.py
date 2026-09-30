@@ -88,9 +88,10 @@ class TestStart:
         """The unit may have started behind a tool that never answered, so no reason is given."""
         stubs("systemd-run", "exec /bin/sleep 5")
         monkeypatch.setattr("adapters.transient_unit._TIMEOUT_SECONDS", 0.2)
+        adapter = SystemdRunAdapter()
 
         with pytest.raises(TimeoutError):
-            SystemdRunAdapter().start("u", ("/bin/true",), ())
+            adapter.start("u", ("/bin/true",), ())
 
 
 class TestIsActive:

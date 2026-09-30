@@ -238,10 +238,11 @@ class TestDownloadAsset:
         assert assets.user_agents == ["romm-tender/9.9.9"]
 
     def test_a_missing_asset_raises_and_leaves_nothing_behind(self, adapter, assets, tmp_path):
-        dest = tmp_path / "missing"
+        url = assets.url("/missing")
+        dest = str(tmp_path / "missing")
 
         with pytest.raises(urllib.error.HTTPError):
-            adapter.download_asset(assets.url("/missing"), str(dest), None)
+            adapter.download_asset(url, dest, None)
 
         assert list(tmp_path.iterdir()) == []
 
@@ -267,8 +268,11 @@ class TestDownloadAsset:
         def interrupt(done: int, _total: int | None) -> None:
             raise RuntimeError("interrupted")
 
+        url = assets.url("/a")
+        dest = str(tmp_path / "a")
+
         with pytest.raises(RuntimeError, match="interrupted"):
-            adapter.download_asset(assets.url("/a"), str(tmp_path / "a"), interrupt)
+            adapter.download_asset(url, dest, interrupt)
 
         assert list(tmp_path.iterdir()) == []
 
