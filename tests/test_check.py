@@ -269,35 +269,50 @@ class TestAVersionThatCannotBeBuilt:
 
     def test_a_module_that_does_not_import_answers_one_with_the_traceback(self, machine):
         """Python's own answer to a failed import, which is the one the installer relies on."""
-        poisoned = (
-            "import runpy, sys; "
-            "sys.modules['bootstrap'] = None; "
-            f"sys.argv = [{str(_CHECK)!r}, *sys.argv[1:]]; "
-            f"runpy.run_path({str(_CHECK)!r}, run_name='__main__')"
-        )
-
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "-c",
-                poisoned,
-                "--data-from",
-                str(machine.live_data),
-                "--config-from",
-                str(machine.live_config),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=machine.env(),
-            timeout=120,
-        )
+        result = _run_with_a_module_that_does_not_import(machine, "bootstrap")
 
         assert result.returncode == 1
         assert "Traceback (most recent call last)" in result.stderr
         assert "bootstrap" in result.stderr
         assert not machine.check.exists()
+
+    def test_a_main_py_that_does_not_import_answers_one_with_the_traceback(self, machine):
+        """The build never reaches the backend's own entry, so the check imports it itself."""
+        before = machine.snapshot()
+
+        result = _run_with_a_module_that_does_not_import(machine, "main")
+
+        assert result.returncode == check.NOT_BUILT
+        assert "could not be built" in result.stderr
+        assert "import of main halted" in result.stderr
+        assert machine.snapshot() == before
+
+
+def _run_with_a_module_that_does_not_import(machine: _Machine, module: str) -> subprocess.CompletedProcess[str]:
+    """The real entry, run as the installer runs it, with *module* made unimportable."""
+    poisoned = (
+        "import runpy, sys; "
+        f"sys.modules[{module!r}] = None; "
+        f"sys.argv = [{str(_CHECK)!r}, *sys.argv[1:]]; "
+        f"runpy.run_path({str(_CHECK)!r}, run_name='__main__')"
+    )
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            poisoned,
+            "--data-from",
+            str(machine.live_data),
+            "--config-from",
+            str(machine.live_config),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=machine.env(),
+        timeout=120,
+    )
 
 
 class TestACheckNotTried:

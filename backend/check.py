@@ -16,15 +16,20 @@ Steam.
 The exit status is the answer, and ``install.sh`` reads it:
 
 - 0: the application was built.
-- 1: it could not be built — the traceback is on stderr. So does anything that
-  ends this process before it can answer, an import that fails among them.
+- 1: it could not be built, or ``main.py`` could not be imported — the
+  traceback is on stderr. An import of this file's own that fails answers 1
+  too, which is Python's status for an exception nothing caught.
 - 2: the check was not tried — its arguments were wrong (argparse's own
   status), a root it would build under was not one it may write, or the live
   data could not be copied.
+
+A process a signal ends answers none of these: the installer sees 128 plus
+the signal's number, a crash in the native library among them.
 """
 
 import argparse
 import asyncio
+import importlib
 import logging
 import os
 import sys
@@ -89,6 +94,9 @@ def check(argv: list[str]) -> int:
         logger.exception("check: the live data could not be copied")
         return NOT_TRIED
     try:
+        # The backend's own entry, which the build alone never reaches; importing
+        # it runs nothing, since its start sits behind ``__name__ == "__main__"``.
+        importlib.import_module("main")
         asyncio.run(_build_on_copies(directories, user_home, logger))
     except Exception:
         logger.exception(f"check: {VERSION} could not be built")
