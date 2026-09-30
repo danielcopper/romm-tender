@@ -22,6 +22,7 @@ const installView = vi.hoisted(() => ({ current: undefined as unknown as UpdateI
 vi.mock("./useUpdateInstall", () => ({ useUpdateInstall: () => installView.current }));
 
 const NOTHING_OFFERED: UpdateInstall = {
+  answered: true,
   offered: false,
   version: null,
   waitReasons: [],
@@ -568,14 +569,25 @@ describe("UpdatesSection", () => {
       expect(utils.queryByTestId("updates-caption")).toBeNull();
     });
 
-    it("keeps the block where an attempt fails before a read has named the version offered", () => {
-      const utils = withInstall({ offered: false, version: null, attempt: DOWNLOADING, underWay: true });
+    it("keeps the block and the button's row where an attempt fails before the first read answers", () => {
+      const unread = { answered: false, offered: false, version: null };
+      const utils = withInstall({ ...unread, attempt: DOWNLOADING, underWay: true });
       const stop = utils.getByTestId("updates-caption").closest('[data-testid="field"]');
+      const button = utils.getByText("Installing…");
 
-      rerender(utils, { offered: false, version: null, ...failedWith("download_failed") });
+      rerender(utils, { ...unread, ...failedWith("download_failed"), tryAgain: false });
 
       expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
       expect(utils.getByTestId("updates-caption").closest('[data-testid="field"]')).toBe(stop);
+      expect(utils.getByText("Install update")).toBe(button);
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("drops a failed attempt's block and its button once a read answers offering nothing", () => {
+      const utils = withInstall({ offered: false, version: null, ...failedWith("download_failed"), tryAgain: false });
+
+      expect(utils.queryByTestId("updates-caption")).toBeNull();
+      expect(utils.queryByText("Install update")).toBeNull();
     });
 
     it("shows an attempt under way even where nothing is offered any more", () => {

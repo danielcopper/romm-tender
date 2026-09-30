@@ -34,6 +34,8 @@ export const UPDATE_INSTALL_POLL_MS = 3000;
 export const UPDATE_INSTALL_READ_DEADLINE_MS = 5000;
 
 export interface UpdateInstall {
+  /** A read has answered since the section mounted; until one has, `offered` and `version` say nothing. */
+  answered: boolean;
   offered: boolean;
   version: string | null;
   waitReasons: UpdateWaitReason[];
@@ -183,6 +185,7 @@ export function useUpdateInstall(): UpdateInstall {
   };
 
   return {
+    answered: reading !== null,
     offered: reading?.offered ?? false,
     version,
     waitReasons: reading?.wait_reasons ?? [],

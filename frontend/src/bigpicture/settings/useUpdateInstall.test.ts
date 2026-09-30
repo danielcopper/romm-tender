@@ -459,6 +459,18 @@ describe("useUpdateInstall", () => {
       expect(result.current.offered).toBe(true);
     });
 
+    it("leaves the state unanswered until a read answers, a failed one included", async () => {
+      vi.mocked(getUpdateInstallState).mockRejectedValueOnce(new Error("boom"));
+      const { result } = renderHook(() => useUpdateInstall());
+      expect(result.current.answered).toBe(false);
+
+      await flush();
+      expect(result.current.answered).toBe(false);
+
+      await tick();
+      expect(result.current.answered).toBe(true);
+    });
+
     it("is said, and is no longer once a read answers again", async () => {
       vi.mocked(getUpdateInstallState).mockRejectedValue(new Error("boom"));
       const { result } = renderHook(() => useUpdateInstall());

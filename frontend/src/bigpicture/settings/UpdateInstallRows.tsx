@@ -34,9 +34,15 @@ function buttonLabel(install: UpdateInstall): string {
   return install.tryAgain ? "Try again" : "Install update";
 }
 
-/** Whether the install's button is there: while the backend offers a release, and through an attempt. */
+/**
+ * Whether the install's button is there: while the backend offers a release,
+ * through an attempt, and — so an attempt's end does not take it away under
+ * focus — beside a known attempt until the first read answers.
+ */
 export function installButtonShown(install: UpdateInstall): boolean {
-  return (install.offered && install.version !== null) || install.underWay;
+  return (
+    (install.offered && install.version !== null) || install.underWay || (!install.answered && install.attempt !== null)
+  );
 }
 
 /** Whether to say the state could not be read: a read failed, and no installer's restart explains it. */
@@ -167,12 +173,12 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   const showButton = installButtonShown(install);
   const earlier = installed || "the earlier version";
   // A failed attempt for a version no longer offered says nothing about the one
-  // that is. Where none is named — before the first read answers, say — it
-  // stays, so the block it replaced does not leave under focus.
+  // that is. Before the first read answers nothing is offered yet, so it stays,
+  // and the block it replaced does not leave under focus.
   const block =
     attempt !== null && install.underWay
       ? progressBlock(install, attempt, earlier)
-      : attempt?.step === "failed" && (install.version === null || attempt.version === install.version)
+      : attempt?.step === "failed" && (!install.answered || attempt.version === install.version)
         ? attemptFailure(attempt, earlier)
         : record && recordFailure(record);
   const [, tick] = useReducer((n: number) => n + 1, 0);
@@ -221,7 +227,9 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
           <ButtonItem
             layout="below"
             onClick={install.install}
-            disabled={install.pressing || install.underWay || install.waitReasons.length > 0}
+            disabled={
+              install.pressing || install.underWay || install.waitReasons.length > 0 || install.version === null
+            }
             {...(hasDescription ? { description } : {})}
           >
             {buttonLabel(install)}
