@@ -33,13 +33,25 @@ MAX_LINE_CHARS = 500
 # within minutes.
 RUN_SPAN_SECONDS = 3600
 
+# How many of this program's last lines before the installer began are read for
+# the run then going. Only a line of no run can stand in the way, and those are
+# rare: the manager failing to open a collected unit's file.
+REPLACED_RUN_LINES = 50
+
 # The query parameter the admission token travels in (``TOKEN_PARAM`` in
 # ``host/access.py``, which this layer may not import;
 # ``tests/domain/test_update_output.py`` holds the two equal). Every start logs
 # the address the panel is loaded from, token included, to its journal.
 _TOKEN_PARAM = "token"
-_TOKEN = re.compile(rf"\b({_TOKEN_PARAM}=)[^\s&#]+")
-_HIDDEN = r"\1[hidden]"
+# Three spellings of it with its value: a query's ``token=…``; the same inside
+# another URL's percent-encoded parameter, ``%3Ftoken%3D…`` or ``%26token%3D…``;
+# and a JSON or Python mapping's ``"token": "…"``. A value is what
+# ``host/access.py::new_token`` draws, ``secrets.token_urlsafe``: letters, digits,
+# ``-`` and ``_``, so it ends at the first character outside those.
+_QUERY_NAME = rf"(?:\b|(?<=%3[fF])|(?<=%26)){_TOKEN_PARAM}(?:=|%3[dD])"
+_MAPPING_KEY = rf"""(?P<q>["']){_TOKEN_PARAM}(?P=q)\s*:\s*(?P=q)"""
+_TOKEN = re.compile(rf"(?P<name>{_QUERY_NAME}|{_MAPPING_KEY})[A-Za-z0-9_-]+")
+_HIDDEN = r"\g<name>[hidden]"
 
 # ``journalctl`` names the run a line belongs to under the first key for what
 # the unit's own process printed, and under the second for what the user
@@ -56,6 +68,9 @@ class OutputGap(StrEnum):
     # The journal reaches back to it and holds no run of the installer's unit
     # there: the installer ran by hand, and printed to its terminal.
     TERMINAL = "terminal"
+    # The journal reaches back to it and holds no run of the unit this program
+    # started the installer as: the unit never ran, or left nothing there.
+    EMPTY = "empty"
 
 
 @dataclass(frozen=True)
@@ -138,6 +153,11 @@ def run_around(entries: Iterable[JournalEntry], at: float) -> tuple[JournalEntry
 def first_run_from(entries: Iterable[JournalEntry], at: float) -> tuple[JournalEntry, ...] | None:
     """The first run that began at or after *at*, or ``None``."""
     return next((run for run in journal_runs(entries) if run[0].at >= at), None)
+
+
+def last_invocation(entries: Sequence[JournalEntry]) -> str | None:
+    """The run the newest line of *entries* that belongs to one belongs to, or ``None``."""
+    return next((entry.invocation for entry in reversed(entries) if entry.invocation is not None), None)
 
 
 def runs_other_than(entries: Iterable[JournalEntry], invocation: str | None) -> tuple[JournalEntry, ...]:

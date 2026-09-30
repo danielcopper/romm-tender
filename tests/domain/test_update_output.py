@@ -19,6 +19,7 @@ from domain.update_output import (
     first_run_from,
     hide_token,
     journal_runs,
+    last_invocation,
     output_section,
     run_around,
     runs_other_than,
@@ -143,6 +144,15 @@ class TestFirstRunFrom:
         assert first_run_from([_entry(90, "old"), _entry(101, "old")], 100) is None
 
 
+class TestLastInvocation:
+    def test_is_the_run_of_the_newest_line_that_belongs_to_one(self):
+        assert last_invocation([_entry(1, "a"), _entry(2, "b"), _entry(3, None)]) == "b"
+
+    def test_is_none_where_no_line_belongs_to_a_run(self):
+        assert last_invocation([_entry(1, None)]) is None
+        assert last_invocation([]) is None
+
+
 class TestRunsOtherThan:
     def test_leaves_out_the_named_run_and_the_lines_of_none(self):
         kept = [_entry(2, "new"), _entry(4, "new-again")]
@@ -167,8 +177,18 @@ class TestHideToken:
     def test_every_token_on_a_line_is_hidden(self):
         assert hide_token("x?token=one y?token=two") == "x?token=[hidden] y?token=[hidden]"
 
+    def test_a_token_in_a_percent_encoded_parameter_is_hidden(self):
+        line = "next=http%3A%2F%2Fh%2Findex.js%3Ftoken%3DZq3_x-9%26a%3D1 or %26token%3dZq3_x"
+
+        assert hide_token(line) == "next=http%3A%2F%2Fh%2Findex.js%3Ftoken%3D[hidden]%26a%3D1 or %26token%3d[hidden]"
+
+    def test_a_token_under_a_json_or_python_key_is_hidden(self):
+        assert hide_token('{"token": "Zq3_x-9", "port": 1}') == '{"token": "[hidden]", "port": 1}'
+        assert hide_token("{'token':'Zq3_x-9'}") == "{'token':'[hidden]'}"
+
     def test_a_word_ending_in_token_is_not_a_parameter(self):
         assert hide_token("csrftoken=abc") == "csrftoken=abc"
+        assert hide_token("%3Fcsrftoken%3Dabc") == "%3Fcsrftoken%3Dabc"
 
     def test_the_parameter_is_the_one_the_host_reads(self):
         from host.access import TOKEN_PARAM

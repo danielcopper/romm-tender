@@ -1,14 +1,19 @@
 """This user's systemd journal, read through ``journalctl --user``.
 
-Owns the one command that reads it. Reading only: nothing in this program writes
-into the journal but its own stderr, which systemd puts there.
+Owns the one command that reads it, and reads only: this adapter writes no
+journal entry of its own.
 """
 
 from __future__ import annotations
 
 import subprocess
+from typing import TYPE_CHECKING
 
+from adapters.bounded_run import run_bounded
 from domain.update_output import JournalEntry, decode_journal_entry
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ``journalctl`` reads files on this machine and answers at once; a bound this
 # wide is only ever reached by a journal it cannot get through.
@@ -20,7 +25,17 @@ _FIELDS = "MESSAGE,_SYSTEMD_INVOCATION_ID,USER_INVOCATION_ID"
 
 
 class JournalctlAdapter:
-    """Reads entries of this user's journal with ``journalctl``."""
+    """Reads entries of this user's journal with ``journalctl``.
+
+    Parameters
+    ----------
+    log_debug:
+        Debug sink for what ``journalctl`` wrote to stderr on a run that
+        succeeded — a journal file it skipped, for one.
+    """
+
+    def __init__(self, *, log_debug: Callable[[str], None]) -> None:
+        self._log_debug = log_debug
 
     def __call__(
         self,
@@ -37,7 +52,18 @@ class JournalctlAdapter:
         ``journalctl`` is missing, could not be run, gave no answer in time
         (``TimeoutError``) or failed.
         """
-        argv = ["journalctl", "--user", "--output=json", f"--output-fields={_FIELDS}", "--quiet", "--no-pager"]
+        # ``--all``: without it the JSON output answers a field over 4096 bytes
+        # as ``null`` (``journalctl(1)``, ``--output=json``), which would read
+        # as an empty line.
+        argv = [
+            "journalctl",
+            "--user",
+            "--output=json",
+            f"--output-fields={_FIELDS}",
+            "--all",
+            "--quiet",
+            "--no-pager",
+        ]
         if unit is not None:
             argv.append(f"--unit={unit}")
         if since is not None:
@@ -47,17 +73,12 @@ class JournalctlAdapter:
         if last is not None:
             argv.append(f"--lines={last}")
         try:
-            done = subprocess.run(
-                argv,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=_TIMEOUT_SECONDS,
-                check=False,
-            )
+            done = run_bounded(argv, timeout=_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f"journalctl did not answer: {e}") from e
+        said = done.stderr.strip()
         if done.returncode != 0:
-            said = done.stderr.strip()
             raise OSError(f"journalctl exited with status {done.returncode}{f': {said}' if said else ''}")
+        if said:
+            self._log_debug(f"[update] journalctl said: {said}")
         return tuple(entry for line in done.stdout.splitlines() if (entry := decode_journal_entry(line)) is not None)

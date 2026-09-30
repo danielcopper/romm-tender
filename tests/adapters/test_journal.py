@@ -51,6 +51,10 @@ def _printing(lines: Sequence[object]) -> str:
     return "\n".join(f"printf '%s\\n' '{json.dumps(line)}'" for line in lines)
 
 
+def _adapter(said: list[str] | None = None) -> JournalctlAdapter:
+    return JournalctlAdapter(log_debug=(said if said is not None else []).append)
+
+
 def _argv(record: str) -> list[str]:
     with open(record) as f:
         return f.read().splitlines()
@@ -60,7 +64,7 @@ class TestRead:
     def test_reads_one_unit_s_entries_between_two_instants_oldest_first(self, journalctl):
         record = journalctl(_printing(_LINES))
 
-        entries = JournalctlAdapter()("romm-tender-update", since=1790794600, until=1790794700.5)
+        entries = _adapter()("romm-tender-update", since=1790794600, until=1790794700.5)
 
         assert entries == (
             JournalEntry(at=1790794693.0, invocation="aa11", message="[..] Checking"),
@@ -70,6 +74,7 @@ class TestRead:
             "--user",
             "--output=json",
             "--output-fields=MESSAGE,_SYSTEMD_INVOCATION_ID,USER_INVOCATION_ID",
+            "--all",
             "--quiet",
             "--no-pager",
             "--unit=romm-tender-update",
@@ -80,7 +85,7 @@ class TestRead:
     def test_reads_every_unit_and_only_the_newest_entries_when_asked(self, journalctl):
         record = journalctl(_printing(_LINES[-1:]))
 
-        entries = JournalctlAdapter()(None, until=1790794700, last=1)
+        entries = _adapter()(None, until=1790794700, last=1)
 
         assert len(entries) == 1
         args = _argv(record)
@@ -90,28 +95,43 @@ class TestRead:
     def test_a_journal_with_no_such_entry_answers_nothing(self, journalctl):
         journalctl("exit 0")
 
-        assert JournalctlAdapter()("romm-tender-update") == ()
+        assert _adapter()("romm-tender-update") == ()
 
     def test_a_line_it_cannot_read_is_skipped_and_the_rest_are_kept(self, journalctl):
         journalctl("echo 'not json'\n" + _printing(_LINES[:1]))
 
-        assert len(JournalctlAdapter()("romm-tender-update")) == 1
+        assert len(_adapter()("romm-tender-update")) == 1
+
+    def test_what_a_journalctl_that_succeeded_said_on_stderr_is_logged_at_debug(self, journalctl):
+        journalctl("echo 'Journal file x.journal~ is truncated, ignoring file.' >&2\n" + _printing(_LINES[:1]))
+        said: list[str] = []
+
+        assert len(_adapter(said)("romm-tender-update")) == 1
+        assert said == ["[update] journalctl said: Journal file x.journal~ is truncated, ignoring file."]
+
+    def test_a_journalctl_that_succeeded_quietly_logs_nothing(self, journalctl):
+        journalctl(_printing(_LINES[:1]))
+        said: list[str] = []
+
+        _adapter(said)("romm-tender-update")
+
+        assert said == []
 
     def test_a_journalctl_that_failed_raises_with_what_it_said(self, journalctl):
         journalctl("echo 'Failed to open journal' >&2; exit 1")
 
         with pytest.raises(OSError, match="status 1: Failed to open journal"):
-            JournalctlAdapter()("romm-tender-update")
+            _adapter()("romm-tender-update")
 
     def test_a_missing_journalctl_raises(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PATH", str(tmp_path / "empty"))
 
         with pytest.raises(OSError):
-            JournalctlAdapter()("romm-tender-update")
+            _adapter()("romm-tender-update")
 
     def test_a_journalctl_that_gives_no_answer_in_time_raises_a_timeout(self, journalctl, monkeypatch):
         monkeypatch.setattr("adapters.journal._TIMEOUT_SECONDS", 0.2)
         journalctl("exec /bin/sleep 5")
 
         with pytest.raises(TimeoutError):
-            JournalctlAdapter()("romm-tender-update")
+            _adapter()("romm-tender-update")

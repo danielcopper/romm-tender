@@ -17,6 +17,8 @@ from __future__ import annotations
 import subprocess
 from typing import TYPE_CHECKING
 
+from adapters.bounded_run import run_bounded
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -56,7 +58,7 @@ class SystemdRunAdapter:
             *command,
         ]
         try:
-            done = subprocess.run(argv, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS, check=False)
+            done = run_bounded(argv, timeout=_TIMEOUT_SECONDS)
         except FileNotFoundError:
             return "systemd-run is not installed"
         except OSError as e:
@@ -76,7 +78,7 @@ class SystemdRunAdapter:
         """
         argv = ["systemctl", "--user", "show", "--property=ActiveState", "--value", unit]
         try:
-            done = subprocess.run(argv, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS, check=False)
+            done = run_bounded(argv, timeout=_TIMEOUT_SECONDS)
         except (OSError, subprocess.TimeoutExpired):
             return None
         state = done.stdout.strip()

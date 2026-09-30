@@ -14,7 +14,7 @@ from fakes.running_loop import running_loop
 
 from domain.update_install import INSTALLER_UNIT
 from domain.update_outcome import UpdateFailure, UpdateFailureKind
-from domain.update_output import SERVICE_UNIT, JournalEntry, utc_stamp_seconds
+from domain.update_output import REPLACED_RUN_LINES, SERVICE_UNIT, JournalEntry, utc_stamp_seconds
 from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
 
 _RUNNING = "1.0.31"
@@ -107,7 +107,7 @@ class TestAfterARollback:
         await service.get_update_output(_STAMP)
 
         assert (SERVICE_UNIT, _AT - 120, _AT, None) in journal.reads
-        assert (SERVICE_UNIT, None, _AT - 120, 1) in journal.reads
+        assert (SERVICE_UNIT, None, _AT - 120, REPLACED_RUN_LINES) in journal.reads
 
     async def test_a_failed_version_that_printed_nothing_has_no_section(self, logger):
         journal = FakeJournal([entry for entry in _ROLLBACK_JOURNAL if entry[1].invocation != "new"])
@@ -117,6 +117,17 @@ class TestAfterARollback:
 
         assert answer["new_version"] is None
         assert answer["installer"] is not None
+
+    async def test_a_line_of_no_run_just_before_the_installer_does_not_let_the_replaced_version_s_lines_in(
+        self, logger
+    ):
+        journal = FakeJournal([*_ROLLBACK_JOURNAL, _line(SERVICE_UNIT, _AT - 121, None, "Failed to open unit file")])
+        service = _make(logger, journal, record=_record())
+
+        answer = await service.get_update_output(_STAMP)
+
+        assert "old backend shutting down" not in answer["new_version"]["lines"]
+        assert answer["new_version"]["lines"][0] == "Traceback (most recent call last):"
 
     async def test_with_nothing_running_before_the_installer_every_run_in_the_window_is_the_failed_version_s(
         self, logger
@@ -206,6 +217,16 @@ class TestAnAttemptOfThisProcess:
 
         assert (await service.get_update_output(None))["missing"] == "rotated"
 
+    async def test_an_attempt_whose_run_was_never_written_where_the_journal_reaches_back_says_so(self, logger):
+        started_at = "2026-09-30T20:58:00Z"
+        at = utc_stamp_seconds(started_at) or 0.0
+        journal = FakeJournal([_line(SERVICE_UNIT, at - 1, "backend", "update: starting the installer for 1.0.32")])
+        service = _make(logger, journal, started_at=started_at)
+
+        answer = await service.get_update_output(None)
+
+        assert answer == {"success": True, "ran_at": None, "installer": None, "new_version": None, "missing": "empty"}
+
     async def test_no_attempt_whose_installer_ran_is_nothing_to_show(self, logger):
         journal = FakeJournal()
         service = _make(logger, journal, started_at=None)
@@ -238,11 +259,21 @@ class TestWhatIsNotAnswered:
 
         assert (await service.get_update_output(_STAMP))["reason"] == "not_found"
 
+    async def test_nothing_to_show_is_logged_with_what_was_asked_about(self, logger, caplog):
+        service = _make(logger, FakeJournal(_ROLLBACK_JOURNAL))
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            await service.get_update_output(_STAMP)
+
+        assert f"no standing record is stamped {_STAMP}" in caplog.text
+
     @pytest.mark.parametrize("value", [7, ["2026"], {"at": 1}, True])
-    async def test_an_argument_that_is_neither_a_stamp_nor_none_is_refused(self, logger, value):
-        answer = await _make(logger, FakeJournal()).get_update_output(value)
+    async def test_an_argument_that_is_neither_a_stamp_nor_none_is_refused_and_logged(self, logger, caplog, value):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            answer = await _make(logger, FakeJournal()).get_update_output(value)
 
         assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+        assert repr(value) in caplog.text
 
     async def test_a_journal_that_cannot_be_read_is_said_and_logged(self, logger, caplog):
         service = _make(logger, FakeJournal(raises=OSError("journalctl exited with status 1")), record=_record())

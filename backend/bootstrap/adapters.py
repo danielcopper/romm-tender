@@ -428,7 +428,7 @@ def bootstrap(
     update_attempt = UpdateAttemptFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
     update_staging = UpdateStagingAdapter(directory=os.path.join(directories.cache_dir, UPDATE_DIR_NAME))
     transient_units = SystemdRunAdapter()
-    journal = JournalctlAdapter()
+    journal = JournalctlAdapter(log_debug=debug_logger)
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
