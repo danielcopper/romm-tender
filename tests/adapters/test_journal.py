@@ -8,11 +8,15 @@ from __future__ import annotations
 
 import json
 import stat
+from typing import TYPE_CHECKING
 
 import pytest
 
 from adapters.journal import JournalctlAdapter
 from domain.update_output import JournalEntry
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _STUB = """#!/bin/sh
 printf '%s\\n' "$@" > "{record}"
@@ -42,7 +46,7 @@ def journalctl(tmp_path, monkeypatch):
     return write
 
 
-def _printing(lines: list[object]) -> str:
+def _printing(lines: Sequence[object]) -> str:
     """A stub body printing *lines* with the shell's own ``printf``: the stub's ``PATH`` holds nothing else."""
     return "\n".join(f"printf '%s\\n' '{json.dumps(line)}'" for line in lines)
 
