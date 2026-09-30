@@ -17,7 +17,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, waitFor, act, within } from "@testing-library/react";
+import { cleanup, render, waitFor, act, within } from "@testing-library/react";
 import { toaster } from "../api/host";
 import { showContextMenu, Navigation } from "@decky/ui";
 import * as deckyUi from "@decky/ui";
@@ -2573,6 +2573,34 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
       vi.useRealTimers();
       logSpy.mockRestore();
     }
+  });
+
+  it("unmount while relaunch options are pending releases the late token and never calls RunGame", async () => {
+    let resolveFetch!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
+    vi.mocked(backend.getRomRelaunchOptions).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+
+    await clickPlay();
+    await waitFor(() => expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42));
+    cleanup();
+    resolveFetch({
+      success: true,
+      app_id: 100,
+      launch_options: RELAUNCH_COMMAND,
+      prune_lease_token: "late-unmount-lease",
+    });
+    await act(async () => {
+      for (let index = 0; index < 8; index++) await Promise.resolve();
+    });
+
+    expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("late-unmount-lease");
+    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
   });
 });
 

@@ -896,8 +896,9 @@ describe("index.tsx — sync_stale listener", () => {
     removeShortcut.mockClear();
     logError.mockClear();
     createOrUpdateCollections.mockClear();
-    // A Steam removal that outlasts the continuation's bound, so the stored
-    // promise REJECTS — the shape L20 is about — and settles only afterwards.
+    // A Steam removal that outlasts the continuation's five-minute bound: the
+    // stored promise REJECTS at the bound, and the removal itself settles only
+    // afterwards.
     let finishRemoval!: () => void;
     removeShortcut.mockImplementationOnce(
       () =>

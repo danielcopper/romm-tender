@@ -629,7 +629,7 @@ describe("sessionManager reload adoption", () => {
     expect(backend.recordSessionStart).toHaveBeenCalledWith(ROM_ID);
   });
 
-  it("survives a full reload: start, destroy, re-init, stop finalizes the original rom", async () => {
+  it("survives a full reload: start, reload, re-init, stop finalizes the original rom", async () => {
     stubNothingRunning();
     // No game at first load → the adoption poll times out before init settles.
     await initDrainingAdoptionPoll();

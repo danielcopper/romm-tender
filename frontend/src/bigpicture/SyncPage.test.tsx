@@ -278,9 +278,7 @@ async function renderAndStartPreview() {
   return result;
 }
 
-// Attached once for the whole file, as `index.tsx` attaches it once for the
-// panel's JS context: the mirror has no detach, and the stores it joins are
-// reset per test instead.
+// Attached once, as `runUnitsStore.test.ts` explains.
 attachRunUnitsMirror();
 
 describe("SyncPage", () => {

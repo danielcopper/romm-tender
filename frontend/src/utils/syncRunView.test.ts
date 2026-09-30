@@ -10,17 +10,12 @@ import {
   APPLY_SHARE,
 } from "./syncProgress";
 import { beginEtaRun, liveEtaSeconds, resetEta } from "./syncEta";
-import { attachRunUnitsMirror, recordUnitCreated, resetRunUnitsStoreForTests, seedRunUnits } from "./runUnitsStore";
+import { recordUnitCreated, resetRunUnitsStoreForTests, seedRunUnits } from "./runUnitsStore";
 import type { SyncPlanUnit } from "../types";
 
 function planUnit(name: string): SyncPlanUnit {
   return { type: "platform", id: name, name, slug: name.toLowerCase(), rom_count: 10 };
 }
-
-// Attached once for the whole file, as `index.tsx` attaches it once for the
-// panel's JS context: the mirror has no detach, and the stores it joins are
-// reset per test instead.
-attachRunUnitsMirror();
 
 describe("useSyncRunView", () => {
   beforeEach(() => {

@@ -114,18 +114,15 @@ const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 const runGameMock = () => vi.mocked(SteamClient.Apps.RunGame);
 
 describe("launchInterceptor — full funnel watcher", () => {
-  let unregisterMock: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
     // Drain any skip-set leak from a prior test's relaunch (the real skip-set is
     // module-level state) so a relaunch in one test never silently skips the next.
     launchGate.consumeLaunchSkip(1234);
 
-    unregisterMock = vi.fn();
     vi.stubGlobal("SteamClient", {
       Apps: {
-        RegisterForGameActionStart: vi.fn(() => ({ unregister: unregisterMock })),
+        RegisterForGameActionStart: vi.fn(() => ({ unregister: vi.fn() })),
         CancelGameAction: vi.fn(),
         RunGame: vi.fn(),
       },
