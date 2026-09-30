@@ -479,10 +479,10 @@ create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the
 (`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
 `frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
 one of this machine's names matches as that name does, while one carrying another machine's suffix does not — a hostname
-differing from this one only by case counts as this machine, as it does for Steam. This is always safe precisely because
-Steam's identity is case-insensitive: two collections differing only by case can never coexist, so there is never an
-ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state` is keyed by
-`(collection_id, collection_kind)`, never by name — so there is no migration.
+differing from this one only by case counts as this machine, as it does for Steam. This is safe because Steam's identity
+is case-insensitive: two collections differing only by case can never coexist, so there is never an ambiguous match to
+disambiguate. The DB is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by
+name — so there is no migration.
 
 ## App IDs and Artwork
 
