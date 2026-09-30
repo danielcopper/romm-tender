@@ -2769,7 +2769,7 @@ enum) plus bespoke plain-string reasons for non-server-reachability guards.
 
 All internal methods use a `_` prefix; public callables (exposed to the frontend via `callable()`) have none. `main.py`
 callable methods delegate directly to the corresponding service method. An endpoint is reachable because it is marked
-`@route`, not because it is `async def`; `.claude/rules/callables.md` owns when one is a `def`.
+`@route`, not because it is `async def`; `.claude/rules/endpoints.md` owns when one is a `def`.
 
 This is no longer just a convention — basedpyright enforces it with `reportPrivateUsage = "error"`, so accessing a
 `_`-prefixed name from outside its owning class is a hard type error. Tests are exempt via an `executionEnvironments`

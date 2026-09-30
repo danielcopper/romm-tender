@@ -77,11 +77,11 @@ new code in it.
   `romm_origin=False` if it does not talk to RomM (not checked).
 - `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, which module of `bootstrap/` new wiring belongs in, what
   the `Application` and `Endpoints` each hold, and why `run()` is synchronous.
-- `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-callable failure shapes, the
+- `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-endpoint failure shapes, the
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
   each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
-- `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
+- `endpoints.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
   method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
@@ -171,13 +171,13 @@ locally with `mise run docs`.
   evidence about any of them — it is equally true of `SetShortcutName`, which is the one that has **never** been
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
-- **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for everything `@decky/api` used
-  to give us — five of the same export names, so a call site reads the same. Three of the five go over the backend's
-  WebSocket (`callable` and the event pair); `definePlugin` sits beside them and opens no socket. `toaster` pushes into
-  Steam's own notification store and draws its entries itself, chained behind whatever already patches Steam's toast
-  renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth name `@decky/api` forwarded
-  was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches Steam's game page through a
-  seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
+- **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for what the panel gets from its
+  host — it replaces `@decky/api`, which is no longer a dependency, so nothing imports that package. Three of its five
+  exports go over the backend's WebSocket (`endpoint` and the event pair); `definePlugin` sits beside them and opens no
+  socket. `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever
+  already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth
+  name `@decky/api` forwarded was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches
+  Steam's game page through a seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
   `docs/architecture/frontend-bundles.md`, "Tender's section on Steam's game page". The toaster does not reach Decky's
   loader API when one is present, and what decides that is not purity: it was the loader's own, and one that borrowed
   the loader's wherever it found it would behave differently on a machine with Decky from one without — which is the
@@ -209,7 +209,7 @@ locally with `mise run docs`.
   Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
-  rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
+  rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item endpoints, and bulk
   lists paged (the library apply emits shortcuts in batches; the metadata cache loads page-by-page). Those numbers are
   ours and were chosen — the reference library's largest cover is 5,869,834 bytes, which base64 turns into 7,826,448
   (7.46 MiB), so a 4 MiB cap would have refused it silently.
@@ -343,7 +343,7 @@ Format: **invariant** — tier — enforced by. Each entry here is the binding s
 entry — why the rule exists, what breaks without it, and where it lives — is on
 [docs/architecture/invariants.md](docs/architecture/invariants.md), in the same order.
 
-- **Callable failures use `{success, reason, message}` (never `error` / `error_code`)** — check —
+- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`)** — check —
   `scripts/check_failure_shape.py --check`
 - **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
   bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
@@ -357,7 +357,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   state** — check — `scripts/check_urlopen_choke_point.py` (AST call sites: an aliased `urlopen` or a `getattr` slips
   past it); unchecked: which requests may skip the retry ladder, and which pass `romm_origin=False` because they do not
   talk to RomM (`.claude/rules/romm-http.md`)
-- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
+- **Frontend↔backend endpoint parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
@@ -539,7 +539,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept live by `frontend/src/eslintBoundaries.test.ts`; code both
   surfaces need moves DOWN into `api/`, `utils/` or `types/`, never sideways; type-only imports are not edges
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
-- **A transport failure and a callable's own failure never arrive in the same shape, on either end** — test +
+- **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is
   `.claude/rules/host.md`, the vocabulary `backend/host/protocol.py`. Prompt-only: the Python and TypeScript spellings
   of `connection_lost` must agree — nothing holds them equal

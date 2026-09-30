@@ -5,7 +5,7 @@ paths:
 
 # Backend testing
 
-Every backend feature or callable where testing makes sense MUST have unit tests: **happy path**, **bad path** (invalid
+Every backend feature or endpoint where testing makes sense MUST have unit tests: **happy path**, **bad path** (invalid
 input, missing data, API errors, network failures), and **edge cases** (empty strings, None, masked values `"••••"`,
 boundaries). Tests mirror the source structure (`tests/services/`, `tests/adapters/`, …), one test file per source
 module. Shared fixtures live in `tests/conftest.py`.
@@ -72,10 +72,10 @@ Clock/UuidGen/Sleeper, `emit`, and `http_adapter.with_retry` as a single-attempt
 itself from the wired services and runs none of its start-up repairs, `open_network` or `shutdown`; a test reaches a
 service through `harness.app.services` and the live settings dict through `harness.settings`.
 
-- **Call callables exactly as the frontend does** — positional, JSON-shaped arguments with the arg types declared in
+- **Call endpoints exactly as the frontend does** — positional, JSON-shaped arguments with the arg types declared in
   `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`).
 - **Assert the response SHAPE + behavior, not delegation.** Pin the literal dict keys, the canonical failure shape, the
-  discriminated-status union, and the partial-success carve-outs. Where a callable has a server-reachable failure mode,
+  discriminated-status union, and the partial-success carve-outs. Where an endpoint has a server-reachable failure mode,
   exercise BOTH the happy path AND the failure path.
 - The `harness` fixture is **async** so it binds the test's running event loop. Each test gets a fresh `tmp_path`.
 

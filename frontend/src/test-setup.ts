@@ -117,9 +117,9 @@ vi.stubGlobal("appDetailsStore", { GetAppDetails: vi.fn() });
 vi.stubGlobal("appDetailsCache", { GetAppData: vi.fn() });
 vi.stubGlobal("collectionStore", { userCollections: [] });
 
-// api/host — the panel's end of the backend's WebSocket. `callable` returns a
+// api/host — the panel's end of the backend's WebSocket. `endpoint` returns a
 // vi.fn that resolves to undefined by default; tests opt into specific behavior
-// via vi.mocked(<callable>).mockResolvedValue(...). addEventListener /
+// via vi.mocked(backend.<name>).mockResolvedValue(...). addEventListener /
 // removeEventListener route through the in-memory event bus in
 // frontend/src/test-utils/host-event-bus.ts so tests can drive backend events
 // via emitHostEvent(). Async factory + dynamic import is required because

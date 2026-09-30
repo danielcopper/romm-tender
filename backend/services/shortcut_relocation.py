@@ -68,7 +68,7 @@ class ShortcutRelocationService:
     async def get_shortcut_relocation(self) -> dict[str, Any]:
         """Report what the frontend still has to repoint, if anything.
 
-        Returns a discriminated status union (``.claude/rules/callables.md``):
+        Returns a discriminated status union (``.claude/rules/endpoints.md``):
 
         - ``{"status": "done"}`` — every shortcut of ours is at the launcher's
           home. Either the completion is already stamped, in which case nothing

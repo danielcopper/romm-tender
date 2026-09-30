@@ -3,7 +3,7 @@
  *
  * `test-setup.ts` replaces `api/host` for the whole suite, so this file has to
  * take the stub off again — otherwise it would assert that a `vi.fn()` behaves
- * like a `vi.fn()`. Every member here is a one-line delegation: `callable`,
+ * like a `vi.fn()`. Every member here is a one-line delegation: `endpoint`,
  * `addEventListener` and `removeEventListener` to `HostSocket`, which
  * `hostSocket.test.ts` drives against a socket of its own, and `toaster` to
  * `utils/steamToaster.tsx`, which its own file drives against supplied seams.

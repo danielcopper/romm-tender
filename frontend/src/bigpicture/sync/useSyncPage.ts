@@ -75,7 +75,7 @@ import type { SyncButton } from "../SessionBudgetBanner";
 
 /** What a preview action that did not take says when the call itself failed and
  *  there is no answer to quote. A refusal always carries a message
- *  (`.claude/rules/callables.md`); a rejection has no answer at all. */
+ *  (`.claude/rules/endpoints.md`); a rejection has no answer at all. */
 const PREVIEW_FAILED = "Could not work out what would change. Check the connection to RomM and try again.";
 
 /** What the armed line falls back to when the clear answered without a message

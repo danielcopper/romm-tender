@@ -39,7 +39,7 @@ keeps it out of the log file is built with the file handler and takes the token 
 it hands the host, is `async` only because the host awaits it; it stays in `main.py`, which Sonar's S7503 exclusion
 covers, and an `async def` that never awaits is not put into `bootstrap/`, which has none.
 
-`main.py` grows with the callable surface it describes; that is unavoidable density, not god-class, and it is
+`main.py` grows with the endpoint surface it describes; that is unavoidable density, not god-class, and it is
 deliberately out of scope for the module-size gate.
 
 `bootstrap/` is **not** exempt. Every module in it is governed by the ~1000-LOC threshold in

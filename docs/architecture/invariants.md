@@ -10,7 +10,7 @@ is the one to correct.
 
 Format: **invariant** — tier — enforced by.
 
-- **Callable failures use `{success, reason, message}` (never `error` / `error_code`)** — check —
+- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`)** — check —
   `scripts/check_failure_shape.py --check`
 - **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
   bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
@@ -26,7 +26,7 @@ Format: **invariant** — tier — enforced by.
   (structural, AST call sites — an alias or a `getattr` would slip past it. Which requests may skip the ladder, and
   which pass `romm_origin=False` because they do not talk to RomM at all, stays prompt-only in
   `.claude/rules/romm-http.md`)
-- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
+- **Frontend↔backend endpoint parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
@@ -585,7 +585,7 @@ Format: **invariant** — tier — enforced by.
   proves nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
   `utils/cachedGameDetailStore.ts` back-reference is not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
-- **A transport failure and a callable's own failure never arrive in the same shape, on either end** — test +
+- **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
   frontend half is `frontend/src/api/hostSocket.ts`, which THROWS `HostTransportError` for an `error` message and
   resolves only a `reply`, so a transport reason cannot reach a reader of `{success, reason, message}`.

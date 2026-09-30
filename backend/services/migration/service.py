@@ -287,7 +287,7 @@ class MigrationService:
     def get_retrodeck_status(self) -> dict[str, Any]:
         """Report RetroDECK path-resolution health for the frontend banner.
 
-        Discriminated-status union (Callable response shapes carve-out):
+        Discriminated-status union (Endpoint response shapes carve-out):
         ``status`` carries one of ``ok`` / ``absent`` / ``unreadable`` /
         ``root_missing``. The frontend owns the human-readable copy; the
         backend returns the discriminant plus the probed paths.

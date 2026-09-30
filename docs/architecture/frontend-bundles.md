@@ -299,13 +299,10 @@ Decky's copy carries a name whose value this check never reads.
 
 ## Talking to the backend
 
-`frontend/src/api/host.ts` is what the panel imports for everything `@decky/api` used to give it, under five of the same
-names — `callable`, `addEventListener`, `removeEventListener`, `toaster`, `definePlugin` — so a call site reads the same
-as before. `@decky/api` itself is gone from the package, and so is the sixth name it forwarded: `routerHook` was Decky
-Loader's route installer, and Tender's section reaches Steam's game page through a seam of its own instead
-([below](#tenders-section-on-steams-game-page)).
+`frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,
+`addEventListener`, `removeEventListener`, `toaster`, `definePlugin`.
 
-**Three of the five are the wire.** `callable`, `addEventListener` and `removeEventListener` go through
+**Three of them are the wire.** `endpoint`, `addEventListener` and `removeEventListener` go through
 `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
 `backend/host/protocol.py`. The port and the token are read off the URL this bundle was loaded from: the host mints
 exactly that address, so they arrive with the code that needs them and cannot be stale.
@@ -329,10 +326,9 @@ seam is arranged that way so this module stays the wire and reaches no view — 
 declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in the tree makes it,
 so without that line the panel is built for nobody.
 
-**The fifth reaches Steam instead.** `toaster` was Decky Loader's own, and `@decky/api` only forwarded it, so it needs a
-replacement of Tender's rather than a backend route: `utils/steamToaster.tsx` pushes a notification into Steam's own
-`NotificationStore`, which then owns the popup window and its animation, the queue behind it, the sound, and the entry
-left in the Quick Access notifications tab.
+**The fifth reaches Steam instead.** `toaster` has no host answer, so it is Tender's own rather than a backend route:
+`utils/steamToaster.tsx` pushes a notification into Steam's own `NotificationStore`, which then owns the popup window
+and its animation, the queue behind it, the sound, and the entry left in the Quick Access notifications tab.
 
 The toaster is two halves and the push is useless without the other one. Steam's renderer has no `case` for the type
 these notifications carry; its `default` arm resolves to Steam's server-notification component, which reads fields our

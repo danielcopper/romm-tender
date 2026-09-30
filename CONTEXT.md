@@ -49,7 +49,7 @@ through the **Unit of Work** (`uow.rom_save_sync_states`, `uow.rom_installs`, �
 ### Unit of Work
 
 The atomic transaction boundary one operation works inside, and the carrier of the **Repositories** for that
-transaction. Owned by the service layer at the operation's entry (never by `main.py` callables); a `with uow:` block
+transaction. Owned by the service layer at the operation's entry (never by `main.py` endpoints); a `with uow:` block
 opens one connection, exposes the repositories, and commits on clean exit / rolls back on exception (stdlib `sqlite3` +
 `run_in_executor`, per [ADR-0004](docs/adr/0004-sync-sqlite-unit-of-work.md)). Kept **narrow** — it wraps only the
 database reads/writes, never network/file I/O or a frontend round-trip; cross-operation consistency comes from the
@@ -254,12 +254,12 @@ session it can happen at most once and counting inside a session counts to one f
 The word names two different things:
 
 - **Tender endpoint** — a public method marked `@route` on **Endpoints**, which the panel reaches over the host's
-  socket; nothing else is reachable that way. Its name is the name the panel calls it by, through its `callable()`
+  socket; nothing else is reachable that way. Its name is the name the panel declares it by, through its `endpoint()`
   function.
 - **Server endpoint** — an HTTP route of a server Tender talks to: RomM's (`/api/roms`, …), in RomM's own sense of the
   word, and likewise SteamGridDB's.
 
-_Avoid_: **callable** for a Tender endpoint — that is the panel's function that reaches one, not the method it reaches.
+_Avoid_: **callable** for a Tender endpoint or for the panel's declaration of one.
 
 ### Application / Endpoints
 

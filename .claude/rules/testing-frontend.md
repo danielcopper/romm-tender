@@ -32,11 +32,11 @@ failing run is the check. Unmounting needs no import of its own: RTL's own `afte
 refuses a single-worker run under the suite's vm pool from its second file on, and says why.
 
 **`api/host` is stubbed for the whole suite, so no socket is ever opened in it.** `test-setup.ts` replaces the module
-wholesale: `callable` is a `vi.fn()` resolving to `undefined`, and the event pair routes through the harness. **No line
-of `frontend/src/api/hostSocket.ts` runs through any of that** — framing, call numbering, the outbox, the reconnection
-and the reply-versus-error discrimination are covered in `hostSocket.test.ts`, against a socket that file supplies, and
-are invisible everywhere else. A test that wants the real module takes the stub off itself (`vi.unmock("./host")`, as
-`host.test.ts` does).
+wholesale: every `endpoint` declaration is a `vi.fn()` resolving to `undefined`, and the event pair routes through the
+harness. **No line of `frontend/src/api/hostSocket.ts` runs through any of that** — framing, call numbering, the outbox,
+the reconnection and the reply-versus-error discrimination are covered in `hostSocket.test.ts`, against a socket that
+file supplies, and are invisible everywhere else. A test that wants the real module takes the stub off itself
+(`vi.unmock("./host")`, as `host.test.ts` does).
 
 **`utils/quickAccessVisible` is the third module stubbed for the whole suite, and its stub answers that the QAM is
 OPEN.** Keep it in `test-setup.ts` rather than per file, for two reasons: a file that re-mocks `@decky/ui` for its own

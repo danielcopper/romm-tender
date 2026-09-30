@@ -4,7 +4,7 @@
 Endpoints that return a plain ``dict`` and can fail use the canonical
 failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
 (plus per-endpoint payload extras). The convention — documented in
-``backend/lib/list_result.py`` and ``.claude/rules/callables.md`` → "Callable
+``backend/lib/list_result.py`` and ``.claude/rules/endpoints.md`` → "Endpoint
 response shapes" — forbids a second ``error`` field and the legacy
 ``error_code`` key.
 
@@ -280,7 +280,7 @@ def _print_violations(findings: list[Finding]) -> None:
     print(
         "ERROR: failure-shaped returns in backend/services/ must carry "
         "'reason' + 'message' and must not carry 'error' / 'error_code' "
-        "(.claude/rules/callables.md → Callable response shapes; lib/list_result.py)."
+        "(.claude/rules/endpoints.md → Endpoint response shapes; lib/list_result.py)."
     )
 
 

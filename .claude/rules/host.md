@@ -14,10 +14,10 @@ exists.
 
 None of the seven below has a mechanical check. Each of them fails green.
 
-## 1. A transport error is not a callable's failure shape
+## 1. A transport error is not an endpoint's failure shape
 
 `error.reason` (`method_unknown`, `payload_too_large`, `backend_exception`, `malformed_message`, `connection_lost`)
-names something that went wrong **carrying** a call. A callable's own failure is a perfectly successful transport and
+names something that went wrong **carrying** a call. An endpoint's own failure is a perfectly successful transport and
 arrives inside `result`, in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards — **and that
 gate does not see `host/` at all.** Collapse the two and a user is shown a sentence about their game where a programming
 error stands.

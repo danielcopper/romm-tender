@@ -1,12 +1,10 @@
 /**
- * What the panel used to get from `@decky/api`, from Tender's own host instead.
- *
- * Five names, so no call site changes meaning: `callable`, `addEventListener`,
- * `removeEventListener`, `toaster` and `definePlugin`. Three of them are the
- * wire — they go over the WebSocket in `hostSocket.ts`. **Two of them reach no
- * socket at all**, and they live here anyway because this module replaces one
- * import specifier with another: making the reader distinguish would put two
- * imports at every call site for a distinction the call sites do not have.
+ * The one module the panel imports for what it gets from its host: `endpoint`,
+ * `addEventListener`, `removeEventListener`, `toaster` and `definePlugin`.
+ * Three of them are the wire — they go over the WebSocket in `hostSocket.ts`.
+ * **Two of them reach no socket at all**, and they live here anyway: making the
+ * reader distinguish would put two imports at every call site for a
+ * distinction the call sites do not have.
  *
  * ## The two that are not the wire
  *
@@ -14,10 +12,9 @@
  * opens no socket; it sits beside the three because a call site importing it
  * asks for the same thing the others answer.
  *
- * `toaster` was Decky Loader's own — `@decky/api` only forwarded it
- * (`api.toaster`). There is no host answer for it, so it gets a replacement of
- * Tender's own rather than a backend route: it pushes through Steam's own
- * notification store (`utils/steamToaster.tsx`).
+ * `toaster` has no host answer, so it is Tender's own rather than a backend
+ * route: it pushes through Steam's own notification store
+ * (`utils/steamToaster.tsx`).
  *
  * **It does not reach Decky Loader's API when one is running.** Why, once:
  * `docs/architecture/frontend-bundles.md`.
