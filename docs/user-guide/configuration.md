@@ -304,8 +304,8 @@ release.
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
-- **Available** — the release the last successful check found, **None newer** when you already have it, or **Not known
-  yet** before a check has found anything — whether or not the daily check is switched on.
+- **Available** — the release the last successful check found, in green, **None newer** when you already have it, or
+  **Not known yet** before a check has found anything — whether or not the daily check is switched on.
 - **Install update** — installs the release **Available** names; see [Installing an update](#installing-an-update).
   **Try again** instead, for a version whose install already failed, was rolled back or was refused. A copy of Tender
   run from a source checkout says **Development build — install updates with the installer.** in its place.

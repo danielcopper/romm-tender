@@ -5,6 +5,7 @@ import type { UpdateInstall } from "./useUpdateInstall";
 import type { UpdateInstallAttempt } from "../../api/backend";
 import { setUpdateInstallAttempt } from "../../utils/updateInstallStore";
 import { NOT_BACK_LINE, TAKING_LONG_LINE } from "../../utils/updateInstallView";
+import { GREEN } from "../layout/pane";
 import { UpdateFailureNotice } from "../UpdateFailureNotice";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import {
@@ -131,6 +132,19 @@ describe("UpdatesSection", () => {
   it("says when no check has established anything yet", () => {
     const { getByTestId } = renderSection({ available: false, newer: false, latestVersion: null });
     expect(getByTestId("updates-available").textContent).toBe("Not known yet");
+  });
+
+  it("shows a newer release in green, and what is not one in no colour of its own", () => {
+    const newer = renderSection();
+    expect(newer.getByTestId("updates-available").style.color).toBe(GREEN);
+    newer.unmount();
+
+    const none = renderSection({ available: false, newer: false, latestVersion: "0.33.0" });
+    expect(none.getByTestId("updates-available").style.color).toBe("");
+    none.unmount();
+
+    const unknown = renderSection({ available: false, newer: false, latestVersion: null });
+    expect(unknown.getByTestId("updates-available").style.color).toBe("");
   });
 
   it("names what the last check found whatever the switch says", () => {

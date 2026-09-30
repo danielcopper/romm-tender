@@ -10,6 +10,7 @@ import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
 import { UpdateInstallRows, installButtonShown, installStateUnread } from "./UpdateInstallRows";
 import { useUpdateInstall } from "./useUpdateInstall";
+import { GREEN } from "../layout/pane";
 import { INSTALL_STATE_UNREAD } from "../../utils/updateInstallView";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import type { UpdateOutcomeState } from "../../utils/updateOutcomeStore";
@@ -27,6 +28,11 @@ interface UpdatesSectionProps {
   result: string;
   onEnabledChange: (enabled: boolean) => void;
   onCheckNow: () => void;
+}
+
+/** Whether the Available row names a newer release — the one value it shows in green. */
+function availableNewer(update: UpdateNoticeState): boolean {
+  return update.latestVersion !== null && update.newer;
 }
 
 /** The Available row's value: a version only where one is newer, and otherwise what is known — whatever the switch says. */
@@ -64,7 +70,9 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
             ? { description: <span data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</span> }
             : {})}
         >
-          <span data-testid="updates-available">{availableValue(update)}</span>
+          <span data-testid="updates-available" style={availableNewer(update) ? { color: GREEN } : undefined}>
+            {availableValue(update)}
+          </span>
         </Field>
       </PanelSectionRow>
       {!update.installedProgram && (
