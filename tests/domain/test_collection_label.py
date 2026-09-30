@@ -1,7 +1,8 @@
-"""Tests for domain.collection_label.collection_label.
+"""Tests for domain.collection_label.
 
 The type label appended to a Steam collection name under the ``by_label``
-naming mode, and its absence for a standard collection; where else the strings
+naming mode, its absence for a standard collection, and the Steam name each
+naming mode builds from it; where else the strings
 are spelled is ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection
 naming mode. No label may contain ``]`` (it sits inside the
 ``RomM: [<name> (<label>)]`` bracket pair the frontend reconcile parses).
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.collection_label import collection_label
+from domain.collection_label import collection_label, steam_collection_key
 
 # The known (kind, virtual_type) → label mapping for every labelled kind.
 _KNOWN_CASES = [
@@ -73,3 +74,19 @@ class TestNoClosingBracketInLabel:
         label = collection_label(kind, virtual_type)
         assert label is not None
         assert "]" not in label
+
+
+class TestSteamCollectionKey:
+    @pytest.mark.parametrize(("kind", "virtual_type", "expected"), _KNOWN_CASES)
+    def test_by_label_appends_the_label(self, kind, virtual_type, expected):
+        assert steam_collection_key("Mario", kind, virtual_type, "by_label") == f"Mario ({expected})"
+
+    def test_by_label_leaves_a_standard_collection_bare(self):
+        assert steam_collection_key("Mario", "standard", None, "by_label") == "Mario"
+
+    @pytest.mark.parametrize(("kind", "virtual_type", "_label"), _KNOWN_CASES)
+    def test_merge_is_the_bare_name_for_every_kind(self, kind, virtual_type, _label):
+        assert steam_collection_key("Mario", kind, virtual_type, "merge") == "Mario"
+
+    def test_an_unknown_mode_reads_as_merge(self):
+        assert steam_collection_key("Mario", "smart", None, "sideways") == "Mario"

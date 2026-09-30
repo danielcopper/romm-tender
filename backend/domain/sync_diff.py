@@ -377,13 +377,15 @@ def compute_collection_diff(
     current_collection_names: set[str],
     last_synced_collections: list[str],
 ) -> dict[str, Any]:
-    """Diff enabled collections (by name) against the last-synced set.
+    """Diff enabled collections (by Steam name) against the last-synced set.
 
-    ``current_collection_names`` is the set of DISTINCT display names present in
-    this run's collection accumulator — a name counts as present iff at least one
-    collection carries it, so two same-named collections (RomM permits them across
-    kinds/users, #1503) collapse to one entry, matching the by-name Steam
-    collection they merge into. Returns
+    ``current_collection_names`` is the set of DISTINCT Steam collection names
+    (:func:`domain.collection_label.steam_collection_key`) of this run's
+    collection accumulator — a name counts as present iff at least one collection
+    carries it, so two collections sharing a name (RomM permits same-named ones
+    across kinds/users, #1503) collapse to one entry, matching the by-name Steam
+    collection they merge into. ``last_synced_collections`` is the last completed
+    run's record, which holds the same names. Returns
     ``{"has_changes": bool, "added": [...], "removed": [...]}``; ``has_changes`` is
     True if there are any added/removed collections, or if there are any current
     collections at all (covers first-sync case).

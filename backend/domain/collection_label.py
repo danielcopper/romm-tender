@@ -1,10 +1,10 @@
-"""Type label for a RomM collection's Steam name, keyed by kind + virtual type.
+"""A RomM collection's Steam name under the collection naming mode.
 
-The pure kernel behind the ``by_label`` Steam-collection naming mode: it maps a
-collection's ``kind`` (``standard`` / ``smart`` / ``virtual``) and, for the
-virtual kind, its ``virtual_type`` (``franchise`` / ``collection``) onto the
-label the reporter appends to the collection's Steam name, or onto none. No
-I/O, no state.
+The pure kernel behind the ``merge`` / ``by_label`` Steam-collection naming
+modes: it maps a collection's ``kind`` (``standard`` / ``smart`` / ``virtual``)
+and, for the virtual kind, its ``virtual_type`` (``franchise`` / ``collection``)
+onto the label appended to the collection's Steam name, or onto none, and builds
+that name. No I/O, no state.
 
 The rule the labels follow, and where else they are spelled (so what a change
 here must also change): ``docs/architecture/steam-non-steam-shortcuts.md``
@@ -55,3 +55,22 @@ def collection_label(kind: str, virtual_type: str | None) -> str | None:
     if kind in _KIND_LABELS:
         return _KIND_LABELS[kind]
     return kind.capitalize() if kind else "Collection"
+
+
+def steam_collection_key(name: str, kind: str, virtual_type: str | None, naming_mode: str) -> str:
+    """Return the Steam-collection name-part for a collection under *naming_mode*.
+
+    ``merge`` (the default, and any unknown mode) → the bare display name.
+    ``by_label`` → ``"<name> (<label>)"`` with the label from
+    :func:`collection_label`, or the bare name where that gives none (a
+    standard collection). The frontend wraps the result as ``RomM: [<key>]``.
+    Every reader of a collection's Steam name takes it from here: the
+    reporter's union key, and the preview's collection diff, which compares it
+    against the keys the last completed run recorded
+    (``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming mode).
+    """
+    if naming_mode == "by_label":
+        label = collection_label(kind, virtual_type)
+        if label is not None:
+            return f"{name} ({label})"
+    return name

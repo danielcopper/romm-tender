@@ -23,7 +23,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.collection_label import collection_label
+from domain.collection_label import steam_collection_key
 from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
 from domain.rom import Rom
@@ -232,7 +232,8 @@ class SyncReporter:
         within). Names that resolve to no appId are omitted.
 
         The key is the Steam-collection name-part built from the
-        ``collection_naming_mode`` setting (:meth:`_collection_key`): under
+        ``collection_naming_mode`` setting
+        (:func:`domain.collection_label.steam_collection_key`): under
         ``merge`` (default) it is the bare display name, so same-named
         collections of any kind union into one ``RomM: [<name>]`` collection
         (#1503) — byte-for-byte the pre-mode output. Under ``by_label`` every
@@ -255,7 +256,7 @@ class SyncReporter:
         app_ids_by_fold: dict[str, list[int]] = {}
         seen_by_fold: dict[str, set[int]] = {}
         for membership in pending_collection_memberships.values():
-            key = self._collection_key(membership, naming_mode)
+            key = steam_collection_key(membership.name, membership.kind, membership.virtual_type, naming_mode)
             fold = key.casefold()
             display_key_by_fold.setdefault(fold, key)
             app_ids = app_ids_by_fold.setdefault(fold, [])
@@ -266,23 +267,6 @@ class SyncReporter:
                     seen.add(app_id)
                     app_ids.append(app_id)
         return {display_key_by_fold[fold]: app_ids for fold, app_ids in app_ids_by_fold.items() if app_ids}
-
-    @staticmethod
-    def _collection_key(membership: CollectionMembership, naming_mode: str) -> str:
-        """The Steam-collection name-part for a membership under *naming_mode*.
-
-        ``merge`` (default / unknown) → the bare display name. ``by_label`` →
-        ``"<name> (<Label>)"`` where the label comes from
-        :func:`domain.collection_label.collection_label`, or the bare name where
-        that gives none (a standard collection). The label is bracket-free, so
-        the frontend's ``RomM: [<key>]`` name-parse
-        (``/^RomM: \\[([^\\]]+)\\]/``) stays intact.
-        """
-        if naming_mode == "by_label":
-            label = collection_label(membership.kind, membership.virtual_type)
-            if label is not None:
-                return f"{membership.name} ({label})"
-        return membership.name
 
     @staticmethod
     def _member_app_id(uow: UnitOfWork, rid: int, group_bound_app_id: dict[str, int]) -> int | None:

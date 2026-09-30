@@ -388,6 +388,103 @@ class TestSyncPreview:
         assert library.sync._sync_state == SyncState.IDLE
 
 
+class TestPreviewCollectionDiff:
+    """The preview's ``collection_diff`` compares Steam collection names on both sides.
+
+    The last completed run records the names the reporter built, so the preview's
+    current set has to be built the same way — under ``by_label`` a smart or
+    virtual collection's name carries its type label.
+    """
+
+    @staticmethod
+    def _seed_three_kinds(library, fake_romm_api):
+        """Enable a standard, a smart and a franchise collection, one game each."""
+        _use_fake_romm(library, fake_romm_api)
+        for rid in (20, 21, 22):
+            fake_romm_api.roms[rid] = {
+                "id": rid,
+                "name": f"Game {rid}",
+                "fs_name": f"g{rid}.gba",
+                "platform_id": 2,
+                "platform_name": "GBA",
+                "platform_slug": "gba",
+            }
+        _seed_collection(fake_romm_api, collection_id=7, name="Favorites", rom_ids=[20], is_favorite=True)
+        fake_romm_api.smart_collections = [{"id": 5, "name": "Filter", "rom_count": 1}]
+        fake_romm_api.roms[21]["smart_collection_ids"] = [5]
+        _seed_collection(
+            fake_romm_api,
+            collection_id="9",
+            name="Metroid",
+            rom_ids=[22],
+            is_virtual=True,
+            virtual_category="franchise",
+        )
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {
+            "standard": {"7": True},
+            "smart": {"5": True},
+            "virtual": {"9": True},
+        }
+
+    @pytest.mark.asyncio
+    async def test_by_label_unchanged_collections_show_no_diff(self, library, fake_romm_api):
+        self._seed_three_kinds(library, fake_romm_api)
+        library.settings["collection_naming_mode"] = "by_label"
+        _seed_completed_run(
+            library, at="2026-01-01T00:00:00", collections=["Favorites", "Filter (Smart)", "Metroid (Franchise)"]
+        )
+
+        result = await library.sync.sync_preview()
+
+        assert result["success"] is True
+        diff = result["summary"]["collection_diff"]
+        assert diff["added"] == []
+        assert diff["removed"] == []
+
+    @pytest.mark.asyncio
+    async def test_merge_unchanged_collections_show_no_diff(self, library, fake_romm_api):
+        self._seed_three_kinds(library, fake_romm_api)
+        library.settings["collection_naming_mode"] = "merge"
+        _seed_completed_run(library, at="2026-01-01T00:00:00", collections=["Favorites", "Filter", "Metroid"])
+
+        result = await library.sync.sync_preview()
+
+        diff = result["summary"]["collection_diff"]
+        assert diff["added"] == []
+        assert diff["removed"] == []
+
+    @pytest.mark.asyncio
+    async def test_by_label_a_real_change_shows_under_the_steam_names(self, library, fake_romm_api):
+        self._seed_three_kinds(library, fake_romm_api)
+        library.settings["collection_naming_mode"] = "by_label"
+        _seed_completed_run(
+            library, at="2026-01-01T00:00:00", collections=["Favorites", "Metroid (Franchise)", "Gone (Smart)"]
+        )
+
+        result = await library.sync.sync_preview()
+
+        diff = result["summary"]["collection_diff"]
+        assert diff["added"] == ["Filter (Smart)"]
+        assert diff["removed"] == ["Gone (Smart)"]
+
+    @pytest.mark.asyncio
+    async def test_switching_the_naming_mode_shows_the_renamed_collections(self, library, fake_romm_api):
+        """A mode switch renames the labelled kinds' Steam collections, so they read as added and removed.
+
+        A standard collection's Steam name is the same in both modes and stays out of the diff.
+        """
+        self._seed_three_kinds(library, fake_romm_api)
+        library.settings["collection_naming_mode"] = "by_label"
+        _seed_completed_run(library, at="2026-01-01T00:00:00", collections=["Favorites", "Filter", "Metroid"])
+
+        result = await library.sync.sync_preview()
+
+        diff = result["summary"]["collection_diff"]
+        assert diff["added"] == ["Filter (Smart)", "Metroid (Franchise)"]
+        assert diff["removed"] == ["Filter", "Metroid"]
+
+
 class TestPreviewCoverRefreshCount:
     """The preview's cover-only work count (#1386 flow gap).
 

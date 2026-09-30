@@ -39,6 +39,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.collection_label import steam_collection_key
 from domain.cover_refresh import count_cover_refreshes
 from domain.session_budget import post_run_advisory, session_memory_delta
 from domain.shortcut_data import build_shortcuts_data
@@ -376,6 +377,7 @@ class SyncOrchestrator:
             created_at = self._clock.time()
             platforms_count = sum(1 for u in work_queue if u.type == "platform")
             collections_count = sum(1 for u in work_queue if u.type == "collection")
+            naming_mode = self._settings.get("collection_naming_mode", "merge")
 
             answer = {
                 "success": True,
@@ -405,7 +407,10 @@ class SyncOrchestrator:
                     "sync_platform_count": platforms_count,
                     "sync_collection_count": collections_count,
                     "collection_diff": compute_collection_diff(
-                        {m.name for m in collection_memberships.values()},
+                        {
+                            steam_collection_key(m.name, m.kind, m.virtual_type, naming_mode)
+                            for m in collection_memberships.values()
+                        },
                         last_synced_collections,
                     ),
                     # Per-platform rows behind the library-wide counts above,
