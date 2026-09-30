@@ -83,10 +83,10 @@ function pressDespiteDisabled(element: HTMLElement): void {
 }
 
 // Where each step stands, read off the mark a reader sees in front of it.
-const MARK_STATUS: Record<string, string> = { "✓": "done", "●": "current", "○": "pending", "✗": "failed" };
+const MARK_STATUS: Partial<Record<string, string>> = { "✓": "done", "●": "current", "○": "pending", "✗": "failed" };
 const statuses = (utils: { getByTestId: (id: string) => HTMLElement }) =>
   ["download", "verify", "check", "install"].map((id) => {
-    const text = utils.getByTestId(`updates-step-${id}`).textContent ?? "";
+    const text = utils.getByTestId(`updates-step-${id}`).textContent;
     return MARK_STATUS[text.charAt(0)] ?? text;
   });
 
