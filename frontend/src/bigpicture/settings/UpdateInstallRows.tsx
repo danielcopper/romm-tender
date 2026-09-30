@@ -28,7 +28,6 @@ import {
   type RolledBackUpdate,
 } from "../../utils/updateOutcomeStore";
 import { cardFrame } from "../UpdateCard";
-import { detach } from "../../utils/detach";
 import { showUpdateOutput } from "./UpdateOutputModal";
 import type { UpdateInstall } from "./useUpdateInstall";
 
@@ -310,7 +309,7 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
       )}
       {output && (
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={() => detach(showUpdateOutput(output.rolledBackAt, output.version))}>
+          <ButtonItem layout="below" onClick={() => showUpdateOutput(output.rolledBackAt, output.version)}>
             {SHOW_OUTPUT}
           </ButtonItem>
         </PanelSectionRow>

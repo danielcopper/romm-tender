@@ -111,12 +111,8 @@ export const INSTALLER_RAN: ReadonlySet<UpdateInstallFailure> = new Set([
   "new_version_does_not_start",
 ]);
 
-/** The same lines where no button stands beside them, as on Main: the installer's failures name its journal. */
-export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
-  ...INSTALL_FAILURE_NOTES,
-  installer_stopped: `${INSTALL_FAILURE_NOTES.installer_stopped} ${INSTALLER_JOURNAL}`,
-  new_version_does_not_start: `${INSTALL_FAILURE_NOTES.new_version_does_not_start} The installer's output says why: ${INSTALLER_UNIT_JOURNAL}`,
-};
+/** The line for an installer that stopped where no button stands beside it, as on Main's card: it names its journal. */
+export const INSTALLER_STOPPED_SENTENCE = `${INSTALL_FAILURE_NOTES.installer_stopped} ${INSTALLER_JOURNAL}`;
 
 type PlainWaitReason = Exclude<UpdateWaitReason, { apps: string[] } | { frees_at: number }>["reason"];
 

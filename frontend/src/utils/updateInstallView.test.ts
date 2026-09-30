@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
 import {
-  INSTALL_FAILURE_SENTENCES,
+  INSTALL_FAILURE_NOTES,
+  INSTALLER_STOPPED_SENTENCE,
   INSTALLER_OVERDUE_MS,
   RELOAD_LIMIT,
   refusalStands,
@@ -171,18 +172,23 @@ describe("restartWaitLine", () => {
   });
 });
 
-describe("INSTALL_FAILURE_SENTENCES", () => {
-  it("words every failure without what its title says, and points the installer's failures at its journal", () => {
-    expect(INSTALL_FAILURE_SENTENCES).toEqual({
+describe("INSTALL_FAILURE_NOTES and INSTALLER_STOPPED_SENTENCE", () => {
+  it("words every failure without what its title says, and names no journal", () => {
+    expect(INSTALL_FAILURE_NOTES).toEqual({
       download_failed: "The download failed.",
       checksum_mismatch: "The download did not match its checksum.",
       installer_not_started: "The installer could not be started.",
-      installer_stopped: "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
+      installer_stopped: "The installer stopped without updating.",
       game_started: "A game was started. Try again once it has closed.",
       running_apps_unknown: "Could not check whether a game is running.",
-      new_version_does_not_start:
-        "The new version does not start. The installer's output says why: journalctl --user -u romm-tender-update",
+      new_version_does_not_start: "The new version does not start.",
     });
+  });
+
+  it("points an installer that stopped at its journal where no button stands beside it", () => {
+    expect(INSTALLER_STOPPED_SENTENCE).toBe(
+      "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
+    );
   });
 });
 
