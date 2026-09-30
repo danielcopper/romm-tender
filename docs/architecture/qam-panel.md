@@ -719,7 +719,8 @@ a page that has to be open at the time, are these — known cases, not a complet
 queue is built, which writes no run, so only the Sync page's status line and Main's transient line say it, each only if
 it is open when the sync fails (§ Sync); a removed-game cleanup that the game page's version picker cannot prepare for
 one version, which it answers with a toast alone; and a play-button download that is refused or fails before it is
-queued, which never reaches the download queue.
+queued, which never reaches the download queue. The notice gives the gist rather than the list: its one example, a sync
+that cannot start, is the first case here, and it leaves out the lines an open page shows.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the

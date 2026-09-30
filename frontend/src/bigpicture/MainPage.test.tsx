@@ -3161,6 +3161,15 @@ describe("MainPage", () => {
       expect(await findByText(/An update should fix it/)).toBeInTheDocument();
     });
 
+    it("says that a few failures are reported only by a notification, rather than promising every result here", async () => {
+      setNotificationsUnavailable(true);
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(
+        await findByText(/a few failures, like a sync that cannot start, are only reported by a notification/),
+      ).toBeInTheDocument();
+    });
+
     it("says nothing at all when every lookup behind a toast answered", async () => {
       resetNotificationsHealthForTests();
       const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);

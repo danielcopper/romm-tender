@@ -25,11 +25,14 @@ export function resetNotificationsHealthForTests(): void {
 
 /**
  * The notice's copy. It names no action because there is none inside the
- * plugin.
+ * plugin. Its example of a failure only a notification reports is one of the
+ * known cases the docs page lists under the same heading, which is where the
+ * list lives.
  */
 export const NOTIFICATIONS_UNAVAILABLE_NOTICE = {
   title: "Tender's notifications unavailable",
   message:
-    "Steam has changed, and Tender can't show its notifications right now. Syncs and downloads still work — check " +
-    "this panel for their results. An update should fix it.",
+    "Steam has changed, and Tender can't show its notifications right now. Syncs and downloads still work, and " +
+    "most results show in this panel — but a few failures, like a sync that cannot start, are only reported by a " +
+    "notification. An update should fix it.",
 } as const;
