@@ -509,6 +509,26 @@ class TestPreviewCollectionDiff:
         assert diff["added"] == []
         assert diff["removed"] == []
 
+    @pytest.mark.asyncio
+    async def test_a_platform_name_whose_case_changed_is_no_platform_collection_change(self, library, fake_romm_api):
+        """Steam's collection identity ignores case, so the platform's Steam collection stays the same one."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="Nintendo 64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+        _seed_rom_row(library, 1, app_id=1001, platform_slug="n64", name="Game A", fs_name="a.z64")
+        _seed_completed_run(library, at="2026-01-01T00:00:00", platforms=["NINTENDO 64"])
+
+        result = await library.sync.sync_preview()
+
+        diff = result["summary"]["platform_collection_diff"]
+        assert diff == {"has_changes": False, "added_count": 0, "removed_count": 0}
+
 
 class TestPreviewCoverRefreshCount:
     """The preview's cover-only work count (#1386 flow gap).

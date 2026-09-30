@@ -449,7 +449,9 @@ def compute_platform_collection_diff(
 
     Returns ``{"has_changes": bool, "added_count": int, "removed_count": int}``.
     Uses ``should_include_in_platform_collection`` to decide which ROMs
-    qualify under the current ``create_platform_groups`` setting.
+    qualify under the current ``create_platform_groups`` setting. Platform
+    names are compared case-insensitively, for the reason
+    :func:`compute_collection_diff` gives.
 
     A rebind entry (see :func:`_rebind_entry`) is keyed to the vanished bound
     ``rom_id`` so the frontend reuses its existing shortcut, but that id is never
@@ -468,11 +470,12 @@ def compute_platform_collection_diff(
             if pname:
                 future_platforms.add(pname)
 
-    current_platforms = set(last_synced_platforms)
-    added = sorted(future_platforms - current_platforms)
-    removed = sorted(current_platforms - future_platforms)
+    future = _spelling_by_fold(future_platforms).keys()
+    previous = _spelling_by_fold(last_synced_platforms).keys()
+    added_count = len(future - previous)
+    removed_count = len(previous - future)
     return {
-        "has_changes": bool(added or removed),
-        "added_count": len(added),
-        "removed_count": len(removed),
+        "has_changes": bool(added_count or removed_count),
+        "added_count": added_count,
+        "removed_count": removed_count,
     }

@@ -363,10 +363,15 @@ class TestComputeCollectionDiff:
         assert result["added"] == []
         assert result["removed"] == []
 
-    def test_new_case_variants_count_as_one_added_collection(self):
+    def test_new_case_variants_count_as_one_added_collection_under_the_sorted_first_spelling(self):
         result = compute_collection_diff({"7 up", "7 Up"}, [])
-        assert len(result["added"]) == 1
-        assert result["added"][0].casefold() == "7 up"
+        assert result["added"] == ["7 Up"]
+
+    def test_names_are_folded_beyond_lower_case(self):
+        """``casefold`` maps ``ß`` to ``ss``, which ``lower`` leaves alone."""
+        result = compute_collection_diff({"STRASSE"}, ["Straße"])
+        assert result["added"] == []
+        assert result["removed"] == []
 
     def test_a_rename_beyond_case_shows_each_side_under_its_own_spelling(self):
         result = compute_collection_diff({"7 Up Deluxe"}, ["7 up"])
@@ -517,6 +522,25 @@ class TestComputePlatformCollectionDiff:
         assert result["has_changes"] is True
         assert result["added_count"] == 1
         assert result["removed_count"] == 0
+
+    def test_a_change_of_case_alone_is_no_change(self):
+        sd = [_make_sd(1, platform_name="Nintendo 64")]
+        result = compute_platform_collection_diff(sd, {1}, ["NINTENDO 64"], False)
+        assert result["has_changes"] is False
+        assert result["added_count"] == 0
+        assert result["removed_count"] == 0
+
+    def test_new_case_variants_count_as_one_added_platform(self):
+        sd = [_make_sd(1, platform_name="Nintendo 64"), _make_sd(2, platform_name="NINTENDO 64")]
+        result = compute_platform_collection_diff(sd, {1, 2}, [], False)
+        assert result["added_count"] == 1
+
+    def test_a_rename_beyond_case_still_counts(self):
+        sd = [_make_sd(1, platform_name="Nintendo 64 DD")]
+        result = compute_platform_collection_diff(sd, {1}, ["nintendo 64"], False)
+        assert result["has_changes"] is True
+        assert result["added_count"] == 1
+        assert result["removed_count"] == 1
 
 
 class TestSelectStaleRemovals:
