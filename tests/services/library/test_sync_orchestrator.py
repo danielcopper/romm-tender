@@ -484,6 +484,31 @@ class TestPreviewCollectionDiff:
         assert diff["added"] == ["Filter (Smart)", "Metroid (Franchise)"]
         assert diff["removed"] == ["Filter", "Metroid"]
 
+    @pytest.mark.asyncio
+    async def test_collections_differing_only_in_case_match_their_one_recorded_name(self, library, fake_romm_api):
+        """The reporter merges the two into one Steam collection and records one spelling of it."""
+        _use_fake_romm(library, fake_romm_api)
+        for rid in (20, 21):
+            fake_romm_api.roms[rid] = {
+                "id": rid,
+                "name": f"Game {rid}",
+                "fs_name": f"g{rid}.gba",
+                "platform_id": 2,
+                "platform_name": "GBA",
+                "platform_slug": "gba",
+            }
+        _seed_collection(fake_romm_api, collection_id=7, name="7 up", rom_ids=[20])
+        _seed_collection(fake_romm_api, collection_id=8, name="7 Up", rom_ids=[21])
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True}}
+        _seed_completed_run(library, at="2026-01-01T00:00:00", collections=["7 up"])
+
+        result = await library.sync.sync_preview()
+
+        diff = result["summary"]["collection_diff"]
+        assert diff["added"] == []
+        assert diff["removed"] == []
+
 
 class TestPreviewCoverRefreshCount:
     """The preview's cover-only work count (#1386 flow gap).

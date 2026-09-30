@@ -12,9 +12,12 @@ slices as primitive parameters and returns primitives or NamedTuple results.
 
 from __future__ import annotations
 
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, resolve_group_representative
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
 # from the vanished bound sibling (the entry's ``rom_id``, kept so the frontend
@@ -385,20 +388,36 @@ def compute_collection_diff(
     carries it, so two collections sharing a name (RomM permits same-named ones
     across kinds/users, #1503) collapse to one entry, matching the by-name Steam
     collection they merge into. ``last_synced_collections`` is the last completed
-    run's record, which holds the same names. Returns
-    ``{"has_changes": bool, "added": [...], "removed": [...]}``; ``has_changes`` is
-    True if there are any added/removed collections, or if there are any current
-    collections at all (covers first-sync case).
+    run's record, which holds the same names.
+
+    Names are compared **case-insensitively** (``str.casefold``), because Steam's
+    collection identity ignores case: the reporter merges keys that differ only in
+    case into one Steam collection and records one spelling of it. So a change of
+    case alone is no change, and case variants on one side count once. An added
+    name is spelled as the current side has it and a removed one as the record
+    has it; of several variants on one side the sorted-first spelling is listed.
+
+    Returns ``{"has_changes": bool, "added": [...], "removed": [...]}``;
+    ``has_changes`` is True if there are any added/removed collections, or if
+    there are any current collections at all (covers first-sync case).
     """
-    current = current_collection_names
-    previous = set(last_synced_collections)
-    added = sorted(current - previous)
-    removed = sorted(previous - current)
+    current = _spelling_by_fold(current_collection_names)
+    previous = _spelling_by_fold(last_synced_collections)
+    added = sorted(name for fold, name in current.items() if fold not in previous)
+    removed = sorted(name for fold, name in previous.items() if fold not in current)
     return {
         "has_changes": bool(added or removed or current),
         "added": added,
         "removed": removed,
     }
+
+
+def _spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
+    """Map each case-folded name to its sorted-first spelling among *names*."""
+    spelling: dict[str, str] = {}
+    for name in sorted(names):
+        spelling.setdefault(name.casefold(), name)
+    return spelling
 
 
 def should_include_in_platform_collection(

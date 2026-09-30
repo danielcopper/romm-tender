@@ -353,6 +353,26 @@ class TestComputeCollectionDiff:
         assert result["added"] == ["X"]
         assert result["removed"] == []
 
+    def test_case_variants_recorded_as_one_name_show_no_diff(self):
+        result = compute_collection_diff({"7 up", "7 Up"}, ["7 up"])
+        assert result["added"] == []
+        assert result["removed"] == []
+
+    def test_a_change_of_case_alone_is_no_diff(self):
+        result = compute_collection_diff({"IGDB Collection"}, ["IGDB collection"])
+        assert result["added"] == []
+        assert result["removed"] == []
+
+    def test_new_case_variants_count_as_one_added_collection(self):
+        result = compute_collection_diff({"7 up", "7 Up"}, [])
+        assert len(result["added"]) == 1
+        assert result["added"][0].casefold() == "7 up"
+
+    def test_a_rename_beyond_case_shows_each_side_under_its_own_spelling(self):
+        result = compute_collection_diff({"7 Up Deluxe"}, ["7 up"])
+        assert result["added"] == ["7 Up Deluxe"]
+        assert result["removed"] == ["7 up"]
+
 
 class TestShouldIncludeInPlatformCollection:
     """should_include_in_platform_collection() — toggle-aware membership predicate."""
