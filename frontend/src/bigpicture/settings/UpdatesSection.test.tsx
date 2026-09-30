@@ -82,13 +82,8 @@ function pressDespiteDisabled(element: HTMLElement): void {
   props.onClick();
 }
 
-// Where each step stands, read off the mark a reader sees in front of it.
-const MARK_STATUS: Partial<Record<string, string>> = { "✓": "done", "●": "current", "○": "pending", "✗": "failed" };
 const statuses = (utils: { getByTestId: (id: string) => HTMLElement }) =>
-  ["download", "verify", "check", "install"].map((id) => {
-    const text = utils.getByTestId(`updates-step-${id}`).textContent;
-    return MARK_STATUS[text.charAt(0)] ?? text;
-  });
+  ["download", "verify", "check", "install"].map((id) => utils.getByTestId(`updates-step-${id}`).dataset.status);
 
 const renderSection = (
   over: Partial<UpdateNoticeState> = {},
@@ -439,6 +434,12 @@ describe("UpdatesSection", () => {
 
       expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
       expect(statuses(utils)).toEqual(["done", "failed", "pending", "pending"]);
+      expect(["download", "verify", "check", "install"].map((id) => text(utils, `updates-step-${id}`))).toEqual([
+        "✓ Download",
+        "✗ Verify",
+        "○ Check new version",
+        "○ Install",
+      ]);
       expect(text(utils, "updates-note")).toBe("The download did not match its checksum.");
       expect(utils.getByText("Try again")).toBeTruthy();
       expect(utils.queryByTestId("progress")).toBeNull();

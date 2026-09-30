@@ -63,10 +63,11 @@ interface Block {
   caption: string;
   /** Beside the caption: the percent and the clock of an attempt under way. */
   aside?: string;
-  /** The bar's percent, `null` for an indeterminate one; absent exactly for a failure, which has no bar. */
+  /** The bar's percent, `null` for an indeterminate one; a failure has none. */
   percent?: number | null;
   /** The step under way, or the one marked failed; `null` where nothing says which. */
   at: InstallStepId | null;
+  failed: boolean;
   note: ReactNode;
 }
 
@@ -85,6 +86,7 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
     aside: percent === null ? elapsed : `${percent} % · ${elapsed}`,
     percent,
     at: gone ? "install" : "check",
+    failed: false,
     note: install.overdue ? (
       <span style={{ color: AMBER }}>{gone ? NOT_BACK_LINE : TAKING_LONG_LINE}</span>
     ) : (
@@ -99,7 +101,7 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
   return block;
 }
 
-const failedTo = (version: string, outcome = "nothing was changed") => `Update to ${version} failed — ${outcome}.`;
+const failedTo = (version: string, outcome: string) => `Update to ${version} failed — ${outcome}.`;
 
 function attemptFailure(attempt: UpdateInstallAttempt, earlier: string): Block {
   const kind = attempt.failure;
@@ -107,9 +109,10 @@ function attemptFailure(attempt: UpdateInstallAttempt, earlier: string): Block {
     // An installer that stopped cannot say what it left behind, so its title claims no more than Main's card does.
     caption:
       kind && kind !== "installer_stopped"
-        ? failedTo(attempt.version)
+        ? failedTo(attempt.version, "nothing was changed")
         : updateDidNotGoThrough(attempt.version, earlier),
     at: kind && failedStep(kind, installerSeenAt() !== null),
+    failed: true,
     note: kind && INSTALL_FAILURE_SENTENCES[kind],
   };
 }
@@ -122,9 +125,10 @@ function recordFailure(record: RolledBackUpdate): Block {
       kind === "rollback"
         ? failedTo(attemptedVersion, `Tender went back to ${record.restoredVersion}`)
         : kind === "check"
-          ? failedTo(attemptedVersion)
+          ? failedTo(attemptedVersion, "nothing was changed")
           : updateFailureSentence(record),
     at: kind === "rollback" ? "install" : kind === "check" ? "check" : null,
+    failed: true,
     note: updateFailureReason(record),
   };
 }
@@ -151,7 +155,6 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
       : attempt?.step === "failed" && attempt.version === install.version
         ? attemptFailure(attempt, earlier)
         : record && recordFailure(record);
-  const failed = block?.percent === undefined;
   // The clock beside the caption moves once a second while an attempt is under way.
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
@@ -180,7 +183,7 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
       {unread && <div data-testid="updates-install-unread">{INSTALL_STATE_UNREAD}</div>}
     </>
   );
-  const hasDescription = waiting || pausedHint || install.refusal || unread;
+  const hasDescription = waiting || pausedHint !== "" || install.refusal !== "" || unread;
 
   return (
     <>
@@ -201,25 +204,35 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
           {/* One field for every state of the block, so the focus stop stays
               put while its content changes under it. */}
           <Field focusable={true} childrenLayout="below" childrenContainerWidth="max">
-            <div style={failed ? cardFrame(AMBER, AMBER_WASH) : undefined}>
-              <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: "6px" }}>
-                <span data-testid="updates-caption" style={failed ? { fontWeight: "bold", color: AMBER } : undefined}>
+            <div style={block.failed ? cardFrame(AMBER, AMBER_WASH) : undefined}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", paddingBottom: "6px" }}>
+                <span
+                  data-testid="updates-caption"
+                  style={block.failed ? { fontWeight: "bold", color: AMBER } : undefined}
+                >
                   {block.caption}
                 </span>
                 <span data-testid="updates-elapsed" style={{ color: MUTED, fontVariantNumeric: "tabular-nums" }}>
                   {block.aside}
                 </span>
               </div>
-              {!failed && (
+              {block.percent !== undefined && (
                 <ProgressBar
                   indeterminate={block.percent === null}
                   {...(block.percent !== null ? { nProgress: block.percent } : {})}
                 />
               )}
               {block.at && (
-                <div style={{ fontSize: "12px", paddingTop: "6px", display: "flex", gap: "14px" }}>
-                  {installSteps(block.at, failed).map(({ id, label, status }) => (
-                    <span key={id} data-testid={`updates-step-${id}`} style={{ color: MARKS[status][1] }}>
+                <div
+                  style={{ fontSize: "12px", paddingTop: "6px", display: "flex", flexWrap: "wrap", gap: "4px 14px" }}
+                >
+                  {installSteps(block.at, block.failed).map(({ id, label, status }) => (
+                    <span
+                      key={id}
+                      data-testid={`updates-step-${id}`}
+                      data-status={status}
+                      style={{ color: MARKS[status][1] }}
+                    >
                       {MARKS[status][0]} {label}
                     </span>
                   ))}

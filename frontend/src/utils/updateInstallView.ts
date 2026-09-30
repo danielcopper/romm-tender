@@ -158,6 +158,16 @@ const STEPS: readonly [InstallStepId, string][] = [
   ["install", "Install"],
 ];
 
+const FAILED_AT: Record<UpdateInstallFailure, InstallStepId> = {
+  download_failed: "download",
+  checksum_mismatch: "verify",
+  installer_not_started: "check",
+  installer_stopped: "check",
+  game_started: "check",
+  running_apps_unknown: "check",
+  new_version_does_not_start: "check",
+};
+
 /**
  * The step a failure is marked at. Everything between the checksum and the
  * end of the installer's pre-install check is marked at the check, so no step
@@ -166,9 +176,7 @@ const STEPS: readonly [InstallStepId, string][] = [
  * start had stopped the backend before it, which is Install.
  */
 export function failedStep(failure: UpdateInstallFailure, installerSeen: boolean): InstallStepId {
-  if (failure === "download_failed") return "download";
-  if (failure === "checksum_mismatch") return "verify";
-  return failure === "installer_stopped" && !installerSeen ? "install" : "check";
+  return failure === "installer_stopped" && !installerSeen ? "install" : FAILED_AT[failure];
 }
 
 /** The four steps with every one before *at* done, *at* current or failed, and the rest still to do. */
