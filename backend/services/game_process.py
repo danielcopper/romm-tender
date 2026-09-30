@@ -2,7 +2,7 @@
 
 Owns the stop-game policy: which of the app's live sandbox instances is the one
 the user pressed Stop on, the order its processes are asked to exit in, how long
-they get before force, and the callable response the frontend's Stop Game action
+they get before force, and the endpoint response the frontend's Stop Game action
 reads. The signal mechanics sit behind the ``GameProcessControl`` Protocol, so
 nothing here touches a syscall or a POSIX signal number.
 """

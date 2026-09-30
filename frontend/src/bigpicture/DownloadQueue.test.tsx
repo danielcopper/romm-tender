@@ -537,7 +537,7 @@ describe("DownloadQueue", () => {
         await Promise.resolve();
       });
 
-      // The backend eviction callable was invoked (no args).
+      // The backend eviction endpoint was invoked (no args).
       expect(backend.clearCompletedDownloads).toHaveBeenCalledWith();
       // After clearing: finished Fields are gone; active progress bar remains.
       const labelsAfter = Array.from(container.querySelectorAll('[data-testid="field-label"]')).map(

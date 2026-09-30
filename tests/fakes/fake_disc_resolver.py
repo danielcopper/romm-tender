@@ -1,7 +1,7 @@
 """In-memory ``DiscResolver`` implementation for service tests.
 
 Lets the launch-bake consumers (library sync, download-complete, RetroDECK-home
-migration) and the disc-picker callables inject the disc-resolution seam without
+migration) and the disc-picker endpoints inject the disc-resolution seam without
 standing up a real ``DiscLaunchResolver`` (directory scan + es_systems read +
 ``domain.disc_selection``). Configure per-``rom_dir`` disc lists; the default
 (no discs seeded for a directory) reproduces a single-disc ROM, which resolves to

@@ -121,7 +121,7 @@ class VersionsService:
         except the one we're currently tracking shows up here.
 
         ``filename`` is kept in the signature for compatibility with the
-        callable wiring but no longer affects which versions are returned.
+        endpoint wiring but no longer affects which versions are returned.
 
         Returns a status dict:
         - ``{"status": "ok", "versions": [...]}`` on success. ``versions``
@@ -295,7 +295,7 @@ class VersionsService:
            ``_rollback_to_version_io``: download chosen → write to
            canonical local target → PUT same content → ``confirm_download``.
 
-        ``filename`` is kept in the signature for callable-wiring stability
+        ``filename`` is kept in the signature for endpoint-wiring stability
         but no longer drives any decision — the canonical local path is
         derived from the target save and the ROM name.
 

@@ -295,7 +295,7 @@ class TestFirmwareCallableDelegation:
     @pytest.mark.asyncio
     async def test_check_platform_bios_delegates(self, endpoints, services):
         services.firmware_service.check_platform_bios = AsyncMock(return_value={"present": []})
-        # The frontend callable sends only the slug; main.py threads no per-game
+        # The frontend sends only the slug; main.py threads no per-game
         # core, so the system default drives the BIOS filter (active_core_so=None).
         result = await endpoints.check_platform_bios("snes")
         services.firmware_service.check_platform_bios.assert_awaited_once_with("snes")
@@ -766,9 +766,9 @@ class TestGameDetailCallableDelegation:
 
 # ── Error-propagation tests ────────────────────────────────────────────
 #
-# Each callable below wraps a service call without any try/except — an
+# Each endpoint below wraps a service call without any try/except — an
 # exception from the service must propagate cleanly. We pick one
-# representative callable per service family for the assertion; the
+# representative endpoint per service family for the assertion; the
 # delegation tests above already cover the happy paths.
 
 

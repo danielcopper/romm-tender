@@ -5,7 +5,7 @@ Cover art is downloaded per RomM ID into the plugin-owned per-ROM cover cache
 version of a sibling group is *published* onto the shared Steam grid as
 ``{app_id}p.png`` (a copy, so every sibling keeps its own cache file, ADR-0021).
 The persisted ``roms.cover_path`` records the cache path; the frontend reads a
-ROM's cover by RomM ID through the base64 query callables.
+ROM's cover by RomM ID through the base64 query endpoints.
 
 A cache entry is valid only while the server's cover is unchanged: the
 persisted ``roms.cover_source`` fingerprint (the full RomM cover source string,

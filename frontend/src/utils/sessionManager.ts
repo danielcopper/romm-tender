@@ -1,6 +1,6 @@
 /**
  * Session manager — detects game start/stop for RomM shortcuts and triggers
- * save sync + playtime tracking via backend callables.
+ * save sync + playtime tracking via backend endpoints.
  *
  * Uses SteamClient.GameSessions.RegisterForAppLifetimeNotifications to detect
  * game lifecycle events — the notification's own `unAppID` identifies the app on
@@ -62,7 +62,7 @@ function getRomIdForApp(appId: number): number | null {
 
 /**
  * Snapshot of the cached appId -> romId map (the same shape the backend's
- * `get_app_id_rom_id_map` callable returns — string-keyed appIds). The global
+ * `get_app_id_rom_id_map` endpoint returns — string-keyed appIds). The global
  * launch watcher reads this synchronously to resolve a launching app's romId
  * without an await, so its cancel-then-gate path never races the map refresh.
  * Returns the live reference; callers treat it as read-only.

@@ -14,14 +14,14 @@ export interface SaveSyncSettings {
   autocleanup_limit: number;
 }
 
-/** The `reason` slug the sync callables return when save sync is blocked because
+/** The `reason` slug the sync endpoints return when save sync is blocked because
  *  a save the plugin could otherwise sync is written beside the game file —
  *  RetroArch's "Write Saves to Content Directory" is the usual cause (#239).
  *  A BENIGN SKIP — the game still launches and no error is surfaced. Mirrors the backend
  *  `SAVE_SYNC_IN_CONTENT_DIR_REASON`. */
 export const SAVEFILES_IN_CONTENT_DIR_REASON = "savefiles_in_content_dir";
 
-/** The `reason` slug the sync callables return when the game's emulator does not
+/** The `reason` slug the sync endpoints return when the game's emulator does not
  *  keep a per-game save file set this plugin can carry — a shared card, a save
  *  written inside the game file, a name with a hole in it, or a shape nobody has
  *  established (#1858). A BENIGN SKIP for the same reason as the slug above:

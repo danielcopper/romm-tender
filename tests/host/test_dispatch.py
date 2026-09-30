@@ -3,7 +3,7 @@
 The set a caller can reach is asserted EQUAL to the set the endpoint parity
 gate derives. The two read different things — the gate parses ``main.py``, the
 dispatcher inspects the loaded class — so a name they disagree about is either a
-callable the panel cannot reach or a method nobody meant to expose, and neither
+endpoint the panel cannot reach or a method nobody meant to expose, and neither
 shows up anywhere else.
 """
 

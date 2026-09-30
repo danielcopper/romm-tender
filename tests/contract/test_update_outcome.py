@@ -1,4 +1,4 @@
-"""Contract tests for the update-outcome callables over the real wiring.
+"""Contract tests for the update-outcome endpoints over the real wiring.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getUpdateOutcome``, ``acknowledgeUpdateToast`` and

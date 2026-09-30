@@ -297,7 +297,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     };
 
     /** Obtain the verdict and apply it. Declared async so a SYNCHRONOUS throw
-     *  out of the callable bridge arrives here as a rejection instead of
+     *  out of the endpoint call arrives here as a rejection instead of
      *  escaping into the fire-and-forget `check()` unlogged — a bridge that
      *  cannot be called at all is as much a reachability signal as a rejected
      *  promise. Only the CALL is guarded: a throw out of applyVerdict is a

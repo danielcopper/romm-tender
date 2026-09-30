@@ -573,7 +573,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   const progress = pruneState.progress;
   const complete = pruneState.complete;
   const runInFlight = complete === null && (starting || pruneState.runId !== null);
-  // Derived from the RUN's lifecycle, never the cancel callable's: the callable
+  // Derived from the RUN's lifecycle, never the cancel endpoint call's: the call
   // resolving means the request was received, not that the run has stopped.
   // Tying the lock to it let seven presses through in three seconds (#1570 F19).
   // The exits are the terminal frame (complete), the run going away in the

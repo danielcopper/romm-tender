@@ -1,4 +1,4 @@
-"""Contract tests for the ``evaluate_launch`` launch-gate callable.
+"""Contract tests for the ``evaluate_launch`` launch-gate endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``evaluate_launch``
 takes a single positional Steam app id and returns the ``LaunchVerdict`` dict

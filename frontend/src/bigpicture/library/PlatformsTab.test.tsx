@@ -748,7 +748,7 @@ describe("Library › Platforms", () => {
 
     it("restores the previous set and says why when Enable all is refused", async () => {
       // The RomM listing behind this write can fail on its own, and then the
-      // callable answers `{success: false, …}` rather than throwing — which
+      // endpoint answers `{success: false, …}` rather than throwing — which
       // left every toggle flipped on over a write that never landed. Reverting
       // without the line only trades that for a silent flip back.
       vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
@@ -1747,7 +1747,7 @@ describe("Library › Platforms", () => {
     });
 
     it("stays silent when leaving the page cancels the switch's continuation", async () => {
-      // Teardown, not a failure: the callable rejects because the page went
+      // Teardown, not a failure: the endpoint call rejects because the page went
       // away, and "Could not change the core" would claim the core did not
       // change on a screen that can no longer show whether it did.
       const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
@@ -1766,7 +1766,7 @@ describe("Library › Platforms", () => {
         r.unmount();
 
         await act(async () => {
-          rejectSwitch(new Error("teardown cancelled the callable"));
+          rejectSwitch(new Error("teardown cancelled the endpoint call"));
           for (let i = 0; i < 6; i++) await Promise.resolve();
         });
 

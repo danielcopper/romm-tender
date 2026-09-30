@@ -236,7 +236,7 @@ class Endpoints:
 
     @route
     async def check_platform_bios(self, platform_slug):
-        # Platform-level BIOS check (the frontend callable sends only the slug);
+        # Platform-level BIOS check (the frontend sends only the slug);
         # no per-game core to thread, so the system default drives the filter.
         return await self._services.firmware_service.check_platform_bios(platform_slug)
 

@@ -1,4 +1,4 @@
-"""Contract tests for the core-selection callables over the real nesting.
+"""Contract tests for the core-selection endpoints over the real nesting.
 
 ``CoreService.clear_game_core`` (Reset / Follow default) and
 ``set_system_core`` (per-platform core change fan-out) both re-bake a ROM's
@@ -6,7 +6,7 @@ Steam ``launch_options`` from its active core, resolved through the real
 :class:`ActiveCoreResolver` — which opens its **own** Unit of Work.
 
 The unit tests inject a ``FakeActiveCoreResolver`` (no real UoW), so they never
-exercise the nesting. This tier drives the **real** callables over the
+exercise the nesting. This tier drives the **real** endpoints over the
 **real** file-based SQLite UoW the harness wires: every UoW opens with
 ``BEGIN IMMEDIATE`` (the per-connection write lock), and the lock is not
 re-entrant. Resolving the active core inside the still-open write UoW would
@@ -197,7 +197,7 @@ async def test_get_system_core_info_payload_shape(harness):
 
     result = await harness.endpoints.get_system_core_info("gba")
 
-    # No `success`: the callable has no in-band failure branch, so a key that
+    # No `success`: the endpoint has no in-band failure branch, so a key that
     # could only ever read True would be an offer of an answer it never gives.
     assert set(result) == {"emulators", "emulator_data_available", "active_core_label"}
     assert result["emulator_data_available"] is True

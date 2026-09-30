@@ -10,9 +10,9 @@
  *     error  {type, id, reason, message, traceback?}
  *     event  {type, name, payload}
  *
- * **A transport failure is not a callable's failure.** `error.reason` names
+ * **A transport failure is not an endpoint's failure.** `error.reason` names
  * something that went wrong CARRYING a call — the method does not exist, the
- * answer is too large, the method raised. A callable's own failure is a
+ * answer is too large, the method raised. An endpoint's own failure is a
  * perfectly successful transport and arrives inside `result`, in the
  * `{success, reason, message}` shape the backend's own gate guards. Reading one
  * as the other shows a user a sentence about their game where a programming

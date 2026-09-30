@@ -1,6 +1,6 @@
 """SettingsService — user-facing settings reads/writes and frontend-log routing.
 
-Owns every callable that reads or mutates the live ``settings`` dict
+Owns every use case that reads or mutates the live ``settings`` dict
 from the frontend. Adapter-level I/O (Steam Input config, RetroArch
 input driver) is reached via the ``SteamConfigStore`` Protocol;
 on-disk persistence is fired through the injected
@@ -270,7 +270,7 @@ class SettingsService:
 
         User intent, stored for a reader to choose between ``sync_preview`` and
         ``start_sync`` when the sync button is pressed. The backend's own sync
-        behaviour does not depend on it: both callables stay reachable and
+        behaviour does not depend on it: both endpoints stay reachable and
         neither consults this value. Persisted so the choice can survive the
         panel closing; Main's toggle holds its own local state today and does
         not read this value. A non-bool from the untrusted frontend wire is

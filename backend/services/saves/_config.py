@@ -117,7 +117,7 @@ class SaveServiceConfig:
         ``UnitOfWorkFactory`` Protocol seam — opens a fresh transactional
         Unit of Work over the SQLite repositories. The saves vertical
         reads/writes the ``rom_save_sync_states`` aggregate + ``kv_config``
-        device id through it; each public callable owns a narrow
+        device id through it; each public use case owns a narrow
         read→I/O→write bracket (ADR-0006).
     """
 

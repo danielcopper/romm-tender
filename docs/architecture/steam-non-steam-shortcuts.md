@@ -276,7 +276,7 @@ the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
    `getAppDetails` timed out. It returns `null` when the store was **unreadable** (`collectionStore` absent) versus two
    empty sets when the scan **ran and found none** — a load-bearing distinction.
 2. `reconcileStaleShortcuts()` (`frontend/src/utils/syncManager.ts`) skips the reconcile on a `null` scan (reconciling
-   against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with
+   against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` endpoint with
    `owned` and `unresolved` together. An unresolved entry is one nothing was established about, so it keeps its binding:
    a binding that should have gone is corrected by the next run that can read the entry. Unbinding a live shortcut
    instead sends its platform back through a full fetch and the ROM through the apply, which adopts the unbound shortcut
@@ -491,7 +491,7 @@ shortcut's lifetime, which is why mutating `launchOptions` or `startDir` keeps t
 
 The frontend stores the returned `appId` and the backend persists it as `shortcut_app_id` on the ROM's `roms` row (the
 synced-ROM registry; reverse-lookupable by `shortcut_app_id`). The frontend resolves rom_id ↔ appId through the
-backend's `get_app_id_rom_id_map()` callable, which reads that binding.
+backend's `get_app_id_rom_id_map()` endpoint, which reads that binding.
 
 The signed-int32 helper `to_signed_app_id(app_id)` remains in `backend/domain/sgdb_artwork.py` (alongside the SGDB
 endpoint/asset-type maps) for the `shortcuts.vdf` record format, but no longer has a production caller now that the icon
@@ -554,10 +554,10 @@ the next client restart.
 
 Both launch funnels (the game-detail Play button and Steam's direct-launch watcher) re-fetch the selected ROM's resolved
 command and confirm-write it immediately before `RunGame`. Ordinary fetch or Steam-write failures remain best-effort and
-the launch proceeds. A three-second callable timeout is different: the already-cancelled launch remains blocked, while
-the unresolved callable stays observed so a lease token returned later is released without a Steam write. Each launch
-captures its plugin/component generation before gate and modal waits; teardown makes that admission stale, and even an
-immediate remount cannot let the old chain write launch options or invoke `RunGame` under the new generation.
+the launch proceeds. A three-second endpoint timeout is different: the already-cancelled launch remains blocked, while
+the unresolved endpoint call stays observed so a lease token returned later is released without a Steam write. Each
+launch captures its plugin/component generation before gate and modal waits; teardown makes that admission stale, and
+even an immediate remount cannot let the old chain write launch options or invoke `RunGame` under the new generation.
 
 ## Key Files
 

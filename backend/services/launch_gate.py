@@ -1,4 +1,4 @@
-"""LaunchGateService — single-callable launch-time gating verdict.
+"""LaunchGateService — the launch-time gating verdict as a single use case.
 
 Composes the three pieces of information the frontend's pre-launch
 interceptor needs into one round-trip: is this Steam app a RomM ROM,

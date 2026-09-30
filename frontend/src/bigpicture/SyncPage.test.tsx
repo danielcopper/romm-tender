@@ -831,7 +831,7 @@ describe("SyncPage", () => {
 
     it("a preview arriving in two commits still hands focus to the table", async () => {
       // The preview path swaps the body TWICE, not once: the backend's own
-      // "Preview ready" frame stops the run before the `sync_preview` callable
+      // "Preview ready" frame stops the run before the `sync_preview` endpoint
       // answers, so the column goes run → idle → preview in two commits
       // milliseconds apart. Both land inside the placement delay, so the second
       // cancels the placement the first scheduled — and the reader was left with
@@ -864,7 +864,7 @@ describe("SyncPage", () => {
       });
       expect(container.textContent).toContain("Nothing is waiting to be applied.");
 
-      // Swap three: the callable answers and the table takes the column.
+      // Swap three: the endpoint answers and the table takes the column.
       await act(async () => {
         answer(preview());
         await Promise.resolve();
@@ -879,7 +879,7 @@ describe("SyncPage", () => {
 
     it("keeps the note where a swap has nothing to place it on, so the body after it still gets focus", async () => {
       // The same path with the backend's frame more than the delay ahead of the
-      // callable, which is what puts the idle body's own placement on screen.
+      // endpoint's answer, which is what puts the idle body's own placement on screen.
       // That placement lands on nothing: the body's one button is disabled while
       // the call is open. The note was taken for a swap still unanswered, so it
       // has to survive an attempt that placed nothing.

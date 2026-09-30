@@ -320,7 +320,7 @@ class TestReconcileOrphanedSyncRuns:
 
 
 class TestGetInstalledRelaunchOptions:
-    """The callable delegates to the shared relaunch-options resolver.
+    """The use case delegates to the shared relaunch-options resolver.
 
     The deep resolution behavior (skip rules, core/disc baking) is owned by
     ``test_relaunch_options_resolver.py``; here we pin only that the service

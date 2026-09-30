@@ -1,6 +1,6 @@
 """Tests for DeviceRegistry — device-registration entry points used by every
-save-sync callable when the local device_id is missing. Sync-callable behaviour
-on registration failure is exercised here because that surface is what the
+save-sync use case when the local device_id is missing. The sync use cases'
+behaviour on registration failure is exercised here because that surface is what the
 DeviceRegistry contract guarantees; pure-orchestration assertions live in
 test_engine.py.
 """
@@ -176,7 +176,7 @@ class TestEnsureDeviceRegisteredVersionProbe:
 
 
 class TestEnsureDeviceRegisteredFailurePaths:
-    """When register_device fails, the four sync callables must surface
+    """When register_device fails, the four sync use cases must surface
     DEVICE_NOT_REGISTERED instead of proceeding with a missing device_id
     (engine.py lines 309-311 / 365 / 407 / 437-439)."""
 

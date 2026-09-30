@@ -1,9 +1,9 @@
 """Contract tests for adopting a ROM already on disk under a different name (#260).
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``startDownload = callable<[number, boolean, string | null, CollisionChoice | null],
+``startDownload = endpoint<[number, boolean, string | null, CollisionChoice | null],
 BackendResult | TargetOccupiedResult | CandidatesFoundResult | RenameCollisionsResult>``
-and ``adoptExistingRom = callable<[number, string | null, CollisionChoice | null], AdoptResult>``.
+and ``adoptExistingRom = endpoint<[number, string | null, CollisionChoice | null], AdoptResult>``.
 
 The real ``Endpoints`` over a real filesystem is what this tier is for: the search
 lists a real directory, the rename runs the real ``os.link`` / ``os.unlink``, and

@@ -9,7 +9,7 @@
  * with the event-handler tests in syncManager.test.ts.
  *
  * steamShortcuts is mocked so the ownership scan is controllable; the backend
- * reconcileShortcuts callable uses the global test-setup mock.
+ * reconcileShortcuts endpoint uses the global test-setup mock.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";

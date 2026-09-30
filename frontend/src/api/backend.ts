@@ -968,7 +968,7 @@ export const saveShortcutIcon = endpoint<[number, string], { success: boolean; i
   "save_shortcut_icon",
 );
 
-// Save sync callables
+// Save sync endpoints
 export const ensureDeviceRegistered = endpoint<[], { success: boolean; device_id: string; device_name: string }>(
   "ensure_device_registered",
 );
@@ -1162,7 +1162,7 @@ export const getHostStatus = endpoint<[], HostStatus>("get_host_status");
 // the `roms.user.read` scope; pending:true means the user should sign in again
 // to mint a scoped token. The flag clears itself once the scope is present (a
 // later successful reconcile, or a fresh sign-in), so this read is non-consuming
-// and pull-only — no backend dismiss callable, the QAM banner's Dismiss is local.
+// and pull-only — no backend dismiss endpoint, the QAM banner's Dismiss is local.
 export const getPlaytimeScopeNotice = endpoint<[], { pending: boolean }>("get_playtime_scope_notice");
 
 /**
@@ -1401,13 +1401,13 @@ export const deleteBiosFolder = endpoint<
   { success: boolean; deleted_count: number; message: string }
 >("delete_bios_folder");
 
-// Save version history callables
+// Save version history endpoints
 export const savesListFileVersions = endpoint<[number, string, string], ListFileVersionsResult>(
   "saves_list_file_versions",
 );
 export const savesRollbackToVersion = endpoint<[number, string, number], RollbackStatus>("saves_rollback_to_version");
 export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
 
-// Achievements callables
+// Achievements endpoints
 export const getAchievements = endpoint<[number], AchievementList>("get_achievements");
 export const getAchievementProgress = endpoint<[number], AchievementProgress>("get_achievement_progress");

@@ -842,7 +842,7 @@ launches, no error); the whole-library sweep passes such a ROM over inside its r
 beside its content, returns the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read
 no ROM at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order)
 that launches with a RetroArch core, and returns the skip where that one saves beside its content; with no such ROM it
-reports as before. The secondary write callables (rollback, slot switch, conflict resolve, slot-choice migration, copy
+reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, slot-choice migration, copy
 to slot) refuse with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so
 the game-detail play section shows a banner saying the saves are written beside the game file, and naming RetroArch's
 setting only as the usual cause — only while save sync is enabled, since the banner is about getting save sync to work.
@@ -956,7 +956,7 @@ the old home. See [RetroDECK Path Migration](../user-guide/retrodeck-path-migrat
 ### Detecting a home change
 
 All five trigger points run the same idempotent detection, `MigrationService.detect_retrodeck_path_change()`: the three
-frontend ones through the `refresh_migration_state` callable, the post-exit one through `MigrationService.refresh_state`
+frontend ones through the `refresh_migration_state` endpoint, the post-exit one through `MigrationService.refresh_state`
 directly, and backend start by calling it as a start-up step. Running on every trigger is cheap: it has an early-return
 guard that exits when the home has not changed since the last call.
 
@@ -997,7 +997,7 @@ navigation between the buttons uses `Focusable` with `flow-children="right"` for
 
 ## Server Capabilities
 
-The capabilities system (`get_server_capabilities` callable) has been removed. Every RomM the plugin accepts has device
+The capabilities system (`get_server_capabilities` endpoint) has been removed. Every RomM the plugin accepts has device
 sync, version history, slot deletion and device management, so all of them are unconditionally available. The frontend
 no longer fetches or checks capability flags.
 
@@ -1022,7 +1022,7 @@ server-save row side by side, each with size and timestamp. Three actions:
   version with `overwrite=true` (the old server save is retained, not overwritten in place).
 - **Use Server** → `resolveSyncConflict(rom_id, filename, "use_server")` → backend downloads the picked server save and
   overwrites local.
-- **Cancel** → pure UI close, no callable, no state mutation. The conflict re-fires on the next sync as long as the
+- **Cancel** → pure UI close, no endpoint call, no state mutation. The conflict re-fires on the next sync as long as the
   underlying state still produces matrix row 12b, 6c, 11b, or 9b.
 
 On a successful resolution the modal closes and surfaces a branch-specific confirmation toast — **Keep Local** confirms
@@ -1034,10 +1034,10 @@ The modal is shown by `CustomPlayButton` during pre-launch sync, and by `Version
 which returns a Promise resolving to `"keep_local" | "use_server" | "cancel"`. After post-exit sync, `sessionManager`
 only fires a toast — the conflict re-surfaces in the modal at the next pre-launch.
 
-### resolve_sync_conflict callable
+### resolve_sync_conflict endpoint
 
-`SaveService.resolve_sync_conflict(rom_id, filename, server_save_id, action)` — the async callable wired in `main.py`.
-The façade delegates to `SyncEngine.resolve_sync_conflict`, whose rollback sub-module
+`SaveService.resolve_sync_conflict(rom_id, filename, server_save_id, action)` — the async use case the `main.py`
+endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, whose rollback sub-module
 (`services/saves/sync_engine/rollback.py`) runs the resolution:
 
 1. Acquires the per-rom asyncio.Lock so no other sync operation for this rom can race.
@@ -1222,7 +1222,7 @@ rollback API.
 
 ## Copy a save to another slot
 
-A per-save **"Copy to slot…"** action (`SaveCopyService`, `services/saves/copies.py`; callable `copy_save_to_slot`)
+A per-save **"Copy to slot…"** action (`SaveCopyService`, `services/saves/copies.py`; endpoint `copy_save_to_slot`)
 takes one server save — from a named slot, an older version, or the read-only legacy no-slot bucket — and copies its
 content into a target slot. The action is offered on every save row that carries a server save id: the active slot's
 current save, its Previous-Versions rows, and the inactive/legacy slot panels.
@@ -1401,8 +1401,8 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    `finalizeGameSession` call, so the post-exit sync never runs against a game that is still holding its save file open.
 2. `sessionManager.handleGameStop` makes a single `finalizeGameSession(romId)` call; the backend
    `SessionLifecycleService.finalize` orchestrates playtime record → post-exit save sync → migration refresh and returns
-   one typed payload (the old `recordSessionEnd` / `postExitSync` frontend callables were collapsed into it). If the
-   plugin was reloaded mid-session, `handleGameStop` still fires for the adopted session — see
+   one typed payload (the old `recordSessionEnd` / `postExitSync` endpoints were collapsed into it). If the plugin was
+   reloaded mid-session, `handleGameStop` still fires for the adopted session — see
    [Surviving a plugin reload mid-session](#surviving-a-plugin-reload-mid-session) — so the post-exit sync is not
    skipped.
 3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
@@ -1831,7 +1831,7 @@ session begins between the button rendering Play and the user pressing it.
 
 Beside Resume sits a chevron whose menu holds one destructive action: **Stop Game**. It confirms first (one line: any
 progress since the last in-game save may be lost — the plugin promises nothing about the save, because it cannot), then
-calls the `stop_running_game(rom_id)` backend callable.
+calls the `stop_running_game(rom_id)` backend endpoint.
 
 **Steam cannot terminate these games.** The shortcut execs `flatpak run net.retrodeck.retrodeck`; flatpak's D-Bus portal
 starts the sandbox from the session helper, so the emulator is not a descendant of Steam's `reaper`.
@@ -1851,7 +1851,7 @@ subprocess and no elevation.
 second game launched from another shortcut, or ES-DE opened on its own, is another live instance of the _same_ app id.
 The registry scan therefore reports the instances **separately** (`GameInstance`: the tree's signal-target pids plus the
 `/proc/<pid>/cmdline` argv tokens read across them) rather than pooling every pid, and the service signals exactly one
-of them. Before #1619 the callable took no arguments and every instance was signalled, so stopping one game ended every
+of them. Before #1619 the endpoint took no arguments and every instance was signalled, so stopping one game ended every
 RetroDECK session on the device; the `rom_id` argument is what makes the target knowable at all.
 
 The **matching rule**: the expected launch target comes from `RelaunchOptionsResolver.launch_path_for_rom` — the same
@@ -1905,7 +1905,7 @@ signal numbers and `/proc` never reach `services/` — `adapters/game_process.py
 (`services/protocols/cross_service.py`) is the launch-target seam the match reads through, and `GameProcessService` owns
 the policy with an injected `Sleeper` for the grace window.
 
-The callable answers `{success: true, stopped, force_killed}`, or a canonical failure: `not_running` when nothing of
+The endpoint answers `{success: true, stopped, force_killed}`, or a canonical failure: `not_running` when nothing of
 RetroDECK's is alive, `game_not_running` when it is but no instance could be attributed to this ROM (nothing was
 signalled), `already_stopping` when a ladder is in flight. The frontend treats `not_running` exactly like its own
 stale-overlay self-heal: clear the overlay (and reset a `launching` state stuck underneath it) rather than surface an

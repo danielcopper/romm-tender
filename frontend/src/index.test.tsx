@@ -218,7 +218,7 @@ function flush(): Promise<void> {
 beforeEach(() => {
   // The metadata cache is paged at init; default to a single empty page so
   // loadAppIdsAndMetadata terminates and reaches initDone in every test. Cases
-  // that assert init behaviour rely on this resolving (the raw callable stub
+  // that assert init behaviour rely on this resolving (the raw endpoint stub
   // resolves undefined, which would throw on `page.total`).
   vi.mocked(getMetadataCachePage).mockResolvedValue({ items: {}, total: 0 });
   // The sync-progress store is a real module — reset it so an etaSeconds set by

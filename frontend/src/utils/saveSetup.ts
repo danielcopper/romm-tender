@@ -82,7 +82,7 @@ export interface LaunchGateSetupDeps {
   /** Resolves the user's chosen save slot on the backend. `slot` is a non-empty
    *  named slot — legacy `slot:null` confirmation is retired (#1276). The launch
    *  gate only ever auto-confirms (`migrate: false`), so `useServerOnConflict` is
-   *  always `false` here; it exists to match the callable's shape (#1498). */
+   *  always `false` here; it exists to match the endpoint's shape (#1498). */
   confirmSlotChoice: (
     rid: number,
     slot: string,

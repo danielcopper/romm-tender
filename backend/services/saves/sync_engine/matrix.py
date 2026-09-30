@@ -6,7 +6,7 @@ the RomM server. Read-only matrix consumption (status reporting) lives
 in StatusService; the loaded :class:`RomSaveSyncState` aggregate is threaded
 in by the operation entry, which owns the Unit-of-Work read/write
 bracketing this executor's in-memory mutations (ADR-0006). Rom-level
-lock coordination and public callable orchestration live on
+lock coordination and public use-case orchestration live on
 :class:`services.saves.sync_engine.engine.SyncEngine`.
 """
 
@@ -143,7 +143,7 @@ class MatrixExecutor:
     ``compute_sync_action`` against per-filename inputs, and dispatches
     the resulting :class:`SyncAction` to disk / server I/O. The loaded
     :class:`RomSaveSyncState` aggregate is threaded in by the public rom-level
-    orchestration callables on :class:`SyncEngine`; this executor mutates
+    orchestration use cases on :class:`SyncEngine`; this executor mutates
     it in memory via the aggregate's verb methods and never persists —
     the operation entry owns the single write Unit of Work.
     """

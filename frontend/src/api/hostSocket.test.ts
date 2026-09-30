@@ -177,7 +177,7 @@ describe("a call on the wire", () => {
     latest().open();
     latest().deliver({ type: "error", id: 1, reason: "method_unknown", message: "no such method", traceback: "…" });
 
-    // A callable's own failure is a successful transport and arrives inside
+    // An endpoint's own failure is a successful transport and arrives inside
     // `result` as `{success, reason, message}`. This is the other thing, and it
     // is thrown so it cannot reach a reader of that shape.
     const error = await answer.catch((e: unknown) => e);
@@ -395,7 +395,7 @@ describe("events arriving from the backend", () => {
 
   it("open the connection even when nothing has been called yet", () => {
     // A panel that only listens still needs a socket; without this a run started
-    // from elsewhere would report nothing until the first callable happened.
+    // from elsewhere would report nothing until the first endpoint call happened.
     build().on("sync_progress", () => {});
     expect(FakeSocket.opened).toHaveLength(1);
   });

@@ -52,7 +52,7 @@ it("reads any failure on a torn-down owner as a cancellation", async () => {
 
   await releasePruneLeasesByOwner("game-detail:2");
 
-  // The backend rejects its own in-flight callables on teardown; that rejection
+  // The backend rejects its own in-flight endpoint calls on teardown; that rejection
   // describes the teardown, not the work.
   expect(isPruneLeaseCancellation(new Error("io"), admission)).toBe(true);
 });

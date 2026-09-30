@@ -1,8 +1,8 @@
-"""Contract tests for the download read-surface callables.
+"""Contract tests for the download read-surface endpoints.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getDownloadQueue = callable<[], {downloads: DownloadItem[]}>`` and
-``getInstalledRom = callable<[number], InstalledRom | null>``.
+``getDownloadQueue = endpoint<[], {downloads: DownloadItem[]}>`` and
+``getInstalledRom = endpoint<[number], InstalledRom | null>``.
 
 The ``get_installed_rom`` ``null`` case is the #1004-class shape risk: the
 backend must return Python ``None`` (which marshals to JS ``null``), not a
@@ -69,7 +69,7 @@ async def test_get_installed_rom_installed_shape(harness):
 async def test_pause_download_no_active_failure_shape(harness):
     """Pausing a ROM with no active download → canonical failure shape.
 
-    ``pauseDownload = callable<[number], {success, message}>`` — the failure
+    ``pauseDownload = endpoint<[number], {success, message}>`` — the failure
     branch carries the canonical ``{success: False, reason, message}``.
     """
     result = harness.endpoints.pause_download(999)
@@ -134,7 +134,7 @@ async def test_cancel_paused_download_evicts_and_get_queue_omits_it(harness):
 async def test_clear_completed_downloads_empty_queue_shape(harness):
     """Clearing an empty queue → ``{success: True, cleared: 0}``.
 
-    ``clearCompletedDownloads = callable<[], {success, cleared}>`` — the success
+    ``clearCompletedDownloads = endpoint<[], {success, cleared}>`` — the success
     payload carries the eviction count.
     """
     result = harness.endpoints.clear_completed_downloads()

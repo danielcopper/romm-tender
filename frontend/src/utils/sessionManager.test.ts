@@ -10,7 +10,7 @@ import {
   ADOPTION_POLL_MAX_MS,
 } from "./sessionManager";
 
-// sessionManager talks to the backend callable surface and the migration
+// sessionManager talks to the backend endpoint surface and the migration
 // stores. Mock both so the test observes only what `handleGameStop` forwards
 // to `finalizeGameSession`.
 vi.mock("../api/backend", () => ({
@@ -1194,7 +1194,7 @@ describe("sessionManager session-changed dispatch (#1313)", () => {
 // Finalizing on a foreign app's exit recorded the wrong playtime AND ran the
 // post-exit save sync against a game still holding its save file open.
 describe("sessionManager stop scoping (#1621)", () => {
-  // finalizeGameSession is the single callable behind BOTH the playtime write and
+  // finalizeGameSession is the single endpoint behind BOTH the playtime write and
   // the post-exit save sync, so "not called" is the direct assertion that neither
   // ran. total_seconds makes the playtime display write observable too.
   const FINALIZE_WITH_PLAYTIME = { ...IDLE_FINALIZE, total_seconds: 99 };

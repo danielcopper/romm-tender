@@ -1,6 +1,6 @@
 """Contract test for the #1298 sibling-supersede cleanup on download start.
 
-Driven frontend-shaped: ``startDownload = callable<[number], ...>``. Starting a
+Driven frontend-shaped: ``startDownload = endpoint<[number], ...>``. Starting a
 download for a version whose sibling group already has ANOTHER version on disk
 strips that install FIRST (files + ``rom_installs`` row; saves untouched, per
 ADR-0007), then the download proceeds — the "at most one downloaded version per

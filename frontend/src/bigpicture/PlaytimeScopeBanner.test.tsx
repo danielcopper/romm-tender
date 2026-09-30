@@ -20,8 +20,8 @@ const flushAsync = () =>
 
 /**
  * Minimal harness mirroring MainPage's `{playtimeScope.pending && <Banner/>}`
- * conditional + its mount fetch, so the callable → store → render pipeline is
- * exercised end-to-end without mounting all of MainPage's unrelated callables.
+ * conditional + its mount fetch, so the endpoint → store → render pipeline is
+ * exercised end-to-end without mounting all of MainPage's unrelated endpoints.
  */
 const ScopeBannerHost: FC = () => {
   const [scope, setScope] = useState(getPlaytimeScopeState());
@@ -73,7 +73,7 @@ describe("PlaytimeScopeBanner component", () => {
       await flushAsync();
     });
     // Store flips to not-pending → the MainPage conditional drops the banner.
-    // No backend dismiss callable exists — the click must not have invoked one.
+    // No backend dismiss endpoint exists — the click must not have invoked one.
     expect(getPlaytimeScopeState()).toEqual({ pending: false });
     expect(getPlaytimeScopeNotice).not.toHaveBeenCalled();
   });

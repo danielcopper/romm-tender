@@ -19,7 +19,7 @@ def sanitize_save_filename(name: str) -> str:
 
     Defends path joins against compromised-server data (e.g. a malicious
     ``file_extension``) and frontend-supplied filenames (e.g. the
-    ``resolve_sync_conflict`` callable parameter). Pure: no I/O, stdlib only.
+    ``resolve_sync_conflict`` endpoint parameter). Pure: no I/O, stdlib only.
 
     Returns the basename of *name* unchanged when it is already a single
     safe component. Raises :class:`ValueError` for inputs that cannot be

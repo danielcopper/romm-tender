@@ -277,7 +277,7 @@ class LibrarySyncStateBox:
     # can surface "last run: ±X GB" on a QAM remount. An errored run aborts
     # before the finalize and keeps the prior value. In-memory only — lost on
     # plugin reload, which is acceptable (no migration). ``None`` when either
-    # endpoint of that run was unmeasurable.
+    # reading of that run was unmeasurable.
     last_run_delta_kb: int | None = None
 
     # ── Run lifecycle — the only writers of sync_state / current_sync_id ──

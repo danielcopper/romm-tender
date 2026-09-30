@@ -1187,7 +1187,7 @@ describe("RomMPlaySection", () => {
     });
 
     it("#1670 — a testConnection that throws SYNCHRONOUSLY still settles the badge and logs", async () => {
-      // A synchronous throw out of the callable must not vanish into the
+      // A synchronous throw out of the endpoint call must not vanish into the
       // fire-and-forget check.
       vi.mocked(backend.testConnection).mockImplementation(() => {
         throw new Error("bridge gone");
@@ -3104,7 +3104,7 @@ describe("RomMPlaySection", () => {
       vi.mocked(toaster.toast).mockClear();
       vi.mocked(backend.debugLog).mockClear();
       await act(async () => {
-        rejectRemove(new Error("teardown cancelled the callable"));
+        rejectRemove(new Error("teardown cancelled the endpoint call"));
         await uninstall;
         for (let i = 0; i < 6; i++) await Promise.resolve();
       });

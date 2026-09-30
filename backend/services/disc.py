@@ -1,6 +1,6 @@
-"""DiscService — the multi-disc picker's read + write callables.
+"""DiscService — the multi-disc picker's read + write use cases.
 
-Owns the two frontend callables behind the disc picker: ``get_disc_selection``
+Owns the two use cases behind the disc picker: ``get_disc_selection``
 reports whether a ROM is multi-disc and, if so, the launchable discs plus the
 current and default targets; ``select_disc`` pins a disc (or clears the pin back
 to the default) and returns the freshly-baked launch command for the frontend to

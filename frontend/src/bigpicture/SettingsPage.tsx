@@ -83,7 +83,7 @@ interface SettingsPageProps {
 }
 
 // Messages the connect handlers return to the ConnectModal (which surfaces them
-// inline) when the sign-in can't even be attempted or the callable throws. The
+// inline) when the sign-in can't even be attempted or the endpoint call throws. The
 // URL guard message mirrors the one the URL editor already shows.
 const INVALID_URL_MESSAGE = "Enter a valid http:// or https:// server URL";
 const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try again.";

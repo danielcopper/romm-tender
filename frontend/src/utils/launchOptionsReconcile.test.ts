@@ -160,7 +160,7 @@ describe("reconfirmLaunchOptions", () => {
   it("a hung fetch returns a distinct timeout without starting a Steam write", async () => {
     vi.useFakeTimers();
     try {
-      // Never resolves — simulates a wedged backend / hung callable bridge.
+      // Never resolves — simulates a wedged backend / hung endpoint call.
       vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
 
       const pending = reconfirmLaunchOptions(42, 100, "CustomPlayButton");

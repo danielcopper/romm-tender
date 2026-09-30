@@ -16,7 +16,7 @@ the same vocabulary, drawn for a controller on one side and for a keyboard and m
 
 ## What this surface may import
 
-- `../api/` — the callable wire to the backend
+- `../api/` — the endpoint wire to the backend
 - `../utils/` — shared logic and the module stores
 - `../types/` — the shared wire and domain types
 

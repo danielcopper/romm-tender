@@ -148,7 +148,7 @@ class TestScope:
         assert "backend/adapters/romm/big.py: 1200 lines exceeds" in capsys.readouterr().err
 
     def test_main_py_is_out_of_scope(self, run_check) -> None:
-        """``main.py`` grows with the callable surface by design — never flagged."""
+        """``main.py`` grows with the endpoint surface by design — never flagged."""
         assert run_check({"backend/main.py": 5000}, {}) == 0
 
     def test_vendored_code_is_out_of_scope(self, run_check) -> None:

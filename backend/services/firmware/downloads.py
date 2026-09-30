@@ -139,7 +139,7 @@ class FirmwareDownloader:
     async def download_firmware(self, firmware_id) -> dict[str, Any]:
         """Download one firmware file — with none of the batch's eligibility checks.
 
-        The folder-declaration refusal is among them, and no callable exposes
+        The folder-declaration refusal is among them, and no endpoint calls
         this method, which is the only reason that gap is unreachable.
         """
         placements = await self._loop.run_in_executor(None, self._demand.placement_index)

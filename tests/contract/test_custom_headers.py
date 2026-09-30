@@ -1,7 +1,7 @@
-"""Contract test for the custom proxy-header callable (#1822).
+"""Contract test for the custom proxy-header endpoint (#1822).
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``saveCustomHeaders = callable<[CustomHeaderEntry[]], BackendResult>`` and the
+``saveCustomHeaders = endpoint<[CustomHeaderEntry[]], BackendResult>`` and the
 ``romm_custom_header_names`` field ``getSettings`` reports.
 
 What this tier adds over the service unit tests is the round trip through the

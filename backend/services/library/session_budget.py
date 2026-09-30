@@ -298,12 +298,12 @@ class SessionBudgetMonitor:
         Fail-open: ``rss_kb`` is ``None`` when the reading is unavailable (no
         ``steamwebhelper`` / unreadable ``/proc``) or any seam raises — the banner
         then drops the number but keeps its guidance text;
-        ``memory_delta_kb`` is ``None`` until a clean run has measured both endpoints,
+        ``memory_delta_kb`` is ``None`` until a clean run has measured both readings,
         and ``resume_ready`` is ``None`` when RSS is unreadable (undecidable).
 
         Also carries the last run's progress — ``run_done_items`` of
         ``run_total_items`` — so the paused banner can say "X of Y games done". They
-        ride this payload rather than a new callable because the QAM already polls it
+        ride this payload rather than a new endpoint because the QAM already polls it
         while a paused banner shows, and they live in the BACKEND because the plugin
         process survives the Steam restart the banner asks for. Both are ``None`` when
         no run has reached its plan in this process (a plugin reload wipes the

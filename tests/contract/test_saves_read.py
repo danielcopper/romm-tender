@@ -1,4 +1,4 @@
-"""Contract tests for the save-sync read-surface callables.
+"""Contract tests for the save-sync read-surface endpoints.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts`` (positional args, the
 TS arg types). The failure-shape assertions are the ones that guard the
@@ -11,7 +11,7 @@ Failure injection note: the save read paths run their RomM calls through
 attempt (no backoff sleep). A ``RommConnectionError`` (a real
 server-unreachable transport error) is therefore fast to inject.
 
-This module covers the read surface only; the mutating save callables have
+This module covers the read surface only; the mutating save endpoints have
 their own modules beside it (``test_saves_slot_choice.py``,
 ``test_saves_destructive.py``, ``test_saves_upload_409.py`` and the other
 ``test_saves_*.py``). Still reached at this tier only by the conflict-rule

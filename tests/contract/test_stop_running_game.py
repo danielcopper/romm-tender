@@ -1,7 +1,7 @@
-"""Contract test for the ``stop_running_game`` callable over the real ``Endpoints``.
+"""Contract test for the ``stop_running_game`` endpoint over the real ``Endpoints``.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``stopRunningGame = callable<[number], StopGameResult>`` — the rom id, passed
+``stopRunningGame = endpoint<[number], StopGameResult>`` — the rom id, passed
 positionally.
 
 Pins all three response shapes across the whole wire (real bootstrap → real
@@ -91,7 +91,7 @@ async def test_stop_running_game_refuses_when_no_instance_runs_this_rom(harness)
 async def test_stop_running_game_refuses_for_a_rom_with_no_install_row(harness):
     # Nothing was ever launched from an uninstalled ROM, so no live instance can
     # be attributed to it — and "attribute it to whatever is running" is exactly
-    # the behaviour this callable's rom_id exists to prevent.
+    # the behaviour this endpoint's rom_id exists to prevent.
     _add_instance(harness, [4201], _OTHER_GAME)
 
     result = await harness.endpoints.stop_running_game(999)

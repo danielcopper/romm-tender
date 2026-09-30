@@ -15,7 +15,7 @@ import { refreshCoreInfoInBackground } from "../utils/sectionRefresh";
 import type { CoreInfoFields } from "../utils/playSection";
 import type { CoreInfo, SaveSlotSummary } from "../types";
 
-/** A promise the test resolves by hand, so two reads of the same callable can be
+/** A promise the test resolves by hand, so two reads of the same endpoint can be
  *  made to answer in the opposite order to the one they were issued in. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;

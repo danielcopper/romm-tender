@@ -4006,7 +4006,7 @@ class TestDeletePlatformBios:
         Drives ``delete_platform_bios`` end-to-end through the *real*
         ``check_platform_bios`` (server-offline registry fallback), so the
         ``files`` list is the genuine ``[asdict(f) for f in files]`` payload
-        the callable hands to the removal worker (``_delete_recorded_io``).
+        the use case hands to the removal worker (``_delete_recorded_io``).
         Before the fix that worker read ``f.downloaded`` / ``f.local_path`` /
         ``f.file_name`` as
         attributes on those dicts, raising ``AttributeError`` in the executor

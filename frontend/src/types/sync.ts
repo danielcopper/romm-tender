@@ -165,7 +165,7 @@ export interface SessionBudgetStatus {
    * EVERY terminal — completed, paused, cancelled, or interrupted — so the row
    * reflects that run's consumption, not a prior clean run's. Retained in backend
    * memory so a QAM remount can show "last run: ±X GB" without a live run. ``null``
-   * when either endpoint was unmeasurable (or after a plugin reload). Rendered
+   * when either reading was unmeasurable (or after a plugin reload). Rendered
    * sign-formatted (#1383 / #36).
    */
   memory_delta_kb: number | null;

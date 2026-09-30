@@ -1,4 +1,4 @@
-"""Contract tests for the platform-toggle callables (#1007).
+"""Contract tests for the platform-toggle endpoints (#1007).
 
 Drives the real ``Endpoints`` over the real ``bootstrap`` to pin the
 end-to-end behavior the data-loss fix restores: opening the Platforms page
@@ -7,7 +7,7 @@ real ``settings.json``, and un-toggling exactly ONE platform
 (``save_platform_sync``) leaves every other platform enabled — both on disk
 and in the sync-time platform filter.
 
-Each callable is driven exactly as the frontend declares it in
+Each endpoint is driven exactly as the frontend declares it in
 ``frontend/src/api/backend.ts``: ``get_platforms()`` zero-arg,
 ``save_platform_sync`` with ``(platform_id: number, enabled: boolean)``.
 """

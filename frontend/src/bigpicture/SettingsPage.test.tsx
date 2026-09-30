@@ -175,8 +175,8 @@ const flushAsync = () =>
     await Promise.resolve();
   });
 
-// logError isn't a callable — it's a plain function wrapping a frontendLog
-// callable. We can't `vi.mocked(backend.logError)` it; instead replace it via
+// logError isn't an endpoint — it's a plain function wrapping a frontendLog
+// endpoint. We can't `vi.mocked(backend.logError)` it; instead replace it via
 // `vi.spyOn(backend, "logError")` per-test and inspect the spy directly.
 // (Inlined as `vi.spyOn(backend, "logError")` at each call site — the spyOn
 // generic constraint is brittle to alias under our TS config.)
@@ -906,7 +906,7 @@ describe("SettingsPage", () => {
       });
 
       expect(vi.mocked(backend.connectWithPairingCode)).toHaveBeenCalledWith("https://romm.local", "ABCD2345", false);
-      // The paired flow must not fall through to the pasted-token callable.
+      // The paired flow must not fall through to the pasted-token endpoint.
       expect(vi.mocked(backend.connectWithToken)).not.toHaveBeenCalled();
       expect(result).toMatchObject({ success: true, message: "Connected!" });
       const conn = capturedConnection[capturedConnection.length - 1];

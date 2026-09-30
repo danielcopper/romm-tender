@@ -226,7 +226,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # The single read-path disc resolver (#865): folds the per-game
     # selected_disc pick over the live disc-image enumeration of an installed
     # ROM's directory. Built alongside active_core_resolver (no service deps) so
-    # every launch-bake site and the picker callables draw the bake path from the
+    # every launch-bake site and the picker use cases draw the bake path from the
     # SAME seam and the baked launch_options never diverge from the selection.
     disc_launch_resolver = DiscLaunchResolver(
         config=DiscLaunchResolverConfig(

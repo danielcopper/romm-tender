@@ -14,12 +14,12 @@ kind from which keys happen to be present::
     event  {type, name, payload}
 
 ``args`` are positional. A named-argument form would have to agree with every
-callable's parameter names, which are an implementation detail on this side and
+endpoint's parameter names, which are an implementation detail on this side and
 would become wire contract the moment the other side spelled one.
 
-**A transport reason is not a callable's failure.** ``reason`` on an ``error``
+**A transport reason is not an endpoint's failure.** ``reason`` on an ``error``
 message names something that went wrong carrying the call — the method does not
-exist, the answer is too large to send, the method raised. A callable's own
+exist, the answer is too large to send, the method raised. An endpoint's own
 failure is a perfectly successful transport and arrives in ``result``, in the
 ``{success, reason, message}`` shape ``scripts/check_failure_shape.py`` guards.
 Reading one as the other shows a user a sentence about their game where a

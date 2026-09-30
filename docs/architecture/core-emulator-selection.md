@@ -421,7 +421,7 @@ resolver yields the **path**, `ActiveCoreResolver` yields the **`EmulatorInvocat
 | `DownloadService._resolve_bound_app_id`                                          | the freshly-installed ROM through `resolve_for_install` → re-applies the pin on reinstall |
 | `MigrationService._build_relaunch_items`                                         | each relocated ROM through `resolve_for_install` against the moved install directory      |
 
-### The picker callables
+### The picker use cases
 
 Two service methods on `DiscService` (`backend/services/disc.py`) drive the inline `DiscSelector` dropdown on the game
 detail page:
@@ -440,7 +440,7 @@ detail page:
 
 ### Per-game (`CoreService`)
 
-The frontend CPU-button menu on the game detail page drives two backend callables:
+The frontend CPU-button menu on the game detail page drives two backend endpoints:
 
 - **`set_game_core(rom_id, label)`** resolves the LABEL to a **bakeable `EmulatorInvocation` (libretro or standalone)
   first**, via `label_to_invocation` against the ROM platform's classified command list. A label that does not resolve

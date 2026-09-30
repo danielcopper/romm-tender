@@ -1,6 +1,6 @@
-"""Contract tests for the game-detail read callables over the real nesting.
+"""Contract tests for the game-detail read endpoints over the real nesting.
 
-Drives the real ``main.py`` callables through the real ``bootstrap()`` + SQLite,
+Drives the real ``main.py`` endpoints through the real ``bootstrap()`` + SQLite,
 pinning the response shapes the frontend consumes — the version-metadata keys
 added in #1295 (ADR-0019), and the BIOS answer both game-detail reads ship. The
 version dimensions are server-derived facts persisted on the ``Rom`` aggregate
@@ -102,7 +102,7 @@ async def test_cached_game_detail_unknown_app_id_is_not_found(harness):
 # ── The BIOS answer both reads ship (#1693) ──────────────────────────────────
 # An absent ``bios_status`` means "the active core needs no BIOS" and clears a
 # shown requirement (#1690); ``bios_status_unknown`` marks the payload that has
-# no answer at all, which must not. Both callables are pinned in both directions.
+# no answer at all, which must not. Both endpoints are pinned in both directions.
 # The harness has no emulator installation, so every answer here is the one a
 # machine that cannot state its own scope gives.
 

@@ -1,6 +1,6 @@
-"""VersionSwitchService — the version picker's read + write callables (ADR-0021).
+"""VersionSwitchService — the version picker's read + write use cases (ADR-0021).
 
-Owns the two frontend callables behind the game-detail version picker.
+Owns the two use cases behind the game-detail version picker.
 ``get_version_list`` reports every version of a sibling group — the local rows
 (rich version dimensions) merged with the server's live ``sibling_roms`` view
 (slim stubs for versions not yet synced) — with the active / downloaded / default

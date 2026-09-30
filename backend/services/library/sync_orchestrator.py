@@ -445,7 +445,7 @@ class SyncOrchestrator:
 
             return answer
         except SyncCancelled:
-            # sync_preview is a callable, and a user's cancel is its own
+            # sync_preview is an endpoint, and a user's cancel is its own
             # outcome, not a transport failure: re-raising would reach the
             # frontend as a ``backend_exception`` error (host/dispatch.py) where
             # the canonical failure shape belongs. The clause order is what
@@ -1258,7 +1258,7 @@ class SyncOrchestrator:
         # run's number in place. The restart advisory stays clean-run-only. The delta
         # is retained IN THE BOX only, surfaced to the QAM via
         # get_session_budget_status (not the sync_complete wire; the UI reads it from
-        # the callable). Fail-open — an unavailable reading or any seam error
+        # the endpoint). Fail-open — an unavailable reading or any seam error
         # recommends nothing and leaves the delta unmeasurable (never a stale number).
         interrupt_reason = self._sync_state.interrupt_reason if cancelled else None
         restart_recommended = False

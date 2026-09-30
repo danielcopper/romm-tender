@@ -29,7 +29,7 @@ _ASSET_TYPE_TO_ENDPOINT: dict[str, str] = {
 }
 
 # Numeric asset-type codes used by the frontend's `get_sgdb_artwork_base64`
-# callable. Keep in sync with the frontend's encoding.
+# endpoint. Keep in sync with the frontend's encoding.
 _ASSET_TYPE_NUM_TO_NAME: dict[int, str] = {
     1: "hero",
     2: "logo",

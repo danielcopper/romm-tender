@@ -139,7 +139,7 @@ const _terminatedRunIds = new Set<string>();
  * can neither starve later listeners nor break the emitting call site (e.g. the
  * per-item apply loop in syncManager, where a subscriber throw would otherwise
  * skip that game's shortcut creation). Console, not the ``logError`` backend
- * callable, at this store layer.
+ * endpoint, at this store layer.
  */
 function notify(): void {
   _listeners.forEach((fn) => {

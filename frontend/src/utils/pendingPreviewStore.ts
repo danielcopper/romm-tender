@@ -5,7 +5,7 @@
  *
  * **Why this fact is not component state, when panel rendering state normally
  * is.** The preview outlives the panel instance that asked for it. `sync_preview`
- * is an awaited callable, so its answer is delivered to the closure of whichever
+ * is an awaited endpoint call, so its answer is delivered to the closure of whichever
  * page pressed the button — and navigating away unmounts that instance while the
  * run keeps going. A `setPreview` in that closure then lands on a dead
  * component, and the instance actually on screen shows the idle start button

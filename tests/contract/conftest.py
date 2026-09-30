@@ -1,4 +1,4 @@
-"""Fixtures for the callable contract-test tier.
+"""Fixtures for the endpoint contract-test tier.
 
 Exposes the ``harness`` fixture: a real :class:`main.Endpoints` wired through
 the real :func:`bootstrap` with only the network edges faked. See
@@ -55,7 +55,7 @@ async def harness(tmp_path) -> ContractHarness:
     """The real wired ``Endpoints`` plus the fake edges a contract test drives.
 
     Async so the harness binds the test's *running* event loop into the
-    services' ``RuntimeBundle.loop`` — the callables ``await`` on that loop,
+    services' ``RuntimeBundle.loop`` — the endpoints ``await`` on that loop,
     and a mismatched loop would raise "got Future attached to a different
     loop" on the first ``run_in_executor``.
 

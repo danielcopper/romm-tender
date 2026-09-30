@@ -142,7 +142,7 @@ class LibraryFetcher:
         self._emit_progress = config.emit_progress
         self._local_library_reader = config.local_library_reader
 
-    # ── Platform metadata callables ──────────────────────────────
+    # ── Platform metadata use cases ──────────────────────────────
 
     async def get_platforms(self):
         try:
@@ -206,7 +206,7 @@ class LibraryFetcher:
         self._settings_persister.save_settings()
         return {"success": True}
 
-    # ── Collection metadata callables ────────────────────────────
+    # ── Collection metadata use cases ────────────────────────────
 
     async def get_collections(self):
         try:

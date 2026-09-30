@@ -349,7 +349,7 @@ class StatusService:
         }
 
     # ------------------------------------------------------------------
-    # Public callable surface — invoked via the SaveService aggregate root
+    # Public use cases — invoked via the SaveService aggregate root
     # ------------------------------------------------------------------
 
     async def get_save_status(self, rom_id: int) -> dict[str, Any]:

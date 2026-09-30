@@ -196,7 +196,7 @@ export function placeEntryFocus(root: ParentNode, findStop: (root: ParentNode) =
  *
  * **A body can swap twice inside the delay, and the placement follows the last
  * one.** The Sync page's preview path does exactly that: the backend's own
- * "Preview ready" frame stops the run before the `sync_preview` callable
+ * "Preview ready" frame stops the run before the `sync_preview` endpoint
  * answers, so the column goes run → idle → preview in two commits milliseconds
  * apart. Each commit's cleanup cancels the placement the one before it
  * scheduled, so a note spent by the FIRST of them leaves the last swap nothing

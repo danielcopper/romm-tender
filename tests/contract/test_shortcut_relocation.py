@@ -1,7 +1,7 @@
 """Contract test for the one-time move of the shortcuts onto the launcher's home.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getShortcutRelocation = callable<[], ShortcutRelocation>``.
+``getShortcutRelocation = endpoint<[], ShortcutRelocation>``.
 
 This tier reaches the answer through the real ``bootstrap()`` and a real SQLite
 database, which is what makes it worth having: the launcher path is derived from

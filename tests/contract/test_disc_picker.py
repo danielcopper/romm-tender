@@ -1,8 +1,8 @@
-"""Contract tests for the disc-picker callables over the real Endpoints/bootstrap.
+"""Contract tests for the disc-picker endpoints over the real Endpoints/bootstrap.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getDiscSelection = callable<[number], DiscSelection>`` and
-``selectDisc = callable<[number, string | null], SelectDiscResult>`` — the
+``getDiscSelection = endpoint<[number], DiscSelection>`` and
+``selectDisc = endpoint<[number, string | null], SelectDiscResult>`` — the
 ``null`` argument is passed as literal Python ``None``.
 
 The harness runs the REAL ``DiscLaunchResolver`` over the REAL download

@@ -44,7 +44,7 @@ function lastConfirmModalProps(): ConfirmModalProps | null {
   return el?.props ?? null;
 }
 
-// Stub VersionHistoryPanel so we don't need to wire its own callable mocks.
+// Stub VersionHistoryPanel so we don't need to wire its own endpoint mocks.
 // We render a tiny marker so tests can assert it appeared per file.
 vi.mock("./VersionHistoryPanel", () => ({
   VersionHistoryPanel: (p: { filename: string; isOffline: boolean }) =>

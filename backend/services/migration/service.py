@@ -773,7 +773,7 @@ class MigrationService:
         except Exception:
             # The files are already moved. A failed re-record leaves the old
             # records standing, which is what it exists to prevent, but it must
-            # not turn a finished migration into a failed callable.
+            # not turn a finished migration into a failed endpoint call.
             self._logger.exception("Recording the save directories after the home migration failed")
 
     def _record_migration_applied_io(self, items: list[dict[str, Any]]) -> None:

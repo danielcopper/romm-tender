@@ -93,7 +93,7 @@ async function fetchRelaunchOptions(
  * launch: pull the ROM's resolved command (`get_rom_relaunch_options`) and
  * confirm-set it onto the shortcut's appId. Ordinary fetch/write failures remain
  * best-effort. Lifecycle cancellation and timeout are explicit launch-stopping
- * results; a timed-out callable stays observed so a late lease is released.
+ * results; a timed-out endpoint call stays observed so a late lease is released.
  */
 export async function reconfirmLaunchOptions(
   romId: number,

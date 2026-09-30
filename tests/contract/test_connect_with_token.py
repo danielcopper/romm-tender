@@ -1,7 +1,7 @@
-"""Contract test for the ``connect_with_token`` callable (pasted API token).
+"""Contract test for the ``connect_with_token`` endpoint (pasted API token).
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``connectWithToken = callable<[string, string, boolean], BackendResult>("connect_with_token")``
+``connectWithToken = endpoint<[string, string, boolean], BackendResult>("connect_with_token")``
 — positional ``(romm_url, token, allow_insecure_ssl)``.
 
 Pins the response SHAPE over the real ``Endpoints`` for both the happy path (a

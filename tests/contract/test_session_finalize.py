@@ -1,4 +1,4 @@
-"""Contract tests for the ``finalize_game_session`` end-of-session callable.
+"""Contract tests for the ``finalize_game_session`` end-of-session endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``finalize_game_session`` takes ONE positional arg — the RomM ROM id — and
@@ -11,7 +11,7 @@ that elapsed while the device was suspended (the monotonic clock pauses) is not
 counted. The zero-suspend case is the control proving the exclusion is a real,
 monotonic-driven difference.
 
-A session is opened via the real ``record_session_start`` callable (which stamps
+A session is opened via the real ``record_session_start`` endpoint (which stamps
 both the wall and monotonic starts from the deterministic ``FakeClock``); the
 clock is then advanced before finalize stamps the end — ``advance`` for awake
 time (both clocks) and ``advance_wall`` for suspend (wall only, monotonic frozen).

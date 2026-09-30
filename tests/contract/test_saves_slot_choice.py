@@ -8,7 +8,7 @@ read-only legacy slot.
 types (``string | null`` for the slot, ``boolean`` for migrate, ``string | null``
 for the source). These pin the explicit-contract fix: ``migrate`` is a real bool
 (no ``"__no_migration__"`` sentinel string) and the default call runs no
-migration. All three callables share one rule: the slot-less legacy bucket is no
+migration. All three endpoints share one rule: the slot-less legacy bucket is no
 longer a confirmable / switchable target (#1276) and is read-only — never
 deletable — from the plugin (#1478), so an empty / ``None`` slot name returns the
 canonical ``invalid_slot_name`` failure and never mutates state or hits the wire.
@@ -61,7 +61,7 @@ async def test_confirm_named_slot_no_migration(harness):
 async def test_confirm_legacy_slot_none_rejected(harness):
     """chosen_slot=None is rejected — legacy slot:null confirmation is retired (#1276).
 
-    The no-slot mode can no longer be confirmed as a target: the callable returns
+    The no-slot mode can no longer be confirmed as a target: the endpoint returns
     the canonical ``invalid_slot_name`` failure and never persists a confirmed
     legacy state.
     """
@@ -224,7 +224,7 @@ async def test_switch_slot_empty_rejected(harness):
     """switch_slot("") is rejected — the legacy bucket is not a switch target (#1276).
 
     Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``switchSlot``
-    is ``callable<[number, string], …>``). The callable returns the canonical
+    is ``endpoint<[number, string], …>``). The endpoint returns the canonical
     ``invalid_slot_name`` failure and never switches the ROM into legacy mode.
     """
     enable_save_sync(harness)
@@ -248,7 +248,7 @@ async def test_delete_slot_legacy_rejected(harness):
     """delete_slot("") is refused — the legacy bucket is read-only (#1478).
 
     Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``deleteSlot``
-    is ``callable<[number, string], …>``). The callable returns the canonical
+    is ``endpoint<[number, string], …>``). The endpoint returns the canonical
     ``invalid_slot_name`` failure before any server I/O, so the game's
     slot-less bucket can never be torn down from the plugin.
     """

@@ -374,7 +374,7 @@ export function usePlatformsPage(): PlatformsPageState {
         const result = await getPlatformFirmwareStatus(slug);
         if (!accept(slug, seq)) return;
         if (!result.success) {
-          // Unreachable today — the callable always answers success — but a
+          // Unreachable today — the endpoint always answers success — but a
           // dropped failure is indistinguishable from a platform the backend has
           // nothing to say about, which is a finished answer and reads green.
           logWarn(`BIOS state for ${slug} answered a failure: ${result.message ?? "no message"}`);

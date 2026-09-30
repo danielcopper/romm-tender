@@ -603,7 +603,7 @@ describe("VersionPicker — per-version covers (#1346)", () => {
       expect(vi.mocked(backend.fetchCoverBase64)).toHaveBeenCalledWith(1);
       expect(vi.mocked(backend.fetchCoverBase64)).toHaveBeenCalledWith(2);
       // The Europe row is server-only (synced:false) — it is fetched too, via the
-      // cache-first callable, so each version shows its own art (#1346).
+      // cache-first endpoint, so each version shows its own art (#1346).
       expect(vi.mocked(backend.fetchCoverBase64)).toHaveBeenCalledWith(3);
     });
   });
@@ -1016,7 +1016,7 @@ describe("VersionPicker — switching", () => {
       vi.mocked(toaster.toast).mockClear();
 
       await act(async () => {
-        rejectSwitch(new Error("teardown cancelled the callable"));
+        rejectSwitch(new Error("teardown cancelled the endpoint call"));
         for (let i = 0; i < 6; i++) await Promise.resolve();
       });
 

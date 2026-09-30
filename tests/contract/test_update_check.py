@@ -1,4 +1,4 @@
-"""Contract tests for the update-check callables over the real wiring.
+"""Contract tests for the update-check endpoints over the real wiring.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateNotice``
 and ``checkForUpdateNow`` take nothing, ``dismissUpdateNotice`` a version string,

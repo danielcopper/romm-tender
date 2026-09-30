@@ -117,7 +117,7 @@ async def test_migration_005_reconfirms_legacy_rom(harness):
     assert state.slots == legacy_slots
     assert state.files["pokemon.srm"].last_sync_hash == "abc123"
 
-    # And the wizard reappears — the callable now reports it unconfigured.
+    # And the wizard reappears — the endpoint now reports it unconfigured.
     after = harness.endpoints.is_save_tracking_configured(42)
     assert after["configured"] is False
     assert after["active_slot"] is None

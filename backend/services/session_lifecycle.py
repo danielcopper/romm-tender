@@ -1,4 +1,4 @@
-"""SessionLifecycleService — single-callable end-of-session orchestration.
+"""SessionLifecycleService — end-of-session orchestration as a single use case.
 
 Composes the four cross-service reads the frontend's game-stop handler
 used to interleave into one round-trip: end-of-session playtime

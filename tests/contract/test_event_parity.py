@@ -4,7 +4,7 @@ This pins the exact contract the CI gate (``scripts/check_event_parity.py``)
 enforces: every backend ``emit("name", ...)`` event has a matching frontend
 ``addEventListener("name", ...)`` listener, in both directions. It is the
 static-parity sibling of the rest of ``tests/contract/`` — those tests *drive*
-the real callables frontend-shaped; this one asserts the two *declarations* of
+the real endpoints frontend-shaped; this one asserts the two *declarations* of
 the event channel agree, so a renamed/added/removed event or an orphaned
 listener breaks the pytest run, not just the standalone lint gate.
 

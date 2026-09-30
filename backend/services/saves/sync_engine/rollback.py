@@ -4,8 +4,8 @@ Anything that commits one side of a true two-sided sync conflict (the
 ``Conflict`` outcome from the newest-wins matrix) lives here. The
 ``keep_local`` / ``use_server`` decision is a one-shot rollback to the
 chosen side: it canonicalises the on-disk filename, writes the picked
-content, and synchronises file-tracking state with the choice. Public-
-callable async orchestration (lock acquisition, server-head fetch,
+content, and synchronises file-tracking state with the choice. Public
+use-case async orchestration (lock acquisition, server-head fetch,
 freshness check) is also driven from here; the rom-level lock itself
 lives on :class:`services.saves.sync_engine.engine.SyncEngine` so that
 every save-sync entry point shares one queue. Persistence is the

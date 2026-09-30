@@ -166,7 +166,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_host_status",
     # Read-only RetroDECK path-resolution health probe (for the frontend banner).
     "get_retrodeck_status",
-    # Cancel / pause operations — must remain callable mid-operation when
+    # Cancel / pause operations — must not be refused mid-operation when
     # migration marker fires so the user can stop in-flight work. (Resume,
     # which re-begins a filesystem transfer, IS migration-blocked.)
     "cancel_sync",
@@ -222,7 +222,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "cancel_prune",
     # Disowning leases a dead frontend context stranded touches no RetroDECK
     # path either, and must run at mount regardless of migration state — a
-    # stranded lease is precisely what would otherwise refuse the callables
+    # stranded lease is precisely what would otherwise refuse the endpoints
     # that resolve the migration.
     "release_orphaned_prune_leases",
     # Sync-start reconcile of Steam-UI-deleted shortcut bindings (#1046) — clears
@@ -231,7 +231,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "reconcile_shortcuts",
     "get_artwork_base64",
     # Cache-first per-ROM cover fetch for the version picker (#1346) — a
-    # read-only data callable (fills the cover cache on a miss), never mutates
+    # read-only data endpoint (fills the cover cache on a miss), never mutates
     # RetroDECK state.
     "fetch_cover_base64",
     "get_sync_status",
@@ -255,7 +255,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # Launch-gate offline funnel: a local-only drift hash check, a version-free
     # reachability heartbeat, a fire-and-forget read-only save-status refresh,
     # and the pre-launch relaunch re-confirm read (#1150). None mutate RetroDECK
-    # state, so all stay callable mid-migration.
+    # state, so they are never refused during a migration.
     "check_local_drift",
     "probe_reachability",
     "refresh_save_status",

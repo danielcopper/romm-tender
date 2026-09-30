@@ -131,7 +131,7 @@ class SteamGridService:
             self._logger.warning(f"SGDB {asset_type} download failed for game {sgdb_game_id}: {e}")
             return None
 
-    # -- artwork base64 (callable) -----------------------------------------
+    # -- artwork base64 (use case) -----------------------------------------
 
     async def _read_file_as_base64(self, path):
         """Read a file and return base64-encoded string, or None on failure."""
@@ -211,7 +211,7 @@ class SteamGridService:
             self._logger.warning(f"SGDB grid thumb lookup failed for game {sgdb_id}: {e}")
             return None
 
-    # -- resolution cascade (callable) -------------------------------------
+    # -- resolution cascade (use case) -------------------------------------
 
     async def get_sgdb_resolution(self, rom_id):
         """Resolve which SGDB game id to use for *rom_id*, picker-driven.
@@ -267,7 +267,7 @@ class SteamGridService:
         Returns an empty, unsuccessful result (``reason="no_api_key"``) when
         no API key is configured. Network failures are logged and surfaced
         as ``{"success": False, "reason": "server_unreachable", "games":
-        []}`` — the callable never raises.
+        []}`` — the use case never raises.
         """
         if not self._settings.get("steamgriddb_api_key"):
             return {

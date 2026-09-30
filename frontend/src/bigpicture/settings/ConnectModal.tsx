@@ -50,7 +50,7 @@ const CODE_INDICES = Array.from({ length: CODE_LENGTH }, (_unused, i) => i);
 
 const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try again.";
 
-// callable() never times out on its own (api/hostSocket.ts), so a backend that
+// endpoint() never times out on its own (api/hostSocket.ts), so a backend that
 // is down or not answering leaves the sign-in promise pending and the modal
 // stuck on "Signing in…" with no way out but Cancel. The deadline is
 // the only thing that turns that into a message.

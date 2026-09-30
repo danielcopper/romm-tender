@@ -1,7 +1,7 @@
-"""Contract test for the ``connect_with_pairing_code`` callable (pairing-code sign-in).
+"""Contract test for the ``connect_with_pairing_code`` endpoint (pairing-code sign-in).
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``connectWithPairingCode = callable<[string, string, boolean], BackendResult>("connect_with_pairing_code")``
+``connectWithPairingCode = endpoint<[string, string, boolean], BackendResult>("connect_with_pairing_code")``
 — positional ``(romm_url, code, allow_insecure_ssl)``.
 
 Pins the response SHAPE over the real ``Endpoints`` for the happy path (a code

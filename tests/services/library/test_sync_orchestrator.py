@@ -2,7 +2,7 @@
 
 The migrated layout drives the orchestrator end-to-end through
 ``FakeRommApi``: tests seed in-memory platforms/ROMs/collections on the
-fake, then exercise the public callable surface (``sync_preview``,
+fake, then exercise the public use cases (``sync_preview``,
 ``sync_apply_delta``, ``_do_sync_per_unit``, etc.) and assert on the
 **observable outputs** — ``emit`` calls, state mutations, persister
 counts.
@@ -1441,9 +1441,9 @@ class TestSyncPreviewErrorHandling:
     @pytest.mark.asyncio
     async def test_cancelled_error_returns_canonical_failure(self, library, fake_romm_api, emit):
         """A cooperative cancel during sync_preview RETURNS the canonical failure
-        shape — it does NOT re-raise out of the callable (#1035).
+        shape — it does NOT re-raise out of the use case (#1035).
 
-        A cancel is the callable's own outcome, not a transport failure:
+        A cancel is the use case's own outcome, not a transport failure:
         re-raising would reach the panel as a ``backend_exception`` error
         (``host/dispatch.py``) where the canonical failure shape belongs. The
         cooperative cancel — the dedicated ``SyncCancelled``, matching the
@@ -3703,7 +3703,7 @@ class TestDoSyncPerUnitErrors:
         ``except SyncCancelled`` catches only the cooperative signal. A genuine
         ``asyncio.CancelledError`` injected at the fetch layer skips it (and the
         generic ``except Exception``) and propagates straight out of the
-        callable — it is NOT mapped onto the canonical ``cancelled`` failure
+        use case — it is NOT mapped onto the canonical ``cancelled`` failure
         dict. The ``finally`` still restores sync_state to IDLE.
         """
         _use_fake_romm(library, fake_romm_api)

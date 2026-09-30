@@ -594,7 +594,7 @@ class TestFrontendLog:
         assert _recorded(caplog) == [("WARNING", "[FE] msg2")]
 
     def test_returns_none(self, service):
-        # Callable contract — frontend_log returns nothing meaningful.
+        # Endpoint contract — frontend_log returns nothing meaningful.
         assert service.frontend_log("info", "msg") is None
 
 

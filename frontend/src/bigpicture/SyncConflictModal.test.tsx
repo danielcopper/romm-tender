@@ -69,7 +69,7 @@ function lastShownElement(): ReactElement {
   return el;
 }
 
-// Flush microtasks so React state updates from awaited callables settle.
+// Flush microtasks so React state updates from awaited endpoint calls settle.
 async function flushAsync(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -423,7 +423,7 @@ describe("SyncConflictModal", () => {
 
   describe("SyncConflictModalHost — isLoading wiring", () => {
     it("disables all three buttons while resolveSyncConflict is in flight", async () => {
-      // Keep the callable pending so isLoading stays true mid-test.
+      // Keep the endpoint call pending so isLoading stays true mid-test.
       let resolveEndpoint: (v: { success: boolean }) => void = () => {};
       vi.mocked(backend.resolveSyncConflict).mockImplementation(
         () =>

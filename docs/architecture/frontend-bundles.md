@@ -309,8 +309,8 @@ exactly that address, so they arrive with the code that needs them and cannot be
 
 Three properties are worth knowing before changing anything there:
 
-- **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call; a
-  callable's own failure is a perfectly successful transport and arrives inside `result` as
+- **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call;
+  an endpoint's own failure is a perfectly successful transport and arrives inside `result` as
   `{success, reason,
   message}`. The frontend keeps them apart by throwing `HostTransportError` for the first, so it
   cannot reach a reader of the second.

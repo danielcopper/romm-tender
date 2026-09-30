@@ -226,7 +226,7 @@ def session_memory_delta(start_kb: int | None, end_kb: int | None) -> int | None
 
     Positive means the run grew the renderer heap, negative means it shrank
     (a GC or reload reclaimed more than the run added). Returns ``None`` when
-    either endpoint was unmeasurable, so the UI shows no delta rather than a
+    either reading was unmeasurable, so the UI shows no delta rather than a
     number derived from a missing reading.
     """
     if start_kb is None or end_kb is None:

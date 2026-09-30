@@ -5,7 +5,7 @@
  * (`setLaunchOptionsConfirmed`) rather than fire-and-forget.
  *
  * steamShortcuts is mocked so the confirm-poll and the existing-shortcut map
- * are observable; backend callables default to the test-setup undefined-stub.
+ * are observable; backend endpoints default to the test-setup undefined-stub.
  *
  * Apart from the first test, a unit is applied by calling the listener
  * `initUnitSyncManager` returns and awaiting it. That listener is the manager's
@@ -337,7 +337,7 @@ describe("syncManager — does not ack a cancelled unit (#1041)", () => {
       await applyUnit(unit(cmd, "run-cancel-1041"));
     });
 
-    // Observable effect of the post-cancel guard: the ack callable is NEVER
+    // Observable effect of the post-cancel guard: the ack endpoint is NEVER
     // invoked, so a cancelled run's bindings can't be credited to a fresh run.
     expect(vi.mocked(backend.reportUnitResults)).not.toHaveBeenCalled();
   });
@@ -733,7 +733,7 @@ describe("syncManager — chunked apply (#1025)", () => {
 describe("syncManager — applies cover artwork to created shortcuts via the API (#1391)", () => {
   const EXE = "/home/deck/.local/bin/tender-rom-launcher";
   const setCustomArtwork = vi.fn().mockResolvedValue(undefined);
-  // logError is a plain wrapper (not a callable), so spy to observe the fail-soft path.
+  // logError is a plain wrapper (not an endpoint), so spy to observe the fail-soft path.
   let logErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {

@@ -1,7 +1,7 @@
-"""Contract tests for the sync-start shortcut reconcile callable.
+"""Contract tests for the sync-start shortcut reconcile endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``reconcileShortcuts = callable<[number[]], {success, reason?, message, unbound_count?}>``.
+``reconcileShortcuts = endpoint<[number[]], {success, reason?, message, unbound_count?}>``.
 
 The frontend scans Steam's live shortcut store at sync start and passes the
 owned plus unresolved entries here — every appId it could not rule out; the

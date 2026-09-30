@@ -25,7 +25,7 @@ reportMissingTypeArgument = "error"
 # because execution environments do not inherit the top-level value.
 # `backend` is what resolves `main` now that the entry point lives there:
 # without it `from main import ...` is unresolved and every `main.*` symbol
-# degrades to Unknown, a blind spot on the callable surface the tests
+# degrades to Unknown, a blind spot on the endpoint surface the tests
 # exercise. The repo root "." is added on top so a test file can resolve a
 # sibling `tests.*` package.
 [[tool.basedpyright.executionEnvironments]]

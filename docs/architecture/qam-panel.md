@@ -923,7 +923,7 @@ is not the only thing that can take focus in one commit — Force Full Sync goes
 preview. **The mount is not a swap**: a page opened mid-run is opened by the frame, on the same stop.
 
 **A body can swap twice inside the 50 ms, and the placement follows the last one.** Working out a preview does exactly
-that: the backend stops the run with its own "Preview ready" frame before the `sync_preview` callable answers, so the
+that: the backend stops the run with its own "Preview ready" frame before the `sync_preview` endpoint answers, so the
 column goes run → idle → preview in two commits milliseconds apart, and each cancels the placement the one before it
 scheduled. So the note the rule reads is spent by the placement it causes rather than by a swap that merely observes it,
 and the timer asks which body it is landing in when it fires. Otherwise the first of the two swaps spends the note, the
@@ -1094,7 +1094,7 @@ by this page's own start button.
 Wide, two tabs.
 
 **Every sync write on either tab is optimistic, and a write that does not take says so.** A switch shows its new value
-before the backend answers. A refusal or a rejection is one outcome — none of the write callables throws to refuse. The
+before the backend answers. A refusal or a rejection is one outcome — none of the write endpoints throws to refuse. The
 switch goes back and a line says why, both within the rule below; the line carries the backend's own message, or a short
 fixed sentence where there is none (`SYNC_WRITE_FAILED`), and takes no space otherwise. Without the line a switch that
 goes back is indistinguishable from one that never moved. A later write in the same place that succeeds takes the line

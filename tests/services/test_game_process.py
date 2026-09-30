@@ -230,7 +230,7 @@ class TestNeverRepeatsTheStopRequest:
     "Ever" is literal and covers both halves: no retry loop inside a single
     ladder, AND no second ladder running concurrently with the first. The
     in-call half alone is not the guarantee — the grace window yields the event
-    loop for seconds, which is ample time for a second callable to arrive.
+    loop for seconds, which is ample time for a second endpoint call to arrive.
     """
 
     @pytest.mark.asyncio
@@ -340,7 +340,7 @@ class TestTargetsOnlyTheMatchedInstance:
 
     RetroDECK is one flatpak app but can have several live instances — a second
     game launched from another Steam shortcut, ES-DE opened on its own. Before
-    the ROM reached the callable every one of them was signalled, so stopping
+    the ROM reached the endpoint every one of them was signalled, so stopping
     one game ended them all. Each test here asserts the OTHER instance's pids
     appear in NEITHER ``stop_calls`` nor ``kill_calls``: asserting only that the
     right pids were signalled would pass just as happily if both were.

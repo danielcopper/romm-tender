@@ -281,7 +281,7 @@ export function useDataPage(): DataPageState {
   // reopen, never a wrong number.
   const readInventory = useCallback(() => {
     getDataInventory()
-      // No callable reached here resolves `{success: false}` today — a raising
+      // No endpoint reached here resolves `{success: false}` today — a raising
       // one rejects instead — so this test is defensive: were one to, it would
       // carry none of the figures its declared type names.
       .then((answer) => setInventory(isEndpointFailure(answer) ? FAILED : { state: "answered", value: answer }))

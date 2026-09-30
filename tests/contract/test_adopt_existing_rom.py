@@ -1,9 +1,9 @@
 """Contract tests for the adopt-an-existing-ROM surface (#260).
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``startDownload = callable<[number, boolean], BackendResult | TargetOccupiedResult>``,
-``adoptExistingRom = callable<[number], AdoptResult>`` and
-``verifyExistingContent = callable<[number], VerifyContentResult>``.
+``startDownload = endpoint<[number, boolean], BackendResult | TargetOccupiedResult>``,
+``adoptExistingRom = endpoint<[number], AdoptResult>`` and
+``verifyExistingContent = endpoint<[number], VerifyContentResult>``.
 
 The shape risk these pin is the refusal payload: the modal renders the whole
 comparison off it, so every key it reads must cross the wire, and the verify

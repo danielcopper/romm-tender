@@ -1,14 +1,14 @@
 """Contract tests for the bulk-removal sync guard (#1390).
 
-The three bulk-removal callables (``remove_all_shortcuts``,
+The three bulk-removal endpoints (``remove_all_shortcuts``,
 ``remove_platform_shortcuts``, ``uninstall_all_roms``) refuse with the
 canonical failure shape ``{success: False, reason: "sync_active", message}``
 while a library-sync run is in flight (RUNNING or CANCELLING) — a bulk
 removal racing a running sync would delete shortcuts the apply is writing
 and corrupt the registry mid-run. At IDLE (which paused and completed runs
-reset the live state to) each callable answers with its normal shape.
+reset the live state to) each endpoint answers with its normal shape.
 
-Driven through the real callables over the real wired plugin, frontend-shaped
+Driven through the real endpoints over the real wired plugin, frontend-shaped
 (positional args), asserting the response shape with and without a sync in
 flight.
 """
@@ -55,7 +55,7 @@ async def test_uninstall_all_roms_refused_while_in_flight(harness, state):
 
 
 async def test_remove_all_shortcuts_normal_shape_at_idle(harness):
-    """IDLE: the callable answers its normal success shape (empty registry)."""
+    """IDLE: the endpoint answers its normal success shape (empty registry)."""
     result = await harness.endpoints.remove_all_shortcuts()
     assert result["success"] is True
     assert result["app_ids"] == []
@@ -63,7 +63,7 @@ async def test_remove_all_shortcuts_normal_shape_at_idle(harness):
 
 
 async def test_remove_platform_shortcuts_normal_shape_at_idle(harness):
-    """IDLE: the callable answers its normal shape (name degrades to the slug)."""
+    """IDLE: the endpoint answers its normal shape (name degrades to the slug)."""
     result = await harness.endpoints.remove_platform_shortcuts("n64")
     assert result["success"] is True
     assert result["app_ids"] == []
@@ -72,6 +72,6 @@ async def test_remove_platform_shortcuts_normal_shape_at_idle(harness):
 
 
 async def test_uninstall_all_roms_partial_success_shape_at_idle(harness):
-    """IDLE: the callable answers its partial-success shape (nothing installed)."""
+    """IDLE: the endpoint answers its partial-success shape (nothing installed)."""
     result = await harness.endpoints.uninstall_all_roms()
     assert result == {"success": True, "removed_count": 0, "errors": [], "app_ids": []}

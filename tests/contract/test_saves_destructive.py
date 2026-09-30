@@ -1,8 +1,8 @@
-"""Contract tests for the destructive save callables — ``delete_slot`` and ``resolve_sync_conflict``.
+"""Contract tests for the destructive save endpoints — ``delete_slot`` and ``resolve_sync_conflict``.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``deleteSlot`` is
-``callable<[number, string], …>`` and ``resolveSyncConflict`` is
-``callable<[number, string, number, "keep_local" | "use_server"], …>``.
+``endpoint<[number, string], …>`` and ``resolveSyncConflict`` is
+``endpoint<[number, string, number, "keep_local" | "use_server"], …>``.
 
 ``delete_slot`` deletes a slot's server saves and its stored state, never a
 file on disk: the files there are the active slot's, and the active slot is

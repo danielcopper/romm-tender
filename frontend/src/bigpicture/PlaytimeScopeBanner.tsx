@@ -13,7 +13,7 @@ export const PLAYTIME_SCOPE_MESSAGE = "Sign in again to enable cross-device play
  * scope needed to read cross-device playtime. Account-wide (no per-game card).
  *
  * Dismiss is local-only — it just clears the shared store for this view. There
- * is no backend dismiss callable: the durable flag clears itself once a scoped
+ * is no backend dismiss endpoint: the durable flag clears itself once a scoped
  * token is minted (a fresh sign-in or a later successful reconcile), so the
  * next MainPage mount re-fetches the real state.
  *

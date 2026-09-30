@@ -4,7 +4,7 @@ sync transfers.
 Anything that decides "which side wins for this file" or actually
 moves bytes between local saves_dir and the RomM server lives here.
 Read-only matrix consumption (status reporting) belongs in
-StatusService; persistence is owned by the public callable's narrow
+StatusService; persistence is owned by the public use case's narrow
 Unit of Work (ADR-0006).
 """
 

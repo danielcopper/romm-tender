@@ -1,7 +1,7 @@
 """Contract test for the Data Management page's inventory read.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getDataInventory = callable<[], DataInventory>``, taking no arguments and
+``getDataInventory = endpoint<[], DataInventory>``, taking no arguments and
 answering the four population figures the page draws its rows from, the
 recovery root, and one entry per counted bundle.
 

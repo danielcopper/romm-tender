@@ -6,7 +6,7 @@ just before a launch to heal mid-session ``launch_options`` drift (#1150). It re
 :class:`RelaunchOptionsResolver`, whose ``active_core_for_rom`` opens its **own**
 Unit of Work — the same non-reentrant ``BEGIN IMMEDIATE`` write-lock nesting the
 batch path guards against (#1154). The unit tests inject a fake UoW; this tier
-drives the real callable over the real file-based SQLite UoW the harness wires.
+drives the real endpoint over the real file-based SQLite UoW the harness wires.
 
 Called positionally as the frontend does, and pinned against the TS shape:
 ``{ app_id: number; launch_options: string } | null`` — a literal ``None`` where

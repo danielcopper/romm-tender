@@ -8,7 +8,7 @@ import * as backend from "../../api/backend";
 import { showSyncConflictModal } from "../SyncConflictModal";
 import type { CopySaveToSlotStatus, SaveSlotSummary, SyncConflict } from "../../types";
 
-// Control the callable + the conflict modal directly; everything else (showModal,
+// Control the endpoint + the conflict modal directly; everything else (showModal,
 // toaster) comes from the global @decky/ui / `api/host` stubs.
 vi.mock("../../api/backend", () => ({
   copySaveToSlot: vi.fn(),
@@ -78,7 +78,7 @@ describe("useCopyToSlot", () => {
   it("ok (no-slot → new named slot): toasts and dispatches romm_data_changed", async () => {
     await runCopy({ status: "ok" }, { saveId: 10, sourceSlot: "backup", target: "promoted" });
 
-    // Non-vacuous: the distinctive target value flowed through to the callable.
+    // Non-vacuous: the distinctive target value flowed through to the endpoint.
     expect(backend.copySaveToSlot).toHaveBeenCalledWith(42, 10, "promoted");
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining("promoted") }));
     expect(dataChanged).toHaveBeenCalled();

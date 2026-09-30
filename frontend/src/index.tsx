@@ -419,12 +419,12 @@ const tender = definePlugin(() => {
 
   // Load metadata cache, register store patches, and populate RomM app ID set.
   // Retries with backoff if the backend isn't ready yet (e.g. boot without network).
-  // callable() has no timeout — hangs forever if backend isn't ready — so we race
+  // endpoint() has no timeout — hangs forever if backend isn't ready — so we race
   // each attempt against a deadline to ensure retries actually fire.
   const RETRY_DELAYS = [2000, 5000, 10000, 15000, 20000];
   const ENDPOINT_TIMEOUT = 5000;
   // Metadata is paged so a large library never sends a multi-MB dump through the
-  // size-limited WebSocket bridge in a single callable response (#1025).
+  // size-limited WebSocket bridge in a single endpoint response (#1025).
   const METADATA_PAGE_SIZE = 500;
   let initAttempt = 0;
   let initDone = false;
@@ -435,7 +435,7 @@ const tender = definePlugin(() => {
     const appIdMap = await withTimeout(getAppIdRomIdMap(), ENDPOINT_TIMEOUT);
 
     // Page the metadata cache until every row is collected. A failed page throws
-    // out of the shared loop (each raced against the per-callable deadline) and
+    // out of the shared loop (each raced against the per-call deadline) and
     // the outer retry loop restarts init from offset 0.
     const cache = await fetchMetadataCachePages(METADATA_PAGE_SIZE, ENDPOINT_TIMEOUT);
 
@@ -458,12 +458,12 @@ const tender = definePlugin(() => {
       const { playtime } = await withTimeout(getAllPlaytime(), ENDPOINT_TIMEOUT);
       await applyAllPlaytime(playtime, appIdMap);
     } catch (e) {
-      // Use console — logError is a callable that may also hang
+      // Use console — logError goes through an endpoint that may also hang
       console.warn("[RomM] Failed to apply playtime:", e);
     }
 
     initDone = true;
-    // Backend is now reachable — log via callable so it appears in plugin log
+    // Backend is now reachable — log via the endpoint so it appears in plugin log
     const attempts = initAttempt + 1;
     if (attempts > 1) {
       logInfo(`App ID init succeeded after ${attempts} attempts (backend was slow to start)`);

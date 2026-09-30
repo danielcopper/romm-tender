@@ -77,7 +77,7 @@ function labelledStatus(label: string, overrides: Partial<SaveStatus> = {}): Sav
   return saveStatus({ save_sync_display: { status: "synced", label, last_sync_check_at: null }, ...overrides });
 }
 
-/** A deferred stand-in for a callable, so a test can hold a read open across an
+/** A deferred stand-in for an endpoint, so a test can hold a read open across an
  *  event and settle it afterwards. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (e: unknown) => void } {
   let resolve!: (value: T) => void;

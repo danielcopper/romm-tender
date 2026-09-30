@@ -414,7 +414,7 @@ class TestGetCollectionsVirtualFailOpen:
 
     @pytest.mark.asyncio
     async def test_one_virtual_type_failure_still_lists_the_other(self, library, fake_romm_api):
-        """AC1 fail-open at the callable: one failing virtual type never fails
+        """AC1 fail-open at the use case: one failing virtual type never fails
         get_collections nor drops the healthy type's collection."""
         _wire_fake(library, fake_romm_api)
         # The franchise type is down; the collection type answers normally.

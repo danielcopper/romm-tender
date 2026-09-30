@@ -1,6 +1,6 @@
-"""Contract tests for the offline launch-path callables.
+"""Contract tests for the offline launch-path endpoints.
 
-Drives the new launch-gate funnel callables exactly as the frontend does
+Drives the new launch-gate funnel endpoints exactly as the frontend does
 (``frontend/src/api/backend.ts``), asserting only the response SHAPE +
 behaviour:
 

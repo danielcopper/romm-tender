@@ -19,7 +19,7 @@ import { logError } from "../api/backend";
 
 /**
  * Outcome of the injected pre-launch sync, shaped after the
- * `pre_launch_sync` callable result the caller already consumes
+ * `pre_launch_sync` endpoint result the caller already consumes
  * (`{ success, message, conflicts? }`). The gate maps it onto the verdict:
  *   - `conflicts` non-empty            -> `{ decision: "conflict", conflicts }`
  *   - `success === false` (no conflict)-> `{ decision: "sync_failed", message }`

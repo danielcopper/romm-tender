@@ -1,4 +1,4 @@
-"""Tests for SyncEngine — public-callable orchestration: lock dispatch, save-sync
+"""Tests for SyncEngine — public-use-case orchestration: lock dispatch, save-sync
 gates (enabled, migration-pending, content directory), heartbeat probe,
 device-registration fallback, error/conflict count surfacing, and matrix/registry
 delegate wiring. Per-file matrix dispatch lives in tests/services/saves/sync_engine/test_matrix.py;
@@ -1015,7 +1015,7 @@ class TestSyncRomSavesDisabledGuard:
 
 
 class TestSyncCallableErrorMessages:
-    """The failure ``message`` each public sync callable builds from the matrix
+    """The failure ``message`` each public sync use case builds from the matrix
     result (``_summarize_sync_result``). A total failure leads with the first
     error's classified reason (never buried behind "Uploaded 0 save(s)"); a
     partial run keeps the count summary and appends the reason; pre-launch
@@ -1025,7 +1025,7 @@ class TestSyncCallableErrorMessages:
     @pytest.mark.asyncio
     async def test_pre_launch_sync_message_includes_error_count(self, tmp_path):
         # pre_launch keeps the plain count clause — the reason promotion is
-        # scoped to the upload-side callables (#1334).
+        # scoped to the upload-side use cases (#1334).
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
@@ -1112,7 +1112,7 @@ class TestSyncCallableErrorMessages:
 
 
 class TestSyncCallablesSurfaceDirectionCounts:
-    """The per-ROM sync callables surface per-direction counts (#250).
+    """The per-ROM sync use cases surface per-direction counts (#250).
 
     The completion toast names which way saves moved, so each result dict
     carries ``uploaded`` / ``downloaded`` alongside the ``synced`` total.

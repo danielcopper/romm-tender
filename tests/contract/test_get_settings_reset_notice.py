@@ -1,13 +1,13 @@
-"""Contract test for the persistent corrupt-settings-reset notice callables.
+"""Contract test for the persistent corrupt-settings-reset notice endpoints.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getSettingsResetNotice = callable<[], {pending: boolean; backed_up_to: string | null}>``
-and ``dismissSettingsResetNotice = callable<[], {success: boolean}>``.
+``getSettingsResetNotice = endpoint<[], {pending: boolean; backed_up_to: string | null}>``
+and ``dismissSettingsResetNotice = endpoint<[], {success: boolean}>``.
 
 The corruption path itself is hard to drive cleanly through the real
 bootstrap (it needs a pre-existing unparseable settings.json before the
-composition root runs) — the bootstrap unit test and the main.py callable
-unit tests are the primary coverage. This pins the callables' response shapes
+composition root runs) — the bootstrap unit test and the main.py endpoint
+unit tests are the primary coverage. This pins the endpoints' response shapes
 over the real Endpoints:
 
 * clean boot → ``pending: False`` with ``backed_up_to: None`` (literal None → JS null);

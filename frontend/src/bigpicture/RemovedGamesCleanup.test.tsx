@@ -121,7 +121,7 @@ function optionToggleFor(modal: RenderResult, label: string): HTMLInputElement {
 }
 
 describe("RemovedGamesCleanup", () => {
-  // logInfo/logWarn/logError are plain wrappers over the frontend_log callable,
+  // logInfo/logWarn/logError are plain wrappers over the frontend_log endpoint,
   // so they are spied rather than module-mocked. Fresh per test: the confirm
   // path asserts on them in both directions, and a call leaking in from a
   // sibling test would satisfy either.
@@ -1605,7 +1605,7 @@ describe("RemovedGamesCleanup", () => {
     fireEvent.click(section.getByRole("button", { name: "Stop Cleanup" }));
     await act(async () => Promise.resolve());
 
-    // The callable has resolved. That means the request was received, NOT that
+    // The endpoint call has resolved. That means the request was received, NOT that
     // the run stopped — tying the lock to it let seven presses through in three
     // seconds on device.
     expect(backend.cancelPrune).toHaveBeenCalledTimes(1);

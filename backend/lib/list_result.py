@@ -22,10 +22,10 @@ Lives in ``lib/`` rather than ``models/`` because it is a cross-cutting
 control-flow primitive: services, adapters, and domain logic may all
 construct or consume it, and it has no place in the persisted-data layer.
 
-Canonical failure response shape for dict-returning callables
+Canonical failure response shape for dict-returning endpoints
 =============================================================
 
-For callables that return a plain ``dict`` (rather than the typed
+For endpoints that return a plain ``dict`` (rather than the typed
 :data:`ListResult` union above) and that can fail, the canonical failure
 shape is::
 
@@ -54,7 +54,7 @@ The legacy ``error_code`` key and a second ``error`` key are **forbidden**.
 and ``message`` and must not carry ``error`` or ``error_code``.
 
 Optional payload-shape extras (``slot``, ``saves``, ``active_slot``, …) may
-appear alongside on a per-callable basis when the frontend needs to render
+appear alongside on a per-endpoint basis when the frontend needs to render
 fallback UI on failure.
 
 Two carve-outs (also recognised by the gate):

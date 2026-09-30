@@ -1,13 +1,13 @@
-"""SyncEngine entry point: per-rom lock dispatch and public-callable orchestration.
+"""SyncEngine entry point: per-rom lock dispatch and public-use-case orchestration.
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
-sequencing rules the public save-sync callables follow (save-sync
+sequencing rules the public save-sync use cases follow (save-sync
 enabled check, retrodeck migration rule, device-registration fallback,
 dispatch into the matrix executor, persistence), plus following a moved
 save directory, which the sync entry points and ``resolve_sync_conflict`` do
 here and the other write paths and the delete, count and status paths of the
 peer services do through ``follow_save_directory``.
-Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
+Each public use case owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
 aggregate back in a short write UoW at the end. The implementation of
@@ -127,7 +127,7 @@ def _first_error_reason(errors: list[str]) -> str:
 
 
 def _summarize_sync_result(base: str, *, synced: int, errors: list[str], conflicts: int) -> str:
-    """Compose a sync callable's result ``message``, surfacing the failure reason (#1334).
+    """Compose a sync use case's result ``message``, surfacing the failure reason (#1334).
 
     A total failure (``synced == 0`` with errors) leads with the first error's
     classified reason — never the "Uploaded 0 save(s), 1 error(s)" count summary
@@ -190,7 +190,7 @@ class SyncEngineConfig:
 
 
 class SyncEngine:
-    """Newest-wins matrix executor, sync orchestration callables, and rom-level lock dispatch."""
+    """Newest-wins matrix executor, sync orchestration use cases, and rom-level lock dispatch."""
 
     def __init__(self, *, config: SyncEngineConfig) -> None:
         self._config = config
@@ -304,7 +304,7 @@ class SyncEngine:
     # Matrix-executor delegates — consumed by tests, peer services, and
     # internal orchestration. Kept on SyncEngine so monkey-patching
     # `svc._sync_engine.do_sync_rom_saves = stub` continues to short-circuit
-    # the public callables that drive `do_sync_rom_saves` through
+    # the public use cases that drive `do_sync_rom_saves` through
     # `self.do_sync_rom_saves`.
     # ------------------------------------------------------------------
 
@@ -479,7 +479,7 @@ class SyncEngine:
         return state, self._devices.get_device_id()
 
     # ------------------------------------------------------------------
-    # Public sync orchestration callables
+    # Public sync orchestration use cases
     # ------------------------------------------------------------------
 
     async def follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:

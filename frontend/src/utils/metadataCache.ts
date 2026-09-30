@@ -7,8 +7,8 @@ import type { RomMetadata } from "../types";
  * full ``appId → RomMetadata`` map.
  *
  * Metadata is paged so a large library never sends a multi-MB dump through the
- * size-limited WebSocket bridge in a single callable response (#1025). Each page
- * is raced against ``timeoutMs`` so a hung callable throws out of the loop — init
+ * size-limited WebSocket bridge in a single endpoint response (#1025). Each page
+ * is raced against ``timeoutMs`` so a hung endpoint call throws out of the loop — init
  * lets its retry driver restart from offset 0, the sync_complete re-apply logs
  * and moves on. The empty-page guard stops the loop even if ``total`` overshoots
  * the rows actually returned. Shared by plugin-load init and the sync_complete

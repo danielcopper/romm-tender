@@ -1,10 +1,10 @@
 /**
- * Pure helpers that translate a `get_save_slots` callable response into the
+ * Pure helpers that translate a `get_save_slots` endpoint response into the
  * side-effects the panel component needs to apply. Centralises the
  * "success:false means keep existing UI state" guard so it can be unit-tested
  * without rendering the panel component.
  *
- * Backend contract: on API failure the callable returns `success:false` with
+ * Backend contract: on API failure the endpoint returns `success:false` with
  * an empty `slots` array so it doesn't clobber persisted state — the UI must
  * preserve the last-known good slot list rather than blank it on a transient
  * blip. Such a failure may additionally carry the persisted listing under

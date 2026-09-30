@@ -119,7 +119,7 @@ class MetadataService:
         frontend metadata entry (list-shaped array fields), ``total`` the
         full row count. Both are read under the same short read UoW so the
         page and its total are consistent. ``offset`` / ``limit`` are
-        clamped non-negative; a read callable, so no failure shape.
+        clamped non-negative; a read use case, so no failure shape.
         """
         page_offset = max(0, int(offset))
         page_limit = max(0, int(limit))
@@ -135,8 +135,8 @@ class MetadataService:
         """Return ``{str(app_id): rom_id}`` from the ``roms`` registry for frontend lookup.
 
         Rows with a NULL ``shortcut_app_id`` (unbound / stale) are
-        excluded — they carry no Steam shortcut to map. Callable-only, so
-        its own short read UoW is safe (no in-transaction caller).
+        excluded — they carry no Steam shortcut to map. Called only by its
+        endpoint, so its own short read UoW is safe (no in-transaction caller).
         """
         with self._uow_factory() as uow:
             return {

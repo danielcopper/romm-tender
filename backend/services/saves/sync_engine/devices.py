@@ -21,7 +21,7 @@ from lib.errors import RommNotFoundError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._settings import save_sync_enabled
 
-# Both device callables short-circuit with the identical failure shape when
+# Both device use cases short-circuit with the identical failure shape when
 # save sync is disabled — kept as one constant so the two branches never drift
 # into a per-call mini-dialect.
 _SYNC_DISABLED_REASON = "sync_disabled"
@@ -55,7 +55,7 @@ class DeviceRegistry:
     identity in ``kv_config``, user-set label in settings) and flows
     through the injected ``SettingsPersister``.
 
-    Also co-locates the device-identity fallback every sync callable
+    Also co-locates the device-identity fallback every sync use case
     reaches when no id is registered yet. The async entry points take
     ``loop``, ``hostname_provider``, and ``machine_id_provider`` per call
     so :class:`SyncEngine` can pass its live (test-rebindable) attributes

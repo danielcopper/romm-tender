@@ -1,7 +1,7 @@
-"""Contract tests for the startup launch-options reconcile read callable.
+"""Contract tests for the startup launch-options reconcile read endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getInstalledRelaunchOptions = callable<[], {app_id, launch_options}[]>``.
+``getInstalledRelaunchOptions = endpoint<[], {app_id, launch_options}[]>``.
 
 The frontend pulls this on mount (after backend reachability is proven) and
 re-confirms each shortcut's launch command to heal any drift to the empty

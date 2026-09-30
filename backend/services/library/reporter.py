@@ -1,7 +1,7 @@
 """Sync result reporter and registry-query sub-service.
 
-Owns the post-apply path: the frontend-callable ``report_unit_results``
-ack (event signal only) and the orchestrator-driven
+Owns the post-apply path: the ``report_unit_results`` ack the frontend
+sends (event signal only) and the orchestrator-driven
 ``commit_unit_results`` that finalises artwork file names and upserts
 each acked ROM into the ``roms`` aggregate, stamping its cached
 ``rom_metadata`` in the same write UoW (Rom row first, then metadata —
@@ -690,7 +690,7 @@ class SyncReporter:
         return None
 
     async def report_unit_results(self, rom_id_to_app_id, run_id, unit_id, chunk_index):
-        """Frontend-Callable: ack that this apply chunk's shortcuts are applied.
+        """The frontend's ack that this apply chunk's shortcuts are applied.
 
         Routes the ack in three cases, by run/unit/chunk identity:
 

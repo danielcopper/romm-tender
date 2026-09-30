@@ -1,9 +1,9 @@
 """Contract tests for ``fetch_cover_base64`` over the real Endpoints/bootstrap.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``fetchCoverBase64 = callable<[number], { base64: string | null }>`` — a single
+``fetchCoverBase64 = endpoint<[number], { base64: string | null }>`` — a single
 positional rom_id, asserting the literal ``{"base64": ...}`` data shape. It is a
-data callable, not a ``{success, reason, message}`` result: every failure —
+data endpoint, not a ``{success, reason, message}`` result: every failure —
 server unreachable, a ROM without a cover — is a silent ``{"base64": None}``.
 
 Only the RomM transport is faked; the per-ROM cover cache is the REAL

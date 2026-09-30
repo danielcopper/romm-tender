@@ -127,7 +127,7 @@ is gitignored. See `.claude/rules/testing-backend.md` for the convention on pinn
 `tests/contract/` is a tier that crosses the frontend↔backend wire. Where the unit tests check each side against its own
 mocked idea of the other, the contract tier builds the **real** `Endpoints` through the **real** `bootstrap()` +
 `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under `tmp_path`) and
-drives the actual `main.py` callables **exactly as the frontend does** — positional, JSON-shaped arguments with the arg
+drives the actual `main.py` endpoints **exactly as the frontend does** — positional, JSON-shaped arguments with the arg
 types declared in `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`). The assertions pin the
 response _shape_ (canonical failure shape, discriminated-status unions, partial-success flags), not delegation. Only the
 outermost edges are faked: the RomM + SteamGridDB network transports, the Clock/UuidGen/Sleeper seams, `emit`, and the
@@ -164,7 +164,7 @@ Updating the vectors means deliberately re-copying the JSON from the matching up
 bumping the release tag in `tests/adapters/gavel_vectors/README.md` — in lockstep with the `.so`, which is pinned to the
 same release; never edit a vector to match the core.
 
-Every backend feature or callable where testing makes sense should have unit tests covering:
+Every backend feature or endpoint where testing makes sense should have unit tests covering:
 
 - **Happy path** — normal successful operation
 - **Bad path** — invalid input, missing data, API errors, network failures
@@ -427,7 +427,7 @@ least of all — that is the growth the gate exists to stop. A raise taken silen
 than any module's size. The pin list lives in the script and entries only ever come out — a module that drops back under
 the threshold has to leave it, and the gate fails until it does — while a module that banks 50+ lines of slack gets a
 non-fatal note asking for its ceiling to be lowered. What the gate does not walk is listed at `SCOPE_DIRS` with the
-reason for each: `main.py` grows with the callable surface by design, `_vendor/` holds checksum-pinned upstream copies,
+reason for each: `main.py` grows with the endpoint surface by design, `_vendor/` holds checksum-pinned upstream copies,
 a large file under `tests/` is the one-file-per-source-module rule working, `scripts/` never ships, and `frontend/src/`
 needs a per-scope glob before it can be added. There is deliberately no `--update` flag — re-baselining should be a
 reviewable diff, never a command someone runs to get back to green.
@@ -544,7 +544,7 @@ Two files, split by how often they apply:
 
 - **`CLAUDE.md`** (repo root) — the traps, the cross-cutting invariant register, and the workflow. Everything here
   applies no matter which file you touch, so it is read up front.
-- **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, callable
+- **`.claude/rules/*.md`** — the per-area conventions (services, adapters/domain, Python naming and docstrings, endpoint
   shapes, bootstrap wiring, vendored assets, backend and frontend testing). Each file carries a `paths:` frontmatter
   glob and is loaded when a matching file is opened, which keeps the always-on set small.
 
@@ -596,7 +596,7 @@ frontend/src/                        # Frontend TypeScript
     saves/                           # Slot and save-file components, shared across the game-detail panel's tabs
     patches/                         # The game-detail route patch
   desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
-  api/backend.ts                     # callable() wrappers (typed)
+  api/backend.ts                     # endpoint() wrappers (typed)
   types/                             # TypeScript interfaces and Steam API declarations
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/tender-rom-launcher              # Pure exec wrapper — installed to <bin root> at every start, and run from there

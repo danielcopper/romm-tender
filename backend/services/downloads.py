@@ -212,7 +212,7 @@ class DownloadService:
         """Start a download, refusing when this game is already on disk.
 
         The user's answers to that refusal and the game page's own report ride on
-        this callable rather than a second one, so every download — first attempt
+        this use case rather than a second one, so every download — first attempt
         or replace — passes the same prologue: the ``already_downloading`` guard,
         the path-safety coercion, the occupancy gate, the supersede, the disk
         pre-flight. ``DownloadTargetGateFn`` owns what each of them means.

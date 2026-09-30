@@ -60,7 +60,7 @@ describe("connectionProbe", () => {
     vi.mocked(testConnection).mockRejectedValue(new Error("backend down"));
     vi.mocked(getSettings).mockImplementation(() => new Promise(() => {}));
     // A dead bridge is reported to the console rather than through logError,
-    // which is itself a callable and would hang.
+    // which itself calls an endpoint and would hang.
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const unsubscribe = onConnectionProbeChange(vi.fn());

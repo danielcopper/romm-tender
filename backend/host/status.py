@@ -1,7 +1,7 @@
 """What the panel can ask about the process hosting it.
 
 Contract: the facts about this backend's own run that no service knows and no
-event announces. It is a record the runtime fills in and a callable reads — one
+event announces. It is a record the runtime fills in and an endpoint reads — one
 number each, read when the panel opens.
 
 Two of them exist because the alternative is a fault that lives only in a log

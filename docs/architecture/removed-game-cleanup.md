@@ -13,7 +13,7 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 
 | Module                            | Responsibility                                                         |
 | --------------------------------- | ---------------------------------------------------------------------- |
-| `services/prune/service.py`       | Callable facade and the ephemeral per-run state                        |
+| `services/prune/service.py`       | Use-case facade and the ephemeral per-run state                        |
 | `services/prune/preview.py`       | Builds the candidate preview (sizes, groups, warnings)                 |
 | `services/prune/registry.py`      | Discovers candidates from local rows and fetch generations             |
 | `services/prune/recovery.py`      | Sequences bundle creation and sealing                                  |

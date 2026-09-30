@@ -754,8 +754,8 @@ class PlaytimeService:
         Wire shape the frontend types and reads:
         ``{playtime: {rom_id_str: {total_seconds, session_count, last_played}}}``.
         ``last_played`` is the ISO end time of the newest recorded/reconciled
-        session (``None`` until one exists). Callable-only, so its own short read
-        UoW is safe (no in-transaction caller).
+        session (``None`` until one exists). Called only by its endpoint, so its own
+        short read UoW is safe (no in-transaction caller).
         """
         with self._uow_factory() as uow:
             return {
@@ -827,7 +827,7 @@ class PlaytimeService:
         partial-success shape ``{total_seconds, session_count, last_played,
         server_query_failed}``: the first three come from the resulting (or
         existing) local row, and ``server_query_failed`` flags an unreachable
-        server. Never raises out of the callable — a fetch failure, a
+        server. Never raises out of the use case — a fetch failure, a
         not-yet-scoped token (403 → durable re-sign-in notice, local-only
         degrade), or an orphan ``rom_id`` (no ``roms`` row) reports the local
         row's values.

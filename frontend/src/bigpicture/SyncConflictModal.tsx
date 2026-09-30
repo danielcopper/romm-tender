@@ -151,7 +151,7 @@ interface SyncConflictModalHostProps {
 }
 
 /**
- * Stateful wrapper: handles the resolveSyncConflict callable, error display,
+ * Stateful wrapper: handles the resolveSyncConflict endpoint, error display,
  * and modal close timing. Used by `showSyncConflictModal`.
  */
 const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, closeModal, onDone }) => {

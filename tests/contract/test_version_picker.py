@@ -1,8 +1,8 @@
-"""Contract tests for the version-picker callables over the real Endpoints/bootstrap.
+"""Contract tests for the version-picker endpoints over the real Endpoints/bootstrap.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``getVersionList = callable<[number], VersionList>`` and
-``switchVersion = callable<[number, number, boolean], SwitchVersionResult>`` —
+``getVersionList = endpoint<[number], VersionList>`` and
+``switchVersion = endpoint<[number, number, boolean], SwitchVersionResult>`` —
 positional JSON-shaped args (the Steam appId, the target rom_id, and the
 ``allow_stranded`` "switch anyway" override).
 
@@ -377,7 +377,7 @@ async def test_switch_version_local_404_has_canonical_shape_and_no_mutation(harn
 
 
 async def test_switch_version_local_probe_transport_failure_fails_open_once(harness):
-    """The real callable preserves the fast offline local-switch path."""
+    """The real endpoint preserves the fast offline local-switch path."""
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     _seed_rom(harness, rom_id=2, app_id=None)
     harness.romm.get_rom_once_side_effect_by_id[2] = ConnectionError("offline")

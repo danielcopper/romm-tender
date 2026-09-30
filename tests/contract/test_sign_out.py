@@ -1,7 +1,7 @@
-"""Contract test for the ``sign_out`` callable.
+"""Contract test for the ``sign_out`` endpoint.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``signOut = callable<[], BackendResult>("sign_out")`` — no arguments.
+``signOut = endpoint<[], BackendResult>("sign_out")`` — no arguments.
 
 Pins the response SHAPE over the real ``Endpoints``: signing out returns the
 canonical success shape, clears the stored token locally while keeping

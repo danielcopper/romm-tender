@@ -1,8 +1,8 @@
 """Tests for MatrixExecutor — newest-wins matrix evaluation and per-file sync I/O
 dispatch. Anything that decides "which side wins for this file" or moves bytes
 between local saves_dir and the RomM server lives in
-backend/services/saves/sync_engine/matrix.py and is exercised here. Public-
-callable orchestration (lock acquisition, guards) lives in test_engine.py;
+backend/services/saves/sync_engine/matrix.py and is exercised here. Public
+use-case orchestration (lock acquisition, guards) lives in test_engine.py;
 device registration in test_devices.py; conflict rollback in test_rollback.py.
 """
 

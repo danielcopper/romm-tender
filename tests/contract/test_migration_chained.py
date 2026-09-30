@@ -11,7 +11,7 @@ database, re-emits ``migration_relaunch_options`` with the C path, and clears
 both pending markers.
 
 ``migrate_retrodeck_files`` is driven frontend-shaped per ``frontend/src/api/backend.ts``:
-``callable<[string | null], MigrationResult>`` — a single positional argument,
+``endpoint<[string | null], MigrationResult>`` — a single positional argument,
 ``None`` for the null conflict-strategy.
 """
 

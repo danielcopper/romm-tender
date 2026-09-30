@@ -9,7 +9,7 @@ cover-only change never re-applies the shortcut). The NULL-adopt upgrade path
 (a pre-#1386 row with an existing cache file) is exercised the same way and
 must persist the fingerprint without any download.
 
-The preview→apply flow gap is exercised through the callables the QAM actually
+The preview→apply flow gap is exercised through the endpoints the QAM actually
 drives: ``sync_preview`` must count the cover-only work (``cover_refresh_count``)
 without side effects, and the subsequent ``sync_apply_delta`` run must advance
 the fingerprint and carry the refresh entry across the wire — while the pure
@@ -114,7 +114,7 @@ async def _run_sync(harness, run_id: str) -> None:
 async def _drain_apply(harness, tries: int = 5000) -> None:
     """Wait for the background apply task ``sync_apply_delta`` scheduled.
 
-    The callable claims the run slot before returning and the per-unit task
+    The endpoint claims the run slot before returning and the per-unit task
     resets the box to IDLE on finish, so polling the state drains the task on
     the harness's own loop (everything behind it is fake/fast).
     """

@@ -1,6 +1,6 @@
-"""Contract tests for the library / sync read-surface callables.
+"""Contract tests for the library / sync read-surface endpoints.
 
-Each callable is driven exactly as the frontend declares it in
+Each endpoint is driven exactly as the frontend declares it in
 ``frontend/src/api/backend.ts`` — positional, JSON-shaped arguments with the TS
 arg types — and the assertions pin the *response shape* (the contract), not the
 delegation. Covered here:
@@ -12,7 +12,7 @@ delegation. Covered here:
 
 Note on the failure shape: ``get_platforms`` / ``get_collections`` now return
 the canonical ``{success: False, reason, message}`` shape used across the
-callable surface. The ``reason`` slug is ``"server_unreachable"`` for a
+endpoint surface. The ``reason`` slug is ``"server_unreachable"`` for a
 ``RommConnectionError``. The earlier legacy divergence (``error_code`` under a
 separate key) has been collapsed onto the unified shape, so these assertions
 pin ``reason``, not ``error_code``.
@@ -381,7 +381,7 @@ async def test_virtual_collection_enable_round_trips(harness):
 
 
 async def test_save_collections_sync_batch_round_trips(harness):
-    """The batch callable stamps every id in one write and reads back enabled."""
+    """The batch endpoint stamps every id in one write and reads back enabled."""
     harness.romm.collections = [
         {"id": 1, "name": "Alpha", "rom_count": 1},
         {"id": 2, "name": "Beta", "rom_count": 1},
@@ -601,7 +601,7 @@ async def test_report_unit_results_late_ack_binds_orphan(harness):
     End-to-end over the real Endpoints/bootstrap: drive the box into the real
     production post-timeout state (chunk stashed via ``stash_abandoned_chunk``,
     run wound down via ``finish_run`` so ``current_sync_id`` is None), call the
-    callable frontend-shaped, then assert ``get_app_id_rom_id_map`` resolves the
+    endpoint frontend-shaped, then assert ``get_app_id_rom_id_map`` resolves the
     appId to the rom_id."""
     box = harness.app.services.sync_service._box
     _entry = {
@@ -642,7 +642,7 @@ async def test_report_unit_results_late_ack_binds_orphan(harness):
 
 async def test_get_session_budget_status_shape_rss_none(harness):
     """Fail-open shape: the harness's fake renderer RSS is unavailable (None), so
-    the callable still resolves with success + the fixed budget lines (#1383)."""
+    the endpoint still resolves with success + the fixed budget lines (#1383)."""
     from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB, POST_RUN_ADVISORY_KB
 
     result = await harness.endpoints.get_session_budget_status()

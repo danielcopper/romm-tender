@@ -6,7 +6,7 @@ sync the user never cancelled — so it would abort and report cancelled. The
 run-scoped cancel ignores a stale run id; an unscoped (falsy) cancel still
 cancels unconditionally.
 
-Driven through the real ``cancel_sync`` callable over the real wired plugin,
+Driven through the real ``cancel_sync`` endpoint over the real wired plugin,
 asserting the response shape and the downstream effect on run B's terminal
 ``sync_complete`` event.
 """
@@ -41,7 +41,7 @@ def _sync_complete_payloads(harness):
 
 
 async def test_cancel_sync_shape_when_idle(harness):
-    """Idle: the callable returns the success-shaped no-op (not a failure shape)."""
+    """Idle: the endpoint returns the success-shaped no-op (not a failure shape)."""
     result = harness.endpoints.cancel_sync("any-run")
     assert result == {"success": True, "message": "No sync in progress"}
 
@@ -67,7 +67,7 @@ async def test_cancel_sync_stale_run_does_not_abort_fresh_run(harness):
     orch = _orchestrator(harness)
     _dispatcher(harness)._wait_for_unit_complete = _ack_immediately
 
-    # Run A: start through the real callable. The deterministic FakeUuidGen mints
+    # Run A: start through the real endpoint. The deterministic FakeUuidGen mints
     # a fixed id, so pin run A's id explicitly to model the cross-run race
     # (run A's id must differ from run B's).
     run_a_id = "run-A"

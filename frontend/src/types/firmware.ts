@@ -197,7 +197,7 @@ export interface EmulatorOption {
 }
 
 /**
- * Response shape of the `get_platform_core_info` callable — the dedicated
+ * Response shape of the `get_platform_core_info` endpoint — the dedicated
  * single-platform emulator-info path, decoupled from the per-game BIOS payload
  * (#923). The per-game detail page (`RomMPlaySection` / `RomMGameInfoPanel`)
  * reads emulator data from here; the platform-keyed twin for a caller with no
@@ -220,7 +220,7 @@ export interface CoreInfo {
 }
 
 /**
- * Response shape of the `get_system_core_info` callable — the platform-keyed
+ * Response shape of the `get_system_core_info` endpoint — the platform-keyed
  * core read the Library page's Platforms detail issues once per selected
  * platform (#1815). Carries what the core picker needs and nothing else: no
  * per-game layer (there is no ROM), and no BIOS data (the detail's table reads
@@ -234,7 +234,7 @@ export interface CoreInfo {
  * RetroDECK then resolves the emulator itself at launch, and the Library page
  * says that rather than printing a name or claiming a failure.
  *
- * There is no `success`, for the reason its sibling has none: the callable has
+ * There is no `success`, for the reason its sibling has none: the endpoint has
  * no in-band failure to report. What can go wrong — an unreadable
  * `es_systems.xml` — is already `emulator_data_available: false`, and anything
  * else raises, which reaches the caller as a rejected promise.

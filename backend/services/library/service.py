@@ -1,13 +1,13 @@
 """LibraryService façade.
 
-Owns the public callable surface exposed via ``main.py`` (platform/
+Owns the public use cases the endpoints call (platform/
 collection metadata, sync preview/apply/cancel, reporting, the
 ``roms``-derived queries) and the shared :class:`LibrarySyncStateBox` that
 threads through every sub-service. Implementation lives in the
 sub-service modules: :class:`LibraryFetcher` for ROM/metadata
 roundtrips, :class:`SyncOrchestrator` for the preview/apply
 lifecycle and safety heartbeat, :class:`SyncReporter` for post-apply
-finalisation and the ``roms``-derived callable queries,
+finalisation and the ``roms``-derived queries,
 :class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
 :class:`ShortcutLaunchResolver` for each ROM's launch facts,
 :class:`ChunkDispatcher` for one unit's emit → ack → commit round-trips,
@@ -108,7 +108,7 @@ class LibraryService:
     Composes :class:`LibraryFetcher` (platform/collection roundtrips +
     metadata-cache stamping), :class:`SyncOrchestrator` (preview/apply lifecycle
     + safety heartbeat), :class:`SyncReporter` (post-apply finalisation + the
-    ``roms``-derived callable queries), :class:`SessionBudgetMonitor` (Steam's
+    ``roms``-derived queries), :class:`SessionBudgetMonitor` (Steam's
     renderer-heap budget), :class:`ShortcutLaunchResolver` (each ROM's installed
     path + active emulator), :class:`ChunkDispatcher` (one unit's apply, emitted
     and committed a chunk at a time), :class:`CoverPreparer` (a unit's covers,

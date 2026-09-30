@@ -1,4 +1,4 @@
-"""Callable facade and ephemeral run state for explicit vanished-ROM cleanup."""
+"""Use-case facade and ephemeral run state for explicit vanished-ROM cleanup."""
 
 from __future__ import annotations
 

@@ -54,7 +54,7 @@ class Download:
 
 @dataclass(frozen=True)
 class Conflict:
-    """Both sides changed. User must decide via the resolve callable."""
+    """Both sides changed. User must decide via the resolve endpoint."""
 
     server_save: dict[str, Any]
 

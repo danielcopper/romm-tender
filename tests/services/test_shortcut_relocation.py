@@ -150,7 +150,7 @@ class TestTheStampHasOneWriter:
 
     The design rests on this: the completion may be recorded only by a call that
     has just read the file and found nothing of ours outside the launcher's home.
-    No report can record it — not the frontend's, which is why the callable that
+    No report can record it — not the frontend's, which is why the endpoint that
     once let it was removed — because Steam writes its in-memory shortcuts to
     that file when it chooses, so a report describes writes the file cannot yet
     show. A second writer breaks no behavioural test below: it would stamp

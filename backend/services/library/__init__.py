@@ -6,8 +6,8 @@ composes the library sync sub-services (:class:`LibraryFetcher`,
 :class:`SessionBudgetMonitor`, :class:`ShortcutLaunchResolver`,
 :class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
 :class:`LocalLibraryReader`)
-over a shared :class:`LibrarySyncStateBox` and exposes the callable surface
-consumed by the endpoints on ``Endpoints`` (platform/collection metadata, sync
+over a shared :class:`LibrarySyncStateBox` and exposes the use cases
+called by the endpoints on ``Endpoints`` (platform/collection metadata, sync
 preview/apply, post-apply reporting, the ``roms``-derived queries). RomM
 communication goes through Protocol-typed adapters.
 """

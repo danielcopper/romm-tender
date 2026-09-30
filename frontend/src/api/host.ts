@@ -121,7 +121,7 @@ function socket(): HostSocket {
  * Declare one backend method, and answer with a function that calls it.
  *
  * Arguments are positional, which is the wire's shape: a named form would have
- * to agree with every backend callable's parameter names, and those are an
+ * to agree with every endpoint's parameter names, and those are an
  * implementation detail on that side.
  */
 export const endpoint =

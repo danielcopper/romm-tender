@@ -216,7 +216,7 @@ class BiosChecker(Protocol):
     caller can pair one emulator's identity with another's name
     (``domain.emulator_commands.LaunchingEmulator``). Its identity names a
     standalone emulator as readily as a libretro core. ``None`` means "use the
-    platform's own pick" — the ``check_platform_bios`` callable passes it, and
+    platform's own pick" — the ``check_platform_bios`` use case passes it, and
     so does the per-game path when nothing could be resolved for the ROM.
     """
 
@@ -249,7 +249,7 @@ class DiscResolver(Protocol):
 
     The composition root satisfies this with ``DiscLaunchResolver``. The three
     launch-bake sites (library sync, download-complete, RetroDECK-home migration)
-    and the disc-picker callables ask "which file does this installed ROM launch
+    and the disc-picker use cases ask "which file does this installed ROM launch
     with, given its persisted disc pick?" and operate entirely in path space.
     :meth:`enumerate_discs` lists the launchable discs in disc order (empty for a
     single-file ROM); :meth:`resolve_bake_path` resolves the pin over that list;

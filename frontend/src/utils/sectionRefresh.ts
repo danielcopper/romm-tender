@@ -1,7 +1,7 @@
 /**
  * Fire-and-forget background refresh helpers for the play-section row.
  *
- * Each helper hits a single backend callable, merges the response into the
+ * Each helper hits a single backend endpoint, merges the response into the
  * caller's state via a typed setter, and swallows errors (logging where it's
  * useful for debugging). Generic over the consumer's state shape so the
  * helpers stay decoupled from any particular component's full state.

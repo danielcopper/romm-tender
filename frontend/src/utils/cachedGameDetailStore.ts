@@ -1,5 +1,5 @@
 /**
- * In-memory cache for the get_cached_game_detail callable. Centralizes the
+ * In-memory cache for the get_cached_game_detail endpoint. Centralizes the
  * cache map + TTL eviction so component call sites never mutate it directly.
  *
  * Follows the same module-scope pattern as utils/connectionState.ts: state

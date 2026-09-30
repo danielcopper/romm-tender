@@ -30,7 +30,7 @@ import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent 
 
 // Stub the cached-detail store: synchronous Promise.resolve so the initial
 // useEffect settles within a single waitFor tick. The default test-setup
-// `callable()` stub would otherwise leave the button stuck in "loading".
+// `endpoint()` stub would otherwise leave the button stuck in "loading".
 vi.mock("../utils/cachedGameDetailStore", () => ({
   getCachedGameDetail: vi.fn<(appId: number) => Promise<CachedGameDetail>>(),
   invalidateCachedGameDetail: vi.fn(),
@@ -958,7 +958,7 @@ describe("CustomPlayButton — pre-launch savefiles_in_content_dir benign skip (
 // front. cached rom_id=42, appId=100.
 describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
   beforeEach(() => {
-    // This file has no global mock-clear, so backend callable call history leaks
+    // This file has no global mock-clear, so backend endpoint call history leaks
     // across describes (an earlier Play test already invoked isSaveTrackingConfigured
     // / debugLog). Clear it so the "never touched" guard assertions are meaningful.
     vi.clearAllMocks();
@@ -2536,7 +2536,7 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
   });
 
   it("a hung getRomRelaunchOptions aborts launch after the timeout and restores Play", async () => {
-    // A callable can hang forever on a wedged backend. The fetch
+    // An endpoint call can hang forever on a wedged backend. The fetch
     // is bounded by a 3s Promise.race; on timeout the launch is aborted and the
     // button must not stay stuck on "Launching…".
     // RTL's findBy* deadlocks under fake timers, so render + settle to "Play"
@@ -2917,7 +2917,7 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
 // Stop Game — the running overlay's chevron action. Steam cannot terminate these
 // games (the shortcut execs `flatpak run`, whose portal-started sandbox is not
 // under Steam's reaper, so TerminateApp is a proven on-device no-op), so the
-// kill is a backend callable. It is destructive and unconfirmable after the
+// kill is a backend endpoint. It is destructive and unconfirmable after the
 // fact, hence the confirm modal in front of it.
 // ---------------------------------------------------------------------------
 describe("CustomPlayButton — Stop Game", () => {
@@ -3101,7 +3101,7 @@ describe("CustomPlayButton — Stop Game", () => {
       await Promise.resolve();
     });
 
-    // Nothing to kill → no prompt, no callable, and the overlay is cleared.
+    // Nothing to kill → no prompt, no endpoint call, and the overlay is cleared.
     expect(showStopGameModal).not.toHaveBeenCalled();
     expect(backend.stopRunningGame).not.toHaveBeenCalled();
     expect(await utils.findByText("Play")).toBeInTheDocument();

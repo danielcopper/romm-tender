@@ -4,7 +4,7 @@ The one place that answers "which file will this multi-disc ROM actually launch
 with?", folding the user's persisted ``roms.selected_disc`` pick over the live
 enumeration of disc images in the ROM's install directory. Every launch-bake
 site draws the bake path from this seam so the baked launch_options never
-diverge from the picker's current selection, and the picker callables enumerate
+diverge from the picker's current selection, and the picker use cases enumerate
 through the same seam so the list they show is the list the bake resolves over.
 
 Resolution is a bake-time path-override layer only: it returns the path to bake
