@@ -2184,9 +2184,15 @@ class TestTheNewVersionIsCheckedFirst:
         assert result.returncode == 0, result.stderr
         assert log.read_text(encoding="utf-8").splitlines() == ["--kill-after=10 120"]
 
-    @pytest.mark.parametrize("status", ["124", "137"])
-    def test_a_check_that_did_not_finish_changes_nothing_and_records_nothing(self, machine, status):
-        """Stopped at the limit, or killed after it: nothing is known about the version."""
+    @pytest.mark.parametrize(
+        ("status", "said", "not_said"),
+        [
+            ("124", "the pre-install check was stopped after 120s", "the pre-install check was killed"),
+            ("137", "the pre-install check was killed", "the pre-install check was stopped after 120s"),
+        ],
+    )
+    def test_a_check_that_did_not_finish_changes_nothing_and_records_nothing(self, machine, status, said, not_said):
+        """Stopped at the limit, or killed — by `timeout` or by anything else: nothing is known about the version."""
         _installed(machine)
         before = _seed_data(machine)
         machine.systemctl_log.write_text("", encoding="utf-8")
@@ -2202,7 +2208,8 @@ class TestTheNewVersionIsCheckedFirst:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the check did not finish"]
         assert "  nothing was changed" in result.stderr.splitlines()
-        assert "the pre-install check was stopped after 120s" in result.stderr.splitlines()
+        assert said in result.stderr.splitlines()
+        assert not_said not in result.stderr
         assert _tree_version(machine.code) == _VERSION
         assert not Path(f"{machine.code}.new").exists()
         assert not machine.failure_record.exists()

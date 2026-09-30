@@ -126,7 +126,9 @@ CHECK_NOT_TRIED=2
 # seconds; a check still running at the limit is waiting on something — a
 # database another process keeps locked, a storage device that stopped
 # answering — rather than working. `timeout` answers 124 for a check it
-# stopped and 137 for one it had to kill (coreutils' timeout(1)).
+# stopped, and 137 for one that was killed: by `timeout` itself once the grace
+# period ran out, or by anything else, the kernel's out-of-memory killer among
+# them (coreutils' timeout(1)).
 CHECK_SECONDS=120
 CHECK_KILL_AFTER=10
 
@@ -1996,16 +1998,16 @@ do_install() {
     fi
 }
 
-# The pre-install check: builds the staged version's backend without starting
-# it (backend/check.py) — every module imported, the native library loaded, and
-# the database and settings migrated, on copies of the live ones taken while the
-# installed version may still be writing them. Every root it could write under
-# is named here, the runtime directory among them, because a root left out falls
-# back to one the running version uses, and a panel install hands this run the
-# live ones in its environment. The code root is the staged tree; the others lie
-# under WORK_DIR, which the EXIT trap removes. `-B` because the staged tree is
-# the one put in place, and bytecode this run wrote into it would be files the
-# tarball did not bring.
+# The pre-install check: builds the staged version's backend without starting it
+# (backend/check.py) — main.py imported with everything it imports, the native
+# library loaded, and the database and settings migrated, on copies of the live
+# ones taken while the installed version may still be writing them. Every root
+# it could write under is named here, the runtime directory among them, because
+# a root left out falls back to one the running version uses, and a panel
+# install hands this run the live ones in its environment. The code root is the
+# staged tree; the others lie under WORK_DIR, which the EXIT trap removes. `-B`
+# because the staged tree is the one put in place, and bytecode this run wrote
+# into it would be files the tarball did not bring.
 check_the_new_version() {
     local roots="$WORK_DIR/check"
     TENDER_CODE_DIR="$CODE.new" \
@@ -2030,9 +2032,12 @@ check_the_new_version() {
 refuse_the_new_version() {
     local status="$1" new="$2" previous="$3" reason
     rm -rf "$CODE.new" || echo "could not remove the new version from $(tilde "$CODE.new")" >&2
-    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+    if [ "$status" -eq 124 ]; then
         reason="the check did not finish"
         echo "the pre-install check was stopped after ${CHECK_SECONDS}s" >&2
+    elif [ "$status" -eq 137 ]; then
+        reason="the check did not finish"
+        echo "the pre-install check was killed" >&2
     elif [ "$status" -eq "$CHECK_NOT_TRIED" ]; then
         reason="could not try the new version: your data could not be copied"
     else
