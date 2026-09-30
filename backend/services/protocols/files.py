@@ -93,7 +93,7 @@ class DirectoryFileListerFn(Protocol):
 
 
 class UpdateFailureFn(Protocol):
-    """Read the installer's record of an update it rolled back or its check refused, or answer that there is none.
+    """Read the installer's record of an update that did not go through, or answer that there is none.
 
     Implementations never raise: a record that is missing, unreadable or
     malformed all answer ``None``, because a start and a panel read have to go

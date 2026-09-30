@@ -150,6 +150,17 @@ class TestTheAttemptVocabularyAgreesAcrossTheWire:
         assert _frontend_literals("UpdateInstallFailure") == {failure.value for failure in InstallFailure}
 
 
+class TestTheFailureKindsAgreeAcrossTheWire:
+    """The backend's ``UpdateFailureKind`` values and the frontend's union are the same set.
+
+    The panel words the line under a failed update by its kind, so a kind added
+    on the backend alone reaches a panel with no line for it.
+    """
+
+    def test_both_sides_carry_the_same_kinds(self):
+        assert _frontend_literals("UpdateFailureKind") == {kind.value for kind in UpdateFailureKind}
+
+
 class TestAttemptOnTheWire:
     def test_a_download_in_progress(self):
         attempt = InstallAttempt(version="1.1.0", step=InstallStep.DOWNLOADING, bytes_done=10, bytes_total=100)
@@ -248,6 +259,13 @@ class TestAStoppedAttempt:
         failure = UpdateFailure("1.1.0", "1.0.0", "2026-09-29T10:00:05Z", UpdateFailureKind.CHECK)
 
         assert stopped_attempt(_ATTEMPT, "1.0.0", failure) is None
+
+    @pytest.mark.parametrize("kind", list(UpdateFailureKind))
+    def test_a_record_of_the_same_version_written_before_it_started_is_an_earlier_attempt_s(self, kind):
+        """It stands until a later update goes through, and would otherwise hide that this installer stopped."""
+        failure = UpdateFailure("1.1.0", "1.0.0", "2026-09-29T09:59:59Z", kind)
+
+        assert stopped_attempt(_ATTEMPT, "1.0.0", failure) == _ATTEMPT
 
 
 _REFUSED = UpdateFailure("1.1.0", "1.0.0", "2026-09-29T10:00:05Z", UpdateFailureKind.CHECK)

@@ -9,6 +9,7 @@ import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import {
   UPDATE_CHECK_FAILURE_REASON,
   UPDATE_FAILURE_REASON,
+  UPDATE_UNKNOWN_FAILURE_REASON,
   resetUpdateOutcomeStoreForTests,
   setUpdateOutcomeState,
   type UpdateOutcomeState,
@@ -174,12 +175,21 @@ describe("UpdatesSection", () => {
     expect(getByText(UPDATE_FAILURE_REASON)).toBeTruthy();
   });
 
-  it("states an update the installer's check refused, with the check's line", () => {
+  it("states an update the pre-install check refused, with the check's line", () => {
     const refused = { ...ROLLED_BACK, failure: { ...ROLLED_BACK.failure!, kind: "check" as const } };
     const { getByTestId, getByText, queryByText } = renderSection({}, { outcome: refused });
     expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
     expect(getByText(UPDATE_CHECK_FAILURE_REASON)).toBeTruthy();
     expect(queryByText(UPDATE_FAILURE_REASON)).toBeNull();
+  });
+
+  it("states an update whose record is of a kind this version does not know, with no cause", () => {
+    const unknown = { ...ROLLED_BACK, failure: { ...ROLLED_BACK.failure!, kind: "unknown" as const } };
+    const { getByTestId, getByText, queryByText } = renderSection({}, { outcome: unknown });
+    expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
+    expect(getByText(UPDATE_UNKNOWN_FAILURE_REASON)).toBeTruthy();
+    expect(queryByText(UPDATE_FAILURE_REASON)).toBeNull();
+    expect(queryByText(UPDATE_CHECK_FAILURE_REASON)).toBeNull();
   });
 
   it("words a rolled-back update in the warning colour its card on Main uses", () => {
@@ -330,7 +340,7 @@ describe("UpdatesSection", () => {
       expect(utils.getByText("Try again")).toBeTruthy();
     });
 
-    it("marks Starting the installer failed where the installer's check refused the new version", () => {
+    it("marks Starting the installer failed where the pre-install check refused the new version", () => {
       const utils = withInstall({
         attempt: { ...DOWNLOADING, step: "failed", failure: "new_version_does_not_start" },
         tryAgain: true,

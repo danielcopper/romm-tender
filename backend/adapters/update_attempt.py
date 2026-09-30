@@ -3,7 +3,8 @@
 Owns ``update-attempt.json``: reading it, writing it, removing it. The backend
 is its only writer — the installer never touches it — and the record is what
 lets the next start tell an installer that stopped without updating from an
-update that went through or was rolled back.
+update that went through, was rolled back, or was refused by the pre-install
+check.
 """
 
 from __future__ import annotations

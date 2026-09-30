@@ -213,7 +213,7 @@ class InstallFailure(StrEnum):
     GAME_STARTED = "game_started"
     RUNNING_APPS_UNKNOWN = "running_apps_unknown"
     # The installer ended while this process still ran, and its record says its
-    # check refused the new version before stopping anything.
+    # pre-install check refused the new version before stopping anything.
     NEW_VERSION_DOES_NOT_START = "new_version_does_not_start"
 
 
@@ -317,25 +317,31 @@ def stopped_attempt(
 ) -> UpdateAttemptRecord | None:
     """The record, where it says the installer stopped without updating; ``None`` where it says anything else.
 
-    Judged at every start while the record stands, once the installer's
-    unit has ended. Running the
-    attempted version, the update went through. A standing record of the
-    installer's that this attempt was rolled back, or refused by its check, is
-    that record's story to tell. Running neither the attempted nor the starting
-    version, the version moved some other way since. Only a start on the version
-    that started the attempt, with no record of it from the installer, is an
-    installer that stopped without updating — which, having stopped this program first, it never got
-    to report.
+    Judged at every start while the record stands, once the installer's unit
+    has ended. Running the attempted version, the update went through. A
+    standing record of the installer's that this attempt was rolled back, or
+    refused by its pre-install check, is that record's story to tell — where it
+    names this attempt's version and was written no earlier than this attempt
+    started; the two stamps compare as text, for the reason
+    :func:`refused_by_the_check` gives. Running neither the attempted nor the
+    starting version, the version moved some other way since. Only a start on
+    the version that started the attempt, with no record of it from the
+    installer, is an installer that stopped without updating — which, having
+    stopped this program first, it never got to report.
     """
     if record is None or running != record.from_version:
         return None
-    if failure is not None and failure.attempted_version == record.attempted_version:
+    if (
+        failure is not None
+        and failure.attempted_version == record.attempted_version
+        and failure.rolled_back_at >= record.started_at
+    ):
         return None
     return record
 
 
 def refused_by_the_check(failure: UpdateFailure | None, attempted_version: str, running: str, started_at: str) -> bool:
-    """Whether *failure* is the installer's record that its check refused this attempt.
+    """Whether *failure* is the installer's record that its pre-install check refused this attempt.
 
     This attempt is the one at *attempted_version* that *running* started at
     *started_at*. A record of the check's kind answers for it only when it

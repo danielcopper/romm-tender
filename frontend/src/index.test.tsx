@@ -1579,6 +1579,29 @@ describe("index.tsx — what the backend pushes about updates", () => {
     plugin.onDismount();
   });
 
+  it("takes a refusal by the pre-install check into the store the card on Main reads, with its card up", () => {
+    const plugin = pluginFactory();
+    const record = {
+      attempted_version: "0.35.0",
+      restored_version: "0.33.0",
+      rolled_back_at: "2026-09-29T10:02:00Z",
+      kind: "check",
+    };
+
+    act(() => emitHostEvent("update_failure_recorded", record));
+
+    expect(getUpdateOutcomeState().failure).toEqual({
+      attemptedVersion: "0.35.0",
+      restoredVersion: "0.33.0",
+      rolledBackAt: "2026-09-29T10:02:00Z",
+      kind: "check",
+    });
+    expect(getUpdateOutcomeState().failureDismissed).toBe(false);
+    expect(hostEventListenerCount("update_failure_recorded")).toBe(1);
+    plugin.onDismount();
+    expect(hostEventListenerCount("update_failure_recorded")).toBe(0);
+  });
+
   it("stops listening for all three on dismount", () => {
     const plugin = pluginFactory();
     expect(hostEventListenerCount("update_notice")).toBe(1);

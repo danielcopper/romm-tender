@@ -285,9 +285,21 @@ class TestAStartAfterARollback:
             service.note_start()
 
         assert _lines(caplog, logger, logging.WARNING) == [
-            "the installer's check refused 1.3.0 at 2026-09-25T10:15:00Z: it did not start, so nothing was changed"
-            " and this is still 1.2.3 — what it said is in journalctl --user -u romm-tender-update,"
+            "the pre-install check refused 1.3.0 at 2026-09-25T10:15:00Z: it does not start, so nothing was changed"
+            " and Tender is still on 1.2.3 — what the check said is in journalctl --user -u romm-tender-update,"
             " or in the terminal the installer ran in"
+        ]
+
+    def test_a_record_of_a_kind_it_does_not_know_is_logged_with_no_cause(self, logger, caplog):
+        unknown = UpdateFailure("1.3.0", "1.2.3", "2026-09-25T10:15:00Z", UpdateFailureKind.UNKNOWN)
+        service, _, _, _ = _make(logger, running="1.2.3", last_run="1.2.3", record=_Record(unknown))
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            service.note_start()
+
+        assert _lines(caplog, logger, logging.WARNING) == [
+            "the update to 1.3.0 did not go through at 2026-09-25T10:15:00Z; Tender is still on 1.2.3 — what the"
+            " installer said is in journalctl --user -u romm-tender-update, or in the terminal the installer ran in"
         ]
 
     def test_no_record_logs_no_warning(self, logger, caplog):
@@ -383,6 +395,15 @@ class TestTheRecord:
             "rolled_back_at": "2026-09-25T10:15:00Z",
             "kind": "check",
         }
+
+    async def test_a_record_of_a_kind_it_does_not_know_is_reported_as_unknown(self, logger):
+        unknown = UpdateFailure("1.3.0", "1.2.3", "2026-09-25T10:15:00Z", UpdateFailureKind.UNKNOWN)
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(unknown))
+
+        outcome = await service.get_update_outcome()
+
+        assert outcome["failure"] is not None
+        assert outcome["failure"]["kind"] == "unknown"
 
     async def test_is_read_afresh_so_it_goes_when_the_installer_removes_it(self, logger):
         record = _Record(_FAILURE)

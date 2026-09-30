@@ -18,8 +18,11 @@ import {
   getUpdateOutcomeState,
   onUpdateOutcomeChange,
   resetUpdateOutcomeStoreForTests,
+  setUpdateOutcomeState,
   UPDATE_CHECK_FAILURE_REASON,
   UPDATE_FAILURE_REASON,
+  UPDATE_UNKNOWN_FAILURE_REASON,
+  takePushedUpdateFailure,
   updateFailureReason,
   updateAnnouncementSentence,
   updateFailureSentence,
@@ -118,6 +121,31 @@ describe("updateOutcomeStore", () => {
 
   it("starts with no record", () => {
     expect(getUpdateOutcomeState()).toEqual({ announcement: null, failure: null, failureDismissed: false });
+  });
+
+  it("takes a pushed refusal as the record its card shows, over a read still in flight", async () => {
+    let answer: (outcome: UpdateOutcome) => void = () => {};
+    vi.mocked(getUpdateOutcome).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const listener = vi.fn();
+    onUpdateOutcomeChange(listener);
+    const read = fetchUpdateOutcome();
+
+    takePushedUpdateFailure({ ...ROLLED_BACK_WIRE.failure!, kind: "check" });
+    answer({ ...ROLLED_BACK_WIRE, failure: null });
+    await read;
+
+    expect(getUpdateOutcomeState().failure).toEqual({ ...ROLLED_BACK.failure!, kind: "check" });
+    expect(getUpdateOutcomeState().failureDismissed).toBe(false);
+    expect(listener).toHaveBeenCalled();
+  });
+
+  it("takes a pushed refusal with its card up, even where an earlier record's card was dismissed", () => {
+    setUpdateOutcomeState({ ...ROLLED_BACK, failureDismissed: true });
+
+    takePushedUpdateFailure({ ...ROLLED_BACK_WIRE.failure!, rolled_back_at: "2026-09-26T08:00:00Z", kind: "check" });
+
+    expect(getUpdateOutcomeState().failureDismissed).toBe(false);
+    expect(getUpdateOutcomeState().failure?.rolledBackAt).toBe("2026-09-26T08:00:00Z");
   });
 
   it("keeps the record's kind", async () => {
@@ -350,9 +378,16 @@ describe("updateOutcomeStore", () => {
     it("says where the reason is in the words of the record's kind", () => {
       expect(updateFailureReason(ROLLED_BACK.failure!)).toBe(UPDATE_FAILURE_REASON);
       expect(updateFailureReason({ ...ROLLED_BACK.failure!, kind: "check" })).toBe(UPDATE_CHECK_FAILURE_REASON);
+      expect(updateFailureReason({ ...ROLLED_BACK.failure!, kind: "unknown" })).toBe(UPDATE_UNKNOWN_FAILURE_REASON);
     });
 
-    it("words a refusal by the installer's check as nothing changed, and sends the reader to the installer's output", () => {
+    it("names no cause for a record of a kind this version does not know, only the installer's output", () => {
+      expect(UPDATE_UNKNOWN_FAILURE_REASON).toBe(
+        "The installer's output says why: journalctl --user -u romm-tender-update, or the terminal it was run in.",
+      );
+    });
+
+    it("words a refusal by the pre-install check as nothing changed, and sends the reader to the installer's output", () => {
       expect(UPDATE_CHECK_FAILURE_REASON).toBe(
         "The new version did not start, so nothing was changed. The installer's output says why: journalctl --user -u romm-tender-update, or the terminal it was run in.",
       );

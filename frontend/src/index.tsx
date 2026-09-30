@@ -59,7 +59,7 @@ import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
-import { fetchUpdateOutcome } from "./utils/updateOutcomeStore";
+import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
@@ -101,7 +101,7 @@ import {
 import { withTimeout } from "./utils/withTimeout";
 import { fetchMetadataCachePages } from "./utils/metadataCache";
 import { cancelPruneActions, handlePruneAction } from "./utils/pruneActions";
-import type { StoppedUpdateAttemptWire, UpdateInstallAttempt, UpdateNotice } from "./api/backend";
+import type { StoppedUpdateAttemptWire, UpdateFailure, UpdateInstallAttempt, UpdateNotice } from "./api/backend";
 import type { PruneActionRequired } from "./utils/pruneActions";
 import { admitPruneFrame, setPruneComplete, setPruneProgress } from "./utils/pruneStore";
 import type { PruneComplete, PruneProgress } from "./utils/pruneStore";
@@ -1063,8 +1063,9 @@ const tender = definePlugin(() => {
   );
 
   // The backend's own release check, pushed when its answer changes, the
-  // install attempt's steps, and a stopped attempt judged after panel load;
-  // each is held in its store for the surfaces.
+  // install attempt's steps, a stopped attempt judged after panel load, and a
+  // refusal by the pre-install check seen while the backend ran; each is held
+  // in its store for the surfaces.
   const updateNoticeListener = addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
   const updateInstallListener = addEventListener<UpdateInstallAttempt>(
     "update_install_progress",
@@ -1074,6 +1075,7 @@ const tender = definePlugin(() => {
     "update_attempt_stopped",
     takePushedStoppedAttempt,
   );
+  const updateFailureListener = addEventListener<UpdateFailure>("update_failure_recorded", takePushedUpdateFailure);
 
   // Destructive cleanup actions must keep running even when the Data Management
   // page or the game-detail picker unmounts. The backend emits one tokenized action at a
@@ -1195,6 +1197,7 @@ const tender = definePlugin(() => {
       removeEventListener("update_notice", updateNoticeListener);
       removeEventListener("update_install_progress", updateInstallListener);
       removeEventListener("update_attempt_stopped", updateStoppedListener);
+      removeEventListener("update_failure_recorded", updateFailureListener);
       removeEventListener("prune_action_required", pruneActionListener);
       cancelPruneActions();
       detach(releaseAllPruneLeases());

@@ -1,11 +1,11 @@
 """What became of the last update, as a start of this program finds it.
 
 Contract: everything pure about an update's outcome — the record the installer
-leaves when it rolled an update back or its check refused the new version (its
-filename, how it is read, and whether it still stands), and which announcement,
-if any, a start owes the user: the version running now and which way it moved.
-Reading the record stays in the adapter; the version a start remembers stays in
-the service.
+leaves when it rolled an update back or its pre-install check refused the new
+version (its filename, how it is read, and whether it still stands), and which
+announcement, if any, a start owes the user: the version running now and which
+way it moved. Reading the record stays in the adapter; the version a start
+remembers stays in the service.
 """
 
 from __future__ import annotations
@@ -31,14 +31,18 @@ class UpdateFailureKind(StrEnum):
     """What the installer's record says became of the update, as its ``kind`` key spells it.
 
     A record without the key is a rollback: that is the only record an installer
-    wrote before its check existed, and an older backend reading a ``check``
-    record ignores the key and tells it as one too.
+    wrote before its pre-install check existed, and an older backend reading a
+    ``check`` record ignores the key and tells it as one too.
     """
 
     ROLLBACK = "rollback"
-    # The installer's check refused the new version before anything was stopped
-    # or replaced (``check_the_new_version`` in ``install.sh``).
+    # The pre-install check refused the new version before anything was stopped
+    # or replaced (``refuse_the_new_version`` in ``install.sh`` writes it).
     CHECK = "check"
+    # A kind this reader does not know — a later installer's. No installer
+    # writes this spelling; the record still says the update did not go
+    # through, and names no cause this reader could word.
+    UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -46,7 +50,7 @@ class UpdateFailure:
     """An update that did not go through, as the installer's record states it.
 
     ``restored_version`` is the version the user is still on: the one a
-    rollback put back, or the one a refused check never replaced.
+    rollback put back, or the one a refused pre-install check never replaced.
     ``rolled_back_at`` is the record's own ISO-8601 UTC text — when the
     rollback or the refusal happened — kept as written: it is shown and
     compared, never computed with, and it is what tells one record from the
@@ -59,6 +63,15 @@ class UpdateFailure:
     rolled_back_at: str
     kind: UpdateFailureKind = UpdateFailureKind.ROLLBACK
 
+    def to_wire(self) -> dict[str, str]:
+        """The JSON shape the outcome's answer and the refusal's push both carry."""
+        return {
+            "attempted_version": self.attempted_version,
+            "restored_version": self.restored_version,
+            "rolled_back_at": self.rolled_back_at,
+            "kind": self.kind.value,
+        }
+
 
 def decode_update_failure(raw: str) -> UpdateFailure | None:
     """Read the installer's record, or ``None`` where it says nothing usable.
@@ -67,8 +80,9 @@ def decode_update_failure(raw: str) -> UpdateFailure | None:
     A record short of that is treated as no record at all rather than shown in
     part, because a card naming half an update would state something the
     installer did not. ``kind`` is optional and read as a rollback where it is
-    absent; a ``kind`` this reader does not know is no record either, for the
-    same reason.
+    absent. A ``kind`` this reader does not know is still a record — the
+    update did not go through, whatever the cause — and reads as
+    :attr:`UpdateFailureKind.UNKNOWN`.
     """
     try:
         decoded = json.loads(raw)
@@ -82,13 +96,11 @@ def decode_update_failure(raw: str) -> UpdateFailure | None:
     if not (_is_text(attempted) and _is_text(restored) and _is_text(rolled_back_at)):
         return None
     kind = decoded.get("kind", UpdateFailureKind.ROLLBACK.value)
-    if not isinstance(kind, str) or kind not in UpdateFailureKind:
-        return None
     return UpdateFailure(
         attempted_version=attempted,
         restored_version=restored,
         rolled_back_at=rolled_back_at,
-        kind=UpdateFailureKind(kind),
+        kind=UpdateFailureKind(kind) if _is_known_kind(kind) else UpdateFailureKind.UNKNOWN,
     )
 
 
@@ -145,3 +157,7 @@ def announced_update(last_run: str | None, running: str, failure: UpdateFailure 
 
 def _is_text(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _is_known_kind(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and value in UpdateFailureKind

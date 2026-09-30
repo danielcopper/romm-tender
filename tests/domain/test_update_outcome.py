@@ -65,10 +65,26 @@ class TestDecodeUpdateFailure:
         assert failure is not None
         assert failure.kind is UpdateFailureKind.CHECK
 
-    @pytest.mark.parametrize("kind", ["CHECK", "refused", "", None, 1, ["check"], {"check": True}])
-    def test_a_kind_it_does_not_know_is_no_record(self, kind):
-        """Told as a rollback it would state something the installer did not."""
-        assert decode_update_failure(json.dumps({**_RECORD, "kind": kind})) is None
+    @pytest.mark.parametrize("kind", ["CHECK", "refused", "unknown", "", None, 1, ["check"], {"check": True}])
+    def test_a_kind_it_does_not_know_is_an_update_that_did_not_go_through_for_no_cause_it_names(self, kind):
+        """Told as a rollback it would state something the installer did not; dropped, the update would vanish."""
+        assert decode_update_failure(json.dumps({**_RECORD, "kind": kind})) == UpdateFailure(
+            attempted_version="1.3.0",
+            restored_version="1.2.3",
+            rolled_back_at="2026-09-25T10:15:00Z",
+            kind=UpdateFailureKind.UNKNOWN,
+        )
+
+    @pytest.mark.parametrize("kind", list(UpdateFailureKind))
+    def test_on_the_wire_it_carries_its_three_fields_and_its_kind(self, kind):
+        failure = UpdateFailure("1.3.0", "1.2.3", "2026-09-25T10:15:00Z", kind)
+
+        assert failure.to_wire() == {
+            "attempted_version": "1.3.0",
+            "restored_version": "1.2.3",
+            "rolled_back_at": "2026-09-25T10:15:00Z",
+            "kind": kind.value,
+        }
 
     @pytest.mark.parametrize("key", ["attempted_version", "restored_version", "rolled_back_at"])
     def test_a_record_missing_any_key_is_no_record(self, key):

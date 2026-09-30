@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.update_install import UpdateAttemptRecord
+    from domain.update_outcome import UpdateFailure
     from domain.update_release import LatestRelease, ReleaseTarball
     from services.protocols import (
         ActiveDownloadRomIdsFn,
@@ -86,10 +87,10 @@ class UpdateInstallServiceConfig:
     Carries the release check the release is read through, the running version
     and whether this process is the installed program, one reader per kind of
     work a restart would cut short and the claims on the prune conflicts, the
-    Steam interface reader the host fills in, the installer's record of a
-    rolled-back update and this program's own record of an attempt, the
-    download, staging and unit seams with the environment the installer starts
-    with, and the runtime infrastructure.
+    Steam interface reader the host fills in, the installer's record of an
+    update that did not go through and this program's own record of an
+    attempt, the download, staging and unit seams with the environment the
+    installer starts with, and the runtime infrastructure.
     """
 
     releases: LastSeenReleaseReader
@@ -199,8 +200,8 @@ class UpdateInstallService:
         again, pushed to the panel as ``update_attempt_stopped``, and kept for
         the notice on Main until it is dismissed, a new attempt starts, or the
         running version changes. Any other record — an update that went
-        through, one the installer rolled back or its check refused, a version
-        that moved since — is removed.
+        through, one the installer rolled back or its pre-install check
+        refused, a version that moved since — is removed.
 
         The installer starts this program itself — the new version, the one it
         rolled back to, or the same one again after it gave up — and may still
@@ -330,7 +331,7 @@ class UpdateInstallService:
         ``{"version", "step", "bytes_done", "bytes_total", "failure"}``, or
         ``None``. ``try_again`` says the offered version already failed once —
         an attempt in this process, or an update the installer rolled back or
-        its check refused.
+        its pre-install check refused.
         """
         release = await self._offered_release()
         waits = await self._waits() if release is not None and not self._holding else []
@@ -522,8 +523,11 @@ class UpdateInstallService:
         """Wait for the installer to stop this process; it ending first is the attempt failing.
 
         It ends first as ``new_version_does_not_start`` where the installer's
-        record says its check refused this attempt, and as
-        ``installer_stopped`` otherwise.
+        record says its pre-install check refused this attempt — and that
+        record is pushed to the panel as ``update_failure_recorded``, in the
+        shape ``get_update_outcome`` answers it in, so the notice on Main shows
+        it without waiting for the next read — and as ``installer_stopped``
+        otherwise.
 
         A user manager that cannot be asked is not an answer, and neither is a
         seam that raised, so the watch goes on rather than calling the
@@ -535,11 +539,13 @@ class UpdateInstallService:
         while True:
             await self._sleeper.sleep(_WATCH_SECONDS)
             active, why = await self._ask_unit()
-            if active is False and await self._refused_by_the_check(version):
+            refusal = await self._check_refusal(version) if active is False else None
+            if refusal is not None:
                 self._logger.warning(
-                    f"update: the installer's check refused {version}: it does not start, so nothing was changed; "
-                    f"what it said is in journalctl --user -u {INSTALLER_UNIT}"
+                    f"update: the pre-install check refused {version}: it does not start, so nothing was changed; "
+                    f"what the check said is in journalctl --user -u {INSTALLER_UNIT}"
                 )
+                await self._emit("update_failure_recorded", refusal.to_wire())
                 raise _AttemptFailedError(InstallFailure.NEW_VERSION_DOES_NOT_START)
             if active is False:
                 self._logger.warning(
@@ -557,17 +563,21 @@ class UpdateInstallService:
             elif active is None:
                 self._log_debug(f"[update] the installer's unit could not be asked about ({why})")
 
-    async def _refused_by_the_check(self, version: str) -> bool:
-        """Whether the installer's record says its check refused this attempt; a record that cannot be read says not."""
+    async def _check_refusal(self, version: str) -> UpdateFailure | None:
+        """The installer's record that its pre-install check refused this attempt, or ``None``.
+
+        ``None`` too where the record cannot be read: the attempt then ends as
+        an installer that stopped, which is what it looks like from here.
+        """
         started_at = self._installer_started_at
         if started_at is None:
-            return False
+            return None
         try:
             failure = await self._loop.run_in_executor(None, self._read_update_failure)
         except Exception as e:
             self._logger.warning(f"update: the installer's record could not be read: {e!r}")
-            return False
-        return refused_by_the_check(failure, version, self._current_version, started_at)
+            return None
+        return failure if refused_by_the_check(failure, version, self._current_version, started_at) else None
 
     async def _ask_unit(self) -> tuple[bool | None, str]:
         """The installer's unit state, and what stood in the way where there is none."""

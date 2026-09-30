@@ -814,7 +814,23 @@ class TestAFailedAttempt:
 
         assert last["failure"] == "new_version_does_not_start"
         assert rig.service.is_update_in_progress() is False
-        assert f"update: the installer's check refused {_OFFERED}" in caplog.text
+        assert f"update: the pre-install check refused {_OFFERED}" in caplog.text
+
+    async def test_the_refusal_is_pushed_to_the_panel_before_the_attempt_fails(self, rigs, tmp_path):
+        """So the notice on Main shows it now, rather than at the next panel load."""
+        refused = UpdateFailure(_OFFERED, _RUNNING, _CLOCK_STAMP, UpdateFailureKind.CHECK)
+        rig = await _built(
+            rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5), failure_record=refused
+        )
+
+        await self._ended_with(rig)
+
+        names = [name for name, _payload in rig.events.events]
+        pushed = [payload for name, payload in rig.events.events if name == "update_failure_recorded"]
+        assert pushed == [refused.to_wire()]
+        assert names.index("update_failure_recorded") < max(
+            index for index, name in enumerate(names) if name == "update_install_progress"
+        )
 
     @pytest.mark.parametrize(
         "record",
@@ -836,6 +852,7 @@ class TestAFailedAttempt:
         )
 
         assert (await self._ended_with(rig))["failure"] == "installer_stopped"
+        assert [name for name, _payload in rig.events.events if name == "update_failure_recorded"] == []
 
     async def test_a_record_that_cannot_be_read_leaves_it_installer_stopped(self, rigs, tmp_path, monkeypatch):
         rig = await _built(rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5))

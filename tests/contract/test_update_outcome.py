@@ -155,6 +155,22 @@ async def test_a_refusal_by_the_installer_s_check_is_reported_with_its_kind(harn
     }
 
 
+async def test_a_record_of_a_kind_this_version_does_not_know_is_reported_as_unknown(harness):
+    """A later installer's kind: the update still did not go through, for a cause this panel cannot word."""
+    _last_run(harness, VERSION)
+    _record(harness, kind="a-later-kind")
+    harness.app.services.update_outcome_service.note_start()
+
+    outcome = await harness.endpoints.get_update_outcome()
+
+    assert outcome["failure"] == {
+        "attempted_version": "99.0.0",
+        "restored_version": VERSION,
+        "rolled_back_at": _STAMP,
+        "kind": "unknown",
+    }
+
+
 async def test_a_record_left_behind_by_an_update_that_went_through_is_no_record(harness):
     """The update to the running version answered and the record was not removed: it no longer stands."""
     _last_run(harness, "0.0.1")
