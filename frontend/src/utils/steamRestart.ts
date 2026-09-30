@@ -1,42 +1,12 @@
 /**
- * The two restarts the panel can ask for, and what each one actually restarts.
- *
- * They are not interchangeable, and the difference is the whole reason both
- * live here rather than beside the one notice that first needed each:
- *
- * - {@link restartSteam} restarts the Steam **client**. The frontend reloads;
- *   the plugin's Python backend does not start again
- *   (`services/library/_state.py` states the same fact from the backend side).
- *   That is exactly right for freeing the renderer's per-session heap budget.
- * - {@link restartDevice} reboots the **device**, which is what it takes to
- *   reach the backend's next start. It has no caller today: the notice that
- *   offered it went with the start-up data migration, and it is kept because
- *   "restart the client" and "restart the machine" are two different answers
- *   and the distinction is the thing worth not losing.
- *
- * Both refuse while a game is running: either one would close it, and neither
- * is urgent enough to be worth that.
+ * {@link restartSteam} restarts the Steam **client**. The frontend reloads;
+ * Tender's backend keeps running (`services/library/_state.py` states the same
+ * fact from the backend side). That is exactly right for freeing the renderer's
+ * per-session heap budget.
  */
 
 import { showToast } from "./toast";
 import { isAnyAppRunning } from "./runningApps";
-
-/**
- * Whether this Steam build can reboot the device on request.
- *
- * Checked at render rather than assumed: `SteamClient.System.RestartPC` is
- * present in the build this was measured on and is what Steam's own UI calls,
- * but a caller that offered the button unconditionally would show a control
- * that silently does nothing if a later build drops it.
- *
- * `SteamClient` and `System` are reached bare, as `restartSteam` reaches `User`
- * below — the plugin runs in SharedJSContext, where the global is always there.
- * Only the METHOD is treated as optional, because it is the one part a Steam
- * update can take away.
- */
-export function canRestartDevice(): boolean {
-  return typeof SteamClient.System.RestartPC === "function";
-}
 
 /**
  * Restart the Steam client — the deterministic "free memory" action. A full
@@ -53,20 +23,4 @@ export function restartSteam(): void {
     return;
   }
   SteamClient.User.StartRestart(false);
-}
-
-/**
- * Reboot the device, which is how the plugin gets its next start.
- *
- * Same hard guard on a running game as {@link restartSteam}. A no-op when the
- * running Steam build has no `RestartPC` — callers ask {@link canRestartDevice}
- * first and render no button at all, so reaching this branch means the method
- * disappeared between render and click.
- */
-export function restartDevice(): void {
-  if (isAnyAppRunning()) {
-    showToast("Close your running game before restarting.");
-    return;
-  }
-  SteamClient.System.RestartPC?.();
 }
