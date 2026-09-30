@@ -1110,34 +1110,50 @@ whether the notice shows. _Avoid_: "new version" for a release that is merely pu
 An **install attempt** is one press of Install under Settings › Updates, for the available release the last check
 stored: from the press, through the download and its digest check, to the installer started as the transient unit
 `romm-tender-update` — after which the installer stops this process — or to a failure (`download_failed`,
-`checksum_mismatch`, `installer_not_started`, `installer_stopped`, `game_started`, `running_apps_unknown`), which
-removes what it staged. From the press until it fails the attempt holds the **update rule** (see **Conflict rules**).
-Nothing retries an attempt by itself; a failed attempt, or an update the installer rolled back, is offered again as
-**Try again**. The **attempt record** (`update-attempt.json`) is the backend's own note of an attempt whose installer it
-started, which tells the next start whether that installer stopped without updating; the installer never writes it. A
-**wait reason** is one thing a press has to wait for because the restart would cut it short — a running app, a sync, a
-download, a cleanup, a migration that is moving files, the reload limit, and **other work**: any other claim of work
-held on the **Prune conflicts**, where an endpoint that only reads, or writes a cache it can build again, holds none
-that counts — and a running-apps reading or a reload-limit reading that could not be taken is a wait reason of its own,
-never "nothing running" or "the limit lets one through". A **paused** ROM download is not one: the restart cancels it,
-and the panel says so. `domain/update_install.py` names the steps, failures and reasons; `services/update_install.py`
-runs the attempt. _Avoid_: "update" alone for the attempt — an update is what the installer does, and it can be rolled
-back after the attempt has ended.
+`checksum_mismatch`, `installer_not_started`, `installer_stopped`, `game_started`, `running_apps_unknown`,
+`new_version_does_not_start`), which removes what it staged. From the press until it fails the attempt holds the
+**update rule** (see **Conflict rules**). Nothing retries an attempt by itself; a failed attempt, or an update the
+installer rolled back or refused, is offered again as **Try again**. The **attempt record** (`update-attempt.json`) is
+the backend's own note of an attempt whose installer it started, which tells the next start whether that installer
+stopped without updating; the installer never writes it. A **wait reason** is one thing a press has to wait for because
+the restart would cut it short — a running app, a sync, a download, a cleanup, a migration that is moving files, the
+reload limit, and **other work**: any other claim of work held on the **Prune conflicts**, where an endpoint that only
+reads, or writes a cache it can build again, holds none that counts — and a running-apps reading or a reload-limit
+reading that could not be taken is a wait reason of its own, never "nothing running" or "the limit lets one through". A
+**paused** ROM download is not one: the restart cancels it, and the panel says so. `domain/update_install.py` names the
+steps, failures and reasons; `services/update_install.py` runs the attempt. _Avoid_: "update" alone for the attempt — an
+update is what the installer does, and it can be rolled back after the attempt has ended.
+
+### Pre-install check
+
+The **pre-install check** is the installer's try of the version it has just unpacked, before it stops or replaces
+anything: it runs the new version's own `backend/main.py --check`, which builds the backend — every module imported, the
+native library loaded, the database and settings migrated — on copies of the live data, under a temporary directory, and
+starts nothing. A version it cannot build is **refused**: the unpacked files are removed and nothing was changed. It
+runs on a first install as well as on an update, and only an update's refusal is recorded (below). It catches what stops
+a version being built, never what fails once it runs — the port, a request, loading the panel — which the rollback still
+catches. _Avoid_: **start-up check**, which is the panel's own question about Steam's modules (above), and
+**pre-flight**, which is the installer's check of the machine — Python, the user manager, Steam, Decky — before any of
+this.
 
 ### Rolled-back update / update announcement
 
 A **rolled-back update** is an update whose new version did not answer, so the installer put the previous version and
 its data back. Its record is the installer's `update-failure.json` in the state directory — the version it tried, the
-version it went back to, and when — which the installer writes and removes and the backend only reads. The record
-**stands** only while the running version is the one it went back to; one that outlived that is a leftover and is shown
-nowhere. The **rolled-back notice** on Main states a standing record until the user dismisses it or the next update that
-answers removes it, and for that long the update notice does not name the version it tried. The **update announcement**
-is what a start on a version that moved owes the panel — an update, or a return to an earlier release — told twice over:
-one toast, raised once per process, and a card on Main that stands until dismissed. The backend compares the running
-version with the one the previous start recorded (`last_run_version`), and a rollback is never announced.
-`domain/update_outcome.py` decides which version is announced and which way it moved; `services/update_outcome.py` keeps
-the announcement for its process and reads the record. _Avoid_: "failed update" for the record alone — an update can
-fail before anything is replaced, and then nothing is rolled back or recorded. The exception is the installer's fixed
-filename, `update-failure.json`, and the code names that follow it (`UpdateFailure`, `read_update_failure`,
-`dismiss_update_failure`, `UpdateFailureNotice`, the answer's `failure` key): each of those means the record of a
-rolled-back update, never an update that failed before anything was replaced.
+version it went back to, and when — which the installer writes and removes and the backend only reads. The same file
+records an update the **pre-install check** refused, marked `"kind": "check"`, where the version "gone back to" is the
+one that was never replaced; a record without `kind` is a rollback, and a backend from before the check reads a refusal
+as one. The record **stands** only while the running version is the one it went back to; one that outlived that is a
+leftover and is shown nowhere. The **rolled-back notice** on Main states a standing record until the user dismisses it
+or the next update that answers removes it, and for that long the update notice does not name the version it tried. The
+**update announcement** is what a start on a version that moved owes the panel — an update, or a return to an earlier
+release — told twice over: one toast, raised once per process, and a card on Main that stands until dismissed. The
+backend compares the running version with the one the previous start recorded (`last_run_version`), and a rollback is
+never announced. `domain/update_outcome.py` decides which version is announced and which way it moved;
+`services/update_outcome.py` keeps the announcement for its process and reads the record. _Avoid_: "failed update" for
+the record alone — an update can fail before anything is replaced, and then nothing is rolled back; only a refusal by
+the pre-install check is recorded, and an install attempt that failed before its installer ran is not. The exception is
+the installer's fixed filename, `update-failure.json`, and the code names that follow it (`UpdateFailure`,
+`read_update_failure`, `dismiss_update_failure`, `UpdateFailureNotice`, the answer's `failure` key): each of those means
+the installer's record — of a rolled-back update or of a refused one — never an attempt that failed before its installer
+ran.

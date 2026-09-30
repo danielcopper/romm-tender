@@ -113,6 +113,34 @@ anything when there is nothing to go back to. It also refuses when the previous 
 together, which an update that was interrupted can leave behind: going back would run the older version over data a
 newer one wrote. Start Tender instead if it is not running, with `systemctl --user start romm-tender`.
 
+## The New Version Does Not Start
+
+**Symptom**: An update, or a first install, marks the **Installing** row failed with **the new version does not start**,
+prints what the new version said, and ends with `install.sh: the new version does not start` and `nothing was changed`.
+After an update, Tender's main panel says **Update to X failed — you are still on Y.** with **The new version did not
+start, so nothing was changed.** under it, and **Settings › Updates** says the same until a later update goes through.
+
+**Explanation**: Before it stops anything, the installer tries the new version: it builds Tender's backend from the new
+files on copies of your library database and settings, the way a start would, without starting it. That failed, so the
+installer removed the new files and stopped there. Tender was not stopped, nothing was replaced, and Steam's interface
+did not reload. An update leaves `~/.local/state/romm-tender/update-failure.json` naming both versions and the time,
+marked as refused (`"kind": "check"`); Tender's log repeats it in one line each time Tender starts
+(`the installer's check refused <new> at <time>: …`). A first install leaves nothing behind.
+
+The check catches a new version that cannot be put together at all: a file that does not load, a missing or wrong
+library, a database or settings upgrade that fails on your data. It cannot catch a failure that only shows once Tender
+runs — the port, a request, loading the panel into Steam. Those are still caught after the update, by the rollback
+above.
+
+**Fix**: The installer printed the reason at the end of its output. For an update from **Settings › Updates** that
+output is in the installer's journal:
+
+```bash
+journalctl --user -u romm-tender-update
+```
+
+Include it when you report it. **Try again** in **Settings › Updates**, or running the installer again, tries again.
+
 ## An Update From Settings Did Not Go Through
 
 **Symptom**: After **Install update X** in **Settings › Updates**, one of the steps is marked **Failed**, a line under
@@ -132,6 +160,8 @@ have:
   downloaded; Tender checks right before the installer starts, and does not start it under a running game.
 - **Could not check whether a game is running — nothing was changed.** At that same check Tender could not ask Steam,
   and did not start the installer on a guess.
+- **The new version does not start — nothing was changed.** The installer tried the new version before stopping Tender,
+  and it could not be built ([The New Version Does Not Start](#the-new-version-does-not-start)).
 
 Nothing tries again by itself; what the attempt downloaded is removed.
 

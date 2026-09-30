@@ -362,7 +362,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
-  automatic rollback and removes it after an update whose new version answered** — test + prompt-only —
+  automatic rollback and, with `"kind": "check"`, when its check refuses an update's new version, and removes it after
+  an update whose new version answered** — test + prompt-only —
   `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord`: no backend module but
   `adapters/update_failure.py` and `domain/update_outcome.py` names `UPDATE_FAILURE_FILENAME` or the literal, and the
   adapter calls nothing named like a write, move or removal and opens nothing with a writing mode, nor with a mode or

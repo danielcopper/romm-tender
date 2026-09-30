@@ -692,18 +692,18 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
 plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                      | On Main                                                           | Home                                                                                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Settings were reset                            | text, backup path, Dismiss                                        | none — the card is the whole of it                                                                     |
-| Cross-device playtime needs a fresh sign-in    | text, **Open Connections**, Dismiss                               | Settings › Connections, where the accounts are                                                         |
-| RetroDECK paths missing or unreadable          | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
-| Steam answers for no notifications             | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
-| RetroArch `input_driver` is wrong              | text, **Open Controller**                                         | Settings › Controller, which holds the Fix button                                                      |
-| Sync paused on the session budget              | text, **Open Sync**                                               | Sync, which holds Restart Steam now and Resume                                                         |
-| An update was rolled back                      | both versions, where the reason is, **Open Updates**, Dismiss     | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
-| An update's installer stopped without updating | both versions, the installer's journal, **Open Updates**, Dismiss | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run         |
-| A newer Tender release is out                  | both versions, **Open Updates**, Dismiss                          | Settings › Updates, which states both versions and holds the install, the check's switch and Check now |
-| Tender was updated, or went back               | the version, Dismiss — and a toast, once                          | none — the card is the whole of it                                                                     |
+| Condition                                                      | On Main                                                           | Home                                                                                                   |
+| -------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Settings were reset                                            | text, backup path, Dismiss                                        | none — the card is the whole of it                                                                     |
+| Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                               | Settings › Connections, where the accounts are                                                         |
+| RetroDECK paths missing or unreadable                          | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
+| Steam answers for no notifications                             | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
+| RetroArch `input_driver` is wrong                              | text, **Open Controller**                                         | Settings › Controller, which holds the Fix button                                                      |
+| Sync paused on the session budget                              | text, **Open Sync**                                               | Sync, which holds Restart Steam now and Resume                                                         |
+| An update was rolled back, or refused by the installer's check | both versions, where the reason is, **Open Updates**, Dismiss     | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
+| An update's installer stopped without updating                 | both versions, the installer's journal, **Open Updates**, Dismiss | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run         |
+| A newer Tender release is out                                  | both versions, **Open Updates**, Dismiss                          | Settings › Updates, which states both versions and holds the install, the check's switch and Check now |
+| Tender was updated, or went back                               | the version, Dismiss — and a toast, once                          | none — the card is the whole of it                                                                     |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -744,17 +744,21 @@ The rolled-back notice says **Update to X failed — you are still on Y.** over 
 Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was stopped is
 there; or the journal (`journalctl --user -u romm-tender`), for a new version that failed before it could write to the
 log (`UPDATE_FAILURE_REASON` in `utils/updateOutcomeStore.ts`). The installer's own output says no more than that the
-new version did not answer in time, and points at the same two places. The notice stands while the installer's record
-does — which the backend reports only while the running version is the one the record restored
-([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is **per record**:
-it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it again, and the
-record going away — the next update whose new version answers removes it — takes it down too. Its home states the same
-sentence, in the card's warning colour (`AMBER`, `bigpicture/layout/pane.tsx`), whether or not it was dismissed. It
-**takes the place of the update notice** for the version that update tried: after a rollback that version is still newer
-than the running one, and the two cards side by side would call a release available and failed at once. So for as long
-as the record stands, that version raises no "is available" card, dismissed or not; a newer release raises one as usual
-(`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at
-panel load by a detached call, like the update notice's.
+new version did not answer in time, and points at the same two places. A record the installer's pre-install check left
+(`kind` `check`) takes the same notice with its own line instead: **The new version did not start, so nothing was
+changed.** and where the reason is — the installer's output, in its journal (`journalctl --user -u romm-tender-update`)
+or the terminal it was run in, since that version never ran as the service and wrote nothing to `backend.log`
+(`UPDATE_CHECK_FAILURE_REASON`, chosen by `updateFailureReason`); the Updates row words it the same way. The notice
+stands while the installer's record does — which the backend reports only while the running version is the one the
+record restored ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is
+**per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it
+again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
+states the same sentence, in the card's warning colour (`AMBER`, `bigpicture/layout/pane.tsx`), whether or not it was
+dismissed. It **takes the place of the update notice** for the version that update tried: after a rollback that version
+is still newer than the running one, and the two cards side by side would call a release available and failed at once.
+So for as long as the record stands, that version raises no "is available" card, dismissed or not; a newer release
+raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's answer
+(`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
 
 The notice that an **update's installer stopped without updating** is the rolled-back notice's sibling for the one
 failure the installer cannot report: it stopped Tender, then gave up and started the same version again. It uses the

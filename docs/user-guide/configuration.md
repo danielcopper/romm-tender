@@ -14,7 +14,7 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
 | **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
 | **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
-| **Updates**       | the version you have and the release the last successful check found, an update that was rolled back, the daily update check, and **Check now**               |
+| **Updates**       | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**    |
 | **Advanced**      | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
@@ -306,10 +306,11 @@ release.
 - **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
   yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
 - **Update to X failed — you are still on Y.**, with where the reason is under it, while the installer's note of a
-  rolled-back update is there and you are still on Y — whether or not you dismissed the notice on the main panel.
+  rolled-back update, or of one it refused because the new version did not start, is there and you are still on Y —
+  whether or not you dismissed the notice on the main panel.
 - **Install update X** — installs the release **Available** names; see [Installing an update](#installing-an-update).
-  **Try again** instead, for a version whose install already failed or was rolled back. A copy of Tender run from a
-  source checkout says **Development build — install updates with the installer.** in its place.
+  **Try again** instead, for a version whose install already failed, was rolled back or was refused. A copy of Tender
+  run from a source checkout says **Development build — install updates with the installer.** in its place.
 - **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
   press **Check now**, and offers nothing to install.
 - **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
@@ -352,8 +353,11 @@ got, **Verifying** and **Starting the installer**. While it downloads and verifi
 there, with nothing changed, if a game is running. When the installer has started, the section says **Tender is
 restarting — Steam's interface will reload in a moment.** From then on the panel loses touch with the old Tender, which
 is expected; after the reload Tender says it was updated, or, if the new version did not start, that the installer
-[went back to the version you had](troubleshooting.md#an-update-was-rolled-back). While the install runs, Tender refuses
-to start a library sync, a game download or a save sync.
+[went back to the version you had](troubleshooting.md#an-update-was-rolled-back). Before any of that the installer tries
+the new version without stopping Tender, and where it cannot even be put together, it stops there: nothing is replaced,
+Steam's interface does not reload, and **Starting the installer** is marked **Failed** with **The new version does not
+start — nothing was changed.** ([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)).
+While the install runs, Tender refuses to start a library sync, a game download or a save sync.
 
 If Tender is not back five minutes after the installer started, the restarting line changes: **Tender has not come
 back.** when it no longer answers — the line names the journal to read and the command that starts it again — or **The

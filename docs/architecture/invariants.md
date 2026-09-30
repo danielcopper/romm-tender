@@ -31,11 +31,15 @@ Format: **invariant** — tier — enforced by.
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
-  automatic rollback and removes it after an update whose new version answered** — test + prompt-only — the record is
-  the installer's statement that it rolled an update back, and the rolled-back notice, the row under Settings › Updates
-  and the start-up WARNING all rest on that. A backend that removed it would take the notice down before the user saw
-  it, with nothing on disk saying a rollback happened; one that wrote it would claim a rollback the installer never did.
-  So a record the backend finds no longer standing — its `restored_version` is not the running version
+  automatic rollback and, with `"kind": "check"`, when its check refuses an update's new version, and removes it after
+  an update whose new version answered** — test + prompt-only — the record is the installer's statement that an update
+  did not go through — that it rolled the update back, or that its check refused the new version before anything was
+  stopped or replaced — and the notice on Main, the row under Settings › Updates, the start-up WARNING and the live
+  `new_version_does_not_start` failure all rest on that. A backend that removed it would take the notice down before the
+  user saw it, with nothing on disk saying the update failed; one that wrote it would claim a rollback or a refusal the
+  installer never made. The check itself is the new version's own `main.py --check`, run by the installer with every
+  root pointed at a temporary directory; it builds under those roots and never under the state root this record lives
+  in. So a record the backend finds no longer standing — its `restored_version` is not the running version
   (`domain/update_outcome.py::standing_update_failure`) — is ignored rather than cleaned up.
   `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord` reads the syntax tree of every backend
   module outside `_vendor/`: only `adapters/update_failure.py` and `domain/update_outcome.py` (the constant's home) may
@@ -48,8 +52,9 @@ Format: **invariant** — tier — enforced by.
   misses a call in `domain/update_outcome.py`, which may name the record and whose calls it does not read, a write under
   a name not on its list, a runtime mode passed as `Path.open`'s first argument, a record path assembled from pieces or
   handed in from elsewhere, a write through a helper in another module, a call reached through `getattr`, and a
-  subprocess. The installer's half — the write on a rollback, before the restored version starts, and the removal once a
-  later update's new version answered — is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`,
+  subprocess. The installer's half — the write on a rollback, before the restored version starts, the write on a refused
+  check, and the removal once a later update's new version answered — is pinned by `tests/scripts/test_install_sh.py`
+  (`TestAnUpdateThatDoesNotStart`, `TestTheNewVersionIsCheckedFirst`,
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **`update-attempt.json` is written and removed by the backend alone, through `adapters/update_attempt.py`; the
   installer never touches it** — test + prompt-only — the record is how a start tells an installer that stopped without

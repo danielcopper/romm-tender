@@ -248,8 +248,17 @@ coming from it. Whenever `install.sh` installs over a tree already at `~/.local/
 order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
-2. The unit is stopped.
-3. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
+2. The new version is tried: the installer runs `$PYTHON -B <staged tree>/backend/main.py --check`, which imports the
+   whole backend, loads the native library and builds the application — the database and settings migrations included —
+   on copies of `romm_sync.db` (taken with SQLite's backup API, since the running version may be writing it) and
+   `settings.json`. All six `TENDER_*` roots point into the run's temporary directory, so it takes no lock, binds no
+   port, writes no `backend.log`, leaves the launcher alone and touches nothing in Steam. A version that cannot be built
+   is refused here with `the new version does not start` and `nothing was changed`: the staged tree is removed, the last
+   lines the check printed end the run's output, and `update-failure.json` is written with `"kind": "check"` (below). A
+   first install is tried the same way, before its tree is put in place, and a refusal there writes no record and no
+   unit.
+3. The unit is stopped.
+4. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
    `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup — beside a
    `backed-up-at` file holding when, as one line of ISO-8601 UTC, and a `data-of-version` file holding the version of
    the tree installed at the time, as one line. Plain copies are whole only because the unit is stopped. The copy is
@@ -257,10 +266,10 @@ order:
    only then is the previous one removed: a removal that fails leaves `update-backup.prev` behind rather than a
    half-removed backup under the real name, and the update goes on. The next backup removes a leftover
    `update-backup.prev` first, or puts it back where the name is empty, and refuses, changing nothing, where it cannot.
-4. The new tree is renamed into place and the old one is kept as `~/.local/lib/romm-tender.old` — one kept tree, so the
+5. The new tree is renamed into place and the old one is kept as `~/.local/lib/romm-tender.old` — one kept tree, so the
    one an earlier update kept goes now, whether or not this update then answers. The covers' move runs and the unit is
    written as on a first install.
-5. The unit is started, and the installer waits up to 60 seconds for the backend to answer as the version in the new
+6. The unit is started, and the installer waits up to 60 seconds for the backend to answer as the version in the new
    tree's `version.txt`. It asks without the token: it reads the port note, requests `http://127.0.0.1:<port>/`, and
    takes the version off the `Server: romm-tender/<version>` field the refusal carries. A missing or stale note and a
    port nobody answers on mean "not yet". The answer costs one `refused GET /: no token` WARNING in `backend.log`.
@@ -283,6 +292,12 @@ ends as any rollback does, and Tender shows no notice of that rollback. The reco
 ```json
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
+
+A version the check in step 2 refused leaves the same record with a fourth key, `"kind": "check"`, where
+`restored_version` is the version still installed — nothing was replaced — and `rolled_back_at` is when it was refused.
+The keys keep their names so that a backend from before the check still reads the record, as a rollback. A record that
+cannot be written is said the same way (`could not record the refused update in <path>; Tender will not show it`) and
+the run still ends with nothing changed.
 
 `rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file. The backend reads it and
 never writes it ([UpdateOutcomeService notes](../architecture/backend-architecture.md#updateoutcomeservice-notes)).
