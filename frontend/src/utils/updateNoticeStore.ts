@@ -31,7 +31,7 @@ import {
 } from "../api/backend";
 
 export interface UpdateNoticeState {
-  /** The card: a newer release exists, it was not dismissed, and the check is on. */
+  /** The card: a newer release exists, and it was not dismissed. */
   available: boolean;
   /** A newer release exists, dismissed or not. */
   newer: boolean;
@@ -63,7 +63,7 @@ let _listeners: Array<() => void> = [];
  * A read can sit on a GitHub request for up to its timeout, and its answer
  * carries `enabled`, which belongs to the user: without the fence, switching the
  * check on and straight back off lets the first read land after the switch is
- * off and put the card back up while `settings.json` says off. Two presses are
+ * off and show it on again while `settings.json` says off. Two presses are
  * genuinely in flight at once too — Steam's `Toggle` keeps its own state and
  * reports the flipped value — so the later one wins, and the loser also skips
  * its trailing read.
@@ -133,23 +133,23 @@ export async function fetchUpdateNotice(): Promise<void> {
 }
 
 /**
- * What an asked-for check found. `none` is a reading that found nothing newer,
- * `unreachable` is no reading at all, and `off` a question that was never asked
- * — collapsing any two says something nothing established. `superseded` means a
- * later press overtook this one, which then has nothing to report.
+ * What an asked-for check found. `none` is a reading that found nothing newer
+ * and `unreachable` no reading at all — collapsing the two says something
+ * nothing established. `superseded` means a later press overtook this one,
+ * which then has nothing to report.
  */
-export type UpdateCheckOutcome = "found" | "none" | "unreachable" | "off" | "superseded";
+export type UpdateCheckOutcome = "found" | "none" | "unreachable" | "superseded";
 
 /**
- * Ask now, past the daily throttle and past a Dismiss — the backend forgets the
- * dismissed version, so a card that was waved away comes back.
+ * Ask now, past the daily throttle, past a Dismiss and whatever the switch says
+ * — the backend forgets the dismissed version, so a card that was waved away
+ * comes back.
  */
 export async function runUpdateCheckNow(): Promise<UpdateCheckOutcome> {
   const seq = ++_seq;
   const answer = await checkForUpdateNow();
   if (seq !== _seq) return "superseded";
   setUpdateNoticeState(stateFromNotice(answer));
-  if (!answer.enabled) return "off";
   if (!answer.reached) return "unreachable";
   return answer.newer ? "found" : "none";
 }
@@ -190,20 +190,16 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
  * that it persisted it. A refused or failed write rejects and changes nothing,
  * whether or not a later write overtook it.
  *
- * Off drops what the backend drops for a switched-off check — the card and the
- * version. On cannot restore them from anything held here, so a fresh read is
- * started and not awaited: it may sit on a GitHub timeout, and the toggle just
- * pressed would sit there with it.
+ * Off keeps the card and the version: the switch governs what the program asks
+ * by itself, not what a check already found. On starts the read the switch
+ * allows again and does not await it: it may sit on a GitHub timeout, and the
+ * toggle just pressed would sit there with it.
  */
 export async function setUpdateCheckSwitch(enabled: boolean): Promise<void> {
   const seq = ++_seq;
   const write = await setUpdateCheckEnabled(enabled);
   requireAccepted(write);
   if (seq !== _seq) return;
-  if (enabled) {
-    setUpdateNoticeState({ ..._state, enabled });
-    detach(fetchUpdateNotice());
-  } else {
-    setUpdateNoticeState({ ..._state, enabled, available: false, newer: false, latestVersion: null });
-  }
+  setUpdateNoticeState({ ..._state, enabled });
+  if (enabled) detach(fetchUpdateNotice());
 }

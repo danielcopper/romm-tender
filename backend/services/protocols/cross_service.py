@@ -649,15 +649,13 @@ class MigrationPendingFn(Protocol):
 
 
 class LastSeenReleaseReader(Protocol):
-    """The release check's own answer, read by the install: the switch, and the last available release it saw.
+    """The release check's own answer, read by the install: the last available release it saw.
 
     The composition root satisfies this with ``UpdateCheckService``, the one
     owner of the stored check. ``last_seen_release`` reads what the last check
     stored and asks nothing new; ``None`` where no check has seen an available
     release.
     """
-
-    def is_check_enabled(self) -> bool: ...
 
     async def last_seen_release(self) -> LatestRelease | None: ...
 

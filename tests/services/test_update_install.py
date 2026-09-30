@@ -82,14 +82,10 @@ def _asset(release: LatestRelease) -> ReleaseTarball:
 
 
 class _Releases:
-    """The release check's answer: the switch, and the stored release."""
+    """The release check's answer: the stored release."""
 
-    def __init__(self, release: LatestRelease | None, *, enabled: bool = True) -> None:
+    def __init__(self, release: LatestRelease | None) -> None:
         self.release = release
-        self.enabled = enabled
-
-    def is_check_enabled(self) -> bool:
-        return self.enabled
 
     async def last_seen_release(self) -> LatestRelease | None:
         return self.release
@@ -179,7 +175,6 @@ async def _rig(
     *,
     release: LatestRelease | None = None,
     body: bytes | None = None,
-    enabled: bool = True,
     installed_program: bool = True,
     apps: tuple[str, ...] | None = (),
     frees_at: float | None = None,
@@ -203,7 +198,7 @@ async def _rig(
     units = FakeTransientUnits(refusal=unit_refusal, states=unit_states, no_answer=unit_no_answer)
     events = FakeEventSink()
     staging = UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update"))
-    releases = _Releases(release, enabled=enabled)
+    releases = _Releases(release)
     sleeper = sleeper if sleeper is not None else _ParkingSleeper()
     service = UpdateInstallService(
         config=UpdateInstallServiceConfig(
@@ -286,11 +281,6 @@ class TestWhatIsOffered:
         state = await rig.service.get_update_install_state()
 
         assert (state["offered"], state["version"], state["wait_reasons"]) == (False, None, [])
-
-    async def test_a_switched_off_check_offers_nothing(self, rigs, tmp_path):
-        rig = await _built(rigs, tmp_path, enabled=False)
-
-        assert (await rig.service.get_update_install_state())["offered"] is False
 
     @pytest.mark.parametrize("version", [_RUNNING, "0.9.0"])
     async def test_a_release_no_newer_than_the_running_one_is_offered_nothing(self, rigs, tmp_path, version):

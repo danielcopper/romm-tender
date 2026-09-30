@@ -321,8 +321,8 @@ class UpdateInstallService:
 
         Returns ``{"offered", "version", "wait_reasons", "paused_downloads",
         "attempt", "try_again"}``. ``offered`` holds on the installed program
-        with the check switched on and a stored release newer than the running
-        version, which ``version`` names (``None`` where nothing is offered).
+        with a stored release newer than the running version, whatever the
+        check's switch says, which ``version`` names (``None`` where nothing is offered).
         ``wait_reasons`` lists every reason a press would be refused now, each
         ``{"reason"}`` plus ``apps`` for ``app_running`` and ``frees_at`` for
         ``interface_reload_limit``; empty where nothing is offered or an
@@ -652,7 +652,7 @@ class UpdateInstallService:
         await self._emit("update_install_progress", attempt.to_wire())
 
     async def _offered_release(self) -> LatestRelease | None:
-        if not self._installed_program or not self._releases.is_check_enabled():
+        if not self._installed_program:
             return None
         release = await self._releases.last_seen_release()
         if release is None or release.tarball is None:

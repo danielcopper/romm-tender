@@ -134,15 +134,18 @@ async def test_dismissing_a_version_takes_that_card_down_only(harness):
     assert (await harness.endpoints.get_update_notice())["available"] is True
 
 
-async def test_switching_the_check_off_stops_the_read(harness):
-    assert harness.endpoints.set_update_check_enabled(False) == {"success": True}
+async def test_switching_the_check_off_stops_the_read_and_keeps_what_was_found(harness):
     harness.releases.answer = _release("99.0.0")
+    await harness.endpoints.get_update_notice()
+    assert harness.endpoints.set_update_check_enabled(False) == {"success": True}
+    harness.clock.advance(_A_DAY)
+    harness.releases.answer = _release("99.1.0")
 
     notice = await harness.endpoints.get_update_notice()
 
-    assert harness.releases.calls == 0
+    assert harness.releases.calls == 1
     assert notice["enabled"] is False
-    assert notice["available"] is False
+    assert (notice["available"], notice["latest_version"]) == (True, "99.0.0")
     assert _settings_on_disk(harness)["update_check_enabled"] is False
 
 
@@ -184,11 +187,11 @@ async def test_a_check_that_reached_nothing_is_told_apart_from_nothing_being_out
     assert (nothing_newer["reached"], nothing_newer["available"]) == (True, False)
 
 
-async def test_the_switch_still_holds_against_an_asked_for_check(harness):
+async def test_an_asked_for_check_reads_whatever_the_switch_says(harness):
     harness.endpoints.set_update_check_enabled(False)
     harness.releases.answer = _release("99.0.0")
 
     notice = await harness.endpoints.check_for_update_now()
 
-    assert harness.releases.calls == 0
-    assert (notice["enabled"], notice["reached"], notice["available"]) == (False, False, False)
+    assert harness.releases.calls == 1
+    assert (notice["enabled"], notice["reached"], notice["available"]) == (False, True, True)

@@ -1169,15 +1169,15 @@ export const getPlaytimeScopeNotice = endpoint<[], { pending: boolean }>("get_pl
  * What the backend knows about a newer release of this program.
  *
  * `available` is the card on Main: a newer release with its tarball and
- * checksum file attached exists, this exact version was not dismissed, and the
- * check is switched on. `newer` is the first of those alone, for the Settings
- * section, which states the versions whether or not the card was dismissed.
- * Every failure is silent.
+ * checksum file attached exists, and this exact version was not dismissed —
+ * whatever the check's switch says. `newer` is the first of those alone, for
+ * the Settings section, which states the versions whether or not the card was
+ * dismissed. Every failure is silent.
  */
 export interface UpdateNotice {
   available: boolean;
   newer: boolean;
-  /** The last available release a check saw, `null` until a check established one or while the check is off. */
+  /** The last available release a check saw, `null` until a check established one. */
   latest_version: string | null;
   current_version: string;
   enabled: boolean;
@@ -1189,11 +1189,11 @@ export const getUpdateNotice = endpoint<[], UpdateNotice>("get_update_notice");
 
 /** The same notice, plus whether the read behind it answered at all. */
 export interface UpdateCheckNow extends UpdateNotice {
-  /** False when GitHub gave no usable answer — and for a switched-off check, which asks nothing. */
+  /** False when GitHub gave no usable answer. */
   reached: boolean;
 }
 
-/** Ask now, past the daily throttle and past a dismissal; never past the switch. */
+/** Ask now, past the daily throttle, past a dismissal, and whatever the switch says. */
 export const checkForUpdateNow = endpoint<[], UpdateCheckNow>("check_for_update_now");
 
 /** A settings write the backend accepted, or the reason it refused one. */
@@ -1202,7 +1202,7 @@ export type UpdateSettingWrite = { success: true } | EndpointFailure;
 /** Wave the card away for one release version; the next release raises it again. */
 export const dismissUpdateNotice = endpoint<[string], UpdateSettingWrite>("dismiss_update_notice");
 
-/** Switch the daily release check on or off. On by default. */
+/** Switch the daily release check on or off — the reads the program makes by itself. On by default. */
 export const setUpdateCheckEnabled = endpoint<[boolean], UpdateSettingWrite>("set_update_check_enabled");
 
 /**

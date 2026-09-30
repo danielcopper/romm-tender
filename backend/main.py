@@ -727,17 +727,18 @@ class Endpoints:
 
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``available`` is the card itself: a
-        newer release with its tarball and checksum file attached exists, the
-        user has not dismissed that exact version, and the check is switched on.
-        ``newer`` is the first of those alone, for the Settings section that
+        newer release with its tarball and checksum file attached exists, and
+        the user has not dismissed that exact version — whatever the check's
+        switch says. ``newer`` is the first of those alone, for the Settings section that
         states the versions whether or not the card was dismissed.
         ``installed_program`` says whether this process is the installed program
         an update could replace — False for a run from a checkout.
 
         GitHub is asked at most once a day and the answer is kept, so a reload
-        inside that window shows the card without a request. Every failure is
-        silent: no network, an unreadable answer or a release whose tarball is
-        not attached yet leave the previous answer standing.
+        inside that window shows the card without a request; with the check
+        switched off it is not asked at all, and the stored answer is reported.
+        Every failure is silent: no network, an unreadable answer or a release
+        whose tarball is not attached yet leave the previous answer standing.
         """
         return await self._services.update_check_service.get_update_notice()
 
@@ -748,9 +749,8 @@ class Endpoints:
         Answers everything :meth:`get_update_notice` does, plus ``reached`` —
         whether the release read answered at all, which is what lets the Settings
         section tell "nothing newer" from "nothing found out". A dismissed card
-        comes back. With the check switched off nothing is requested and nothing
-        is forgotten: the answer carries ``enabled: False`` and ``reached:
-        False``.
+        comes back. The check's switch does not hold this back: it governs only
+        what the program asks by itself.
         """
         return await self._services.update_check_service.check_for_update_now()
 
@@ -768,7 +768,8 @@ class Endpoints:
     def set_update_check_enabled(self, enabled):
         """Persist whether the daily release check may ask GitHub.
 
-        On by default; with it off nothing is fetched at all. Returns
+        On by default; with it off nothing is fetched but what Check now asks
+        for. Returns
         ``{"success": True}``, or the canonical failure shape for a non-boolean
         value.
         """
@@ -830,8 +831,8 @@ class Endpoints:
 
         Returns ``{"offered", "version", "wait_reasons", "paused_downloads",
         "attempt", "try_again"}``. ``offered`` holds only on the installed
-        program with the check switched on and a stored release newer than the
-        running version, which ``version`` names. ``wait_reasons`` lists, as
+        program with a stored release newer than the running version, whatever
+        the check's switch says, which ``version`` names. ``wait_reasons`` lists, as
         ``{"reason", ...}``, everything a press would be refused for now —
         ``app_running`` (with ``apps``), ``running_apps_unknown``,
         ``library_sync``, ``rom_downloads``, ``save_sync``,

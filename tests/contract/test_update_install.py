@@ -84,6 +84,15 @@ async def test_the_state_answer_offers_the_stored_release(installed):
     assert (state["paused_downloads"], state["attempt"], state["try_again"]) == (0, None, False)
 
 
+async def test_the_stored_release_is_offered_with_the_check_switched_off(installed):
+    """The switch governs what the program asks GitHub by itself, not what a check already found."""
+    assert installed.endpoints.set_update_check_enabled(False) == {"success": True}
+
+    state = await installed.endpoints.get_update_install_state()
+
+    assert (state["offered"], state["version"]) == (True, _OFFERED)
+
+
 async def test_a_run_that_is_not_the_installed_program_is_offered_nothing(harness):
     state = await harness.endpoints.get_update_install_state()
 

@@ -116,8 +116,8 @@ class UpdateCheckService:
         available release a check saw — the release GitHub called latest, with
         its tarball and checksum file attached — ``None`` where none was
         established. ``newer`` says it is strictly newer than the running
-        version. ``available`` is the card: newer, not the dismissed version,
-        and the check switched on.
+        version. ``available`` is the card: newer, and not the dismissed
+        version. ``enabled`` is the switch.
 
         Reads GitHub at most once a day: inside that window the answer comes
         from the stored marker, so a reload shows the card again without a
@@ -125,22 +125,18 @@ class UpdateCheckService:
         stands and the next attempt is a day out, so an offline machine neither
         waits on a timeout at every start nor spends the request budget.
 
-        With the switch off nothing is fetched and nothing is read: the answer
-        names no version, because the program is not looking.
+        The switch decides only whether this read asks GitHub: with it off the
+        stored answer is reported however old it is.
         """
-        if not self.is_check_enabled():
-            return self._notice(None, enabled=False)
         async with self._check_lock:
-            # Asked again: the switch may have gone off while this waited.
-            if not self.is_check_enabled():
-                return self._notice(None, enabled=False)
             check = await self._loop.run_in_executor(None, self._read_last_check_io)
-            if self._is_due(check):
+            # Asked under the lock: the switch may have gone off while this waited.
+            if self.is_check_enabled() and self._is_due(check):
                 check, _ = await self._check_now(check)
-        return self._notice(check, enabled=True)
+        return self._notice(check)
 
     async def check_for_update_now(self) -> dict[str, Any]:
-        """Read the release now — past the throttle, and past a dismissal.
+        """Read the release now — past the throttle, past a dismissal, and whatever the switch says.
 
         The answer :meth:`get_update_notice` returns plus ``reached``, which says
         whether the release read answered at all: the automatic check renders a
@@ -149,24 +145,17 @@ class UpdateCheckService:
         found out".
 
         The dismissal is forgotten because the button's second job is bringing
-        a waved-away card back. With the switch off nothing is read and nothing
-        is forgotten — a button is not consent the switch withheld — and the
-        answer carries ``enabled: False`` with ``reached: False``.
+        a waved-away card back. The switch governs only the reads this program
+        makes by itself; a press is the user asking.
         """
-        if not self.is_check_enabled():
-            return {**self._notice(None, enabled=False), "reached": False}
         # The dismissal this press is undoing is the one standing when it was
         # made; a Dismiss pressed while it waited for the lock is newer intent.
         dismissed_at_press = self._settings.get(DISMISSED_KEY)
         async with self._check_lock:
-            # Asked again: the switch may have gone off while this waited, and
-            # then nothing is read and nothing is forgotten.
-            if not self.is_check_enabled():
-                return {**self._notice(None, enabled=False), "reached": False}
             self._forget_dismissal(dismissed_at_press)
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
-        return {**self._notice(check, enabled=True), "reached": reached}
+        return {**self._notice(check), "reached": reached}
 
     async def run_due_checks(self) -> None:
         """Ask for the notice whenever a check may be due, for as long as this runs; tell the panel when it changes.
@@ -176,8 +165,8 @@ class UpdateCheckService:
         and a check that reached nothing is silent. A notice different from the
         one this loop saw last is emitted as ``update_notice``, carrying what
         :meth:`get_update_notice` answers, unless the switch went off while it
-        was worked out: the panel would otherwise put the card back up beside a
-        switch that says off. Runs until cancelled; a round that raises, its
+        was worked out: switched off, this program says nothing by itself.
+        Runs until cancelled; a round that raises, its
         emit included, is logged and the next one comes as usual, pushing again
         what did not go out.
         """
@@ -216,7 +205,8 @@ class UpdateCheckService:
     def set_update_check_enabled(self, enabled: object) -> dict[str, Any]:
         """Persist whether this program may ask GitHub about newer releases.
 
-        With it off :meth:`get_update_notice` makes no request at all. Returns
+        With it off :meth:`get_update_notice` and the running check make no
+        request at all; :meth:`check_for_update_now` still does. Returns
         ``{"success": True}``, or the canonical failure shape for a non-boolean
         value off the untrusted frontend wire.
         """
@@ -227,7 +217,7 @@ class UpdateCheckService:
         return {"success": True}
 
     def is_check_enabled(self) -> bool:
-        """Whether the user lets this program ask GitHub about newer releases."""
+        """Whether the user lets this program ask GitHub about newer releases by itself."""
         return bool(self._settings.get(ENABLED_KEY, True))
 
     def _is_due(self, check: UpdateCheck | None) -> bool:
@@ -258,16 +248,16 @@ class UpdateCheckService:
         await self._loop.run_in_executor(None, self._record_check_io, stamped)
         return stamped, latest is not None
 
-    def _notice(self, check: UpdateCheck | None, *, enabled: bool) -> dict[str, Any]:
+    def _notice(self, check: UpdateCheck | None) -> dict[str, Any]:
         release = check.release if check is not None else None
         latest = release.version if release is not None else None
         newer = is_newer_version(latest, self._current_version)
         return {
-            "available": enabled and newer and latest != self._dismissed(),
+            "available": newer and latest != self._dismissed(),
             "newer": newer,
             "latest_version": latest,
             "current_version": self._current_version,
-            "enabled": enabled,
+            "enabled": self.is_check_enabled(),
             "installed_program": self._installed_program,
         }
 

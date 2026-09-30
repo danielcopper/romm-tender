@@ -1935,7 +1935,7 @@ describe("SettingsPage", () => {
     });
 
     // A release found by its version, and none newer, are the Available row's
-    // to say, so Check now adds no line for them.
+    // to say, so Check now adds no line for them — with the switch off too.
     it.each([
       [{}, ""],
       [{ available: false, newer: false, latest_version: "0.33.0" }, ""],
@@ -1943,10 +1943,7 @@ describe("SettingsPage", () => {
         { reached: false, available: false, newer: false, latest_version: null },
         "GitHub gave no usable answer. Try again later.",
       ],
-      [
-        { enabled: false, reached: false, available: false, newer: false },
-        "The daily check is off, so nothing was asked.",
-      ],
+      [{ enabled: false }, ""],
     ])("Check now says what it found: %o", async (answer, line) => {
       checkNowAnswering(answer);
       renderPage();

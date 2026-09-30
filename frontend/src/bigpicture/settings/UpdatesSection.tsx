@@ -29,9 +29,8 @@ interface UpdatesSectionProps {
   onCheckNow: () => void;
 }
 
-/** The Available row's value: a version only where one is newer, and otherwise what is known. */
+/** The Available row's value: a version only where one is newer, and otherwise what is known — whatever the switch says. */
 function availableValue(update: UpdateNoticeState): string {
-  if (!update.enabled) return "Not checked — the daily check is off";
   if (update.latestVersion === null) return "Not known yet";
   return update.newer ? update.latestVersion : "None newer";
 }

@@ -132,9 +132,13 @@ describe("UpdatesSection", () => {
     expect(getByTestId("updates-available").textContent).toBe("Not known yet");
   });
 
-  it("says the daily check is off rather than claiming anything about releases", () => {
-    const { getByTestId } = renderSection({ enabled: false, available: false, newer: false, latestVersion: null });
-    expect(getByTestId("updates-available").textContent).toContain("the daily check is off");
+  it("names what the last check found whatever the switch says", () => {
+    const found = renderSection({ enabled: false });
+    expect(found.getByTestId("updates-available").textContent).toBe("0.34.0");
+    found.unmount();
+
+    const unknown = renderSection({ enabled: false, available: false, newer: false, latestVersion: null });
+    expect(unknown.getByTestId("updates-available").textContent).toBe("Not known yet");
   });
 
   it("a run from a checkout says it is a development build and points at the installer", () => {

@@ -129,7 +129,7 @@ describe("updateNoticeStore", () => {
       refused.resolve({ success: false, reason: "invalid_value", message: "Invalid version" });
 
       await expect(dismissing).rejects.toThrow("invalid_value: Invalid version");
-      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, available: false, latestVersion: null });
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, available: true, latestVersion: "0.34.0" });
     });
 
     it("leaves the card up when the write fails", async () => {
@@ -144,7 +144,7 @@ describe("updateNoticeStore", () => {
   });
 
   describe("the switch", () => {
-    it("off drops the card and the version, as the backend does", async () => {
+    it("off keeps the card and the version, as the backend does, and reads nothing", async () => {
       vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
       await fetchUpdateNotice();
 
@@ -153,19 +153,20 @@ describe("updateNoticeStore", () => {
       expect(setUpdateCheckEnabled).toHaveBeenCalledWith(false);
       expect(getUpdateNoticeState()).toMatchObject({
         enabled: false,
-        available: false,
-        newer: false,
-        latestVersion: null,
+        available: true,
+        newer: true,
+        latestVersion: "0.34.0",
       });
+      expect(getUpdateNotice).toHaveBeenCalledTimes(1);
     });
 
-    it("on reads again, because nothing held here can restore the card", async () => {
-      vi.mocked(getUpdateNotice).mockResolvedValue({ ...NOTICE, enabled: false, available: false });
+    it("on starts the read the switch allows again", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue({ ...NOTICE, enabled: false });
       await fetchUpdateNotice();
-      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      vi.mocked(getUpdateNotice).mockResolvedValue({ ...NOTICE, latest_version: "0.35.0" });
 
       await setUpdateCheckSwitch(true);
-      await vi.waitFor(() => expect(getUpdateNoticeState().available).toBe(true));
+      await vi.waitFor(() => expect(getUpdateNoticeState().latestVersion).toBe("0.35.0"));
 
       expect(getUpdateNoticeState().enabled).toBe(true);
       expect(getUpdateNotice).toHaveBeenCalledTimes(2);
@@ -198,7 +199,7 @@ describe("updateNoticeStore", () => {
       expect(getUpdateNoticeState().enabled).toBe(false);
     });
 
-    it("a read issued before the switch went off does not put the card back", async () => {
+    it("a read issued before the switch went off does not show it on again", async () => {
       const read = deferred<UpdateNotice>();
       vi.mocked(getUpdateNotice).mockReturnValue(read.promise);
 
@@ -207,7 +208,7 @@ describe("updateNoticeStore", () => {
       read.resolve(NOTICE);
       await reading;
 
-      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, available: false });
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, latestVersion: null });
     });
 
     it("of two presses in flight, the later one wins", async () => {
@@ -244,10 +245,11 @@ describe("updateNoticeStore", () => {
       expect(await runUpdateCheckNow()).toBe("unreachable");
     });
 
-    it("reports a switched-off check as off, whatever else the answer says", async () => {
-      vi.mocked(checkForUpdateNow).mockResolvedValue(now({ enabled: false, reached: false, available: false }));
+    it("reports what a check found with the switch off as it would with the switch on", async () => {
+      vi.mocked(checkForUpdateNow).mockResolvedValue(now({ enabled: false }));
 
-      expect(await runUpdateCheckNow()).toBe("off");
+      expect(await runUpdateCheckNow()).toBe("found");
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, available: true });
     });
 
     it("an overtaken press writes nothing and says so", async () => {

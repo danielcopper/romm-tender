@@ -406,7 +406,7 @@ class TestTheSwitch:
         assert notice["enabled"] is True
         assert releases.calls == 1
 
-    async def test_switched_off_nothing_is_read_and_nothing_is_available(self):
+    async def test_switched_off_github_is_not_asked_and_nothing_is_stored(self):
         uow_factory = FakeUnitOfWorkFactory()
         service, releases, _, _ = _make(
             latest=_release("0.34.0"), settings={ENABLED_KEY: False}, uow_factory=uow_factory
@@ -424,6 +424,19 @@ class TestTheSwitch:
             "installed_program": True,
         }
         assert _nothing_stored(uow_factory)
+
+    async def test_switched_off_the_stored_answer_is_reported_card_and_all_however_old(self):
+        clock = FakeClock()
+        service, releases, settings, _ = _make(latest=_release("0.34.0"), clock=clock)
+        await service.get_update_notice()
+        settings[ENABLED_KEY] = False
+        clock.advance(_A_DAY)
+        releases.answer = _release("0.35.0")
+
+        notice = await service.get_update_notice()
+
+        assert releases.calls == 1
+        assert (notice["available"], notice["latest_version"], notice["enabled"]) == (True, "0.34.0", False)
 
     def test_setting_the_switch_persists_it(self):
         service, _, settings, persister = _make()
@@ -524,7 +537,7 @@ class TestCheckingNow:
         assert notice["reached"] is True
         assert notice["available"] is False
 
-    async def test_with_the_switch_off_nothing_is_read_and_nothing_is_forgotten(self):
+    async def test_with_the_switch_off_it_still_reads_and_forgets_the_dismissal(self):
         uow_factory = FakeUnitOfWorkFactory()
         service, releases, settings, persister = _make(
             latest=_release("0.34.0"),
@@ -534,13 +547,13 @@ class TestCheckingNow:
 
         notice = await service.check_for_update_now()
 
-        assert releases.calls == 0
+        assert releases.calls == 1
         assert notice["enabled"] is False
-        assert notice["reached"] is False
-        assert notice["available"] is False
-        assert settings[DISMISSED_KEY] == "0.34.0"
-        assert persister.save_count == 0
-        assert _nothing_stored(uow_factory)
+        assert notice["reached"] is True
+        assert notice["available"] is True
+        assert DISMISSED_KEY not in settings
+        assert persister.save_count == 1
+        assert _stored(uow_factory)["version"] == "0.34.0"
 
     async def test_the_answer_is_the_notice_plus_whether_the_read_answered(self):
         notice = await _make(latest=_release("0.34.0"))[0].check_for_update_now()
@@ -632,7 +645,7 @@ class TestOverlappingChecks:
         assert seam.calls == 1
         assert [a["latest_version"] for a in answers] == ["0.34.0", "0.34.0"]
 
-    async def test_a_check_now_queued_behind_a_read_asks_nothing_once_the_switch_went_off(self):
+    async def test_a_check_now_queued_behind_a_read_still_asks_once_the_switch_went_off(self):
         uow_factory = FakeUnitOfWorkFactory()
         seam = _GatedRelease(first=_release("0.34.0"), later=_release("0.35.0"))
         service, settings = self._make_gated_with_settings(seam, uow_factory, {DISMISSED_KEY: "0.34.0"})
@@ -645,11 +658,11 @@ class TestOverlappingChecks:
         seam.release_first.set()
         _, answer = await asyncio.gather(panel_load, check_now)
 
-        assert seam.calls == 1
+        assert seam.calls == 2
         assert answer["enabled"] is False
-        assert answer["reached"] is False
-        assert answer["latest_version"] is None
-        assert settings[DISMISSED_KEY] == "0.34.0", "nothing is forgotten either"
+        assert answer["reached"] is True
+        assert answer["latest_version"] == "0.35.0"
+        assert DISMISSED_KEY not in settings
 
     async def test_a_throttled_read_queued_behind_a_check_asks_nothing_once_the_switch_went_off(self):
         uow_factory = FakeUnitOfWorkFactory()

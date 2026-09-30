@@ -107,7 +107,6 @@ const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, str
   found: "",
   none: "",
   unreachable: "GitHub gave no usable answer. Try again later.",
-  off: "The daily check is off, so nothing was asked.",
 };
 
 /** The list hands its ids back as plain strings; this is where one becomes a

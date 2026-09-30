@@ -281,10 +281,11 @@ problems.
 
 ## Updates
 
-Tender asks GitHub whether a newer release is out — at most once a day, when Steam loads it and again while it runs.
-When there is one, a notice on the main panel says **Tender X is available** and names the version you have — a check
-made while the panel is open brings it up there and then. **Open Updates** takes you to **Settings › Updates**, where
-you can install it, and **Dismiss** puts the notice away for that version only — the next release brings it back.
+Tender asks GitHub whether a newer release is out — at most once a day, when Steam loads it and again while it runs,
+unless you switch the daily check off. When there is one, a notice on the main panel says **Tender X is available** and
+names the version you have — a check made while the panel is open brings it up there and then. **Open Updates** takes
+you to **Settings › Updates**, where you can install it, and **Dismiss** puts the notice away for that version only —
+the next release brings it back.
 
 After an update, once Steam has finished starting, it says **Tender updated to X** in a message that goes by itself;
 after installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or
@@ -303,8 +304,8 @@ release.
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
-- **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
-  yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
+- **Available** — the release the last successful check found, **None newer** when you already have it, or **Not known
+  yet** before a check has found anything — whether or not the daily check is switched on.
 - **Install update** — installs the release **Available** names; see [Installing an update](#installing-an-update).
   **Try again** instead, for a version whose install already failed, was rolled back or was refused. A copy of Tender
   run from a source checkout says **Development build — install updates with the installer.** in its place.
@@ -313,29 +314,29 @@ release.
   the version it names, the block says so — **Update to X failed — Tender went back to Y.** or **Update to X failed —
   nothing was changed.** — with the step it failed at and where the reason is, whether or not you dismissed the notice
   on the main panel.
-- **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
-  press **Check now**, and offers nothing to install.
-- **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
-  What it found shows in **Available**; a line under the button appears only when there is more to say: that GitHub gave
-  no usable answer, that the check is switched off, or that the check failed.
+- **Check for updates daily** — on by default. Switch it off and Tender no longer asks GitHub by itself; what the last
+  check found stays in **Available** and can still be installed.
+- **Check now** — asks straight away rather than waiting for the day to pass, whether or not the daily check is switched
+  on, and brings back a notice you dismissed. What it found shows in **Available**; a line under the button appears only
+  when there is more to say: that GitHub gave no usable answer, or that the check failed.
 
 A release counts as out only once its download is attached together with GitHub's checksum for it and the checksum file
 the installer verifies it against, which happens a few minutes after the release is published; until then Tender says
 nothing about it. A release whose download comes without a valid checksum, or without that file, does not count as out
 while either is missing, because it could not be verified.
 
-**What the check sends where.** When a day has passed since the last check — Tender looks when Steam loads it and once
-an hour while it runs — and whenever you press **Check now**, Tender asks GitHub's public API for the newest release of
-`danielcopper/romm-tender`. The request names the program and its version (for example `romm-tender/1.0.0`), and GitHub
-sees your IP address, as it does for any request. Nothing about your library, your RomM server or your accounts is sent.
-If the check gets no usable answer — you are offline, GitHub is down, or it refuses the request — nothing changes:
-whatever the last successful check found stays as it was, and Tender tries again once a day has passed.
+**What the check sends where.** When a day has passed since the last check — while the daily check is on, Tender looks
+when Steam loads it and once an hour while it runs — and whenever you press **Check now**, Tender asks GitHub's public
+API for the newest release of `danielcopper/romm-tender`. The request names the program and its version (for example
+`romm-tender/1.0.0`), and GitHub sees your IP address, as it does for any request. Nothing about your library, your RomM
+server or your accounts is sent. If the check gets no usable answer — you are offline, GitHub is down, or it refuses the
+request — nothing changes: whatever the last successful check found stays as it was, and Tender tries again once a day
+has passed.
 
 ### Installing an update
 
 **Install update** downloads the release, checks it against GitHub's checksum and starts the installer, which replaces
-Tender and restarts it. It is there only for the release **Available** names, and only while the daily check is switched
-on.
+Tender and restarts it. It is there for the release **Available** names, whether or not the daily check is switched on.
 
 The button waits while an update would cut something short, and says what under **Waiting for:** — a game to close
 (named), library sync, game downloads, save sync (a slot switch or a save deletion counts too), BIOS downloads, a save

@@ -734,10 +734,12 @@ update notice's Dismiss is **per version**: it records the version the card name
 so the next release raises the card again, and **Check now** in its home forgets it. The home states the versions and
 holds the install, the check's switch and Check now, and to a run from a checkout it shows a line naming this a
 development build in place of the install. The card's condition is `available` on the backend's answer and nothing else
-— a newer release with its tarball, a valid digest and its checksum file attached, not the dismissed version, the check
-switched on. The answer is fetched at panel load by a detached call nothing awaits (the store's `fetchUpdateNotice` says
-why), rewritten by Dismiss, the switch and Check now, and replaced by the notice the backend pushes (`update_notice`)
-when its own check while it runs finds a different answer, so the card and its home follow without a reload.
+— a newer release with its tarball, a valid digest and its checksum file attached, not the dismissed version, whatever
+the check's switch says: the switch governs only what the program asks GitHub by itself, so a release Check now found is
+announced and offered to install with it off too. The answer is fetched at panel load by a detached call nothing awaits
+(the store's `fetchUpdateNotice` says why), rewritten by Dismiss, the switch and Check now, and replaced by the notice
+the backend pushes (`update_notice`) when its own check while it runs finds a different answer, so the card and its home
+follow without a reload.
 
 The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is. For a
 rollback that is Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was
@@ -1819,9 +1821,9 @@ for a refusal by the check, and the card's sentence with no step line for a kind
 is the record's own line (`updateFailureReason`). An attempt takes the block over a record, so a refusal by the check
 this backend saw while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows only
 while its version is the one offered, and leaves once a read no longer offers that version; a record standing then takes
-the block. Check now's own line under its button says only what the rows above do not: **GitHub gave no usable answer.
-Try again later.**, **The daily check is off, so nothing was asked.** and **The check failed.** — a release found is the
-Available row's to name, and so is none newer.
+the block. Check now reads whatever the switch says, and its own line under its button says only what the rows above do
+not: **GitHub gave no usable answer. Try again later.** and **The check failed.** — a release found is the Available
+row's to name, and so is none newer.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).
