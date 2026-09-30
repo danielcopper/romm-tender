@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
 
-from adapters.live_data_copy import copy_database, copy_file
+import adapters.live_data_copy as live_data_copy
+from adapters.live_data_copy import LiveDatabaseChangedError, copy_database, copy_file
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,6 +77,74 @@ class TestCopyDatabase:
     def test_no_database_is_nothing_to_copy(self, tmp_path):
         assert copy_database(str(tmp_path / "absent.db"), str(tmp_path / "copy" / "romm_sync.db")) is False
         assert not (tmp_path / "copy").exists()
+
+    def test_a_wal_left_without_its_index_is_folded_into_the_copy_and_nothing_is_put_beside_the_live_one(
+        self, tmp_path
+    ):
+        """A read-only open would create the index in the live directory; the bytes route opens a copy instead."""
+        held = tmp_path / "held"
+        held.mkdir()
+        _database(held / "romm_sync.db", "in the file")
+        live = tmp_path / "live"
+        live.mkdir()
+        writer = sqlite3.connect(held / "romm_sync.db")
+        try:
+            writer.execute("PRAGMA wal_autocheckpoint=0")
+            writer.execute("INSERT INTO marker VALUES ('in the wal')")
+            writer.commit()
+            for name in ("romm_sync.db", "romm_sync.db-wal"):
+                (live / name).write_bytes((held / name).read_bytes())
+        finally:
+            writer.close()
+        before = {path.name: path.read_bytes() for path in live.iterdir()}
+        assert sorted(before) == ["romm_sync.db", "romm_sync.db-wal"]
+
+        assert copy_database(str(live / "romm_sync.db"), str(tmp_path / "copy" / "romm_sync.db")) is True
+
+        assert {path.name: path.read_bytes() for path in live.iterdir()} == before
+        assert _notes(tmp_path / "copy" / "romm_sync.db") == ["in the file", "in the wal"]
+        assert sorted(path.name for path in (tmp_path / "copy").iterdir()) == ["romm_sync.db"]
+
+    def test_a_write_during_a_copy_that_takes_no_lock_is_seen_and_the_copy_taken_again(self, tmp_path, monkeypatch):
+        """The first copy reads a quiet database; a writer opens it meanwhile, and the second copy has its row."""
+        _database(tmp_path / "live.db", "before")
+        reads: list[str] = []
+        writers: list[sqlite3.Connection] = []
+        real_backup = live_data_copy._backup
+
+        def backup_then_write(uri: str, target: str) -> None:
+            reads.append(uri)
+            real_backup(uri, target)
+            if len(reads) == 1:
+                writer = sqlite3.connect(tmp_path / "live.db")
+                writers.append(writer)
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute("INSERT INTO marker VALUES ('during')")
+                writer.commit()
+
+        monkeypatch.setattr(live_data_copy, "_backup", backup_then_write)
+        try:
+            copy_database(str(tmp_path / "live.db"), str(tmp_path / "copy.db"))
+        finally:
+            for writer in writers:
+                writer.close()
+
+        assert ["immutable=1" in uri for uri in reads] == [True, False]
+        assert _notes(tmp_path / "copy.db") == ["before", "during"]
+
+    def test_a_database_that_changes_under_both_copies_raises(self, tmp_path, monkeypatch):
+        _database(tmp_path / "live.db", "before")
+        real_backup = live_data_copy._backup
+
+        def backup_then_touch(uri: str, target: str) -> None:
+            real_backup(uri, target)
+            stamp = (tmp_path / "live.db").stat().st_mtime_ns + 1_000_000_000
+            os.utime(tmp_path / "live.db", ns=(stamp, stamp))
+
+        monkeypatch.setattr(live_data_copy, "_backup", backup_then_touch)
+
+        with pytest.raises(LiveDatabaseChangedError):
+            copy_database(str(tmp_path / "live.db"), str(tmp_path / "copy.db"))
 
     def test_a_file_that_is_not_a_database_raises(self, tmp_path):
         (tmp_path / "live.db").write_bytes(b"not a database, and long enough to have a header of sorts" * 4)
