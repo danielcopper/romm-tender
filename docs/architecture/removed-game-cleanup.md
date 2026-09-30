@@ -189,8 +189,8 @@ repoint publication. Every continuation re-checks its abort signal before each l
 delivery releases an unreachable token. A continuation with an owner captures that owner's generation before each
 backend wait, and the owner's teardown tombstones it so a late lease-bearing response is released without doing work;
 only a genuine remount opens a new generation. The continuations with no owner — the ones `index.tsx` registers and
-Steam's launch watcher — have no teardown to tombstone them. Teardown stops renewal and blocks future writes but defers
-the explicit release until already-started Steam promises settle.
+Steam's launch watcher — have no teardown to tombstone them. An owner's teardown stops renewal and blocks future writes
+but defers the explicit release until already-started Steam promises settle.
 
 A frontend that has just mounted disowns every lease outstanding at that moment, once, before anything else can acquire
 one. A continuation whose JS context is torn down mid-call never reaches its release and never renews either, so its
