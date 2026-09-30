@@ -12,7 +12,7 @@ here must also change): ``docs/architecture/steam-non-steam-shortcuts.md``
 
 Label-format safety: a label is appended inside the single bracket pair of
 ``RomM: [<name> (<label>)]``, and the frontend reconcile parses that name with
-``/^RomM: \\[([^\\]]+)\\]/`` (``frontend/src/index.tsx``). So a label must
+``/^RomM: \\[([^\\]]+)\\]/i`` (``frontend/src/index.tsx``). So a label must
 contain **no** ``]`` character (parens are safe, brackets would truncate the
 parsed name and orphan the collection). Every label below is bracket-free; the
 fallback capitalises a controlled kind literal, which is too.

@@ -436,7 +436,7 @@ its own. The reporter needs the kind/virtual_type at its union key, so `WorkUnit
 `CollectionMembership.kind` + `CollectionMembership.virtual_type` thread that identity through the fetcher →
 orchestrator → reporter.
 
-**Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/`
+**Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/i`
 (`frontend/src/index.tsx`), so a label must contain **no** `]` character — it sits inside the single existing bracket
 pair. Parens (`(Franchise)`) are safe; a bracket would truncate the parsed name and orphan the collection. Every
 produced label is bracket-free (asserted in `tests/domain/test_collection_label.py`).
@@ -460,18 +460,27 @@ standard collection over a run recorded while standard collections still carried
 
 **Name identity is case-insensitive (#1569).** Steam collapses collection names by a **case-insensitive** identity — two
 collections whose display names differ only in case (`RomM: [7 up]` vs `RomM: [7 Up]`) are the same Steam collection, so
-creating the second silently overwrites the first and loses its games. To match, the plugin compares collection **and**
-platform names case-insensitively wherever it asks whether two names are one Steam collection: the reporter groups both
-`romm_collection_app_ids` and `platform_app_ids` by a case-folded key (`str.casefold()`), keeping the first-seen
-original casing for display (which exact casing wins is irrelevant — Steam uppercases collection names anyway); the
-preview's `collection_diff` and `platform_collection_diff` compare case-folded names the same way; the frontend
-create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`) and the cleanup matchers
-(`clearPlatformCollection` / `clearAllRomMCollections`) match by `toLowerCase()`; and the `onSyncComplete` stale-delete
-(`removeStaleCollections`, `frontend/src/index.tsx`) matches the platform or collection name by `toLowerCase()`, while
-its `RomM:` prefix and host-suffix checks are exact. This is always safe precisely because Steam's identity is
-case-insensitive: two collections differing only by case can never coexist, so there is never an ambiguous match to
-disambiguate. The DB is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by
-name — so there is no migration.
+creating the second silently overwrites the first and loses its games. To match, the plugin folds both names wherever it
+asks whether two names are one Steam collection, by one rule on both sides: lower case, then upper case, then lower case
+again — `fold_collection_name` (`backend/domain/collection_name.py`) on the backend, `foldCollectionName`
+(`frontend/src/utils/collectionName.ts`) on the frontend, both tested against the names in
+`tests/domain/collection_name_folds.json`. It is that chain rather than Python's `str.casefold()`, which JavaScript has
+no counterpart for, and rather than a single lower-casing, which keeps `Straße` apart from `STRASSE`. Over every code
+point both languages' Unicode versions assign, Python and JavaScript compute the chain identically, and it joins each
+code point with everything `str.casefold()`, `toLowerCase()` or `toUpperCase()` joins it with — plus one pair
+`str.casefold()` keeps apart, a dotless `ı` and `i`. Joining more is the safe direction: what loses games is a pair
+Steam holds as one and the plugin keeps apart.
+
+Where the fold applies: the reporter groups both `romm_collection_app_ids` and `platform_app_ids` by the folded key,
+keeping the first-seen original casing for display (which exact casing wins is irrelevant — Steam uppercases collection
+names anyway); the preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the
+frontend create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
+(`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
+`frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
+one of this machine's names matches as that name does, while one carrying another machine's suffix does not. This is
+always safe precisely because Steam's identity is case-insensitive: two collections differing only by case can never
+coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state` is keyed
+by `(collection_id, collection_kind)`, never by name — so there is no migration.
 
 ## App IDs and Artwork
 

@@ -11,10 +11,5 @@ from __future__ import annotations
 
 
 def fold_collection_name(name: str) -> str:
-    """Return the key under which *name* is one Steam collection with every name sharing it.
-
-    Lower, upper, then lower case again — not ``str.casefold``, which JavaScript
-    has no counterpart for, so the frontend could not compute the same key; and
-    not a single ``lower``, which keeps ``Straße`` apart from ``STRASSE``.
-    """
+    """Return the key under which *name* is one Steam collection with every name sharing it."""
     return name.lower().upper().lower()
