@@ -37,8 +37,8 @@ never changes or removes it itself. [Troubleshooting](troubleshooting.md#an-upda
 
 Before it stops anything, the installer runs the new version's pre-install check, which tries it on copies of the
 database and settings made in a temporary directory the installer removes again. Where the new version cannot be built,
-nothing is stopped or replaced, and the same note is left marked as refused rather than rolled back (`"kind": "check"`),
-naming the version it tried and the one still installed.
+or crashes the check, nothing is stopped or replaced, and the same note is left marked as refused rather than rolled
+back (`"kind": "check"`), naming the version it tried and the one still installed.
 [Troubleshooting](troubleshooting.md#the-new-version-does-not-start) has what to do next.
 
 An update started from **Settings › Updates** leaves a note of its own,

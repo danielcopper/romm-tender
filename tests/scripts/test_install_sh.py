@@ -2226,17 +2226,17 @@ class TestTheNewVersionIsCheckedFirst:
         assert "--user stop romm-tender" not in machine.systemctl_calls()
 
     @pytest.mark.parametrize(
-        "status",
+        ("status", "crashed"),
         [
-            pytest.param("1", id="not-built"),
-            pytest.param("132", id="SIGILL"),
-            pytest.param("134", id="SIGABRT"),
-            pytest.param("135", id="SIGBUS"),
-            pytest.param("136", id="SIGFPE"),
-            pytest.param("139", id="SIGSEGV"),
+            pytest.param("1", None, id="not-built"),
+            pytest.param("132", "SIGILL", id="SIGILL"),
+            pytest.param("134", "SIGABRT", id="SIGABRT"),
+            pytest.param("135", "SIGBUS", id="SIGBUS"),
+            pytest.param("136", "SIGFPE", id="SIGFPE"),
+            pytest.param("139", "SIGSEGV", id="SIGSEGV"),
         ],
     )
-    def test_a_check_the_version_failed_or_crashed_is_refused_as_the_version_s(self, machine, status):
+    def test_a_check_the_version_failed_or_crashed_is_refused_as_the_version_s(self, machine, status, crashed):
         """A build that failed, or the version's own code taking the interpreter down: recorded as the check's."""
         _installed(machine)
         before = _seed_data(machine)
@@ -2253,6 +2253,10 @@ class TestTheNewVersionIsCheckedFirst:
         assert result.returncode == 1
         assert _refusals(result.stderr) == ["install.sh: the new version does not start"]
         assert "  nothing was changed" in result.stderr.splitlines()
+        if crashed is None:
+            assert "crashed" not in result.stderr
+        else:
+            assert f"the pre-install check crashed ({crashed})" in result.stderr.splitlines()
         record = json.loads(machine.failure_record.read_text(encoding="utf-8"))
         assert (record["attempted_version"], record["restored_version"], record["kind"]) == (_NEW, _VERSION, "check")
         assert _tree_version(machine.code) == _VERSION

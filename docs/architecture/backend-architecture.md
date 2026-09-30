@@ -1772,7 +1772,7 @@ The service tells the user what the last update did, in one of two ways, and nev
   — and again on every `get_update_outcome`, so the card goes as soon as the next update that answers removes the file.
   A record that is missing, unreadable or short of any of its three keys is no record.
 - **The record has kinds, and a record without `kind` is a rollback.** The pre-install check refuses a new version that
-  cannot be built before anything is stopped or replaced
+  cannot be built, or that crashes it, before anything is stopped or replaced
   ([Running an installed one](../contributing/development.md#running-an-installed-one)), and an update records that
   refusal in the same file with `"kind": "check"` — `restored_version` the version still running, `rolled_back_at` when.
   The keys keep their names so that a backend from before the check still reads such a record, and tells it as a

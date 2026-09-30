@@ -53,8 +53,8 @@ Format: **invariant** — tier — enforced by.
   a name not on its list, a runtime mode passed as `Path.open`'s first argument, a record path assembled from pieces or
   handed in from elsewhere, a write through a helper in another module, a call reached through `getattr`, and a
   subprocess. The installer's half — the write on a rollback, before the restored version starts, the write on a version
-  the pre-install check could not build, and the removal once a later update's new version answered — is pinned by
-  `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`, `TestTheNewVersionIsCheckedFirst`,
+  the pre-install check could not build or that crashed it, and the removal once a later update's new version answered —
+  is pinned by `tests/scripts/test_install_sh.py` (`TestAnUpdateThatDoesNotStart`, `TestTheNewVersionIsCheckedFirst`,
   `TestAnUpdateThatStarts::test_a_later_update_that_starts_removes_the_record_of_one_that_did_not`)
 - **`update-attempt.json` is written and removed by the backend alone, through `adapters/update_attempt.py`; the
   installer never touches it** — test + prompt-only — the record is how a start tells an installer that stopped without

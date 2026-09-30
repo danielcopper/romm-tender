@@ -261,7 +261,8 @@ order:
    - It could not be built (exit status 1), or it crashed — ended by `SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGILL` or
      `SIGFPE`: the run ends with `the new version does not start` and `nothing was changed`, the staged tree is removed,
      and `update-failure.json` is written with `"kind": "check"` (below). The check's reason and the last lines it
-     printed come just above those two lines.
+     printed come just above those two lines — for a crash, after a line naming its signal
+     (`the pre-install check crashed (SIGSEGV)`).
    - It did not finish — stopped at the limit (`the pre-install check was stopped after 120s`), killed, by `timeout` or
      by anything else (`the pre-install check was killed`), or ended with any other status the installer does not know,
      such as a `SIGTERM` from outside or `timeout` unable to run the interpreter
@@ -309,10 +310,10 @@ ends as any rollback does, and Tender shows no notice of that rollback. The reco
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
 
-A version the pre-install check in step 2 could not build leaves the same record with a fourth key, `"kind": "check"`,
-where `restored_version` is the version still installed — nothing was replaced — and `rolled_back_at` is when it was
-refused. The keys keep their names so that a backend from before the check still reads the record, as a rollback. A
-record that cannot be written is said the same way
+A version the pre-install check in step 2 refused — one it could not build, or one that crashed it — leaves the same
+record with a fourth key, `"kind": "check"`, where `restored_version` is the version still installed — nothing was
+replaced — and `rolled_back_at` is when it was refused. The keys keep their names so that a backend from before the
+check still reads the record, as a rollback. A record that cannot be written is said the same way
 (`could not record the refused update in <path>; Tender will not show it`) and the run still ends with nothing changed.
 
 `rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file. The backend reads it and

@@ -123,9 +123,11 @@ CHECK_NOT_BUILT=1
 CHECK_NOT_TRIED=2
 
 # The signals a check dies of when the new version's own code crashed — its
-# native library among it — rather than something outside stopping it. A shell
-# answers 128 plus the signal's number for a command a signal ended, and
-# `timeout` answers the same for its command (coreutils' timeout(1)).
+# native library among that code — rather than something outside stopping it. A
+# shell answers 128 plus the signal's number for a command a signal ended, and
+# `timeout` answers the same for its command (coreutils' timeout(1)). SIGBUS can
+# also come from an I/O error on a mapped file, such as one on storage that
+# stopped answering; that is filed as the version's too, accepted as rare.
 CHECK_CRASH_SIGNALS="SEGV ABRT BUS ILL FPE"
 
 # How long the pre-install check may run before it is stopped, and how long it
@@ -2053,6 +2055,7 @@ refuse_the_new_version() {
         echo "the pre-install check ended with status $status" >&2
     else
         reason="the new version does not start"
+        [ "$status" -eq "$CHECK_NOT_BUILT" ] || echo "the pre-install check crashed (SIG$(kill -l "$status"))" >&2
         if [ "$UPDATING" = "yes" ] && ! record_update_failure "$new" "$previous" "$CHECK_REFUSED"; then
             row_sub "$INSTALLING" "could not record the refused update; Tender will not show it" fail
             echo "install.sh: could not record the refused update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2

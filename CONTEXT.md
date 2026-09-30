@@ -1127,12 +1127,12 @@ update is what the installer does, and it can be rolled back after the attempt h
 ### Pre-install check
 
 The **pre-install check** is the installer's try of the version it has just unpacked, before it stops or replaces
-anything: the new version builds itself on copies of the user's data and starts nothing. A version it cannot build is
-**refused**: the unpacked files are removed and nothing is changed. It runs on a first install as well as on an update,
-and only an update's refusal is recorded (below). A check that does not finish, or cannot copy the data it builds on,
-refuses nothing: it says nothing about the version, so nothing is changed and nothing is recorded. It catches what stops
-a version being built, never what fails once it runs — answering the panel, loading it into Steam — which the rollback
-still catches. A release from before the check has none and is installed without one. How it runs:
+anything: the new version builds itself on copies of the user's data and starts nothing. A version it cannot build, or
+that crashes it, is **refused**: the unpacked files are removed and nothing is changed. It runs on a first install as
+well as on an update, and only an update's refusal is recorded (below). A check that does not finish, or cannot copy the
+data it builds on, refuses nothing: it says nothing about the version, so nothing is changed and nothing is recorded. It
+catches what stops a version being built, never what fails once it runs — answering the panel, loading it into Steam —
+which the rollback still catches. A release from before the check has none and is installed without one. How it runs:
 [Running an installed one](docs/contributing/development.md#running-an-installed-one). _Avoid_: **start-up check**,
 which is the panel's own question about Steam's modules (above), and **pre-flight**, which is the installer's check of
 the machine before any of this — a Python new enough, the user manager, a native Steam, no Tender plugin left in Decky

@@ -133,8 +133,9 @@ for another system, an upgrade of your database or settings that fails on your d
 shows once Tender runs — answering the panel, loading it into Steam, talking to your server. Those are still caught
 after the update, by the rollback above.
 
-**Fix**: The installer printed the check's reason, and the last lines the check printed, just above its last two lines.
-For an update from **Settings › Updates** that output is in the installer's journal:
+**Fix**: The installer printed the check's reason, and the last lines the check printed, just above its last two lines —
+for a crash, after a line naming the signal that ended it (`the pre-install check crashed (SIGSEGV)`). For an update
+from **Settings › Updates** that output is in the installer's journal:
 
 ```bash
 journalctl --user -u romm-tender-update
@@ -193,7 +194,8 @@ have:
 - **Could not check whether a game is running — nothing was changed.** At that same check Tender could not ask Steam,
   and did not start the installer on a guess.
 - **The new version does not start — nothing was changed.** The installer's pre-install check tried the new version
-  before stopping Tender, and it could not be built ([The New Version Does Not Start](#the-new-version-does-not-start)).
+  before stopping Tender, and it could not be built, or it crashed
+  ([The New Version Does Not Start](#the-new-version-does-not-start)).
 
 Nothing tries again by itself; what the attempt downloaded is removed.
 
