@@ -147,17 +147,22 @@ reason names.
 ### The check did not finish
 
 The installer ends with `install.sh: the check did not finish` and `nothing was changed`, after
-`the pre-install check was stopped after 120s`. Building Tender takes seconds; a check still running after two minutes
-was waiting on something — usually the library database, held by another program, or storage that stopped answering. It
-says nothing about the new version, so nothing is recorded and the panel shows no notice. Run the installer again once
-that is resolved.
+`the pre-install check was stopped after 120s` or `the pre-install check was killed`. Building Tender takes seconds; a
+check still running after two minutes was waiting on something — usually the library database, held by another program,
+or storage that stopped answering. A check that was killed was ended by force: by the installer, when it did not stop
+ten seconds after it was told to, or by something else, such as the system running out of memory. Neither is a verdict
+on the new version, so nothing is recorded and the main panel does not mention it. An update started from **Settings ›
+Updates** says **The installer stopped without updating.** there, and these lines are in the installer's journal
+(`journalctl --user -u romm-tender-update`). Run the installer again once the cause is resolved.
 
 ### Your data could not be copied
 
 The installer ends with `install.sh: could not try the new version: your data could not be copied` and
 `nothing was changed`, with the reason just above. The check could not copy your library database or settings to try the
 new version on — a full disk, or a file it could not read. That is about your data, not the new version, so nothing is
-recorded and the panel shows no notice. Free space, or fix the file the reason names, and run the installer again.
+recorded and the main panel does not mention it. An update started from **Settings › Updates** says **The installer
+stopped without updating.** there, and these lines are in the installer's journal
+(`journalctl --user -u romm-tender-update`). Free space, or fix the file the reason names, and run the installer again.
 
 ### No pre-install check
 
@@ -179,7 +184,8 @@ have:
 - **The installer could not be started.** The installer could not be taken out of the download, or could not be started
   — for example because an earlier one is still running.
 - **The installer stopped without updating.** The installer started, but ended before it replaced Tender — it refused,
-  or it failed.
+  or it failed. A pre-install check that did not finish ([The check did not finish](#the-check-did-not-finish)), and
+  data it could not copy ([Your data could not be copied](#your-data-could-not-be-copied)), end this way.
 - **A game was started — nothing was changed. Try again once it has closed.** A game was started while the update
   downloaded; Tender checks right before the installer starts, and does not start it under a running game.
 - **Could not check whether a game is running — nothing was changed.** At that same check Tender could not ask Steam,

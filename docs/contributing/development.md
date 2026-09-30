@@ -249,19 +249,21 @@ order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The new version gets its pre-install check: the installer runs `$PYTHON -B <staged tree>/backend/check.py` under
-   `timeout`, with a two-minute limit. The check imports the whole backend, loads the native library and builds the
-   application — the database and settings migrations included — on copies of `romm_sync.db` (taken with SQLite's backup
-   API, since the running version may be writing it), of a `save_sync_state.json` older settings still fold in, and of
-   `settings.json`. It builds the application and never starts it, so it takes no lock, binds no port, writes no port
-   note, logs to its own output rather than to `backend.log`, and reaches neither Steam nor the network. Its code root
-   is the staged tree; the other five `TENDER_*` roots and `XDG_RUNTIME_DIR` point into the run's temporary directory,
-   and the check refuses to build where one of them already holds something. It ends one of four ways:
+   `timeout`, with a two-minute limit. The check imports `main.py` with everything it imports, loads the native library
+   and builds the application — the database and settings migrations included — on copies of `romm_sync.db` (taken with
+   SQLite's backup API, since the running version may be writing it), of a `save_sync_state.json` older settings still
+   fold in, and of `settings.json`. It builds the application and never starts it, so it takes no lock, binds no port,
+   writes no port note, logs to its own output rather than to `backend.log`, and reaches neither Steam nor the network.
+   Its code root is the staged tree; the other five `TENDER_*` roots and `XDG_RUNTIME_DIR` point into the run's
+   temporary directory, and the check refuses to build where one of them already holds something. It ends one of four
+   ways:
    - The application was built, and the update goes on.
    - It could not be built: the run ends with `the new version does not start` and `nothing was changed`, the staged
      tree is removed, and `update-failure.json` is written with `"kind": "check"` (below). The check's reason and the
      last lines it printed come just above those two lines.
-   - It did not finish within the limit: `the check did not finish` and `nothing was changed`, and no record, since
-     nothing is known about the version.
+   - It did not finish — stopped at the limit (`the pre-install check was stopped after 120s`), or killed, by `timeout`
+     or by anything else (`the pre-install check was killed`): `the check did not finish` and `nothing was changed`, and
+     no record, since nothing is known about the version.
    - The live data could not be copied: `could not try the new version: your data could not be copied` and
      `nothing was changed`, and no record, for the same reason.
 

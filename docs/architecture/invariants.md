@@ -69,22 +69,24 @@ Format: **invariant** — tier — enforced by.
   ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
-  from, and the live database is read without a file created, removed or rewritten beside it** — test + prompt-only —
-  the check runs while the installed version still runs and before anything is stopped, and its whole promise is that a
-  refusal changes nothing. A build under a live root would break that where no refusal shows it: the bin root's launcher
-  replaced by the new version's before the new version is installed, the settings migrated in place, the running
-  backend's port note overwritten under the runtime directory. `install.sh::check_the_new_version` names every root —
-  the code root as the staged tree, the others and `XDG_RUNTIME_DIR` under the run's temporary directory — because a
-  root left out falls back to the one the running version uses, and a panel install hands the installer the live ones in
-  its environment. `backend/check.py` refuses, before copying anything, a root the environment does not name, a code
-  root other than its own tree, a data or config root that is where the live data is copied from, and any other root
-  that already holds something. `adapters/live_data_copy.py` reads the database through SQLite in a way that creates
-  nothing beside it: a read-only open inside a transaction where a WAL or journal shows a connection, an `immutable=1`
-  read where none does, and a byte copy opened under the check's own root where a WAL has lost its index.
-  `tests/test_check.py` runs the real entry over a fake install whose home and runtime directory it compares by names,
-  modes and bytes around a check that builds and around ones that do not, names each root in turn as a live one, and
-  copies the checked tree to show the build leaves nothing in it; `tests/adapters/test_live_data_copy.py` holds the
-  database's directory to its names and bytes for each of the three reads; and
+  from, and the live database is read without a file created or removed beside it, and with no write to one but a
+  reader's marks in the WAL index** — test + prompt-only — the check runs while the installed version still runs and
+  before anything is stopped, and its whole promise is that a refusal changes nothing. A build under a live root would
+  break that where no refusal shows it: the bin root's launcher replaced by the new version's before the new version is
+  installed, the settings migrated in place, the running backend's port note overwritten under the runtime directory.
+  `install.sh::check_the_new_version` names every root — the code root as the staged tree, the others and
+  `XDG_RUNTIME_DIR` under the run's temporary directory — because a root left out falls back to the one the running
+  version uses, and a panel install hands the installer the live ones in its environment. `backend/check.py` refuses,
+  before copying anything, a root the environment does not name, a code root other than its own tree, a data or config
+  root that is where the live data is copied from, and any other root that already holds something.
+  `adapters/live_data_copy.py` reads the database through SQLite in a way that creates nothing beside it: a read-only
+  open inside a transaction where a WAL with its index, or a journal, shows a connection, an `immutable=1` read where
+  there is neither a WAL nor a journal, and a byte copy opened under the check's own root where a WAL has lost its
+  index. `tests/test_check.py` runs the real entry over a fake install whose home and runtime directory it compares by
+  names, modes and bytes around a check that builds and around ones that do not, names each root in turn as a live one,
+  and copies the checked tree to show the build leaves nothing in it; `tests/adapters/test_live_data_copy.py` holds the
+  database's directory to its names and bytes for each of the three reads — the index's bytes aside where a connection
+  holds the database open — and for an index left without its WAL; and
   `tests/scripts/test_install_sh.py::TestTheNewVersionIsCheckedFirst::test_the_check_runs_the_staged_tree_with_every_root_its_own`
   holds the installer to naming every root outside the live ones. **Prompt-only**: a constructor that writes only where
   RetroDECK's or Steam's own paths exist, which the test home has neither of; a write the build makes by `user_home` or

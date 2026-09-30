@@ -380,9 +380,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `UpdateInstallService` calls the adapter's `write` and `remove`
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
-  from, and the live database is read without a file created, removed or rewritten beside it** — test + prompt-only —
-  `tests/test_check.py` (`TestItRefusesToBuildOnALiveRoot`, and the live home and runtime directory compared by names,
-  modes and bytes around a check that builds and around one that does not), `tests/adapters/test_live_data_copy.py`, and
+  from, and the live database is read without a file created or removed beside it, and with no write to one but a
+  reader's marks in the WAL index** — test + prompt-only — `tests/test_check.py` (`TestItRefusesToBuildOnALiveRoot`, and
+  the live home and runtime directory compared by names, modes and bytes around a check that builds and around one that
+  does not), `tests/adapters/test_live_data_copy.py`, and
   `tests/scripts/test_install_sh.py::TestTheNewVersionIsCheckedFirst::test_the_check_runs_the_staged_tree_with_every_root_its_own`.
   Unseen by them: a constructor that writes only where RetroDECK's or Steam's own paths exist, which the test home has
   neither of; a write the build makes by `user_home` or an absolute path rather than under a root it was handed; and a

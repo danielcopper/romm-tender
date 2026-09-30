@@ -1136,7 +1136,7 @@ still catches. A release from before the check has none and is installed without
 [Running an installed one](docs/contributing/development.md#running-an-installed-one). _Avoid_: **start-up check**,
 which is the panel's own question about Steam's modules (above), and **pre-flight**, which is the installer's check of
 the machine before any of this — a Python new enough, the user manager, a native Steam, no Tender plugin left in Decky
-Loader, and no Tender backend already running.
+Loader, and no Tender backend running outside its unit.
 
 ### Rolled-back update / update announcement
 
