@@ -306,8 +306,8 @@ release.
 - **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
   yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
 - **Update to X failed — you are still on Y.**, with where the reason is under it, while the installer's note of a
-  rolled-back update, or of one it refused because the new version did not start, is there and you are still on Y —
-  whether or not you dismissed the notice on the main panel.
+  rolled-back update, or of one its pre-install check refused, is there and you are still on Y — whether or not you
+  dismissed the notice on the main panel.
 - **Install update X** — installs the release **Available** names; see [Installing an update](#installing-an-update).
   **Try again** instead, for a version whose install already failed, was rolled back or was refused. A copy of Tender
   run from a source checkout says **Development build — install updates with the installer.** in its place.
@@ -352,12 +352,14 @@ got, **Verifying** and **Starting the installer**. While it downloads and verifi
 **Starting a game now cancels the update.** — Tender checks once more right before the installer starts, and stops
 there, with nothing changed, if a game is running. When the installer has started, the section says **Tender is
 restarting — Steam's interface will reload in a moment.** From then on the panel loses touch with the old Tender, which
-is expected; after the reload Tender says it was updated, or, if the new version did not start, that the installer
-[went back to the version you had](troubleshooting.md#an-update-was-rolled-back). Before any of that the installer tries
-the new version without stopping Tender, and where it cannot even be put together, it stops there: nothing is replaced,
-Steam's interface does not reload, and **Starting the installer** is marked **Failed** with **The new version does not
-start — nothing was changed.** ([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)).
-While the install runs, Tender refuses to start a library sync, a game download or a save sync.
+is expected; after the reload Tender says it was updated, or, if the new version did not answer once started, that the
+installer [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). Before any of that the
+installer runs the new version's pre-install check, without stopping Tender — the restarting line is already up while it
+runs, though nothing restarts until it has passed. Where the new version cannot even be put together, the installer
+stops there: nothing is replaced, Steam's interface does not reload, **Starting the installer** is marked **Failed**
+with **The new version does not start — nothing was changed.**, and the main panel says the update failed
+([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)). While the install runs, Tender
+refuses to start a library sync, a game download or a save sync.
 
 If Tender is not back five minutes after the installer started, the restarting line changes: **Tender has not come
 back.** when it no longer answers — the line names the journal to read and the command that starts it again — or **The

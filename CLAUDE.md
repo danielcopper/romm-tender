@@ -362,8 +362,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
-  automatic rollback and, with `"kind": "check"`, when its check refuses an update's new version, and removes it after
-  an update whose new version answered** — test + prompt-only —
+  automatic rollback and, with `"kind": "check"`, when its pre-install check refuses an update's new version, and
+  removes it after an update whose new version answered** — test + prompt-only —
   `tests/adapters/test_update_failure.py::TestOnlyTheInstallerWritesTheRecord`: no backend module but
   `adapters/update_failure.py` and `domain/update_outcome.py` names `UPDATE_FAILURE_FILENAME` or the literal, and the
   adapter calls nothing named like a write, move or removal and opens nothing with a writing mode, nor with a mode or
@@ -378,6 +378,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   neither `install.sh` nor a file under `scripts/` (`*.sh`) or `bin/` spells the literal. Unseen by it: a record path
   assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess. Prompt-only: only
   `UpdateInstallService` calls the adapter's `write` and `remove`
+- **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
+  every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
+  from, and the live database is read without a file created, removed or rewritten beside it** — test + prompt-only —
+  `tests/test_check.py` (`TestItRefusesToBuildOnALiveRoot`, and the live home and runtime directory compared by names,
+  modes and bytes around a check that builds and around one that does not), `tests/adapters/test_live_data_copy.py`, and
+  `tests/scripts/test_install_sh.py::TestTheNewVersionIsCheckedFirst::test_the_check_runs_the_staged_tree_with_every_root_its_own`.
+  Unseen by them: a constructor that writes only where RetroDECK's or Steam's own paths exist, which the test home has
+  neither of; a write the build makes by `user_home` or an absolute path rather than under a root it was handed; and a
+  write the copy's change detection cannot see (`adapters/live_data_copy.py` names it)
 - **From the press that starts an install attempt until it fails, everything a pending RetroDECK migration refuses is
   refused with `blocked_by_update`, and so is the migration itself, asked ahead of every other rule — at every `hold` /
   `hold_start` call that names the migration rule, at `migrate_retrodeck_files`, and at every direct migration check

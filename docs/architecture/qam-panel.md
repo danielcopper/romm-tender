@@ -700,7 +700,7 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Steam answers for no notifications                             | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
 | RetroArch `input_driver` is wrong                              | text, **Open Controller**                                         | Settings › Controller, which holds the Fix button                                                      |
 | Sync paused on the session budget                              | text, **Open Sync**                                               | Sync, which holds Restart Steam now and Resume                                                         |
-| An update was rolled back, or refused by the installer's check | both versions, where the reason is, **Open Updates**, Dismiss     | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
+| An update was rolled back, or refused by its pre-install check | both versions, where the reason is, **Open Updates**, Dismiss     | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
 | An update's installer stopped without updating                 | both versions, the installer's journal, **Open Updates**, Dismiss | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run         |
 | A newer Tender release is out                                  | both versions, **Open Updates**, Dismiss                          | Settings › Updates, which states both versions and holds the install, the check's switch and Check now |
 | Tender was updated, or went back                               | the version, Dismiss — and a toast, once                          | none — the card is the whole of it                                                                     |
@@ -740,25 +740,30 @@ switched on. The answer is fetched at panel load by a detached call nothing awai
 why), rewritten by Dismiss, the switch and Check now, and replaced by the notice the backend pushes (`update_notice`)
 when its own check while it runs finds a different answer, so the card and its home follow without a reload.
 
-The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is:
-Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was stopped is
-there; or the journal (`journalctl --user -u romm-tender`), for a new version that failed before it could write to the
-log (`UPDATE_FAILURE_REASON` in `utils/updateOutcomeStore.ts`). The installer's own output says no more than that the
-new version did not answer in time, and points at the same two places. A record the installer's pre-install check left
-(`kind` `check`) takes the same notice with its own line instead: **The new version did not start, so nothing was
-changed.** and where the reason is — the installer's output, in its journal (`journalctl --user -u romm-tender-update`)
-or the terminal it was run in, since that version never ran as the service and wrote nothing to `backend.log`
-(`UPDATE_CHECK_FAILURE_REASON`, chosen by `updateFailureReason`); the Updates row words it the same way. The notice
-stands while the installer's record does — which the backend reports only while the running version is the one the
-record restored ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is
-**per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next rollback raises it
-again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
-states the same sentence, in the card's warning colour (`AMBER`, `bigpicture/layout/pane.tsx`), whether or not it was
-dismissed. It **takes the place of the update notice** for the version that update tried: after a rollback that version
-is still newer than the running one, and the two cards side by side would call a release available and failed at once.
-So for as long as the record stands, that version raises no "is available" card, dismissed or not; a newer release
-raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's answer
-(`get_update_outcome`) is read at panel load by a detached call, like the update notice's.
+The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is. For a
+rollback that is Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was
+stopped is there; or the journal (`journalctl --user -u romm-tender`), for a new version that failed before it could
+write to the log (`UPDATE_FAILURE_REASON` in `utils/updateOutcomeStore.ts`). The installer's own output says no more
+than that the new version did not answer in time, and points at the same two places. A record the installer's
+pre-install check left (`kind` `check`) takes the same notice with its own line instead: **The new version did not
+start, so nothing was changed.** and where the reason is — the installer's output, in its journal
+(`journalctl --user -u romm-tender-update`) or the terminal it was run in, since that version never ran as the service
+and wrote nothing to `backend.log` (`UPDATE_CHECK_FAILURE_REASON`, chosen by `updateFailureReason`); the Updates row
+words it the same way. A record of a kind this version does not know — a later installer's, `kind` `unknown` on the wire
+— takes the notice with no cause named, only where the installer's output is (`UPDATE_UNKNOWN_FAILURE_REASON`). The
+notice stands while the installer's record does — which the backend reports only while the running version is the one
+the record names as still running ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) —
+and its Dismiss is **per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next
+record the installer writes raises it again, and the record going away — the next update whose new version answers
+removes it — takes it down too. Its home states the same sentence, in the card's warning colour (`AMBER`,
+`bigpicture/layout/pane.tsx`), whether or not it was dismissed. It **takes the place of the update notice** for the
+version that update tried: after a rollback that version is still newer than the running one, and the two cards side by
+side would call a release available and failed at once. So for as long as the record stands, that version raises no "is
+available" card, dismissed or not; a newer release raises one as usual (`failureTakesThePlaceOf` in
+`utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at panel load by a detached call,
+like the update notice's. A refusal by the pre-install check that the running backend sees while an install from
+Settings is under way is also pushed (`update_failure_recorded`, taken by `takePushedUpdateFailure`), so the notice is
+up at once rather than at the next panel load; it outranks a read still in flight, as the other pushes do.
 
 The notice that an **update's installer stopped without updating** is the rolled-back notice's sibling for the one
 failure the installer cannot report: it stopped Tender, then gave up and started the same version again. It uses the
@@ -1744,33 +1749,36 @@ and a stop there would be a step that leads nowhere.
 it rather than failing, so an interval that kept issuing would queue one read per tick behind it — and stops when the
 section unmounts (`bigpicture/settings/useUpdateInstall.ts`). The button is there while the backend offers the stored
 release (`offered`), and stays through an attempt: it reads **Install update X**, **Try again** where that version
-already failed here or was rolled back, and **Installing…**, disabled, while an attempt is under way — **while an
-attempt is under way, nothing that can hold focus unmounts under it**. It is disabled while any wait reason holds, and a
-press on it then is refused in the handler too, since a disabled control still reports a press on the device. What it
-waits for — **Waiting for:** and a line per reason — rides the button's own description, with the paused-download hint,
-what refused the last press and **Could not read the update state.** after a read that failed or did not answer within
-five seconds (`UPDATE_INSTALL_READ_DEADLINE_MS`; the late read stays the one in flight), so none of them is a row that
-can leave while it holds focus; the reasons go by themselves once a read no longer names any. Where there is no button,
-that line rides the **Available** row's description instead, which is always there. The backend answers in
-discriminants; the sentences for them are in `utils/updateInstallView.ts`, and the button's labels and a step's value
-beside the rows in `bigpicture/settings/UpdateInstallRows.tsx`. A refusal is worded by the panel, not by the backend's
-message, and goes once a read says it no longer holds (`refusalStands`). After a press the steps come from two sources,
-the `update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a
-press fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`). The steps
-show for an attempt under way, and for a failed one only while its version is the one offered — those rows leave, and
-the failure's line with them, once a read no longer offers that version. The download's bar rides the step's field
-description, as Main's sync bar does, so the step and its bar are one focus stop; the steps and the one line under them
-are focusable read-only fields, and that line is one row whose words change with the attempt — **Starting a game now
-cancels the update.** while it downloads and verifies, then the restarting line, then a failure's sentence. **From
-`installer_started` on, a lost connection is the expected outcome** — the installer stops this backend — so a read it
-takes down is not logged, Main's connection row stays at Checking... rather than calling the backend failed, and Check
-now is disabled while an attempt is under way — in its handler too — since a check in flight when the connection goes
-would fail on it and say so. Five minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`,
-counted from that moment across the section leaving the screen), the restarting line gives way: **Tender has not come
-back.** with the journal and the command to start it where reads no longer answer — a call to a backend that is gone
-waits rather than fails, so it is the read deadline that says so — and **The installer is taking unusually long.** with
-the journal where they still do. From then on the connection row is left to its own verdict too: a probe that held it at
-Checking... asks again when the five minutes are up.
+already failed here or was rolled back or refused by the pre-install check, and **Installing…**, disabled, while an
+attempt is under way — **while an attempt is under way, nothing that can hold focus unmounts under it**. It is disabled
+while any wait reason holds, and a press on it then is refused in the handler too, since a disabled control still
+reports a press on the device. What it waits for — **Waiting for:** and a line per reason — rides the button's own
+description, with the paused-download hint, what refused the last press and **Could not read the update state.** after a
+read that failed or did not answer within five seconds (`UPDATE_INSTALL_READ_DEADLINE_MS`; the late read stays the one
+in flight), so none of them is a row that can leave while it holds focus; the reasons go by themselves once a read no
+longer names any. Where there is no button, that line rides the **Available** row's description instead, which is always
+there. The backend answers in discriminants; the sentences for them are in `utils/updateInstallView.ts`, and the
+button's labels and a step's value beside the rows in `bigpicture/settings/UpdateInstallRows.tsx`. A refusal is worded
+by the panel, not by the backend's message, and goes once a read says it no longer holds (`refusalStands`). After a
+press the steps come from two sources, the `update_install_progress` frames (`utils/updateInstallStore.ts`) and the
+reads; whichever got further wins, and a press fences off the reads that could carry the attempt it replaces
+(`furtherAttempt`, `useUpdateInstall.ts`). The steps show for an attempt under way, and for a failed one only while its
+version is the one offered — those rows leave, and the failure's line with them, once a read no longer offers that
+version. The download's bar rides the step's field description, as Main's sync bar does, so the step and its bar are one
+focus stop; the steps and the one line under them are focusable read-only fields, and that line is one row whose words
+change with the attempt — **Starting a game now cancels the update.** while it downloads and verifies, then the
+restarting line, then a failure's sentence. The restarting line covers the installer's pre-install check as well: the
+installer runs it before it stops anything, so for those first seconds nothing is restarting yet, and a version the
+check refuses ends in a failure's sentence without a restart at all. **From `installer_started` on, a lost connection is
+the expected outcome** — the installer stops this backend — so a read it takes down is not logged, Main's connection row
+stays at Checking... rather than calling the backend failed, and Check now is disabled while an attempt is under way —
+in its handler too — since a check in flight when the connection goes would fail on it and say so. Five minutes after
+the panel first saw the installer started (`INSTALLER_OVERDUE_MS`, counted from that moment across the section leaving
+the screen), the restarting line gives way: **Tender has not come back.** with the journal and the command to start it
+where reads no longer answer — a call to a backend that is gone waits rather than fails, so it is the read deadline that
+says so — and **The installer is taking unusually long.** with the journal where they still do. From then on the
+connection row is left to its own verdict too: a probe that held it at Checking... asks again when the five minutes are
+up.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

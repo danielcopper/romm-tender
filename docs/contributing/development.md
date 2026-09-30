@@ -248,15 +248,26 @@ coming from it. Whenever `install.sh` installs over a tree already at `~/.local/
 order:
 
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
-2. The new version is tried: the installer runs `$PYTHON -B <staged tree>/backend/main.py --check`, which imports the
-   whole backend, loads the native library and builds the application — the database and settings migrations included —
-   on copies of `romm_sync.db` (taken with SQLite's backup API, since the running version may be writing it) and
-   `settings.json`. All six `TENDER_*` roots point into the run's temporary directory, so it takes no lock, binds no
-   port, writes no `backend.log`, leaves the launcher alone and touches nothing in Steam. A version that cannot be built
-   is refused here with `the new version does not start` and `nothing was changed`: the staged tree is removed, the last
-   lines the check printed end the run's output, and `update-failure.json` is written with `"kind": "check"` (below). A
-   first install is tried the same way, before its tree is put in place, and a refusal there writes no record and no
-   unit.
+2. The new version gets its pre-install check: the installer runs `$PYTHON -B <staged tree>/backend/check.py` under
+   `timeout`, with a two-minute limit. The check imports the whole backend, loads the native library and builds the
+   application — the database and settings migrations included — on copies of `romm_sync.db` (taken with SQLite's backup
+   API, since the running version may be writing it), of a `save_sync_state.json` older settings still fold in, and of
+   `settings.json`. It builds the application and never starts it, so it takes no lock, binds no port, writes no port
+   note, logs to its own output rather than to `backend.log`, and reaches neither Steam nor the network. Its code root
+   is the staged tree; the other five `TENDER_*` roots and `XDG_RUNTIME_DIR` point into the run's temporary directory,
+   and the check refuses to build where one of them already holds something. It ends one of four ways:
+   - The application was built, and the update goes on.
+   - It could not be built: the run ends with `the new version does not start` and `nothing was changed`, the staged
+     tree is removed, and `update-failure.json` is written with `"kind": "check"` (below). The check's reason and the
+     last lines it printed come just above those two lines.
+   - It did not finish within the limit: `the check did not finish` and `nothing was changed`, and no record, since
+     nothing is known about the version.
+   - The live data could not be copied: `could not try the new version: your data could not be copied` and
+     `nothing was changed`, and no record, for the same reason.
+
+   A first install gets the same check before its tree is put in place, and a refusal there writes no record and no
+   unit. A release from before the check has no `backend/check.py`: it is installed without one, and the run says
+   `this version has no pre-install check`.
 3. The unit is stopped.
 4. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
    `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup — beside a
@@ -293,11 +304,11 @@ ends as any rollback does, and Tender shows no notice of that rollback. The reco
 { "attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z" }
 ```
 
-A version the check in step 2 refused leaves the same record with a fourth key, `"kind": "check"`, where
-`restored_version` is the version still installed — nothing was replaced — and `rolled_back_at` is when it was refused.
-The keys keep their names so that a backend from before the check still reads the record, as a rollback. A record that
-cannot be written is said the same way (`could not record the refused update in <path>; Tender will not show it`) and
-the run still ends with nothing changed.
+A version the pre-install check in step 2 could not build leaves the same record with a fourth key, `"kind": "check"`,
+where `restored_version` is the version still installed — nothing was replaced — and `rolled_back_at` is when it was
+refused. The keys keep their names so that a backend from before the check still reads the record, as a rollback. A
+record that cannot be written is said the same way
+(`could not record the refused update in <path>; Tender will not show it`) and the run still ends with nothing changed.
 
 `rolled_back_at` is ISO-8601 UTC. The next update whose new version answers removes the file. The backend reads it and
 never writes it ([UpdateOutcomeService notes](../architecture/backend-architecture.md#updateoutcomeservice-notes)).

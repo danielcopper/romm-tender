@@ -1127,14 +1127,16 @@ update is what the installer does, and it can be rolled back after the attempt h
 ### Pre-install check
 
 The **pre-install check** is the installer's try of the version it has just unpacked, before it stops or replaces
-anything: it runs the new version's own `backend/main.py --check`, which builds the backend — every module imported, the
-native library loaded, the database and settings migrated — on copies of the live data, under a temporary directory, and
-starts nothing. A version it cannot build is **refused**: the unpacked files are removed and nothing was changed. It
-runs on a first install as well as on an update, and only an update's refusal is recorded (below). It catches what stops
-a version being built, never what fails once it runs — the port, a request, loading the panel — which the rollback still
-catches. _Avoid_: **start-up check**, which is the panel's own question about Steam's modules (above), and
-**pre-flight**, which is the installer's check of the machine — Python, the user manager, Steam, Decky — before any of
-this.
+anything: the new version builds itself on copies of the user's data and starts nothing. A version it cannot build is
+**refused**: the unpacked files are removed and nothing is changed. It runs on a first install as well as on an update,
+and only an update's refusal is recorded (below). A check that does not finish, or cannot copy the data it builds on,
+refuses nothing: it says nothing about the version, so nothing is changed and nothing is recorded. It catches what stops
+a version being built, never what fails once it runs — answering the panel, loading it into Steam — which the rollback
+still catches. A release from before the check has none and is installed without one. How it runs:
+[Running an installed one](docs/contributing/development.md#running-an-installed-one). _Avoid_: **start-up check**,
+which is the panel's own question about Steam's modules (above), and **pre-flight**, which is the installer's check of
+the machine before any of this — a Python new enough, the user manager, a native Steam, no Tender plugin left in Decky
+Loader, and no Tender backend already running.
 
 ### Rolled-back update / update announcement
 
@@ -1144,16 +1146,16 @@ version it went back to, and when — which the installer writes and removes and
 records an update the **pre-install check** refused, marked `"kind": "check"`, where the version "gone back to" is the
 one that was never replaced; a record without `kind` is a rollback, and a backend from before the check reads a refusal
 as one. The record **stands** only while the running version is the one it went back to; one that outlived that is a
-leftover and is shown nowhere. The **rolled-back notice** on Main states a standing record until the user dismisses it
-or the next update that answers removes it, and for that long the update notice does not name the version it tried. The
-**update announcement** is what a start on a version that moved owes the panel — an update, or a return to an earlier
-release — told twice over: one toast, raised once per process, and a card on Main that stands until dismissed. The
-backend compares the running version with the one the previous start recorded (`last_run_version`), and a rollback is
-never announced. `domain/update_outcome.py` decides which version is announced and which way it moved;
-`services/update_outcome.py` keeps the announcement for its process and reads the record. _Avoid_: "failed update" for
-the record alone — an update can fail before anything is replaced, and then nothing is rolled back; only a refusal by
-the pre-install check is recorded, and an install attempt that failed before its installer ran is not. The exception is
-the installer's fixed filename, `update-failure.json`, and the code names that follow it (`UpdateFailure`,
-`read_update_failure`, `dismiss_update_failure`, `UpdateFailureNotice`, the answer's `failure` key): each of those means
-the installer's record — of a rolled-back update or of a refused one — never an attempt that failed before its installer
-ran.
+leftover and is shown nowhere. The **rolled-back notice** on Main states a standing record — a rollback, or a refusal by
+the pre-install check, under the same name — until the user dismisses it or the next update that answers removes it, and
+for that long the update notice does not name the version it tried. The **update announcement** is what a start on a
+version that moved owes the panel — an update, or a return to an earlier release — told twice over: one toast, raised
+once per process, and a card on Main that stands until dismissed. The backend compares the running version with the one
+the previous start recorded (`last_run_version`), and a rollback is never announced. `domain/update_outcome.py` decides
+which version is announced and which way it moved; `services/update_outcome.py` keeps the announcement for its process
+and reads the record. _Avoid_: "failed update" for the record alone — an update can fail before anything is replaced,
+and then nothing is rolled back; only a refusal by the pre-install check is recorded, and an install attempt that failed
+before its installer ran is not. The exception is the installer's fixed filename, `update-failure.json`, and the code
+names that follow it (`UpdateFailure`, `read_update_failure`, `dismiss_update_failure`, `UpdateFailureNotice`, the
+answer's `failure` key): each of those means the installer's record — of a rolled-back update or of a refused one —
+never an attempt that failed before its installer ran.

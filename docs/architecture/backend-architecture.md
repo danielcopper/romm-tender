@@ -16,12 +16,16 @@ Services depend on **Protocols** (defined in `services/protocols/`), never on co
 implement those Protocols. `bootstrap/` is the composition root — the only place where concrete adapters meet services.
 `bootstrap/` also builds the `Application` — every wired service, the start-up repairs, the network step and the
 shutdown. `main.py` owns the process entry (`run()` and `build_backend()`) and the endpoints; it holds no business
-logic. It has a second entry, `check()`, which the installer runs as `main.py --check` on a version it has unpacked and
-not yet put in place: stderr-only logging, copies of the live database and settings (`bootstrap/check.py`, the database
-through SQLite's backup API) under roots the installer points at a temporary directory, then `build_application()` and
-nothing else — no lock, no port, no `backend.log`, no start-up repair, no network. It answers 0 once the `Application`
-is built and 1 with the traceback on stderr otherwise, and refuses to run where one of the six `TENDER_*` roots is unset
-or the data or config root is the one it copies from. What the installer does with the answer:
+logic, and it reads no arguments. The pre-install check is an entry of its own, `check.py` beside it, which the
+installer runs on a version it has unpacked and not yet put in place — a file rather than a flag on `main.py`, because a
+version whose `main.py` predated the flag would ignore it and start a whole backend. It logs to stderr only, copies the
+live database, the save-sync state and the settings (`bootstrap/check.py`, the database through SQLite's backup API)
+under roots of its own, then calls `build_application()` and nothing else — no lock, no port, no `backend.log`, no
+start-up repair, no network. Its exit status is its answer: 0 when the `Application` was built; 1 when it was not, with
+the traceback on stderr, which is also what Python itself answers for a module that does not import; and 2 when the
+check was not tried — arguments it cannot read, a root it may not build under, or live data it could not copy. It
+refuses to build unless the code root is its own tree and every other root, the runtime directory among them, is absent
+or empty. What the installer does with each answer:
 [Running an installed one](../contributing/development.md#running-an-installed-one).
 
 ```python
@@ -1766,22 +1770,26 @@ The service tells the user what the last update did, in one of two ways, and nev
   `the update to <X> was rolled back at <T>; back on <Y> — what <X> logged when it tried to start is earlier in this log, or in journalctl --user -u romm-tender if it failed before logging`
   — and again on every `get_update_outcome`, so the card goes as soon as the next update that answers removes the file.
   A record that is missing, unreadable or short of any of its three keys is no record.
-- **The record has two kinds, and a record without `kind` is a rollback.** The installer's check refuses a new version
-  that cannot be built before anything is stopped or replaced
+- **The record has kinds, and a record without `kind` is a rollback.** The pre-install check refuses a new version that
+  cannot be built before anything is stopped or replaced
   ([Running an installed one](../contributing/development.md#running-an-installed-one)), and an update records that
   refusal in the same file with `"kind": "check"` — `restored_version` the version still running, `rolled_back_at` when.
   The keys keep their names so that a backend from before the check still reads such a record, and tells it as a
   rollback. This one logs it as its own WARNING,
-  `the installer's check refused <X> at <T>: it did not start, so nothing was changed and this is still <Y> — what it said is in journalctl --user -u romm-tender-update, or in the terminal the installer ran in`,
-  and hands `kind` to the panel in `failure`, which words the line under the card by it. A `kind` it does not know is no
-  record, as a missing key is (`domain/update_outcome.py::decode_update_failure`).
+  `the pre-install check refused <X> at <T>: it does not start, so nothing was changed and Tender is still on <Y> — what the check said is in journalctl --user -u romm-tender-update, or in the terminal the installer ran in`,
+  and hands `kind` to the panel in `failure`, which words the line under the card by it. A `kind` it does not know — a
+  later installer's — is still an update that did not go through: it reads as `"unknown"`
+  (`domain/update_outcome.py::decode_update_failure`), logs
+  `the update to <X> did not go through at <T>; Tender is still on <Y> — what the installer said is in journalctl --user -u romm-tender-update, or in the terminal the installer ran in`,
+  and the panel names no cause for it, only where the installer's output is.
 - **A record stands only while the running version is the one it restored**
   (`domain/update_outcome.py::standing_update_failure`). One that names another `restored_version` — the installer's
   removal did not happen, and a later update went through anyway — is a leftover: no WARNING, `failure` is `None`, and
   so there is no card and no row under Settings › Updates. The file is left where it is, since removing it is the
   installer's.
 - **Dismiss is per record.** `update_failure_dismissed_at` in `settings.json` holds the dismissed record's
-  `rolled_back_at`, written only through the `SettingsPersister`, so the next rollback raises the card again.
+  `rolled_back_at`, written only through the `SettingsPersister`, so the next record the installer writes raises the
+  card again.
 - Which card stands where both apply is the panel's rule (`failureTakesThePlaceOf`,
   [QAM panel](qam-panel.md#notices-and-homes)).
 
@@ -1847,13 +1855,14 @@ swaps the tree and rolls back what does not answer
   and the watch finds out.
 - **Watching the installer.** Every three seconds the unit is asked whether it still runs. It ending while this process
   still runs means the installer refused or failed before it stopped the service. Where the installer's record says its
-  check refused this attempt — `kind` `check`, naming this version, leaving the running one in place, written no earlier
-  than the attempt record's `started_at` (`domain/update_install.py::refused_by_the_check`) — the attempt fails as
-  `new_version_does_not_start`; otherwise, a record that cannot be read included, as `installer_stopped`. What the
-  installer said is in its journal either way. A user manager that cannot be asked is not taken for the unit ending: the
-  first such reading is a WARNING, later ones go to the debug log, and the watch goes on with the update rule held, for
-  as long as this process lives — it is never given back on a guess. The panel says what that looks like after five
-  minutes ([QAM panel](qam-panel.md#settings)).
+  pre-install check refused this attempt — `kind` `check`, naming this version, leaving the running one in place,
+  written no earlier than the attempt record's `started_at` (`domain/update_install.py::refused_by_the_check`) — that
+  record is pushed to the panel as `update_failure_recorded`, in the shape `get_update_outcome` answers it in, so the
+  notice on Main shows it at once, and the attempt fails as `new_version_does_not_start`. Otherwise — a record that
+  cannot be read included — it fails as `installer_stopped`. What the installer said is in its journal either way. A
+  user manager that cannot be asked is not taken for the unit ending: the first such reading is a WARNING, later ones go
+  to the debug log, and the watch goes on with the update rule held, for as long as this process lives — it is never
+  given back on a guess. The panel says what that looks like after five minutes ([QAM panel](qam-panel.md#settings)).
 - **Something unforeseen** — an exception the steps above do not name — is logged with its trace. Before the installer
   was asked to start it fails the attempt, as `download_failed` while downloading and as `installer_not_started` after;
   from that moment on it leaves the rule held, since the installer may be running. A running-apps reader that raises is
@@ -1885,20 +1894,21 @@ swaps the tree and rolls back what does not answer
   `update-failure.json`. A failure this process reports itself removes it (the panel already showed it), and so does the
   next attempt. At start (`note_update_attempt`), `domain/update_install.py::stopped_attempt` judges it: running the
   attempted version, the update went through; a standing record of the installer's that it rolled this attempt back, or
-  that its check refused it, is that record's story; running neither version, the version moved since — each removes it.
-  Running the version that started it, with no rollback recorded, is an installer that stopped without updating: a
-  WARNING, the attempt reported as `installer_stopped` for Try again, and `get_stopped_update_attempt` answering it for
-  the notice on Main until `dismiss_stopped_update_attempt` removes the record or a new attempt starts. The dismissal
-  does nothing where no such attempt stands — a card left on screen from before a new press must not take the new
-  attempt's record away. The installer starts this program itself — the new version, the one it rolled back to, or the
-  same one again after it gave up — so the start that looks at the record may run inside the installer's unit.
-  `note_update_attempt` therefore only starts a task, which reads the record and asks the unit off the loop, so a user
-  manager slow to answer holds up no other start step; only once that unit reads ended is the record judged. While it
-  runs, or the user manager cannot say, the unit is asked again every three seconds; a stopped attempt found is pushed
-  to the panel as `update_attempt_stopped` (the panel reads the answer once, at load, which may come before the
-  judgement or after it); and a press in the meantime ends the question. A record that cannot be written is a WARNING
-  and does not hold the install up — should that installer then stop without updating, the next start cannot say so; one
-  that cannot be removed is judged again at the next start.
+  that its pre-install check refused it — one naming this attempt's version, written no earlier than the attempt started
+  — is that record's story; running neither version, the version moved since — each removes it. Running the version that
+  started it, with no such record from the installer, is an installer that stopped without updating: a WARNING, the
+  attempt reported as `installer_stopped` for Try again, and `get_stopped_update_attempt` answering it for the notice on
+  Main until `dismiss_stopped_update_attempt` removes the record or a new attempt starts. The dismissal does nothing
+  where no such attempt stands — a card left on screen from before a new press must not take the new attempt's record
+  away. The installer starts this program itself — the new version, the one it rolled back to, or the same one again
+  after it gave up — so the start that looks at the record may run inside the installer's unit. `note_update_attempt`
+  therefore only starts a task, which reads the record and asks the unit off the loop, so a user manager slow to answer
+  holds up no other start step; only once that unit reads ended is the record judged. While it runs, or the user manager
+  cannot say, the unit is asked again every three seconds; a stopped attempt found is pushed to the panel as
+  `update_attempt_stopped` (the panel reads the answer once, at load, which may come before the judgement or after it);
+  and a press in the meantime ends the question. A record that cannot be written is a WARNING and does not hold the
+  install up — should that installer then stop without updating, the next start cannot say so; one that cannot be
+  removed is judged again at the next start.
 
 ### Adapters (`backend/adapters/`)
 
