@@ -302,13 +302,14 @@ available — you have just seen it fail — although a release newer than X bri
 release.
 
 A failed update also says so in a message that goes by itself, once Steam has finished starting, so you hear of it
-without opening the panel — in Game Mode it shows over the game. After the installer went back to the version you had,
-refused the new version, or stopped without updating, it says **Update to X failed. You are still on Y. Settings ›
-Updates shows why.** An install you started from **Settings › Updates** that fails before the installer runs says what
-stopped it — **Update to X failed. The download failed.**, for example — and one a game stopped says **Update to X was
-cancelled. A game was started. Nothing was changed.** Each failed update says it once: reopening the panel, restarting
-Steam or restarting Tender does not bring it back, and one whose notice you already dismissed on the main panel does not
-say it at all.
+without opening the panel. After the installer went back to the version you had or refused the new version, and after an
+installer that stopped Tender and then stopped without updating, it says **Update to X failed. You are still on Y.
+Settings › Updates shows why.** An install you started from **Settings › Updates** that fails while Tender runs says
+what stopped it — **Update to X failed. The download failed.** or **Update to X failed. The installer stopped without
+updating.**, for example — and one a game stopped says **Update to X was cancelled. A game was started. Nothing was
+changed.** Where the panel was not loaded when such an install failed, the message comes when it next loads, unless
+Tender was restarted in between. Each failed update says it once: reopening the panel, restarting Steam or restarting
+Tender does not bring it back, and one whose notice you already dismissed on the main panel does not say it at all.
 
 **Settings › Updates** shows:
 
@@ -399,23 +400,28 @@ update it went back from, one its pre-install check refused, and one where it st
 for a download that failed, a checksum that did not match, an installer that could not be started, or an update a game
 cancelled — the installer did not run for those, and Tender's log, `backend.log`, says why.
 
-It opens a window titled **What the installer said** with the time the installer ran. **The installer** shows that
-installer's output — the run that belongs to this failure, not the latest one if the installer has run again since.
-After the installer went back to the version you had, a second part, **X, when it tried to start**, shows what the new
-version printed between the installer starting and going back — where the reason usually is, since the installer itself
-only says that the new version did not answer. Each part shows its last 300 lines and says how many earlier ones it
-leaves out, and a line longer than 500 characters is cut. Tender's own address, which the new version prints with the
-key that lets the panel in, shows that key as `[hidden]`. Move down through the lines with the D-pad, and press
-**Close** to go back.
+It opens a window titled **What the installer said**, which says **Reading what the installer said…** until Tender has
+the answer; pressing the button again meanwhile opens no second one. Where there is output, the title carries the time
+the installer ran, and **The installer** shows that installer's output — the run that belongs to this failure, not the
+latest one if the installer has run again since. After the installer went back to the version you had, a second part,
+**X, when it tried to start**, shows what the new version printed between the installer starting and going back — where
+the reason usually is, since the installer itself only says that the new version did not answer. Each part shows its
+last 300 lines and says how many earlier ones it leaves out, and a line longer than 500 characters is cut. Tender's own
+address, which the new version prints with the key that lets the panel in, shows that key as `[hidden]`. Move down
+through the lines with the D-pad, and press **Close** to go back.
 
-Tender reads this from the system journal, where it stays on the Deck. Sometimes there is nothing to show, and the
-window says why instead:
+Tender reads this from the Deck's system journal. Sometimes there is nothing to show, and the window says why instead,
+with no time in its title:
 
 - **This output is no longer in the system journal — it keeps only the last hours of logs.** The journal keeps a fixed
   amount for everything on the Deck, so older output is gone.
 - **This update was run in a terminal, so its output is there, not in the journal.** The installer ran by hand, so its
   output went to that terminal.
-- **The installer's output could not be read.** The journal could not be read, or Tender did not answer.
+- **The installer left nothing in the journal for this update.** Tender started the installer, and the journal, which
+  still reaches back that far, holds nothing from it — it may never have started.
+- **This failed update is no longer on record.** The failure went away between the block showing it and the press — a
+  later update went through, or a new install started.
+- **Tender could not read what the installer said.** The journal could not be read, or Tender did not answer.
 
 ## RetroArch Input Driver Fix
 

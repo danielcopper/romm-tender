@@ -1176,10 +1176,10 @@ never an attempt that failed before its installer ran.
 
 The **failed-update toast** tells the user an update failed without the panel being open, once per failure: for a
 standing record of the installer's and for an installer an earlier start found stopped, once across starts — the backend
-keeps the stamp each was acknowledged for — and for an **install attempt** this backend runs, off the progress frame
-that turned failed, never off a read. A record whose card was dismissed owes none. The **installer output** of a failed
-update is what its installer printed, read back from the journal for Settings › Updates: the one run of
-`romm-tender-update` that belongs to that failure — never merely the latest run — and, after a rollback, what the failed
-version printed while it tried to start; every admission token in it is hidden. `domain/update_output.py` decides what
-of a run is shown; `services/update_output.py` picks the run. _Avoid_: "log" for the installer output — Tender's log is
-`backend.log`, which the installer does not write to.
+keeps the stamp each was acknowledged for — and for an **install attempt** this backend runs, once for this process —
+the backend holds it owed, per press, until the panel acknowledges it. A record whose card was dismissed owes none. The
+**installer output** of a failed update is what its installer printed, read back from the journal for Settings ›
+Updates: the one run of `romm-tender-update` that belongs to that failure — never merely the latest run — and, after a
+rollback, what the failed version printed while it tried to start; every admission token in it is hidden.
+`domain/update_output.py` decides what of a run is shown; `services/update_output.py` picks the run. _Avoid_: "log" for
+the installer output — Tender's log is `backend.log`, which the installer does not write to.

@@ -798,18 +798,21 @@ card is held back by it.
 **A failed update is announced by a toast too**, once, in Tender's name like every other toast: **Update to X failed.
 You are still on Y. Settings › Updates shows why.** for the installer's record and for an installer an earlier start
 found stopped, and for an attempt of this backend's the attempt's own reason — **Update to X failed. The download
-failed.**, or **Update to X was cancelled. A game was started. Nothing was changed.** for the two aborts titled
-cancelled (`utils/failedUpdateToast.ts`). The record and the stopped attempt stand across starts, so a flag held for one
-process would raise their toasts at every start: the backend owes each one per identity — the record's `rolled_back_at`,
-the stopped attempt's `started_at` — until the panel acknowledges that stamp, which it keeps in `kv_config`
-(`failure_toast_owed` on `get_update_outcome`, `toast_owed` on the stopped attempt;
-[UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)). A record whose card was dismissed
-owes none, and dismissing a stopped attempt removes it. An attempt of this backend's lives in this process only, so its
-toast is raised off the `update_install_progress` frame that turns failed and never off a read, which is what keeps a
-reloaded panel from raising it again; a refusal by the pre-install check is the one live failure that is not, because
-its record is pushed (`update_failure_recorded`) just before that frame and raises the toast — once, the record's. A
-push and a read of the same failure in one JavaScript context raise one toast between them. Where Steam has no
-notification store the cards and Settings › Updates are the only word of it, as for every toast.
+failed.** or **Update to X failed. The installer stopped without updating.**, or **Update to X was cancelled. A game was
+started. Nothing was changed.** for the two aborts titled cancelled (`utils/failedUpdateToast.ts`). Every one of them is
+owed by the backend until the panel acknowledges it, and raised only then: the record per `rolled_back_at` and the
+stopped attempt per `started_at`, both kept in `kv_config` because they stand across starts (`failure_toast_owed` on
+`get_update_outcome`, `toast_owed` on the stopped attempt;
+[UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)), and an attempt of this backend's per
+press, in memory, since the attempt lives in this process only (`get_update_attempt_toast`;
+[UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). The panel asks for an attempt's toast
+at load and again whenever an `update_install_progress` frame turns failed (`toastOwedAttempt`), so a frame sent while
+no panel was loaded does not take its toast with it, and a reloaded panel finds it acknowledged. A record whose card was
+dismissed owes none, and dismissing a stopped attempt removes it. A refusal by the pre-install check owes no attempt's
+toast: its record is pushed (`update_failure_recorded`) just before the failed frame and raises the toast — once, the
+record's. A read something overtook raises no record's toast; the push raises its own. A push and a read of the same
+failure in one JavaScript context raise one toast between them. Where Steam has no notification store the cards and
+Settings › Updates are the only word of it, as for every toast.
 
 The three update notices stack in one order: the announcement card, then the rolled-back card, then the "is available"
 card — what this start runs on, then an update that did not go through, then a release still to be had. The announcement
@@ -1830,7 +1833,7 @@ is titled **Update to X failed — nothing was changed.**, and one cancelled for
 changed.**; an installer that stopped where this panel did not see it start says **— you are still on Y.** as its card
 on Main does, since what it left behind is not known here. Its reason is its line in `INSTALL_FAILURE_NOTES`, which
 leaves out what the title says and names no journal; Main's card for a stopped installer takes the same line with the
-installer's journal named (`INSTALL_FAILURE_SENTENCES`), since no button stands beside it there. The step it is marked
+installer's journal named (`INSTALLER_STOPPED_SENTENCE`), since no button stands beside it there. The step it is marked
 at (`failedStep`, `utils/updateInstallView.ts`):
 
 | Failure                                                         | Marked at                                                                                                                         |
@@ -1864,23 +1867,27 @@ again later.** and **The check failed.** — a release found is the Available ro
 **Show what the installer said** is a row of its own directly under a failed block, a `ButtonItem`, where the installer
 ran: an attempt that failed as `installer_stopped` or `new_version_does_not_start` (`INSTALLER_RAN`,
 `utils/updateInstallView.ts`) — a stopped attempt an earlier start found among them — and a record of every kind. It is
-not a control inside the block's field, which would change that stop; it comes and goes with the block, so it too leaves
-only when a read offers another version or none, never while an attempt is under way. A press asks the backend for that
-failure's output (`get_update_output`, with the record's `rolled_back_at`, or `null` for this backend's attempt) and
-opens a modal over the answer (`bigpicture/settings/UpdateOutputModal.tsx`) through the `showModal` and `ModalRoot` the
-panel already imports, so the start-up check has no new name to classify. The modal renders in Big Picture's document
-rather than the QAM view's; it reads no DOM global, so the two realms do not meet in it. It is titled **What the
-installer said — HH:MM**, the local time the installer's run began, and holds **The installer** and, after a rollback,
-**X, when it tried to start** — which run each is, and what the backend cuts and hides, is
-[UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and wrap, and
-the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines are cut
-into stops of twelve, each a `Focusable` declaring `focusableIfEmpty`, so a controller walks several hundred lines a
-screenful at a time and every line is reachable. A part that leaves lines out says how many above them. Where the
-journal holds no run it says why in a stop of its own instead of an empty box — **This output is no longer in the system
-journal — it keeps only the last hours of logs.** (`missing` `rotated`) or **This update was run in a terminal, so its
-output is there, not in the journal.** (`terminal`) — and **The installer's output could not be read.** where the
-journal or the call failed. **Close** ends it. Main's cards keep their journal sentence and **Open Updates**; the button
-is Settings' alone.
+not a control inside the block's field, which would change that stop; it comes and goes with the block, so it leaves
+when a read offers another version or none, and when **Try again** starts a new attempt, whose block has no button while
+it runs. A press opens a modal at once (`bigpicture/settings/UpdateOutputModal.tsx`), through the `showModal` and
+`ModalRoot` the panel already imports, so the start-up check has no new name to classify; it says **Reading what the
+installer said…** until the backend answers for that failure (`get_update_output`, with the record's `rolled_back_at`,
+or `null` for this backend's attempt), and a press while that answer is on its way opens nothing. The modal renders in
+Big Picture's document rather than the QAM view's; it reads no DOM global, so the two realms do not meet in it. Where it
+shows output it is titled **What the installer said — HH:MM**, the local time the installer's run began, and holds **The
+installer** and, after a rollback, **X, when it tried to start** — which run each is, and what the backend cuts and
+hides, is [UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and
+wrap, and the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines
+are cut into stops of at most twelve lines and under 1200 characters (`outputStops`) — a line of 500 characters wraps to
+several rows, and a stop taller than the dialog would hide its own end — each a `Focusable` declaring
+`focusableIfEmpty`, so a controller walks several hundred lines one stop at a time and every line is reachable. A part
+that leaves lines out says how many above them. Everywhere else the title carries no time, and one stop says why there
+is nothing instead of an empty box: **This output is no longer in the system journal — it keeps only the last hours of
+logs.** (`missing` `rotated`), **This update was run in a terminal, so its output is there, not in the journal.**
+(`terminal`), **The installer left nothing in the journal for this update.** (`empty`), **This failed update is no
+longer on record.** (`not_found`), and **Tender could not read what the installer said.** where the journal or the call
+failed, and for a `missing` value this panel has no sentence for. **Close** ends it. Main's cards keep their journal
+sentence and **Open Updates**; the button is Settings' alone.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

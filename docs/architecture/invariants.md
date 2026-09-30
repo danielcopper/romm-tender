@@ -68,19 +68,26 @@ Format: **invariant** — tier — enforced by.
   **Prompt-only**: only `UpdateInstallService` calls the adapter's `write` and `remove`
   ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
 - **No journal line reaches the panel with an admission token in it: every line read back from the journal is shown
-  through `domain/update_output.py::output_section`, which replaces each `token=` value with `[hidden]`** — test +
-  prompt-only — every start logs the address the panel is loaded from, admission token included, on stderr, which under
-  the service is this unit's journal (`host/runtime.py`; only the log file's formatter redacts it,
-  `host/logging_setup.py`). The window "Show what the installer said" shows the failed version's lines from that journal
-  after a rollback, so without the rule the panel would print a token — a dead one, since each process draws its own,
-  but a token all the same, on a screen that can be photographed or shared. The token is not known by value to the
-  reader (it belonged to another process), so the rule hides the parameter's value by pattern; the parameter's name is
-  held equal to `host/access.py::TOKEN_PARAM` by a test, since `domain/` may not import the host.
-  `tests/domain/test_update_output.py::TestHideToken` pins the address line's shape, a token among other parameters and
-  a word that merely ends in `token`; `tests/services/test_update_output.py::TestAfterARollback` and
-  `tests/contract/test_update_output.py` pin it end to end. **Prompt-only**: a new reader of journal text answers
-  through `output_section` or `hide_token`, never with the raw `JournalEntry.message`
-  ([UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes))
+  through `domain/update_output.py::output_section`, which replaces the value of every admission-token spelling it knows
+  with `[hidden]`** — test + prompt-only — every start logs the address the panel is loaded from, admission token
+  included, on stderr, which under the service is the `romm-tender` unit's journal (`host/runtime.py`; only the log
+  file's formatter redacts it, `host/logging_setup.py`). The window "Show what the installer said" shows the failed
+  version's lines from that journal after a rollback, so without the rule the panel would print a token — a dead one,
+  since each process draws its own, but a token all the same, on a screen that can be photographed or shared. The token
+  is not known by value to the reader (it belonged to another process), so the rule hides it by pattern, in three
+  spellings: a query's `token=…`, the same percent-encoded inside another URL's parameter (`%3Ftoken%3D…`,
+  `%26token%3D…`), and a JSON or Python mapping's `"token": "…"`; a value ends at the first character outside
+  `secrets.token_urlsafe`'s alphabet, which is what `host/access.py::new_token` draws. The parameter's name is held
+  equal to `host/access.py::TOKEN_PARAM` by a test, since `domain/` may not import the host.
+  `tests/domain/test_update_output.py::TestHideToken` pins the address line's shape, each spelling, a token among other
+  parameters and a word that merely ends in `token`; one service case
+  (`tests/services/test_update_output.py::TestAfterARollback::test_answers_the_installer_s_run_and_what_the_failed_version_printed`)
+  and one contract case
+  (`tests/contract/test_update_output.py::test_after_a_rollback_both_runs_are_answered_with_the_token_hidden`, the only
+  one end to end) assert `[hidden]` in the failed version's part. **Unseen by it**: a token printed in any other shape —
+  under another name, encoded twice, split across lines, or holding a character outside that alphabet. **Prompt-only**:
+  a new reader of journal text answers through `output_section` or `hide_token`, never with the raw
+  `JournalEntry.message` ([UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes))
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
   from, and the live database is read without a file created or removed beside it, and with no write to one but a
