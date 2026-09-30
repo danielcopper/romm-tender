@@ -157,11 +157,13 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_stopped_update_attempt",
     "dismiss_stopped_update_attempt",
     # The toast for an update that did not go through, and what its installer
-    # printed: the acknowledgements write a marker in kv_config, and the read
-    # asks the journal, the installer's record and this process's memory;
-    # none of them touches RetroDECK state.
+    # printed: the acknowledgements write a marker in kv_config or this
+    # process's memory, and the reads ask the journal, the installer's record
+    # and this process's memory; none of them touches RetroDECK state.
     "acknowledge_update_failure_toast",
     "acknowledge_stopped_update_attempt_toast",
+    "get_update_attempt_toast",
+    "acknowledge_update_attempt_toast",
     "get_update_output",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.

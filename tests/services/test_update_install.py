@@ -157,6 +157,8 @@ class _Rig:
     releases: _Releases
     sleeper: _ParkingSleeper
     uow_factory: FakeUnitOfWorkFactory
+    # Every stamp the installer's record's toast was acknowledged for.
+    failure_toast_acks: list[object]
 
     @property
     def tarball(self) -> ReleaseTarball:
@@ -188,8 +190,10 @@ async def _rig(
     unit_no_answer: bool = False,
     sleeper: _ParkingSleeper | None = None,
     failure_record: UpdateFailure | None = None,
+    read_update_failure: Callable[[], UpdateFailure | None] | None = None,
     current_version: str = _RUNNING,
     uow_factory: FakeUnitOfWorkFactory | None = None,
+    events: FakeEventSink | None = None,
 ) -> _Rig:
     body = body if body is not None else _tarball()
     release = release if release is not None else _release(body=body)
@@ -200,11 +204,17 @@ async def _rig(
         bodies={release.tarball.url: body, release.tarball.checksum_url: checksum_body}, failing=failing
     )
     units = FakeTransientUnits(refusal=unit_refusal, states=unit_states, no_answer=unit_no_answer)
-    events = FakeEventSink()
+    events = events if events is not None else FakeEventSink()
     staging = UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update"))
     releases = _Releases(release)
     sleeper = sleeper if sleeper is not None else _ParkingSleeper()
     uow_factory = uow_factory if uow_factory is not None else FakeUnitOfWorkFactory()
+    failure_toast_acks: list[object] = []
+
+    async def acknowledge_failure_toast(rolled_back_at: object) -> dict[str, Any]:
+        failure_toast_acks.append(rolled_back_at)
+        return {"success": True}
+
     service = UpdateInstallService(
         config=UpdateInstallServiceConfig(
             releases=releases,
@@ -220,13 +230,14 @@ async def _rig(
             cleanup_running=lambda: work.cleanup,
             migration_running=lambda: work.migration_running,
             held_claims=lambda: tuple(work.claims),
-            read_update_failure=lambda: failure_record,
+            read_update_failure=read_update_failure or (lambda: failure_record),
             attempts=UpdateAttemptFileAdapter(state_dir=str(tmp_path / "state"), log_debug=lambda msg: None),
             download_asset=downloads,
             staging=staging,
             units=units,
             installer_environment=_ENVIRONMENT,
             uow_factory=uow_factory,
+            acknowledge_failure_toast=acknowledge_failure_toast,
             emit=events.emit,
             clock=FakeClock(),
             sleeper=sleeper,
@@ -247,6 +258,7 @@ async def _rig(
         releases=releases,
         sleeper=sleeper,
         uow_factory=uow_factory,
+        failure_toast_acks=failure_toast_acks,
     )
 
 
@@ -1052,11 +1064,11 @@ def _record_path(tmp_path) -> str:
     return str(tmp_path / "state" / UPDATE_ATTEMPT_FILENAME)
 
 
-def _leave_record(tmp_path, attempted: str = _OFFERED, started_by: str = _RUNNING) -> None:
+def _leave_record(
+    tmp_path, attempted: str = _OFFERED, started_by: str = _RUNNING, started_at: str = "2026-09-01T10:00:00Z"
+) -> None:
     os.makedirs(tmp_path / "state", exist_ok=True)
-    record = UpdateAttemptRecord(
-        attempted_version=attempted, from_version=started_by, started_at="2026-09-01T10:00:00Z"
-    )
+    record = UpdateAttemptRecord(attempted_version=attempted, from_version=started_by, started_at=started_at)
     with open(_record_path(tmp_path), "w", encoding="utf-8") as f:
         f.write(encode_attempt_record(record))
 
@@ -1320,6 +1332,158 @@ class TestTheStoppedAttemptsToast:
         assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
         with rig.uow_factory() as uow:
             assert uow.kv_config.get("update_stopped_toasted_at") is None
+
+
+class TestTheAttemptsToast:
+    async def test_a_failed_attempt_owes_its_toast_until_the_panel_acknowledges_it(self, rigs, tmp_path):
+        release = _release()
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url})
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        assert rig.service.get_update_attempt_toast() == {
+            "attempt": 1,
+            "version": _OFFERED,
+            "failure": "download_failed",
+        }
+        assert await rig.service.acknowledge_update_attempt_toast(1) == {"success": True}
+        assert rig.service.get_update_attempt_toast() is None
+
+    async def test_it_is_owed_by_the_time_the_failed_frame_is_emitted(self, rigs, tmp_path):
+        class LookingSink(FakeEventSink):
+            """Notes what the service owes at the moment each failed frame goes out."""
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.service: UpdateInstallService | None = None
+                self.owed_at_emit: list[object] = []
+
+            async def emit(self, name: str, payload: object, /) -> bool:
+                if name == "update_install_progress" and isinstance(payload, dict) and payload["step"] == "failed":
+                    assert self.service is not None
+                    self.owed_at_emit.append(self.service.get_update_attempt_toast())
+                return await super().emit(name, payload)
+
+        release = _release()
+        sink = LookingSink()
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url}, events=sink)
+        sink.service = rig.service
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        assert sink.owed_at_emit == [{"attempt": 1, "version": _OFFERED, "failure": "download_failed"}]
+
+    async def test_a_refusal_by_the_check_owes_none_since_its_record_s_toast_tells_it(self, rigs, tmp_path):
+        refused = UpdateFailure(_OFFERED, _RUNNING, _CLOCK_STAMP, UpdateFailureKind.CHECK)
+        rig = await _built(
+            rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5), failure_record=refused
+        )
+
+        assert (await TestAFailedAttempt._ended_with(rig))["failure"] == "new_version_does_not_start"
+        assert rig.service.get_update_attempt_toast() is None
+
+    async def test_an_attempt_under_way_or_none_at_all_owes_none(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        assert rig.service.get_update_attempt_toast() is None
+
+        await rig.service.install_update(_OFFERED)
+
+        assert (await rig.settled())["step"] == "installer_started"
+        assert rig.service.get_update_attempt_toast() is None
+
+    async def test_each_press_is_numbered_and_an_earlier_one_s_acknowledgement_changes_nothing(self, rigs, tmp_path):
+        release = _release()
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url})
+        for _ in range(2):
+            await rig.service.install_update(_OFFERED)
+            await rig.settled()
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        owed = rig.service.get_update_attempt_toast()
+        assert owed is not None
+        assert owed["attempt"] == 2
+
+    async def test_an_earlier_press_s_acknowledgement_stores_nothing_for_the_latest(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, unit_refusal="already loaded")
+        for _ in range(2):
+            await rig.service.install_update(_OFFERED)
+            assert (await rig.settled())["failure"] == "installer_not_started"
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        with rig.uow_factory() as uow:
+            assert uow.kv_config.get("update_stopped_toasted_at") is None
+
+    async def test_an_attempt_whose_record_was_written_owes_the_next_start_no_second_toast(self, rigs, tmp_path):
+        """Its record's removal may have failed: the next start would judge it an installer that stopped."""
+        factory = FakeUnitOfWorkFactory()
+        rig = await _built(rigs, tmp_path, unit_refusal="already loaded", uow_factory=factory)
+        await rig.service.install_update(_OFFERED)
+        assert (await rig.settled())["failure"] == "installer_not_started"
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        _leave_record(tmp_path, started_at=_CLOCK_STAMP)
+        second = await _built(rigs, tmp_path, unit_states=_ENDED, uow_factory=factory)
+        second.service.note_start()
+        assert [payload["toast_owed"] for payload in await _judged(second)] == [False]
+
+    async def test_an_attempt_that_failed_before_its_record_stores_nothing(self, rigs, tmp_path):
+        release = _release()
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url})
+        await rig.service.install_update(_OFFERED)
+        await rig.settled()
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        with rig.uow_factory() as uow:
+            assert uow.kv_config.get("update_stopped_toasted_at") is None
+        assert rig.failure_toast_acks == []
+
+    async def test_a_check_refusal_whose_record_was_unreadable_at_the_end_has_its_record_s_toast_acknowledged(
+        self, rigs, tmp_path
+    ):
+        """The attempt ended as an installer that stopped; the record the next start reads is the same failure."""
+        refused = UpdateFailure(_OFFERED, _RUNNING, _CLOCK_STAMP, UpdateFailureKind.CHECK)
+        reads: list[str] = []
+
+        def read_update_failure() -> UpdateFailure | None:
+            reads.append("read")
+            if len(reads) == 1:
+                raise OSError("the record is being written")
+            return refused
+
+        rig = await _built(
+            rigs,
+            tmp_path,
+            unit_states=[True, False],
+            sleeper=_ParkingSleeper(free=5),
+            read_update_failure=read_update_failure,
+        )
+        assert (await TestAFailedAttempt._ended_with(rig))["failure"] == "installer_stopped"
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        assert rig.failure_toast_acks == [_CLOCK_STAMP]
+
+    async def test_an_installer_that_stopped_with_no_refusal_on_record_acknowledges_no_record(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5))
+        assert (await TestAFailedAttempt._ended_with(rig))["failure"] == "installer_stopped"
+
+        await rig.service.acknowledge_update_attempt_toast(1)
+
+        assert rig.failure_toast_acks == []
+        with rig.uow_factory() as uow:
+            assert uow.kv_config.get("update_stopped_toasted_at") == _CLOCK_STAMP
+
+    @pytest.mark.parametrize("attempt", [None, "1", True, 1.5])
+    async def test_a_number_that_is_not_one_is_refused(self, rigs, tmp_path, attempt):
+        rig = await _built(rigs, tmp_path)
+
+        answer = await rig.service.acknowledge_update_attempt_toast(attempt)
+
+        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
 
 
 class TestTheFailedInstallersStart:

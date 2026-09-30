@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         DebugLogger,
         DownloadQueueFn,
         EventEmitter,
+        FailureToastAcknowledgeFn,
         HeldClaimsFn,
         LastSeenReleaseReader,
         ReleaseAssetDownloadFn,
@@ -102,7 +103,8 @@ class UpdateInstallServiceConfig:
     update that did not go through and this program's own record of an
     attempt, the download, staging and unit seams with the environment the
     installer starts with, the unit-of-work factory the raised toast of a
-    stopped attempt is stored through, and the runtime infrastructure.
+    stopped attempt is stored through, the acknowledgement a toast raised for
+    the installer's record is stored through, and the runtime infrastructure.
     """
 
     releases: LastSeenReleaseReader
@@ -125,6 +127,7 @@ class UpdateInstallServiceConfig:
     units: TransientUnitControl
     installer_environment: tuple[tuple[str, str], ...]
     uow_factory: UnitOfWorkFactory
+    acknowledge_failure_toast: FailureToastAcknowledgeFn
     emit: EventEmitter
     clock: Clock
     sleeper: Sleeper
@@ -157,6 +160,7 @@ class UpdateInstallService:
         self._units = config.units
         self._installer_environment = config.installer_environment
         self._uow_factory = config.uow_factory
+        self._acknowledge_failure_toast = config.acknowledge_failure_toast
         self._emit = config.emit
         self._clock = config.clock
         self._sleeper = config.sleeper
@@ -183,6 +187,12 @@ class UpdateInstallService:
         self._stopped: UpdateAttemptRecord | None = None
         # Whether the panel still owes that attempt's toast.
         self._stopped_toast_owed = False
+        # Every press this process accepted, counted, and the one whose failure
+        # the panel still owes a toast for: a toast raised off the failed frame
+        # is lost with a frame no panel received, so it is owed until
+        # acknowledged. Held for this process only, like the attempt itself.
+        self._presses = 0
+        self._attempt_toast_owed: int | None = None
         # Judges the record an earlier start's attempt left, once the
         # installer's unit has ended.
         self._judging: asyncio.Task[None] | None = None
@@ -354,6 +364,55 @@ class UpdateInstallService:
             return None
         return self._installer_started_at
 
+    def get_update_attempt_toast(self) -> dict[str, Any] | None:
+        """The failed attempt of this process whose toast the panel has not raised yet, or ``None``.
+
+        ``{"attempt", "version", "failure"}``: ``attempt`` numbers the press
+        among this process's, which is what the acknowledgement names. Every
+        failure of an attempt owes one, but ``new_version_does_not_start``,
+        whose record's toast tells it; a new press ends what the last one owed.
+        """
+        attempt = self._attempt
+        if self._attempt_toast_owed is None or attempt is None or attempt.failure is None:
+            return None
+        return {"attempt": self._attempt_toast_owed, "version": attempt.version, "failure": attempt.failure.value}
+
+    async def acknowledge_update_attempt_toast(self, attempt: object) -> dict[str, Any]:
+        """Record that the panel raised the toast for the failed attempt numbered *attempt*.
+
+        Idempotent, and a number that is not the one owed changes nothing. So
+        that no later start raises a second toast for the same failure, it also
+        records what outlives this process: where the attempt's record was
+        written — its removal may have failed — its ``started_at`` as the
+        stopped attempt's raised toast, and where an installer that stopped
+        was the pre-install check refusing it — its record unreadable when the
+        attempt ended — that record's toast as raised. Returns ``{"success":
+        True}``, or the canonical failure shape for a number that is not an
+        integer.
+        """
+        if not isinstance(attempt, int) or isinstance(attempt, bool):
+            return {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+        current = self._attempt
+        if attempt != self._attempt_toast_owed or current is None:
+            return {"success": True}
+        started_at = self._installer_started_at
+        if started_at is not None:
+            await self._loop.run_in_executor(None, self._record_toast_io, started_at)
+            if current.failure is InstallFailure.INSTALLER_STOPPED:
+                await self._acknowledge_check_refusal(current.version, started_at)
+        if self._attempt_toast_owed == attempt:
+            self._attempt_toast_owed = None
+        return {"success": True}
+
+    async def _acknowledge_check_refusal(self, version: str, started_at: str) -> None:
+        try:
+            failure = await self._loop.run_in_executor(None, self._read_update_failure)
+        except Exception as e:
+            self._logger.warning(f"update: the installer's record could not be read: {e!r}")
+            return
+        if failure is not None and refused_by_the_check(failure, version, self._current_version, started_at):
+            await self._acknowledge_failure_toast(failure.rolled_back_at)
+
     async def dismiss_stopped_attempt(self) -> dict[str, Any]:
         """Wave away the notice of an installer that stopped without updating, and remove its record.
 
@@ -446,6 +505,8 @@ class UpdateInstallService:
                 "wait_reasons": [wait.to_wire() for wait in waits],
             }
         self._holding = True
+        self._presses += 1
+        self._attempt_toast_owed = None
         self._installer_may_run = False
         self._stopped = None
         self._record_written = False
@@ -677,6 +738,9 @@ class UpdateInstallService:
             await self._loop.run_in_executor(None, self._remove_record_io)
         self._attempt = InstallAttempt(version=version, step=InstallStep.FAILED, failure=failure)
         self._holding = False
+        # A refusal by the pre-install check is told by its record's toast.
+        if failure is not InstallFailure.NEW_VERSION_DOES_NOT_START:
+            self._attempt_toast_owed = self._presses
         await self._emit_attempt()
 
     def _on_progress(self, done: int, total: int | None) -> None:

@@ -268,6 +268,36 @@ describe("updateOutcomeStore", () => {
 
       expect(toastBodies()).toEqual([FAILURE_TOAST]);
     });
+
+    it("is not raised by a read a Dismiss overtook", async () => {
+      let answer: (outcome: UpdateOutcome) => void = () => {};
+      vi.mocked(getUpdateOutcome).mockReturnValue(
+        new Promise<UpdateOutcome>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const reading = fetchUpdateOutcome();
+
+      await dismissUpdateFailureRecord("2026-09-25T10:15:00Z");
+      answer({ ...ROLLED_BACK_WIRE, failure_toast_owed: true });
+      await reading;
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+    });
+
+    it("failing to be acknowledged keeps neither the read nor the announcement's toast from going on", async () => {
+      vi.mocked(acknowledgeUpdateFailureToast).mockRejectedValue(new Error("connection lost"));
+      vi.mocked(getUpdateOutcome).mockResolvedValue({
+        ...UPDATED,
+        failure: ROLLED_BACK_WIRE.failure,
+        failure_toast_owed: true,
+      });
+
+      await fetchUpdateOutcome();
+
+      expect(toastBodies()).toEqual([FAILURE_TOAST, "Tender updated to 1.3.0"]);
+      expect(acknowledgeUpdateToast).toHaveBeenCalledOnce();
+    });
   });
 
   describe("the announcement waits until Steam can show it", () => {

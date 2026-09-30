@@ -746,6 +746,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             units=cfg.adapters.transient_units,
             installer_environment=cfg.installer_environment,
             uow_factory=cfg.callbacks.uow_factory,
+            acknowledge_failure_toast=update_outcome_service.acknowledge_update_failure_toast,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
             sleeper=cfg.runtime.sleeper,

@@ -22,6 +22,8 @@ import {
   getUpdateNotice,
   getUpdateOutcome,
   acknowledgeUpdateToast,
+  acknowledgeUpdateAttemptToast,
+  getUpdateAttemptToast,
   getAllPlaytime,
   getAppIdRomIdMap,
   getInstalledRelaunchOptions,
@@ -37,6 +39,7 @@ import { getSettingsResetState, setSettingsResetState } from "./utils/settingsRe
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
 import { getUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
+import { resetFailedUpdateToastsForTests } from "./utils/failedUpdateToast";
 import { getStoppedUpdateAttempt, resetStoppedUpdateStoreForTests } from "./utils/stoppedUpdateStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
@@ -1438,12 +1441,19 @@ describe("index.tsx — what the backend pushes about updates", () => {
     expect(getUpdateInstallAttempt()).toEqual(frame);
   });
 
-  it("raises the toast for an install frame that turned failed, from the frame alone", async () => {
+  it("raises the toast the backend owes once an install frame turned failed, and acknowledges it", async () => {
     vi.stubGlobal("App", { GetServicesInitialized: () => true });
     vi.stubGlobal("securitystore", { IsLockScreenActive: () => false });
     vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
     vi.mocked(toaster.toast).mockClear();
+    resetFailedUpdateToastsForTests();
     pluginFactory();
+    await flush();
+    vi.mocked(getUpdateAttemptToast).mockResolvedValue({
+      attempt: 2,
+      version: "0.35.0",
+      failure: "checksum_mismatch",
+    });
 
     act(() =>
       emitHostEvent("update_install_progress", {
@@ -1461,6 +1471,27 @@ describe("index.tsx — what the backend pushes about updates", () => {
         body: "Update to 0.35.0 failed. The download did not match its checksum.",
       }),
     );
+    await vi.waitFor(() => expect(acknowledgeUpdateAttemptToast).toHaveBeenCalledWith(2));
+    vi.mocked(getUpdateAttemptToast).mockReset();
+  });
+
+  it("asks for no toast over a frame that did not turn failed", async () => {
+    pluginFactory();
+    await flush();
+    vi.mocked(getUpdateAttemptToast).mockClear();
+
+    act(() =>
+      emitHostEvent("update_install_progress", {
+        version: "0.35.0",
+        step: "verifying",
+        bytes_done: 1,
+        bytes_total: 1,
+        failure: null,
+      }),
+    );
+    await flush();
+
+    expect(getUpdateAttemptToast).not.toHaveBeenCalled();
   });
 
   it("takes a stopped attempt judged after panel load into the store the card on Main reads", () => {
@@ -1507,6 +1538,24 @@ describe("index.tsx — what the last update did, at panel load", () => {
     vi.mocked(getUpdateOutcome).mockReset();
     vi.mocked(acknowledgeUpdateToast).mockReset().mockResolvedValue({ success: true });
     resetUpdateOutcomeStoreForTests();
+  });
+
+  it("raises the toast for an attempt that failed while no panel was loaded", async () => {
+    vi.stubGlobal("App", { GetServicesInitialized: () => true });
+    vi.stubGlobal("securitystore", { IsLockScreenActive: () => false });
+    vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
+    resetFailedUpdateToastsForTests();
+    vi.mocked(getUpdateAttemptToast).mockResolvedValue({ attempt: 1, version: "1.3.0", failure: "download_failed" });
+    pluginFactory();
+
+    await vi.waitFor(() =>
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Update to 1.3.0 failed. The download failed.",
+      }),
+    );
+    expect(acknowledgeUpdateAttemptToast).toHaveBeenCalledWith(1);
+    vi.mocked(getUpdateAttemptToast).mockReset();
   });
 
   it("announces an update that went through in one toast and acknowledges it", async () => {

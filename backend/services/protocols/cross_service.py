@@ -693,6 +693,17 @@ class FailedInstallerStartFn(Protocol):
     def __call__(self) -> str | None: ...
 
 
+class FailureToastAcknowledgeFn(Protocol):
+    """Record that the panel raised the toast for the installer's record stamped *rolled_back_at*, for good.
+
+    Answers ``{"success": True}``, or the canonical failure shape for a stamp
+    that is not a non-empty string. The composition root satisfies this with
+    ``UpdateOutcomeService.acknowledge_update_failure_toast``.
+    """
+
+    async def __call__(self, rolled_back_at: object) -> dict[str, Any]: ...
+
+
 class DownloadQueueFn(Protocol):
     """The ROM download queue as the panel is shown it: ``{"downloads": [entry, ...]}``, each with a ``status``."""
 

@@ -1360,6 +1360,22 @@ export const acknowledgeStoppedUpdateAttemptToast = endpoint<[string], UpdateSet
   "acknowledge_stopped_update_attempt_toast",
 );
 
+/**
+ * The failed attempt of this backend's whose toast the panel has not raised yet; `attempt` numbers the press, and is
+ * what the acknowledgement names.
+ */
+export interface UpdateAttemptToast {
+  attempt: number;
+  version: string;
+  failure: UpdateInstallFailure;
+}
+
+/** The attempt whose toast is still owed, or `null`: none failed, it was acknowledged, or its record's toast tells it. */
+export const getUpdateAttemptToast = endpoint<[], UpdateAttemptToast | null>("get_update_attempt_toast");
+
+/** Tell the backend the toast for the attempt it numbered was raised, so no later panel load raises it again. */
+export const acknowledgeUpdateAttemptToast = endpoint<[number], UpdateSettingWrite>("acknowledge_update_attempt_toast");
+
 /** The last lines of one run the journal holds, the admission token hidden, and how many before them are left out. */
 export interface UpdateOutputSection {
   lines: string[];
@@ -1369,7 +1385,8 @@ export interface UpdateOutputSection {
 /**
  * What the installer printed for one failed update. `installer` is its run, which began at `ran_at` (epoch seconds);
  * after a rollback `new_version` is what the version it tried printed while it tried to start. Where the journal holds
- * no such run, `missing` says why: `rotated` — no longer kept — or `terminal` — the installer ran by hand.
+ * no such run, `missing` says why: `rotated` — no longer kept — `terminal` — the installer ran by hand — or `empty` —
+ * the unit this backend started it as left nothing there.
  */
 export type UpdateOutput =
   | {
@@ -1379,7 +1396,7 @@ export type UpdateOutput =
       new_version: UpdateOutputSection | null;
       missing: null;
     }
-  | { success: true; ran_at: null; installer: null; new_version: null; missing: "rotated" | "terminal" }
+  | { success: true; ran_at: null; installer: null; new_version: null; missing: "rotated" | "terminal" | "empty" }
   | EndpointFailure;
 
 /** The installer's output for the record stamped `rolled_back_at`, or for this backend's latest attempt with `null`. */

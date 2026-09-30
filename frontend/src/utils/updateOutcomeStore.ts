@@ -33,12 +33,12 @@ import {
   dismissUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
-  logError,
   type UpdateDirection,
   type UpdateFailure,
   type UpdateOutcome,
 } from "../api/backend";
-import { raiseFailureToastOnce, stillOnToast, toastWhenSteamIsReady } from "./failedUpdateToast";
+import { detach } from "./detach";
+import { logToastFailure, raiseFailureToastOnce, stillOnToast, toastWhenSteamIsReady } from "./failedUpdateToast";
 
 /** An update the installer rolled back, or its pre-install check refused, in this store's spelling. */
 export interface RolledBackUpdate {
@@ -206,13 +206,13 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
   return state.failure !== null && state.failure.attemptedVersion === latestVersion;
 }
 
-/** Raise the toast for the installer's record once, and tell the backend it was raised. */
+/** Raise the toast for the installer's record once, and tell the backend it was raised. Never rejects. */
 function toastRecord(failure: UpdateFailure): Promise<void> {
   return raiseFailureToastOnce(
     `record ${failure.rolled_back_at}`,
     stillOnToast(failure.attempted_version, failure.restored_version),
     () => acknowledgeUpdateFailureToast(failure.rolled_back_at),
-  );
+  ).catch(logToastFailure);
 }
 
 /**
@@ -227,13 +227,17 @@ function toastRecord(failure: UpdateFailure): Promise<void> {
  * reloaded by a Steam restart shows the card again but does not raise the
  * toast a second time, and the record's toast once for good. An
  * acknowledgement that fails leaves it owed, and the next panel load raises it
- * again — a repeat rather than a loss.
+ * again — a repeat rather than a loss. A read something overtook — a Dismiss,
+ * or a push — raises no record's toast: the push raises its own, and a record
+ * still owed after a Dismiss of another card is raised at the next load. The
+ * record's toast failing does not keep the announcement's from being raised.
  */
 export async function fetchUpdateOutcome(): Promise<void> {
   const seq = ++_seq;
   const outcome = await getUpdateOutcome();
-  if (seq === _seq) setUpdateOutcomeState(stateFromOutcome(outcome));
-  if (outcome.failure_toast_owed && outcome.failure !== null) await toastRecord(outcome.failure);
+  const current = seq === _seq;
+  if (current) setUpdateOutcomeState(stateFromOutcome(outcome));
+  if (current && outcome.failure_toast_owed && outcome.failure !== null) await toastRecord(outcome.failure);
   if (outcome.toast_owed) {
     await toastWhenSteamIsReady(
       updateAnnouncementToast(outcome.announce_version, outcome.announce_direction),
@@ -262,7 +266,7 @@ export async function dismissUpdateAnnouncementCard(): Promise<void> {
 export function takePushedUpdateFailure(pushed: UpdateFailure): void {
   ++_seq;
   setUpdateOutcomeState({ ..._state, failure: failureFromWire(pushed), failureDismissed: false });
-  toastRecord(pushed).catch((e) => logError(`Failed to raise the failed update's toast: ${e}`));
+  detach(toastRecord(pushed));
 }
 
 /**

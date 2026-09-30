@@ -33,10 +33,9 @@ import {
   acknowledgeStoppedUpdateAttemptToast,
   dismissStoppedUpdateAttempt,
   getStoppedUpdateAttempt as readStoppedUpdateAttempt,
-  logError,
   type StoppedUpdateAttemptWire,
 } from "../api/backend";
-import { raiseFailureToastOnce, stillOnToast } from "./failedUpdateToast";
+import { logToastFailure, raiseFailureToastOnce, stillOnToast } from "./failedUpdateToast";
 import { notifyUpdateOutcome, onUpdateOutcomeChange } from "./updateOutcomeStore";
 
 /** An attempt whose installer stopped without updating, in this store's spelling. */
@@ -79,13 +78,13 @@ function fromWire(wire: StoppedUpdateAttemptWire): StoppedUpdateAttempt {
 }
 
 /** Raise the attempt's toast once where the backend still owes it, and tell the backend it was raised. */
-function toastIfOwed(wire: StoppedUpdateAttemptWire): Promise<void> {
-  if (!wire.toast_owed) return Promise.resolve();
-  return raiseFailureToastOnce(
-    `stopped ${wire.started_at}`,
-    stillOnToast(wire.attempted_version, wire.from_version),
-    () => acknowledgeStoppedUpdateAttemptToast(wire.started_at),
-  );
+async function toastIfOwed(wire: StoppedUpdateAttemptWire): Promise<void> {
+  if (wire.toast_owed)
+    await raiseFailureToastOnce(
+      `stopped ${wire.started_at}`,
+      stillOnToast(wire.attempted_version, wire.from_version),
+      () => acknowledgeStoppedUpdateAttemptToast(wire.started_at),
+    );
 }
 
 /** Ask the backend whether an earlier start's installer stopped without updating, fill the store, and raise its toast. */
@@ -101,7 +100,7 @@ export async function fetchStoppedUpdateAttempt(): Promise<void> {
 export function takePushedStoppedAttempt(pushed: StoppedUpdateAttemptWire): void {
   ++_seq;
   set(fromWire(pushed));
-  toastIfOwed(pushed).catch((e) => logError(`Failed to raise the stopped update's toast: ${e}`));
+  toastIfOwed(pushed).catch(logToastFailure);
 }
 
 /** A new attempt was accepted: the backend ended the stopped one's record, so the card comes down here too. */

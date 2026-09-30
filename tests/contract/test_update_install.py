@@ -172,6 +172,23 @@ async def test_a_failed_attempt_gives_the_rule_back_and_says_try_again(installed
     assert not os.path.lexists(os.path.join(installed.cache_dir, "update"))
 
 
+async def test_a_failed_attempt_owes_its_toast_until_acknowledged(installed):
+    installed.units.refusal = "Unit romm-tender-update.service was already loaded"
+    await installed.endpoints.install_update(_OFFERED)
+    await _settled(installed)
+
+    owed = installed.endpoints.get_update_attempt_toast()
+
+    assert owed == {"attempt": 1, "version": _OFFERED, "failure": "installer_not_started"}
+    assert await installed.endpoints.acknowledge_update_attempt_toast(1) == {"success": True}
+    assert installed.endpoints.get_update_attempt_toast() is None
+    assert await installed.endpoints.acknowledge_update_attempt_toast("1") == {
+        "success": False,
+        "reason": "invalid_value",
+        "message": "Invalid attempt",
+    }
+
+
 async def test_the_version_pressed_must_be_the_one_stored(installed):
     answer = await installed.endpoints.install_update(VERSION)
 

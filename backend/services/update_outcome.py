@@ -135,18 +135,18 @@ class UpdateOutcomeService:
         Returns ``{"announce_version", "announce_direction", "toast_owed",
         "failure", "failure_dismissed", "failure_toast_owed"}``.
         ``announce_version`` is the version this process moved to, until the
-        user dismissed its card, ``None`` otherwise, and ``announce_direction`` which way it moved — ``"updated"``
-        or ``"back"``, ``None`` exactly when ``announce_version`` is.
-        ``toast_owed`` says its toast has not been raised yet, and is ``False``
-        whenever ``announce_version`` is ``None``. ``failure`` is the
-        installer's record of an update that did not go through as
-        ``{"attempted_version", "restored_version", "rolled_back_at", "kind"}``
-        — ``kind`` ``"rollback"``, ``"check"`` or ``"unknown"`` — read afresh on
-        every call so it goes when the installer removes it, and ``None`` where
-        there is none or it no longer stands. ``failure_dismissed`` says the
-        user waved away that exact record, and ``failure_toast_owed`` that its
-        toast has not been raised yet — never for a dismissed record, and
-        ``False`` whenever ``failure`` is ``None``.
+        user dismissed its card, ``None`` otherwise, and ``announce_direction``
+        which way it moved — ``"updated"`` or ``"back"``, ``None`` exactly when
+        ``announce_version`` is. ``toast_owed`` says its toast has not been
+        raised yet, and is ``False`` whenever ``announce_version`` is ``None``.
+        ``failure`` is the installer's record of an update that did not go
+        through as ``{"attempted_version", "restored_version",
+        "rolled_back_at", "kind"}`` — ``kind`` ``"rollback"``, ``"check"`` or
+        ``"unknown"`` — read afresh on every call so it goes when the installer
+        removes it, and ``None`` where there is none or it no longer stands.
+        ``failure_dismissed`` says the user waved away that exact record, and
+        ``failure_toast_owed`` that its toast has not been raised yet — never
+        for a dismissed record, and ``False`` whenever ``failure`` is ``None``.
         """
         failure, toasted_at = await self._loop.run_in_executor(None, self._failure_and_toast_io)
         dismissed = failure is not None and failure.rolled_back_at == self._dismissed_at()

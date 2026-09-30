@@ -56,7 +56,7 @@ import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
-import { toastFailedAttempt } from "./utils/failedUpdateToast";
+import { logToastFailure, toastOwedAttempt } from "./utils/failedUpdateToast";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -591,6 +591,10 @@ const tender = definePlugin(() => {
     })(),
   );
 
+  // An install attempt of this backend's that failed while no panel was loaded
+  // to take its frame: its toast is still owed.
+  toastOwedAttempt().catch(logToastFailure);
+
   // Point every shortcut at the launcher's home. Runs here rather than on
   // panel mount because a user can launch a game without ever opening the QAM.
   detach(
@@ -1042,11 +1046,12 @@ const tender = definePlugin(() => {
   // The backend's own release check, pushed when its answer changes, the
   // install attempt's steps, a stopped attempt judged after panel load, and a
   // refusal by the pre-install check seen while the backend ran; each is held
-  // in its store for the surfaces.
+  // in its store for the surfaces. A frame that turned failed also asks for
+  // the toast the backend owes for that attempt.
   addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
   addEventListener<UpdateInstallAttempt>("update_install_progress", (frame) => {
     setUpdateInstallAttempt(frame);
-    toastFailedAttempt(frame).catch((e) => logError(`Failed to raise the failed update's toast: ${e}`));
+    if (frame.step === "failed") toastOwedAttempt().catch(logToastFailure);
   });
   addEventListener<StoppedUpdateAttemptWire>("update_attempt_stopped", takePushedStoppedAttempt);
   addEventListener<UpdateFailure>("update_failure_recorded", takePushedUpdateFailure);

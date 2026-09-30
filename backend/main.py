@@ -901,6 +901,27 @@ class Endpoints:
         return await self._services.update_install_service.dismiss_stopped_attempt()
 
     @route
+    def get_update_attempt_toast(self):
+        """Report the failed attempt of this process whose toast the panel has not raised yet.
+
+        Returns ``{"attempt", "version", "failure"}`` — ``attempt`` numbers the
+        press, and is what :meth:`acknowledge_update_attempt_toast` names — or
+        ``None`` where none is owed: none failed, a new press started, the
+        toast was acknowledged, or the failure is ``new_version_does_not_start``,
+        whose record's toast tells it.
+        """
+        return self._services.update_install_service.get_update_attempt_toast()
+
+    @route
+    async def acknowledge_update_attempt_toast(self, attempt):
+        """Record that the panel raised the toast for the failed attempt numbered *attempt*.
+
+        Returns ``{"success": True}``, or the canonical failure shape for a
+        number that is not an integer.
+        """
+        return await self._services.update_install_service.acknowledge_update_attempt_toast(attempt)
+
+    @route
     async def get_update_output(self, rolled_back_at):
         """Report what the installer printed for one failed update, read from the journal.
 
@@ -911,9 +932,9 @@ class Endpoints:
         ``new_version`` are ``{"lines", "earlier"}`` with the admission token
         hidden, ``ran_at`` is when the installer's run began in epoch seconds,
         and where the journal holds no such run both are ``None`` and
-        ``missing`` is ``"rotated"`` or ``"terminal"``. Otherwise the canonical
-        failure shape, with ``reason`` ``not_found``, ``invalid_value`` or
-        ``journal_unreadable``.
+        ``missing`` is ``"rotated"``, ``"terminal"`` or ``"empty"``. Otherwise
+        the canonical failure shape, with ``reason`` ``not_found``,
+        ``invalid_value`` or ``journal_unreadable``.
         """
         return await self._services.update_output_service.get_update_output(rolled_back_at)
 
