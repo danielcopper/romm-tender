@@ -226,8 +226,8 @@ Three events, never one word for them. A **backend restart** loses the backend's
 again (`Application.run_startup_repairs`). The backend then has Steam rebuild its JS context once no app is running, to
 replace the panel the earlier process loaded (→ Stranded panel) — never the reverse: a JS-context rebuild leaves the
 backend running. A **JS-context rebuild** (→ Injection) loses everything the frontend held in memory; `localStorage`
-outlives it, which is what reload-adoption rests on. A **panel load** is the panel's factory running, once per JS
-context.
+outlives it, which is what lets reload-adoption keep the span played before the rebuild. A **panel load** is the panel's
+factory running, once per JS context.
 
 _Avoid_: **plugin reload**, **plugin load**, **plugin start** — each names a host that loads Tender, and none says which
 of the three events is meant.
