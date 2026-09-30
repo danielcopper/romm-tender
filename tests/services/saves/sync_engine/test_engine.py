@@ -656,7 +656,7 @@ class TestMigrationPendingGuards:
         assert result == {
             "success": False,
             "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
             "synced": 0,
         }
         # No upload/download initiated — the guard fired before sync ran.
@@ -679,7 +679,7 @@ class TestMigrationPendingGuards:
         assert result == {
             "success": False,
             "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
             "synced": 0,
         }
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)

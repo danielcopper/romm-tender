@@ -50,7 +50,7 @@ from ._harness import (
 )
 from ._seed import seed_rom
 
-_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss."
+_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 _UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
 
 _PRUNE_PREVIEW_REQUEST = {"scope": "bulk", "rom_id": None, "preview_id": None, "offset": 0, "limit": 50}

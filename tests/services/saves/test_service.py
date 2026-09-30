@@ -463,7 +463,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         assert result == {
             "success": False,
             "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
             "synced": 0,
         }
 
@@ -480,7 +480,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         assert result == {
             "success": False,
             "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
             "synced": 0,
         }
 
@@ -503,7 +503,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
         assert result == {
             "success": False,
             "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
         }
         spy.assert_not_called()
 

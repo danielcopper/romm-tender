@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from lib.prune_conflicts import PruneConflicts
 
 _UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
-_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss."
+_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 _SYNC_MESSAGE = "A library sync is in progress — wait for it to finish or cancel it first."
 _PRUNE_ACTIVE_MESSAGE = "A removed-game cleanup is in progress; wait for it to finish before changing local game data."
 

@@ -666,7 +666,7 @@ describe("Library › Platforms", () => {
       vi.mocked(backend.savePlatformSync).mockResolvedValue({
         success: false,
         reason: "blocked_by_migration",
-        message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        message: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -679,7 +679,7 @@ describe("Library › Platforms", () => {
 
       expect(toggle.checked).toBe(true);
       expect(within(container).getByTestId("status-list").textContent).toBe(
-        "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
       );
     });
 
@@ -687,7 +687,7 @@ describe("Library › Platforms", () => {
       vi.mocked(backend.savePlatformSync).mockResolvedValueOnce({
         success: false,
         reason: "blocked_by_migration",
-        message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        message: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -698,7 +698,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 4; i++) await Promise.resolve();
       });
       expect(within(container).getByTestId("status-list").textContent).toBe(
-        "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
       );
 
       await act(async () => {

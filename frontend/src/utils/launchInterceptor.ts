@@ -66,7 +66,7 @@ export interface LaunchPrompts {
 }
 
 /** Migration block copy — surfaced as a toast (no relaunch). */
-const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.";
+const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.";
 
 /**
  * Watcher variant of the tracking-setup gate. On a cold grid launch there is no
@@ -380,7 +380,7 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
             // (no relaunch): the ROM is gone.
             if (!(await isRomInstalled(appId, romId))) {
               if (!isPruneLeaseAdmissionCurrent(admission)) return;
-              showToast("ROM not downloaded. Open the plugin to download it first.");
+              showToast("ROM not downloaded. Download it from its game page first.");
               return;
             }
 

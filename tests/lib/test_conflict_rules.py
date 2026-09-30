@@ -23,7 +23,7 @@ _UPDATE_REFUSAL = {
 _MIGRATION_REFUSAL = {
     "success": False,
     "reason": "blocked_by_migration",
-    "message": "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+    "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
 }
 _SYNC_REFUSAL = {
     "success": False,

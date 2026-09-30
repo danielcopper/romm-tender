@@ -312,7 +312,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "ROM not downloaded. Open the plugin to download it first.",
+        body: "ROM not downloaded. Download it from its game page first.",
       });
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
       expect(runGameMock()).not.toHaveBeenCalled();
@@ -356,7 +356,7 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "ROM not downloaded. Open the plugin to download it first.",
+        body: "ROM not downloaded. Download it from its game page first.",
       });
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
       expect(runGameMock()).not.toHaveBeenCalled();
@@ -502,7 +502,7 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+        body: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
       });
       expect(runGameMock()).not.toHaveBeenCalled();
     });

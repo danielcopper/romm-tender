@@ -1607,7 +1607,7 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
     },
     {
       reason: "blocked_by_migration",
-      message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
+      message: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
     },
   ];
 
@@ -1636,7 +1636,7 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
 
       // The shared fallback confirm opened (not a silent launch) carrying the
       // backend's specific message (e.g. blocked_by_migration's "Open the
-      // plugin QAM to migrate or dismiss" — previously never shown).
+      // Tender menu (QAM) to migrate or dismiss" — previously never shown).
       await waitFor(() => expect(vi.mocked(showFallbackLaunchModal)).toHaveBeenCalledWith(message));
       // Cancelling the fallback must NOT launch.
       expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();

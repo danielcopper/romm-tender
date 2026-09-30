@@ -10,7 +10,7 @@ interface MigrationBlockedCardProps {
 export const MigrationBlockedCard: FC<MigrationBlockedCardProps> = ({ compact = false }) => (
   <WarningCard
     title="RetroDECK Migration Required"
-    message="Open the plugin QAM to migrate files or dismiss the migration before playing."
+    message="Open the Tender menu (QAM) to migrate files or dismiss the migration before playing."
     compact={compact}
   />
 );
