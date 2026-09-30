@@ -113,6 +113,14 @@ class TestWaitOnTheWire:
         assert Wait(reason, apps=("ignored",), frees_at=1.0).to_wire() == {"reason": reason.value}
 
 
+def _frontend_literals(alias: str) -> set[str]:
+    """The string literals of the type alias *alias* in the panel's ``api/backend.ts``."""
+    source = (_REPO_ROOT / "frontend" / "src" / "api" / "backend.ts").read_text(encoding="utf-8")
+    union = re.search(rf"export type {alias} =(.*?)\n\n", source, re.DOTALL)
+    assert union is not None, f"{alias} is not declared as a type alias in backend.ts any more"
+    return set(re.findall(r'"([a-z_]+)"', union.group(1)))
+
+
 class TestTheWaitReasonsAgreeAcrossTheWire:
     """The backend's ``WaitReason`` values and the frontend's ``UpdateWaitReason`` union are the same set.
 
@@ -122,15 +130,23 @@ class TestTheWaitReasonsAgreeAcrossTheWire:
     the check lives here and reads the other side's source directly.
     """
 
-    @staticmethod
-    def _frontend_reasons() -> set[str]:
-        source = (_REPO_ROOT / "frontend" / "src" / "api" / "backend.ts").read_text(encoding="utf-8")
-        union = re.search(r"export type UpdateWaitReason =(.*?)\n\n", source, re.DOTALL)
-        assert union is not None, "UpdateWaitReason is not declared as a type alias in backend.ts any more"
-        return set(re.findall(r'"([a-z_]+)"', union.group(1)))
-
     def test_both_sides_carry_the_same_reasons(self):
-        assert self._frontend_reasons() == {reason.value for reason in WaitReason}
+        assert _frontend_literals("UpdateWaitReason") == {reason.value for reason in WaitReason}
+
+
+class TestTheAttemptVocabularyAgreesAcrossTheWire:
+    """The backend's ``InstallStep`` and ``InstallFailure`` values and the frontend's unions are the same sets.
+
+    The panel draws an attempt by its step and words a failure by its name, so
+    a value added on the backend alone reaches a panel that has no row or no
+    sentence for it.
+    """
+
+    def test_both_sides_carry_the_same_steps(self):
+        assert _frontend_literals("UpdateInstallStep") == {step.value for step in InstallStep}
+
+    def test_both_sides_carry_the_same_failures(self):
+        assert _frontend_literals("UpdateInstallFailure") == {failure.value for failure in InstallFailure}
 
 
 class TestAttemptOnTheWire:
