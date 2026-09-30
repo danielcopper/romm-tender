@@ -8,11 +8,11 @@ Deck, then continue where you left off on your HTPC — your saves travel with y
 The plugin uploads and downloads your RetroArch game saves to and from your RomM server. When you start a game, the
 plugin checks if the server has a newer save and downloads it. When you stop playing, it uploads your updated save.
 
-> **Important:** Save sync runs in **Game Mode only**, but there it covers every way a game can start: the Play button
-> on the game detail page syncs directly, and a launch that skips the plugin's UI (for example a `steam://rungameid`
-> deep link) is caught by the plugin's launch gate and synced before the game starts. In **Desktop Mode** the plugin is
-> not loaded at all, so nothing syncs there — no pre-launch download, no post-exit upload. Changes made in Desktop Mode
-> are picked up the next time you sync in Game Mode, which may surface a conflict.
+> **Important:** Save sync runs around every game started from **Big Picture** — in Game Mode, or Big Picture on the
+> desktop: the Play button on the game detail page syncs directly, and a launch that skips the plugin's UI (for example
+> a `steam://rungameid` deep link) is caught by the plugin's launch gate and synced before the game starts. In Steam's
+> **desktop client** it currently runs only after a game ends: a newer save from another device is not downloaded before
+> the game starts, so start from Big Picture when another device may hold a newer save.
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 
