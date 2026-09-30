@@ -1,4 +1,4 @@
-import { FC, ReactNode } from "react";
+import { CSSProperties, FC, ReactNode } from "react";
 import { PanelSectionRow, DialogButton, Field, Focusable } from "@decky/ui";
 
 interface CardText {
@@ -10,20 +10,20 @@ interface CardText {
   detail?: ReactNode;
 }
 
+/** The coloured frame an update card is drawn in; Settings › Updates states a failure in the same one. */
+export const cardFrame = (color: string, wash: string): CSSProperties => ({
+  padding: "8px 12px",
+  backgroundColor: wash,
+  borderLeft: `3px solid ${color}`,
+  borderRadius: "4px",
+  fontSize: "12px",
+});
+
 /** The coloured card every update notice on Main opens with: a title and, where there is one, a line under it. */
 export const UpdateCardBody: FC<CardText> = ({ testId, color, wash, title, detail }) => (
   <PanelSectionRow>
     <Focusable onActivate={() => {}}>
-      <div
-        data-testid={testId}
-        style={{
-          padding: "8px 12px",
-          backgroundColor: wash,
-          borderLeft: `3px solid ${color}`,
-          borderRadius: "4px",
-          fontSize: "12px",
-        }}
-      >
+      <div data-testid={testId} style={cardFrame(color, wash)}>
         <div style={{ fontWeight: "bold", color, ...(detail === undefined ? {} : { marginBottom: "4px" }) }}>
           {title}
         </div>

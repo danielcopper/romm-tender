@@ -1786,7 +1786,7 @@ The service tells the user what the last update did, in one of two ways, and nev
 - **A record stands only while the running version is the one it restored**
   (`domain/update_outcome.py::standing_update_failure`). One that names another `restored_version` — the installer's
   removal did not happen, and a later update went through anyway — is a leftover: no WARNING, `failure` is `None`, and
-  so there is no card and no row under Settings › Updates. The file is left where it is, since removing it is the
+  so there is no card and nothing under Settings › Updates. The file is left where it is, since removing it is the
   installer's.
 - **Dismiss is per record.** `update_failure_dismissed_at` in `settings.json` holds the dismissed record's
   `rolled_back_at`, written only through the `SettingsPersister`, so the next record the installer writes raises the

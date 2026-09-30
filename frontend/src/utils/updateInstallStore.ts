@@ -1,17 +1,19 @@
 /**
  * Module-level store for the latest install attempt the backend reported, and
- * when this panel first saw its installer started.
+ * when this panel first saw it under way and its installer started.
  *
  * Updated by:
  *   - the `update_install_progress` listener in index.tsx, one frame per step
  *     and a throttled one per stretch of downloaded bytes
  *   - a press of Install (bigpicture/settings/useUpdateInstall.ts), which
  *     clears the frame an earlier attempt left
- *   - the install's reads (useUpdateInstall.ts), which note an installer they
- *     find started
+ *   - the install's reads (useUpdateInstall.ts), which note an attempt and an
+ *     installer they find
  *
  * Read by:
  *   - bigpicture/settings/useUpdateInstall.ts, beside the state it reads
+ *   - bigpicture/settings/UpdateInstallRows.tsx, for the install's clock and
+ *     the step an installer that stopped is marked at
  *   - utils/connectionProbe.ts, which does not call a backend the installer
  *     is restarting failed until {@link INSTALLER_OVERDUE_MS} has passed
  *
@@ -29,14 +31,16 @@ import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
 
 let _attempt: UpdateInstallAttempt | null = null;
 let _listeners: Array<() => void> = [];
-// The wall-clock millisecond this panel first saw the installer started, in
-// either a pushed frame or a read; `null` until then and again after a press.
+// The wall-clock millisecond this panel first saw the attempt under way, and
+// its installer started, in either a pushed frame or a read; `null` until then
+// and again after a press.
+let _attemptSeenAt: number | null = null;
 let _installerSeenAt: number | null = null;
 
 export function setUpdateInstallAttempt(attempt: UpdateInstallAttempt | null): void {
   _attempt = attempt;
-  if (attempt === null) _installerSeenAt = null;
-  else noteInstaller(attempt);
+  if (attempt === null) _attemptSeenAt = _installerSeenAt = null;
+  else noteAttempt(attempt);
   _listeners.forEach((fn) => fn());
 }
 
@@ -56,9 +60,16 @@ export function useUpdateInstallAttempt(): UpdateInstallAttempt | null {
   return useSyncExternalStore(onUpdateInstallAttemptChange, getUpdateInstallAttempt);
 }
 
-/** Note the moment the installer is first seen started, from whichever of a frame or a read shows it first. */
-export function noteInstaller(attempt: UpdateInstallAttempt | null, now: number = Date.now()): void {
-  if (attempt?.step === "installer_started" && _installerSeenAt === null) _installerSeenAt = now;
+/** Note the moments the attempt is first seen under way and its installer started, from whichever of a frame or a read shows each first. */
+export function noteAttempt(attempt: UpdateInstallAttempt | null, now: number = Date.now()): void {
+  if (attempt === null || attempt.step === "failed") return;
+  _attemptSeenAt ??= now;
+  if (attempt.step === "installer_started") _installerSeenAt ??= now;
+}
+
+/** When this panel first saw the attempt under way, or `null`: what the install's clock counts from. */
+export function attemptSeenAt(): number | null {
+  return _attemptSeenAt;
 }
 
 /** When this panel first saw the installer started, or `null`. */

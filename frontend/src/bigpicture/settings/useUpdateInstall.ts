@@ -12,7 +12,7 @@ import { endStoppedAttempt } from "../../utils/stoppedUpdateStore";
 import {
   getUpdateInstallAttempt,
   installerSeenAt,
-  noteInstaller,
+  noteAttempt,
   setUpdateInstallAttempt,
   useUpdateInstallAttempt,
 } from "../../utils/updateInstallStore";
@@ -88,7 +88,7 @@ export function useUpdateInstall(): UpdateInstall {
 
   const take = useCallback((next: UpdateInstallState) => {
     lastReading.current = next;
-    noteInstaller(next.attempt);
+    noteAttempt(next.attempt);
     setReading(next);
     setRefusal((held) => (held !== null && !refusalStands(held, next) ? null : held));
   }, []);
@@ -136,7 +136,7 @@ export function useUpdateInstall(): UpdateInstall {
   const restarting = attempt?.step === "installer_started";
   const underWay = attempt !== null && attempt.step !== "failed";
 
-  // The restarting line gives way once the installer has had five minutes.
+  // The line under the steps gives way once the installer has had five minutes.
   // Timed from the first time this panel saw it started, which the store
   // keeps across the section's unmounts.
   useEffect(() => {

@@ -6,9 +6,11 @@ import {
   RELOAD_LIMIT,
   refusalStands,
   downloadPercent,
+  failedStep,
   furtherAttempt,
-  installStepRows,
+  installSteps,
   pausedDownloadsHint,
+  restartWaitLine,
   waitReasonLine,
 } from "./updateInstallView";
 
@@ -21,8 +23,6 @@ const DOWNLOADING: UpdateInstallAttempt = {
 };
 
 const failed = (failure: UpdateInstallFailure): UpdateInstallAttempt => ({ ...DOWNLOADING, step: "failed", failure });
-
-const statuses = (attempt: UpdateInstallAttempt) => installStepRows(attempt).map((row) => [row.id, row.status]);
 
 describe("waitReasonLine", () => {
   it.each<[UpdateWaitReason, string]>([
@@ -105,111 +105,75 @@ describe("pausedDownloadsHint", () => {
   });
 });
 
-describe("installStepRows", () => {
-  it("labels the three steps in order", () => {
-    expect(installStepRows(DOWNLOADING).map((row) => row.label)).toEqual([
-      "Downloading",
-      "Verifying",
-      "Starting the installer",
+describe("installSteps", () => {
+  const statuses = (...args: Parameters<typeof installSteps>) =>
+    installSteps(...args).map((row) => `${row.id}:${row.status}`);
+
+  it("labels the four steps in order", () => {
+    expect(installSteps("download", false).map((row) => row.label)).toEqual([
+      "Download",
+      "Verify",
+      "Check new version",
+      "Install",
     ]);
   });
 
-  it("has the download under way and the rest ahead while it downloads", () => {
-    expect(statuses(DOWNLOADING)).toEqual([
-      ["download", "current"],
-      ["verify", "pending"],
-      ["installer", "pending"],
-    ]);
+  it("has every step before the one under way done and every one after it still to do", () => {
+    expect(statuses("check", false)).toEqual(["download:done", "verify:done", "check:current", "install:pending"]);
   });
 
-  it("has the verification under way once the download is done", () => {
-    expect(statuses({ ...DOWNLOADING, step: "verifying" })).toEqual([
-      ["download", "done"],
-      ["verify", "current"],
-      ["installer", "pending"],
-    ]);
+  it("marks the step a failure stopped at failed instead", () => {
+    expect(statuses("verify", true)).toEqual(["download:done", "verify:failed", "check:pending", "install:pending"]);
   });
 
-  it("has every step done once the installer started", () => {
-    expect(statuses({ ...DOWNLOADING, step: "installer_started" })).toEqual([
-      ["download", "done"],
-      ["verify", "done"],
-      ["installer", "done"],
-    ]);
+  it("can have the first step under way and the last one failed", () => {
+    expect(statuses("download", false)[0]).toBe("download:current");
+    expect(statuses("install", true)).toEqual(["download:done", "verify:done", "check:done", "install:failed"]);
+  });
+});
+
+describe("failedStep", () => {
+  it.each<[UpdateInstallFailure, string]>([
+    ["download_failed", "download"],
+    ["checksum_mismatch", "verify"],
+    ["installer_not_started", "check"],
+    ["game_started", "check"],
+    ["running_apps_unknown", "check"],
+    ["new_version_does_not_start", "check"],
+    ["installer_stopped", "check"],
+  ])("marks %s at %s where this panel saw the installer start", (failure, step) => {
+    expect(failedStep(failure, true)).toBe(step);
   });
 
-  it.each<[UpdateInstallFailure, string[][]]>([
-    [
-      "download_failed",
-      [
-        ["download", "failed"],
-        ["verify", "pending"],
-        ["installer", "pending"],
-      ],
-    ],
-    [
-      "checksum_mismatch",
-      [
-        ["download", "done"],
-        ["verify", "failed"],
-        ["installer", "pending"],
-      ],
-    ],
-    [
-      "installer_not_started",
-      [
-        ["download", "done"],
-        ["verify", "done"],
-        ["installer", "failed"],
-      ],
-    ],
-    [
-      "installer_stopped",
-      [
-        ["download", "done"],
-        ["verify", "done"],
-        ["installer", "failed"],
-      ],
-    ],
-    [
-      "game_started",
-      [
-        ["download", "done"],
-        ["verify", "done"],
-        ["installer", "failed"],
-      ],
-    ],
-    [
-      "running_apps_unknown",
-      [
-        ["download", "done"],
-        ["verify", "done"],
-        ["installer", "failed"],
-      ],
-    ],
-    [
-      "new_version_does_not_start",
-      [
-        ["download", "done"],
-        ["verify", "done"],
-        ["installer", "failed"],
-      ],
-    ],
-  ])("marks the step %s failed at", (failure, expected) => {
-    expect(statuses(failed(failure))).toEqual(expected);
+  it("marks an installer that stopped at Install where a backend found it at its start", () => {
+    expect(failedStep("installer_stopped", false)).toBe("install");
+  });
+
+  it("marks every other failure at the same step either way", () => {
+    expect(failedStep("new_version_does_not_start", false)).toBe("check");
+    expect(failedStep("download_failed", false)).toBe("download");
+  });
+});
+
+describe("restartWaitLine", () => {
+  it("names the version Tender would go back to", () => {
+    expect(restartWaitLine("1.0.20")).toBe(
+      "Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if Tender has to go back to 1.0.20.",
+    );
   });
 });
 
 describe("INSTALL_FAILURE_SENTENCES", () => {
-  it("words every failure, and points an installer that stopped at its journal", () => {
+  it("words every failure without what its title says, and points the installer's failures at its journal", () => {
     expect(INSTALL_FAILURE_SENTENCES).toEqual({
-      download_failed: "The download failed — nothing was changed.",
-      checksum_mismatch: "The download did not match its checksum — nothing was changed.",
+      download_failed: "The download failed.",
+      checksum_mismatch: "The download did not match its checksum.",
       installer_not_started: "The installer could not be started.",
       installer_stopped: "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
-      game_started: "A game was started — nothing was changed. Try again once it has closed.",
-      running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
-      new_version_does_not_start: "The new version does not start — nothing was changed.",
+      game_started: "A game was started. Try again once it has closed.",
+      running_apps_unknown: "Could not check whether a game is running.",
+      new_version_does_not_start:
+        "The new version does not start. The installer's output says why: journalctl --user -u romm-tender-update",
     });
   });
 });

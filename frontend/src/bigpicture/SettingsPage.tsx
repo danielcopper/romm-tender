@@ -49,7 +49,6 @@ import type {
 import { SETTINGS_SECTIONS } from "../types";
 import { detach } from "../utils/detach";
 import {
-  getUpdateNoticeState,
   runUpdateCheckNow,
   setUpdateCheckSwitch,
   useUpdateNoticeState,
@@ -99,14 +98,16 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   advanced: "Advanced",
 };
 
-// What a Check now found, as the line under the button says it. A check that a
-// later switch press or a notice the backend pushed overtook reports nothing:
-// its answer was never written, and the store holds the newer one.
-const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, (latest: string | null) => string> = {
-  found: (latest) => (latest === null ? "A newer release is available." : `Tender ${latest} is available.`),
-  none: () => "You have the newest release.",
-  unreachable: () => "GitHub gave no usable answer. Try again later.",
-  off: () => "The daily check is off, so nothing was asked.",
+// What a Check now found, as the line under the button says it — only where
+// the Available row above does not say it already, so a release found, or none
+// newer, is no line. A check that a later switch press or a notice the backend
+// pushed overtook reports nothing: its answer was never written, and the store
+// holds the newer one.
+const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, string> = {
+  found: "",
+  none: "",
+  unreachable: "GitHub gave no usable answer. Try again later.",
+  off: "The daily check is off, so nothing was asked.",
 };
 
 /** The list hands its ids back as plain strings; this is where one becomes a
@@ -504,7 +505,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     try {
       const outcome = await runUpdateCheckNow();
       if (outcome !== "superseded") {
-        setUpdateCheckResult(CHECK_OUTCOME_LINES[outcome](getUpdateNoticeState().latestVersion));
+        setUpdateCheckResult(CHECK_OUTCOME_LINES[outcome]);
       }
     } catch (e) {
       logError(`Failed to check for updates: ${e}`);

@@ -1934,9 +1934,11 @@ describe("SettingsPage", () => {
       expect(lastUpdates().update).toMatchObject({ newer: true, latestVersion: "0.35.0", installedProgram: true });
     });
 
+    // A release found by its version, and none newer, are the Available row's
+    // to say, so Check now adds no line for them.
     it.each([
-      [{}, "Tender 0.34.0 is available."],
-      [{ available: false, newer: false, latest_version: "0.33.0" }, "You have the newest release."],
+      [{}, ""],
+      [{ available: false, newer: false, latest_version: "0.33.0" }, ""],
       [
         { reached: false, available: false, newer: false, latest_version: null },
         "GitHub gave no usable answer. Try again later.",

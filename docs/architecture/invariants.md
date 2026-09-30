@@ -34,10 +34,10 @@ Format: **invariant** — tier — enforced by.
   automatic rollback and, with `"kind": "check"`, when its pre-install check refuses an update's new version, and
   removes it after an update whose new version answered** — test + prompt-only — the record is the installer's statement
   that an update did not go through — that it rolled the update back, or that its pre-install check refused the new
-  version before anything was stopped or replaced — and the notice on Main, the row under Settings › Updates, the
-  start-up WARNING and the live `new_version_does_not_start` failure all rest on that. A backend that removed it would
-  take the notice down before the user saw it, with nothing on disk saying the update failed; one that wrote it would
-  claim a rollback or a refusal the installer never made. The pre-install check is the new version's own
+  version before anything was stopped or replaced — and the notice on Main, the failure block under Settings › Updates,
+  the start-up WARNING and the live `new_version_does_not_start` failure all rest on that. A backend that removed it
+  would take the notice down before the user saw it, with nothing on disk saying the update failed; one that wrote it
+  would claim a rollback or a refusal the installer never made. The pre-install check is the new version's own
   `backend/check.py`, and it never builds under the state root this record lives in (its own entry, below). So a record
   the backend finds no longer standing — its `restored_version` is not the running version
   (`domain/update_outcome.py::standing_update_failure`) — is ignored rather than cleaned up.

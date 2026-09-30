@@ -118,8 +118,8 @@ newer one wrote. Start Tender instead if it is not running, with `systemctl --us
 **Symptom**: An update, or a first install, marks the **Installing** row failed with **the new version does not start**,
 prints what the pre-install check said, and ends with `install.sh: the new version does not start` and
 `nothing was changed`. After an update, Tender's main panel says **Update to X failed — you are still on Y.** with **The
-new version did not start, so nothing was changed.** under it, and **Settings › Updates** says the same until a later
-update goes through.
+new version did not start, so nothing was changed.** under it, and **Settings › Updates** says **Update to X failed —
+nothing was changed.** with **Check new version** marked as the step that failed, until a later update goes through.
 
 **Explanation**: Before it stops anything, the installer runs the new version's pre-install check: it builds Tender from
 the new files on copies of your library database and settings, the way a start would, without starting it. That failed,
@@ -175,35 +175,38 @@ A release from before the pre-install check has none. The installer installs it 
 
 ## An Update From Settings Did Not Go Through
 
-**Symptom**: After **Install update X** in **Settings › Updates**, one of the steps is marked **Failed**, a line under
-the steps says why, and the button is back as **Try again**.
+**Symptom**: After **Install update** in **Settings › Updates**, an amber block under the button says **Update to X
+failed — nothing was changed.**, marks the step it stopped at with `✗`, and says why under that; the button is back as
+**Try again**.
 
 **Explanation**: Each of these ends the install before Tender was replaced, and Tender goes on running the version you
-have:
+have. The step each is marked at is in brackets:
 
-- **The download failed — nothing was changed.** The release, or the checksum file beside it, could not be downloaded.
-- **The download did not match its checksum — nothing was changed.** What arrived is not the file GitHub lists for the
-  release, so Tender did not install it.
-- **The installer could not be started.** The installer could not be taken out of the download, or could not be started
-  — for example because an earlier one is still running.
-- **The installer stopped without updating.** The installer started, but ended before it replaced Tender — it refused,
-  or it failed. A pre-install check that did not finish ([The check did not finish](#the-check-did-not-finish)), and
-  data it could not copy ([Your data could not be copied](#your-data-could-not-be-copied)), end this way.
-- **A game was started — nothing was changed. Try again once it has closed.** A game was started while the update
+- **The download failed.** (Download) The release, or the checksum file beside it, could not be downloaded.
+- **The download did not match its checksum.** (Verify) What arrived is not the file GitHub lists for the release, so
+  Tender did not install it.
+- **The installer could not be started.** (Check new version) The installer could not be taken out of the download, or
+  could not be started — for example because an earlier one is still running.
+- **The installer stopped without updating.** (Check new version) The installer started, but ended before it replaced
+  Tender — it refused, or it failed. A pre-install check that did not finish
+  ([The check did not finish](#the-check-did-not-finish)), and data it could not copy
+  ([Your data could not be copied](#your-data-could-not-be-copied)), end this way. The block's title says **Update to X
+  failed — you are still on Y.** for this one, as the notice on the main panel does.
+- **A game was started. Try again once it has closed.** (Check new version) A game was started while the update
   downloaded; Tender checks right before the installer starts, and does not start it under a running game.
-- **Could not check whether a game is running — nothing was changed.** At that same check Tender could not ask Steam,
-  and did not start the installer on a guess.
-- **The new version does not start — nothing was changed.** The installer's pre-install check tried the new version
-  before stopping Tender, and it could not be built, or it crashed
+- **Could not check whether a game is running.** (Check new version) At that same check Tender could not ask Steam, and
+  did not start the installer on a guess.
+- **The new version does not start.** (Check new version) The installer's pre-install check tried the new version before
+  stopping Tender, and it could not be built, or it crashed
   ([The New Version Does Not Start](#the-new-version-does-not-start)).
 
 Nothing tries again by itself; what the attempt downloaded is removed.
 
 An installer that stops without updating after it has stopped Tender cannot say so itself. If it started Tender again on
 the version you had, the main panel says **Update to X failed — you are still on Y.** with the same line about the
-installer, and the step is marked **Failed** under **Settings › Updates** with **Try again**. If it did not start Tender
-again, the section says after five minutes **Tender has not come back** and how to start it; once it is running again,
-the main panel says the same as above.
+installer, and **Settings › Updates** says the same in its block, with **Install** marked, and offers **Try again**. If
+it did not start Tender again, the block says after five minutes **Tender has not come back** and how to start it; once
+it is running again, the main panel says the same as above.
 
 **Could not read the update state.** under the button means the section asked Tender how the install stands and got no
 answer; it asks again every few seconds, and the line goes once an answer comes.

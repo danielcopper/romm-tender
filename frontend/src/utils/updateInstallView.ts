@@ -3,16 +3,24 @@
  *
  * The backend answers in discriminants (`UpdateWaitReason`,
  * `UpdateInstallStep`, `UpdateInstallFailure`, a refusal's `reason`); the
- * sentence a reader sees for each is here. The button's labels and a step's
- * value sit with the rows that show them, in `UpdateInstallRows.tsx`.
+ * sentence a reader sees for each is here. The button's labels, the captions
+ * and the failure titles sit with the block that shows them, in
+ * `UpdateInstallRows.tsx`.
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
 
 export const WAITING_FOR = "Waiting for:";
 
-/** What stands after the installer started: this backend is on its way out, and nothing more is reported. */
-export const RESTARTING_LINE = "Tender is restarting — Steam's interface will reload in a moment.";
+/**
+ * What stands under the steps once this backend has gone: nothing more is
+ * reported until Steam's interface reloads. Which of the installer's waits the
+ * five minutes cover is `docs/architecture/qam-panel.md`, "The install under
+ * Updates".
+ */
+export function restartWaitLine(installed: string): string {
+  return `Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if Tender has to go back to ${installed}.`;
+}
 
 /** A press the connection failed to carry; the log names the error. */
 export const INSTALL_REQUEST_FAILED = "The install could not be requested.";
@@ -23,8 +31,10 @@ export const GAME_STARTS_CANCEL = "Starting a game now cancels the update.";
 /** A read of the install's state that did not answer, while no installer is running. */
 export const INSTALL_STATE_UNREAD = "Could not read the update state.";
 
+const INSTALLER_UNIT_JOURNAL = "journalctl --user -u romm-tender-update";
+
 /** Where the installer's own account of an attempt is, as every line about it names it. */
-const INSTALLER_JOURNAL = "Details: journalctl --user -u romm-tender-update";
+const INSTALLER_JOURNAL = `Details: ${INSTALLER_UNIT_JOURNAL}`;
 
 /** Five minutes after the installer started, with the backend gone: it has not come back up. */
 export const NOT_BACK_LINE = `Tender has not come back. ${INSTALLER_JOURNAL} — start it again with: systemctl --user start romm-tender`;
@@ -32,7 +42,7 @@ export const NOT_BACK_LINE = `Tender has not come back. ${INSTALLER_JOURNAL} —
 /** Five minutes after the installer started, with the backend still answering: the installer has not stopped it yet. */
 export const TAKING_LONG_LINE = `The installer is taking unusually long. ${INSTALLER_JOURNAL}`;
 
-/** How long after the panel first sees the installer started the restarting line gives way to one of the two above. */
+/** How long after the panel first sees the installer started the line under the steps gives way to one of the two above. */
 export const INSTALLER_OVERDUE_MS = 5 * 60 * 1000;
 
 /** A press the backend refused for something other than a wait, and a press the connection did not carry. */
@@ -81,14 +91,15 @@ export function refusalStands(
  */
 export const RELOAD_LIMIT: number = 2;
 
+/** The line under a failed attempt's title, which says for every kind but `installer_stopped` that nothing was changed. */
 export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
-  download_failed: "The download failed — nothing was changed.",
-  checksum_mismatch: "The download did not match its checksum — nothing was changed.",
+  download_failed: "The download failed.",
+  checksum_mismatch: "The download did not match its checksum.",
   installer_not_started: "The installer could not be started.",
   installer_stopped: `The installer stopped without updating. ${INSTALLER_JOURNAL}`,
-  game_started: "A game was started — nothing was changed. Try again once it has closed.",
-  running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
-  new_version_does_not_start: "The new version does not start — nothing was changed.",
+  game_started: "A game was started. Try again once it has closed.",
+  running_apps_unknown: "Could not check whether a game is running.",
+  new_version_does_not_start: `The new version does not start. The installer's output says why: ${INSTALLER_UNIT_JOURNAL}`,
 };
 
 type PlainWaitReason = Exclude<UpdateWaitReason, { apps: string[] } | { frees_at: number }>["reason"];
@@ -131,7 +142,7 @@ export function pausedDownloadsHint(count: number): string {
   return count === 1 ? "1 paused download will be cancelled." : `${count} paused downloads will be cancelled.`;
 }
 
-export type InstallStepId = "download" | "verify" | "installer";
+export type InstallStepId = "download" | "verify" | "check" | "install";
 export type InstallStepStatus = "pending" | "current" | "done" | "failed";
 
 export interface InstallStepRow {
@@ -140,46 +151,34 @@ export interface InstallStepRow {
   status: InstallStepStatus;
 }
 
-const STEPS: readonly { id: InstallStepId; label: string }[] = [
-  { id: "download", label: "Downloading" },
-  { id: "verify", label: "Verifying" },
-  { id: "installer", label: "Starting the installer" },
+const STEPS: readonly [InstallStepId, string][] = [
+  ["download", "Download"],
+  ["verify", "Verify"],
+  ["check", "Check new version"],
+  ["install", "Install"],
 ];
 
-const FAILED_AT: Record<UpdateInstallFailure, InstallStepId> = {
-  download_failed: "download",
-  checksum_mismatch: "verify",
-  installer_not_started: "installer",
-  installer_stopped: "installer",
-  game_started: "installer",
-  running_apps_unknown: "installer",
-  new_version_does_not_start: "installer",
-};
-
 /**
- * Where each step stands. The backend's `verifying` covers everything up to the
- * installer's start, so "Starting the installer" is never the current step: it
- * is pending until `installer_started` and done from then on.
+ * The step a failure is marked at. Everything between the checksum and the
+ * end of the installer's pre-install check is marked at the check, so no step
+ * the attempt never reached reads as done. An installer that stopped is marked
+ * there only where this panel saw it start: one a backend found at its own
+ * start had stopped the backend before it, which is Install.
  */
-export function installStepRows(attempt: UpdateInstallAttempt): InstallStepRow[] {
-  const index = (id: InstallStepId) => STEPS.findIndex((step) => step.id === id);
-  const statusOf = (at: number): InstallStepStatus => {
-    switch (attempt.step) {
-      case "downloading":
-        return at === 0 ? "current" : "pending";
-      case "verifying":
-        if (at === 0) return "done";
-        return at === 1 ? "current" : "pending";
-      case "installer_started":
-        return "done";
-      case "failed": {
-        const failedAt = index(attempt.failure === null ? "download" : FAILED_AT[attempt.failure]);
-        if (at < failedAt) return "done";
-        return at === failedAt ? "failed" : "pending";
-      }
-    }
-  };
-  return STEPS.map((step, at) => ({ ...step, status: statusOf(at) }));
+export function failedStep(failure: UpdateInstallFailure, installerSeen: boolean): InstallStepId {
+  if (failure === "download_failed") return "download";
+  if (failure === "checksum_mismatch") return "verify";
+  return failure === "installer_stopped" && !installerSeen ? "install" : "check";
+}
+
+/** The four steps with every one before *at* done, *at* current or failed, and the rest still to do. */
+export function installSteps(at: InstallStepId, failed: boolean): InstallStepRow[] {
+  const index = STEPS.findIndex(([id]) => id === at);
+  return STEPS.map(([id, label], i) => ({
+    id,
+    label,
+    status: i < index ? "done" : i > index ? "pending" : failed ? "failed" : "current",
+  }));
 }
 
 /** The download's whole percent, or `null` where it announced no size. */

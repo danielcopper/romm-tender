@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UpdateInstallAttempt } from "../api/backend";
 import {
+  attemptSeenAt,
   getUpdateInstallAttempt,
   installerRestarting,
   installerSeenAt,
-  noteInstaller,
+  noteAttempt,
   onUpdateInstallAttemptChange,
   setUpdateInstallAttempt,
 } from "./updateInstallStore";
@@ -50,33 +51,57 @@ describe("updateInstallStore", () => {
     const STARTED: UpdateInstallAttempt = { ...DOWNLOADING, step: "installer_started" };
 
     it("is the first frame or read that showed it, and a later one does not move it", () => {
-      noteInstaller(STARTED, 1000);
-      noteInstaller(STARTED, 5000);
+      noteAttempt(STARTED, 1000);
+      noteAttempt(STARTED, 5000);
       setUpdateInstallAttempt(STARTED);
 
       expect(installerSeenAt()).toBe(1000);
     });
 
     it("is nothing for an attempt that has not got that far", () => {
-      noteInstaller(DOWNLOADING, 1000);
+      noteAttempt(DOWNLOADING, 1000);
 
       expect(installerSeenAt()).toBeNull();
     });
 
     it("counts as restarting for five minutes and no longer", () => {
-      noteInstaller(STARTED, 1000);
+      noteAttempt(STARTED, 1000);
 
       expect(installerRestarting(1000 + INSTALLER_OVERDUE_MS - 1)).toBe(true);
       expect(installerRestarting(1000 + INSTALLER_OVERDUE_MS)).toBe(false);
     });
 
     it("is forgotten at a press, which clears the attempt", () => {
-      noteInstaller(STARTED, 1000);
+      noteAttempt(STARTED, 1000);
 
       setUpdateInstallAttempt(null);
 
       expect(installerSeenAt()).toBeNull();
       expect(installerRestarting(1001)).toBe(false);
+    });
+  });
+
+  describe("when the attempt was first seen under way", () => {
+    it("is the first frame or read that showed it, whatever its step, and a later one does not move it", () => {
+      noteAttempt(DOWNLOADING, 1000);
+      noteAttempt({ ...DOWNLOADING, step: "installer_started" }, 5000);
+
+      expect(attemptSeenAt()).toBe(1000);
+    });
+
+    it("is nothing for an attempt first seen failed", () => {
+      noteAttempt({ ...DOWNLOADING, step: "failed", failure: "download_failed" }, 1000);
+
+      expect(attemptSeenAt()).toBeNull();
+    });
+
+    it("is forgotten at a press, so the next attempt counts from its own start", () => {
+      noteAttempt(DOWNLOADING, 1000);
+
+      setUpdateInstallAttempt(null);
+      noteAttempt(DOWNLOADING, 9000);
+
+      expect(attemptSeenAt()).toBe(9000);
     });
   });
 });

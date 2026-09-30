@@ -8,12 +8,11 @@
 
 import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
-import { AMBER } from "../layout/pane";
 import { UpdateInstallRows, installButtonShown, installStateUnread } from "./UpdateInstallRows";
 import { useUpdateInstall } from "./useUpdateInstall";
 import { INSTALL_STATE_UNREAD } from "../../utils/updateInstallView";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
-import { updateFailureReason, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
+import type { UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
 /** Shown only to a run from a checkout, which is never offered an install. */
 export const NOT_INSTALLED_PROGRAM = "Development build — install updates with the installer.";
@@ -69,25 +68,12 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
           <span data-testid="updates-available">{availableValue(update)}</span>
         </Field>
       </PanelSectionRow>
-      {outcome.failure !== null && (
-        <PanelSectionRow>
-          <Field
-            label={
-              <span data-testid="updates-last-update" style={{ color: AMBER }}>
-                {updateFailureSentence(outcome.failure)}
-              </span>
-            }
-            description={updateFailureReason(outcome.failure)}
-            focusable={true}
-          />
-        </PanelSectionRow>
-      )}
       {!update.installedProgram && (
         <PanelSectionRow>
           <Field label={<span data-testid="updates-not-installed">{NOT_INSTALLED_PROGRAM}</span>} focusable={true} />
         </PanelSectionRow>
       )}
-      <UpdateInstallRows install={install} />
+      <UpdateInstallRows install={install} record={outcome.failure} installed={update.currentVersion} />
       <PanelSectionRow>
         <ToggleField
           label="Check for updates daily"
