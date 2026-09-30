@@ -1110,7 +1110,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     plugin.onDismount();
   });
 
-  it("surfaces a startup_reconcile-prefixed logError when the pull callable rejects", async () => {
+  it("surfaces a startup_reconcile-prefixed logError when the pull endpoint rejects", async () => {
     vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
     const plugin = pluginFactory();
     await flush();
@@ -1197,7 +1197,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     plugin.onDismount();
   });
 
-  it("surfaces a sync_reconcile-prefixed logError when the pull callable rejects", async () => {
+  it("surfaces a sync_reconcile-prefixed logError when the pull endpoint rejects", async () => {
     const plugin = pluginFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();

@@ -1014,7 +1014,7 @@ class TestSyncRomSavesDisabledGuard:
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
 
-class TestSyncCallableErrorMessages:
+class TestSyncUseCaseErrorMessages:
     """The failure ``message`` each public sync use case builds from the matrix
     result (``_summarize_sync_result``). A total failure leads with the first
     error's classified reason (never buried behind "Uploaded 0 save(s)"); a
@@ -1111,7 +1111,7 @@ class TestSyncCallableErrorMessages:
         assert result["message"] == "502 bad gateway"
 
 
-class TestSyncCallablesSurfaceDirectionCounts:
+class TestSyncUseCasesSurfaceDirectionCounts:
     """The per-ROM sync use cases surface per-direction counts (#250).
 
     The completion toast names which way saves moved, so each result dict
@@ -1176,7 +1176,7 @@ class TestSyncCallablesSurfaceDirectionCounts:
         assert result["synced"] == 3
 
 
-class TestSyncCallablePromotesRealDispatchReason:
+class TestSyncUseCasePromotesRealDispatchReason:
     """The promoted message comes from a REAL classified failure dispatched
     through the matrix executor — not a fabricated ``message`` — so a 403 on the
     upload surfaces "Access denied …" in both the post-exit toast and the manual

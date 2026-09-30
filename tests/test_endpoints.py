@@ -317,7 +317,7 @@ class TestMigrationRuleCoverage:
     it calls. Prevents a new endpoint from being silently unguarded against
     pending migration corruption."""
 
-    def test_all_callables_either_whitelisted_or_declaring_the_rule(self):
+    def test_all_endpoints_either_whitelisted_or_declaring_the_rule(self):
         migration_ruled = endpoints_with_rule("migration")
         unclassified: list[str] = []
         for name in route_names(Endpoints):
@@ -333,7 +333,7 @@ class TestMigrationRuleCoverage:
             f"{sorted(unclassified)}"
         )
 
-    def test_no_callable_both_declares_the_rule_and_is_whitelisted(self):
+    def test_no_endpoint_both_declares_the_rule_and_is_whitelisted(self):
         """An endpoint that both declares the migration rule AND is whitelisted
         is silently passing the coverage check — likely a misclassification.
         Catch it."""
@@ -347,7 +347,7 @@ class TestMigrationRuleCoverage:
             f"remove from one: {sorted(double_classified)}"
         )
 
-    def test_whitelisted_callables_are_endpoints_declaring_no_rule(self):
+    def test_whitelisted_names_are_endpoints_declaring_no_rule(self):
         """Every name in _MIGRATION_RULE_WHITELIST must be an endpoint on
         Endpoints and must NOT declare the migration rule. Reads from the
         whitelist side, so a name left behind by a removed or renamed endpoint

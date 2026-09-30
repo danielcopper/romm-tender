@@ -1282,7 +1282,7 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("3/4");
     });
 
-    it("bios: threads bios_level from the callable result into the rendered status-dot color (#461)", async () => {
+    it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {
       // The re-read ships bios_level straight from the backend
       // (compute_bios_level) — the handler threads it through, never re-deriving
       // from counts. amber (#d4a72c) is the observable side effect.

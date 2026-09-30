@@ -51,7 +51,7 @@ def _write_main(tmp_path: Path, body: str) -> Path:
     return path
 
 
-class TestParseFrontendCallables:
+class TestParseFrontendEndpoints:
     def test_empty_args_is_arity_zero(self, tmp_path: Path):
         src = _write_ts(tmp_path, "a.ts", 'const x = endpoint<[], Foo>("get_settings");')
         assert check.parse_frontend_endpoints(src) == {"get_settings": 0}
@@ -250,7 +250,7 @@ class TestParserHardening:
         assert check.parse_frontend_endpoints(src) == {"url_in_string": 2}
 
 
-class TestParseBackendCallables:
+class TestParseBackendEndpoints:
     def test_public_methods_with_arity(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
@@ -337,12 +337,12 @@ class TestParseBackendCallables:
                 async def unmarked_coroutine(self):
                     ...
                 @route
-                async def real_callable(self):
+                async def real_endpoint(self):
                     ...
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_endpoints(main_py) == {"real_callable": 0}
+        assert check.parse_backend_endpoints(main_py) == {"real_endpoint": 0}
 
     def test_a_marked_synchronous_method_counts_with_its_arity(self, tmp_path: Path):
         body = textwrap.dedent(

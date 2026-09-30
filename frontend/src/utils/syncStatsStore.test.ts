@@ -206,7 +206,7 @@ describe("syncStatsStore", () => {
   });
 
   describe("request sharing", () => {
-    it("collapses two concurrent refreshes into one callable call", async () => {
+    it("collapses two concurrent refreshes into one endpoint call", async () => {
       const open = deferred<SyncStats>();
       vi.mocked(getSyncStats).mockReturnValue(open.promise);
 

@@ -5655,7 +5655,7 @@ class TestDeletePlatformBiosIOLogsWarnings:
         assert firmware.uow.bios_files.get("psx", "scph5502.bin") is None
 
 
-class TestBadPathFirmwareCallables:
+class TestBadPathFirmwareUseCases:
     """Coverage for three firmware error paths.
 
     Each test wires a fresh ``FirmwareService`` against the seeded

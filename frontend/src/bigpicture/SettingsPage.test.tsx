@@ -1404,7 +1404,7 @@ describe("SettingsPage", () => {
   });
 
   describe("SteamGridDB handlers", () => {
-    it("wires onVerifyKey directly to the verifySgdbApiKey callable (tests the key without persisting)", async () => {
+    it("wires onVerifyKey directly to the verifySgdbApiKey endpoint (tests the key without persisting)", async () => {
       vi.mocked(backend.verifySgdbApiKey).mockResolvedValue({ success: true, message: "API key is valid" });
       renderPage();
       await flushAsync();

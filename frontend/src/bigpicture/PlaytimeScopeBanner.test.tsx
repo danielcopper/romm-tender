@@ -85,14 +85,14 @@ describe("PlaytimeScopeBanner store-driven visibility", () => {
     setPlaytimeScopeState({ pending: false });
   });
 
-  it("shows the banner when the callable reports pending:true", async () => {
+  it("shows the banner when the endpoint reports pending:true", async () => {
     vi.mocked(getPlaytimeScopeNotice).mockResolvedValue({ pending: true });
     const { queryByText } = render(<ScopeBannerHost />);
     await flushAsync();
     expect(queryByText(PLAYTIME_SCOPE_MESSAGE)).toBeInTheDocument();
   });
 
-  it("keeps the banner absent when the callable reports pending:false", async () => {
+  it("keeps the banner absent when the endpoint reports pending:false", async () => {
     vi.mocked(getPlaytimeScopeNotice).mockResolvedValue({ pending: false });
     const { queryByText } = render(<ScopeBannerHost />);
     await flushAsync();

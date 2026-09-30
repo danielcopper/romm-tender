@@ -40,7 +40,7 @@ def _load_gate():
 _gate = _load_gate()
 
 
-def test_frontend_backend_callable_manifest_matches():
+def test_frontend_backend_endpoints_match():
     frontend = _gate.parse_frontend_endpoints(_SRC_DIR)
     backend = _gate.parse_backend_endpoints(_MAIN_PY)
     findings = _gate.find_misplaced_routes(_MAIN_PY) + _gate.find_discrepancies(frontend, backend, _gate.EXEMPT)

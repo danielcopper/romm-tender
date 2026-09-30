@@ -962,7 +962,7 @@ class TestSaveShortcutIcon:
         assert steamgrid.service._save_icon_to_grid(12345, b"data") is None
 
     @pytest.mark.asyncio
-    async def test_save_shortcut_icon_callable_returns_icon_path(self, steamgrid, tmp_path):
+    async def test_save_shortcut_icon_use_case_returns_icon_path(self, steamgrid, tmp_path):
         """save_shortcut_icon decodes base64, writes the PNG, returns its path."""
         import base64
 

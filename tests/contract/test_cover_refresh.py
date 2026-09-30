@@ -208,7 +208,7 @@ async def test_null_fingerprint_with_cache_adopts_without_download(harness):
     assert events[0]["cover_refreshes"] == []
 
 
-async def test_cover_only_change_flows_from_preview_to_apply_via_callables(harness):
+async def test_cover_only_change_flows_from_preview_to_apply_via_endpoints(harness):
     """The QAM flow for a cover-only change (the #1386 flow gap).
 
     ``sync_preview`` must count the pending cover refresh in its summary — the

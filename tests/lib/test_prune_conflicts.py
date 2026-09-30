@@ -323,7 +323,7 @@ async def test_refusal_message_stays_generic_for_an_unnamed_holder() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refusal_names_a_blocking_callable_registration() -> None:
+async def test_refusal_names_a_blocking_endpoint_registration() -> None:
     entered = asyncio.Event()
     release = asyncio.Event()
 
@@ -381,7 +381,7 @@ async def test_expired_lease_is_reported_at_info_as_never_released(monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_detached_retention_is_labelled_by_its_originating_callable() -> None:
+async def test_detached_retention_is_labelled_by_its_originating_endpoint() -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
@@ -414,7 +414,7 @@ async def test_a_new_frontend_disowns_a_lease_its_predecessor_stranded() -> None
 
 
 @pytest.mark.asyncio
-async def test_disowning_leaves_callable_registrations_and_run_claims_alone() -> None:
+async def test_disowning_leaves_endpoint_registrations_and_run_claims_alone() -> None:
     entered = asyncio.Event()
     release = asyncio.Event()
 

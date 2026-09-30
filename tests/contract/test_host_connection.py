@@ -102,8 +102,8 @@ async def served(harness, tmp_path) -> AsyncIterator[ServedEndpoints]:
         await server.stop()
 
 
-class TestARealCallableOverTheRealConnection:
-    async def test_it_answers_with_the_callables_own_payload(self, served):
+class TestARealEndpointOverTheRealConnection:
+    async def test_it_answers_with_the_endpoints_own_payload(self, served):
         """`get_settings` is a plain read, so the answer is the settings dict itself."""
         answer = await served.call("get_settings")
 
@@ -112,7 +112,7 @@ class TestARealCallableOverTheRealConnection:
         assert isinstance(answer["result"], dict)
         assert "romm_url" in answer["result"]
 
-    async def test_an_argument_taking_callable_receives_them_in_order(self, served):
+    async def test_an_argument_taking_endpoint_receives_them_in_order(self, served):
         """`args` are positional, and the order is what this asserts.
 
         Two rows seeded, then `(offset=0, limit=1)`. Swapped, that is
@@ -127,7 +127,7 @@ class TestARealCallableOverTheRealConnection:
         assert answer["result"]["total"] == 2
         assert list(answer["result"]["items"].keys()) == ["1"]
 
-    async def test_a_callables_own_failure_shape_travels_inside_result(self, served):
+    async def test_an_endpoints_own_failure_shape_travels_inside_result(self, served):
         """A refused endpoint call is a SUCCESSFUL transport — the distinction this protocol exists to keep.
 
         `test_connection` with no server configured answers the repo's
@@ -154,7 +154,7 @@ class TestARealCallableOverTheRealConnection:
 
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
-    async def test_wrong_arity_against_a_real_callable_is_reported_not_swallowed(self, served):
+    async def test_wrong_arity_against_a_real_endpoint_is_reported_not_swallowed(self, served):
         answer = await served.call("get_metadata_cache_page", [])
 
         assert answer["type"] == TYPE_ERROR
@@ -197,12 +197,12 @@ class TestTheSizeCapAgainstARealAnswer:
 
 
 class TestAdmissionInFrontOfTheRealEndpoints:
-    async def test_no_token_reaches_no_callable(self, served):
+    async def test_no_token_reaches_no_endpoint(self, served):
         status, _, _ = await http_get(served.server.port, "/ws", token=None)
 
         assert status == 401
 
-    async def test_a_foreign_origin_reaches_no_callable(self, served):
+    async def test_a_foreign_origin_reaches_no_endpoint(self, served):
         status, _, _ = await http_get(
             served.server.port,
             "/ws",

@@ -171,7 +171,7 @@ describe("a call on the wire", () => {
     await expect(answer).resolves.toEqual({ total: 7 });
   });
 
-  it("fails with a transport error that cannot be read as a callable's own failure", async () => {
+  it("fails with a transport error that cannot be read as an endpoint's own failure", async () => {
     const socket = build();
     const answer = socket.call("nope", []);
     latest().open();

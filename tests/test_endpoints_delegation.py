@@ -39,10 +39,10 @@ def endpoints(services):
     return Endpoints(_make_application(services), HostStatus())
 
 
-# ── Settings / connection / log-level callables ───────────────────────
+# ── Settings / connection / log-level endpoints ───────────────────────
 
 
-class TestSettingsCallableDelegation:
+class TestSettingsEndpointDelegation:
     @pytest.mark.asyncio
     async def test_connect_with_credentials_delegates(self, endpoints, services):
         services.connection_service.establish_token = AsyncMock(return_value={"success": True})
@@ -145,7 +145,7 @@ class TestSettingsCallableDelegation:
         services.settings_service.frontend_log.assert_called_once_with("debug", "hello")
 
 
-class TestConnectionCallableDelegation:
+class TestConnectionEndpointDelegation:
     @pytest.mark.asyncio
     async def test_test_connection_delegates(self, endpoints, services):
         services.connection_service.test_connection = AsyncMock(return_value={"success": True})
@@ -161,10 +161,10 @@ class TestConnectionCallableDelegation:
         assert result == {"success": True}
 
 
-# ── Prune lease callables ──────────────────────────────────────────────
+# ── Prune lease endpoints ──────────────────────────────────────────────
 
 
-class TestPruneLeaseCallableDelegation:
+class TestPruneLeaseEndpointDelegation:
     @pytest.mark.asyncio
     async def test_release_prune_conflict_lease_delegates(self, endpoints, services):
         answer = {"success": True, "message": "Operation lease released."}
@@ -191,10 +191,10 @@ class TestPruneLeaseCallableDelegation:
         assert result == {"success": True, "released": 2}
 
 
-# ── Migration callables ────────────────────────────────────────────────
+# ── Migration endpoints ────────────────────────────────────────────────
 
 
-class TestMigrationCallableDelegation:
+class TestMigrationEndpointDelegation:
     @pytest.mark.asyncio
     async def test_migrate_retrodeck_files_delegates(self, endpoints, services):
         services.migration_service.migrate_retrodeck_files = AsyncMock(return_value={"ok": True})
@@ -224,10 +224,10 @@ class TestMigrationCallableDelegation:
         assert result == {"status": "ok"}
 
 
-# ── Core / firmware / BIOS callables ───────────────────────────────────
+# ── Core / firmware / BIOS endpoints ───────────────────────────────────
 
 
-class TestCoreCallableDelegation:
+class TestCoreEndpointDelegation:
     @pytest.mark.asyncio
     async def test_set_system_core_delegates(self, endpoints, services):
         services.core_service.set_system_core = AsyncMock(return_value={"success": True})
@@ -270,7 +270,7 @@ class TestCoreCallableDelegation:
         assert result == {"emulators": [], "active_core": "snes9x_libretro", "active_core_label": "Snes9x"}
 
 
-class TestFirmwareCallableDelegation:
+class TestFirmwareEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_firmware_status_delegates(self, endpoints, services):
         services.firmware_service.get_firmware_status = AsyncMock(return_value={"items": []})
@@ -316,10 +316,10 @@ class TestFirmwareCallableDelegation:
         assert result == {"removed": 0}
 
 
-# ── Sync / library callables ───────────────────────────────────────────
+# ── Sync / library endpoints ───────────────────────────────────────────
 
 
-class TestLibrarySyncCallableDelegation:
+class TestLibrarySyncEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_platforms_delegates(self, endpoints, services):
         services.sync_service.get_platforms = AsyncMock(return_value=[])
@@ -426,7 +426,7 @@ class TestLibrarySyncCallableDelegation:
         assert result == {"roms": 5}
 
 
-class TestShortcutRemovalCallableDelegation:
+class TestShortcutRemovalEndpointDelegation:
     @pytest.mark.asyncio
     async def test_remove_platform_shortcuts_delegates(self, endpoints, services):
         services.shortcut_removal_service.remove_platform_shortcuts = AsyncMock(return_value={"removed": 3})
@@ -449,7 +449,7 @@ class TestShortcutRemovalCallableDelegation:
         assert result == {"ok": True}
 
 
-class TestArtworkCallableDelegation:
+class TestArtworkEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_artwork_base64_delegates(self, endpoints, services):
         services.artwork_service.get_artwork_base64 = AsyncMock(return_value={"base64": None})
@@ -483,10 +483,10 @@ class TestArtworkCallableDelegation:
         services.artwork_service.refresh_cover.assert_awaited_once_with(42)
 
 
-# ── Launch / session lifecycle callables ───────────────────────────────
+# ── Launch / session lifecycle endpoints ───────────────────────────────
 
 
-class TestLifecycleCallableDelegation:
+class TestLifecycleEndpointDelegation:
     @pytest.mark.asyncio
     async def test_evaluate_launch_returns_asdict(self, endpoints, services):
         from dataclasses import dataclass
@@ -539,10 +539,10 @@ class TestLifecycleCallableDelegation:
         assert result == {"success": True, "stopped": 2, "force_killed": 0}
 
 
-# ── Download callables ─────────────────────────────────────────────────
+# ── Download endpoints ─────────────────────────────────────────────────
 
 
-class TestDownloadCallableDelegation:
+class TestDownloadEndpointDelegation:
     @pytest.mark.asyncio
     async def test_start_download_delegates(self, endpoints, services):
         services.download_service.start_download = AsyncMock(return_value={"queued": True})
@@ -574,7 +574,7 @@ class TestDownloadCallableDelegation:
         assert result == {"installed": True}
 
 
-class TestRomRemovalCallableDelegation:
+class TestRomRemovalEndpointDelegation:
     @pytest.mark.asyncio
     async def test_remove_rom_delegates(self, endpoints, services):
         answer = {"success": True, "prune_lease_token": "rom_uninstall:1"}
@@ -592,10 +592,10 @@ class TestRomRemovalCallableDelegation:
         assert result == answer
 
 
-# ── Saves callables ───────────────────────────────────────────────────
+# ── Saves endpoints ───────────────────────────────────────────────────
 
 
-class TestSavesCallableDelegation:
+class TestSavesEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_save_status_delegates(self, endpoints, services):
         services.save_sync_service.get_save_status = AsyncMock(return_value={"status": "ok"})
@@ -679,10 +679,10 @@ class TestSavesCallableDelegation:
         assert result == {"ok": True}
 
 
-# ── SteamGridDB callables ──────────────────────────────────────────────
+# ── SteamGridDB endpoints ──────────────────────────────────────────────
 
 
-class TestSgdbCallableDelegation:
+class TestSgdbEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_sgdb_artwork_base64_delegates(self, endpoints, services):
         answer = {"base64": "data", "prune_lease_token": "sgdb_artwork:1"}
@@ -713,10 +713,10 @@ class TestSgdbCallableDelegation:
         assert result == {"ok": True}
 
 
-# ── Metadata / achievements / game-detail callables ────────────────────
+# ── Metadata / achievements / game-detail endpoints ────────────────────
 
 
-class TestMetadataCallableDelegation:
+class TestMetadataEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_rom_metadata_delegates(self, endpoints, services):
         services.metadata_service.get_rom_metadata.return_value = {"name": "x"}
@@ -739,7 +739,7 @@ class TestMetadataCallableDelegation:
         assert result == {"100": 42}
 
 
-class TestAchievementsCallableDelegation:
+class TestAchievementsEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_achievements_delegates(self, endpoints, services):
         services.achievements_service.get_achievements = AsyncMock(return_value=[])
@@ -755,7 +755,7 @@ class TestAchievementsCallableDelegation:
         assert result == {"completed": 0}
 
 
-class TestGameDetailCallableDelegation:
+class TestGameDetailEndpointDelegation:
     @pytest.mark.asyncio
     async def test_get_cached_game_detail_delegates(self, endpoints, services):
         services.game_detail_service.get_cached_game_detail = AsyncMock(return_value={"detail": "x"})
@@ -772,7 +772,7 @@ class TestGameDetailCallableDelegation:
 # delegation tests above already cover the happy paths.
 
 
-class TestCallableErrorPropagation:
+class TestEndpointErrorPropagation:
     @pytest.mark.asyncio
     async def test_save_server_url_propagates(self, endpoints, services):
         services.settings_service.save_server_url.side_effect = ValueError("bad")

@@ -35,7 +35,7 @@ describe("reconcileStaleShortcuts (#1046)", () => {
     vi.mocked(backend.reconcileShortcuts).mockResolvedValue({ success: true, message: "", unbound_count: 0 });
   });
 
-  it("passes the live appId set to the backend reconcile callable", async () => {
+  it("passes the live appId set to the backend reconcile endpoint", async () => {
     scanShortcutOwnership.mockResolvedValue({ owned: [100, 200], unresolved: [] });
 
     await reconcileStaleShortcuts();

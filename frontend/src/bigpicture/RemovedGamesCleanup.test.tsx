@@ -1594,7 +1594,7 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("Shenmue-II_2026-07-31_07f4953b");
   });
 
-  it("keeps Stop locked after the cancel callable resolves, until the run ends", async () => {
+  it("keeps Stop locked after the cancel endpoint call resolves, until the run ends", async () => {
     vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
     const section = render(createElement(RemovedGamesCleanupSection));
     act(() => {
@@ -1678,7 +1678,7 @@ describe("RemovedGamesCleanup", () => {
     expect((section.getByRole("button", { name: "Stop Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("keeps the modal's Stop locked after its callable resolves", async () => {
+  it("keeps the modal's Stop locked after its endpoint call resolves", async () => {
     vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());

@@ -433,7 +433,7 @@ describe("handlePruneAction", () => {
     expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
   });
 
-  it("starts a fresh queue generation when an earlier callable never settles", async () => {
+  it("starts a fresh queue generation when an earlier endpoint call never settles", async () => {
     vi.useFakeTimers();
     vi.mocked(backend.reportPruneAction).mockImplementationOnce(() => new Promise(() => {}));
     vi.mocked(removeShortcutConfirmedOutcome).mockResolvedValue({ status: "confirmed" });
