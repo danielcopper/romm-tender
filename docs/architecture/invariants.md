@@ -69,16 +69,16 @@ Format: **invariant** — tier — enforced by.
   starts after the press is cut short where it stands: a download leaves a partial file the next start removes, a save
   sync leaves a run half done, a file move leaves a record naming where the files no longer are. The press checks that
   no work of this process is in flight — each kind the panel names, and every claim held on the prune conflicts but
-  those of endpoints that only read, or rebuild what they write (`READ_ONLY_CLAIMS`, which a restart cuts nothing short
-  of), which covers every other endpoint that names the prune rule and every lease a frontend still holds; this rule
-  keeps anything new from starting behind that check, and a use case that names both rules asks the update rule again
-  once its operation is registered, so a press that came while it waited to register cannot slip in between. The
-  migration rule already names every endpoint that touches local game data, so the update rule rides on it rather than
-  keeping a list of its own, and it is asked first because an update in progress is the answer the user can do nothing
-  about but wait. The migration itself names no migration rule — it is what that rule waits for — yet starting it is new
-  work, so it names the update rule alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it as the
-  one such site (`test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`). Source readers hold the
-  two together: `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
+  those of endpoints that only read, or write a cache they can build again (`READ_ONLY_CLAIMS`, which a restart cuts
+  nothing short of), which covers every other endpoint that names the prune rule and every lease a frontend still holds;
+  this rule keeps anything new from starting behind that check, and a use case that names both rules asks the update
+  rule again once its operation is registered, so a press that came while it waited to register cannot slip in between.
+  The migration rule already names every endpoint that touches local game data, so the update rule rides on it rather
+  than keeping a list of its own, and it is asked first because an update in progress is the answer the user can do
+  nothing about but wait. The migration itself names no migration rule — it is what that rule waits for — yet starting
+  it is new work, so it names the update rule alone; `UPDATE_ONLY` in `tests/contract/test_conflict_refusals.py` pins it
+  as the one such site (`test_the_update_rule_stands_without_the_migration_rule_only_where_pinned`). Source readers hold
+  the two together: `tests/_conflict_rules.py::call_sites_with_rule` compares the `hold` / `hold_start` calls one by one
   (`test_every_call_site_naming_the_migration_rule_names_the_update_rule`), and
   `functions_checking_migration_without_update` finds any function under `backend/services/` that reads the migration
   check directly without also reading the update one, and finds none
