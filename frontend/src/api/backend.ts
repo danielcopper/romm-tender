@@ -80,13 +80,13 @@ export interface CustomHeadersResult {
   message?: string;
 }
 
-export interface CallableFailure {
+export interface EndpointFailure {
   success: false;
   reason: string;
   message: string;
 }
 
-export function isCallableFailure(value: object): value is CallableFailure {
+export function isEndpointFailure(value: object): value is EndpointFailure {
   return "success" in value && value.success === false;
 }
 
@@ -974,7 +974,7 @@ export const ensureDeviceRegistered = endpoint<[], { success: boolean; device_id
 );
 
 export const listDevices = endpoint<[], ListDevicesResponse>("list_devices");
-export type SaveStatusResult = SaveStatus | CallableFailure;
+export type SaveStatusResult = SaveStatus | EndpointFailure;
 export const getSaveStatus = endpoint<[number], SaveStatusResult>("get_save_status");
 export const preLaunchSync = endpoint<
   [number],
@@ -1197,7 +1197,7 @@ export interface UpdateCheckNow extends UpdateNotice {
 export const checkForUpdateNow = endpoint<[], UpdateCheckNow>("check_for_update_now");
 
 /** A settings write the backend accepted, or the reason it refused one. */
-export type UpdateSettingWrite = { success: true } | CallableFailure;
+export type UpdateSettingWrite = { success: true } | EndpointFailure;
 
 /** Wave the card away for one release version; the next release raises it again. */
 export const dismissUpdateNotice = endpoint<[string], UpdateSettingWrite>("dismiss_update_notice");
@@ -1315,8 +1315,8 @@ export const getUpdateInstallState = endpoint<[], UpdateInstallState>("get_updat
 
 /** Why a press of Install was refused; `update_waiting` carries every reason it waits for. */
 export type UpdateInstallRefusal =
-  | (CallableFailure & { reason: "update_waiting"; wait_reasons: UpdateWaitReason[] })
-  | (CallableFailure & { reason: "update_in_progress" | "not_offered" | "version_changed" });
+  | (EndpointFailure & { reason: "update_waiting"; wait_reasons: UpdateWaitReason[] })
+  | (EndpointFailure & { reason: "update_in_progress" | "not_offered" | "version_changed" });
 
 /** Install the named version, which must be the stored one; answers once the attempt has started. */
 export const installUpdate = endpoint<[string], { success: true } | UpdateInstallRefusal>("install_update");

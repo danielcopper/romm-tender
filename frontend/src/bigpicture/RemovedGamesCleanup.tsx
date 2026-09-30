@@ -53,7 +53,7 @@ import {
 
 const PAGE_SIZE = 50;
 const SELECTION_PAGE_SIZE = 100;
-const PRUNE_CALLABLE_TIMEOUT_MS = 15000;
+const PRUNE_ENDPOINT_TIMEOUT_MS = 15000;
 const RESULT_LOST_MESSAGE = "The cleanup result was lost — check your library and run the scan again.";
 /** What Cancel can and cannot promise — the running group is never rolled back. */
 const CANCEL_HINT = "Stops before the next game. The one being processed now finishes and reports what it changed.";
@@ -92,7 +92,7 @@ const DETAILS_REGION_STOP: { focusableIfEmpty: boolean } = { focusableIfEmpty: t
 async function requestPruneCancel(runId: string): Promise<string | null> {
   logInfo(`[prune] Cancel pressed for run ${runId}`);
   try {
-    const result = await withTimeout(cancelPrune(runId), PRUNE_CALLABLE_TIMEOUT_MS);
+    const result = await withTimeout(cancelPrune(runId), PRUNE_ENDPOINT_TIMEOUT_MS);
     if (!result.success) {
       logWarn(`[prune] cancelPrune refused: reason=${result.reason ?? "none"}`);
       return result.message;
@@ -255,7 +255,7 @@ export async function stageInstalledSelections(
         rom_ids: page,
         final: offset + page.length >= selected.length,
       }),
-      PRUNE_CALLABLE_TIMEOUT_MS,
+      PRUNE_ENDPOINT_TIMEOUT_MS,
     );
     if (!staged.success || !staged.selection_id) {
       setStatus(staged.message ?? "Installed-content selections could not be staged.");
@@ -611,7 +611,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
     try {
       const next = await withTimeout(
         getPrunePreview(requestFor(scope, romId, initial.preview_id, items.length)),
-        PRUNE_CALLABLE_TIMEOUT_MS,
+        PRUNE_ENDPOINT_TIMEOUT_MS,
       );
       if (!next.success) {
         setStatus(next.message ?? "Could not load more candidates.");
@@ -637,7 +637,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           offset: 0,
           limit: 0,
         }),
-        PRUNE_CALLABLE_TIMEOUT_MS,
+        PRUNE_ENDPOINT_TIMEOUT_MS,
       );
       if (!refreshed.success || typeof refreshed.free_bytes !== "number") {
         setStatus(refreshed.message ?? "Could not refresh recovery space.");
@@ -683,7 +683,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           create_recovery_bundle: recovery,
           installed_selection_id: staged.selectionId,
         }),
-        PRUNE_CALLABLE_TIMEOUT_MS,
+        PRUNE_ENDPOINT_TIMEOUT_MS,
       );
       if (!result.success) {
         setStatus(result.message ?? "Cleanup could not start.");
@@ -929,7 +929,7 @@ export async function openRemovedGamesCleanupModal(
   onScanRead?.({ state: "reading" });
   let result: PrunePreviewResult;
   try {
-    result = await withTimeout(getPrunePreview(requestFor(scope, romId ?? null, null, 0)), PRUNE_CALLABLE_TIMEOUT_MS);
+    result = await withTimeout(getPrunePreview(requestFor(scope, romId ?? null, null, 0)), PRUNE_ENDPOINT_TIMEOUT_MS);
   } catch (e) {
     onScanRead?.({ state: "failed" });
     throw e;

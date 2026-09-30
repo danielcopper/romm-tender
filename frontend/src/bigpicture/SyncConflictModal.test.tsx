@@ -424,11 +424,11 @@ describe("SyncConflictModal", () => {
   describe("SyncConflictModalHost — isLoading wiring", () => {
     it("disables all three buttons while resolveSyncConflict is in flight", async () => {
       // Keep the callable pending so isLoading stays true mid-test.
-      let resolveCallable: (v: { success: boolean }) => void = () => {};
+      let resolveEndpoint: (v: { success: boolean }) => void = () => {};
       vi.mocked(backend.resolveSyncConflict).mockImplementation(
         () =>
           new Promise((res) => {
-            resolveCallable = res;
+            resolveEndpoint = res;
           }),
       );
 
@@ -445,17 +445,17 @@ describe("SyncConflictModal", () => {
 
       // Settle the in-flight call so React doesn't hold an open promise.
       await act(async () => {
-        resolveCallable({ success: true });
+        resolveEndpoint({ success: true });
       });
       await flushAsync();
     });
 
     it("ModalRoot.closeModal is undefined while loading (suppresses outside-click close)", async () => {
-      let resolveCallable: (v: { success: boolean }) => void = () => {};
+      let resolveEndpoint: (v: { success: boolean }) => void = () => {};
       vi.mocked(backend.resolveSyncConflict).mockImplementation(
         () =>
           new Promise((res) => {
-            resolveCallable = res;
+            resolveEndpoint = res;
           }),
       );
 
@@ -475,7 +475,7 @@ describe("SyncConflictModal", () => {
       expect(last).toBeUndefined();
 
       await act(async () => {
-        resolveCallable({ success: true });
+        resolveEndpoint({ success: true });
       });
       await flushAsync();
     });
@@ -497,11 +497,11 @@ describe("SyncConflictModal", () => {
     });
 
     it("loading: Cancel button is disabled (no-op via DOM is unreachable, ModalRoot close is undefined)", async () => {
-      let resolveCallable: (v: { success: boolean }) => void = () => {};
+      let resolveEndpoint: (v: { success: boolean }) => void = () => {};
       vi.mocked(backend.resolveSyncConflict).mockImplementation(
         () =>
           new Promise((res) => {
-            resolveCallable = res;
+            resolveEndpoint = res;
           }),
       );
 
@@ -524,7 +524,7 @@ describe("SyncConflictModal", () => {
       expect(resolved).not.toHaveBeenCalled();
 
       await act(async () => {
-        resolveCallable({ success: true });
+        resolveEndpoint({ success: true });
       });
       await flushAsync();
     });

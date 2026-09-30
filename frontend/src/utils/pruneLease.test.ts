@@ -139,7 +139,7 @@ it("bounds a lost release acknowledgement and logs the failed release", async ()
   await release;
 
   expect(logError).toHaveBeenCalledWith(
-    "Core selection: failed to release prune lease: TimeoutError: callable timed out after 5000ms",
+    "Core selection: failed to release prune lease: TimeoutError: timed out after 5000ms",
   );
 });
 
@@ -231,7 +231,7 @@ it("stops renewing an unresolved continuation at the five-minute bound", async (
   vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
 
   const operation = withPruneLease("lease-hung", "Hung continuation", () => new Promise<never>(() => {}));
-  const rejection = expect(operation).rejects.toThrow("callable timed out after 300000ms");
+  const rejection = expect(operation).rejects.toThrow(/^timed out after 300000ms$/);
   await vi.advanceTimersByTimeAsync(300_001);
   await rejection;
   const renewalsAtTimeout = vi.mocked(renewPruneConflictLease).mock.calls.length;
@@ -254,7 +254,7 @@ it("timeout aborts future work and releases only after the underlying operation 
     });
     if (!signal.aborted) wroteAfterAwait = true;
   });
-  const rejection = expect(operation).rejects.toThrow("callable timed out after 300000ms");
+  const rejection = expect(operation).rejects.toThrow(/^timed out after 300000ms$/);
 
   await vi.advanceTimersByTimeAsync(300_001);
   await rejection;

@@ -5,7 +5,7 @@
  */
 export class TimeoutError extends Error {
   constructor(ms: number) {
-    super(`callable timed out after ${ms}ms`);
+    super(`timed out after ${ms}ms`);
     this.name = "TimeoutError";
   }
 }
@@ -16,8 +16,8 @@ export class TimeoutError extends Error {
  * deadline timer is cleared as soon as the race settles, so a settled call never
  * leaves a pending timer behind.
  *
- * `callable()` has no timeout of its own (`api/hostSocket.ts`): a call issued
- * while the backend is down waits for it to come back — every callable probe
+ * `endpoint()` has no timeout of its own (`api/hostSocket.ts`): a call issued
+ * while the backend is down waits for it to come back — every endpoint call
  * that must stay responsive races through this.
  *
  * Losing the race abandons `promise`, it does not cancel it: a backend call that

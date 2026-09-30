@@ -33,7 +33,7 @@ import {
   debugLog,
   preLaunchSync,
   getSaveStatus,
-  isCallableFailure,
+  isEndpointFailure,
   logError,
   isSaveTrackingConfigured,
   getSaveSetupInfo,
@@ -1016,7 +1016,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000)),
       ]);
 
-      if (isCallableFailure(result)) {
+      if (isEndpointFailure(result)) {
         detach(debugLog(`CustomPlayButton: resolve conflict deferred: ${result.message}`));
         showToast(result.message);
         setState("conflict");

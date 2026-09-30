@@ -19,7 +19,7 @@ describe("withTimeout", () => {
     const pending = new Promise<string>(() => {
       /* never settles */
     });
-    const assertion = expect(withTimeout(pending, 5000)).rejects.toThrow("callable timed out after 5000ms");
+    const assertion = expect(withTimeout(pending, 5000)).rejects.toThrow(/^timed out after 5000ms$/);
     await vi.advanceTimersByTimeAsync(5000);
     await assertion;
   });

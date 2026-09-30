@@ -32,7 +32,7 @@ import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
 // than rejects) while the backend is still starting. The schedule mirrors the
 // metadata init loop's tuned window in index.tsx (#1203).
 const CONNECTION_RETRY_DELAYS = [2000, 5000, 10000, 15000, 20000];
-const CONNECTION_CALLABLE_TIMEOUT = 5000;
+const CONNECTION_ENDPOINT_TIMEOUT = 5000;
 
 /** Backend never answered after the retry budget — distinct from `false` ("not connected"). */
 export type BackendFailed = "backend_failed";
@@ -78,7 +78,7 @@ export function onConnectionProbeChange(cb: (s: ConnectionProbeState) => void): 
 async function runProbe(): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const r = await withTimeout(testConnection(), CONNECTION_CALLABLE_TIMEOUT);
+      const r = await withTimeout(testConnection(), CONNECTION_ENDPOINT_TIMEOUT);
       publish({ connected: r.success, failure: r.success ? null : { reason: r.reason, message: r.message } });
       setVersionError(r.reason === "version_error" ? r.message : null);
       return;
@@ -101,7 +101,7 @@ async function runProbe(): Promise<void> {
  *  came up ("Backend error"). */
 async function pingAfterExhaustedBudget(): Promise<void> {
   try {
-    await withTimeout(getSettings(), CONNECTION_CALLABLE_TIMEOUT);
+    await withTimeout(getSettings(), CONNECTION_ENDPOINT_TIMEOUT);
     publish({ connected: false, failure: null });
   } catch (pingErr) {
     if (holdVerdictForInstaller()) return;

@@ -171,7 +171,7 @@ async function boundedContinuation<T>(promise: Promise<T>): Promise<{ result: T;
   let timer!: ReturnType<typeof setTimeout>;
   const timeout = new Promise<{ kind: "timeout"; error: Error }>((resolve) => {
     timer = setTimeout(
-      () => resolve({ kind: "timeout", error: new Error(`callable timed out after ${CONTINUATION_TIMEOUT_MS}ms`) }),
+      () => resolve({ kind: "timeout", error: new Error(`timed out after ${CONTINUATION_TIMEOUT_MS}ms`) }),
       CONTINUATION_TIMEOUT_MS,
     );
   });

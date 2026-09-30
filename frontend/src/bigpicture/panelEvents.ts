@@ -18,7 +18,7 @@ import {
   getBiosStatus,
   getPlatformCoreInfo,
   getSaveStatus,
-  isCallableFailure,
+  isEndpointFailure,
   debugLog,
   type BiosAnswer,
 } from "../api/backend";
@@ -98,7 +98,7 @@ async function handleSaveSyncSettingsChange(
   const binding = bindCurrentRom(ctx, romId);
   const overtaken = takeReadTicket(ctx.readSeqs, "saveStatus");
   const result = await getSaveStatus(binding.romId).catch(() => null);
-  if (result && isCallableFailure(result)) return;
+  if (result && isEndpointFailure(result)) return;
   if (overtaken()) return;
   const updatedStatus: SaveStatus | null = result;
   const conflicts: SyncConflict[] = updatedStatus?.conflicts ?? [];
@@ -122,7 +122,7 @@ async function handleSaveSyncChange(
   // top of it.
   const overtaken = takeReadTicket(ctx.readSeqs, "saveStatus");
   const result = detail.save_status ?? (await getSaveStatus(binding.romId).catch(() => null));
-  if (result && isCallableFailure(result)) return;
+  if (result && isEndpointFailure(result)) return;
   const updatedStatus: SaveStatus | null = result;
   const conflicts: SyncConflict[] = updatedStatus?.conflicts ?? [];
   // Only the status fold is fenced. The slot refresh below issues its own reads
