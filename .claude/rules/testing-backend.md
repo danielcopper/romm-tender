@@ -79,9 +79,9 @@ service through `harness.app.services` and the live settings dict through `harne
   exercise BOTH the happy path AND the failure path.
 - The `harness` fixture is **async** so it binds the test's running event loop. Each test gets a fresh `tmp_path`.
 
-`scripts/check_callable_manifest.py` derives the frontend surface from every `callable<[Args], Return>("name")` in
+`scripts/check_endpoint_parity.py` derives the frontend surface from every `endpoint<[Args], Return>("name")` in
 `frontend/src/**/*.ts` and the backend surface from the endpoints on `Endpoints` (public, `@route` first), failing on
-any name or arity divergence. It runs standalone in CI and inside pytest via `tests/contract/test_callable_manifest.py`.
+any name or arity divergence. It runs standalone in CI and inside pytest via `tests/contract/test_endpoint_parity.py`.
 
 ## Gate tests — `tests/scripts/`
 

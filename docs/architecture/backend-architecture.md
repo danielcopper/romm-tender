@@ -68,7 +68,7 @@ event  {type, name, payload}
 in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so
 keeping the two apart is prose and review. Reachable methods are exactly the endpoints on `Endpoints`: the public
 methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
-is the one `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
+is the one `scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the

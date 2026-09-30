@@ -398,19 +398,19 @@ in `services/` is missing the canonical `reason` + `message` keys or carries the
 collapsing the failure-shape dialects onto one vocabulary (the two documented carve-outs are pattern-exempt). Run it
 without `--check` for a report-mode inventory.
 
-`mise run lint` (and CI) also runs `scripts/check_callable_manifest.py`, which pins the frontend↔backend callable
-surface to one source of truth: it derives the frontend names + arities from every `callable<[Args], Return>("name")` in
+`mise run lint` (and CI) also runs `scripts/check_endpoint_parity.py`, which pins the frontend↔backend endpoint surface
+to one source of truth: it derives the frontend names + arities from every `endpoint<[Args], Return>("name")` in
 `frontend/src/**/*.ts` and the backend surface from the endpoints on the `Endpoints` class in `main.py` (the public
 methods whose first decorator is `@route`), then fails if they diverge: an endpoint declared on only one side (either
 direction) or a matching name whose arity (positional param count) differs. A `@route` below another decorator or on an
 underscored name fails on its own. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
 mechanically checkable shape. The same checks are surfaced inside the pytest run by
-`tests/contract/test_callable_manifest.py`.
+`tests/contract/test_endpoint_parity.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_event_parity.py`, which fails if a backend `emit("name", ...)` event
 has no matching frontend `addEventListener("name", ...)` (or vice versa). The event names are bare string literals, so
 the gate matches the two surfaces by literal event name — the backend side parsed via AST (`emit` / `_emit` calls), the
-frontend side via a text scan of bare `addEventListener` calls. Static sibling of the callable-manifest gate, for the
+frontend side via a text scan of bare `addEventListener` calls. Static sibling of the endpoint parity gate, for the
 event channel. The same parity assertion is surfaced inside the pytest run by `tests/contract/test_event_parity.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_settings_owner.py`, which fails if the `settings.json` filename

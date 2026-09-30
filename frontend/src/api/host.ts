@@ -127,7 +127,7 @@ function socket(): HostSocket {
  * to agree with every backend callable's parameter names, and those are an
  * implementation detail on that side.
  */
-export const callable =
+export const endpoint =
   <Args extends unknown[] = [], Return = void>(route: string) =>
   (...args: Args): Promise<Return> =>
     socket().call(route, args) as Promise<Return>;

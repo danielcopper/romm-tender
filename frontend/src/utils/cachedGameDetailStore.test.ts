@@ -3,7 +3,7 @@ import { getCachedGameDetail, invalidateCachedGameDetail, _cacheForTests } from 
 import type { CachedGameDetail } from "../api/backend";
 
 const raw = vi.hoisted(() => vi.fn());
-vi.mock("../api/host", () => ({ callable: () => raw }));
+vi.mock("../api/host", () => ({ endpoint: () => raw }));
 
 describe("getCachedGameDetail", () => {
   beforeEach(() => {

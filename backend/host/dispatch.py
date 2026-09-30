@@ -8,7 +8,7 @@ without a socket in sight.
 
 **Reachable is exactly the endpoints on that object's class** — a method on the
 class with no leading underscore that carries ``@route``, ``def`` or
-``async def`` alike, which is the same set ``scripts/check_callable_manifest.py``
+``async def`` alike, which is the same set ``scripts/check_endpoint_parity.py``
 derives from the source. The two are asserted equal by a test rather than kept
 equal by care: the gate reads the file and this reads the loaded class, and a
 method whose reachability the two disagree about is either an endpoint the

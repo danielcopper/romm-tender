@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Frontend↔backend callable-manifest parity gate.
+"""Frontend↔backend endpoint parity gate.
 
 Every endpoint is declared twice: once on the frontend as
-``callable<[Args], Return>("wire_name")`` (TypeScript) and once on the backend
+``endpoint<[Args], Return>("wire_name")`` (TypeScript) and once on the backend
 as a public method on the ``Endpoints`` class in ``main.py`` whose first decorator
 is ``@route`` — ``def`` or ``async def`` alike. Nothing ties the two together at
 build time — a renamed/added/removed endpoint on either side, or an arg-count
@@ -11,13 +11,13 @@ not found" / wrong-arity failure once the backend is running.
 
 This check derives both surfaces from source and fails when they diverge, so the
 wire stays one source of truth. It is the static sibling of the
-``tests/contract/`` tier: the contract tests drive the *real* callables
+``tests/contract/`` tier: the contract tests drive the *real* endpoints
 frontend-shaped; this gate pins that the two *declarations* agree before any
-callable is driven.
+endpoint is driven.
 
 What it guarantees (and what it deliberately does not):
 
-  * Every frontend ``callable("name")`` has a matching backend endpoint ``name``
+  * Every frontend ``endpoint("name")`` has a matching backend endpoint ``name``
     and vice versa — no orphan on either side.
   * ``@route`` is where this gate can see it: a ``route`` below another
     decorator, or on a name with a leading underscore, is a finding of its own
@@ -44,6 +44,7 @@ Exit 0 when the two surfaces match, 1 (one line per discrepancy) otherwise.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -56,10 +57,12 @@ MAIN_PY = REPO_ROOT / "backend" / "main.py"
 # name here to silence a real drift — a drift is a finding to triage.
 EXEMPT: frozenset[str] = frozenset()
 
-# Brackets that open/close a balance-tracked region inside a ``callable<...>``.
+# Brackets that open/close a balance-tracked region inside an ``endpoint<...>``.
 _OPENERS = {"<": ">", "[": "]", "{": "}", "(": ")"}
 _CLOSERS = frozenset(_OPENERS.values())
 _QUOTES = frozenset({'"', "'", "`"})
+
+_DECLARATION_NAME = re.compile(r"(?<![A-Za-z0-9_$])endpoint")
 
 
 def _skip_string(text: str, start: int) -> int:
@@ -89,8 +92,8 @@ def _strip_comments(text: str) -> str:
     Comment spans are replaced with a single space (preserving token separation
     and source length is unnecessary — the parser is whitespace-tolerant), so a
     comment containing an apostrophe, a ``<``/``>``, an unbalanced bracket, or a
-    whole commented-out ``callable<...>("dead")`` declaration cannot corrupt the
-    downstream bracket-depth tracking or be mistaken for a live callable.
+    whole commented-out ``endpoint<...>("dead")`` declaration cannot corrupt the
+    downstream bracket-depth tracking or be mistaken for a live declaration.
 
     String and template literals are preserved verbatim — a ``//`` or ``/*``
     inside ``"http://x"`` or `` `a/*b` `` is part of the string, not a comment.
@@ -216,9 +219,9 @@ def _split_top_level(text: str) -> list[str]:
 
 
 def _args_arity(args_fragment: str) -> int:
-    """Return the arity of the leading ``[...]`` args tuple of a callable generic.
+    """Return the arity of the leading ``[...]`` args tuple of an endpoint generic.
 
-    *args_fragment* is the first top-level element of the ``callable<...>``
+    *args_fragment* is the first top-level element of the ``endpoint<...>``
     generic — a tuple type like ``[number, string]``. Arity is the count of
     top-level comma-separated elements inside the brackets (``[]`` -> 0). Nested
     generics, unions and object literals inside an element do not inflate it.
@@ -232,7 +235,7 @@ def _args_arity(args_fragment: str) -> int:
 def _trailing_call_name(text: str, after: int) -> str | None:
     """Return the string literal in the ``("name")`` immediately following *after*.
 
-    *after* indexes just past the closing ``>`` of the ``callable<...>`` generic.
+    *after* indexes just past the closing ``>`` of the ``endpoint<...>`` generic.
     Skips whitespace, expects ``(`` then a quoted string literal.
     """
     i = after
@@ -253,21 +256,21 @@ def _trailing_call_name(text: str, after: int) -> str | None:
     return body if quote != "`" or "${" not in body else None
 
 
-def parse_frontend_callables(src_dir: Path) -> dict[str, int]:
-    """Parse every ``callable<[Args], Return>("name")`` under *src_dir*.
+def parse_frontend_endpoints(src_dir: Path) -> dict[str, int]:
+    """Parse every ``endpoint<[Args], Return>("name")`` under *src_dir*.
 
     Scans all ``.ts``/``.tsx`` files as text (declarations may span multiple
     lines), EXCLUDING test files (``*.test.*``), ``frontend/src/test-utils/`` and
     ``frontend/src/test-setup.ts`` — the same scope
     :func:`check_event_parity.parse_frontend_listeners` uses, and for the same
-    reason: what this gate compares is the WIRE SURFACE, and a ``callable(...)``
+    reason: what this gate compares is the WIRE SURFACE, and an ``endpoint(...)``
     written inside a test is a fixture rather than a declaration. Without the
-    exclusion a test that exercises the transport against a real callable name
+    exclusion a test that exercises the transport against a real endpoint name
     reads as a duplicate declaration of it, which is what
     ``frontend/src/api/host.test.ts`` did.
 
-    Comments are stripped first (:func:`_strip_comments`) so a comment inside a
-    ``callable<...>`` block can't corrupt the bracket tracker and a commented-out
+    Comments are stripped first (:func:`_strip_comments`) so a comment inside an
+    ``endpoint<...>`` block can't corrupt the bracket tracker and a commented-out
     declaration isn't mistaken for a live one. Returns ``{wire_name: arity}``
     where arity is the number of top-level elements in the ``[Args]`` tuple. A
     wire name declared more than once maps to a sentinel arity of ``-1`` so the
@@ -291,16 +294,20 @@ def parse_frontend_callables(src_dir: Path) -> dict[str, int]:
 
 
 def _parse_text_into(text: str, result: dict[str, int]) -> None:
-    """Find every ``callable<...>("name")`` in *text* and record name -> arity."""
-    needle = "callable"
+    """Find every ``endpoint<...>("name")`` in *text* and record name -> arity.
+
+    The name counts only where no identifier character precedes it, so an
+    identifier that merely ends in it (``asset_type_endpoint<...>``) is not a
+    declaration.
+    """
     i = 0
     n = len(text)
     while True:
-        idx = text.find(needle, i)
-        if idx == -1:
+        match = _DECLARATION_NAME.search(text, i)
+        if match is None:
             return
-        i = idx + len(needle)
-        # The ``<`` of the generic must follow ``callable`` (allowing whitespace).
+        i = match.end()
+        # The ``<`` of the generic must follow ``endpoint`` (allowing whitespace).
         j = i
         while j < n and text[j].isspace():
             j += 1
@@ -338,7 +345,7 @@ def _is_route(decorator: ast.expr) -> bool:
     return isinstance(decorator, ast.Name) and decorator.id == "route"
 
 
-def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
+def parse_backend_endpoints(main_py: Path) -> dict[str, int | None]:
     """Parse the endpoints of the ``Endpoints`` class in *main_py*.
 
     Uses ``ast`` (never imports ``main.py``). Returns ``{method_name: arity}``
@@ -368,7 +375,7 @@ def find_misplaced_routes(main_py: Path) -> list[str]:
     """One line per ``@route`` on ``Endpoints`` that this gate would not count.
 
     Two placements: ``route`` below another decorator, and ``route`` on a name
-    with a leading underscore. Neither is in :func:`parse_backend_callables`'s
+    with a leading underscore. Neither is in :func:`parse_backend_endpoints`'s
     surface, so without this each would be a marker the parity check never sees.
     """
     findings: list[str] = []
@@ -391,7 +398,7 @@ def find_discrepancies(
     backend: dict[str, int | None],
     exempt: frozenset[str],
 ) -> list[str]:
-    """Diff the two callable surfaces. One human-readable line per discrepancy.
+    """Diff the two endpoint surfaces. One human-readable line per discrepancy.
 
     Reports: (a) a name on the frontend but not the backend, (b) a name on the
     backend but not the frontend, (c) a name on both whose arity differs, and
@@ -400,7 +407,7 @@ def find_discrepancies(
     """
     findings: list[str] = [
         f"{name}: declared more than once on the frontend (frontend/src/**/*.ts"
-        f" callable<...>) — remove the duplicate declaration."
+        f" endpoint<...>) — remove the duplicate declaration."
         for name in sorted(frontend)
         if frontend[name] == -1
     ]
@@ -409,14 +416,14 @@ def find_discrepancies(
     backend_names = set(backend) - exempt
 
     findings.extend(
-        f'{name}: frontend declares callable("{name}") but main.py has no public '
+        f'{name}: frontend declares endpoint("{name}") but main.py has no public '
         f"method {name} marked @route on Endpoints — add the backend method, fix a rename, or "
         f"add it to EXEMPT in this script if it is intentionally frontend-only."
         for name in sorted(frontend_names - backend_names)
     )
     findings.extend(
         f"{name}: main.py marks {name} on Endpoints with @route but no frontend "
-        f'callable("{name}") declares it — add the frontend declaration, fix a '
+        f'endpoint("{name}") declares it — add the frontend declaration, fix a '
         f"rename, or add it to EXEMPT in this script if it is intentionally backend-only."
         for name in sorted(backend_names - frontend_names)
     )
@@ -431,7 +438,7 @@ def find_discrepancies(
         if fe_arity != be_arity:
             findings.append(
                 f"{name}: arity mismatch — frontend declares {fe_arity} arg(s) "
-                f"(callable<[...]>) but main.py endpoint {name} takes {be_arity} "
+                f"(endpoint<[...]>) but main.py endpoint {name} takes {be_arity} "
                 f"(self dropped). Align the argument count on one side."
             )
 
@@ -442,8 +449,8 @@ def main(argv: list[str]) -> int:
     if any(a in {"-h", "--help"} for a in argv):
         print(__doc__)
         return 0
-    frontend = parse_frontend_callables(SRC_DIR)
-    backend = parse_backend_callables(MAIN_PY)
+    frontend = parse_frontend_endpoints(SRC_DIR)
+    backend = parse_backend_endpoints(MAIN_PY)
     findings = find_misplaced_routes(MAIN_PY) + find_discrepancies(frontend, backend, EXEMPT)
     if findings:
         for line in findings:
@@ -451,14 +458,14 @@ def main(argv: list[str]) -> int:
         print()
         print(
             "ERROR: an @route sits where this check cannot count it, or the frontend "
-            "(frontend/src/**/*.ts callable declarations) and backend (@route endpoints "
+            "(frontend/src/**/*.ts endpoint declarations) and backend (@route endpoints "
             "on Endpoints in main.py) surfaces have drifted. Every endpoint must be declared "
             "on both sides with matching arity (or be explicitly EXEMPT) so the "
             "frontend↔backend wire stays one source of truth."
         )
         return 1
     matched = len(set(frontend) & set(backend))
-    print(f"OK: frontend↔backend callable manifest matches ({matched} callables).")
+    print(f"OK: frontend↔backend endpoints match ({matched} endpoints).")
     return 0
 
 

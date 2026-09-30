@@ -1,4 +1,4 @@
-import { callable } from "./host";
+import { endpoint } from "./host";
 import { detach } from "../utils/detach";
 import type {
   DataInventory,
@@ -243,51 +243,51 @@ export interface CachedGameDetail extends BiosAnswer {
 // module-scope cache + invalidation surface is in one place. Re-exported here
 // for back-compat with existing import sites.
 export { getCachedGameDetail, invalidateCachedGameDetail } from "../utils/cachedGameDetailStore";
-export const getSettings = callable<[], PluginSettings>("get_settings");
-export const saveServerUrl = callable<[string, boolean], BackendResult>("save_server_url");
-export const saveCustomHeaders = callable<[CustomHeaderEntry[]], CustomHeadersResult>("save_custom_headers");
-export const connectWithCredentials = callable<[string, string, string, boolean], BackendResult>(
+export const getSettings = endpoint<[], PluginSettings>("get_settings");
+export const saveServerUrl = endpoint<[string, boolean], BackendResult>("save_server_url");
+export const saveCustomHeaders = endpoint<[CustomHeaderEntry[]], CustomHeadersResult>("save_custom_headers");
+export const connectWithCredentials = endpoint<[string, string, string, boolean], BackendResult>(
   "connect_with_credentials",
 );
-export const connectWithToken = callable<[string, string, boolean], BackendResult>("connect_with_token");
-export const connectWithPairingCode = callable<[string, string, boolean], BackendResult>("connect_with_pairing_code");
-export const signOut = callable<[], BackendResult>("sign_out");
+export const connectWithToken = endpoint<[string, string, boolean], BackendResult>("connect_with_token");
+export const connectWithPairingCode = endpoint<[string, string, boolean], BackendResult>("connect_with_pairing_code");
+export const signOut = endpoint<[], BackendResult>("sign_out");
 
 export interface WhitelistSettings {
   disabled_defaults: string[];
   custom_names: string[];
 }
-export const getWhitelistSettings = callable<[], WhitelistSettings>("get_whitelist_settings");
-export const updateWhitelistSettings = callable<[string[], string[]], { success: boolean; message?: string }>(
+export const getWhitelistSettings = endpoint<[], WhitelistSettings>("get_whitelist_settings");
+export const updateWhitelistSettings = endpoint<[string[], string[]], { success: boolean; message?: string }>(
   "update_whitelist_settings",
 );
 
-export const testConnection = callable<[], BackendResult>("test_connection");
-export const startSync = callable<[], BackendResult>("start_sync");
-export const cancelSync = callable<[string], BackendResult>("cancel_sync");
-export const syncHeartbeat = callable<[], { success: boolean }>("sync_heartbeat");
-export const syncPreview = callable<[], SyncPreview>("sync_preview");
-export const syncApplyDelta = callable<[string], BackendResult>("sync_apply_delta");
-export const syncCancelPreview = callable<[], BackendResult>("sync_cancel_preview");
+export const testConnection = endpoint<[], BackendResult>("test_connection");
+export const startSync = endpoint<[], BackendResult>("start_sync");
+export const cancelSync = endpoint<[string], BackendResult>("cancel_sync");
+export const syncHeartbeat = endpoint<[], { success: boolean }>("sync_heartbeat");
+export const syncPreview = endpoint<[], SyncPreview>("sync_preview");
+export const syncApplyDelta = endpoint<[string], BackendResult>("sync_apply_delta");
+export const syncCancelPreview = endpoint<[], BackendResult>("sync_cancel_preview");
 /**
  * The preview the backend is still holding, if any — how a panel that was
  * navigated away from gets its card back. `preview: null` is the normal
  * "nothing pending" answer; the backend also drops (and reports as null) a
  * snapshot past its 30-minute TTL, which the apply would refuse anyway.
  */
-export const getPendingPreview = callable<[], PendingPreviewAnswer>("get_pending_preview");
-export const getSyncStatus = callable<[], SyncStatusAnswer>("get_sync_status");
-export const getSessionBudgetStatus = callable<[], SessionBudgetStatus>("get_session_budget_status");
-export const clearSyncCache = callable<[], BackendResult>("clear_sync_cache");
-export const getSyncStats = callable<[], SyncStats>("get_sync_stats");
+export const getPendingPreview = endpoint<[], PendingPreviewAnswer>("get_pending_preview");
+export const getSyncStatus = endpoint<[], SyncStatusAnswer>("get_sync_status");
+export const getSessionBudgetStatus = endpoint<[], SessionBudgetStatus>("get_session_budget_status");
+export const clearSyncCache = endpoint<[], BackendResult>("clear_sync_cache");
+export const getSyncStats = endpoint<[], SyncStats>("get_sync_stats");
 /**
  * What this device holds — the Data Management page's inventory figures, read
  * once when the page opens. The shortcut count is NOT here: it is
  * `getSyncStats`' `total_shortcuts`, which Main already reads every visit.
  */
-export const getDataInventory = callable<[], DataInventory>("get_data_inventory");
+export const getDataInventory = endpoint<[], DataInventory>("get_data_inventory");
 // The newest recorded sync runs, newest first — the Sync page's run list.
-export const getSyncRuns = callable<[], SyncRunsAnswer>("get_sync_runs");
+export const getSyncRuns = endpoint<[], SyncRunsAnswer>("get_sync_runs");
 /**
  * Start a download. `replaceExisting` is the user's answer to a
  * `target_occupied` or `adoption_candidates` refusal: pass `true` only after the
@@ -311,7 +311,7 @@ export const getSyncRuns = callable<[], SyncRunsAnswer>("get_sync_runs");
  * this user a copy was on the device. The backend's last check is a backstop
  * over it, so a page that found a copy can never end in a silent download.
  */
-export const startDownload = callable<
+export const startDownload = endpoint<
   [number, boolean, string | null, CollisionChoice | null, boolean],
   | BackendResult
   | TargetOccupiedResult
@@ -329,7 +329,7 @@ export const startDownload = callable<
  * `collisionChoice` answers the second dialog and stays `null` until that dialog
  * has been shown — the backend refuses rather than guessing.
  */
-export const adoptExistingRom = callable<[number, string | null, CollisionChoice | null], AdoptResult>(
+export const adoptExistingRom = endpoint<[number, string | null, CollisionChoice | null], AdoptResult>(
   "adopt_existing_rom",
 );
 /**
@@ -337,25 +337,25 @@ export const adoptExistingRom = callable<[number, string | null, CollisionChoice
  * only. `candidatePath` picks the entry to check; `null` checks the game's own
  * location.
  */
-export const verifyExistingContent = callable<[number, string | null], VerifyContentResult>("verify_existing_content");
-export const cancelDownload = callable<[number], BackendResult>("cancel_download");
-export const pauseDownload = callable<[number], BackendResult>("pause_download");
+export const verifyExistingContent = endpoint<[number, string | null], VerifyContentResult>("verify_existing_content");
+export const cancelDownload = endpoint<[number], BackendResult>("cancel_download");
+export const pauseDownload = endpoint<[number], BackendResult>("pause_download");
 /**
  * Resume a paused download. Answers the collision refusal too: the occupancy
  * gate runs again on resume, so content that appeared at the game's location
  * while it sat paused turns the resume down rather than being written over.
  */
-export const resumeDownload = callable<[number], BackendResult | TargetOccupiedResult>("resume_download");
-export const getDownloadQueue = callable<[], { downloads: DownloadItem[] }>("get_download_queue");
-export const clearCompletedDownloads = callable<[], { success: boolean; cleared: number }>("clear_completed_downloads");
-export const getInstalledRom = callable<[number], InstalledRom | null>("get_installed_rom");
-export const evaluateLaunch = callable<[number], LaunchVerdict>("evaluate_launch");
-export const checkLocalDrift = callable<[number], { drifted: boolean; rom_id: number }>("check_local_drift");
+export const resumeDownload = endpoint<[number], BackendResult | TargetOccupiedResult>("resume_download");
+export const getDownloadQueue = endpoint<[], { downloads: DownloadItem[] }>("get_download_queue");
+export const clearCompletedDownloads = endpoint<[], { success: boolean; cleared: number }>("clear_completed_downloads");
+export const getInstalledRom = endpoint<[number], InstalledRom | null>("get_installed_rom");
+export const evaluateLaunch = endpoint<[number], LaunchVerdict>("evaluate_launch");
+export const checkLocalDrift = endpoint<[number], { drifted: boolean; rom_id: number }>("check_local_drift");
 export type RelaunchOptionsResult =
   | { success: true; app_id: number; launch_options: string; prune_lease_token: string }
   | { success: false; reason: string; message: string }
   | null;
-export const getRomRelaunchOptions = callable<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
+export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
 /**
  * `stop_running_game` result. On success the counts describe what the backend's
  * stop ladder did to the instance running the ROM it was called for: `stopped`
@@ -373,52 +373,52 @@ export interface StopGameResult {
   stopped?: number;
   force_killed?: number;
 }
-export const stopRunningGame = callable<[number], StopGameResult>("stop_running_game");
-export const probeReachability = callable<[], { online: boolean }>("probe_reachability");
-export const refreshSaveStatus = callable<[number], { success: boolean }>("refresh_save_status");
-export const removeRom = callable<[number], BackendResult>("remove_rom");
-export const getPlatforms = callable<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
+export const stopRunningGame = endpoint<[number], StopGameResult>("stop_running_game");
+export const probeReachability = endpoint<[], { online: boolean }>("probe_reachability");
+export const refreshSaveStatus = endpoint<[number], { success: boolean }>("refresh_save_status");
+export const removeRom = endpoint<[number], BackendResult>("remove_rom");
+export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
 // `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads
 // `undefined`.
-export const savePlatformSync = callable<[number, boolean], { success: boolean; reason?: string; message?: string }>(
+export const savePlatformSync = endpoint<[number, boolean], { success: boolean; reason?: string; message?: string }>(
   "save_platform_sync",
 );
-export const setAllPlatformsSync = callable<[boolean], { success: boolean; reason?: string; message?: string }>(
+export const setAllPlatformsSync = endpoint<[boolean], { success: boolean; reason?: string; message?: string }>(
   "set_all_platforms_sync",
 );
-export const getCollections = callable<
+export const getCollections = endpoint<
   [],
   { success: boolean; collections: CollectionSyncSetting[]; message?: string; reason?: RommErrorCode }
 >("get_collections");
-export const saveCollectionSync = callable<
+export const saveCollectionSync = endpoint<
   [string, CollectionKind, boolean],
   { success: boolean; reason?: string; message?: string }
 >("save_collection_sync");
 // One settings write stamping these ids into one kind's bucket — the
 // Collections tab's Enable all / Disable all, over the ids its table lists.
-export const saveCollectionsSync = callable<
+export const saveCollectionsSync = endpoint<
   [string[], CollectionKind, boolean],
   { success: boolean; reason?: string; message?: string }
 >("save_collections_sync");
-export const saveCollectionPlatformGroups = callable<[boolean], { success: boolean }>(
+export const saveCollectionPlatformGroups = endpoint<[boolean], { success: boolean }>(
   "save_collection_platform_groups",
 );
 // Owner-scope for the Collections tab (#1532). "all" (default) or "own" (only
 // the signed-in user's own collections). Read via getSettings().collection_owner_scope.
-export const setCollectionOwnerScope = callable<
+export const setCollectionOwnerScope = endpoint<
   [CollectionOwnerScope],
   { success: boolean; reason?: string; message?: string }
 >("set_collection_owner_scope");
 // Steam-collection naming mode (#1539), described in
 // docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode.
 // Read via getSettings().collection_naming_mode; applies on the next sync.
-export const setCollectionNamingMode = callable<
+export const setCollectionNamingMode = endpoint<
   [CollectionNamingMode],
   { success: boolean; reason?: string; message?: string }
 >("set_collection_naming_mode");
-export const getRegistryPlatforms = callable<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
-export const removePlatformShortcuts = callable<
+export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
+export const removePlatformShortcuts = endpoint<
   [string],
   {
     success: boolean;
@@ -435,7 +435,7 @@ export const removePlatformShortcuts = callable<
     message?: string;
   }
 >("remove_platform_shortcuts");
-export const removeAllShortcuts = callable<
+export const removeAllShortcuts = endpoint<
   [],
   {
     success: boolean;
@@ -451,15 +451,15 @@ export const removeAllShortcuts = callable<
     prune_lease_token?: string;
   }
 >("remove_all_shortcuts");
-export const getArtworkBase64 = callable<[number], { base64: string | null }>("get_artwork_base64");
+export const getArtworkBase64 = endpoint<[number], { base64: string | null }>("get_artwork_base64");
 // Cache-first per-ROM cover fetch for the version picker (#1346, ADR-0021).
 // Keyed by RomM ID: a cache hit returns the cached bytes, a miss downloads the
 // ROM's cover from RomM into the cache. Works for a group version with no local
 // DB row (the picker lists not-yet-synced siblings). Every failure — offline, no
 // cover, read error — returns { base64: null } silently; it never re-downloads a
 // cached cover.
-export const fetchCoverBase64 = callable<[number], { base64: string | null }>("fetch_cover_base64");
-export const refreshCoverArtwork = callable<
+export const fetchCoverBase64 = endpoint<[number], { base64: string | null }>("fetch_cover_base64");
+export const refreshCoverArtwork = endpoint<
   [number],
   { success: boolean; reason?: string; message: string; cover_path?: string }
 >("refresh_cover_artwork");
@@ -469,7 +469,7 @@ export const refreshCoverArtwork = callable<
 // run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound
 // shortcut is missing from the live set, no_grid_dir) and a refusal by the
 // update, migration, sync or prune rule answer success/reason/message with no count.
-export const cleanupOrphanedGridImages = callable<
+export const cleanupOrphanedGridImages = endpoint<
   [number[], boolean],
   {
     success: boolean;
@@ -479,7 +479,7 @@ export const cleanupOrphanedGridImages = callable<
     message?: string;
   }
 >("cleanup_orphaned_grid_images");
-export const getSgdbArtworkBase64 = callable<
+export const getSgdbArtworkBase64 = endpoint<
   [number, number],
   { base64: string | null; no_api_key?: boolean; prune_lease_token?: string }
 >("get_sgdb_artwork_base64");
@@ -504,33 +504,33 @@ export interface SgdbSearchResult {
   games: SgdbCandidate[];
 }
 
-export const getSgdbResolution = callable<[number], SgdbResolution>("get_sgdb_resolution");
-export const searchSgdbGames = callable<[string], SgdbSearchResult>("search_sgdb_games");
-export const applySgdbGameId = callable<[number, number], { success: boolean }>("apply_sgdb_game_id");
-export const reportUnitResults = callable<
+export const getSgdbResolution = endpoint<[number], SgdbResolution>("get_sgdb_resolution");
+export const searchSgdbGames = endpoint<[string], SgdbSearchResult>("search_sgdb_games");
+export const applySgdbGameId = endpoint<[number, number], { success: boolean }>("apply_sgdb_game_id");
+export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],
   { success: boolean; count: number; ignored?: boolean }
 >("report_unit_results");
-export const reportRemovalResults = callable<
+export const reportRemovalResults = endpoint<
   [(string | number)[], string | null],
   { success: boolean; message: string }
 >("report_removal_results");
 /** Disown leases stranded by a previous frontend context; called once at mount. */
-export const releaseOrphanedPruneLeases = callable<[], { success: boolean; released: number }>(
+export const releaseOrphanedPruneLeases = endpoint<[], { success: boolean; released: number }>(
   "release_orphaned_prune_leases",
 );
-export const releasePruneConflictLease = callable<[string], { success: boolean; message: string }>(
+export const releasePruneConflictLease = endpoint<[string], { success: boolean; message: string }>(
   "release_prune_conflict_lease",
 );
-export const renewPruneConflictLease = callable<
+export const renewPruneConflictLease = endpoint<
   [string],
   { success: boolean; reason?: "stale_lease"; message: string }
 >("renew_prune_conflict_lease");
-export const reconcileShortcuts = callable<
+export const reconcileShortcuts = endpoint<
   [number[]],
   { success: boolean; reason?: string; message: string; unbound_count?: number }
 >("reconcile_shortcuts");
-export const uninstallAllRoms = callable<
+export const uninstallAllRoms = endpoint<
   [],
   {
     success: boolean;
@@ -547,25 +547,25 @@ export const uninstallAllRoms = callable<
     prune_lease_token?: string;
   }
 >("uninstall_all_roms");
-export const saveSgdbApiKey = callable<[string], { success: boolean; message: string }>("save_sgdb_api_key");
-export const verifySgdbApiKey = callable<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
-export const saveSteamInputSetting = callable<[string], { success: boolean }>("save_steam_input_setting");
-export const applySteamInputSetting = callable<[], { success: boolean; message: string }>("apply_steam_input_setting");
+export const saveSgdbApiKey = endpoint<[string], { success: boolean; message: string }>("save_sgdb_api_key");
+export const verifySgdbApiKey = endpoint<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
+export const saveSteamInputSetting = endpoint<[string], { success: boolean }>("save_steam_input_setting");
+export const applySteamInputSetting = endpoint<[], { success: boolean; message: string }>("apply_steam_input_setting");
 // Which platforms the BIOS page can speak for — not what it will say about any
 // of them. The state costs a live per-system reading, so it is asked for one
 // platform at a time below, in the order the page's own list is in.
-export const getFirmwareStatus = callable<[], FirmwareStatus>("get_firmware_status");
-export const getPlatformFirmwareStatus = callable<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
-export const downloadAllFirmware = callable<[string], FirmwareDownloadResult>("download_all_firmware");
-export const downloadRequiredFirmware = callable<[string], FirmwareDownloadResult>("download_required_firmware");
+export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
+export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
+export const downloadAllFirmware = endpoint<[string], FirmwareDownloadResult>("download_all_firmware");
+export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult>("download_required_firmware");
 // One row's Download button (#164). Addressed by file name within the platform,
 // like the two bulk buttons beside it — never by RomM's firmware id, which the
 // status row may have been holding since before the listing moved on.
-export const downloadPlatformFirmwareFile = callable<[string, string], FirmwareDownloadResult>(
+export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult>(
   "download_platform_firmware_file",
 );
-export const checkPlatformBios = callable<[string], BiosStatus>("check_platform_bios");
-export const getBiosStatus = callable<[number], BiosAnswer>("get_bios_status");
+export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
+export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 /**
  * A single shortcut whose baked `launch_options` must be confirm-set after a
  * per-platform core change. The backend returns one entry per installed + bound
@@ -577,7 +577,7 @@ export interface RebakeItem {
   launch_options: string;
 }
 
-export const setSystemCore = callable<
+export const setSystemCore = endpoint<
   [string, string],
   {
     success: boolean;
@@ -609,19 +609,19 @@ export interface GameCoreApplyResult {
 // uninstall/reinstall (roms.emulator_override). set_game_core pins a label;
 // clear_game_core drops the pin (follow default — triggered by picking the
 // default-marked core in the menu).
-export const setGameCore = callable<[number, string], GameCoreApplyResult>("set_game_core");
-export const clearGameCore = callable<[number], GameCoreApplyResult>("clear_game_core");
+export const setGameCore = endpoint<[number, string], GameCoreApplyResult>("set_game_core");
+export const clearGameCore = endpoint<[number], GameCoreApplyResult>("clear_game_core");
 // Dedicated core-info path (#923) — active core + available cores for a ROM,
 // decoupled from the BIOS firmware status. Keyed by rom_id (#945): the active
 // core reflects the per-game DB override when one is pinned, else the platform
 // default.
-export const getPlatformCoreInfo = callable<[number], CoreInfo>("get_platform_core_info");
+export const getPlatformCoreInfo = endpoint<[number], CoreInfo>("get_platform_core_info");
 // The platform-keyed twin (#1815): the Library page's Platforms detail asks it
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
 // ROM's own pin on top and so cannot answer for a platform with no synced ROM;
 // distinct from the emulator fields on getFirmwareStatus, which cover only the
 // platforms that payload has something to say about.
-export const getSystemCoreInfo = callable<[string], SystemCoreInfo>("get_system_core_info");
+export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_core_info");
 
 /** One launchable disc image within a multi-disc ROM's install directory. */
 export interface Disc {
@@ -667,8 +667,8 @@ export interface SelectDiscResult {
 // uninstall/reinstall (roms.selected_disc). select_disc(rom_id, filename) pins a
 // disc by basename; select_disc(rom_id, null) clears the pin (follow the default
 // — the m3u playlist or disc 1).
-export const getDiscSelection = callable<[number], DiscSelection>("get_disc_selection");
-export const selectDisc = callable<[number, string | null], SelectDiscResult>("select_disc");
+export const getDiscSelection = endpoint<[number], DiscSelection>("get_disc_selection");
+export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("select_disc");
 
 /**
  * One version (RomM sibling) of a game in the version picker (#1297, ADR-0021).
@@ -786,8 +786,8 @@ export type SwitchVersionResult = SwitchVersionSuccess | SwitchVersionUnsyncedSa
 // Version picker (#1297, ADR-0021). Keyed by the Steam appId (the group's
 // shortcut). get_version_list reads the group's versions; switch_version moves
 // the active-version binding to a target rom_id.
-export const getVersionList = callable<[number], VersionList>("get_version_list");
-export const switchVersion = callable<[number, number, boolean], SwitchVersionResult>("switch_version");
+export const getVersionList = endpoint<[number], VersionList>("get_version_list");
+export const switchVersion = endpoint<[number, number, boolean], SwitchVersionResult>("switch_version");
 
 export type PruneScope = "bulk" | "rom";
 
@@ -894,8 +894,8 @@ export interface CompletePruneActionRequest {
 
 export type ReportPruneActionRequest = ClaimPruneActionRequest | CompletePruneActionRequest;
 
-export const getPrunePreview = callable<[PrunePreviewRequest], PrunePreviewResult>("get_prune_preview");
-export const stagePruneInstalledSelection = callable<
+export const getPrunePreview = endpoint<[PrunePreviewRequest], PrunePreviewResult>("get_prune_preview");
+export const stagePruneInstalledSelection = endpoint<
   [StagePruneInstalledSelectionRequest],
   {
     success: boolean;
@@ -906,34 +906,34 @@ export const stagePruneInstalledSelection = callable<
     message?: string;
   }
 >("stage_prune_installed_selection");
-export const startPrune = callable<[StartPruneRequest], StartPruneResult>("start_prune");
+export const startPrune = endpoint<[StartPruneRequest], StartPruneResult>("start_prune");
 /** Stop a run before its next group; the group already executing still finishes. */
-export const cancelPrune = callable<
+export const cancelPrune = endpoint<
   [string],
   { success: boolean; reason?: string; message: string; already_cancelling?: boolean }
 >("cancel_prune");
-export const reportPruneAction = callable<
+export const reportPruneAction = endpoint<
   [ReportPruneActionRequest],
   { success: boolean; ignored?: boolean; reason?: string; message: string }
 >("report_prune_action");
-export const waitForPruneRelease = callable<[string], { success: boolean; reason?: string; message: string }>(
+export const waitForPruneRelease = endpoint<[string], { success: boolean; reason?: string; message: string }>(
   "wait_for_prune_release",
 );
 
-export const saveLogLevel = callable<[string], { success: boolean }>("save_log_level");
+export const saveLogLevel = endpoint<[string], { success: boolean }>("save_log_level");
 // Preferred sibling-group region (ADR-0021 §3). "auto" = build-time default
 // order; any RomM region string heads the ranking on the next sync.
-export const savePreferredRegion = callable<[string], { success: boolean }>("save_preferred_region");
+export const savePreferredRegion = endpoint<[string], { success: boolean }>("save_preferred_region");
 // Sync-button intent, persisted so the choice can survive the panel closing:
 // with it on, the sync button starts the run instead of asking for a preview.
 // Read back from get_settings. Main's toggle still holds its own local state
 // and does not call this; no backend sync path consults the value either.
-export const saveSkipPreview = callable<[boolean], { success: boolean }>("save_skip_preview");
+export const saveSkipPreview = endpoint<[boolean], { success: boolean }>("save_skip_preview");
 // Distinct region values present in the locally synced library — the non-anchor
 // options for the Preferred-region dropdown. Pure local DB read, no server call.
-export const getKnownRegions = callable<[], string[]>("get_known_regions");
-export const debugLog = callable<[string], void>("debug_log");
-const frontendLog = callable<[string, string], void>("frontend_log");
+export const getKnownRegions = endpoint<[], string[]>("get_known_regions");
+export const debugLog = endpoint<[string], void>("debug_log");
+const frontendLog = endpoint<[string, string], void>("frontend_log");
 export const logInfo = (msg: string) => {
   detach(frontendLog("info", msg));
 };
@@ -943,14 +943,14 @@ export const logWarn = (msg: string) => {
 export const logError = (msg: string) => {
   detach(frontendLog("error", msg));
 };
-export const fixRetroarchInputDriver = callable<[], { success: boolean; message: string }>(
+export const fixRetroarchInputDriver = endpoint<[], { success: boolean; message: string }>(
   "fix_retroarch_input_driver",
 );
-export const getRomMetadata = callable<[number], RomMetadata>("get_rom_metadata");
-export const getMetadataCachePage = callable<[number, number], { items: Record<string, RomMetadata>; total: number }>(
+export const getRomMetadata = endpoint<[number], RomMetadata>("get_rom_metadata");
+export const getMetadataCachePage = endpoint<[number, number], { items: Record<string, RomMetadata>; total: number }>(
   "get_metadata_cache_page",
 );
-export const getAppIdRomIdMap = callable<[], Record<string, number>>("get_app_id_rom_id_map");
+export const getAppIdRomIdMap = endpoint<[], Record<string, number>>("get_app_id_rom_id_map");
 export type InstalledRelaunchOptionsResult =
   | {
       success: true;
@@ -958,25 +958,25 @@ export type InstalledRelaunchOptionsResult =
       prune_lease_token: string | null;
     }
   | { success: false; reason: string; message: string };
-export const getInstalledRelaunchOptions = callable<[], InstalledRelaunchOptionsResult>(
+export const getInstalledRelaunchOptions = endpoint<[], InstalledRelaunchOptionsResult>(
   "get_installed_relaunch_options",
 );
 
 // Icon support — writes the icon PNG into Steam's grid dir and returns its
 // path; the caller points the shortcut at it via SteamClient.Apps.SetShortcutIcon.
-export const saveShortcutIcon = callable<[number, string], { success: boolean; icon_path?: string }>(
+export const saveShortcutIcon = endpoint<[number, string], { success: boolean; icon_path?: string }>(
   "save_shortcut_icon",
 );
 
 // Save sync callables
-export const ensureDeviceRegistered = callable<[], { success: boolean; device_id: string; device_name: string }>(
+export const ensureDeviceRegistered = endpoint<[], { success: boolean; device_id: string; device_name: string }>(
   "ensure_device_registered",
 );
 
-export const listDevices = callable<[], ListDevicesResponse>("list_devices");
+export const listDevices = endpoint<[], ListDevicesResponse>("list_devices");
 export type SaveStatusResult = SaveStatus | CallableFailure;
-export const getSaveStatus = callable<[number], SaveStatusResult>("get_save_status");
-export const preLaunchSync = callable<
+export const getSaveStatus = endpoint<[number], SaveStatusResult>("get_save_status");
+export const preLaunchSync = endpoint<
   [number],
   {
     success: boolean;
@@ -991,7 +991,7 @@ export const preLaunchSync = callable<
     reason?: string;
   }
 >("pre_launch_sync");
-export const syncRomSaves = callable<
+export const syncRomSaves = endpoint<
   [number],
   {
     success: boolean;
@@ -1004,22 +1004,22 @@ export const syncRomSaves = callable<
     reason?: string;
   }
 >("sync_rom_saves");
-export const syncAllSaves = callable<
+export const syncAllSaves = endpoint<
   [],
   { success: boolean; message: string; synced: number; conflicts: number; reason?: string }
 >("sync_all_saves");
-export const resolveSyncConflict = callable<
+export const resolveSyncConflict = endpoint<
   [number, string, number, "keep_local" | "use_server"],
   { success: boolean; message?: string; reason?: "stale_conflict"; action?: "keep_local" | "use_server" }
 >("resolve_sync_conflict");
-export const recordSessionStart = callable<[number], { success: boolean }>("record_session_start");
-export const getSaveSyncSettings = callable<[], SaveSyncSettings>("get_save_sync_settings");
-export const updateSaveSyncSettings = callable<[SaveSyncSettings], { success: boolean }>("update_save_sync_settings");
+export const recordSessionStart = endpoint<[number], { success: boolean }>("record_session_start");
+export const getSaveSyncSettings = endpoint<[], SaveSyncSettings>("get_save_sync_settings");
+export const updateSaveSyncSettings = endpoint<[SaveSyncSettings], { success: boolean }>("update_save_sync_settings");
 // `last_known` is present ONLY on the failed-server-fetch branch, and is null
 // there unless the ROM's active slot was confirmed: it is the slot listing the
 // last successful contact left on disk, not an answer about now. `slots` /
 // `active_slot` keep their meaning on every branch (#1755).
-export const getSaveSlots = callable<
+export const getSaveSlots = endpoint<
   [number],
   {
     success: boolean;
@@ -1033,16 +1033,16 @@ export const getSaveSlots = callable<
     } | null;
   }
 >("get_save_slots");
-export const getSlotSaves = callable<[number, string], SlotSavesResponse>("get_slot_saves");
-export const switchSlot = callable<[number, string], SwitchSlotResponse>("switch_slot");
+export const getSlotSaves = endpoint<[number, string], SlotSavesResponse>("get_slot_saves");
+export const switchSlot = endpoint<[number, string], SwitchSlotResponse>("switch_slot");
 
-export const getSlotDeleteInfo = callable<[number, string], SlotDeleteInfo>("get_slot_delete_info");
-export const deleteSlot = callable<[number, string], DeleteSlotResult>("delete_slot");
+export const getSlotDeleteInfo = endpoint<[number, string], SlotDeleteInfo>("get_slot_delete_info");
+export const deleteSlot = endpoint<[number, string], DeleteSlotResult>("delete_slot");
 
-export const isSaveTrackingConfigured = callable<[number], { configured: boolean; active_slot: string | null }>(
+export const isSaveTrackingConfigured = endpoint<[number], { configured: boolean; active_slot: string | null }>(
   "is_save_tracking_configured",
 );
-export const getSaveSetupInfo = callable<[number], SaveSetupInfo>("get_save_setup_info");
+export const getSaveSetupInfo = endpoint<[number], SaveSetupInfo>("get_save_setup_info");
 // confirm_slot_choice(rom_id, chosen_slot, migrate, migrate_from_slot, use_server_on_conflict):
 // `chosen_slot` must be a non-empty named slot — legacy `slot:null` confirmation
 // is retired (#1276), so an empty/`null` target is rejected by the backend's
@@ -1054,7 +1054,7 @@ export const getSaveSetupInfo = callable<[number], SaveSetupInfo>("get_save_setu
 // wizard asks; `use_server_on_conflict: true` resolves in the server's favour
 // (quarantine local, replace with the server content). On success the response
 // carries `migrated`/`failed` counts for the completion copy.
-export const confirmSlotChoice = callable<
+export const confirmSlotChoice = endpoint<
   [number, string, boolean, string | null, boolean],
   {
     success: boolean;
@@ -1069,14 +1069,14 @@ export const confirmSlotChoice = callable<
     failed?: number;
   }
 >("confirm_slot_choice");
-export const checkCoreChange = callable<
+export const checkCoreChange = endpoint<
   [number],
   { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string }
 >("check_core_change");
 
 // Bulk playtime for plugin-load UI update. last_played is the ISO end time of
 // the newest recorded/reconciled session (null until one exists).
-export const getAllPlaytime = callable<
+export const getAllPlaytime = endpoint<
   [],
   { playtime: Record<string, { total_seconds: number; session_count: number; last_played: string | null }> }
 >("get_all_playtime");
@@ -1086,7 +1086,7 @@ export const getAllPlaytime = callable<
 // moment the detail page is opened. Restores total_seconds, session_count AND
 // last_played across a device cutover (#903, ADR-0018). server_query_failed=true
 // means the server was unreachable and these are the local fallback.
-export const reconcilePlaytime = callable<
+export const reconcilePlaytime = endpoint<
   [number],
   | { total_seconds: number; session_count: number; last_played: string | null; server_query_failed: boolean }
   | { success: false; reason: string; message: string }
@@ -1095,27 +1095,27 @@ export const reconcilePlaytime = callable<
 // RetroDECK path-resolution health for the QAM banner — discriminated status
 // ("ok" | "absent" | "unreadable" | "root_missing") plus the probed paths. The
 // frontend owns the human-readable copy; the backend returns the discriminant.
-export const getRetroDeckStatus = callable<[], RetroDeckStatus>("get_retrodeck_status");
+export const getRetroDeckStatus = endpoint<[], RetroDeckStatus>("get_retrodeck_status");
 
 // RetroDECK path migration
-export const getMigrationStatus = callable<[], MigrationStatus>("get_migration_status");
-export const migrateRetroDeckFiles = callable<[string | null], MigrationResult>("migrate_retrodeck_files");
-export const dismissRetrodeckMigration = callable<[], { success: boolean }>("dismiss_retrodeck_migration");
+export const getMigrationStatus = endpoint<[], MigrationStatus>("get_migration_status");
+export const migrateRetroDeckFiles = endpoint<[string | null], MigrationResult>("migrate_retrodeck_files");
+export const dismissRetrodeckMigration = endpoint<[], { success: boolean }>("dismiss_retrodeck_migration");
 
-export const refreshMigrationState = callable<[], { retrodeck: MigrationStatus }>("refresh_migration_state");
+export const refreshMigrationState = endpoint<[], { retrodeck: MigrationStatus }>("refresh_migration_state");
 
 // Persistent corrupt-settings-reset notice. When settings.json was unparseable
 // at boot it is backed up to settings.json.corrupt-<ts> and reset to defaults,
 // and a marker is persisted into the fresh settings.json. This read is
 // non-consuming: it reports pending:true with the backup filename until the
 // user explicitly dismisses it in the QAM, so the banner survives reloads.
-export const getSettingsResetNotice = callable<[], { pending: boolean; backed_up_to: string | null }>(
+export const getSettingsResetNotice = endpoint<[], { pending: boolean; backed_up_to: string | null }>(
   "get_settings_reset_notice",
 );
 
 // Acknowledge the corrupt-settings reset — pops the persistent marker and
 // persists, so the QAM banner + game-detail cards stay down across reloads.
-export const dismissSettingsResetNotice = callable<[], { success: boolean }>("dismiss_settings_reset_notice");
+export const dismissSettingsResetNotice = endpoint<[], { success: boolean }>("dismiss_settings_reset_notice");
 
 /**
  * What the backend says is left of pointing the shortcuts at the launcher.
@@ -1134,7 +1134,7 @@ export type ShortcutRelocation =
   | { status: "outstanding"; exe: string; start_dir: string; app_ids: number[] }
   | { status: "blocked"; message: string };
 
-export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_shortcut_relocation");
+export const getShortcutRelocation = endpoint<[], ShortcutRelocation>("get_shortcut_relocation");
 
 /**
  * What only the process hosting this backend knows about its own run.
@@ -1155,7 +1155,7 @@ export interface HostStatus {
   dropped_messages: number;
 }
 
-export const getHostStatus = callable<[], HostStatus>("get_host_status");
+export const getHostStatus = endpoint<[], HostStatus>("get_host_status");
 
 // Durable "re-sign-in for cross-device playtime" notice. The backend persists a
 // flag when a playtime reconcile is rejected because the Client API Token lacks
@@ -1163,7 +1163,7 @@ export const getHostStatus = callable<[], HostStatus>("get_host_status");
 // to mint a scoped token. The flag clears itself once the scope is present (a
 // later successful reconcile, or a fresh sign-in), so this read is non-consuming
 // and pull-only — no backend dismiss callable, the QAM banner's Dismiss is local.
-export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_playtime_scope_notice");
+export const getPlaytimeScopeNotice = endpoint<[], { pending: boolean }>("get_playtime_scope_notice");
 
 /**
  * What the backend knows about a newer release of this program.
@@ -1185,7 +1185,7 @@ export interface UpdateNotice {
   installed_program: boolean;
 }
 
-export const getUpdateNotice = callable<[], UpdateNotice>("get_update_notice");
+export const getUpdateNotice = endpoint<[], UpdateNotice>("get_update_notice");
 
 /** The same notice, plus whether the read behind it answered at all. */
 export interface UpdateCheckNow extends UpdateNotice {
@@ -1194,16 +1194,16 @@ export interface UpdateCheckNow extends UpdateNotice {
 }
 
 /** Ask now, past the daily throttle and past a dismissal; never past the switch. */
-export const checkForUpdateNow = callable<[], UpdateCheckNow>("check_for_update_now");
+export const checkForUpdateNow = endpoint<[], UpdateCheckNow>("check_for_update_now");
 
 /** A settings write the backend accepted, or the reason it refused one. */
 export type UpdateSettingWrite = { success: true } | CallableFailure;
 
 /** Wave the card away for one release version; the next release raises it again. */
-export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismiss_update_notice");
+export const dismissUpdateNotice = endpoint<[string], UpdateSettingWrite>("dismiss_update_notice");
 
 /** Switch the daily release check on or off. On by default. */
-export const setUpdateCheckEnabled = callable<[boolean], UpdateSettingWrite>("set_update_check_enabled");
+export const setUpdateCheckEnabled = endpoint<[boolean], UpdateSettingWrite>("set_update_check_enabled");
 
 /** An update the installer rolled back, as its record states it. `rolled_back_at` is ISO-8601 UTC text. */
 export interface UpdateFailure {
@@ -1235,16 +1235,16 @@ export type UpdateOutcome = (
   failure_dismissed: boolean;
 };
 
-export const getUpdateOutcome = callable<[], UpdateOutcome>("get_update_outcome");
+export const getUpdateOutcome = endpoint<[], UpdateOutcome>("get_update_outcome");
 
 /** Tell the backend the announcement's toast was raised, so a reloaded panel does not raise it again. */
-export const acknowledgeUpdateToast = callable<[], { success: true }>("acknowledge_update_toast");
+export const acknowledgeUpdateToast = endpoint<[], { success: true }>("acknowledge_update_toast");
 
 /** Wave the announcement's card away for the rest of this backend process. */
-export const dismissUpdateAnnouncement = callable<[], { success: true }>("dismiss_update_announcement");
+export const dismissUpdateAnnouncement = endpoint<[], { success: true }>("dismiss_update_announcement");
 
 /** Wave the rolled-back card away for one record, named by its `rolled_back_at`; the next rollback raises it again. */
-export const dismissUpdateFailure = callable<[string], UpdateSettingWrite>("dismiss_update_failure");
+export const dismissUpdateFailure = endpoint<[string], UpdateSettingWrite>("dismiss_update_failure");
 
 /**
  * One reason a press of Install has to wait. `apps` names what Steam lists as
@@ -1311,7 +1311,7 @@ export interface UpdateInstallState {
   try_again: boolean;
 }
 
-export const getUpdateInstallState = callable<[], UpdateInstallState>("get_update_install_state");
+export const getUpdateInstallState = endpoint<[], UpdateInstallState>("get_update_install_state");
 
 /** Why a press of Install was refused; `update_waiting` carries every reason it waits for. */
 export type UpdateInstallRefusal =
@@ -1319,7 +1319,7 @@ export type UpdateInstallRefusal =
   | (CallableFailure & { reason: "update_in_progress" | "not_offered" | "version_changed" });
 
 /** Install the named version, which must be the stored one; answers once the attempt has started. */
-export const installUpdate = callable<[string], { success: true } | UpdateInstallRefusal>("install_update");
+export const installUpdate = endpoint<[string], { success: true } | UpdateInstallRefusal>("install_update");
 
 /** An update attempt an earlier start's installer stopped without updating; `started_at` is ISO-8601 UTC. */
 export interface StoppedUpdateAttemptWire {
@@ -1329,10 +1329,10 @@ export interface StoppedUpdateAttemptWire {
 }
 
 /** The stopped attempt a start found, until dismissed or a new attempt starts; `null` where there is none. */
-export const getStoppedUpdateAttempt = callable<[], StoppedUpdateAttemptWire | null>("get_stopped_update_attempt");
+export const getStoppedUpdateAttempt = endpoint<[], StoppedUpdateAttemptWire | null>("get_stopped_update_attempt");
 
 /** Wave the stopped attempt's card away; the backend removes its record. */
-export const dismissStoppedUpdateAttempt = callable<[], { success: true }>("dismiss_stopped_update_attempt");
+export const dismissStoppedUpdateAttempt = endpoint<[], { success: true }>("dismiss_stopped_update_attempt");
 
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
@@ -1368,20 +1368,20 @@ export interface SessionFinalizeResult {
   migration: SessionFinalizeMigration | null;
 }
 
-export const finalizeGameSession = callable<[number], SessionFinalizeResult>("finalize_game_session");
+export const finalizeGameSession = endpoint<[number], SessionFinalizeResult>("finalize_game_session");
 
 // Delete operations
-export const deleteLocalSaves = callable<[number], { success: boolean; deleted_count: number; message: string }>(
+export const deleteLocalSaves = endpoint<[number], { success: boolean; deleted_count: number; message: string }>(
   "delete_local_saves",
 );
-export const deletePlatformSaves = callable<[string], { success: boolean; deleted_count: number; message: string }>(
+export const deletePlatformSaves = endpoint<[string], { success: boolean; deleted_count: number; message: string }>(
   "delete_platform_saves",
 );
 /** How many local save files a platform holds — the read half of
  *  `deletePlatformSaves`, walking the same path without deleting. The Library
  *  page's platform detail asks it once per selection, beside the core read. */
-export const countPlatformSaves = callable<[string], { count: number }>("count_platform_saves");
-export const deletePlatformBios = callable<[string], { success: boolean; deleted_count: number; message: string }>(
+export const countPlatformSaves = endpoint<[string], { count: number }>("count_platform_saves");
+export const deletePlatformBios = endpoint<[string], { success: boolean; deleted_count: number; message: string }>(
   "delete_platform_bios",
 );
 /** One row's Delete button — the per-file twin of `deletePlatformBios`, sharing
@@ -1389,25 +1389,25 @@ export const deletePlatformBios = callable<[string], { success: boolean; deleted
  *  name the plugin holds no download record for removes nothing: the record is
  *  the only evidence we placed the file, and it is the record's own path that is
  *  unlinked. Offer it only where the row says `deletable`. */
-export const deleteBiosFile = callable<[string, string], { success: boolean; deleted_count: number; message: string }>(
+export const deleteBiosFile = endpoint<[string, string], { success: boolean; deleted_count: number; message: string }>(
   "delete_bios_file",
 );
 /** A declared folder's Delete button. The folder has no name a download record
  *  could carry, so the files inside it are matched by being written underneath
  *  it — a filter over the platform's own records, which narrows and can never
  *  widen. The folder itself is never removed; the emulator lists it. */
-export const deleteBiosFolder = callable<
+export const deleteBiosFolder = endpoint<
   [string, string],
   { success: boolean; deleted_count: number; message: string }
 >("delete_bios_folder");
 
 // Save version history callables
-export const savesListFileVersions = callable<[number, string, string], ListFileVersionsResult>(
+export const savesListFileVersions = endpoint<[number, string, string], ListFileVersionsResult>(
   "saves_list_file_versions",
 );
-export const savesRollbackToVersion = callable<[number, string, number], RollbackStatus>("saves_rollback_to_version");
-export const copySaveToSlot = callable<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
+export const savesRollbackToVersion = endpoint<[number, string, number], RollbackStatus>("saves_rollback_to_version");
+export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
 
 // Achievements callables
-export const getAchievements = callable<[number], AchievementList>("get_achievements");
-export const getAchievementProgress = callable<[number], AchievementProgress>("get_achievement_progress");
+export const getAchievements = endpoint<[number], AchievementList>("get_achievements");
+export const getAchievementProgress = endpoint<[number], AchievementProgress>("get_achievement_progress");

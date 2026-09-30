@@ -187,10 +187,10 @@ locally with `mise run docs`.
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
   `Endpoints` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the
-  one placement `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public
-  method as such: the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so
-  those declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's
-  by `tests/host/test_dispatch.py`.
+  one placement `scripts/check_endpoint_parity.py` accepts. Nothing flags a missing or stray `@route` on a public method
+  as such: the gate sees either only as a name the frontend's `endpoint("name")` declarations disagree with, so those
+  declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
+  `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
@@ -357,7 +357,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   state** — check — `scripts/check_urlopen_choke_point.py` (AST call sites: an aliased `urlopen` or a `getattr` slips
   past it); unchecked: which requests may skip the retry ladder, and which pass `romm_origin=False` because they do not
   talk to RomM (`.claude/rules/romm-http.md`)
-- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_callable_manifest.py`
+- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`

@@ -26,7 +26,7 @@ Format: **invariant** — tier — enforced by.
   (structural, AST call sites — an alias or a `getattr` would slip past it. Which requests may skip the ladder, and
   which pass `romm_origin=False` because they do not talk to RomM at all, stays prompt-only in
   `.claude/rules/romm-http.md`)
-- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_callable_manifest.py`
+- **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`

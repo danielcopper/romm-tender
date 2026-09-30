@@ -1,7 +1,7 @@
-"""Frontend↔backend callable-manifest parity, surfaced inside the pytest run.
+"""Frontend↔backend endpoint parity, surfaced inside the pytest run.
 
-This runs the checks the CI gate (``scripts/check_callable_manifest.py``) runs:
-every ``callable<[Args], Return>("name")`` declared on the frontend
+This runs the checks the CI gate (``scripts/check_endpoint_parity.py``) runs:
+every ``endpoint<[Args], Return>("name")`` declared on the frontend
 (``frontend/src/**/*.ts``) has a matching endpoint ``name`` on the ``Endpoints``
 class in ``main.py``, in both directions, with matching arity, and no ``@route``
 sits where the gate cannot count it. It is the static-parity sibling of the rest
@@ -22,13 +22,13 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SCRIPT_PATH = _REPO_ROOT / "scripts" / "check_callable_manifest.py"
+_SCRIPT_PATH = _REPO_ROOT / "scripts" / "check_endpoint_parity.py"
 _SRC_DIR = _REPO_ROOT / "frontend" / "src"
 _MAIN_PY = _REPO_ROOT / "backend" / "main.py"
 
 
 def _load_gate():
-    spec = importlib.util.spec_from_file_location("check_callable_manifest", _SCRIPT_PATH)
+    spec = importlib.util.spec_from_file_location("check_endpoint_parity", _SCRIPT_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -41,7 +41,7 @@ _gate = _load_gate()
 
 
 def test_frontend_backend_callable_manifest_matches():
-    frontend = _gate.parse_frontend_callables(_SRC_DIR)
-    backend = _gate.parse_backend_callables(_MAIN_PY)
+    frontend = _gate.parse_frontend_endpoints(_SRC_DIR)
+    backend = _gate.parse_backend_endpoints(_MAIN_PY)
     findings = _gate.find_misplaced_routes(_MAIN_PY) + _gate.find_discrepancies(frontend, backend, _gate.EXEMPT)
     assert findings == []

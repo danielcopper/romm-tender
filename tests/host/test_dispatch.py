@@ -1,6 +1,6 @@
 """What a caller can reach, and what comes back when it does.
 
-The set a caller can reach is asserted EQUAL to the set the callable-manifest
+The set a caller can reach is asserted EQUAL to the set the endpoint parity
 gate derives. The two read different things — the gate parses ``main.py``, the
 dispatcher inspects the loaded class — so a name they disagree about is either a
 callable the panel cannot reach or a method nobody meant to expose, and neither
@@ -29,7 +29,7 @@ from host.route import route
 from tests.host.conftest import FakeEndpoints
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_GATE_PATH = _REPO_ROOT / "scripts" / "check_callable_manifest.py"
+_GATE_PATH = _REPO_ROOT / "scripts" / "check_endpoint_parity.py"
 _MAIN_PY = _REPO_ROOT / "backend" / "main.py"
 
 LOGGER = logging.getLogger("test_dispatch")
@@ -37,7 +37,7 @@ LOGGER = logging.getLogger("test_dispatch")
 
 def _load_gate():
     """Load the gate script — ``scripts/`` is not importable."""
-    spec = importlib.util.spec_from_file_location("check_callable_manifest_for_host", _GATE_PATH)
+    spec = importlib.util.spec_from_file_location("check_endpoint_parity_for_host", _GATE_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -58,7 +58,7 @@ class TestTheReachableSurface:
 
         gate = _load_gate()
 
-        assert route_names(Endpoints) == set(gate.parse_backend_callables(_MAIN_PY))
+        assert route_names(Endpoints) == set(gate.parse_backend_endpoints(_MAIN_PY))
 
     def test_the_names_are_read_off_the_class_the_dispatcher_reaches(self, dispatcher):
         assert route_names(FakeEndpoints) == dispatcher.method_names

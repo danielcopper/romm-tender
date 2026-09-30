@@ -12,7 +12,7 @@ behaviour:
 * ``refresh_save_status(rom_id)`` → ``{"success": True}`` — fire-and-forget
   trigger for the background ``save_status_updated`` emit (the F7 fix).
 
-The manifest-parity contract test (``tests/contract/test_callable_manifest.py``)
+The endpoint-parity contract test (``tests/contract/test_endpoint_parity.py``)
 asserts all three names + arities match the frontend declarations; these tests
 cover the runtime shape + behaviour.
 """

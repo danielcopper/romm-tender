@@ -10,7 +10,7 @@ listener) or a listener that never wakes (listener with no emitter).
 
 This check derives both surfaces from source and fails when they diverge, so the
 event channel stays one source of truth. It is the static sibling of
-``scripts/check_callable_manifest.py``: the callable gate pins the request/reply
+``scripts/check_endpoint_parity.py``: the endpoint gate pins the request/reply
 surface, this gate pins the fire-and-forget event surface.
 
 What it guarantees (and what it deliberately does not):
@@ -19,7 +19,7 @@ What it guarantees (and what it deliberately does not):
     ``addEventListener("name", ...)`` and vice versa — no orphan on either side.
   * Only **literal** event names are checked. A dynamic/variable event name
     (``self._emit(some_var, ...)`` or ``addEventListener(name, ...)``) can't be
-    matched statically and is skipped — same limitation the callable gate has
+    matched statically and is skipped — same limitation the endpoint gate has
     with literal wire names.
   * Only the bare ``api/host`` ``addEventListener(...)`` counts on the
     frontend. ``globalThis.addEventListener`` / ``el.addEventListener`` are DOM
@@ -52,7 +52,7 @@ EXEMPT: frozenset[str] = frozenset()
 # Attribute names that name an emit call (``self.emit`` / ``self._emit``).
 _EMIT_ATTRS = frozenset({"emit", "_emit"})
 
-# Mirrors the TS-source helpers in check_callable_manifest.py (kept local:
+# Mirrors the TS-source helpers in check_endpoint_parity.py (kept local:
 # scripts/ is not importable from the importlib-loaded contract tests).
 _QUOTES = frozenset({'"', "'", "`"})
 

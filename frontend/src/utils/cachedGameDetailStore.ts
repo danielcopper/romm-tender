@@ -7,7 +7,7 @@
  * add one when there's a consumer that needs invalidation notifications.
  */
 
-import { callable } from "../api/host";
+import { endpoint } from "../api/host";
 import type { CachedGameDetail } from "../api/backend";
 
 const CACHE_TTL_MS = 3000;
@@ -18,7 +18,7 @@ interface CacheEntry {
 }
 
 const _cache = new Map<number, CacheEntry>();
-const _raw = callable<[number], CachedGameDetail>("get_cached_game_detail");
+const _raw = endpoint<[number], CachedGameDetail>("get_cached_game_detail");
 
 export function getCachedGameDetail(appId: number): Promise<CachedGameDetail> {
   const now = Date.now();

@@ -132,7 +132,7 @@ vi.stubGlobal("collectionStore", { userCollections: [] });
 vi.mock("./api/host", async () => {
   const bus = await import("./test-utils/host-event-bus");
   return {
-    callable: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
+    endpoint: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
     toaster: { toast: vi.fn() },
     definePlugin: (fn: unknown) => fn,
     addEventListener: bus.mockAddEventListener,

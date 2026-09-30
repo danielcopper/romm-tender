@@ -1,4 +1,4 @@
-"""Tests for ``scripts/check_callable_manifest.py``.
+"""Tests for ``scripts/check_endpoint_parity.py``.
 
 Loaded via ``importlib`` because ``scripts/`` is not on ``sys.path`` (and is
 excluded from ruff/basedpyright). Parser edge cases feed synthetic ``.ts`` /
@@ -19,11 +19,11 @@ if TYPE_CHECKING:
 
     import pytest
 
-_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_callable_manifest.py"
+_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_endpoint_parity.py"
 
 
 def _load_check_module() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("check_callable_manifest", _SCRIPT_PATH)
+    spec = importlib.util.spec_from_file_location("check_endpoint_parity", _SCRIPT_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -53,16 +53,16 @@ def _write_main(tmp_path: Path, body: str) -> Path:
 
 class TestParseFrontendCallables:
     def test_empty_args_is_arity_zero(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'const x = callable<[], Foo>("get_settings");')
-        assert check.parse_frontend_callables(src) == {"get_settings": 0}
+        src = _write_ts(tmp_path, "a.ts", 'const x = endpoint<[], Foo>("get_settings");')
+        assert check.parse_frontend_endpoints(src) == {"get_settings": 0}
 
     def test_single_arg_is_arity_one(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[number], Foo>("start_download");')
-        assert check.parse_frontend_callables(src) == {"start_download": 1}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[number], Foo>("start_download");')
+        assert check.parse_frontend_endpoints(src) == {"start_download": 1}
 
     def test_three_args_with_union(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[number, string, string | null], Foo>("f");')
-        assert check.parse_frontend_callables(src) == {"f": 3}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[number, string, string | null], Foo>("f");')
+        assert check.parse_frontend_endpoints(src) == {"f": 3}
 
     def test_nested_generic_comma_not_counted(self, tmp_path: Path):
         # Record<string, number> is ONE element — the inner comma must not inflate.
@@ -70,66 +70,78 @@ class TestParseFrontendCallables:
         src = _write_ts(
             tmp_path,
             "a.ts",
-            'callable<[Record<string, number>, string, number | string], Foo>("report_unit_results");',
+            'endpoint<[Record<string, number>, string, number | string], Foo>("report_unit_results");',
         )
-        assert check.parse_frontend_callables(src) == {"report_unit_results": 3}
+        assert check.parse_frontend_endpoints(src) == {"report_unit_results": 3}
 
     def test_union_with_string_literals_is_arity_two(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[boolean, "my" | "smart" | null], Foo>("g");')
-        assert check.parse_frontend_callables(src) == {"g": 2}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[boolean, "my" | "smart" | null], Foo>("g");')
+        assert check.parse_frontend_endpoints(src) == {"g": 2}
 
     def test_object_literal_return_does_not_split_args(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[number], { a: number; b: string }>("h");')
-        assert check.parse_frontend_callables(src) == {"h": 1}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[number], { a: number; b: string }>("h");')
+        assert check.parse_frontend_endpoints(src) == {"h": 1}
 
     def test_multiline_declaration(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            export const setAllCollectionsSync = callable<
+            export const setAllCollectionsSync = endpoint<
               [boolean, "my" | "smart" | "virtual" | null],
               { success: boolean; message?: string }
             >("set_all_collections_sync");
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_callables(src) == {"set_all_collections_sync": 2}
+        assert check.parse_frontend_endpoints(src) == {"set_all_collections_sync": 2}
 
     def test_string_literal_containing_bracket_and_comma(self, tmp_path: Path):
         # A string literal in the args tuple must not be parsed as structure.
-        src = _write_ts(tmp_path, "a.ts", 'callable<["a, b]", number], Foo>("weird");')
-        assert check.parse_frontend_callables(src) == {"weird": 2}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<["a, b]", number], Foo>("weird");')
+        assert check.parse_frontend_endpoints(src) == {"weird": 2}
 
     def test_scans_tsx_and_nested_dirs(self, tmp_path: Path):
         src = tmp_path / "src"
         (src / "utils").mkdir(parents=True)
-        (src / "api.ts").write_text('callable<[], A>("a");', encoding="utf-8")
-        (src / "utils" / "store.tsx").write_text('callable<[number], B>("b");', encoding="utf-8")
-        assert check.parse_frontend_callables(src) == {"a": 0, "b": 1}
+        (src / "api.ts").write_text('endpoint<[], A>("a");', encoding="utf-8")
+        (src / "utils" / "store.tsx").write_text('endpoint<[number], B>("b");', encoding="utf-8")
+        assert check.parse_frontend_endpoints(src) == {"a": 0, "b": 1}
 
     def test_duplicate_name_marked_sentinel(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("dup");\ncallable<[number], B>("dup");')
-        assert check.parse_frontend_callables(src) == {"dup": -1}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[], A>("dup");\nendpoint<[number], B>("dup");')
+        assert check.parse_frontend_endpoints(src) == {"dup": -1}
 
     def test_missing_src_returns_empty(self, tmp_path: Path):
-        assert check.parse_frontend_callables(tmp_path / "nope") == {}
+        assert check.parse_frontend_endpoints(tmp_path / "nope") == {}
 
     def test_test_files_are_not_wire_surface(self, tmp_path: Path):
-        """A ``callable(...)`` written in a test is a fixture, not a declaration.
+        """An ``endpoint(...)`` written in a test is a fixture, not a declaration.
 
         Scoped the same way ``check_event_parity`` scopes its own scan. Without
-        it, a test that drives the transport against a real callable name reads
+        it, a test that drives the transport against a real endpoint name reads
         as a second declaration of it and the gate reports a duplicate that does
         not exist on the wire.
         """
         src = tmp_path / "src"
         (src / "api").mkdir(parents=True)
         (src / "test-utils").mkdir(parents=True)
-        (src / "api" / "backend.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
-        (src / "api" / "host.test.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
-        (src / "test-utils" / "fake.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
-        (src / "test-setup.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "api" / "backend.ts").write_text('endpoint<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "api" / "host.test.ts").write_text('endpoint<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "test-utils" / "fake.ts").write_text('endpoint<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "test-setup.ts").write_text('endpoint<[], A>("get_sync_stats");', encoding="utf-8")
 
-        assert check.parse_frontend_callables(src) == {"get_sync_stats": 0}
+        assert check.parse_frontend_endpoints(src) == {"get_sync_stats": 0}
+
+    def test_an_identifier_ending_in_the_name_is_not_a_declaration(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            asset_type_endpoint<[], A>("underscore");
+            $endpoint<[], A>("dollar");
+            v2endpoint<[], A>("digit");
+            endpoint<[], A>("declared");
+            """
+        )
+        src = _write_ts(tmp_path, "a.ts", body)
+        assert check.parse_frontend_endpoints(src) == {"declared": 0}
 
 
 class TestParserHardening:
@@ -139,10 +151,10 @@ class TestParserHardening:
 
     def test_comment_with_apostrophe_inside_generic(self, tmp_path: Path):
         # A line comment carrying an apostrophe inside the multiline <...> block
-        # must not corrupt depth tracking — the callable is still captured.
+        # must not corrupt depth tracking — the declaration is still captured.
         body = textwrap.dedent(
             """\
-            export const x = callable<
+            export const x = endpoint<
               [number],
               // it's a tricky comment
               R
@@ -150,13 +162,13 @@ class TestParserHardening:
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_callables(src) == {"has_apostrophe": 1}
+        assert check.parse_frontend_endpoints(src) == {"has_apostrophe": 1}
 
     def test_comment_with_brackets_and_angles_inside_generic(self, tmp_path: Path):
         # A comment with an unbalanced bracket and a stray > must be ignored.
         body = textwrap.dedent(
             """\
-            export const y = callable<
+            export const y = endpoint<
               [number, string],
               // compares x > y and references app_ids[]
               R
@@ -164,26 +176,26 @@ class TestParserHardening:
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_callables(src) == {"noisy_comment": 2}
+        assert check.parse_frontend_endpoints(src) == {"noisy_comment": 2}
 
     def test_block_comment_inside_generic(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            export const z = callable<
+            export const z = endpoint<
               [number, /* inline 's apostrophe, < > [ */ string],
               R
             >("block_comment");
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_callables(src) == {"block_comment": 2}
+        assert check.parse_frontend_endpoints(src) == {"block_comment": 2}
 
     def test_real_shape_multiline_with_apostrophe_comment(self, tmp_path: Path):
         # Mirrors the remove_platform_shortcuts declaration: a multiline generic
         # whose Return carries inline comments with apostrophes.
         body = textwrap.dedent(
             """\
-            export const removePlatformShortcuts = callable<
+            export const removePlatformShortcuts = endpoint<
               [string],
               {
                 success: boolean;
@@ -197,45 +209,45 @@ class TestParserHardening:
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        assert check.parse_frontend_callables(src) == {"remove_platform_shortcuts": 1}
+        assert check.parse_frontend_endpoints(src) == {"remove_platform_shortcuts": 1}
 
     def test_commented_out_declaration_not_counted(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            // const dead = callable<[number], R>("dead");
-            const live = callable<[], R>("alive");
+            // const dead = endpoint<[number], R>("dead");
+            const live = endpoint<[], R>("alive");
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        result = check.parse_frontend_callables(src)
+        result = check.parse_frontend_endpoints(src)
         assert "dead" not in result
         assert result == {"alive": 0}
 
     def test_block_commented_out_declaration_not_counted(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            /* const dead = callable<[number], R>("dead2"); */
-            const live = callable<[number], R>("alive2");
+            /* const dead = endpoint<[number], R>("dead2"); */
+            const live = endpoint<[number], R>("alive2");
             """
         )
         src = _write_ts(tmp_path, "a.ts", body)
-        result = check.parse_frontend_callables(src)
+        result = check.parse_frontend_endpoints(src)
         assert "dead2" not in result
         assert result == {"alive2": 1}
 
     def test_arrow_function_typed_arg_is_arity_one(self, tmp_path: Path):
         # The > in => must not unbalance the generic's depth.
-        src = _write_ts(tmp_path, "a.ts", 'callable<[(a: number, b: number) => void], R>("arrow_arg");')
-        assert check.parse_frontend_callables(src) == {"arrow_arg": 1}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[(a: number, b: number) => void], R>("arrow_arg");')
+        assert check.parse_frontend_endpoints(src) == {"arrow_arg": 1}
 
     def test_trailing_comma_does_not_inflate_arity(self, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[number, string,], R>("trailing_comma");')
-        assert check.parse_frontend_callables(src) == {"trailing_comma": 2}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[number, string,], R>("trailing_comma");')
+        assert check.parse_frontend_endpoints(src) == {"trailing_comma": 2}
 
     def test_comment_like_text_in_string_literal_preserved(self, tmp_path: Path):
         # A // or /* inside a string literal is part of the string, NOT a comment.
-        src = _write_ts(tmp_path, "a.ts", 'callable<["http://x.com/*nope", number], R>("url_in_string");')
-        assert check.parse_frontend_callables(src) == {"url_in_string": 2}
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<["http://x.com/*nope", number], R>("url_in_string");')
+        assert check.parse_frontend_endpoints(src) == {"url_in_string": 2}
 
 
 class TestParseBackendCallables:
@@ -255,7 +267,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {
+        assert check.parse_backend_endpoints(main_py) == {
             "get_settings": 0,
             "start_download": 1,
             "switch_slot": 2,
@@ -274,7 +286,7 @@ class TestParseBackendCallables:
                     ...
             """
         )
-        assert check.parse_backend_callables(_write_main(tmp_path, body)) == {"test_connection": 0}
+        assert check.parse_backend_endpoints(_write_main(tmp_path, body)) == {"test_connection": 0}
 
     def test_underscore_internal_excluded(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -290,7 +302,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"test_connection": 0}
+        assert check.parse_backend_endpoints(main_py) == {"test_connection": 0}
 
     def test_default_param_counts_as_positional_slot(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -302,7 +314,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"connect_with_credentials": 4}
+        assert check.parse_backend_endpoints(main_py) == {"connect_with_credentials": 4}
 
     def test_vararg_method_has_none_arity_name_recorded(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -314,7 +326,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"flexible": None}
+        assert check.parse_backend_endpoints(main_py) == {"flexible": None}
 
     def test_unmarked_methods_ignored(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -330,7 +342,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"real_callable": 0}
+        assert check.parse_backend_endpoints(main_py) == {"real_callable": 0}
 
     def test_a_marked_synchronous_method_counts_with_its_arity(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -342,7 +354,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"get_settings": 2}
+        assert check.parse_backend_endpoints(main_py) == {"get_settings": 2}
 
     def test_route_below_another_decorator_is_not_counted(self, tmp_path: Path):
         body = textwrap.dedent(
@@ -355,11 +367,11 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {}
+        assert check.parse_backend_endpoints(main_py) == {}
 
     def test_no_endpoints_class_returns_empty(self, tmp_path: Path):
         main_py = _write_main(tmp_path, "class Other:\n    async def foo(self):\n        ...\n")
-        assert check.parse_backend_callables(main_py) == {}
+        assert check.parse_backend_endpoints(main_py) == {}
 
     def test_keyword_only_args_excluded_from_positional_arity(self, tmp_path: Path):
         # ``*, c`` is keyword-only — a positional frontend tuple can't fill it,
@@ -373,7 +385,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"m": 2}
+        assert check.parse_backend_endpoints(main_py) == {"m": 2}
 
     def test_kwargs_only_yields_positional_arity(self, tmp_path: Path):
         # **kwargs is not positional — the two positional params still count as 2.
@@ -386,7 +398,7 @@ class TestParseBackendCallables:
             """
         )
         main_py = _write_main(tmp_path, body)
-        assert check.parse_backend_callables(main_py) == {"m": 2}
+        assert check.parse_backend_endpoints(main_py) == {"m": 2}
 
 
 class TestFindMisplacedRoutes:
@@ -490,13 +502,13 @@ class TestMainEntryPoint:
     def test_help_flag_returns_zero(self, capsys: pytest.CaptureFixture[str]):
         rc = check.main(["--help"])
         assert rc == 0
-        assert "callable-manifest parity gate" in capsys.readouterr().out
+        assert "endpoint parity gate" in capsys.readouterr().out
 
     def test_short_help_flag_returns_zero(self):
         assert check.main(["-h"]) == 0
 
     def test_real_repo_run_is_clean(self, capsys: pytest.CaptureFixture[str]):
-        # Locks the actual frontend/src/**/*.ts callable declarations in sync
+        # Locks the actual frontend/src/**/*.ts endpoint declarations in sync
         # with the endpoints on Endpoints in main.py. If this fails, a name was
         # added/renamed/removed on one side only, or an arity drifted.
         rc = check.main([])
@@ -506,7 +518,7 @@ class TestMainEntryPoint:
     def test_drift_reports_and_returns_one(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");\ncallable<[number], B>("frontend_only");')
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[], A>("present");\nendpoint<[number], B>("frontend_only");')
         main_py = _write_main(
             tmp_path,
             "class Endpoints:\n    @route\n    async def present(self):\n        ...\n",
@@ -523,7 +535,7 @@ class TestMainEntryPoint:
     def test_a_misplaced_route_fails_even_when_the_surfaces_match(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");')
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[], A>("present");')
         main_py = _write_main(
             tmp_path,
             "class Endpoints:\n    @route\n    async def present(self):\n        ...\n"
@@ -536,7 +548,7 @@ class TestMainEntryPoint:
         assert "_hidden: @route on an underscored name" in capsys.readouterr().out
 
     def test_in_sync_fake_repo_returns_zero(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        src = _write_ts(tmp_path, "a.ts", 'callable<[number], A>("match");')
+        src = _write_ts(tmp_path, "a.ts", 'endpoint<[number], A>("match");')
         main_py = _write_main(
             tmp_path, "class Endpoints:\n    @route\n    async def match(self, rom_id):\n        ...\n"
         )

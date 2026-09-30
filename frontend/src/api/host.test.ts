@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.unmock("./host");
 
-import { addEventListener, callable, definePlugin, removeEventListener, toaster, type Plugin } from "./host";
+import { addEventListener, definePlugin, endpoint, removeEventListener, toaster, type Plugin } from "./host";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -88,7 +88,7 @@ describe("a bundle served without a token", () => {
     // are written to `await` and `.catch()`, so the failure has to arrive as a
     // rejection; a synchronous throw would sail past all of them.
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    const askBackend = callable<[], unknown>("get_sync_stats");
+    const askBackend = endpoint<[], unknown>("get_sync_stats");
 
     let threw = false;
     const answer = (() => {
