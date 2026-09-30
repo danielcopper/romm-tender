@@ -1,19 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { toaster } from "../api/host";
+import type { Toaster } from "../api/host";
 import * as backend from "../api/backend";
 import { updatePlaytimeDisplay } from "./metadataPatches";
-import {
-  initSessionManager,
-  destroySessionManager,
-  isSessionActive,
-  planAdoption,
-  ADOPTION_POLL_MAX_MS,
-} from "./sessionManager";
 
 // sessionManager talks to the backend endpoint surface and the migration
 // stores. Mock both so the test observes only what `handleGameStop` forwards
-// to `finalizeGameSession`.
-vi.mock("../api/backend", () => ({
+// to `finalizeGameSession`. The two mocks the assertions read are hoisted, so
+// every fresh load of the module below reaches the same spies.
+const backendMock = vi.hoisted(() => ({
   recordSessionStart: vi.fn().mockResolvedValue({ success: true }),
   getAppIdRomIdMap: vi.fn(),
   finalizeGameSession: vi.fn(),
@@ -21,9 +15,28 @@ vi.mock("../api/backend", () => ({
   logError: vi.fn(),
   debugLog: vi.fn(),
 }));
+vi.mock("../api/backend", () => backendMock);
 
+const metadataPatchesMock = vi.hoisted(() => ({ updatePlaytimeDisplay: vi.fn() }));
 vi.mock("./migrationStore", () => ({ setMigrationStatus: vi.fn() }));
-vi.mock("./metadataPatches", () => ({ updatePlaytimeDisplay: vi.fn() }));
+vi.mock("./metadataPatches", () => metadataPatchesMock);
+
+// The manager keeps its sessions in module state, which only a new JS context
+// starts over — so every test starts from a fresh load of the module, and a test
+// that simulates a reload loads it afresh again while localStorage stays put.
+let toaster: Toaster;
+let initSessionManager: typeof import("./sessionManager").initSessionManager;
+let isSessionActive: typeof import("./sessionManager").isSessionActive;
+let planAdoption: typeof import("./sessionManager").planAdoption;
+let ADOPTION_POLL_MAX_MS: number;
+
+async function loadSessionManager(): Promise<void> {
+  vi.resetModules();
+  ({ toaster } = await import("../api/host"));
+  ({ initSessionManager, isSessionActive, planAdoption, ADOPTION_POLL_MAX_MS } = await import("./sessionManager"));
+}
+
+beforeEach(loadSessionManager);
 
 type LifetimeUpdate = { bRunning: boolean; unAppID: number };
 type LifetimeCb = (update: LifetimeUpdate) => void;
@@ -237,7 +250,6 @@ describe("sessionManager lifecycle forwarding", () => {
   });
 
   afterEach(() => {
-    destroySessionManager();
     vi.useRealTimers();
   });
 
@@ -366,7 +378,6 @@ describe("sessionManager isSessionActive", () => {
   });
 
   afterEach(() => {
-    destroySessionManager();
     vi.useRealTimers();
   });
 
@@ -426,7 +437,6 @@ describe("sessionManager post-exit save-sync toast (#1481)", () => {
   });
 
   afterEach(() => {
-    destroySessionManager();
     vi.useRealTimers();
   });
 
@@ -498,7 +508,6 @@ describe("sessionManager reload adoption", () => {
   });
 
   afterEach(() => {
-    destroySessionManager();
     vi.useRealTimers();
   });
 
@@ -631,9 +640,10 @@ describe("sessionManager reload adoption", () => {
     await startGame(lifetime1);
     expect(backend.recordSessionStart).toHaveBeenCalledTimes(1);
 
-    // Plugin reload: destroy wipes in-memory state but leaves the breadcrumb.
+    // Reload: the fresh module holds none of the old one's sessions, but the
+    // breadcrumb in localStorage survives it.
     vi.setSystemTime(120_000);
-    destroySessionManager();
+    await loadSessionManager();
     expect(readCrumb()).not.toBeNull();
 
     // Re-init while the game is still running — the poll sees the running app
@@ -713,7 +723,7 @@ describe("sessionManager reload adoption", () => {
 
     expect(backend.recordSessionStart).toHaveBeenCalledTimes(1);
 
-    destroySessionManager();
+    await loadSessionManager();
     vi.clearAllMocks();
     localStorage.setItem(BREADCRUMB_KEY, JSON.stringify({ v: 2, sessions: { appId: APP_ID } }));
 
@@ -1075,28 +1085,6 @@ describe("sessionManager reload adoption", () => {
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
     expect(backend.recordSessionStart).not.toHaveBeenCalled();
   });
-
-  it("aborts an in-flight adoption poll when destroy tears the manager down", async () => {
-    // Nothing running yet → the poll is mid-flight when destroy fires. A game that
-    // appears AFTER teardown must not be adopted: the aborted poll writes no
-    // breadcrumb, records no session, and takes no adoption action (#1148 LOW-1).
-    stubNothingRunning();
-
-    const init = initSessionManager();
-    await vi.advanceTimersByTimeAsync(2_000); // poll running, nothing found yet
-    destroySessionManager(); // tears down mid-poll → bumps the epoch
-    // A running game appears after teardown; the still-pending poll would adopt it
-    // (case a′ → recordSessionStart + breadcrumb) if it did not check the epoch.
-    stubRunningApp(APP_ID);
-    await vi.advanceTimersByTimeAsync(500);
-    await init;
-
-    expect(backend.debugLog).toHaveBeenCalledWith("adoption: cancelled by destroy");
-    expect(backend.recordSessionStart).not.toHaveBeenCalled();
-    expect(readCrumb()).toBeNull(); // no breadcrumb written by the aborted adoption
-    expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("Adopted"));
-    expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("running app appeared"));
-  });
 });
 // #1313: the state-aware Resume button reacts to session start/stop without
 // polling by listening for the romm_session_changed DOM event. These pin that
@@ -1143,7 +1131,6 @@ describe("sessionManager session-changed dispatch (#1313)", () => {
 
   afterEach(() => {
     globalThis.removeEventListener("romm_session_changed", sessionListener);
-    destroySessionManager();
     vi.useRealTimers();
   });
 
@@ -1225,7 +1212,6 @@ describe("sessionManager stop scoping (#1621)", () => {
 
   afterEach(() => {
     globalThis.removeEventListener("romm_data_changed", dataListener);
-    destroySessionManager();
     vi.useRealTimers();
   });
 

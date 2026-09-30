@@ -43,15 +43,6 @@ const activeSessions = new Map<number, ActiveSession>();
 // Serialization chain — ensures lifecycle events don't interleave
 let lifecycleChain: Promise<void> = Promise.resolve();
 
-// Bumped by destroySessionManager. The adoption poll can run for up to 15s, past
-// a teardown; adoption captures this at entry and re-checks it after the poll so a
-// destroy mid-poll aborts before mutating any module state, the breadcrumb, or the
-// backend.
-let sessionEpoch = 0;
-
-// Hook handles for cleanup
-let lifetimeHook: { unregister: () => void } | null = null;
-
 // Cached app ID -> rom ID map (refreshed on init and periodically)
 let appIdToRomId: Record<string, number> = {};
 
@@ -431,21 +422,14 @@ export function planAdoption(
  * up (#1054 / #1148 round 2), so a one-shot read raced the restart and wrongly
  * orphaned a still-running session.
  *
- * This is the orchestration around that: capture the epoch, poll, re-check the
- * epoch, ask {@link planAdoption} what to do, then commit / dispatch / log /
- * re-stamp. The reconcile matrix itself lives in that pure function.
+ * This is the orchestration around that: poll, ask {@link planAdoption} what to
+ * do, then commit / dispatch / log / re-stamp. The reconcile matrix itself lives
+ * in that pure function.
  */
 async function adoptOrphanedSessions(): Promise<void> {
-  const epoch = sessionEpoch;
   const pollStart = Date.now();
   const crumbs = readSessionBreadcrumbs();
   const reading = await pollForRunningApps(new Set(crumbs.map((c) => c.appId)));
-  if (epoch !== sessionEpoch) {
-    // destroySessionManager ran while the poll was in flight — abort before
-    // touching module state, the breadcrumbs, or the backend.
-    detach(debugLog("adoption: cancelled by destroy"));
-    return;
-  }
   const waitedMs = Date.now() - pollStart;
   logInfo(
     reading.apps.length > 0
@@ -472,11 +456,6 @@ async function adoptOrphanedSessions(): Promise<void> {
   for (const s of orphans) logInfo(`Session orphaned — playtime not recorded (romId=${s.romId})`);
 
   for (const session of restamped) {
-    if (epoch !== sessionEpoch) {
-      // Each re-stamp is an await, so the teardown check is per iteration.
-      detach(debugLog("adoption: cancelled by destroy"));
-      return;
-    }
     try {
       await recordSessionStart(session.romId);
     } catch (e) {
@@ -497,7 +476,7 @@ export async function initSessionManager(): Promise<void> {
   await refreshAppIdMap();
 
   // Game lifecycle notifications
-  lifetimeHook = SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
+  SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
     lifecycleChain = lifecycleChain
       .then(async () => {
         if (update.bRunning) {
@@ -537,22 +516,4 @@ export async function initSessionManager(): Promise<void> {
   await adoption;
 
   logInfo("Session manager initialized");
-}
-
-/**
- * Destroy session manager — unregisters all hooks.
- * Call during plugin unload.
- */
-export function destroySessionManager(): void {
-  if (lifetimeHook) {
-    lifetimeHook.unregister();
-    lifetimeHook = null;
-  }
-
-  activeSessions.clear();
-  lifecycleChain = Promise.resolve();
-  // Signal any in-flight adoption poll to abort instead of mutating torn-down state.
-  sessionEpoch++;
-
-  logInfo("Session manager destroyed");
 }

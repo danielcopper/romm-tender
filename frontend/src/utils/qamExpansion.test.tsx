@@ -167,12 +167,12 @@ describe("useWideQamPanel", () => {
     const panelDoc = document.implementation.createHTMLDocument("qam");
     const { host } = mountQamDom("panel", panelDoc);
 
-    renderWidePage(mod, host);
+    const { unmount } = renderWidePage(mod, host);
 
     expect(wideStyles(mod.WIDE_ROOT_CLASS, panelDoc)).toHaveLength(1);
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(0);
 
-    mod.collapseQamOnDismount();
+    unmount();
 
     expect(wideStyles(mod.WIDE_ROOT_CLASS, panelDoc)).toHaveLength(0);
   });
@@ -192,17 +192,6 @@ describe("useWideQamPanel", () => {
     });
 
     expect(lastMessage()).toBe("QamFriendsHidden");
-  });
-
-  it("posts nothing from dismount when no wide page took the panel", async () => {
-    const mod = await loadQamExpansion(PROBE_CLASSES);
-
-    // The flag is Steam's own: an unconditional hide would retract a Friends
-    // panel the user opened, and the frame has no consumer yet, so every plugin
-    // dismount would do exactly that.
-    mod.collapseQamOnDismount();
-
-    expect(post).not.toHaveBeenCalled();
   });
 
   it("never expands when the page mounts under an inactive Decky tab", async () => {
@@ -261,17 +250,6 @@ describe("useWideQamPanel", () => {
       qamVisible = false;
       for (const listener of visibilityListeners) listener();
     });
-
-    expect(lastMessage()).toBe("QamFriendsHidden");
-    expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(0);
-  });
-
-  it("clears from the plugin's dismount, where no React cleanup runs", async () => {
-    const mod = await loadQamExpansion(PROBE_CLASSES);
-    const { host } = mountQamDom();
-    renderWidePage(mod, host);
-
-    mod.collapseQamOnDismount();
 
     expect(lastMessage()).toBe("QamFriendsHidden");
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(0);

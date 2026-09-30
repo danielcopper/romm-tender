@@ -71,23 +71,6 @@ export interface Plugin {
   icon: ReactNode;
   /** Drawn in the panel below the strip. */
   content?: ReactNode;
-  /**
-   * Decky Loader's word for "render this panel even while another tab is
-   * active". **Nothing reads it since the panel stopped being a Decky plugin**:
-   * behind Tender's own entry, whether an unselected tab's panel stays mounted
-   * is Steam's tab group's decision and there is no flag to ask it with. It
-   * stays because it records what a page may still rely on — `qamExpansion.ts`
-   * is written against a panel that can render while its tab is not active —
-   * and deleting it would delete the question with it.
-   */
-  alwaysRender?: boolean;
-  /**
-   * Decky Loader's teardown hook. **Nothing calls it for the same reason**: a
-   * JS-context rebuild is what ends this panel, and it takes the whole context
-   * rather than unloading anything. The panel's own suite calls it to exercise
-   * the teardown paths it registers.
-   */
-  onDismount?(): void;
 }
 
 // -- the connection -----------------------------------------------------------

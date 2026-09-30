@@ -278,6 +278,11 @@ async function renderAndStartPreview() {
   return result;
 }
 
+// Attached once for the whole file, as `index.tsx` attaches it once for the
+// panel's JS context: the mirror has no detach, and the stores it joins are
+// reset per test instead.
+attachRunUnitsMirror();
+
 describe("SyncPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -1263,13 +1268,6 @@ describe("SyncPage", () => {
   // The run view.
   // ===========================================================================
   describe("the run view", () => {
-    let detachMirror: (() => void) | null = null;
-
-    afterEach(() => {
-      detachMirror?.();
-      detachMirror = null;
-    });
-
     function seedPlan() {
       seedRunUnits(
         [
@@ -1279,7 +1277,6 @@ describe("SyncPage", () => {
         ],
         "run-live",
       );
-      detachMirror = attachRunUnitsMirror();
     }
 
     it("shows the whole run as one bar with the stage and the step counter", async () => {
@@ -1370,7 +1367,6 @@ describe("SyncPage", () => {
 
     it("a waiting unit the plan carries no new-shortcut count for shows its ROM count", async () => {
       seedRunUnits([planUnit({ id: 7, type: "collection", name: "Favorites", rom_count: 12 })], "run-live");
-      detachMirror = attachRunUnitsMirror();
       setSyncProgress({ running: true, stage: "fetching", step: 0, totalSteps: 1, message: "", runId: "run-live" });
       const { container } = await renderPage();
 
@@ -1542,7 +1538,6 @@ describe("SyncPage", () => {
         const calls = recordScrolls();
         // Unit 1, which the geometry above leaves at the region's own top.
         seedRunUnits([planUnit({ id: 1, name: "PlayStation", rom_count: 40, new_shortcut_count: 4 })], "run-live");
-        detachMirror = attachRunUnitsMirror();
         const { container } = await renderPage();
         await act(async () => {
           setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, runId: "run-live" });
@@ -1682,13 +1677,6 @@ describe("SyncPage", () => {
   // start they are still true for.
   // ===========================================================================
   describe("a previous run's rows at the next press", () => {
-    let detachMirror: (() => void) | null = null;
-
-    afterEach(() => {
-      detachMirror?.();
-      detachMirror = null;
-    });
-
     /** Rows from a run that has already been and gone, with the results its
      *  apply produced — what the reader saw standing over a new run's fetch. */
     function seedFinishedRun(): void {
@@ -1696,7 +1684,6 @@ describe("SyncPage", () => {
         [planUnit({ id: 1, name: "PlayStation" }), planUnit({ id: 2, name: "SNES" })],
         "run-that-already-ended",
       );
-      detachMirror = attachRunUnitsMirror();
     }
 
     /** Stats that offer a resume: the newest run did not complete, and the games
@@ -2290,24 +2277,19 @@ describe("SyncPage", () => {
 
     it("keeps it in the run table's own region, which stands in its column's room rather than inside it", async () => {
       seedRunUnits([planUnit({ id: 1, name: "PlayStation" })], "run-live");
-      const detach = attachRunUnitsMirror();
-      try {
-        setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, runId: "run-live" });
-        const { container } = await renderPage();
+      setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, runId: "run-live" });
+      const { container } = await renderPage();
 
-        // The room is the unit list's own region's, not only its column's.
-        const unitRegion = regionAround(container.querySelector('[data-testid="run-unit-platform-1"]')!);
-        expect(unitRegion.getAttribute("data-testid")).toBe("run-units");
-        expect(unitRegion.style.padding).toBe(`${FOCUS_RING_REACH}px`);
-        // Its column is a region too, and the margins stand the list in the
-        // column's room — why: `docs/architecture/qam-panel.md` § Room for the
-        // focus ring.
-        expect(regionAround(unitRegion).style.padding).toBe(`${FOCUS_RING_REACH}px`);
-        expect(unitRegion.style.marginLeft).toBe(`-${FOCUS_RING_REACH}px`);
-        expect(unitRegion.style.marginRight).toBe(`-${FOCUS_RING_REACH}px`);
-      } finally {
-        detach();
-      }
+      // The room is the unit list's own region's, not only its column's.
+      const unitRegion = regionAround(container.querySelector('[data-testid="run-unit-platform-1"]')!);
+      expect(unitRegion.getAttribute("data-testid")).toBe("run-units");
+      expect(unitRegion.style.padding).toBe(`${FOCUS_RING_REACH}px`);
+      // Its column is a region too, and the margins stand the list in the
+      // column's room — why: `docs/architecture/qam-panel.md` § Room for the
+      // focus ring.
+      expect(regionAround(unitRegion).style.padding).toBe(`${FOCUS_RING_REACH}px`);
+      expect(unitRegion.style.marginLeft).toBe(`-${FOCUS_RING_REACH}px`);
+      expect(unitRegion.style.marginRight).toBe(`-${FOCUS_RING_REACH}px`);
     });
   });
 

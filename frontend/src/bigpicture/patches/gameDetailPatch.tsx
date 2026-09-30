@@ -24,7 +24,7 @@ import { RomMGameInfoPanel } from "../RomMGameInfoPanel";
 import { debugLog } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { isRomMAppId, rommAppIdCount } from "../../utils/rommAppIds";
-import { installGamePagePatch, type GamePagePatchHandle } from "./installGamePagePatch";
+import { installGamePagePatch } from "./installGamePagePatch";
 import { PLUGIN_NAME } from "../../utils/toast";
 
 // Tracks which appIds have already had their tree dumped (once per page load)
@@ -161,8 +161,6 @@ function dumpTree(container: any, appId: number): void {
   detach(debugLog(`===== END DEEP TREE DUMP =====`));
 }
 
-let gamePatch: GamePagePatchHandle | null = null;
-
 export function registerGameDetailPatch() {
   const patchHandler = createReactTreePatcher(
     [
@@ -247,7 +245,7 @@ export function registerGameDetailPatch() {
     "RomMGameDetail",
   );
 
-  gamePatch = installGamePagePatch(patchHandler);
+  const gamePatch = installGamePagePatch(patchHandler);
   if (!gamePatch.installed) {
     // The start-up check asks the same question before the panel is built and
     // records the miss in the line it logs there — nothing reaches the screen,
@@ -255,9 +253,4 @@ export function registerGameDetailPatch() {
     // the game page, for whoever reads the log with the game page in mind.
     console.warn(`[${PLUGIN_NAME}] Steam's game-page route was not found, so no Tender section will appear on it.`);
   }
-}
-
-export function unregisterGameDetailPatch() {
-  gamePatch?.unpatch();
-  gamePatch = null;
 }

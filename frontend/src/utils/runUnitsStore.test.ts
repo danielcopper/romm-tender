@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import {
   attachRunUnitsMirror,
@@ -50,19 +50,17 @@ function frame(step: number, name: string, over: Record<string, unknown> = {}): 
   });
 }
 
-describe("runUnitsStore", () => {
-  let detachMirror: () => void;
+// Attached once for the whole file, as `index.tsx` attaches it once for the
+// panel's JS context: the mirror has no detach, and the stores it joins are
+// reset per test instead.
+attachRunUnitsMirror();
 
+describe("runUnitsStore", () => {
   beforeEach(() => {
     resetRunUnitsStoreForTests();
     // The whole store, not just an idle frame: these cases reuse one run id, and
     // a run this store has seen END can never be put back in flight.
     resetSyncProgressStoreForTests();
-    detachMirror = attachRunUnitsMirror();
-  });
-
-  afterEach(() => {
-    detachMirror();
   });
 
   describe("seeding from the plan", () => {

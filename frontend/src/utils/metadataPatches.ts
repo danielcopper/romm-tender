@@ -118,16 +118,6 @@ export async function applyAllMetadata(signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Clean up metadata state. Call on plugin dismount.
- */
-export function unregisterMetadataPatches() {
-  metadataCache = {};
-  appIdToRomId = {};
-  registeredAppIds = new Set();
-  logInfo("Cleared metadata state");
-}
-
-/**
  * Write tracked playtime to Steam's native UI fields.
  * Sets minutes_playtime_forever and rt_last_time_played so Steam shows
  * actual play time instead of "Never Played" for RomM shortcuts.

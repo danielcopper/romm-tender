@@ -381,8 +381,8 @@ describe("the renderer's render chain", () => {
 
   it("stops the link it replaces from drawing, so only one of ours is ever live", () => {
     // Whatever overwrote the replaced link may still delegate through it, as
-    // the second patcher below does — so without retiring it a teardown that
-    // restores nothing would leave it drawing from underneath.
+    // the second patcher below does — so without retiring it the replaced link
+    // would go on drawing from underneath the new one.
     const renderer = fakeRenderer();
     const store = fakeStore();
     const toaster = createSteamToaster(seams({ renderer, store }));
@@ -393,68 +393,13 @@ describe("the renderer's render chain", () => {
       return createElement("div", { "data-testid": "second-patcher" }, ours.apply(this, args) as ReactNode);
     };
     const notification = raiseAndDraw(toaster, store);
-    toaster.teardown();
 
-    const drawn = drawWith(renderer, { group: groupFor(notification), location: 3 });
-    expect(drawn.queryByTestId("second-patcher")).not.toBeNull();
-    expect(drawn.queryByText("Sync finished")).toBeNull();
-  });
-});
-
-describe("handing the renderer back at dismount", () => {
-  it("puts back what it found when ours is still the one on top", () => {
-    const renderer = fakeRenderer();
-    installTrampoline(renderer);
-    const valveRender = renderer.prototype.render;
-
-    const toaster = createSteamToaster(seams({ renderer }));
-    toaster.toast(TOAST);
-    expect(renderer.prototype.render).not.toBe(valveRender);
-
-    toaster.teardown();
-    expect(renderer.prototype.render).toBe(valveRender);
-  });
-
-  it("goes transparent instead of cutting the chain when somebody wrapped over ours", () => {
-    // Restoring here would take the later patcher's drawing with it: what it
-    // delegates to is our link.
-    const renderer = fakeRenderer();
-    const store = fakeStore();
-    const toaster = createSteamToaster(seams({ renderer, store }));
-    const notification = raiseAndDraw(toaster, store);
-
-    const ours = renderer.prototype.render as SteamToastRenderFn;
-    renderer.prototype.render = function (this: { props: SteamToastRenderProps }, ...args: unknown[]): ReactNode {
-      return createElement("div", { "data-testid": "later-patcher" }, ours.apply(this, args) as ReactNode);
-    };
-
-    toaster.teardown();
-    expect(renderer.prototype.render).not.toBe(ours);
-    const drawn = drawWith(renderer, { group: groupFor(notification), location: 3 });
-    // The later patcher still draws, and what it delegates to now falls through
-    // to Steam's own instead of to a toast of ours.
-    expect(drawn.queryByTestId("later-patcher")).not.toBeNull();
+    // Entered the way the second patcher enters it, the replaced link falls
+    // through to what it wrapped instead of drawing a toast of ours.
+    const props = { group: groupFor(notification), location: 3 };
+    const Replaced = () => ours.call({ props }) as ReactNode;
+    const drawn = render(<Replaced />);
     expect(drawn.queryByText("Sync finished")).toBeNull();
     expect(drawn.queryByTestId("valve-drawing")).not.toBeNull();
-  });
-
-  it("does nothing at all when no toast was ever raised", () => {
-    const renderer = fakeRenderer();
-    createSteamToaster(seams({ renderer })).teardown();
-    expect(renderer.prototype.render).toBeUndefined();
-  });
-
-  it("is safe to call twice, and a toast after it installs the drawing again", () => {
-    const renderer = fakeRenderer();
-    const store = fakeStore();
-    const toaster = createSteamToaster(seams({ renderer, store }));
-    toaster.toast(TOAST);
-    toaster.teardown();
-    toaster.teardown();
-
-    const notification = raiseAndDraw(toaster, store);
-    expect(
-      drawWith(renderer, { group: groupFor(notification), location: 3 }).queryByText("Sync finished"),
-    ).not.toBeNull();
   });
 });

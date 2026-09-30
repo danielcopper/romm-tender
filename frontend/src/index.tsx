@@ -1,4 +1,4 @@
-import { definePlugin, addEventListener, removeEventListener, toaster } from "./api/host";
+import { definePlugin, addEventListener, toaster } from "./api/host";
 import { showToast, PLUGIN_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
@@ -21,15 +21,10 @@ import { beginEtaRun } from "./utils/syncEta";
 import { syncFailedMessage } from "./utils/syncFailed";
 import { updateDownload, getDownloadState, removeDownload } from "./utils/downloadStore";
 import { handleGlobalDownloadFailure } from "./utils/downloadFailure";
-import { registerGameDetailPatch, unregisterGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
+import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
-import {
-  registerMetadataPatches,
-  unregisterMetadataPatches,
-  applyAllPlaytime,
-  applyAllMetadata,
-} from "./utils/metadataPatches";
-import { registerLaunchInterceptor, unregisterLaunchInterceptor } from "./utils/launchInterceptor";
+import { registerMetadataPatches, applyAllPlaytime, applyAllMetadata } from "./utils/metadataPatches";
+import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { showCoreChangeModal } from "./bigpicture/CoreChangeModal";
 import { handleConflicts } from "./bigpicture/SyncConflictModal";
 import { showOfflineDriftModal } from "./bigpicture/OfflineDriftModal";
@@ -66,12 +61,10 @@ import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
 import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
-import { initSessionManager, destroySessionManager } from "./utils/sessionManager";
+import { initSessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
 import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
-import { collapseQamOnDismount } from "./utils/qamExpansion";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
-import { steamToaster } from "./utils/steamToaster";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,
@@ -94,7 +87,6 @@ import {
   capturePruneLeaseAdmission,
   isPruneLeaseCancelled,
   mountPruneLeasePlugin,
-  releaseAllPruneLeases,
   releasePruneLease,
   withPruneLease,
 } from "./utils/pruneLease";
@@ -400,7 +392,6 @@ const tender = definePlugin(() => {
         name: PLUGIN_NAME,
         icon: <TabIcon />,
         content: <StartupFailurePanel report={startup} copy={copy} />,
-        alwaysRender: true,
       };
     }
     // The panel mounts, so nothing on screen reports this: the log line is the
@@ -778,21 +769,21 @@ const tender = definePlugin(() => {
     );
   };
 
-  const syncCompleteListener = addEventListener<{
+  addEventListener<{
     platform_app_ids: Record<string, number[]>;
     romm_collection_app_ids?: Record<string, number[]>;
     total_games: number;
   }>("sync_complete", onSyncComplete);
 
-  const syncApplyUnitListener = initUnitSyncManager();
+  initUnitSyncManager();
   // Mirror the run's frames into its per-unit rows for as long as the plugin is
   // loaded, so a run that spans a page change keeps filling them in.
-  const detachRunUnitsMirror = attachRunUnitsMirror();
+  attachRunUnitsMirror();
 
   // Per-unit pipeline: planning + stale + collections events.
   // ``sync_plan`` arrives once per run with the full work queue: the per-run
   // resets below and the run's per-unit rows both key off it.
-  const syncPlanListener = addEventListener<SyncPlanData>("sync_plan", (data: SyncPlanData) => {
+  addEventListener<SyncPlanData>("sync_plan", (data: SyncPlanData) => {
     syncContinuationController.abort();
     syncContinuationController = new AbortController();
     // sync_plan fires once per run, before any unit — reset the per-run delta
@@ -860,7 +851,7 @@ const tender = definePlugin(() => {
   // shortcut by the ``app_id`` the backend captured BEFORE unbinding the
   // row. Resolving rom_id→app_id here (via getExistingRomMShortcuts) would
   // race the backend unbind and find nothing, orphaning the shortcut.
-  const syncStaleListener = addEventListener<SyncStaleData>("sync_stale", (data: SyncStaleData) => {
+  addEventListener<SyncStaleData>("sync_stale", (data: SyncStaleData) => {
     if (!Array.isArray(data.remove) || data.remove.length === 0) return;
     // Collect the valid app_ids and record the "removed" delta for each UP FRONT —
     // synchronously, before the first paced breather. recordSyncRemoved is a cheap,
@@ -905,12 +896,9 @@ const tender = definePlugin(() => {
   // routes these through ``sync_complete``; the per-unit path emits them
   // separately so the frontend can apply collection updates before the
   // terminal "done" toast.
-  const syncCollectionsListener = addEventListener<SyncCollectionsData>(
-    "sync_collections",
-    (data: SyncCollectionsData) => {
-      logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
-    },
-  );
+  addEventListener<SyncCollectionsData>("sync_collections", (data: SyncCollectionsData) => {
+    logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
+  });
 
   // Backend emits sync_progress events throughout the sync run — update the
   // module-level store. The backend frame carries no etaSeconds (that ceiling is
@@ -922,7 +910,7 @@ const tender = definePlugin(() => {
   // failure is not toasted: the Sync page that asked for it says it, or Main's
   // transient line if the reader has left, and only while Main is open.
   const failedRunsAnnounced = new Set<string>();
-  const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
+  addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
     setSyncProgress(etaSeconds !== undefined ? { ...progress, etaSeconds } : progress);
     if (progress.running || progress.stage !== "error" || progress.runKind !== "apply") return;
@@ -934,101 +922,92 @@ const tender = definePlugin(() => {
     showToast(syncFailedMessage(progress.message));
   });
 
-  const downloadProgressListener = addEventListener<DownloadProgressEvent>(
-    "download_progress",
-    (data: DownloadProgressEvent) => {
-      // A cancel is an explicit discard — drop the entry entirely so no
-      // "Cancelled" row lingers in the queue view or the QAM summary count
-      // (#149 downloads-round). Both the running-cancel and the paused-cancel
-      // backend paths emit this terminal frame, so this is the single place the
-      // store drops a cancelled download. Every other status updates in place.
-      if (data.status === "cancelled") {
-        removeDownload(data.rom_id);
-        return;
-      }
-      // Carry the server's resumability verdict from the frame; a frame that
-      // omits it (older shape) keeps the prior value instead of clobbering it.
-      const prev = getDownloadState().find((d) => d.rom_id === data.rom_id);
-      updateDownload({
-        rom_id: data.rom_id,
-        rom_name: data.rom_name,
-        platform_name: data.platform_name,
-        file_name: data.file_name,
-        status: data.status as "queued" | "downloading" | "completed" | "failed" | "cancelled" | "paused",
-        progress: data.progress,
-        bytes_downloaded: data.bytes_downloaded,
-        total_bytes: data.total_bytes,
-        resumable: data.resumable ?? prev?.resumable ?? false,
-      });
-    },
-  );
+  addEventListener<DownloadProgressEvent>("download_progress", (data: DownloadProgressEvent) => {
+    // A cancel is an explicit discard — drop the entry entirely so no
+    // "Cancelled" row lingers in the queue view or the QAM summary count
+    // (#149 downloads-round). Both the running-cancel and the paused-cancel
+    // backend paths emit this terminal frame, so this is the single place the
+    // store drops a cancelled download. Every other status updates in place.
+    if (data.status === "cancelled") {
+      removeDownload(data.rom_id);
+      return;
+    }
+    // Carry the server's resumability verdict from the frame; a frame that
+    // omits it (older shape) keeps the prior value instead of clobbering it.
+    const prev = getDownloadState().find((d) => d.rom_id === data.rom_id);
+    updateDownload({
+      rom_id: data.rom_id,
+      rom_name: data.rom_name,
+      platform_name: data.platform_name,
+      file_name: data.file_name,
+      status: data.status as "queued" | "downloading" | "completed" | "failed" | "cancelled" | "paused",
+      progress: data.progress,
+      bytes_downloaded: data.bytes_downloaded,
+      total_bytes: data.total_bytes,
+      resumable: data.resumable ?? prev?.resumable ?? false,
+    });
+  });
 
-  const downloadCompleteListener = addEventListener<DownloadCompleteEvent>(
-    "download_complete",
-    (data: DownloadCompleteEvent) => {
-      const prev = getDownloadState().find((d) => d.rom_id === data.rom_id);
-      updateDownload({
-        rom_id: data.rom_id,
-        rom_name: data.rom_name,
-        platform_name: data.platform_name,
-        file_name: prev?.file_name ?? "",
-        status: "completed",
-        progress: 1,
-        bytes_downloaded: prev?.bytes_downloaded ?? 0,
-        total_bytes: prev?.total_bytes ?? 0,
-        resumable: data.resumable ?? prev?.resumable ?? false,
-      });
-      showToast(`Downloaded ${data.rom_name}`);
+  addEventListener<DownloadCompleteEvent>("download_complete", (data: DownloadCompleteEvent) => {
+    const prev = getDownloadState().find((d) => d.rom_id === data.rom_id);
+    updateDownload({
+      rom_id: data.rom_id,
+      rom_name: data.rom_name,
+      platform_name: data.platform_name,
+      file_name: prev?.file_name ?? "",
+      status: "completed",
+      progress: 1,
+      bytes_downloaded: prev?.bytes_downloaded ?? 0,
+      total_bytes: prev?.total_bytes ?? 0,
+      resumable: data.resumable ?? prev?.resumable ?? false,
+    });
+    showToast(`Downloaded ${data.rom_name}`);
 
-      // The ROM is now installed — its shortcut's launch options must carry the
-      // full launch command (was "" while uninstalled). The backend resolved
-      // the bound appId for this rom_id and put it on the payload, so confirm-set
-      // the new launch options directly. ``app_id`` is null when the ROM isn't
-      // synced yet (no shortcut) — no-op; the next sync writes the command at
-      // creation time.
-      if (data.app_id !== null) {
-        const appId = data.app_id;
-        detach(
-          (async () => {
-            try {
-              const ok = await withPruneLease(data.prune_lease_token, "Download completion", async (signal) => {
-                if (isPruneLeaseCancelled(signal)) return false;
-                return setLaunchOptionsConfirmed(appId, data.launch_options);
-              });
-              if (!ok) {
-                logError(`download_complete: failed to confirm launch options for rom ${data.rom_id} (appId ${appId})`);
-              }
-            } catch (e) {
-              logError(`download_complete: failed to set launch options for rom ${data.rom_id}: ${e}`);
+    // The ROM is now installed — its shortcut's launch options must carry the
+    // full launch command (was "" while uninstalled). The backend resolved
+    // the bound appId for this rom_id and put it on the payload, so confirm-set
+    // the new launch options directly. ``app_id`` is null when the ROM isn't
+    // synced yet (no shortcut) — no-op; the next sync writes the command at
+    // creation time.
+    if (data.app_id !== null) {
+      const appId = data.app_id;
+      detach(
+        (async () => {
+          try {
+            const ok = await withPruneLease(data.prune_lease_token, "Download completion", async (signal) => {
+              if (isPruneLeaseCancelled(signal)) return false;
+              return setLaunchOptionsConfirmed(appId, data.launch_options);
+            });
+            if (!ok) {
+              logError(`download_complete: failed to confirm launch options for rom ${data.rom_id} (appId ${appId})`);
             }
-          })(),
-        );
-      }
-    },
-  );
+          } catch (e) {
+            logError(`download_complete: failed to set launch options for rom ${data.rom_id}: ${e}`);
+          }
+        })(),
+      );
+    }
+  });
 
-  const downloadFailedListener = addEventListener<DownloadFailedEvent>("download_failed", (data: DownloadFailedEvent) =>
+  addEventListener<DownloadFailedEvent>("download_failed", (data: DownloadFailedEvent) =>
     handleGlobalDownloadFailure(data, { getDownloadState, updateDownload }, toaster),
   );
 
-  const pathChangedListener = addEventListener<{ old_path: string; new_path: string; cleared?: boolean }>(
-    "retrodeck_path_changed",
-    (data) => {
-      // Backend auto-clears the migration when the new path matches a previous
-      // RetroDECK home (round-trip / branch reset). Drop the pending block so
-      // all subscribers re-render without the migration UI.
-      if (data.cleared) {
-        setMigrationStatus({ pending: false });
-        return;
-      }
-      // Path actually changed — refetch authoritative status (file counts).
-      getMigrationStatus()
-        .then((status) => setMigrationStatus(status))
-        .catch((e) => logError(`Failed to refresh migration status: ${e}`));
-    },
-  );
+  addEventListener<{ old_path: string; new_path: string; cleared?: boolean }>("retrodeck_path_changed", (data) => {
+    // Backend auto-clears the migration when the new path matches a previous
+    // RetroDECK home (round-trip / branch reset). Drop the pending block so
+    // all subscribers re-render without the migration UI.
+    if (data.cleared) {
+      setMigrationStatus({ pending: false });
+      return;
+    }
+    // Path actually changed — refetch authoritative status (file counts).
+    getMigrationStatus()
+      .then((status) => setMigrationStatus(status))
+      .catch((e) => logError(`Failed to refresh migration status: ${e}`));
+  });
 
-  const saveStatusListener = addEventListener<SaveStatus>("save_status_updated", (data: SaveStatus) => {
+  addEventListener<SaveStatus>("save_status_updated", (data: SaveStatus) => {
     const hasConflict = hasAnySaveConflict(data);
     globalThis.dispatchEvent(
       new CustomEvent("romm_data_changed", {
@@ -1040,7 +1019,7 @@ const tender = definePlugin(() => {
   // After a RetroDECK-home migration the backend rewrites each installed ROM's
   // launch command to the new path and emits the new command per shortcut.
   // Confirm-set each so existing shortcuts launch from the migrated location.
-  const migrationRelaunchListener = addEventListener<{
+  addEventListener<{
     items: { app_id: number; launch_options: string }[];
     prune_lease_token?: string;
   }>("migration_relaunch_options", (data) => {
@@ -1055,27 +1034,18 @@ const tender = definePlugin(() => {
   // retry so the saves surfaces can show "Connecting to RomM… (attempt N/M)".
   // The consuming surface clears the store once its own load settles — the
   // ladder itself emits no terminal "done" frame.
-  const serverRetryListener = addEventListener<ServerRetryProgressEvent>(
-    "server_retry_progress",
-    (data: ServerRetryProgressEvent) => {
-      setServerRetryProgress({ attempt: data.attempt, maxAttempts: data.max_attempts });
-    },
-  );
+  addEventListener<ServerRetryProgressEvent>("server_retry_progress", (data: ServerRetryProgressEvent) => {
+    setServerRetryProgress({ attempt: data.attempt, maxAttempts: data.max_attempts });
+  });
 
   // The backend's own release check, pushed when its answer changes, the
   // install attempt's steps, a stopped attempt judged after panel load, and a
   // refusal by the pre-install check seen while the backend ran; each is held
   // in its store for the surfaces.
-  const updateNoticeListener = addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
-  const updateInstallListener = addEventListener<UpdateInstallAttempt>(
-    "update_install_progress",
-    setUpdateInstallAttempt,
-  );
-  const updateStoppedListener = addEventListener<StoppedUpdateAttemptWire>(
-    "update_attempt_stopped",
-    takePushedStoppedAttempt,
-  );
-  const updateFailureListener = addEventListener<UpdateFailure>("update_failure_recorded", takePushedUpdateFailure);
+  addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
+  addEventListener<UpdateInstallAttempt>("update_install_progress", setUpdateInstallAttempt);
+  addEventListener<StoppedUpdateAttemptWire>("update_attempt_stopped", takePushedStoppedAttempt);
+  addEventListener<UpdateFailure>("update_failure_recorded", takePushedUpdateFailure);
 
   // Destructive cleanup actions must keep running even when the Data Management
   // page or the game-detail picker unmounts. The backend emits one tokenized action at a
@@ -1115,19 +1085,14 @@ const tender = definePlugin(() => {
     );
   };
 
-  const pruneActionListener = addEventListener<PruneActionRequired>(
-    "prune_action_required",
-    (action: PruneActionRequired) => {
-      if (!admitPruneFrame(action.preview_id, action.run_id)) return;
-      detach(handlePruneAction(action));
-    },
-  );
+  addEventListener<PruneActionRequired>("prune_action_required", (action: PruneActionRequired) => {
+    if (!admitPruneFrame(action.preview_id, action.run_id)) return;
+    detach(handlePruneAction(action));
+  });
 
-  const pruneProgressListener = addEventListener<PruneProgress>("prune_progress", (progress: PruneProgress) =>
-    setPruneProgress(progress),
-  );
+  addEventListener<PruneProgress>("prune_progress", (progress: PruneProgress) => setPruneProgress(progress));
 
-  const pruneCompleteListener = addEventListener<PruneComplete>("prune_complete", (result: PruneComplete) => {
+  addEventListener<PruneComplete>("prune_complete", (result: PruneComplete) => {
     const completed = setPruneComplete(result);
     if (!completed) return;
     for (const appId of completed.affected_app_ids) invalidateCachedGameDetail(appId);
@@ -1169,42 +1134,6 @@ const tender = definePlugin(() => {
     name: PLUGIN_NAME,
     icon: <TabIcon />,
     content: <QAMPanel />,
-    alwaysRender: true,
-    onDismount() {
-      // Ahead of every step below that can throw: the panel width is a global
-      // Steam flag with no React cleanup left to clear it here, so a teardown
-      // that dies halfway must not be what leaves Steam's own QAM expanded.
-      collapseQamOnDismount();
-      syncContinuationController.abort();
-      destroySessionManager();
-      unregisterLaunchInterceptor();
-      unregisterGameDetailPatch();
-      unregisterMetadataPatches();
-      removeEventListener("sync_complete", syncCompleteListener);
-      removeEventListener("sync_apply_unit", syncApplyUnitListener);
-      removeEventListener("sync_plan", syncPlanListener);
-      removeEventListener("sync_stale", syncStaleListener);
-      removeEventListener("sync_collections", syncCollectionsListener);
-      removeEventListener("sync_progress", syncProgressListener);
-      detachRunUnitsMirror();
-      removeEventListener("download_progress", downloadProgressListener);
-      removeEventListener("download_complete", downloadCompleteListener);
-      removeEventListener("download_failed", downloadFailedListener);
-      removeEventListener("retrodeck_path_changed", pathChangedListener);
-      removeEventListener("save_status_updated", saveStatusListener);
-      removeEventListener("migration_relaunch_options", migrationRelaunchListener);
-      removeEventListener("server_retry_progress", serverRetryListener);
-      removeEventListener("update_notice", updateNoticeListener);
-      removeEventListener("update_install_progress", updateInstallListener);
-      removeEventListener("update_attempt_stopped", updateStoppedListener);
-      removeEventListener("update_failure_recorded", updateFailureListener);
-      removeEventListener("prune_action_required", pruneActionListener);
-      cancelPruneActions();
-      detach(releaseAllPruneLeases());
-      removeEventListener("prune_progress", pruneProgressListener);
-      removeEventListener("prune_complete", pruneCompleteListener);
-      steamToaster.teardown();
-    },
   };
 });
 

@@ -157,17 +157,6 @@ function expandWidePanel(root: HTMLElement): void {
 }
 
 /**
- * Collapse the panel from outside React's own cleanup.
- *
- * Written for Decky's `onDismount`, which has no caller behind Tender's own
- * Quick Access entry. Kept because the flag it clears is Steam's and global,
- * so a lever that reaches it without a mounted component is worth having.
- */
-export function collapseQamOnDismount(): void {
-  collapseWidePanel();
-}
-
-/**
  * Hold the panel wide for as long as the page owning `rootRef` is mounted, the
  * tab this page sits in is the active QAM tab, and the QAM is not known to be
  * closed. Losing any of the three posts the hide message and drops the

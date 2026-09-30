@@ -12,7 +12,6 @@ import {
   mountPruneLeaseOwner,
   mountPruneLeasePlugin,
   PruneLeaseAdmissionCancelled,
-  releaseAllPruneLeases,
   releasePruneLease,
   releasePruneLeasesByOwner,
   withPruneLease,
@@ -30,7 +29,6 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await releaseAllPruneLeases();
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -60,7 +58,6 @@ it("reads any failure on a torn-down owner as a cancellation", async () => {
 it("reads any failure as a cancellation once the plugin generation rolls", async () => {
   const admission = capturePruneLeaseAdmission();
 
-  await releaseAllPruneLeases();
   mountPruneLeasePlugin();
 
   expect(isPruneLeaseCancellation(new Error("io"), admission)).toBe(true);
@@ -86,7 +83,6 @@ it("an old plugin generation stays stale after a genuine remount", async () => {
   const oldAdmission = capturePruneLeaseAdmission();
   const operation = vi.fn().mockResolvedValue(undefined);
 
-  await releaseAllPruneLeases();
   mountPruneLeasePlugin();
   await expect(withPruneLease("late-plugin", "Late plugin", operation, "root", oldAdmission)).rejects.toThrow(
     "cancelled before lease registration",
@@ -208,21 +204,6 @@ it("owner teardown retains backend exclusion until a started non-cancellable ope
   await continuation;
   await teardown;
   expect(releasePruneConflictLease).toHaveBeenCalledWith("lease-started");
-});
-
-it("plugin teardown releases all registered frontend leases", async () => {
-  vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
-  maintainPruneLease("lease-1", "Artwork", "artwork:42");
-  maintainPruneLease("lease-2", "Sync", "root");
-
-  await releaseAllPruneLeases();
-
-  expect(
-    vi
-      .mocked(releasePruneConflictLease)
-      .mock.calls.map(([token]) => token)
-      .sort(),
-  ).toEqual(["lease-1", "lease-2"]);
 });
 
 it("stops renewing an unresolved continuation at the five-minute bound", async () => {

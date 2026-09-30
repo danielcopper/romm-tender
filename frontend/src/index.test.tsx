@@ -14,8 +14,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
-import { toaster } from "./api/host";
+import { createElement } from "react";
+import { toaster, type Plugin } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
 import {
   getSettingsResetNotice,
@@ -28,6 +28,7 @@ import {
   invalidateCachedGameDetail,
   getMetadataCachePage,
   releasePruneConflictLease,
+  renewPruneConflictLease,
   waitForPruneRelease,
 } from "./api/backend";
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
@@ -44,7 +45,6 @@ import { resetEta, weightedCoarseFraction } from "./utils/syncEta";
 import { recordSyncCreated, resetSyncDelta, getSyncDelta } from "./utils/syncDeltaStore";
 import { resetSyncCancel } from "./utils/syncManager";
 import { beginPrunePreview, beginPruneRun, getPruneState, resetPruneState } from "./utils/pruneStore";
-import { mountPruneLeasePlugin, releaseAllPruneLeases } from "./utils/pruneLease";
 import type { StartupReport } from "./boot/steamModules";
 import type {
   DownloadCompleteEvent,
@@ -91,7 +91,6 @@ vi.mock("./qam/installEntry", () => ({
 
 vi.mock("./bigpicture/patches/gameDetailPatch", () => ({
   registerGameDetailPatch: vi.fn(),
-  unregisterGameDetailPatch: vi.fn(),
 }));
 vi.mock("./utils/rommAppIds", () => ({
   registerRomMAppId: vi.fn(),
@@ -99,17 +98,14 @@ vi.mock("./utils/rommAppIds", () => ({
 }));
 vi.mock("./utils/metadataPatches", () => ({
   registerMetadataPatches: vi.fn(),
-  unregisterMetadataPatches: vi.fn(),
   applyAllPlaytime: vi.fn().mockResolvedValue(undefined),
   applyAllMetadata: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("./utils/launchInterceptor", () => ({
   registerLaunchInterceptor: vi.fn(),
-  unregisterLaunchInterceptor: vi.fn(),
 }));
 vi.mock("./utils/sessionManager", () => ({
   initSessionManager: vi.fn().mockResolvedValue(undefined),
-  destroySessionManager: vi.fn(),
 }));
 
 const handlePruneAction = vi.fn().mockResolvedValue(undefined);
@@ -202,7 +198,6 @@ import {
   resetNotificationsHealthForTests,
   setNotificationsUnavailable,
 } from "./utils/notificationsHealth";
-import { steamToaster } from "./utils/steamToaster";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import "./index";
@@ -210,11 +205,8 @@ import "./index";
 // Importing `./index` runs its last act, which hands the factory to the Quick
 // Access installer mocked above — so the factory is taken from that call, the
 // one argument index.tsx really passes. Calling it registers the listeners and
-// returns the plugin descriptor (with onDismount and the panel itself).
-const pluginFactory = vi.mocked(installQuickAccessEntry).mock.calls[0]![0] as unknown as () => {
-  onDismount: () => void;
-  content: ReactNode;
-};
+// returns the plugin descriptor with the panel itself.
+const pluginFactory: () => Plugin = vi.mocked(installQuickAccessEntry).mock.calls[0]![0];
 
 function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
@@ -290,19 +282,13 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     vi.mocked(registerLaunchInterceptor).mockClear();
     relocateShortcutsToLauncher.mockClear();
 
-    // Cast locally rather than widening `pluginFactory`: this is the one exit
-    // where the teardown is absent, and making it optional everywhere would say
-    // the other seventy-nine call sites have to guard for something they do not.
-    const plugin = pluginFactory() as unknown as { onDismount?: () => void };
+    pluginFactory();
 
     expect(registerGameDetailPatch).not.toHaveBeenCalled();
     expect(registerLaunchInterceptor).not.toHaveBeenCalled();
     expect(relocateShortcutsToLauncher).not.toHaveBeenCalled();
     expect(hostEventListenerCount("sync_progress")).toBe(0);
     expect(hostEventListenerCount("download_complete")).toBe(0);
-    // And nothing to tear down: a factory that registered nothing must not hand
-    // back a teardown that would remove listeners the real panel installed.
-    expect(plugin.onDismount).toBeUndefined();
   });
 });
 
@@ -335,14 +321,12 @@ describe("index.tsx — what the factory does when only a decoration was not fou
 
     expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
     expect(registerGameDetailPatch).toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("reports it in the log, which is the only place it is reported at all", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Missing: ControllerGlyph"));
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
-    plugin.onDismount();
   });
 });
 
@@ -365,27 +349,16 @@ describe("index.tsx — what the factory records about the toasts", () => {
       missingPackageNames: [],
       checked: 33,
     };
-    const plugin = pluginFactory();
+    pluginFactory();
     expect(notificationsUnavailable()).toBe(true);
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Tender's notifications are off"));
-    plugin.onDismount();
     consoleWarn.mockRestore();
   });
 
   it("records nothing owed when every search answered", () => {
     setNotificationsUnavailable(true);
-    const plugin = pluginFactory();
+    pluginFactory();
     expect(notificationsUnavailable()).toBe(false);
-    plugin.onDismount();
-  });
-
-  it("hands Steam's toast renderer back at dismount", () => {
-    const teardown = vi.spyOn(steamToaster, "teardown");
-    const plugin = pluginFactory();
-    expect(teardown).not.toHaveBeenCalled();
-    plugin.onDismount();
-    expect(teardown).toHaveBeenCalledTimes(1);
-    teardown.mockRestore();
   });
 });
 
@@ -396,39 +369,36 @@ describe("index.tsx — launcher relocation at plugin load", () => {
   });
 
   it("points the shortcuts at the launcher without the panel being opened", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await act(flush);
 
     expect(relocateShortcutsToLauncher).toHaveBeenCalledTimes(1);
     expect(getLauncherState().relocated).toBe(true);
-    plugin.onDismount();
   });
 
   it("leaves the relocation unestablished when the backend blocked the rewrite", async () => {
     relocateShortcutsToLauncher.mockResolvedValue({ status: "blocked" });
 
-    const plugin = pluginFactory();
+    pluginFactory();
     await act(flush);
 
     expect(getLauncherState().relocated).toBe(false);
-    plugin.onDismount();
   });
 
   it("leaves the relocation unestablished when the pass throws", async () => {
     relocateShortcutsToLauncher.mockRejectedValue(new Error("shortcut store exploded"));
 
-    const plugin = pluginFactory();
+    pluginFactory();
     await act(flush);
 
     expect(getLauncherState().relocated).toBe(false);
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("shortcut store exploded"));
-    plugin.onDismount();
   });
 });
 
 describe("index.tsx — persistent prune listeners", () => {
-  it("handles tokenized Steam actions at the plugin root and unregisters on dismount", async () => {
-    const plugin = pluginFactory();
+  it("handles tokenized Steam actions at the plugin root", async () => {
+    pluginFactory();
     beginPrunePreview("preview-1");
     const action = {
       run_id: "run-1",
@@ -445,14 +415,10 @@ describe("index.tsx — persistent prune listeners", () => {
     });
 
     expect(handlePruneAction).toHaveBeenCalledWith(action);
-    plugin.onDismount();
-    expect(hostEventListenerCount("prune_action_required")).toBe(0);
-    expect(hostEventListenerCount("prune_progress")).toBe(0);
-    expect(hostEventListenerCount("prune_complete")).toBe(0);
   });
 
   it("stores progress and completion, invalidates affected details, and emits a refresh", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-1");
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
@@ -487,11 +453,10 @@ describe("index.tsx — persistent prune listeners", () => {
     expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Removed 1 local entry." });
 
     globalThis.removeEventListener("romm_data_changed", changed);
-    plugin.onDismount();
   });
 
   it("a foreign or duplicate terminal frame has no root side effects", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
     vi.mocked(unregisterRomMAppId).mockClear();
@@ -520,11 +485,10 @@ describe("index.tsx — persistent prune listeners", () => {
     expect(unregisterRomMAppId).not.toHaveBeenCalled();
     expect(changed).not.toHaveBeenCalled();
     globalThis.removeEventListener("romm_data_changed", changed);
-    plugin.onDismount();
   });
 
   it("surfaces a zero-row committed partial instead of reporting that nothing changed", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-partial");
 
     act(() => {
@@ -555,11 +519,10 @@ describe("index.tsx — persistent prune listeners", () => {
       body: "Shortcut removal committed; local cleanup incomplete.",
       subtext: "Steam removed the shortcut, but local cleanup was retained.",
     });
-    plugin.onDismount();
   });
 
   it("hands back a continuation lease the terminal frame gave it nothing to do with", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-nothing");
 
     await act(async () => {
@@ -582,11 +545,10 @@ describe("index.tsx — persistent prune listeners", () => {
     // Without this the lease refuses the next cleanup's start for its full
     // 300s TTL.
     await waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("orphan-lease"));
-    plugin.onDismount();
   });
 
   it("publishes a known committed partial repoint after terminal completion", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-repoint");
     let release: ((value: { success: true; message: string }) => void) | undefined;
     vi.mocked(waitForPruneRelease).mockImplementationOnce(
@@ -627,11 +589,10 @@ describe("index.tsx — persistent prune listeners", () => {
     await flush();
     expect(publishCommittedVersionSwitch).toHaveBeenCalledWith(9001, 8, undefined, expect.any(AbortSignal));
     expect(releasePruneConflictLease).toHaveBeenCalledWith("publication-lease");
-    plugin.onDismount();
   });
 
   it("does not publish an ambiguous repoint outcome", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-ambiguous");
 
     act(() => {
@@ -664,11 +625,10 @@ describe("index.tsx — persistent prune listeners", () => {
       body: "Shortcut repoint outcome is uncertain; source data was retained.",
       subtext: "The repoint outcome is unknown.",
     });
-    plugin.onDismount();
   });
 
   it("fails closed when a committed repoint terminal frame has no publication lease", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     beginPrunePreview("preview-missing-publication-lease");
 
     act(() => {
@@ -700,7 +660,6 @@ describe("index.tsx — persistent prune listeners", () => {
     expect(logError).toHaveBeenCalledWith(
       "Cleanup publication was skipped because its continuation lease was missing.",
     );
-    plugin.onDismount();
   });
 });
 
@@ -712,7 +671,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
   });
 
   it("confirm-sets launch options for the payload appId on download_complete", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     const event: DownloadCompleteEvent = {
       rom_id: 42,
@@ -731,11 +690,10 @@ describe("index.tsx — download_complete launch-options sync", () => {
       5000,
       'flatpak run net.retrodeck.retrodeck "/games/test.bin"',
     );
-    plugin.onDismount();
   });
 
   it("no-ops gracefully when the downloaded rom has no bound appId (null)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<DownloadCompleteEvent>("download_complete", {
@@ -750,12 +708,11 @@ describe("index.tsx — download_complete launch-options sync", () => {
     await flush();
 
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("surfaces a logError when setLaunchOptionsConfirmed rejects", async () => {
     setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<DownloadCompleteEvent>("download_complete", {
@@ -772,13 +729,12 @@ describe("index.tsx — download_complete launch-options sync", () => {
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining("download_complete: failed to set launch options for rom 42"),
     );
-    plugin.onDismount();
   });
 });
 
 describe("index.tsx — download_progress cancelled eviction (#149 downloads-round)", () => {
   it("drops the entry from the store when a cancelled frame arrives", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     setDownloads([
       {
         rom_id: 42,
@@ -810,11 +766,10 @@ describe("index.tsx — download_progress cancelled eviction (#149 downloads-rou
     // Explicit discard → no residue in the store (which MainPage's count + the
     // DownloadQueue view both read).
     expect(getDownloadState().some((d) => d.rom_id === 42)).toBe(false);
-    plugin.onDismount();
   });
 
   it("updates in place (does not drop) for a non-cancelled frame", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     setDownloads([]);
 
     act(() => {
@@ -832,7 +787,6 @@ describe("index.tsx — download_progress cancelled eviction (#149 downloads-rou
     });
 
     expect(getDownloadState().find((d) => d.rom_id === 7)?.status).toBe("downloading");
-    plugin.onDismount();
   });
 });
 
@@ -846,7 +800,7 @@ describe("index.tsx — sync_stale listener", () => {
     // No getExistingRomMShortcuts is even imported — proving the orphan race is
     // gone: removal happens via the payload app_id the backend captured before
     // unbinding, so an empty backend map can't strand the shortcut.
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncStaleData>("sync_stale", {
@@ -861,11 +815,10 @@ describe("index.tsx — sync_stale listener", () => {
     expect(removeShortcut).toHaveBeenCalledWith(9900);
     expect(removeShortcut).toHaveBeenCalledWith(7700);
     expect(removeShortcut).toHaveBeenCalledTimes(2);
-    plugin.onDismount();
   });
 
   it("ignores an empty remove array", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncStaleData>("sync_stale", { remove: [] });
@@ -873,11 +826,10 @@ describe("index.tsx — sync_stale listener", () => {
     await flush();
 
     expect(removeShortcut).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("chunk-paces a large stale removal (25 back-to-back, 50ms breather) and records the delta up front (#977)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     removeShortcut.mockClear();
     resetSyncDelta();
@@ -907,11 +859,10 @@ describe("index.tsx — sync_stale listener", () => {
     } finally {
       vi.useRealTimers();
     }
-    plugin.onDismount();
   });
 
   it("holds its own event lease through a paced tail when sync_complete never arrives", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
     const remove = Array.from({ length: 26 }, (_, i) => ({ rom_id: i + 1, app_id: 2000 + i }));
@@ -934,55 +885,66 @@ describe("index.tsx — sync_stale listener", () => {
       await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("standalone-stale-lease"));
     } finally {
       vi.useRealTimers();
-      plugin.onDismount();
     }
   });
 
   it("catches a rejecting stale tail so it never wedges the later sync_complete continuation", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
+    vi.mocked(renewPruneConflictLease).mockResolvedValue({ success: true, message: "renewed" });
     removeShortcut.mockClear();
     logError.mockClear();
     createOrUpdateCollections.mockClear();
+    // A Steam removal that outlasts the continuation's bound, so the stored
+    // promise REJECTS — the shape L20 is about — and settles only afterwards.
+    let finishRemoval!: () => void;
+    removeShortcut.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRemoval = resolve;
+        }),
+    );
 
+    vi.useFakeTimers();
     try {
-      // A tombstoned plugin generation refuses the tail's continuation outright,
-      // so the stored promise REJECTS — the shape L20 is about.
-      await releaseAllPruneLeases();
       act(() => {
         emitHostEvent<SyncStaleData>("sync_stale", {
           remove: [{ rom_id: 1, app_id: 3000 }],
           prune_lease_token: "rejecting-stale-lease",
         });
       });
-      await flush();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300_001);
+      });
 
       // Post-catch state: the failure is surfaced where the tail is STORED, so the
-      // stored promise is settled (nothing waits on an unhandled rejection), no
-      // Steam write happened, and the refused token is released anyway.
+      // stored promise is settled (nothing waits on an unhandled rejection), and
+      // the token is released once the removal it was held for settles.
       expect(logError).toHaveBeenCalledWith(expect.stringContaining("stale shortcut removal failed"));
-      expect(removeShortcut).not.toHaveBeenCalled();
-      await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("rejecting-stale-lease"));
-
-      mountPruneLeasePlugin();
-      // The completion continuation awaits that same tail and still runs its
-      // sibling reconciles to the end instead of being aborted by it.
-      act(() => {
-        emitHostEvent<SyncCompleteAfterStaleFailure>("sync_complete", {
-          platform_app_ids: { gba: [3000] },
-          total_games: 1,
-          prune_lease_token: "completion-after-failed-tail",
-        });
+      expect(removeShortcut).toHaveBeenCalledTimes(1);
+      finishRemoval();
+      await act(async () => {
+        for (let i = 0; i < 10; i++) await Promise.resolve();
       });
-      await flush();
-
-      expect(createOrUpdateCollections).toHaveBeenCalled();
-      await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("completion-after-failed-tail"));
+      expect(releasePruneConflictLease).toHaveBeenCalledWith("rejecting-stale-lease");
     } finally {
-      mountPruneLeasePlugin();
-      plugin.onDismount();
+      vi.useRealTimers();
     }
+
+    // The completion continuation awaits that same tail and still runs its
+    // sibling reconciles to the end instead of being aborted by it.
+    act(() => {
+      emitHostEvent<SyncCompleteAfterStaleFailure>("sync_complete", {
+        platform_app_ids: { gba: [3000] },
+        total_games: 1,
+        prune_lease_token: "completion-after-failed-tail",
+      });
+    });
+    await flush();
+
+    expect(createOrUpdateCollections).toHaveBeenCalled();
+    await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("completion-after-failed-tail"));
   });
 });
 
@@ -1000,7 +962,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
   });
 
   it("confirm-sets launch options for each migrated item", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1014,11 +976,10 @@ describe("index.tsx — migration_relaunch_options listener", () => {
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/new/a.bin"');
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/new/b.bin"');
-    plugin.onDismount();
   });
 
   it("ignores an empty items array", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1028,12 +989,11 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     await flush();
 
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("surfaces a logError when setLaunchOptionsConfirmed rejects for an item", async () => {
     setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1045,15 +1005,6 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining("migration_relaunch_options: failed to set launch options for appId 100"),
     );
-    plugin.onDismount();
-  });
-
-  it("removes the migration_relaunch_options listener on unmount", () => {
-    const plugin = pluginFactory();
-    expect(hostEventListenerCount("migration_relaunch_options")).toBe(1);
-
-    plugin.onDismount();
-    expect(hostEventListenerCount("migration_relaunch_options")).toBe(0);
   });
 });
 
@@ -1083,23 +1034,21 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
         { app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"' },
       ]),
     );
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("startup_reconcile"));
-    plugin.onDismount();
   });
 
   it("never confirm-sets when there is nothing installed to reconcile", async () => {
     vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(relaunchOptions([]));
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(getInstalledRelaunchOptions).toHaveBeenCalled();
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("surfaces a startup_reconcile-prefixed logError when a confirm returns false", async () => {
@@ -1107,24 +1056,22 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
       relaunchOptions([{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"' }]),
     );
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
     expect(logError).toHaveBeenCalledWith("startup_reconcile: failed to confirm launch options for appId 100");
-    plugin.onDismount();
   });
 
   it("surfaces a startup_reconcile-prefixed logError when the pull endpoint rejects", async () => {
     vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining("startup_reconcile: failed to reconcile launch options"),
     );
-    plugin.onDismount();
   });
 });
 
@@ -1157,7 +1104,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   });
 
   it("re-confirms launch options for every installed+bound ROM after a sync", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush(); // settle the startup reconcile (empty set)
     setLaunchOptionsConfirmed.mockClear();
     vi.mocked(getInstalledRelaunchOptions).mockClear();
@@ -1177,11 +1124,10 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     expect(getInstalledRelaunchOptions).toHaveBeenCalled();
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("sync_reconcile"));
-    plugin.onDismount();
   });
 
   it("reconciles even when the sync was cancelled", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();
     vi.mocked(getInstalledRelaunchOptions).mockClear();
@@ -1199,11 +1145,10 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await flush();
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
-    plugin.onDismount();
   });
 
   it("surfaces a sync_reconcile-prefixed logError when the pull endpoint rejects", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();
     logError.mockClear();
@@ -1223,7 +1168,6 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining("sync_reconcile: failed to reconcile launch options"),
     );
-    plugin.onDismount();
   });
 
   it("holds the sync event lease until collection and sibling Steam continuations settle", async () => {
@@ -1234,7 +1178,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
           finishCollections = resolve;
         }),
     );
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
 
@@ -1252,75 +1196,10 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
 
     finishCollections?.();
     await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("sync-complete-lease"));
-    plugin.onDismount();
-  });
-
-  it("plugin dismount defers sync lease release until a started collection save settles", async () => {
-    let finishCollections: (() => void) | undefined;
-    createOrUpdateCollections.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishCollections = resolve;
-        }),
-    );
-    const plugin = pluginFactory();
-    await flush();
-    vi.mocked(releasePruneConflictLease).mockClear();
-    createOrUpdateRomMCollections.mockClear();
-
-    act(() => {
-      emitHostEvent<SyncCompletePayload>("sync_complete", {
-        platform_app_ids: { SNES: [100] },
-        romm_collection_app_ids: { Favorites: [100] },
-        total_games: 1,
-        prune_lease_token: "dismount-sync-lease",
-      });
-    });
-    await vi.waitFor(() => expect(createOrUpdateCollections).toHaveBeenCalled());
-
-    plugin.onDismount();
-    await Promise.resolve();
-    expect(releasePruneConflictLease).not.toHaveBeenCalledWith("dismount-sync-lease");
-
-    finishCollections?.();
-    await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("dismount-sync-lease"));
-    expect(createOrUpdateRomMCollections).not.toHaveBeenCalled();
-  });
-
-  it("plugin dismount releases an installed-reconcile token that arrives afterward", async () => {
-    const plugin = pluginFactory();
-    await flush();
-    setLaunchOptionsConfirmed.mockClear();
-    vi.mocked(getInstalledRelaunchOptions).mockReset();
-    let resolveReconcile!: (value: ReturnType<typeof relaunchOptions>) => void;
-    vi.mocked(getInstalledRelaunchOptions).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveReconcile = resolve;
-        }),
-    );
-
-    act(() => {
-      emitHostEvent<SyncCompletePayload>("sync_complete", {
-        platform_app_ids: {},
-        total_games: 0,
-        prune_lease_token: "outer-sync-lease",
-      });
-    });
-    await waitFor(() => expect(getInstalledRelaunchOptions).toHaveBeenCalled());
-    plugin.onDismount();
-    resolveReconcile({
-      success: true,
-      items: [{ app_id: 100, launch_options: "cmd" }],
-      prune_lease_token: "late-installed-lease",
-    });
-
-    await vi.waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("late-installed-lease"));
-    expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
   });
 
   it("holds the sync event lease until the paced sync_stale tail settles", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
     removeShortcut.mockClear();
@@ -1360,7 +1239,6 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
       ).toHaveLength(1);
     } finally {
       vi.useRealTimers();
-      plugin.onDismount();
     }
   });
 });
@@ -1396,7 +1274,7 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
   });
 
   it("registers every platform and RomM-collection appId from the payload", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush(); // settle startup detaches (they call registerRomMAppId with the empty appIdMap)
     vi.mocked(registerRomMAppId).mockClear();
 
@@ -1412,14 +1290,13 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
     for (const appId of [100, 101, 200, 300, 400]) {
       expect(registerRomMAppId).toHaveBeenCalledWith(appId);
     }
-    plugin.onDismount();
   });
 
   it("registers RomM-collection appIds even when platform_app_ids is empty (collection-only sync)", async () => {
     // The #1205 core repro: a collection-only sync never populates
     // platform_app_ids, so its new shortcuts land only in romm_collection_app_ids.
     // The old platform-only loop left them unregistered until a Steam restart.
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(registerRomMAppId).mockClear();
 
@@ -1432,7 +1309,6 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
 
     expect(registerRomMAppId).toHaveBeenCalledWith(777);
     expect(registerRomMAppId).toHaveBeenCalledWith(888);
-    plugin.onDismount();
   });
 });
 
@@ -1450,7 +1326,7 @@ describe("index.tsx — corrupt-settings reset notice", () => {
       pending: true,
       backed_up_to: "settings.json.corrupt-1781697600",
     });
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     // Persistent banner store is populated — surfaced by the QAM banner +
@@ -1460,27 +1336,24 @@ describe("index.tsx — corrupt-settings reset notice", () => {
       backedUpTo: "settings.json.corrupt-1781697600",
     });
     expect(toaster.toast).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("leaves the store not-pending and fires no toast when the boot notice reports no reset", async () => {
     vi.mocked(getSettingsResetNotice).mockResolvedValue({ pending: false, backed_up_to: null });
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(getSettingsResetState()).toEqual({ pending: false, backedUpTo: null });
     expect(toaster.toast).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("surfaces a logError when the reset-notice check rejects", async () => {
     vi.mocked(getSettingsResetNotice).mockRejectedValue(new Error("boom"));
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check settings reset notice"));
     expect(toaster.toast).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 });
 
@@ -1500,12 +1373,11 @@ describe("index.tsx — the release check at panel load", () => {
       enabled: true,
       installed_program: true,
     });
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(getUpdateNotice).toHaveBeenCalledTimes(1);
     expect(getUpdateNoticeState().available).toBe(true);
-    plugin.onDismount();
   });
 
   it("does not hold the panel up while GitHub is slow to answer", () => {
@@ -1514,17 +1386,15 @@ describe("index.tsx — the release check at panel load", () => {
 
     expect(plugin.content).toBeDefined();
     expect(getUpdateNoticeState().available).toBe(false);
-    plugin.onDismount();
   });
 
   it("logs a check that rejected and shows no card", async () => {
     vi.mocked(getUpdateNotice).mockRejectedValue(new Error("boom"));
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for a newer release"));
     expect(getUpdateNoticeState().available).toBe(false);
-    plugin.onDismount();
   });
 });
 
@@ -1536,7 +1406,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("takes a notice from the backend's own check into the store the card and the section read", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() =>
       emitHostEvent("update_notice", {
@@ -1550,11 +1420,10 @@ describe("index.tsx — what the backend pushes about updates", () => {
     );
 
     expect(getUpdateNoticeState()).toMatchObject({ available: true, latestVersion: "0.35.0" });
-    plugin.onDismount();
   });
 
   it("takes an install frame into the store Settings › Updates reads", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     const frame = {
       version: "0.35.0",
       step: "verifying",
@@ -1566,11 +1435,10 @@ describe("index.tsx — what the backend pushes about updates", () => {
     act(() => emitHostEvent("update_install_progress", frame));
 
     expect(getUpdateInstallAttempt()).toEqual(frame);
-    plugin.onDismount();
   });
 
   it("takes a stopped attempt judged after panel load into the store the card on Main reads", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() =>
       emitHostEvent("update_attempt_stopped", {
@@ -1581,11 +1449,10 @@ describe("index.tsx — what the backend pushes about updates", () => {
     );
 
     expect(getStoppedUpdateAttempt()).toEqual({ attemptedVersion: "0.35.0", fromVersion: "0.33.0" });
-    plugin.onDismount();
   });
 
   it("takes a refusal by the pre-install check into the store the card on Main reads, with its card up", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     const record = {
       attempted_version: "0.35.0",
       restored_version: "0.33.0",
@@ -1603,21 +1470,6 @@ describe("index.tsx — what the backend pushes about updates", () => {
     });
     expect(getUpdateOutcomeState().failureDismissed).toBe(false);
     expect(hostEventListenerCount("update_failure_recorded")).toBe(1);
-    plugin.onDismount();
-    expect(hostEventListenerCount("update_failure_recorded")).toBe(0);
-  });
-
-  it("stops listening for all three on dismount", () => {
-    const plugin = pluginFactory();
-    expect(hostEventListenerCount("update_notice")).toBe(1);
-    expect(hostEventListenerCount("update_install_progress")).toBe(1);
-    expect(hostEventListenerCount("update_attempt_stopped")).toBe(1);
-
-    plugin.onDismount();
-
-    expect(hostEventListenerCount("update_notice")).toBe(0);
-    expect(hostEventListenerCount("update_install_progress")).toBe(0);
-    expect(hostEventListenerCount("update_attempt_stopped")).toBe(0);
   });
 });
 
@@ -1638,14 +1490,13 @@ describe("index.tsx — what the last update did, at panel load", () => {
       failure: null,
       failure_dismissed: false,
     });
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(getUpdateOutcome).toHaveBeenCalledTimes(1);
     expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Tender updated to 1.3.0" });
     expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(1);
     expect(acknowledgeUpdateToast).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("fills the store the rolled-back notice reads", async () => {
@@ -1661,22 +1512,20 @@ describe("index.tsx — what the last update did, at panel load", () => {
       },
       failure_dismissed: false,
     });
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(getUpdateOutcomeState().failure?.attemptedVersion).toBe("1.3.0");
     expect(acknowledgeUpdateToast).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("logs a read that rejected and announces nothing", async () => {
     vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("boom"));
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to read what the last update did"));
     expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(0);
-    plugin.onDismount();
   });
 });
 
@@ -1725,7 +1574,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("runs the stale cleanup on a completed (non-cancelled) sync", async () => {
     const { faves } = seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // Only "Nintendo 64" is active — SNES and [Faves] are stale and removed.
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
@@ -1733,12 +1582,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
     expect(clearPlatformCollection).toHaveBeenCalledWith("Super Nintendo", expect.any(AbortSignal));
     expect(faves.Delete).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("keeps a case-variant ACTIVE RomM collection (does not delete it) (#1569)", async () => {
     const { snes, faves } = seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // The live collection is "[Faves]"; the active map keys it as "faves" (the
     // reporter's folded-first-seen casing). Case-insensitive identity → it is
@@ -1754,12 +1602,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     // Non-vacuous: the stale SNES platform IS still cleaned, so cleanup ran.
     expect(clearPlatformCollection).toHaveBeenCalledWith("Super Nintendo", expect.any(AbortSignal));
     expect(snes.Delete).not.toHaveBeenCalled(); // platform delete routes via clearPlatformCollection
-    plugin.onDismount();
   });
 
   it("keeps a case-variant ACTIVE platform collection (does not clear it) (#1569)", async () => {
     const { faves } = seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // Live "RomM: Super Nintendo (steamdeck)"; active map keys it "super nintendo".
     // Case-insensitive → ACTIVE, must not be cleared. [Faves] has no active RomM
@@ -1772,7 +1619,6 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
     expect(clearPlatformCollection).not.toHaveBeenCalled();
     expect(faves.Delete).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("sweeps a stale RomM collection whose prefix is a case variant of ours (#2131)", async () => {
@@ -1867,7 +1713,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const oldName = { id: "old-id", displayName: "RomM: [Kids (Standard)] (steamdeck)", Delete: vi.fn() };
     const newName = { id: "new-id", displayName: "RomM: [Kids] (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [oldName, newName] });
-    const plugin = pluginFactory();
+    pluginFactory();
 
     emitSyncComplete({
       platform_app_ids: {},
@@ -1879,12 +1725,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     expect(createOrUpdateRomMCollections).toHaveBeenCalledWith({ Kids: [1] }, undefined, expect.any(AbortSignal));
     expect(oldName.Delete).toHaveBeenCalledTimes(1);
     expect(newName.Delete).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("skips the stale cleanup on a cancelled sync with a partial map (regression)", async () => {
     const { snes, faves } = seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // Cancel reached only "Nintendo 64"; SNES + [Faves] must SURVIVE.
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
@@ -1893,12 +1738,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     expect(clearPlatformCollection).not.toHaveBeenCalled();
     expect(snes.Delete).not.toHaveBeenCalled();
     expect(faves.Delete).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("skips the stale cleanup on an early cancel with an empty map (full-wipe case)", async () => {
     const { snes, faves } = seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // Cancel fired before unit 1 — the map is empty. Treating it as the active
     // set would wipe EVERY RomM collection; nothing must be deleted.
@@ -1908,12 +1752,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     expect(clearPlatformCollection).not.toHaveBeenCalled();
     expect(snes.Delete).not.toHaveBeenCalled();
     expect(faves.Delete).not.toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("still fires the cancelled toast and re-applies playtime on a cancelled sync", async () => {
     seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
     // The factory's own init runs one initial playtime apply; clear it so the
     // assertion counts only the apply triggered by sync_complete.
     await flush();
@@ -1925,12 +1768,11 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining("cancelled") }));
     expect(applyAllPlaytime).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("still creates/updates the reached platforms' collections on a cancelled sync", async () => {
     seedCollections();
-    const plugin = pluginFactory();
+    pluginFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
     await flush();
@@ -1938,7 +1780,6 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     // The additive create/update path is NOT gated on cancel — the platforms
     // that DID complete still get their collections.
     expect(createOrUpdateCollections).toHaveBeenCalledWith({ "Nintendo 64": [1] }, undefined, expect.any(AbortSignal));
-    plugin.onDismount();
   });
 });
 
@@ -1976,7 +1817,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
   });
 
   it("re-fetches the paged cache + map and re-applies on a normal completion", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush(); // init done — registerMetadataPatches called once with the empty init cache
     vi.mocked(registerMetadataPatches).mockClear();
     vi.mocked(applyAllMetadata).mockClear();
@@ -1997,11 +1838,10 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
     expect(mapArg).toEqual({ "100": 55 });
     // …and the readiness-gated overview pass re-ran.
     expect(applyAllMetadata).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("re-applies overview metadata on a CANCELLED sync too (partial units are still fresh)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(registerMetadataPatches).mockClear();
     vi.mocked(applyAllMetadata).mockClear();
@@ -2015,11 +1855,10 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
 
     expect(registerMetadataPatches).toHaveBeenCalledTimes(1);
     expect(applyAllMetadata).toHaveBeenCalledTimes(1);
-    plugin.onDismount();
   });
 
   it("logs and leaves the other blocks intact when the metadata re-fetch fails", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     await flush();
     vi.mocked(applyAllMetadata).mockClear();
     vi.mocked(applyAllPlaytime).mockClear();
@@ -2036,7 +1875,6 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
     expect(applyAllMetadata).not.toHaveBeenCalled();
     // Non-vacuous: the playtime re-apply is a separate detached block and still ran.
     expect(applyAllPlaytime).toHaveBeenCalled();
-    plugin.onDismount();
   });
 });
 
@@ -2075,7 +1913,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("sync_plan resets the per-run cancel flag (#1198)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     vi.mocked(resetSyncCancel).mockClear();
 
     act(() => {
@@ -2086,7 +1924,6 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // — reliable even on a skip-only run where no per-unit handler fires. Run
     // identity for a Cancel click now comes from the sync_progress store (#1202).
     expect(vi.mocked(resetSyncCancel)).toHaveBeenCalled();
-    plugin.onDismount();
   });
 
   it("drives terminal teardown from sync_complete even if no stage:done frame follows", async () => {
@@ -2094,7 +1931,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // frame, sync_complete arrived, but the separate backend stage:"done"
     // sync_progress frame never did — so the QAM stayed stuck on "Applying".
     // sync_complete alone must flip the store to a terminal stage.
-    const plugin = pluginFactory();
+    pluginFactory();
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
@@ -2104,11 +1941,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
 
     expect(getSyncProgress().running).toBe(false);
     expect(getSyncProgress().stage).toBe("done");
-    plugin.onDismount();
   });
 
   it("flips the store to a cancelled stage when sync_complete is cancelled", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
@@ -2118,11 +1954,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
 
     expect(getSyncProgress().running).toBe(false);
     expect(getSyncProgress().stage).toBe("cancelled");
-    plugin.onDismount();
   });
 
   it("reports 'X added, Y removed' when both are non-zero (ignores total_games)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 2 });
@@ -2142,11 +1977,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync complete — 2 added, 1 removed.");
-    plugin.onDismount();
   });
 
   it("omits the zero part — only removals → 'Sync complete — N removed.'", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 0 });
@@ -2165,11 +1999,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync complete — 2 removed.");
-    plugin.onDismount();
   });
 
   it("reports 'Library up to date.' when nothing changed (the #744 repro)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 53 });
@@ -2182,11 +2015,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Library up to date.");
-    plugin.onDismount();
   });
 
   it("dedups a shortcut created in two units (platform + collection) — counted once", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 1 });
@@ -2201,11 +2033,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync complete — 1 added.");
-    plugin.onDismount();
   });
 
   it("on cancel with partial work → 'Sync cancelled — … so far.'", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2223,11 +2054,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync cancelled — 3 added so far.");
-    plugin.onDismount();
   });
 
   it("on cancel before any work → 'Sync cancelled.' (no delta)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2242,11 +2072,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync cancelled.");
-    plugin.onDismount();
   });
 
   it("on a heartbeat-timeout interrupt with partial work → 'Sync interrupted — … so far.' (#1384)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2268,11 +2097,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync interrupted — 3 added so far.");
-    plugin.onDismount();
   });
 
   it("on a heartbeat-timeout interrupt before any work → 'Sync interrupted.' (no delta, #1384)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2288,11 +2116,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync interrupted.");
-    plugin.onDismount();
   });
 
   it("on a session-budget pause → shows the pause guidance verbatim with the delta (#1383)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2320,11 +2147,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const toastCalls = vi.mocked(toaster.toast).mock.calls;
     const lastToast = toastCalls[toastCalls.length - 1]![0] as { duration?: number };
     expect(lastToast.duration).toBe(15000);
-    plugin.onDismount();
   });
 
   it("a non-pause completion toast carries no custom duration (default lifetime)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
     });
@@ -2336,11 +2162,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const toastCalls = vi.mocked(toaster.toast).mock.calls;
     const lastToast = toastCalls[toastCalls.length - 1]![0] as { duration?: number };
     expect(lastToast.duration).toBeUndefined();
-    plugin.onDismount();
   });
 
   it("on a session-budget pause with no delta → shows just the reason (#1383)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2359,11 +2184,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     expect(lastToastBody()).toBe(
       "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
     );
-    plugin.onDismount();
   });
 
   it("on a clean run with restart_recommended → appends the restart nudge (#1383)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
@@ -2379,7 +2203,6 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     await flush();
 
     expect(lastToastBody()).toBe("Sync complete — 1 added. Steam restart recommended before further large operations.");
-    plugin.onDismount();
   });
 });
 
@@ -2408,7 +2231,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("names the failure when the run's work queue could not be built", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame());
@@ -2416,33 +2239,30 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
 
     expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`]);
     expect(getSyncProgress().stage).toBe("error");
-    plugin.onDismount();
   });
 
   it("does not say it twice when the frame already does", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: `Sync failed — ${UNREACHABLE}` }));
     });
 
     expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`]);
-    plugin.onDismount();
   });
 
   it("still says the sync failed when the frame carries no message", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: "" }));
     });
 
     expect(toastBodies()).toEqual(["Sync failed."]);
-    plugin.onDismount();
   });
 
   it("toasts a run once, however often its error frame arrives", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame());
@@ -2450,11 +2270,10 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
     });
 
     expect(toastBodies()).toHaveLength(1);
-    plugin.onDismount();
   });
 
   it("toasts the next run's failure too", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runId: "run-1" }));
@@ -2462,22 +2281,20 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
     });
 
     expect(toastBodies()).toEqual([`Sync failed — ${UNREACHABLE}`, "Sync failed — Authentication failed"]);
-    plugin.onDismount();
   });
 
   it("leaves a preview's failure to the Sync page", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runKind: "preview" }));
     });
 
     expect(toastBodies()).toEqual([]);
-    plugin.onDismount();
   });
 
   it("raises nothing for a frame that does not stop a run at stage error", () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ stage: "done", message: "Sync complete" }));
@@ -2486,13 +2303,12 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
     });
 
     expect(toastBodies()).toEqual([]);
-    plugin.onDismount();
   });
 });
 
 describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estimate)", () => {
   it("writes the composition-priced seed (unbound rows as creates) into the sync progress store", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2506,11 +2322,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // Nothing bound yet, so every planned item is a create — the fresh-import
     // shape, priced exactly as the preview would price it.
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(120, 0));
-    plugin.onDismount();
   });
 
   it("prices already-bound rows as cheap updates, not as fresh creates (#1511)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2537,11 +2352,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
 
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(0, 1000));
     resetEta();
-    plugin.onDismount();
   });
 
   it("prices a Force Full Sync's sibling duplicates as nothing, not as phantom creates (#1517)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2569,11 +2383,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
 
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(0, 600));
     resetEta();
-    plugin.onDismount();
   });
 
   it("preserves etaSeconds across a subsequent backend sync_progress frame", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2596,11 +2409,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
 
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(200, 0));
     expect(getSyncProgress().stage).toBe("applying");
-    plugin.onDismount();
   });
 
   it("does NOT clobber an etaSeconds already seeded by the preview path (handleApply)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // handleApply full-replaces the store with a tighter delta-based etaSeconds
     // before sync_plan arrives; the listener must leave that seed intact. Both
@@ -2614,11 +2426,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
 
     // The crude estimateApplySeconds(5400, 0) bound must NOT overwrite the preview seed.
     expect(getSyncProgress().etaSeconds).toBe(previewSeed);
-    plugin.onDismount();
   });
 
   it("still seeds the total_roms bound when no preview seed is present (skip-preview path)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     // Skip-preview never sets an etaSeconds — the store has none at sync_plan
     // time, so the listener still supplies the upper bound. Regression guard for
@@ -2634,11 +2445,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     });
 
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(80, 0));
-    plugin.onDismount();
   });
 
   it("excludes predicted-skip units from the seed (#1382 skip-aware)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2665,11 +2475,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // An incremental re-sync prices only the predicted work, not the library.
     expect(getSyncProgress().etaSeconds).toBeCloseTo(estimateApplySeconds(5, 0));
     resetEta();
-    plugin.onDismount();
   });
 
   it("seeds the live estimator with skip-aware unit weights (predicted_skip → 0, collapsed over raw)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2711,11 +2520,10 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // above it (#1506): 1/3 + (2/3)·55/70.
     expect(weightedCoarseFraction(2, 0.5, 3)).toBeCloseTo(1 / 3 + (2 / 3) * (55 / 70), 10);
     resetEta();
-    plugin.onDismount();
   });
 
   it("falls back to raw weights and total_roms when the estimate fields are absent (old backend)", async () => {
-    const plugin = pluginFactory();
+    pluginFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2733,7 +2541,6 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // Raw rom_count weights: unit 1 done (60) plus half of unit 2 (10) → 70/80.
     expect(weightedCoarseFraction(1, 0.5, 2)).toBeCloseTo(70 / 80, 10);
     resetEta();
-    plugin.onDismount();
   });
 });
 
@@ -2758,7 +2565,6 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
       expect(btn).toHaveFocus();
       expect(btn).toHaveClass("gpfocus");
-      plugin.onDismount();
     } finally {
       vi.useRealTimers();
     }
@@ -2782,7 +2588,6 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
       expect(declared).toHaveFocus();
       expect(declared).toHaveClass("gpfocus");
       expect(screen.getByRole("button", { name: "first button" })).not.toHaveFocus();
-      plugin.onDismount();
     } finally {
       vi.useRealTimers();
     }
@@ -2827,8 +2632,6 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     });
     expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
     expect(screen.queryByText("downloads page")).toBeNull();
-
-    plugin.onDismount();
   });
 
   it("leaves focus alone for a page that places its own", async () => {
@@ -2848,7 +2651,6 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
       expect(btn).not.toHaveFocus();
       expect(btn).not.toHaveClass("gpfocus");
-      plugin.onDismount();
     } finally {
       vi.useRealTimers();
     }

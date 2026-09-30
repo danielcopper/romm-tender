@@ -73,8 +73,6 @@ interface TenderNotification extends SteamNotification {
 interface InstalledDrawing {
   /** What was put on the prototype — the identity a later check compares against. */
   readonly render: SteamToastRenderFn;
-  /** What it delegates to for everything that is not ours. */
-  readonly previous: SteamToastRenderFn;
   /** Stop drawing, leaving the link in place as a pass-through. */
   retire(): void;
 }
@@ -90,15 +88,9 @@ export interface SteamToasterSeams {
   readonly log: (message: string) => void;
 }
 
-/** A toaster, plus the teardown the plugin's dismount owes the renderer. */
-export interface SteamToaster extends Toaster {
-  /** Take our drawing back out of the renderer's chain. */
-  teardown(): void;
-}
-
 const describeToast = (toast: ToastData): string => `${String(toast.title)} — ${String(toast.body)}`;
 
-export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
+export function createSteamToaster(seams: SteamToasterSeams): Toaster {
   const { renderer, store, classes, errorBoundary: Boundary, installTrampoline, log } = seams;
   let drawing: InstalledDrawing | null = null;
 
@@ -131,7 +123,6 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
     };
     return {
       render,
-      previous,
       retire: () => {
         retired = true;
       },
@@ -230,21 +221,7 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
     };
   };
 
-  const teardown = (): void => {
-    const installed = drawing;
-    drawing = null;
-    if (installed === null || renderer === undefined) return;
-    if (renderer.prototype.render === installed.render) {
-      renderer.prototype.render = installed.previous;
-      return;
-    }
-    // Somebody wrapped over ours and delegates through it, so cutting it out
-    // would take their drawing with it. Left in place and made transparent
-    // instead.
-    installed.retire();
-  };
-
-  return { toast, teardown };
+  return { toast };
 }
 
 /**
@@ -254,7 +231,7 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
  * component it renders, where everything here wants the one property this code
  * reads and writes — see {@link SteamToastRenderer}.
  */
-export const steamToaster: SteamToaster = createSteamToaster({
+export const steamToaster: Toaster = createSteamToaster({
   renderer: ToastRenderer,
   store: NotificationStore,
   classes: toastClasses,

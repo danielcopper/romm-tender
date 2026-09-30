@@ -21,7 +21,6 @@ interface ActiveLease {
 const activeLeases = new Map<string, ActiveLease>();
 const ownerGenerations = new Map<string, { generation: number; mounted: boolean }>();
 let pluginGeneration = 0;
-let pluginMounted = true;
 
 export interface PruneLeaseAdmission {
   pluginGeneration: number;
@@ -56,7 +55,6 @@ export function isPruneLeaseCancellation(error: unknown, admission: PruneLeaseAd
 
 export function mountPruneLeasePlugin(): void {
   pluginGeneration++;
-  pluginMounted = true;
   // Disown anything the previous context stranded. A continuation whose JS
   // context died mid-call never released its lease and never renews it, so it
   // would hold off every cleanup for its full TTL with nobody behind it
@@ -85,7 +83,7 @@ export function capturePruneLeaseAdmission(owner?: string): PruneLeaseAdmission 
 }
 
 export function isPruneLeaseAdmissionCurrent(admission: PruneLeaseAdmission): boolean {
-  if (!pluginMounted || admission.pluginGeneration !== pluginGeneration) return false;
+  if (admission.pluginGeneration !== pluginGeneration) return false;
   if (admission.owner === undefined) return true;
   const current = ownerGenerations.get(admission.owner);
   return current?.mounted === true && current.generation === admission.ownerGeneration;
@@ -151,16 +149,6 @@ export async function releasePruneLeasesByOwner(owner: string): Promise<void> {
   for (const [, lease] of owned) lease.abortController?.abort();
   const tokens = owned.map(([token]) => token);
   await Promise.all(tokens.map(retireLeaseAfterSettlement));
-}
-
-export async function releaseAllPruneLeases(): Promise<void> {
-  pluginGeneration++;
-  pluginMounted = false;
-  for (const [owner, current] of ownerGenerations) {
-    ownerGenerations.set(owner, { generation: current.generation + 1, mounted: false });
-  }
-  for (const lease of activeLeases.values()) lease.abortController?.abort();
-  await Promise.all([...activeLeases].map(([token]) => retireLeaseAfterSettlement(token)));
 }
 
 async function boundedContinuation<T>(promise: Promise<T>): Promise<{ result: T; settled: true }> {

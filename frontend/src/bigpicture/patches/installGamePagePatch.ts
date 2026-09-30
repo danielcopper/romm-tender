@@ -20,7 +20,7 @@
  * `type`, is on `docs/architecture/frontend-bundles.md`.
  */
 
-import { afterPatch, beforePatch, getReactRoot, modules, type GenericPatchHandler, type Patch } from "@decky/ui";
+import { afterPatch, beforePatch, getReactRoot, modules, type GenericPatchHandler } from "@decky/ui";
 
 import {
   hasRouteModuleShape,
@@ -208,8 +208,6 @@ function adoptMountedPage(memos: readonly object[]): void {
 export interface GamePagePatchHandle {
   /** Did anything get patched? `false` means no Tender section will appear. */
   readonly installed: boolean;
-  /** Take the patch back off. Silent where nothing was installed. */
-  unpatch(): void;
 }
 
 /**
@@ -225,28 +223,23 @@ export interface GamePagePatchHandle {
  * component, every later render goes through that cached copy and a patch
  * installed on the original is never entered again.
  *
- * What `unpatch` takes back is the patch on the memo; a props object already
- * wrapped keeps its wrapper until its element is built again
- * ({@link wrapRouteRenderFunc}).
+ * Nothing takes the patch back: a JS-context rebuild is what ends the panel,
+ * and it takes the patches with it. How a props object is wrapped, and why
+ * nothing is kept per props object, is {@link wrapRouteRenderFunc}'s.
  */
 export function installGamePagePatch(renderPatch: GenericPatchHandler): GamePagePatchHandle {
   const memos = AppDetailsRoute();
-  if (memos.length === 0) return { installed: false, unpatch: () => {} };
+  if (memos.length === 0) return { installed: false };
 
   const wrapped = new WeakSet<object>();
-  const patches: Patch[] = memos.map((memo) =>
+  for (const memo of memos) {
     beforePatch(memo, "type", (args: unknown[]) => {
       wrapRouteRenderFunc(args, wrapped, (props) => {
         afterPatch(props, "renderFunc", renderPatch);
       });
-    }),
-  );
+    });
+  }
   adoptMountedPage(memos);
 
-  return {
-    installed: true,
-    unpatch: () => {
-      for (const patch of patches) patch.unpatch();
-    },
-  };
+  return { installed: true };
 }

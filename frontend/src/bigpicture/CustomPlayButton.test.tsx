@@ -137,7 +137,6 @@ import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";
 import { showAdoptCollisionModal } from "../bigpicture/AdoptCollisionModal";
 import { showAdoptUnusableModal } from "../bigpicture/AdoptUnusableModal";
 import { showAdoptVanishedModal } from "../bigpicture/AdoptVanishedModal";
-import { mountPruneLeasePlugin, releaseAllPruneLeases } from "../utils/pruneLease";
 import { resetBoundVanished, setBoundVanished } from "../utils/vanishedBinding";
 import type { SyncConflict, SaveStatus } from "../types";
 
@@ -2573,38 +2572,6 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     } finally {
       vi.useRealTimers();
       logSpy.mockRestore();
-    }
-  });
-
-  it("plugin teardown while relaunch options are pending releases the late token and never calls RunGame", async () => {
-    let resolveFetch!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
-    vi.mocked(backend.getRomRelaunchOptions).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveFetch = resolve;
-        }),
-    );
-    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
-
-    try {
-      await clickPlay();
-      await waitFor(() => expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42));
-      await releaseAllPruneLeases();
-      resolveFetch({
-        success: true,
-        app_id: 100,
-        launch_options: RELAUNCH_COMMAND,
-        prune_lease_token: "late-plugin-launch-lease",
-      });
-      await act(async () => {
-        for (let index = 0; index < 8; index++) await Promise.resolve();
-      });
-
-      expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("late-plugin-launch-lease");
-      expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
-    } finally {
-      mountPruneLeasePlugin();
     }
   });
 });

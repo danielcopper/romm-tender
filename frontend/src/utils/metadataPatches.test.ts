@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  registerMetadataPatches,
-  unregisterMetadataPatches,
-  applyAllMetadata,
-  applyAllPlaytime,
-  updatePlaytimeDisplay,
-} from "./metadataPatches";
+import { registerMetadataPatches, applyAllMetadata, applyAllPlaytime, updatePlaytimeDisplay } from "./metadataPatches";
 import type { RomMetadata } from "../types";
 
 // RomMetadata has several required fields; build a full object and override the
@@ -124,36 +118,6 @@ describe("applyAllMetadata (#1203 readiness retry)", () => {
 
     expect(appStore.GetAppOverviewByAppID).toHaveBeenCalledTimes(1);
     expect(overview.minutes_playtime_forever).toBe(0);
-  });
-});
-
-describe("unregisterMetadataPatches", () => {
-  beforeEach(() => {
-    vi.stubGlobal("__mobxGlobals", undefined);
-    vi.stubGlobal("appStore", { GetAppOverviewByAppID: vi.fn(), allApps: [] });
-  });
-
-  it("leaves nothing for a later apply to write", async () => {
-    const registered = makeOverview(100);
-    vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(registered as unknown as SteamAppOverview);
-    registerMetadataPatches({ "10": makeMeta({ average_rating: 88, steam_categories: [1] }) }, APP_ID_MAP);
-    await applyAllMetadata();
-    // Control: the registration being cleared is one that does reach the overview.
-    expect(registered.controller_support).toBe(2);
-
-    unregisterMetadataPatches();
-
-    const later = makeOverview(100);
-    vi.mocked(appStore.GetAppOverviewByAppID)
-      .mockClear()
-      .mockReturnValue(later as unknown as SteamAppOverview);
-    await applyAllMetadata();
-
-    // No app is pending any more, so the appStore is never even asked.
-    expect(appStore.GetAppOverviewByAppID).not.toHaveBeenCalled();
-    expect(later.controller_support).toBe(0);
-    expect(later.metacritic_score).toBe(0);
-    expect([...later.m_setStoreCategories]).toEqual([]);
   });
 });
 

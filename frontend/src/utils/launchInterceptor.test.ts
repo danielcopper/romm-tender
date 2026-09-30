@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as rommAppIds from "./rommAppIds";
@@ -6,8 +6,7 @@ import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
 import * as runningApps from "./runningApps";
 import * as steamShortcuts from "./steamShortcuts";
-import { registerLaunchInterceptor, unregisterLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
-import { mountPruneLeasePlugin, releaseAllPruneLeases } from "./pruneLease";
+import { registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
 
@@ -168,10 +167,6 @@ describe("launchInterceptor — full funnel watcher", () => {
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
     vi.mocked(backend.renewPruneConflictLease).mockResolvedValue({ success: true, message: "renewed" });
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockResolvedValue(true);
-  });
-
-  afterEach(() => {
-    unregisterLaunchInterceptor();
   });
 
   describe("entry guards", () => {
@@ -649,64 +644,6 @@ describe("launchInterceptor — full funnel watcher", () => {
         expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Launch cancelled — try again" });
       } finally {
         vi.useRealTimers();
-      }
-    });
-
-    it("a lifecycle-cancelled re-confirm stays silent (no launch-cancelled toast)", async () => {
-      let remounted = false;
-      vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
-      try {
-        register();
-        captureHandler()(77, "1234", "LaunchApp", 0);
-        await flush();
-        expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
-        vi.mocked(toaster.toast).mockClear();
-
-        await releaseAllPruneLeases();
-        mountPruneLeasePlugin();
-        remounted = true;
-        await flush();
-
-        // Teardown is not a refused launch — only the timeout branch reports.
-        expect(toaster.toast).not.toHaveBeenCalled();
-        expect(runGameMock()).not.toHaveBeenCalled();
-      } finally {
-        if (!remounted) mountPruneLeasePlugin();
-      }
-    });
-
-    it("plugin teardown while re-confirm is pending releases a late token and never calls RunGame", async () => {
-      let resolveFetch!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
-      let remounted = false;
-      vi.mocked(backend.getRomRelaunchOptions).mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveFetch = resolve;
-          }),
-      );
-
-      try {
-        register();
-        captureHandler()(77, "1234", "LaunchApp", 0);
-        await flush();
-        expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
-
-        await releaseAllPruneLeases();
-        mountPruneLeasePlugin();
-        remounted = true;
-        resolveFetch({
-          success: true,
-          app_id: 1234,
-          launch_options: RELAUNCH_COMMAND,
-          prune_lease_token: "late-watcher-launch-lease",
-        });
-        await flush();
-
-        expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("late-watcher-launch-lease");
-        expect(steamShortcuts.setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-        expect(runGameMock()).not.toHaveBeenCalled();
-      } finally {
-        if (!remounted) mountPruneLeasePlugin();
       }
     });
 

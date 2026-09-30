@@ -65,8 +65,6 @@ export interface LaunchPrompts {
   confirmFallbackLaunch(message?: string): Promise<boolean>;
 }
 
-let gameActionHook: { unregister: () => void } | null = null;
-
 /** Migration block copy — surfaced as a toast (no relaunch). */
 const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.";
 
@@ -328,7 +326,7 @@ async function isRomInstalled(appId: number, romId: number): Promise<boolean> {
 }
 
 export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
-  gameActionHook = SteamClient.Apps.RegisterForGameActionStart(
+  SteamClient.Apps.RegisterForGameActionStart(
     (gameActionId: number, appIdStr: string, action: string, _launchSource: number) => {
       if (action !== "LaunchApp") return;
 
@@ -403,12 +401,4 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
   );
 
   logInfo("Launch interceptor registered");
-}
-
-export function unregisterLaunchInterceptor(): void {
-  if (gameActionHook) {
-    gameActionHook.unregister();
-    gameActionHook = null;
-  }
-  logInfo("Launch interceptor unregistered");
 }

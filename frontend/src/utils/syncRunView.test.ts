@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useSyncRunView } from "./syncRunView";
 import {
@@ -17,20 +17,18 @@ function planUnit(name: string): SyncPlanUnit {
   return { type: "platform", id: name, name, slug: name.toLowerCase(), rom_count: 10 };
 }
 
-describe("useSyncRunView", () => {
-  let detachMirror: () => void;
+// Attached once for the whole file, as `index.tsx` attaches it once for the
+// panel's JS context: the mirror has no detach, and the stores it joins are
+// reset per test instead.
+attachRunUnitsMirror();
 
+describe("useSyncRunView", () => {
   beforeEach(() => {
     resetEta();
     resetRunUnitsStoreForTests();
     // Not an idle frame but the whole store: these cases reuse one run id, and a
     // run this store has seen END can never be put back in flight.
     resetSyncProgressStoreForTests();
-    detachMirror = attachRunUnitsMirror();
-  });
-
-  afterEach(() => {
-    detachMirror();
   });
 
   describe("the coarse bar", () => {
