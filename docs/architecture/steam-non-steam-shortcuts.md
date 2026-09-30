@@ -465,22 +465,24 @@ asks whether two names are one Steam collection, by one rule on both sides: lowe
 again — `fold_collection_name` (`backend/domain/collection_name.py`) on the backend, `foldCollectionName`
 (`frontend/src/utils/collectionName.ts`) on the frontend, both tested against the names in
 `tests/domain/collection_name_folds.json`. It is that chain rather than Python's `str.casefold()`, which JavaScript has
-no counterpart for, and rather than a single lower-casing, which keeps `Straße` apart from `STRASSE`. Over every code
-point both languages' Unicode versions assign, Python and JavaScript compute the chain identically, and it joins each
-code point with everything `str.casefold()`, `toLowerCase()` or `toUpperCase()` joins it with — plus one pair
-`str.casefold()` keeps apart, a dotless `ı` and `i`. Joining more is the safe direction: what loses games is a pair
-Steam holds as one and the plugin keeps apart.
+no counterpart for, and rather than a single lower-casing, which keeps `Straße` apart from `STRASSE`. Python and
+JavaScript compute the chain identically on every code point both assign, and it joins each code point with everything
+`str.casefold()`, `toLowerCase()` or `toUpperCase()` joins it with — plus one pair `str.casefold()` keeps apart, a
+dotless `ı` and `i` (measured: CPython 3.13 / Unicode 15.1 against Node 24 / Unicode 17). For grouping and for the
+create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and the plugin keeps
+apart. On the delete matchers, joining more means deleting more.
 
 Where the fold applies: the reporter groups both `romm_collection_app_ids` and `platform_app_ids` by the folded key,
-keeping the first-seen original casing for display (which exact casing wins is irrelevant — Steam uppercases collection
-names anyway); the preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the
-frontend create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
+keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both sides); the
+preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the frontend
+create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
 (`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
 `frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
-one of this machine's names matches as that name does, while one carrying another machine's suffix does not. This is
-always safe precisely because Steam's identity is case-insensitive: two collections differing only by case can never
-coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state` is keyed
-by `(collection_id, collection_kind)`, never by name — so there is no migration.
+one of this machine's names matches as that name does, while one carrying another machine's suffix does not — a hostname
+differing from this one only by case counts as this machine, as it does for Steam. This is always safe precisely because
+Steam's identity is case-insensitive: two collections differing only by case can never coexist, so there is never an
+ambiguous match to disambiguate. The DB is unaffected — `collection_sync_state` is keyed by
+`(collection_id, collection_kind)`, never by name — so there is no migration.
 
 ## App IDs and Artwork
 
