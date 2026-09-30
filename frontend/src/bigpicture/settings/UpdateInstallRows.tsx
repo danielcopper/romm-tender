@@ -173,8 +173,8 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   const showButton = installButtonShown(install);
   const earlier = installed || "the earlier version";
   // A failed attempt for a version no longer offered says nothing about the one
-  // that is. Before the first read answers nothing is offered yet, so it stays,
-  // and the block it replaced does not leave under focus.
+  // that is. Before the first read answers nothing is known about the offer
+  // yet, so it stays, and the block it replaced does not leave under focus.
   const block =
     attempt !== null && install.underWay
       ? progressBlock(install, attempt, earlier)
