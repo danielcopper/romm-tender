@@ -220,6 +220,17 @@ its **instance**, a random value each process makes at start-up. A stranded pane
 holds that backend's token, so it can reach no running backend. The backend **replaces** a stranded panel by having
 Steam rebuild its JS context.
 
+### Backend restart / JS-context rebuild / panel load
+
+Three events, never one word for them. A **backend restart** loses the backend's memory and runs the start-up repairs
+again (`Application.run_startup_repairs`). It leads to a JS-context rebuild once no app is running — the panel the
+earlier process loaded is stranded (→ Stranded panel) — and never the reverse: a JS-context rebuild leaves the backend
+running. A **JS-context rebuild** (→ Injection) loses everything the frontend held. A **panel load** is the panel's
+factory running, once per JS context.
+
+_Avoid_: **plugin reload**, **plugin load**, **plugin start** — each names a host that loads Tender, and none says which
+of the three events is meant.
+
 ### Load-failure card
 
 The small card the injected expression draws into Steam's own document when the panel bundle did not load — Tender's
