@@ -108,11 +108,27 @@ ROLLBACK_BACKUP="$DATA/rollback-backup"
 
 # The note an update that did not go through leaves in the state directory: the
 # version it tried, the version it left running, and when. A rolled-back update
-# writes it with no `kind`; one the check refused writes the kind below
-# (UpdateFailureKind in backend/domain/update_outcome.py, which
+# writes it with no `kind`; one the pre-install check refused writes the kind
+# below (UpdateFailureKind in backend/domain/update_outcome.py, which
 # tests/scripts/test_install_sh.py holds equal).
 UPDATE_FAILURE="update-failure.json"
 CHECK_REFUSED="check"
+
+# The new version's pre-install check, relative to its tree, and what its exit
+# status means (backend/check.py): 1 is a version that could not be built, and
+# 2 a check that was not tried, which says nothing about the version. A tree
+# without the file predates the check and is installed without one.
+CHECK_ENTRY="backend/check.py"
+CHECK_NOT_TRIED=2
+
+# How long the pre-install check may run before it is stopped, and how long it
+# then has before it is killed, in seconds. Building the application takes a few
+# seconds; a check still running at the limit is waiting on something — a
+# database another process keeps locked, a storage device that stopped
+# answering — rather than working. `timeout` answers 124 for a check it
+# stopped and 137 for one it had to kill (coreutils' timeout(1)).
+CHECK_SECONDS=120
+CHECK_KILL_AFTER=10
 
 # The name every answer from the backend's server carries in its `Server` field,
 # before the version: `<PACKAGE_NAME>/<VERSION>` (backend/domain/identity.py,
@@ -180,9 +196,10 @@ UNVERIFIED=""
 # no app is running (docs/architecture/loading-the-panel.md).
 REPLACED_AN_INSTALL="no"
 
-# Whether this run is an update: a tree was already at $CODE. An update stops
-# the unit before it touches anything, keeps the tree it replaces and a backup
-# of the data, and rolls back where the new version does not answer.
+# Whether this run is an update: a tree was already at $CODE. An update runs
+# the pre-install check first, then stops the unit before it touches anything,
+# keeps the tree it replaces and a backup of the data, and rolls back where the
+# new version does not answer.
 UPDATING="no"
 
 # Whether the backend now running was seen to answer as the version at $CODE,
@@ -1928,8 +1945,15 @@ do_install() {
         previous="$(tree_version "$CODE")" || previous=""
     fi
     new="$(tree_version "$CODE.new")" || new=""
-    row_detail "$INSTALLING" "trying ${new:-the new version}"
-    check_the_new_version || refuse_the_new_version "$new" "$previous"
+    if [ -f "$CODE.new/$CHECK_ENTRY" ]; then
+        row_detail "$INSTALLING" "trying ${new:-the new version}"
+        local checked=0
+        check_the_new_version || checked=$?
+        [ "$checked" -eq 0 ] || refuse_the_new_version "$checked" "$new" "$previous"
+    else
+        row_sub "$INSTALLING" "this version has no pre-install check"
+        echo "this version has no pre-install check; it is installed without one" >&2
+    fi
     if [ "$UPDATING" = "yes" ]; then
         set_the_install_aside
     fi
@@ -1972,15 +1996,16 @@ do_install() {
     fi
 }
 
-# Builds the staged version's backend without starting it (check in
-# backend/main.py): every module imported, the native library loaded, and the
-# database and settings migrated — on copies of the live ones, taken while the
-# installed version may still be writing them. Every one of the six roots is
-# named here, because a root left out falls back to one the running version
-# uses, and a panel install hands this run the live ones in its environment.
-# They lie under WORK_DIR, which the EXIT trap removes. `-B` because the staged
-# tree is the one put in place, and bytecode this run wrote into it would be
-# files the tarball did not bring.
+# The pre-install check: builds the staged version's backend without starting
+# it (backend/check.py) — every module imported, the native library loaded, and
+# the database and settings migrated, on copies of the live ones taken while the
+# installed version may still be writing them. Every root it could write under
+# is named here, the runtime directory among them, because a root left out falls
+# back to one the running version uses, and a panel install hands this run the
+# live ones in its environment. The code root is the staged tree; the others lie
+# under WORK_DIR, which the EXIT trap removes. `-B` because the staged tree is
+# the one put in place, and bytecode this run wrote into it would be files the
+# tarball did not bring.
 check_the_new_version() {
     local roots="$WORK_DIR/check"
     TENDER_CODE_DIR="$CODE.new" \
@@ -1989,26 +2014,58 @@ check_the_new_version() {
         TENDER_CACHE_DIR="$roots/cache" \
         TENDER_STATE_DIR="$roots/state" \
         TENDER_BIN_DIR="$roots/bin" \
-        "$PYTHON" -B "$CODE.new/backend/main.py" --check --data-from "$DATA" --config-from "$CONFIG" \
+        XDG_RUNTIME_DIR="$roots/run" \
+        timeout --kill-after="$CHECK_KILL_AFTER" "$CHECK_SECONDS" \
+        "$PYTHON" -B "$CODE.new/$CHECK_ENTRY" --data-from "$DATA" --config-from "$CONFIG" \
         > "$WORK_DIR/check.log" 2>&1
 }
 
 # Nothing has been stopped or replaced yet, so the staged tree is all there is
-# to take away. An update records the refusal for the panel, naming the version
-# still installed; a first install has no panel to tell. What the check said ends
-# the run's output — the journal's, for an install started from the panel.
+# to take away, whatever the check answered (*status*). Only a version the check
+# could not build is the version's: an update records that refusal for the
+# panel, naming the version still installed, and a first install has no panel to
+# tell. A check that did not finish, or was not tried, says nothing about the
+# version, and is recorded nowhere. What the check said is printed above the
+# abort's two lines — the journal's, for an install started from the panel.
 refuse_the_new_version() {
-    local new="$1" previous="$2"
-    rm -rf "$CODE.new"
-    if [ "$UPDATING" = "yes" ] && ! record_update_failure "$new" "$previous" "$CHECK_REFUSED"; then
-        row_sub "$INSTALLING" "could not record the refused update; Tender will not show it" fail
-        echo "install.sh: could not record the refused update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2
+    local status="$1" new="$2" previous="$3" reason
+    rm -rf "$CODE.new" || echo "could not remove the new version from $(tilde "$CODE.new")" >&2
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+        reason="the check did not finish"
+        echo "the pre-install check was stopped after ${CHECK_SECONDS}s" >&2
+    elif [ "$status" -eq "$CHECK_NOT_TRIED" ]; then
+        reason="could not try the new version: your data could not be copied"
+    else
+        reason="the new version does not start"
+        if [ "$UPDATING" = "yes" ] && ! record_update_failure "$new" "$previous" "$CHECK_REFUSED"; then
+            row_sub "$INSTALLING" "could not record the refused update; Tender will not show it" fail
+            echo "install.sh: could not record the refused update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2
+        fi
     fi
-    row_detail "$INSTALLING" "the new version does not start"
+    row_detail "$INSTALLING" "$reason"
     fail_open_row
-    echo "what the new version said as it was checked:" >&2
-    tail -n 20 "$WORK_DIR/check.log" | sed 's/^/  /' >&2
-    abort "the new version does not start" "nothing was changed"
+    say_what_the_check_said
+    abort "$reason" "nothing was changed"
+}
+
+# The check's last error line and the last line of its last traceback first, then
+# the end of what it printed: a tail alone can begin below the reason where the
+# log carries two tracebacks. Reading the log never ends the run, which still has
+# its reason to give.
+say_what_the_check_said() {
+    local log="$WORK_DIR/check.log" reason="" raised=""
+    [ -s "$log" ] || return 0
+    reason="$(grep -F '[ERROR]: check:' "$log" 2> /dev/null | tail -n 1)" || reason=""
+    reason="${reason#*\]: check: }"
+    raised="$(grep -E '^[A-Za-z_][A-Za-z0-9_.]*(: |$)' "$log" 2> /dev/null | tail -n 1)" || raised=""
+    if [ -n "$reason" ]; then
+        echo "the pre-install check said: $reason" >&2
+        [ -z "$raised" ] || echo "  $raised" >&2
+    elif [ -n "$raised" ]; then
+        echo "the pre-install check said: $raised" >&2
+    fi
+    echo "the last lines it printed:" >&2
+    tail -n 20 "$log" 2> /dev/null | sed 's/^/  /' >&2 || true
 }
 
 # Stops the unit and backs the data up, before the tree is swapped. Either one

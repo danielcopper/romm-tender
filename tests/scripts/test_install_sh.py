@@ -77,8 +77,11 @@ _BACKEND_PORT = "27740"
 # `bin/tender-rom-launcher` and that `version.txt`. _RECOVERY is here because
 # the closing line asks for it, and the rest have to exist because the packager
 # refuses a tree that is missing any shipped entry.
+_CHECK = "backend/check.py"
+
 _CHECKOUT_FILES = (
     "backend/main.py",
+    _CHECK,
     "dist/index.js",
     "dist/globals.js",
     "dist/index-coexistence.js",
@@ -89,6 +92,18 @@ _CHECKOUT_FILES = (
     "install.sh",
     _RECOVERY,
 )
+
+# Stands in for coreutils' timeout(1) around the pre-install check: notes its
+# own arguments in STUB_TIMEOUT_LOG where a test asks, and answers
+# STUB_CHECK_TIMES_OUT (124 or 137) without running the check where one is set —
+# the statuses the real one gives a command it stopped or killed. Otherwise it
+# runs the command in its place.
+_TIMEOUT_STUB = """#!/usr/bin/env bash
+[ -z "${STUB_TIMEOUT_LOG:-}" ] || printf '%s %s\\n' "$1" "$2" >> "$STUB_TIMEOUT_LOG"
+[ -z "${STUB_CHECK_TIMES_OUT:-}" ] || exit "$STUB_CHECK_TIMES_OUT"
+shift 2
+exec "$@"
+"""
 
 _SYSTEMCTL_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$STUB_SYSTEMCTL_LOG"
@@ -296,31 +311,48 @@ esac
 # Runs the installer's own version question under a real interpreter that reports
 # the version the test names, so the comparison under test is the installer's
 # rather than one this stub makes up. It also stands in for the new version's
-# check (`-B <tree>/backend/main.py --check …`), which the synthetic tree cannot
-# answer: it notes the call in STUB_CHECK_LOG where a test asks, leaves a file
-# in each root it was given — where a real build writes — and fails for a
-# version named in STUB_UNSTARTABLE_VERSIONS, saying why on stderr.
+# pre-install check (`-B <tree>/backend/check.py …`), which the synthetic tree
+# cannot answer: it notes the call in STUB_CHECK_LOG where a test asks, leaves a
+# file in each root it was given — where a real build writes — and answers as
+# backend/check.py does: 1 for a version named in STUB_UNSTARTABLE_VERSIONS and 2
+# for one named in STUB_UNCOPYABLE_VERSIONS, saying why on stderr the way the
+# check's logger does. STUB_CHECK_PINS_THE_TREE leaves a directory in the staged
+# tree that cannot be emptied, so removing the tree fails.
 _PYTHON_STUB = """#!/usr/bin/env bash
-if [ "$1" = "-B" ] && [ "$3" = "--check" ]; then
+if [ "$1" = "-B" ] && [ "${2##*/}" = "check.py" ]; then
     version="$(tr -d '[:space:]' < "$TENDER_CODE_DIR/version.txt")"
     if [ -n "${STUB_CHECK_LOG:-}" ]; then
         {
             printf 'version=%s\\n' "$version"
             printf 'argv=%s\\n' "$*"
             for name in TENDER_CODE_DIR TENDER_CONFIG_DIR TENDER_DATA_DIR TENDER_CACHE_DIR \\
-                TENDER_STATE_DIR TENDER_BIN_DIR; do
+                TENDER_STATE_DIR TENDER_BIN_DIR XDG_RUNTIME_DIR; do
                 printf '%s=%s\\n' "$name" "${!name}"
             done
         } >> "$STUB_CHECK_LOG"
     fi
-    for root in "$TENDER_CONFIG_DIR" "$TENDER_DATA_DIR" "$TENDER_CACHE_DIR" "$TENDER_STATE_DIR" "$TENDER_BIN_DIR"; do
+    for root in "$TENDER_CONFIG_DIR" "$TENDER_DATA_DIR" "$TENDER_CACHE_DIR" "$TENDER_STATE_DIR" "$TENDER_BIN_DIR" \\
+        "$XDG_RUNTIME_DIR"; do
         mkdir -p "$root"
         printf 'written by the check of %s\\n' "$version" > "$root/written-by-the-check"
     done
+    if [ -n "${STUB_CHECK_PINS_THE_TREE:-}" ]; then
+        mkdir -p "$TENDER_CODE_DIR/pinned"
+        : > "$TENDER_CODE_DIR/pinned/file"
+        chmod 555 "$TENDER_CODE_DIR/pinned"
+    fi
     case " ${STUB_UNSTARTABLE_VERSIONS:-} " in
         *" $version "*)
+            printf '[t][ERROR]: check: %s could not be built\\n' "$version" >&2
             printf 'Traceback (most recent call last):\\nImportError: %s cannot be imported\\n' "$version" >&2
             exit 1
+            ;;
+    esac
+    case " ${STUB_UNCOPYABLE_VERSIONS:-} " in
+        *" $version "*)
+            printf '[t][ERROR]: check: the live data could not be copied\\n' >&2
+            printf 'Traceback (most recent call last):\\nsqlite3.DatabaseError: file is not a database\\n' >&2
+            exit 2
             ;;
     esac
     exit 0
@@ -381,6 +413,7 @@ class Install:
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
         _write_executable(self.stubs / "pgrep", _PGREP_STUB)
+        _write_executable(self.stubs / "timeout", _TIMEOUT_STUB)
 
         self.steam_root = self.home / ".local" / "share" / "Steam"
         self.steam_root.mkdir(parents=True)
@@ -721,19 +754,24 @@ def _write_executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _build_tarball(tmp_path: Path, version: str = _VERSION, *, replaces_a_stranded_panel: bool = True) -> Path:
+def _build_tarball(
+    tmp_path: Path, version: str = _VERSION, *, replaces_a_stranded_panel: bool = True, has_a_check: bool = True
+) -> Path:
     """A real release tarball, produced by the real packager from a synthetic checkout.
 
     *replaces_a_stranded_panel* False builds a release from before the backend
-    replaced a panel an earlier one left, which is a tree without that module.
-    Each distinct build has a checkout and an output directory of its own.
+    replaced a panel an earlier one left, which is a tree without that module;
+    *has_a_check* False one from before the pre-install check, without its
+    entry. Each distinct build has a checkout and an output directory of its own.
     """
     label = version if replaces_a_stranded_panel else f"{version}-before-recovery"
+    if not has_a_check:
+        label = f"{label}-before-the-check"
     source = tmp_path / f"checkout-{label}"
     out = tmp_path / f"built-{label}"
     if not source.exists():
         for relative in _CHECKOUT_FILES:
-            if relative == _RECOVERY and not replaces_a_stranded_panel:
+            if (relative == _RECOVERY and not replaces_a_stranded_panel) or (relative == _CHECK and not has_a_check):
                 continue
             target = source / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1942,7 +1980,7 @@ class TestTheNewVersionIsCheckedFirst:
     """
 
     def _refused_update(self, machine) -> tuple[dict[Path, bytes], subprocess.CompletedProcess[str]]:
-        """1.2.3 installed, 1.3.0 installed over it, then 1.4.0 refused by its check."""
+        """1.2.3 installed, 1.3.0 installed over it, then 1.4.0 refused by the pre-install check."""
         _installed(machine)
         assert (
             machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up").returncode
@@ -1982,17 +2020,24 @@ class TestTheNewVersionIsCheckedFirst:
         assert "[!!] Installing   the new version does not start" in result.stdout
         assert "is stopped" not in result.stderr
 
-    def test_what_the_check_said_ends_the_run(self, machine):
-        """A panel install's run output is its journal, which is where the notice sends the reader."""
+    def test_what_the_check_said_is_printed_above_the_refusal_its_reason_first(self, machine):
+        """A panel install's run output is its journal, which is where the notice sends the reader.
+
+        The reason comes before the tail, which can begin below it where the log carries two tracebacks.
+        """
         _before, result = self._refused_update(machine)
 
         lines = result.stderr.splitlines()
-        said = lines.index("  ImportError: 1.4.0 cannot be imported")
-        assert lines[said - 2 : said] == [
-            "what the new version said as it was checked:",
+        said = lines.index("the pre-install check said: 1.4.0 could not be built")
+        assert lines[said : said + 6] == [
+            "the pre-install check said: 1.4.0 could not be built",
+            "  ImportError: 1.4.0 cannot be imported",
+            "the last lines it printed:",
+            "  [t][ERROR]: check: 1.4.0 could not be built",
             "  Traceback (most recent call last):",
+            "  ImportError: 1.4.0 cannot be imported",
         ]
-        assert said < lines.index("install.sh: the new version does not start")
+        assert lines[said + 6 :] == ["install.sh: the new version does not start", "  nothing was changed"]
 
     def test_it_records_the_refusal_as_the_check_s(self, machine):
         _before, _result = self._refused_update(machine)
@@ -2091,7 +2136,7 @@ class TestTheNewVersionIsCheckedFirst:
         assert _tree_version(machine.code) == version
 
     def test_the_check_runs_the_staged_tree_with_every_root_its_own(self, machine):
-        """Code from the staged tree; the other five in a directory of the run's own, gone once it ends."""
+        """Code from the staged tree; the other five and the runtime directory under the run's own, gone at its end."""
         log = machine.tmp_path / "check.log"
         _installed(machine)
 
@@ -2101,9 +2146,7 @@ class TestTheNewVersionIsCheckedFirst:
 
         (call,) = _check_calls(log)
         staged = f"{machine.code}.new"
-        assert call["argv"] == (
-            f"-B {staged}/backend/main.py --check --data-from {machine.data} --config-from {machine.config}"
-        )
+        assert call["argv"] == f"-B {staged}/{_CHECK} --data-from {machine.data} --config-from {machine.config}"
         assert call["TENDER_CODE_DIR"] == staged
         roots = [
             Path(call[name])
@@ -2113,13 +2156,128 @@ class TestTheNewVersionIsCheckedFirst:
                 "TENDER_CACHE_DIR",
                 "TENDER_STATE_DIR",
                 "TENDER_BIN_DIR",
+                "XDG_RUNTIME_DIR",
             )
         ]
-        live = (machine.config, machine.data, machine.cache, machine.state, machine.bin, machine.home, machine.tmp_path)
+        live = (
+            machine.config,
+            machine.data,
+            machine.cache,
+            machine.state,
+            machine.bin,
+            machine.runtime,
+            machine.home,
+            machine.tmp_path,
+        )
         assert len({root.parent for root in roots}) == 1
         assert not any(root == place or place in root.parents for root in roots for place in live)
         assert not any(root.exists() for root in roots)
         assert list(machine.tmp_path.rglob("written-by-the-check")) == []
+
+    def test_the_check_is_stopped_at_two_minutes_and_killed_ten_seconds_later(self, machine):
+        log = machine.tmp_path / "timeout.log"
+
+        result = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_BACKEND="up", STUB_TIMEOUT_LOG=str(log)
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert log.read_text(encoding="utf-8").splitlines() == ["--kill-after=10 120"]
+
+    @pytest.mark.parametrize("status", ["124", "137"])
+    def test_a_check_that_did_not_finish_changes_nothing_and_records_nothing(self, machine, status):
+        """Stopped at the limit, or killed after it: nothing is known about the version."""
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_CHECK_TIMES_OUT=status,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the check did not finish"]
+        assert "  nothing was changed" in result.stderr.splitlines()
+        assert "the pre-install check was stopped after 120s" in result.stderr.splitlines()
+        assert _tree_version(machine.code) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
+        assert not machine.failure_record.exists()
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert "--user stop romm-tender" not in machine.systemctl_calls()
+
+    def test_data_that_could_not_be_copied_is_not_the_version_s_and_is_recorded_nowhere(self, machine):
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_UNCOPYABLE_VERSIONS=_NEW,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: could not try the new version: your data could not be copied"]
+        assert "  nothing was changed" in result.stderr.splitlines()
+        assert "the pre-install check said: the live data could not be copied" in result.stderr.splitlines()
+        assert "  sqlite3.DatabaseError: file is not a database" in result.stderr.splitlines()
+        assert _tree_version(machine.code) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
+        assert not machine.failure_record.exists()
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert "--user stop romm-tender" not in machine.systemctl_calls()
+
+    def test_a_refused_tree_that_cannot_be_removed_is_said_and_the_refusal_still_recorded(self, machine):
+        """Nothing about the removal may end the run before the record and the refusal are written."""
+        _installed(machine)
+        staged = Path(f"{machine.code}.new")
+        try:
+            result = machine.run(
+                "--from",
+                str(_build_tarball(machine.tmp_path, _NEW)),
+                "--yes",
+                STUB_BACKEND="up",
+                STUB_UNSTARTABLE_VERSIONS=_NEW,
+                STUB_CHECK_PINS_THE_TREE="yes",
+            )
+        finally:
+            if (staged / "pinned").exists():
+                (staged / "pinned").chmod(0o755)
+
+        assert result.returncode == 1
+        assert f"could not remove the new version from {staged}" in result.stderr.splitlines()
+        assert _refusals(result.stderr) == ["install.sh: the new version does not start"]
+        assert json.loads(machine.failure_record.read_text(encoding="utf-8"))["kind"] == "check"
+        assert _tree_version(machine.code) == _VERSION
+
+    @pytest.mark.parametrize("updating", [False, True])
+    def test_a_version_without_a_check_is_installed_without_one_and_says_so(self, machine, updating):
+        log = machine.tmp_path / "check.log"
+        if updating:
+            _installed(machine)
+        version = _NEW if updating else _VERSION
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, version, has_a_check=False)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_CHECK_LOG=str(log),
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert not log.exists()
+        assert "this version has no pre-install check; it is installed without one" in result.stderr.splitlines()
+        assert "this version has no pre-install check" in (line.strip() for line in result.stdout.splitlines())
+        assert _tree_version(machine.code) == version
 
 
 class TestRollingBackByHand:
@@ -3026,6 +3184,14 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         from domain.update_outcome import UpdateFailureKind
 
         assert f'CHECK_REFUSED="{UpdateFailureKind.CHECK.value}"' in _INSTALL.read_text(encoding="utf-8")
+
+    def test_the_check_it_runs_is_the_backend_s_and_so_is_its_status_for_a_check_not_tried(self):
+        import check
+
+        text = _INSTALL.read_text(encoding="utf-8")
+        assert f'CHECK_ENTRY="{_CHECK}"' in text
+        assert (_REPO / _CHECK).resolve() == Path(check.__file__).resolve()
+        assert f"CHECK_NOT_TRIED={check.NOT_TRIED}" in text
 
 
 class TestHowTheRunLooks:
