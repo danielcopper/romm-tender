@@ -1584,9 +1584,9 @@ parallelised, for an outcome that costs one deferred sync — deliberately defer
 
 ### Surviving a plugin reload mid-session
 
-`destroySessionManager` wipes the in-memory sessions on unload, so a plugin reload while a game is running would leave
-the next game-stop with nothing to finalize — the pre-reload playtime is lost and the post-exit sync never runs. Two
-signals let the re-initialized `sessionManager` recover them:
+The in-memory sessions live in the JS context, so a context rebuild while a game is running would leave the next
+game-stop with nothing to finalize — the pre-reload playtime is lost and the post-exit sync never runs. Two signals let
+the re-initialized `sessionManager` recover them:
 
 - **Steam running-state (liveness).** A guarded reader (`utils/runningApps`) is the authority for _whether_ the games
   are still running at re-init — the durable marker (`last_session_start`) is written by `recordSessionStart` precisely
@@ -1599,8 +1599,8 @@ signals let the re-initialized `sessionManager` recover them:
   attested app has surfaced**: the store omits apps whose overview has not loaded, so a reading listing one concurrent
   game can still be missing its sibling, and stopping at the first non-empty round would orphan it.
 - **A localStorage breadcrumb (attestation).** One versioned row (`romm-tender:active-session` →
-  `{v: 2, sessions: [{appId, romId, startMs}, …]}`) holds **every** open session. It is **not** cleared by
-  `destroySessionManager`, so it outlives the reload. Every localStorage access is wrapped — a storage failure degrades
+  `{v: 2, sessions: [{appId, romId, startMs}, …]}`) holds **every** open session. It lives in localStorage, which
+  outlives the JS context, so it survives the reload. Every localStorage access is wrapped — a storage failure degrades
   to the no-attestation path, never throws.
 
   Writes are a **projection**: the map is the source of truth and the whole row is rewritten after each mutation, before

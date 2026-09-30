@@ -104,8 +104,7 @@ export interface QuickAccessEntryHandle {
  * marker is a JS-context rebuild, which takes this module, its patches, the
  * menu's tree and every tab array with it. So a second installation into a live
  * context is unreachable, and an unpatch would be a teardown nothing could ever
- * call — including `plugin.onDismount`, which has had no caller since the panel
- * stopped being loaded by Decky.
+ * call.
  */
 export function installQuickAccessEntry(factory: () => Plugin): QuickAccessEntryHandle {
   const entry = buildEntry(factory());

@@ -199,9 +199,9 @@ function recordUnitOutcome(unitIndex: number, created: number, updated: number):
   notify();
 }
 
-/** Start mirroring the frame stream into the rows, and hand back the teardown.
- *  Called once where the plugin's other long-lived listeners are installed, so
- *  the store's lifetime is the plugin's and its writers stay explicit. */
+/** Start mirroring the frame stream into the rows. Called once where the
+ *  plugin's other long-lived listeners are installed, so the store's lifetime
+ *  is the plugin's and its writers stay explicit. */
 export function attachRunUnitsMirror(): void {
   onSyncProgressChange(() => observeRunFrame(getSyncProgress()));
 }

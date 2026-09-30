@@ -66,9 +66,9 @@ describe("the toaster", () => {
 
 describe("subscribing to a backend event", () => {
   it("answers with the listener unchanged, which is what every teardown holds on to", () => {
-    // `index.tsx` keeps the returned reference and hands the same one back to
-    // `removeEventListener` on dismount — twenty times. A wrapper returned here
-    // instead would make every one of those removals a silent no-op.
+    // A view that subscribes while it is mounted keeps the returned reference
+    // and hands the same one back to `removeEventListener` when it unmounts. A
+    // wrapper returned here instead would make every such removal a silent no-op.
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const listener = (frame: never) => frame;
 

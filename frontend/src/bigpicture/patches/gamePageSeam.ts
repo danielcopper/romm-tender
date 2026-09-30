@@ -137,10 +137,8 @@ export function patchableMemos(exports: unknown): object[] {
  * original component type, so the cost of a second props object is a cache hit,
  * and a props object dies with the element it was made for. Keeping the patches to
  * undo them would keep every props object alive for the life of the process,
- * and there is nothing to undo them WITH — the patch on the memo is what the
- * install takes back, and a props object already wrapped keeps its wrapper
- * until its element is built again, which is how Decky's own unpatch behaves
- * too.
+ * and nothing would ever undo them: a JS-context rebuild is what ends the
+ * panel, and it takes the patches with it.
  */
 export function wrapRouteRenderFunc(
   args: readonly unknown[],

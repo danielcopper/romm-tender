@@ -186,10 +186,10 @@ that can drift from the registry leaves a refusal with no holder to name.
 Frontend-owned Steam work spans many calls, so it holds a globally registered, bounded, tokenized lease that it
 heartbeats through every sibling continuation's final write — including each paced `sync_stale` removal and the terminal
 repoint publication. Every continuation re-checks its abort signal before each later Steam mutation. Failed event
-delivery releases an unreachable token. The owner's plugin generation is captured before each backend wait, and teardown
-tombstones it so a late lease-bearing response is released without doing work; only a genuine remount opens a new
-generation. Teardown stops renewal and blocks future writes but defers the explicit release until already-started Steam
-promises settle.
+delivery releases an unreachable token. The owner's generation is captured before each backend wait, and the owner's
+teardown tombstones it so a late lease-bearing response is released without doing work; only a genuine remount opens a
+new generation. Teardown stops renewal and blocks future writes but defers the explicit release until already-started
+Steam promises settle.
 
 A frontend that has just mounted disowns every lease outstanding at that moment, once, before anything else can acquire
 one. A continuation whose JS context is torn down mid-call — the double mount at plugin load does this — never reaches

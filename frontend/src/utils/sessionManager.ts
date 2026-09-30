@@ -34,10 +34,6 @@ export interface ActiveSession {
 // WITH THE SESSION (#1621) — a romId key would force a reverse lookup through
 // the `appId → romId` map, which can go stale mid-session and would then drop a
 // live session instead of an unrelated one.
-//
-// `const` + `clear()` on teardown: the binding is never reassigned, so a handler
-// already queued on the lifecycle chain cannot end up writing into a map that
-// has been swapped out from under it.
 const activeSessions = new Map<number, ActiveSession>();
 
 // Serialization chain — ensures lifecycle events don't interleave
@@ -374,8 +370,8 @@ export interface AdoptionPlan {
  * That skip is UNREACHABLE as the manager is currently wired, and deliberately
  * kept: adoption and every notification handler run on the one serialized
  * `lifecycleChain`, adoption is enqueued in the same synchronous block that
- * registers the hook, and a teardown clears the session map — so a fresh init
- * always reconciles against an empty `tracked`. Two wiring changes would make it
+ * registers the hook, and init runs once per JS context, whose session map
+ * starts empty — so a fresh init always reconciles against an empty `tracked`. Two wiring changes would make it
  * live: taking adoption off that chain (giving a notification a window to
  * complete during the up-to-15s poll), or a handler that acts directly instead
  * of enqueueing. Do not delete it as dead code without making one of those
@@ -410,9 +406,9 @@ export function planAdoption(
 /**
  * Adopt the play sessions orphaned by a plugin reload mid-game.
  *
- * `destroySessionManager` wipes the in-memory sessions on unload, so the
- * game-stops after a reload would otherwise never finalize — the pre-reload
- * playtime is lost and the post-exit sync never runs. Steam's running-state
+ * The in-memory sessions live in the JS context, so the game-stops after a
+ * reload would otherwise never finalize — the pre-reload playtime is lost and
+ * the post-exit sync never runs. Steam's running-state
  * (`SteamUIStore.RunningApps`) is the liveness authority; the localStorage
  * breadcrumbs are the attestations of starts we actually observed. Every
  * finalize fold thus stays anchored to a marker stamped by an observed start.

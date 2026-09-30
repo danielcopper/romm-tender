@@ -199,9 +199,10 @@ describe("useWideQamPanel", () => {
     const { host, panelParent } = mountQamDom();
     panelParent.classList.remove(ACTIVE_TAB_CLASS);
 
-    // The plugin's panel renders on while another QAM tab is active
-    // (`alwaysRender`), so a wide page can mount here. Expanding and retracting
-    // across two renders would flash Steam's own panel open.
+    // A panel can render on while another QAM tab is active — Steam's tab group
+    // decides whether an unselected panel stays mounted — so a wide page can
+    // mount here. Expanding and retracting across two renders would flash
+    // Steam's own panel open.
     renderWidePage(mod, host);
 
     expect(post).not.toHaveBeenCalled();
@@ -225,7 +226,9 @@ describe("useWideQamPanel", () => {
     renderWidePage(mod, host);
 
     // A QAM tab switch is a class change on the panel's parent, not an unmount:
-    // the plugin's panel renders on (`alwaysRender`), so only the observer sees it.
+    // a panel can render on while another QAM tab is active — Steam's tab group
+    // decides whether an unselected panel stays mounted — so only the observer
+    // sees it.
     await act(async () => {
       panelParent.classList.remove(ACTIVE_TAB_CLASS);
     });

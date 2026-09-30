@@ -342,9 +342,7 @@ Loader patches the same component — overwrites that property outright with no 
 whoever applies it second orphans the first, in either order and in both bundles. So Tender never installs over a chain
 it has not just read. It wraps whatever `render` it finds, and looks again before every push; a check at push time is
 enough because a toast is drawn only after it is pushed, so no accessor trick and no observer is needed. A link it
-replaces is retired as it goes, because whatever overwrote it may still delegate through it. At dismount it puts back
-what it found where its own link is still on top, and turns that link into a pass-through where somebody wrapped over it
-— cutting it out there would take the later patcher's drawing with it.
+replaces is retired as it goes, because whatever overwrote it may still delegate through it.
 
 There are three layouts, chosen from the `location` Steam passes the renderer, and all of their class names come from
 one map (`findClassModule((m) => m.ShortTemplate)`): several class maps carry these template names and exactly one
@@ -394,7 +392,7 @@ and caches its own copy — and the order the wrappers end up in follows from wh
 `(props) => createElement(originalType, props)`, so beside a Decky the route component is handed a fresh props object on
 every render; a guard kept per component, or per `renderFunc`, would wrap the first render and no other. Nothing is
 retained per props object either: the tree patcher's own cache bounds the work to one wrap per original component type,
-and a props object dies with the element it was made for. What the teardown takes back is the patch on the memo.
+and a props object dies with the element it was made for.
 
 **The module is found by three property names in a factory's source.** Steam's webpack `require` is obtained the way
 `@decky/ui` obtains it — pushing a chunk keyed by a fresh Symbol, whose factory is handed it — and a module factory's

@@ -487,13 +487,13 @@ While cleanup is starting or running, library sync, downloads/resumes, migration
 session finalization, launch evaluation, core/disc changes, Steam Input application, uninstalls, and relevant cache
 cleanup are refused. Frontend Steam continuations hold bounded expiring leases until acknowledged, so a lost page or
 bridge response cannot block cleanup forever. Active work renews its lease while applying Steam changes; a lease expires
-only after five minutes without a successful renewal. Component/plugin teardown stops future Steam writes and renewal,
-but a lease is not explicitly released while an already-started Steam operation is still settling. An unresolved
-continuation stops renewing after its bounded frontend lifetime and then relies on backend expiry. Server, sign-in,
-token, and user changes (including a connection test that can backfill user identity) are refused during the run, and
-every exact-id check also verifies the same server/user namespace captured by the preview. Cancel or finish the cleanup
-before retrying those actions. This reciprocal block prevents newly downloaded content or recovered state from appearing
-after recovery was captured and then being removed by finalization.
+only after five minutes without a successful renewal. Component teardown stops future Steam writes and renewal, but a
+lease is not explicitly released while an already-started Steam operation is still settling. An unresolved continuation
+stops renewing after its bounded frontend lifetime and then relies on backend expiry. Server, sign-in, token, and user
+changes (including a connection test that can backfill user identity) are refused during the run, and every exact-id
+check also verifies the same server/user namespace captured by the preview. Cancel or finish the cleanup before retrying
+those actions. This reciprocal block prevents newly downloaded content or recovered state from appearing after recovery
+was captured and then being removed by finalization.
 
 Recovery bundles are under `~/romm-tender-recovery/bundles/`. Older bundles sealed under
 `~/decky-romm-sync-recovery/bundles/` stay where they are — nothing moves them, and both folders are yours to keep or

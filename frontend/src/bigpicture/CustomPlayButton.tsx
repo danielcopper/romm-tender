@@ -665,7 +665,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     setState("launching");
     // Heal any mid-session launch_options drift on this shortcut before launch
     // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay
-    // best-effort; timeout or plugin teardown cancels this launch.
+    // best-effort; timeout or the button's unmount cancels this launch.
     if (romId) {
       const reconfirm = await reconfirmLaunchOptions(romId, appId, "CustomPlayButton", admission);
       if (reconfirm.status === "cancelled") return;

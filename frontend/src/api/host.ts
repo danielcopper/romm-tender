@@ -63,7 +63,7 @@ export interface Toaster {
   toast(toast: ToastData): ToastNotification;
 }
 
-/** What `definePlugin`'s factory answers with — the panel, and its teardown. */
+/** What `definePlugin`'s factory answers with — the panel. */
 export interface Plugin {
   /** The entry's title, which Steam files the panel under. */
   name: string;
@@ -116,7 +116,8 @@ export const endpoint =
  * Subscribe to a backend event, and answer with the listener unchanged.
  *
  * Returning it is what lets a caller hand the same reference straight to
- * `removeEventListener`, which is how every teardown in `index.tsx` is written.
+ * `removeEventListener`, which is how a view that subscribes while it is
+ * mounted unsubscribes when it unmounts.
  */
 export const addEventListener = <Payload = unknown>(
   event: string,

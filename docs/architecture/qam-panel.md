@@ -208,10 +208,9 @@ How a page gets wide, measured on the device rather than read from documentation
 
 The flag is Steam's and global, so the page that set it clears it: on unmount (navigation away, plugin closed), when the
 tab the page sits in stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a
-class change, not an unmount), and when the QAM closes (`useQuickAccessVisible`). It no longer clears from `onDismount`:
-that was Decky's teardown hook and nothing calls it now. **Which tab that is is never asked**: the page walks up to the
-panel around it and reads the class off that panel's parent, so the same code answers for Tender's entry and for
-Decky's.
+class change, not an unmount), and when the QAM closes (`useQuickAccessVisible`). **Which tab that is is never asked**:
+the page walks up to the panel around it and reads the class off that panel's parent, so the same code answers for
+Tender's entry and for Decky's.
 
 **Both of those questions proceed when they cannot be answered**, and each one costs at worst an expansion the other
 paths still clear — the alternative default leaves a wide page permanently narrow with nothing saying why. The tab
