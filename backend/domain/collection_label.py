@@ -64,10 +64,6 @@ def steam_collection_key(name: str, kind: str, virtual_type: str | None, naming_
     ``by_label`` → ``"<name> (<label>)"`` with the label from
     :func:`collection_label`, or the bare name where that gives none (a
     standard collection). The frontend wraps the result as ``RomM: [<key>]``.
-    Every reader of a collection's Steam name takes it from here: the
-    reporter's union key, and the preview's collection diff, which compares it
-    against the keys the last completed run recorded
-    (``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming mode).
     """
     if naming_mode == "by_label":
         label = collection_label(kind, virtual_type)

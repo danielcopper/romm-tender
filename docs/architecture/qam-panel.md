@@ -1069,10 +1069,10 @@ looking.
 
 What the backend holds for it: the preview answer carries library-wide totals (`SyncPreviewSummary`: new, changed,
 unchanged and removed counts, the platform and collection counts, and more), the names of new and changed games, and the
-added and removed collection names (`collection_diff`), which are Steam collection names
-([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)). The same counts
-split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one non-zero count,
-ordered by display name, each carrying `synced` for whether the platform is in the run's platform list. A
+added and removed collection names (`collection_diff`), each the name-part of a Steam collection — the key the reporter
+builds ([Collection naming mode](steam-non-steam-shortcuts.md#collection-naming-mode-merge-vs-by_label-1539)). The same
+counts split per platform ride the summary as `platform_breakdown` — one row per platform holding at least one non-zero
+count, ordered by display name, each carrying `synced` for whether the platform is in the run's platform list. A
 `synced: false` row is a platform outside it: its toggle went off, RomM stopped listing it, or the only route to it is
 an enabled collection, which is not filtered by platform enablement. The causes compose, so one row can carry removals
 for the ROMs the run no longer fetches and new or changed counts for the ROMs a collection still reaches. Its name is

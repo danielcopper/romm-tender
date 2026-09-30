@@ -380,15 +380,17 @@ def compute_collection_diff(
     current_collection_names: set[str],
     last_synced_collections: list[str],
 ) -> dict[str, Any]:
-    """Diff enabled collections (by Steam name) against the last-synced set.
+    """Diff enabled collections (by Steam-collection key) against the last-synced set.
 
-    ``current_collection_names`` is the set of DISTINCT Steam collection names
-    (:func:`domain.collection_label.steam_collection_key`) of this run's
-    collection accumulator — a name counts as present iff at least one collection
-    carries it, so two collections sharing a name (RomM permits same-named ones
-    across kinds/users, #1503) collapse to one entry, matching the by-name Steam
-    collection they merge into. ``last_synced_collections`` is the last completed
-    run's record, which holds the same names.
+    ``current_collection_names`` is the set of DISTINCT keys
+    (:func:`domain.collection_label.steam_collection_key`, the name-part of each
+    Steam collection) of this run's collection accumulator — a key counts as
+    present iff at least one collection carries it, so two collections sharing
+    one (RomM permits same-named ones across kinds/users, #1503) collapse to one
+    entry, matching the by-name Steam collection they merge into.
+    ``last_synced_collections`` is the last completed run's record of the same
+    keys. The reporter records no key for a collection none of whose members
+    resolved to a Steam appId, so such a collection reads as added.
 
     Names are compared **case-insensitively** (``str.casefold``), because Steam's
     collection identity ignores case: the reporter merges keys that differ only in

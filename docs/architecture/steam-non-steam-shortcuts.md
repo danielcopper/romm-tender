@@ -452,23 +452,26 @@ sync that reaches the collection creates it under its new name, and the first sy
 **The preview names collections by the same key.** A completed run records the reporter's keys as its
 `collections_completed`, and the preview's `collection_diff` builds its current set with the same
 `steam_collection_key`, so an unchanged set of Steam collections shows no collection change in either mode, and the
-Added and Removed names the Sync page lists are Steam names (`Filter (Smart)` under `by_label`). It compares them
-without regard to case, like every other name comparison ("Name identity is case-insensitive", below). A mode flip is a
-real rename: the first preview after it lists each labelled collection as added under its new name and removed under its
-old one. Under `by_label` the same holds once for a standard collection over a run recorded while standard collections
-still carried a `(Standard)` label.
+Added and Removed names the Sync page lists are those keys, the name-part of each Steam collection (`Filter (Smart)`
+under `by_label`). It compares them without regard to case ("Name identity is case-insensitive", below). A mode flip is
+a real rename: the preview lists each labelled collection's new name as added and its old name as removed, unless
+another collection still carries it; this holds until a run completes. Under `by_label` the same holds for a standard
+collection over a run recorded while standard collections still carried a `(Standard)` label.
 
 **Name identity is case-insensitive (#1569).** Steam collapses collection names by a **case-insensitive** identity — two
 collections whose display names differ only in case (`RomM: [7 up]` vs `RomM: [7 Up]`) are the same Steam collection, so
-creating the second silently overwrites the first and loses its games. To match, collection **and** platform name
-identity is treated case-insensitively **everywhere** the plugin compares names: the reporter groups both
+creating the second silently overwrites the first and loses its games. To match, the plugin compares collection **and**
+platform names case-insensitively wherever it asks whether two names are one Steam collection: the reporter groups both
 `romm_collection_app_ids` and `platform_app_ids` by a case-folded key (`str.casefold()`), keeping the first-seen
 original casing for display (which exact casing wins is irrelevant — Steam uppercases collection names anyway); the
-frontend create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
-(`clearPlatformCollection` / `clearAllRomMCollections`), and the `onSyncComplete` stale-delete comparisons all match by
-`toLowerCase()`. This is always safe precisely because Steam's identity is case-insensitive: two collections differing
-only by case can never coexist, so there is never an ambiguous match to disambiguate. The DB is unaffected —
-`collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by name — so there is no migration.
+preview's `collection_diff` and `platform_collection_diff` compare case-folded names the same way; the frontend
+create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`) and the cleanup matchers
+(`clearPlatformCollection` / `clearAllRomMCollections`) match by `toLowerCase()`; and the `onSyncComplete` stale-delete
+(`removeStaleCollections`, `frontend/src/index.tsx`) matches the platform or collection name by `toLowerCase()`, while
+its `RomM:` prefix and host-suffix checks are exact. This is always safe precisely because Steam's identity is
+case-insensitive: two collections differing only by case can never coexist, so there is never an ambiguous match to
+disambiguate. The DB is unaffected — `collection_sync_state` is keyed by `(collection_id, collection_kind)`, never by
+name — so there is no migration.
 
 ## App IDs and Artwork
 

@@ -2,10 +2,10 @@
 
 The type label appended to a Steam collection name under the ``by_label``
 naming mode, its absence for a standard collection, and the Steam name each
-naming mode builds from it; where else the strings
-are spelled is ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection
-naming mode. No label may contain ``]`` (it sits inside the
-``RomM: [<name> (<label>)]`` bracket pair the frontend reconcile parses).
+naming mode builds from it; where else the strings are spelled is
+``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming mode.
+No label may contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]``
+bracket pair the frontend reconcile parses).
 """
 
 from __future__ import annotations

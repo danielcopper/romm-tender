@@ -389,11 +389,11 @@ class TestSyncPreview:
 
 
 class TestPreviewCollectionDiff:
-    """The preview's ``collection_diff`` compares Steam collection names on both sides.
+    """The preview's collection diffs compare the Steam collections' name-parts on both sides.
 
-    The last completed run records the names the reporter built, so the preview's
+    The last completed run records the keys the reporter built, so the preview's
     current set has to be built the same way — under ``by_label`` a smart or
-    virtual collection's name carries its type label.
+    virtual collection's key carries its type label — and folded the same way.
     """
 
     @staticmethod
