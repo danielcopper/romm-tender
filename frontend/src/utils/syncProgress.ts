@@ -191,8 +191,9 @@ export function getSyncProgress(): SyncProgress {
  * The run ids are the half a test cannot reach any other way: a suite that
  * reuses one run id across cases would have the first case's ending refuse the
  * next case's start, which is the rule working rather than a rule to work
- * around. Subscribers are left alone — they are installed and torn down by the
- * hooks that own them.
+ * around. Subscribers are left alone: a component's subscription is torn down
+ * by the effect that installed it, and the run-units mirror `index.tsx`
+ * attaches (`runUnitsStore.ts`) is installed once and never torn down.
  */
 export function resetSyncProgressStoreForTests(): void {
   _progress = idleFrame();

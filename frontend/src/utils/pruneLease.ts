@@ -57,8 +57,8 @@ export function mountPruneLeasePlugin(): void {
   pluginGeneration++;
   // Disown anything the previous context stranded. A continuation whose JS
   // context died mid-call never released its lease and never renews it, so it
-  // would hold off every cleanup for its full TTL with nobody behind it
-  // (#1570 F18). This mount is the proof that no such continuation survives.
+  // would hold off every cleanup for its full TTL with nobody behind it. This
+  // mount is the proof that no such continuation survives.
   void releaseOrphanedPruneLeases()
     .then((result) => {
       if (result.released > 0) {

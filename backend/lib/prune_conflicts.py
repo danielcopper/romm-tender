@@ -215,9 +215,9 @@ class PruneConflicts:
         """Drop every lease and answer how many there were.
 
         A lease is released by the continuation that received it. A frontend
-        whose JS context is torn down mid-call — the double mount at load —
-        never reaches that release and never renews either, so the lease holds
-        off every cleanup for its full TTL with nobody behind it.
+        whose JS context is torn down mid-call never reaches that release and
+        never renews either, so the lease holds off every cleanup for its full
+        TTL with nobody behind it.
 
         A newly mounted frontend is the proof that no earlier continuation can
         still be running: the context that owned them is gone. That makes mount

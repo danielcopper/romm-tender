@@ -135,10 +135,9 @@ export function patchableMemos(exports: unknown): object[] {
  * **Nothing is retained per props object.** The wrap installs a patch and that
  * patch is not kept: `@decky/ui`'s `createReactTreePatcher` caches its work per
  * original component type, so the cost of a second props object is a cache hit,
- * and a props object dies with the element it was made for. Keeping the patches to
- * undo them would keep every props object alive for the life of the process,
- * and nothing would ever undo them: a JS-context rebuild is what ends the
- * panel, and it takes the patches with it.
+ * and a props object dies with the element it was made for. Keeping the patches
+ * to undo them would keep every props object alive for the life of the JS
+ * context, for an undo nothing calls (`installGamePagePatch`).
  */
 export function wrapRouteRenderFunc(
   args: readonly unknown[],

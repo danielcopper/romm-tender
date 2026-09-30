@@ -371,11 +371,11 @@ export interface AdoptionPlan {
  * kept: adoption and every notification handler run on the one serialized
  * `lifecycleChain`, adoption is enqueued in the same synchronous block that
  * registers the hook, and init runs once per JS context, whose session map
- * starts empty — so a fresh init always reconciles against an empty `tracked`. Two wiring changes would make it
- * live: taking adoption off that chain (giving a notification a window to
- * complete during the up-to-15s poll), or a handler that acts directly instead
- * of enqueueing. Do not delete it as dead code without making one of those
- * orderings impossible instead.
+ * starts empty — so a fresh init always reconciles against an empty
+ * `tracked`. Two wiring changes would make it live: taking adoption off that
+ * chain (giving a notification a window to complete during the up-to-15s
+ * poll), or a handler that acts directly instead of enqueueing. Do not delete
+ * it as dead code without making one of those orderings impossible instead.
  */
 export function planAdoption(
   crumbs: readonly ActiveSession[],

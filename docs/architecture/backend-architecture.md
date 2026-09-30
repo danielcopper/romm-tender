@@ -315,7 +315,7 @@ application, download completion, home migration, startup healing, pre-launch he
 write and bounded release. Active continuations heartbeat those leases once per minute. A global frontend registry
 signals cooperative cancellation by component owner. Every backend wait captures the current plugin/owner mount
 generation before it starts; an owner's teardown tombstones its generation synchronously, so a lease-bearing response
-that arrives afterward is released without running its continuation. Only a genuine component remount opens a new owner
+that arrives afterward is released without running its continuation. Only a genuine remount opens a new owner
 generation. Cancellation stops every not-yet-started Steam mutation and lease renewal, but explicit backend release
 waits for any already-started non-cancellable Steam promise to settle. An unresolved operation stops renewing after a
 bounded five minutes; the backend's five-minute no-heartbeat expiry is the abandonment backstop if it never settles.

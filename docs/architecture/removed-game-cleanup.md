@@ -186,17 +186,18 @@ that can drift from the registry leaves a refusal with no holder to name.
 Frontend-owned Steam work spans many calls, so it holds a globally registered, bounded, tokenized lease that it
 heartbeats through every sibling continuation's final write — including each paced `sync_stale` removal and the terminal
 repoint publication. Every continuation re-checks its abort signal before each later Steam mutation. Failed event
-delivery releases an unreachable token. The owner's generation is captured before each backend wait, and the owner's
-teardown tombstones it so a late lease-bearing response is released without doing work; only a genuine remount opens a
-new generation. Teardown stops renewal and blocks future writes but defers the explicit release until already-started
-Steam promises settle.
+delivery releases an unreachable token. A continuation with an owner captures that owner's generation before each
+backend wait, and the owner's teardown tombstones it so a late lease-bearing response is released without doing work;
+only a genuine remount opens a new generation. The continuations with no owner — the ones `index.tsx` registers and
+Steam's launch watcher — have no teardown to tombstone them. Teardown stops renewal and blocks future writes but defers
+the explicit release until already-started Steam promises settle.
 
 A frontend that has just mounted disowns every lease outstanding at that moment, once, before anything else can acquire
-one. A continuation whose JS context is torn down mid-call — the double mount at plugin load does this — never reaches
-its release and never renews either, so its lease holds off every cleanup for a full TTL with nobody behind it. A fresh
-mount is the proof that no earlier continuation survives, which makes it the one moment such an orphan is provably safe
-to drop; run claims, reservations and operations are untouched, because only the frontend's own leases are the
-frontend's to disown. Each one released this way is logged at INFO, since it means a leak happened.
+one. A continuation whose JS context is torn down mid-call never reaches its release and never renews either, so its
+lease holds off every cleanup for a full TTL with nobody behind it. A fresh mount is the proof that no earlier
+continuation survives, which makes it the one moment such an orphan is provably safe to drop; run claims, reservations
+and operations are untouched, because only the frontend's own leases are the frontend's to disown. Each one released
+this way is logged at INFO, since it means a leak happened.
 
 A lease is the frontend's to release, so every path that receives one must give it back — including the paths that do no
 work. A terminal completion frame carries a publication lease whenever the run committed a repoint; when the frame turns

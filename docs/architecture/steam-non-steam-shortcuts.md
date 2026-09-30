@@ -249,8 +249,8 @@ The same reciprocal exclusion covers ordinary frontend Steam continuations outsi
 carry leases through hero/logo/grid/icon writes; `sync_complete` keeps one shared lease until launch-option, collection,
 playtime, and overview-metadata branches all settle; and bulk shortcut removal clears its collections before
 acknowledging and releasing the removal lease. Leases live in one frontend registry, renew only for a bounded active
-continuation, and receive a cooperative cancellation signal before their component owner releases them. Owner/plugin
-mount generations are captured before backend waits, so a token arriving after an owner's teardown is released without
+continuation, and receive a cooperative cancellation signal before their owner releases them. Owner/plugin mount
+generations are captured before backend waits, so a token arriving after an owner's teardown is released without
 admitting old continuation work even if a new owner has since mounted. Each non-empty `sync_stale` frame owns a lease
 through its paced tail; successful `sync_complete` processing overlaps that lease while joining the same tail. A backend
 emit failure rolls back a token the frontend never received.
@@ -566,9 +566,11 @@ the next client restart.
 Both launch funnels (the game-detail Play button and Steam's direct-launch watcher) re-fetch the selected ROM's resolved
 command and confirm-write it immediately before `RunGame`. Ordinary fetch or Steam-write failures remain best-effort and
 the launch proceeds. A three-second endpoint timeout is different: the already-cancelled launch remains blocked, while
-the unresolved endpoint call stays observed so a lease token returned later is released without a Steam write. Each
-launch captures its plugin/component generation before gate and modal waits; teardown makes that admission stale, and
-even an immediate remount cannot let the old chain write launch options or invoke `RunGame` under the new generation.
+the unresolved endpoint call stays observed so a lease token returned later is released without a Steam write. The Play
+button's launch captures its component generation before gate and modal waits; the button's unmount makes that admission
+stale, and even an immediate remount cannot let the old chain write launch options or invoke `RunGame` under the new
+generation. The watcher's launch has no component owner, so no teardown short of a JS-context rebuild stops its chain;
+the timeout above still does.
 
 ## Key Files
 

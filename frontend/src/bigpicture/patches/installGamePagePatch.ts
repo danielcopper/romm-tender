@@ -223,9 +223,9 @@ export interface GamePagePatchHandle {
  * component, every later render goes through that cached copy and a patch
  * installed on the original is never entered again.
  *
- * Nothing takes the patch back: a JS-context rebuild is what ends the panel,
- * and it takes the patches with it. How a props object is wrapped, and why
- * nothing is kept per props object, is {@link wrapRouteRenderFunc}'s.
+ * Nothing takes the patch back, for the reason `qam/installEntry.tsx` gives
+ * for its own. How a props object is wrapped, and why nothing is kept per
+ * props object, is {@link wrapRouteRenderFunc}'s.
  */
 export function installGamePagePatch(renderPatch: GenericPatchHandler): GamePagePatchHandle {
   const memos = AppDetailsRoute();

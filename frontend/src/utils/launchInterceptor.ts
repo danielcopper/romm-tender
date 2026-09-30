@@ -12,7 +12,7 @@
  * `launchGate.ts`) exempts exactly one launch: the watcher's own relaunch and
  * the Play button's gated launch — so neither gets re-gated (no double-gate).
  *
- * Registered on plugin load, unregistered on unload.
+ * Registered once, from the panel's factory; nothing unregisters it.
  */
 
 import { showToast } from "./toast";
