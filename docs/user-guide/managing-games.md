@@ -502,7 +502,7 @@ go. Pressing it again while that is on screen does nothing — the removal alrea
 the plugin refuses a second one for the same game rather than letting two run against the same folder. That holds across
 both entry points: **Uninstall all ROM files** on Data Management claims every game it is about to remove, so it is
 refused while a single uninstall is running, and a single uninstall is refused while the bulk run holds that game. If
-the plugin is reloaded or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
+Tender's backend restarts or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
 interrupted one stopped.
 
 ## Removing a Platform from Steam

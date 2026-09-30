@@ -329,12 +329,12 @@ only once something actually reports the server as unreachable. A page that take
 same thing as a page that found RomM missing.
 
 When the missing thing is this device's own registration — the RomM database was wiped or restored and the id this
-device was issued no longer exists — you don't have to do anything. Both when the plugin loads (installing an update
-counts, since that reloads it) and before every save-sync (before a game launches, after it exits, or a manual sync),
-the plugin first checks that this device's id still exists on the server; the moment it finds the id is gone it
-registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the old, dead
-one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away — is carried
-over to the new registration, so it still lands on the server under this device rather than being stranded.
+device was issued no longer exists — you don't have to do anything. Both when Tender's panel loads (installing an update
+counts: the panel is loaded again after one) and before every save-sync (before a game launches, after it exits, or a
+manual sync), the plugin first checks that this device's id still exists on the server; the moment it finds the id is
+gone it registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the
+old, dead one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away —
+is carried over to the new registration, so it still lands on the server under this device rather than being stranded.
 
 The first-time save-slot setup screen is the clearest example. If RomM can't find the save data that setup needs, it
 pauses with "RomM couldn't find the save data for this setup" rather than the "server is not reachable" message, and the

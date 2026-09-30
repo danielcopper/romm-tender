@@ -6,7 +6,7 @@ paths:
 # Services — Cosmic Python rules
 
 Cosmic Python ("Architecture Patterns with Python", Percival & Gregory) is our north star, adapted for a single-user
-Decky plugin domain. `[CP]` marks a canonical Cosmic Python rule — a hard rule, breaking it is an architectural
+Steam plugin and RomM client. `[CP]` marks a canonical Cosmic Python rule — a hard rule, breaking it is an architectural
 regression. `[ours]` marks a project convention layered on top — flag deviations in review, but the rule itself can be
 debated.
 

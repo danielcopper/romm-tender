@@ -1401,10 +1401,10 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    `finalizeGameSession` call, so the post-exit sync never runs against a game that is still holding its save file open.
 2. `sessionManager.handleGameStop` makes a single `finalizeGameSession(romId)` call; the backend
    `SessionLifecycleService.finalize` orchestrates playtime record → post-exit save sync → migration refresh and returns
-   one typed payload (the old `recordSessionEnd` / `postExitSync` endpoints were collapsed into it). If the plugin was
-   reloaded mid-session, `handleGameStop` still fires for the adopted session — see
-   [Surviving a plugin reload mid-session](#surviving-a-plugin-reload-mid-session) — so the post-exit sync is not
-   skipped.
+   one typed payload (the old `recordSessionEnd` / `postExitSync` endpoints were collapsed into it). If Steam's JS
+   context was rebuilt mid-session, `handleGameStop` still fires for the adopted session — see
+   [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the post-exit sync is
+   not skipped.
 3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
    just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version (`overwrite=false`,
    409-backstopped).
@@ -1582,7 +1582,7 @@ A skipped run is **not** re-queued on a delay. It is picked up by the next pre-l
 copy promises exactly that. Retry-on-a-timer would need scheduling and backoff machinery around a gate that must not be
 parallelised, for an outcome that costs one deferred sync — deliberately deferred, not overlooked.
 
-### Surviving a plugin reload mid-session
+### Surviving a JS-context rebuild mid-session
 
 The in-memory sessions live in the JS context, so a context rebuild while a game is running would leave the next
 game-stop with nothing to finalize — the pre-reload playtime is lost and the post-exit sync never runs. Two signals let
@@ -1592,12 +1592,13 @@ the re-initialized `sessionManager` recover them:
   are still running at re-init — the durable marker (`last_session_start`) is written by `recordSessionStart` precisely
   so it survives the reload, but only Steam can attest a session has not already ended. Its one surface is
   `SteamUIStore.RunningApps`, read through a guard (an absent store, a `null` store or a throwing getter degrades to
-  "nothing running", never a throw). A single read is not trusted: after a full `plugin_loader` restart the store
-  reports an **empty** list for several seconds with the game still running (#1054 / #1148 round 2), so the read is
-  **polled** (every 500ms for up to 15s), not one-shot, and a timed-out round logs the `diagnostics` note that tells an
-  absent store, an empty list and a throwing getter apart. The poll settles once something is running **and every
-  attested app has surfaced**: the store omits apps whose overview has not loaded, so a reading listing one concurrent
-  game can still be missing its sibling, and stopping at the first non-empty round would orphan it.
+  "nothing running", never a throw). A single read is not trusted: the store reported an **empty** list for several
+  seconds with the game still running — measured when Decky Loader's `plugin_loader` restarted (#1054 / #1148 round 2) —
+  so the read is **polled** (every 500ms for up to 15s), not one-shot, and a JS-context rebuild under a running game is
+  guarded the same way. A timed-out round logs the `diagnostics` note that tells an absent store, an empty list and a
+  throwing getter apart. The poll settles once something is running **and every attested app has surfaced**: the store
+  omits apps whose overview has not loaded, so a reading listing one concurrent game can still be missing its sibling,
+  and stopping at the first non-empty round would orphan it.
 - **A localStorage breadcrumb (attestation).** One versioned row (`romm-tender:active-session` →
   `{v: 2, sessions: [{appId, romId, startMs}, …]}`) holds **every** open session. It lives in localStorage, which
   outlives the JS context, so it survives the reload. Every localStorage access is wrapped — a storage failure degrades
@@ -1799,10 +1800,10 @@ tail. So the head is never the app that just started, and nothing reads it to id
 the starting app's id from the lifetime notification's own `unAppID` (#1624 — it previously waited 500ms and read the
 head, which both mis-attributed a start while another game was running and stalled the serialized lifecycle chain).
 
-The store is also not reliable across timing: after a `plugin_loader` restart it reports an empty list for several
-seconds while the game runs (#1054 / #1148 round 2), so the adoption path **polls** the reader (every 500ms up to 15s)
-instead of reading once, and a failed round logs what the store reported. The same reader backs the already-running skip
-on both launch surfaces — the interceptor and the Play button
+The store is also not reliable across timing — why, and what was measured, is under
+[Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the adoption path
+**polls** the reader instead of reading once, and a failed round logs what the store reported. The same reader backs the
+already-running skip on both launch surfaces — the interceptor and the Play button
 ([ADR-0015](../adr/0015-single-launch-gate-cancel-then-relaunch.md)).
 
 ### State-aware Resume button (#1313)
@@ -1917,7 +1918,7 @@ unidentified — so the overlay stays up, Resume stays reachable, and the backen
 The session manager maintains a cached `appId -> romId` map loaded from the backend's synced-ROM registry (the `roms`
 SQLite table, via `get_app_id_rom_id_map`). This map is refreshed:
 
-- On session manager initialization (plugin load)
+- On session manager initialization (panel load)
 - Before each game start event (in case a sync added new shortcuts)
 
 If the launched app ID is not in the map, it is not a RomM shortcut and the session manager ignores it.

@@ -1,7 +1,7 @@
 # Configuration
 
-All settings are accessible from the plugin's QAM panel. Open the Quick Access Menu (**...** button), navigate to the
-Tender plugin, and pick **Settings** from the menu at the bottom of the panel.
+All settings are accessible from the plugin's QAM panel. Open the Quick Access Menu (**...** button), select **Tender**,
+and pick **Settings** from the menu at the bottom of the panel.
 
 ## The Settings page
 

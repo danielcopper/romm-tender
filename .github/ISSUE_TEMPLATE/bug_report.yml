@@ -55,15 +55,6 @@ body:
     validations:
       required: false
 
-  - type: input
-    id: decky-version
-    attributes:
-      label: Decky Loader version
-      description: Shown in the Decky settings panel. If you can't find it quickly, leave blank.
-      placeholder: "3.0.5"
-    validations:
-      required: false
-
   - type: textarea
     id: logs
     attributes:

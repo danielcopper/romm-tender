@@ -619,7 +619,7 @@ backend/
   _vendor/                           # Vendored third-party deps — not our code, only imported by adapters;
                                      #   each package's provenance is in _vendor/README.md
 frontend/src/                        # Frontend TypeScript
-  index.tsx                          # Plugin entry, event listeners, QAM router, the Quick Access entry's install
+  index.tsx                          # The panel's entry module: event listeners, QAM router, the Quick Access entry's install
   qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary
   bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)
     layout/                          # Wide-page frame primitives: WidePage, ScrollRegion, Columns, ListDetail, pane

@@ -15,7 +15,7 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 
 ## Starting a Sync
 
-1. Open the QAM and navigate to the plugin
+1. Open the QAM and find **Tender**
 2. Tap **Sync** in the menu on the main page
 3. On the **Sync page**, tap **Check for changes** and the plugin works out what would change. When it lands you get a
    table of the changes; tap **Apply Sync** to start the run, **Refresh** to work out a fresh one, or **Cancel** to
@@ -65,9 +65,9 @@ shows what it is doing and how far in it is, and the rest show what is waiting f
 and the platform being worked is kept in the middle of it, so a run over sixteen platforms does not walk out of sight.
 **Cancel Sync** sits just under the bar, above that list, so stopping a run is never more than a press or two away
 however many platforms it covers. While the plugin is working out a preview there are no rows to show yet, so the line
-names what it is fetching instead. If you reload the plugin mid-run the plan is gone for the rest of that run: the bar,
-the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail is
-not available for the run.
+names what it is fetching instead. If Steam reloads its interface mid-run the plan is gone for the rest of that run: the
+bar, the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail
+is not available for the run.
 
 **On the right** are **Skip preview** (now remembered between sessions), **Force Full Sync** behind a confirmation,
 Steam's memory now and how much the last run added to it, and your last ten sync runs with when each started, what it

@@ -5,8 +5,8 @@ vice versa — the plugin detects the change and helps you migrate your download
 
 ## How It Works
 
-Every time the plugin starts, it compares the current RetroDECK home path with the path it had stored from your last
-session. If they are different **folders**, the plugin flags a migration — two ways of writing one folder are not a
+Every time Tender's backend starts, it compares the current RetroDECK home path with the path it had stored from your
+last session. If they are different **folders**, the plugin flags a migration — two ways of writing one folder are not a
 move, so a system that reaches your home through a link (`/home` is a link to `/var/home` on Bazzite and other
 image-based distributions) does not raise a migration for the spelling alone. This typically happens after you use
 RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory.

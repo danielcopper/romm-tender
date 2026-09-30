@@ -74,7 +74,7 @@ window, replaces the menu's browser view and with it the React tree, the array a
 each is a way to get this wrong:
 
 - No array is held. The spike kept every array it had pushed into so that it could take its entries back out; that set
-  only grows, one dead array per remount for the life of the process. There is nothing to take back out here — the
+  only grows, one dead array per remount for the life of the JS context. There is nothing to take back out here — the
   injector refuses to load the panel into a context that already carries its marker, and what clears that marker is a JS
   context rebuild, which takes this module and its patches with it — so the module holds no array and every dead one is
   collectable with its view.
@@ -206,11 +206,11 @@ How a page gets wide, measured on the device rather than read from documentation
   rail). The QAM browser view itself is 854 px wide in both states, so only the sliding container's geometry, read
   through `findSP()`, proves an expansion.
 
-The flag is Steam's and global, so the page that set it clears it: on unmount (navigation away, plugin closed), when the
-tab the page sits in stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a
-class change, not an unmount), and when the QAM closes (`useQuickAccessVisible`). **Which tab that is is never asked**:
-the page walks up to the panel around it and reads the class off that panel's parent, so the same code answers for
-Tender's entry and for Decky's.
+The flag is Steam's and global, so the page that set it clears it: on unmount (navigation away), when the tab the page
+sits in stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a class change,
+not an unmount), and when the QAM closes (`useQuickAccessVisible`). **Which tab that is is never asked**: the page walks
+up to the panel around it and reads the class off that panel's parent, so the same code answers behind Tender's entry
+and behind any other that renders the panel.
 
 **Both of those questions proceed when they cannot be answered**, and each one costs at worst an expansion the other
 paths still clear — the alternative default leaves a wide page permanently narrow with nothing saying why. The tab
@@ -1030,9 +1030,9 @@ while Main is open. Main's transient line says an apply run's failure as well, w
 work queue is built writes no sync run, so the run list and Last sync do not change.
 
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
-which seeds none, a run whose plan was lost to a plugin reload, or the window between a press that cleared the rows and
-its plan arriving — shows the frame's own fine-detail line in their place ("Fetching Game Boy Advance (page 12/62)") —
-`useSyncRunView`'s own `fineDetailText`, which no other surface renders; the page says the per-unit detail is
+which seeds none, a run whose plan was lost to a JS-context rebuild, or the window between a press that cleared the rows
+and its plan arriving — shows the frame's own fine-detail line in their place ("Fetching Game Boy Advance (page 12/62)")
+— `useSyncRunView`'s own `fineDetailText`, which no other surface renders; the page says the per-unit detail is
 unavailable only where there is neither a row nor a detail line.
 
 **The rows are cleared at the press that starts a run, and kept at exactly one press.** A plan is the only other thing

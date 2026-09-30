@@ -357,7 +357,7 @@ The schema above is not loaded as a special case — it is migration `001`, appl
 future schema change. The runner lives in
 [`backend/adapters/sqlite_migrations.py`](https://github.com/danielcopper/romm-tender/blob/main/backend/adapters/sqlite_migrations.py)
 ([#781](https://github.com/danielcopper/romm-tender/issues/781)) — it does file + database I/O, so it is an adapter —
-and is invoked from `bootstrap()` at plugin startup, before any service is wired. stdlib `sqlite3` only; no Alembic or
+and is invoked from `bootstrap()` at backend start, before any service is wired. stdlib `sqlite3` only; no Alembic or
 other third-party migration tooling.
 
 **Versioning — `PRAGMA user_version`.** SQLite keeps a single integer in the database header, readable and writable via

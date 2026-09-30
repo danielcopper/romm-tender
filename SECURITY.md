@@ -28,12 +28,13 @@ You should receive a response within 7 days.
 
 This plugin handles:
 
-- **A scoped RomM Client API Token** stored in the plugin's settings file (`settings.json`) in Decky's settings
-  directory. The token is either **minted by the plugin** at credential sign-in — your RomM username and password are
-  used **once, in memory only**, then discarded, never written to disk — or **supplied by you**: a Client API Token you
-  created in RomM's web UI and pasted in (e.g. for OIDC / SSO accounts, which have no password to mint from). In both
-  cases the plugin stores only the server URL, the token (plus its server-side id when minted; none for a user-supplied
-  token), the origin it was minted or accepted against, a provenance marker, and the SSL-verification flag.
+- **A scoped RomM Client API Token** stored in the plugin's settings file (`settings.json`) in Tender's config directory
+  (`~/.config/romm-tender/` by default). The token is either **minted by the plugin** at credential sign-in — your RomM
+  username and password are used **once, in memory only**, then discarded, never written to disk — or **supplied by
+  you**: a Client API Token you created in RomM's web UI and pasted in (e.g. for OIDC / SSO accounts, which have no
+  password to mint from). In both cases the plugin stores only the server URL, the token (plus its server-side id when
+  minted; none for a user-supplied token), the origin it was minted or accepted against, a provenance marker, and the
+  SSL-verification flag.
 - **An optional SteamGridDB API key** stored in the same `settings.json`
 - **HTTP requests** to self-hosted RomM servers (optionally with SSL verification disabled for self-signed certificates)
 

@@ -246,8 +246,8 @@ Format: **invariant** — tier — enforced by.
   them**: a fourth frame builder that omits the key, a fourth start path that stamps the kind it is not, or a reader
   that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral
   branch was — goes green, because each test above pins one half and none of them pins the join. The failure is silent
-  and worst exactly where the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the
-  snapshot is the only thing that can say what the run is doing, and Main then tells the reader a real apply run is
+  and worst exactly where the frontend cannot help itself: after a JS-context rebuild mid-run the store starts empty,
+  the snapshot is the only thing that can say what the run is doing, and Main then tells the reader a real apply run is
   merely checking for changes. Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in
   `docs/architecture/qam-panel.md`'s Main section; do not restate it here
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
@@ -464,16 +464,16 @@ Format: **invariant** — tier — enforced by.
   `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears that marker is a JS-context rebuild,
   which takes the module, its patches and every array with it. Re-adding an unpatch is therefore also re-adding a reason
   to retain arrays, and the spike's shape — a `Set` of every array ever pushed into — leaks one dead array per Quick
-  Access remount, with the strip's entries and their React elements, for the life of the process. (3) The placement is
-  re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs the previous handler first: whoever
-  patches last lands lowest, measured both ways, and install order is a property of which program starts first. A
-  handler that pushed once and trusted the order goes green here and comes out above Decky on exactly the machines where
-  TENDER started first — it pushes first and Decky pushes under it. Where Decky started first the single push already
-  lands lowest, which is the case re-assertion does not have to fix and the one a developer is most likely to test. The
-  third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and unpinned:
-  that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to a document
-  nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests
-  aside) for `addEventListener(`, `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and
+  Access remount, with the strip's entries and their React elements, for the life of the JS context. (3) The placement
+  is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs the previous handler first:
+  whoever patches last lands lowest, measured both ways, and install order is a property of which program starts first.
+  A handler that pushed once and trusted the order goes green here and comes out above Decky on exactly the machines
+  where TENDER started first — it pushes first and Decky pushes under it. Where Decky started first the single push
+  already lands lowest, which is the case re-assertion does not have to fix and the one a developer is most likely to
+  test. The third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and
+  unpinned: that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to
+  a document nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src`
+  (tests aside) for `addEventListener(`, `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and
   `createElement(`, with the enclosing function of every hit read. **Neither observer term is prefixed with `new`**, and
   that is what makes it find anything: this repo's realm rule takes the constructor off the node's own view, so every
   observer here is spelled `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on
