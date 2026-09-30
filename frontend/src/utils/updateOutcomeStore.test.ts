@@ -7,6 +7,7 @@ import {
   getUpdateOutcome,
   logWarn,
   type UpdateOutcome,
+  type UpdateSettingWrite,
 } from "../api/backend";
 import { TOAST_READINESS_DEADLINE_MS, TOAST_READINESS_POLL_MS } from "./steamReadyForToasts";
 import {
@@ -315,6 +316,21 @@ describe("updateOutcomeStore", () => {
 
       await expect(dismissUpdateFailureRecord("")).rejects.toThrow("invalid_value: Invalid record");
       expect(getUpdateOutcomeState().failureDismissed).toBe(false);
+    });
+
+    it("a record pushed while the dismissal was in flight keeps its card up", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue(ROLLED_BACK_WIRE);
+      await fetchUpdateOutcome();
+      const write = deferred<UpdateSettingWrite>();
+      vi.mocked(dismissUpdateFailure).mockReturnValue(write.promise);
+
+      const dismissing = dismissUpdateFailureRecord("2026-09-25T10:15:00Z");
+      takePushedUpdateFailure({ ...ROLLED_BACK_WIRE.failure!, rolled_back_at: "2026-09-26T08:00:00Z", kind: "check" });
+      write.resolve({ success: true });
+      await dismissing;
+
+      expect(getUpdateOutcomeState().failure?.rolledBackAt).toBe("2026-09-26T08:00:00Z");
+      expect(failureCardShows(getUpdateOutcomeState())).toBe(true);
     });
 
     it("a read that was in flight when Dismiss landed writes nothing over it", async () => {

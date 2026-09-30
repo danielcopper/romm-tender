@@ -90,8 +90,9 @@ let _listeners: Array<() => void> = [];
  * Ordering fence for the read: it takes the number before its `await` and
  * writes nothing if the number moved meanwhile. Either Dismiss moves it, so a
  * read that was in flight when Dismiss was pressed cannot put a card back up.
- * Dismiss itself is not fenced — once the backend recorded it, the card is
- * dismissed whatever was read around it.
+ * Dismiss is fenced by the record instead: once the backend recorded it, the
+ * card it was pressed on is dismissed whatever was read around it, and a
+ * different record pushed meanwhile keeps its own.
  */
 let _seq = 0;
 
@@ -245,12 +246,14 @@ export function takePushedUpdateFailure(pushed: UpdateFailure): void {
 
 /**
  * Wave the rolled-back card away for one record, then take it down here — only
- * once the backend answered that it persisted the dismissal. A refused or
- * failed write rejects and leaves the card up.
+ * once the backend answered that it persisted the dismissal, and only while the
+ * store still holds that record or none. A refused or failed write rejects and
+ * leaves the card up.
  */
 export async function dismissUpdateFailureRecord(rolledBackAt: string): Promise<void> {
   ++_seq;
   const write = await dismissUpdateFailure(rolledBackAt);
   if (!write.success) throw new Error(`${write.reason}: ${write.message}`);
+  if (_state.failure !== null && _state.failure.rolledBackAt !== rolledBackAt) return;
   setUpdateOutcomeState({ ..._state, failureDismissed: true });
 }
