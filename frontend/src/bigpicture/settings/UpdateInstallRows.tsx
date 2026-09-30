@@ -144,17 +144,38 @@ function attemptFailure(attempt: UpdateInstallAttempt, earlier: string): Block {
 /** The installer's record, where no attempt of this backend's is shown. */
 function recordFailure(record: RolledBackUpdate): Block {
   const { kind, attemptedVersion } = record;
-  return {
-    caption:
-      kind === "rollback"
-        ? failedTo(attemptedVersion, `Tender went back to ${record.restoredVersion}`)
-        : kind === "check"
-          ? failedTo(attemptedVersion, "nothing was changed")
-          : updateFailureSentence(record),
-    at: kind === "rollback" ? "install" : kind === "check" ? "check" : null,
-    failed: true,
-    note: kind === "check" ? UPDATE_CHECK_FAILURE_NOTE : updateFailureReason(record),
-  };
+  if (kind === "rollback") {
+    return {
+      caption: failedTo(attemptedVersion, `Tender went back to ${record.restoredVersion}`),
+      at: "install",
+      failed: true,
+      note: updateFailureReason(record),
+    };
+  }
+  if (kind === "check") {
+    return {
+      caption: failedTo(attemptedVersion, "nothing was changed"),
+      at: "check",
+      failed: true,
+      note: UPDATE_CHECK_FAILURE_NOTE,
+    };
+  }
+  return { caption: updateFailureSentence(record), at: null, failed: true, note: updateFailureReason(record) };
+}
+
+/**
+ * The block the section shows. A failed attempt for a version no longer
+ * offered says nothing about the one that is. Before the first read answers
+ * nothing is known about the offer yet, so it stays, and the block it replaced
+ * does not leave under focus.
+ */
+function shownBlock(install: UpdateInstall, record: RolledBackUpdate | null, earlier: string): Block | null {
+  const { attempt } = install;
+  if (attempt !== null && install.underWay) return progressBlock(install, attempt, earlier);
+  if (attempt?.step === "failed" && (!install.answered || attempt.version === install.version)) {
+    return attemptFailure(attempt, earlier);
+  }
+  return record && recordFailure(record);
 }
 
 /**
@@ -169,18 +190,9 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   record,
   installed,
 }) => {
-  const { attempt } = install;
   const showButton = installButtonShown(install);
   const earlier = installed || "the earlier version";
-  // A failed attempt for a version no longer offered says nothing about the one
-  // that is. Before the first read answers nothing is known about the offer
-  // yet, so it stays, and the block it replaced does not leave under focus.
-  const block =
-    attempt !== null && install.underWay
-      ? progressBlock(install, attempt, earlier)
-      : attempt?.step === "failed" && (!install.answered || attempt.version === install.version)
-        ? attemptFailure(attempt, earlier)
-        : record && recordFailure(record);
+  const block = shownBlock(install, record, earlier);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     if (!install.underWay) return;

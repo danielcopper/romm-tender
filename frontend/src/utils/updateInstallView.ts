@@ -181,14 +181,16 @@ export function failedStep(failure: UpdateInstallFailure, installerSeen: boolean
   return failure === "installer_stopped" && !installerSeen ? "install" : FAILED_AT[failure];
 }
 
+function stepStatus(i: number, index: number, failed: boolean): InstallStepStatus {
+  if (i < index) return "done";
+  if (i > index) return "pending";
+  return failed ? "failed" : "current";
+}
+
 /** The four steps with every one before *at* done, *at* current or failed, and the rest still to do. */
 export function installSteps(at: InstallStepId, failed: boolean): InstallStepRow[] {
   const index = STEPS.findIndex(([id]) => id === at);
-  return STEPS.map(([id, label], i) => ({
-    id,
-    label,
-    status: i < index ? "done" : i > index ? "pending" : failed ? "failed" : "current",
-  }));
+  return STEPS.map(([id, label], i) => ({ id, label, status: stepStatus(i, index, failed) }));
 }
 
 /** The download's whole percent, or `null` where it announced no size. */
