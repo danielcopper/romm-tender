@@ -1625,7 +1625,12 @@ describe("index.tsx — what the last update did, at panel load", () => {
       announce_version: null,
       announce_direction: null,
       toast_owed: false,
-      failure: { attempted_version: "1.3.0", restored_version: "1.2.3", rolled_back_at: "2026-09-25T10:15:00Z" },
+      failure: {
+        attempted_version: "1.3.0",
+        restored_version: "1.2.3",
+        rolled_back_at: "2026-09-25T10:15:00Z",
+        kind: "rollback",
+      },
       failure_dismissed: false,
     });
     const plugin = pluginFactory();

@@ -1,8 +1,8 @@
 import { FC } from "react";
 import {
-  UPDATE_FAILURE_REASON,
   dismissUpdateFailureRecord,
   failureCardShows,
+  updateFailureReason,
   updateFailureSentence,
   useUpdateOutcomeState,
 } from "../utils/updateOutcomeStore";
@@ -11,7 +11,8 @@ import { AMBER, AMBER_WASH } from "./layout/pane";
 import { UpdateCard } from "./UpdateCard";
 
 /**
- * The notice on Main that the installer rolled an update back.
+ * The notice on Main that an update did not go through: the installer rolled it
+ * back, or its check refused the new version before anything was replaced.
  *
  * States the fact and where its reason is, and jumps to its home, Settings ›
  * Updates, which states it too. Dismiss is per record, so the next rollback
@@ -37,7 +38,7 @@ export const UpdateFailureNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
       color={AMBER}
       wash={AMBER_WASH}
       title={updateFailureSentence(failure)}
-      detail={UPDATE_FAILURE_REASON}
+      detail={updateFailureReason(failure)}
       onOpenUpdates={onOpenUpdates}
       onDismiss={handleDismiss}
     />

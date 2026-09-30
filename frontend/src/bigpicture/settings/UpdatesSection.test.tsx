@@ -7,6 +7,7 @@ import { RESTARTING_LINE } from "../../utils/updateInstallView";
 import { UpdateFailureNotice } from "../UpdateFailureNotice";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import {
+  UPDATE_CHECK_FAILURE_REASON,
   UPDATE_FAILURE_REASON,
   resetUpdateOutcomeStoreForTests,
   setUpdateOutcomeState,
@@ -57,7 +58,12 @@ const NO_OUTCOME: UpdateOutcomeState = { announcement: null, failure: null, fail
 
 const ROLLED_BACK: UpdateOutcomeState = {
   announcement: null,
-  failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+  failure: {
+    attemptedVersion: "0.34.0",
+    restoredVersion: "0.33.0",
+    rolledBackAt: "2026-09-25T10:15:00Z",
+    kind: "rollback",
+  },
   failureDismissed: false,
 };
 
@@ -166,6 +172,14 @@ describe("UpdatesSection", () => {
     const { getByTestId, getByText } = renderSection({}, { outcome: ROLLED_BACK });
     expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
     expect(getByText(UPDATE_FAILURE_REASON)).toBeTruthy();
+  });
+
+  it("states an update the installer's check refused, with the check's line", () => {
+    const refused = { ...ROLLED_BACK, failure: { ...ROLLED_BACK.failure!, kind: "check" as const } };
+    const { getByTestId, getByText, queryByText } = renderSection({}, { outcome: refused });
+    expect(getByTestId("updates-last-update").textContent).toBe("Update to 0.34.0 failed — you are still on 0.33.0.");
+    expect(getByText(UPDATE_CHECK_FAILURE_REASON)).toBeTruthy();
+    expect(queryByText(UPDATE_FAILURE_REASON)).toBeNull();
   });
 
   it("words a rolled-back update in the warning colour its card on Main uses", () => {
@@ -312,6 +326,20 @@ describe("UpdatesSection", () => {
       expect(utils.getByTestId("updates-step-verify").textContent).toBe("Failed");
       expect(utils.getByTestId("updates-install-failure").textContent).toBe(
         "The download did not match its checksum — nothing was changed.",
+      );
+      expect(utils.getByText("Try again")).toBeTruthy();
+    });
+
+    it("marks Starting the installer failed where the installer's check refused the new version", () => {
+      const utils = withInstall({
+        attempt: { ...DOWNLOADING, step: "failed", failure: "new_version_does_not_start" },
+        tryAgain: true,
+      });
+
+      expect(stepStatus(utils, "verify")).toBe("done");
+      expect(stepStatus(utils, "installer")).toBe("failed");
+      expect(utils.getByTestId("updates-install-failure").textContent).toBe(
+        "The new version does not start — nothing was changed.",
       );
       expect(utils.getByText("Try again")).toBeTruthy();
     });

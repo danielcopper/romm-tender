@@ -2607,7 +2607,12 @@ describe("MainPage", () => {
       });
       setUpdateOutcomeState({
         announcement: null,
-        failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+        failure: {
+          attemptedVersion: "0.34.0",
+          restoredVersion: "0.33.0",
+          rolledBackAt: "2026-09-25T10:15:00Z",
+          kind: "rollback",
+        },
         failureDismissed: false,
       });
       const onNavigate = vi.fn();
@@ -2634,7 +2639,12 @@ describe("MainPage", () => {
       });
       setUpdateOutcomeState({
         announcement: { version: "0.33.0", direction: "back" },
-        failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+        failure: {
+          attemptedVersion: "0.34.0",
+          restoredVersion: "0.33.0",
+          rolledBackAt: "2026-09-25T10:15:00Z",
+          kind: "rollback",
+        },
         failureDismissed: false,
       });
       const { getByTestId } = render(<MainPage onNavigate={vi.fn()} />);

@@ -88,6 +88,7 @@ export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
   installer_stopped: `The installer stopped without updating. ${INSTALLER_JOURNAL}`,
   game_started: "A game was started — nothing was changed. Try again once it has closed.",
   running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
+  new_version_does_not_start: "The new version does not start — nothing was changed.",
 };
 
 type PlainWaitReason = Exclude<UpdateWaitReason, { apps: string[] } | { frees_at: number }>["reason"];
@@ -152,6 +153,7 @@ const FAILED_AT: Record<UpdateInstallFailure, InstallStepId> = {
   installer_stopped: "installer",
   game_started: "installer",
   running_apps_unknown: "installer",
+  new_version_does_not_start: "installer",
 };
 
 /**

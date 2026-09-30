@@ -5,6 +5,7 @@ import { UpdateFailureNotice } from "./UpdateFailureNotice";
 import * as backend from "../api/backend";
 import { dismissUpdateFailure } from "../api/backend";
 import {
+  UPDATE_CHECK_FAILURE_REASON,
   UPDATE_FAILURE_REASON,
   getUpdateOutcomeState,
   resetUpdateOutcomeStoreForTests,
@@ -14,7 +15,12 @@ import {
 
 const ROLLED_BACK: UpdateOutcomeState = {
   announcement: null,
-  failure: { attemptedVersion: "1.3.0", restoredVersion: "1.2.3", rolledBackAt: "2026-09-25T10:15:00Z" },
+  failure: {
+    attemptedVersion: "1.3.0",
+    restoredVersion: "1.2.3",
+    rolledBackAt: "2026-09-25T10:15:00Z",
+    kind: "rollback",
+  },
   failureDismissed: false,
 };
 
@@ -41,6 +47,15 @@ describe("UpdateFailureNotice", () => {
     const text = getByTestId("update-failure-notice").textContent;
     expect(text).toContain("Update to 1.3.0 failed — you are still on 1.2.3.");
     expect(text).toContain(UPDATE_FAILURE_REASON);
+  });
+
+  it("says nothing was changed for an update the installer's check refused, in place of the log line", () => {
+    setUpdateOutcomeState({ ...ROLLED_BACK, failure: { ...ROLLED_BACK.failure!, kind: "check" } });
+    const { getByTestId } = render(<UpdateFailureNotice onOpenUpdates={vi.fn()} />);
+    const text = getByTestId("update-failure-notice").textContent;
+    expect(text).toContain("Update to 1.3.0 failed — you are still on 1.2.3.");
+    expect(text).toContain(UPDATE_CHECK_FAILURE_REASON);
+    expect(text).not.toContain(UPDATE_FAILURE_REASON);
   });
 
   it("names the backend log as where the reason is, and the journal for a version that failed before it", () => {

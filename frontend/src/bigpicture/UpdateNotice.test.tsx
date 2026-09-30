@@ -28,7 +28,12 @@ const AVAILABLE: UpdateNoticeState = {
 
 const ROLLED_BACK: UpdateOutcomeState = {
   announcement: null,
-  failure: { attemptedVersion: "0.34.0", restoredVersion: "0.33.0", rolledBackAt: "2026-09-25T10:15:00Z" },
+  failure: {
+    attemptedVersion: "0.34.0",
+    restoredVersion: "0.33.0",
+    rolledBackAt: "2026-09-25T10:15:00Z",
+    kind: "rollback",
+  },
   failureDismissed: false,
 };
 

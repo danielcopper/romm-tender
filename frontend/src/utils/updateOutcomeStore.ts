@@ -36,12 +36,13 @@ import {
 import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamCanShowToasts } from "./steamReadyForToasts";
 import { showToast } from "./toast";
 
-/** An update the installer rolled back, in this store's spelling. */
+/** An update the installer rolled back, or its check refused, in this store's spelling. */
 export interface RolledBackUpdate {
   attemptedVersion: string;
   restoredVersion: string;
   /** The record's own ISO-8601 UTC text — what tells one record from the next. */
   rolledBackAt: string;
+  kind: UpdateFailure["kind"];
 }
 
 /** A version this backend process moved to, and which way it moved. */
@@ -53,7 +54,7 @@ export interface UpdateAnnouncement {
 export interface UpdateOutcomeState {
   /** The version that moved, until its card was dismissed. `null` where none, or before the backend answered. */
   announcement: UpdateAnnouncement | null;
-  /** The installer's record of a rolled-back update. `null` where none stands, or before the backend answered. */
+  /** The installer's record of an update that did not go through. `null` where none stands, or before the backend answered. */
   failure: RolledBackUpdate | null;
   /** The user waved away the card for this exact record. */
   failureDismissed: boolean;
@@ -68,6 +69,10 @@ const INITIAL: UpdateOutcomeState = { announcement: null, failure: null, failure
  */
 export const UPDATE_FAILURE_REASON =
   "Tender's log, backend.log, says why — or the journal (journalctl --user -u romm-tender), if the new version failed before it could write to the log.";
+
+/** The same line for an update the installer's check refused, which never ran the new version as a service. */
+export const UPDATE_CHECK_FAILURE_REASON =
+  "The new version did not start, so nothing was changed. The installer's output says why: journalctl --user -u romm-tender-update, or the terminal it was run in.";
 
 let _state: UpdateOutcomeState = INITIAL;
 let _listeners: Array<() => void> = [];
@@ -119,6 +124,7 @@ function failureFromWire(failure: UpdateFailure | null): RolledBackUpdate | null
     attemptedVersion: failure.attempted_version,
     restoredVersion: failure.restored_version,
     rolledBackAt: failure.rolled_back_at,
+    kind: failure.kind,
   };
 }
 
@@ -131,6 +137,11 @@ function stateFromOutcome(outcome: UpdateOutcome): UpdateOutcomeState {
     failure: failureFromWire(outcome.failure),
     failureDismissed: outcome.failure_dismissed,
   };
+}
+
+/** The line under {@link updateFailureSentence}, for the kind of record it states. */
+export function updateFailureReason(failure: RolledBackUpdate): string {
+  return failure.kind === "check" ? UPDATE_CHECK_FAILURE_REASON : UPDATE_FAILURE_REASON;
 }
 
 /** The one sentence a rolled-back update is stated in, wherever it is stated. */

@@ -13,7 +13,7 @@ import { UpdateInstallRows, installButtonShown, installStateUnread } from "./Upd
 import { useUpdateInstall } from "./useUpdateInstall";
 import { INSTALL_STATE_UNREAD } from "../../utils/updateInstallView";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
-import { UPDATE_FAILURE_REASON, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
+import { updateFailureReason, updateFailureSentence, type UpdateOutcomeState } from "../../utils/updateOutcomeStore";
 
 /** Shown only to a run from a checkout, which is never offered an install. */
 export const NOT_INSTALLED_PROGRAM = "Development build — install updates with the installer.";
@@ -77,7 +77,7 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({
                 {updateFailureSentence(outcome.failure)}
               </span>
             }
-            description={UPDATE_FAILURE_REASON}
+            description={updateFailureReason(outcome.failure)}
             focusable={true}
           />
         </PanelSectionRow>

@@ -187,6 +187,14 @@ describe("installStepRows", () => {
         ["installer", "failed"],
       ],
     ],
+    [
+      "new_version_does_not_start",
+      [
+        ["download", "done"],
+        ["verify", "done"],
+        ["installer", "failed"],
+      ],
+    ],
   ])("marks the step %s failed at", (failure, expected) => {
     expect(statuses(failed(failure))).toEqual(expected);
   });
@@ -201,6 +209,7 @@ describe("INSTALL_FAILURE_SENTENCES", () => {
       installer_stopped: "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
       game_started: "A game was started — nothing was changed. Try again once it has closed.",
       running_apps_unknown: "Could not check whether a game is running — nothing was changed.",
+      new_version_does_not_start: "The new version does not start — nothing was changed.",
     });
   });
 });
