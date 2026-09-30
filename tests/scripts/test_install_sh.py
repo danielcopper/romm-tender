@@ -3230,6 +3230,11 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
 
         assert f'SERVER_NAME="{PACKAGE_NAME}"' in _INSTALL.read_text(encoding="utf-8")
 
+    def test_the_unit_it_installs_is_the_one_the_backend_reads_the_journal_of(self):
+        from domain.update_output import SERVICE_UNIT
+
+        assert f'UNIT_NAME="{SERVICE_UNIT}"' in _INSTALL.read_text(encoding="utf-8")
+
     def test_the_record_of_a_rolled_back_update_matches_the_backend(self):
         from domain.update_outcome import UPDATE_FAILURE_FILENAME
 

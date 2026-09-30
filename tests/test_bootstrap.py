@@ -25,6 +25,7 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_hostname_reader import FakeHostnameReader
+from fakes.fake_journal import FakeJournal
 from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_migration_file_store import FakeMigrationFileStore
@@ -75,6 +76,7 @@ from services.saves import SaveService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
+from services.update_output import UpdateOutputService
 from services.version_switch import VersionSwitchService
 
 _GAVEL = GavelNativeAdapter()
@@ -547,6 +549,7 @@ class TestWireServices:
                 download_release_asset=FakeReleaseDownload(),
                 update_staging=deps["update_staging"],
                 transient_units=FakeTransientUnits(),
+                journal=FakeJournal(),
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -632,7 +635,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 33
+        assert len(fields(result)) == 34
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -645,6 +648,7 @@ class TestWireServices:
         assert isinstance(result.update_check_service, UpdateCheckService)
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
+        assert isinstance(result.update_output_service, UpdateOutputService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):

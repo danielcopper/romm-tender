@@ -134,7 +134,12 @@ describe("useUpdateInstall", () => {
   });
 
   it("takes a stopped attempt's card down once the backend accepted the press, and not before", async () => {
-    takePushedStoppedAttempt({ attempted_version: "1.0.0", from_version: "0.9.0", started_at: "2026-09-29T10:00:00Z" });
+    takePushedStoppedAttempt({
+      attempted_version: "1.0.0",
+      from_version: "0.9.0",
+      started_at: "2026-09-29T10:00:00Z",
+      toast_owed: false,
+    });
     const answer = deferred<{ success: true }>();
     vi.mocked(installUpdate).mockReturnValue(answer.promise);
     const { result } = renderHook(() => useUpdateInstall());
@@ -152,7 +157,12 @@ describe("useUpdateInstall", () => {
   });
 
   it("leaves a stopped attempt's card up where the press was refused", async () => {
-    takePushedStoppedAttempt({ attempted_version: "1.0.0", from_version: "0.9.0", started_at: "2026-09-29T10:00:00Z" });
+    takePushedStoppedAttempt({
+      attempted_version: "1.0.0",
+      from_version: "0.9.0",
+      started_at: "2026-09-29T10:00:00Z",
+      toast_owed: false,
+    });
     vi.mocked(installUpdate).mockResolvedValue({ success: false, reason: "not_offered", message: "none" });
     const { result } = renderHook(() => useUpdateInstall());
     await flush();

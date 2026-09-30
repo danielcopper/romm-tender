@@ -793,7 +793,10 @@ class Endpoints:
         check) or ``"unknown"`` (a kind a later installer wrote), read afresh so
         it goes when the installer removes it; ``None`` where there is none, or
         where the running version is not the one it names as still running.
-        ``failure_dismissed`` says the user waved away that exact record.
+        ``failure_dismissed`` says the user waved away that exact record, and
+        ``failure_toast_owed`` that its toast has not been raised yet — until
+        :meth:`acknowledge_update_failure_toast` names it, and never for a
+        dismissed record.
         """
         return await self._services.update_outcome_service.get_update_outcome()
 
@@ -804,6 +807,16 @@ class Endpoints:
         The card stays. Returns ``{"success": True}``.
         """
         return self._services.update_outcome_service.acknowledge_update_toast()
+
+    @route
+    async def acknowledge_update_failure_toast(self, rolled_back_at):
+        """Record that the panel raised the toast for one update that did not go through, for every later start.
+
+        Per record — named by its ``rolled_back_at``. Returns ``{"success":
+        True}``, or the canonical failure shape for a stamp that is not a
+        non-empty string.
+        """
+        return await self._services.update_outcome_service.acknowledge_update_failure_toast(rolled_back_at)
 
     @route
     def dismiss_update_announcement(self):
@@ -865,17 +878,44 @@ class Endpoints:
     def get_stopped_update_attempt(self):
         """Report an update attempt whose installer stopped without updating, as an earlier start left it.
 
-        Returns ``{"attempted_version", "from_version", "started_at"}``, or
-        ``None`` where there is none, it was dismissed, a new attempt has
-        started since, or the installer's unit had not ended yet — a judgement
-        made later is pushed as ``update_attempt_stopped``.
+        Returns ``{"attempted_version", "from_version", "started_at",
+        "toast_owed"}``, or ``None`` where there is none, it was dismissed, a
+        new attempt has started since, or the installer's unit had not ended
+        yet — a judgement made later is pushed as ``update_attempt_stopped``.
+        ``toast_owed`` says its toast has not been raised yet.
         """
         return self._services.update_install_service.get_stopped_update_attempt()
+
+    @route
+    async def acknowledge_stopped_update_attempt_toast(self, started_at):
+        """Record that the panel raised the toast for one stopped attempt, named by its ``started_at``, for good.
+
+        Returns ``{"success": True}``, or the canonical failure shape for a
+        stamp that is not a non-empty string.
+        """
+        return await self._services.update_install_service.acknowledge_stopped_attempt_toast(started_at)
 
     @route
     async def dismiss_stopped_update_attempt(self):
         """Wave away the notice of an installer that stopped without updating. Returns ``{"success": True}``."""
         return await self._services.update_install_service.dismiss_stopped_attempt()
+
+    @route
+    async def get_update_output(self, rolled_back_at):
+        """Report what the installer printed for one failed update, read from the journal.
+
+        *rolled_back_at* names the installer's record by its stamp; ``None``
+        names this process's latest attempt, where it failed after its
+        installer ran. Returns ``{"success": True, "ran_at", "installer",
+        "new_version", "missing"}``: ``installer`` and, after a rollback,
+        ``new_version`` are ``{"lines", "earlier"}`` with the admission token
+        hidden, ``ran_at`` is when the installer's run began in epoch seconds,
+        and where the journal holds no such run both are ``None`` and
+        ``missing`` is ``"rotated"`` or ``"terminal"``. Otherwise the canonical
+        failure shape, with ``reason`` ``not_found``, ``invalid_value`` or
+        ``journal_unreadable``.
+        """
+        return await self._services.update_output_service.get_update_output(rolled_back_at)
 
     @route
     async def get_shortcut_relocation(self):

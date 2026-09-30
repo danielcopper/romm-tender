@@ -1235,7 +1235,9 @@ export type UpdateDirection = "updated" | "back";
  * there is no version to name. `failure` is the installer's record of an update
  * that did not go through, read afresh on every call, so it is gone once the
  * installer removes it, and `null` too where the running version is not the one
- * it restored. `failure_dismissed` says the user waved away that exact record.
+ * it restored. `failure_dismissed` says the user waved away that exact record,
+ * and `failure_toast_owed` that its toast has not been raised yet — never for a
+ * dismissed record, and `false` where there is none.
  */
 export type UpdateOutcome = (
   | { announce_version: null; announce_direction: null; toast_owed: false }
@@ -1243,12 +1245,16 @@ export type UpdateOutcome = (
 ) & {
   failure: UpdateFailure | null;
   failure_dismissed: boolean;
+  failure_toast_owed: boolean;
 };
 
 export const getUpdateOutcome = endpoint<[], UpdateOutcome>("get_update_outcome");
 
 /** Tell the backend the announcement's toast was raised, so a reloaded panel does not raise it again. */
 export const acknowledgeUpdateToast = endpoint<[], { success: true }>("acknowledge_update_toast");
+
+/** Tell the backend the toast for one record was raised, named by its `rolled_back_at`, so no later start raises it again. */
+export const acknowledgeUpdateFailureToast = endpoint<[string], UpdateSettingWrite>("acknowledge_update_failure_toast");
 
 /** Wave the announcement's card away for the rest of this backend process. */
 export const dismissUpdateAnnouncement = endpoint<[], { success: true }>("dismiss_update_announcement");
@@ -1332,11 +1338,15 @@ export type UpdateInstallRefusal =
 /** Install the named version, which must be the stored one; answers once the attempt has started. */
 export const installUpdate = endpoint<[string], { success: true } | UpdateInstallRefusal>("install_update");
 
-/** An update attempt an earlier start's installer stopped without updating; `started_at` is ISO-8601 UTC. */
+/**
+ * An update attempt an earlier start's installer stopped without updating; `started_at` is ISO-8601 UTC, and
+ * `toast_owed` says its toast has not been raised yet.
+ */
 export interface StoppedUpdateAttemptWire {
   attempted_version: string;
   from_version: string;
   started_at: string;
+  toast_owed: boolean;
 }
 
 /** The stopped attempt a start found, until dismissed or a new attempt starts; `null` where there is none. */
@@ -1344,6 +1354,36 @@ export const getStoppedUpdateAttempt = endpoint<[], StoppedUpdateAttemptWire | n
 
 /** Wave the stopped attempt's card away; the backend removes its record. */
 export const dismissStoppedUpdateAttempt = endpoint<[], { success: true }>("dismiss_stopped_update_attempt");
+
+/** Tell the backend the stopped attempt's toast was raised, named by its `started_at`, so no later start raises it again. */
+export const acknowledgeStoppedUpdateAttemptToast = endpoint<[string], UpdateSettingWrite>(
+  "acknowledge_stopped_update_attempt_toast",
+);
+
+/** The last lines of one run the journal holds, the admission token hidden, and how many before them are left out. */
+export interface UpdateOutputSection {
+  lines: string[];
+  earlier: number;
+}
+
+/**
+ * What the installer printed for one failed update. `installer` is its run, which began at `ran_at` (epoch seconds);
+ * after a rollback `new_version` is what the version it tried printed while it tried to start. Where the journal holds
+ * no such run, `missing` says why: `rotated` — no longer kept — or `terminal` — the installer ran by hand.
+ */
+export type UpdateOutput =
+  | {
+      success: true;
+      ran_at: number;
+      installer: UpdateOutputSection;
+      new_version: UpdateOutputSection | null;
+      missing: null;
+    }
+  | { success: true; ran_at: null; installer: null; new_version: null; missing: "rotated" | "terminal" }
+  | EndpointFailure;
+
+/** The installer's output for the record stamped `rolled_back_at`, or for this backend's latest attempt with `null`. */
+export const getUpdateOutput = endpoint<[string | null], UpdateOutput>("get_update_output");
 
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.

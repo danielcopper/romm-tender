@@ -1,11 +1,12 @@
-"""UpdateOutcomeService — what the last update did, told as a toast once and a card until dismissed, or a card alone.
+"""UpdateOutcomeService — what the last update did, told as a toast once and a card until dismissed.
 
 Owns the two outcomes a start can find: a version that moved — an update that
 went through, or a return to an earlier release — which the panel raises as one
 toast per process and shows as a card until the user dismisses it, and an update
 that did not go through — rolled back by the installer, or refused by its
-pre-install check before anything was replaced — which the panel shows until
-the user dismisses that record or the installer removes it. What is announced,
+pre-install check before anything was replaced — which the panel raises as one
+toast per record, across starts, and shows until the user dismisses that record
+or the installer removes it. What is announced,
 how the installer's record is read, and whether it still stands live in
 ``domain/update_outcome.py``; the record itself is behind a seam.
 """
@@ -37,15 +38,21 @@ LAST_RUN_KEY = "last_run_version"
 # card again on its own.
 FAILURE_DISMISSED_KEY = "update_failure_dismissed_at"
 
+# The ``rolled_back_at`` of the record whose toast the panel raised, in
+# kv_config: observed state, like the last-run version. A record stands across
+# every start until a later update goes through, so a flag held for one process
+# would raise its toast again at every start.
+FAILURE_TOASTED_KEY = "update_failure_toasted_at"
+
 
 @dataclass(frozen=True)
 class UpdateOutcomeServiceConfig:
     """Frozen wiring bundle handed to ``UpdateOutcomeService.__init__``.
 
     Carries the running version, the seam the installer's record is read
-    through, the unit-of-work factory the last-run version is stored through,
-    the live settings dict plus its persister for the dismissal, and the
-    runtime infrastructure.
+    through, the unit-of-work factory the last-run version and the raised
+    failure toast are stored through, the live settings dict plus its
+    persister for the dismissal, and the runtime infrastructure.
     """
 
     current_version: str
@@ -58,7 +65,7 @@ class UpdateOutcomeServiceConfig:
 
 
 class UpdateOutcomeService:
-    """Tells the user what the last update did: a toast once and a card until dismissed, or a card alone."""
+    """Tells the user what the last update did: a toast once and a card until dismissed."""
 
     def __init__(self, *, config: UpdateOutcomeServiceConfig) -> None:
         self._current_version = config.current_version
@@ -126,7 +133,7 @@ class UpdateOutcomeService:
         """Report what the panel owes the user about the last update.
 
         Returns ``{"announce_version", "announce_direction", "toast_owed",
-        "failure", "failure_dismissed"}``. ``announce_version`` is the version
+        "failure", "failure_dismissed", "failure_toast_owed"}``. ``announce_version`` is the version
         this process moved to, until the user dismissed its card, ``None``
         otherwise, and ``announce_direction`` which way it moved — ``"updated"``
         or ``"back"``, ``None`` exactly when ``announce_version`` is.
@@ -137,15 +144,19 @@ class UpdateOutcomeService:
         — ``kind`` ``"rollback"``, ``"check"`` or ``"unknown"`` — read afresh on
         every call so it goes when the installer removes it, and ``None`` where
         there is none or it no longer stands. ``failure_dismissed`` says the
-        user waved away that exact record.
+        user waved away that exact record, and ``failure_toast_owed`` that its
+        toast has not been raised yet — never for a dismissed record, and
+        ``False`` whenever ``failure`` is ``None``.
         """
-        failure = await self._loop.run_in_executor(None, self._standing_failure_io)
+        failure, toasted_at = await self._loop.run_in_executor(None, self._failure_and_toast_io)
+        dismissed = failure is not None and failure.rolled_back_at == self._dismissed_at()
         return {
             "announce_version": self._announcement.version if self._announcement is not None else None,
             "announce_direction": self._announcement.direction if self._announcement is not None else None,
             "toast_owed": self._announcement is not None and self._toast_owed,
             "failure": failure.to_wire() if failure is not None else None,
-            "failure_dismissed": failure is not None and failure.rolled_back_at == self._dismissed_at(),
+            "failure_dismissed": dismissed,
+            "failure_toast_owed": failure is not None and not dismissed and failure.rolled_back_at != toasted_at,
         }
 
     def acknowledge_update_toast(self) -> dict[str, Any]:
@@ -155,6 +166,29 @@ class UpdateOutcomeService:
         """
         self._toast_owed = False
         return {"success": True}
+
+    async def acknowledge_update_failure_toast(self, rolled_back_at: object) -> dict[str, Any]:
+        """Record that the panel raised the toast for the record stamped *rolled_back_at*, for every later start.
+
+        Per record, so a later record owes its own toast. Idempotent. Returns
+        ``{"success": True}``, or the canonical failure shape for a stamp that
+        is not a non-empty string.
+        """
+        if not isinstance(rolled_back_at, str) or not rolled_back_at:
+            return {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+        await self._loop.run_in_executor(None, self._record_toast_io, rolled_back_at)
+        return {"success": True}
+
+    def _record_toast_io(self, rolled_back_at: str) -> None:
+        with self._uow_factory() as uow:
+            uow.kv_config.set(FAILURE_TOASTED_KEY, rolled_back_at)
+
+    def _failure_and_toast_io(self) -> tuple[UpdateFailure | None, str | None]:
+        failure = self._standing_failure_io()
+        if failure is None:
+            return None, None
+        with self._uow_factory() as uow:
+            return failure, uow.kv_config.get(FAILURE_TOASTED_KEY)
 
     def dismiss_update_announcement(self) -> dict[str, Any]:
         """Record that the user waved away the announcement's card, for the rest of this process.

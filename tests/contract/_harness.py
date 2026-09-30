@@ -51,6 +51,7 @@ from bootstrap import (
     wire_services,
 )
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
+from fakes.fake_journal import FakeJournal
 from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -128,12 +129,14 @@ class ContractHarness:
     # The record of every claim that conflicts with a removed-game cleanup, as the
     # composition root built it. ``Endpoints`` holds none: the services it calls do.
     prune_conflicts: PruneConflicts
-    # The three edges an install from the panel reaches past this process: the
-    # host's reading of Steam, the release download, and the unit the installer
-    # would be started as — none of which a test may reach for real.
+    # The four edges an install from the panel reaches past this process: the
+    # host's reading of Steam, the release download, the unit the installer
+    # would be started as, and the journal its output is read back from — none
+    # of which a test may reach for real.
     steam: FakeSteamInterface
     downloads: FakeReleaseDownload
     units: FakeTransientUnits
+    journal: FakeJournal
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -224,6 +227,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     fake_releases = FakeLatestRelease()
     fake_downloads = FakeReleaseDownload()
     fake_units = FakeTransientUnits()
+    fake_journal = FakeJournal()
     fake_steam = FakeSteamInterface()
     patched_adapters = dataclasses.replace(
         result.adapters,
@@ -239,6 +243,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         latest_release=fake_releases,
         download_release_asset=fake_downloads,
         transient_units=fake_units,
+        journal=fake_journal,
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.
@@ -302,6 +307,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         steam=fake_steam,
         downloads=fake_downloads,
         units=fake_units,
+        journal=fake_journal,
     )
 
 

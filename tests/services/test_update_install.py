@@ -19,6 +19,7 @@ from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
+from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from adapters.update_attempt import UpdateAttemptFileAdapter
@@ -154,6 +155,7 @@ class _Rig:
     staging_dir: str
     releases: _Releases
     sleeper: _ParkingSleeper
+    uow_factory: FakeUnitOfWorkFactory
 
     @property
     def tarball(self) -> ReleaseTarball:
@@ -186,6 +188,7 @@ async def _rig(
     sleeper: _ParkingSleeper | None = None,
     failure_record: UpdateFailure | None = None,
     current_version: str = _RUNNING,
+    uow_factory: FakeUnitOfWorkFactory | None = None,
 ) -> _Rig:
     body = body if body is not None else _tarball()
     release = release if release is not None else _release(body=body)
@@ -200,6 +203,7 @@ async def _rig(
     staging = UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update"))
     releases = _Releases(release)
     sleeper = sleeper if sleeper is not None else _ParkingSleeper()
+    uow_factory = uow_factory if uow_factory is not None else FakeUnitOfWorkFactory()
     service = UpdateInstallService(
         config=UpdateInstallServiceConfig(
             releases=releases,
@@ -221,6 +225,7 @@ async def _rig(
             staging=staging,
             units=units,
             installer_environment=_ENVIRONMENT,
+            uow_factory=uow_factory,
             emit=events.emit,
             clock=FakeClock(),
             sleeper=sleeper,
@@ -240,6 +245,7 @@ async def _rig(
         staging_dir=str(tmp_path / "cache" / "update"),
         releases=releases,
         sleeper=sleeper,
+        uow_factory=uow_factory,
     )
 
 
@@ -1159,7 +1165,12 @@ class TestTheNextStart:
             rig.service.note_start()
             pushed = await _judged(rig)
 
-        stopped = {"attempted_version": _OFFERED, "from_version": _RUNNING, "started_at": "2026-09-01T10:00:00Z"}
+        stopped = {
+            "attempted_version": _OFFERED,
+            "from_version": _RUNNING,
+            "started_at": "2026-09-01T10:00:00Z",
+            "toast_owed": True,
+        }
         assert pushed == [stopped]
         assert rig.service.get_stopped_update_attempt() == stopped
         state = await rig.service.get_update_install_state()
@@ -1243,6 +1254,106 @@ class TestTheNextStart:
         assert rig.service.get_stopped_update_attempt() is None
 
 
+class TestTheStoppedAttemptsToast:
+    async def test_a_stopped_attempt_owes_its_toast_until_the_panel_says_it_raised_it(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        rig.service.note_start()
+        await _judged(rig)
+
+        assert await rig.service.acknowledge_stopped_attempt_toast("2026-09-01T10:00:00Z") == {"success": True}
+
+        stopped = rig.service.get_stopped_update_attempt()
+        assert stopped is not None
+        assert stopped["toast_owed"] is False
+
+    async def test_the_next_start_that_finds_the_same_attempt_owes_no_toast_for_it(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        factory = FakeUnitOfWorkFactory()
+        first = await _built(rigs, tmp_path, unit_states=_ENDED, uow_factory=factory)
+        first.service.note_start()
+        await _judged(first)
+        await first.service.acknowledge_stopped_attempt_toast("2026-09-01T10:00:00Z")
+
+        second = await _built(rigs, tmp_path, unit_states=_ENDED, uow_factory=factory)
+        second.service.note_start()
+        pushed = await _judged(second)
+
+        assert [payload["toast_owed"] for payload in pushed] == [False]
+
+    async def test_a_raised_toast_for_another_attempt_leaves_this_one_owed(self, rigs, tmp_path):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        rig.service.note_start()
+        await _judged(rig)
+
+        await rig.service.acknowledge_stopped_attempt_toast("2026-08-01T10:00:00Z")
+
+        stopped = rig.service.get_stopped_update_attempt()
+        assert stopped is not None
+        assert stopped["toast_owed"] is True
+
+    @pytest.mark.parametrize("stamp", [None, "", 7])
+    async def test_a_stamp_that_is_not_one_is_refused_and_records_nothing(self, rigs, tmp_path, stamp):
+        rig = await _built(rigs, tmp_path)
+
+        answer = await rig.service.acknowledge_stopped_attempt_toast(stamp)
+
+        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+        with rig.uow_factory() as uow:
+            assert uow.kv_config.get("update_stopped_toasted_at") is None
+
+
+class TestTheFailedInstallersStart:
+    async def test_an_installer_that_stopped_while_this_process_ran_names_when_it_was_started(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5))
+
+        await TestAFailedAttempt._ended_with(rig)
+
+        assert rig.service.failed_installer_started_at() == _CLOCK_STAMP
+
+    async def test_a_refusal_by_the_check_names_it_too(self, rigs, tmp_path):
+        refused = UpdateFailure(_OFFERED, _RUNNING, _CLOCK_STAMP, UpdateFailureKind.CHECK)
+        rig = await _built(
+            rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5), failure_record=refused
+        )
+
+        assert (await TestAFailedAttempt._ended_with(rig))["failure"] == "new_version_does_not_start"
+        assert rig.service.failed_installer_started_at() == _CLOCK_STAMP
+
+    async def test_an_attempt_a_previous_start_found_stopped_names_its_record_s_start_even_once_dismissed(
+        self, rigs, tmp_path
+    ):
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED)
+        rig.service.note_start()
+        await _judged(rig)
+
+        await rig.service.dismiss_stopped_attempt()
+
+        assert rig.service.failed_installer_started_at() == "2026-09-01T10:00:00Z"
+
+    async def test_an_attempt_that_failed_before_its_installer_ran_names_none(self, rigs, tmp_path):
+        release = _release()
+        rig = await _built(rigs, tmp_path, release=release, failing={_asset(release).url})
+        await rig.service.install_update(_OFFERED)
+
+        assert (await rig.settled())["failure"] == "download_failed"
+        assert rig.service.failed_installer_started_at() is None
+
+    async def test_an_attempt_under_way_names_none(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+
+        assert (await rig.settled())["step"] == "installer_started"
+        assert rig.service.failed_installer_started_at() is None
+
+    async def test_no_attempt_names_none(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+
+        assert rig.service.failed_installer_started_at() is None
+
+
 class TestAnInstallerStillRunningAtTheNextStart:
     """The installer starts this program itself, and may not have ended when the start looks at the record."""
 
@@ -1256,7 +1367,12 @@ class TestAnInstallerStillRunningAtTheNextStart:
 
         pushed = await _judged(rig)
 
-        stopped = {"attempted_version": _OFFERED, "from_version": _RUNNING, "started_at": "2026-09-01T10:00:00Z"}
+        stopped = {
+            "attempted_version": _OFFERED,
+            "from_version": _RUNNING,
+            "started_at": "2026-09-01T10:00:00Z",
+            "toast_owed": True,
+        }
         assert pushed == [stopped]
         assert rig.service.get_stopped_update_attempt() == stopped
         state = await rig.service.get_update_install_state()

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { toaster } from "../api/host";
 import {
+  acknowledgeUpdateFailureToast,
   acknowledgeUpdateToast,
   dismissUpdateAnnouncement,
   dismissUpdateFailure,
@@ -10,6 +11,7 @@ import {
   type UpdateSettingWrite,
 } from "../api/backend";
 import { TOAST_READINESS_DEADLINE_MS, TOAST_READINESS_POLL_MS } from "./steamReadyForToasts";
+import { resetFailedUpdateToastsForTests } from "./failedUpdateToast";
 import {
   dismissUpdateAnnouncementCard,
   dismissUpdateFailureRecord,
@@ -36,6 +38,7 @@ const NOTHING: UpdateOutcome = {
   toast_owed: false,
   failure: null,
   failure_dismissed: false,
+  failure_toast_owed: false,
 };
 const UPDATED: UpdateOutcome = {
   ...NOTHING,
@@ -58,6 +61,7 @@ const ROLLED_BACK_WIRE: UpdateOutcome = {
     kind: "rollback",
   },
   failure_dismissed: false,
+  failure_toast_owed: false,
 };
 
 const ROLLED_BACK: UpdateOutcomeState = {
@@ -113,6 +117,8 @@ describe("updateOutcomeStore", () => {
     stubSteam(steam);
     vi.mocked(logWarn).mockClear();
     resetUpdateOutcomeStoreForTests();
+    resetFailedUpdateToastsForTests();
+    vi.mocked(acknowledgeUpdateFailureToast).mockReset().mockResolvedValue({ success: true });
     vi.mocked(getUpdateOutcome).mockReset();
     vi.mocked(acknowledgeUpdateToast).mockReset().mockResolvedValue({ success: true });
     vi.mocked(dismissUpdateAnnouncement).mockReset().mockResolvedValue({ success: true });
@@ -224,6 +230,43 @@ describe("updateOutcomeStore", () => {
 
       await expect(fetchUpdateOutcome()).rejects.toThrow("socket closed");
       expect(toaster.toast).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("the toast for an update that did not go through", () => {
+    const FAILURE_TOAST = "Update to 1.3.0 failed. You are still on 1.2.3. Settings › Updates shows why.";
+    const toastBodies = () => vi.mocked(toaster.toast).mock.calls.map(([toast]) => toast.body);
+
+    it("is raised where the backend still owes it, then acknowledged for that record", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...ROLLED_BACK_WIRE, failure_toast_owed: true });
+
+      await fetchUpdateOutcome();
+
+      expect(toastBodies()).toEqual([FAILURE_TOAST]);
+      expect(acknowledgeUpdateFailureToast).toHaveBeenCalledWith("2026-09-25T10:15:00Z");
+    });
+
+    it("is not raised where the backend owes none — raised before, or its card dismissed", async () => {
+      vi.mocked(getUpdateOutcome).mockResolvedValue({ ...ROLLED_BACK_WIRE, failure_toast_owed: false });
+
+      await fetchUpdateOutcome();
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(acknowledgeUpdateFailureToast).not.toHaveBeenCalled();
+    });
+
+    it("is raised for a pushed refusal, and once for a read of the same record after it", async () => {
+      takePushedUpdateFailure({ ...ROLLED_BACK_WIRE.failure!, kind: "check" });
+      await vi.waitFor(() => expect(acknowledgeUpdateFailureToast).toHaveBeenCalledOnce());
+      vi.mocked(getUpdateOutcome).mockResolvedValue({
+        ...ROLLED_BACK_WIRE,
+        failure: { ...ROLLED_BACK_WIRE.failure!, kind: "check" },
+        failure_toast_owed: true,
+      });
+
+      await fetchUpdateOutcome();
+
+      expect(toastBodies()).toEqual([FAILURE_TOAST]);
     });
   });
 

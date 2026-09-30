@@ -53,6 +53,7 @@ if TYPE_CHECKING:
         Sleeper,
         SteamInterfaceReader,
         TransientUnitControl,
+        UnitOfWorkFactory,
         UpdateAttemptStore,
         UpdateFailureFn,
         UpdateStagingStore,
@@ -62,6 +63,16 @@ if TYPE_CHECKING:
 # At most one progress frame per this many seconds while bytes arrive, as the
 # ROM downloads do; the last one of a download always goes out.
 _PROGRESS_EMIT_SECONDS = 0.5
+
+# The ``started_at`` of the stopped attempt whose toast the panel raised, in
+# kv_config: observed state. A stopped attempt is judged again at every start
+# until it is dismissed or superseded, so a flag held for one process would
+# raise its toast again at every start.
+STOPPED_TOASTED_KEY = "update_stopped_toasted_at"
+
+# The failures an attempt ends in once its installer has run, and has
+# printed something to the journal.
+_INSTALLER_RAN = frozenset({InstallFailure.INSTALLER_STOPPED, InstallFailure.NEW_VERSION_DOES_NOT_START})
 
 # How often the installer's unit is asked whether it still runs. It stops this
 # process when it gets far enough, so the watch only ever sees it end early.
@@ -90,7 +101,8 @@ class UpdateInstallServiceConfig:
     Steam interface reader the host fills in, the installer's record of an
     update that did not go through and this program's own record of an
     attempt, the download, staging and unit seams with the environment the
-    installer starts with, and the runtime infrastructure.
+    installer starts with, the unit-of-work factory the raised toast of a
+    stopped attempt is stored through, and the runtime infrastructure.
     """
 
     releases: LastSeenReleaseReader
@@ -112,6 +124,7 @@ class UpdateInstallServiceConfig:
     staging: UpdateStagingStore
     units: TransientUnitControl
     installer_environment: tuple[tuple[str, str], ...]
+    uow_factory: UnitOfWorkFactory
     emit: EventEmitter
     clock: Clock
     sleeper: Sleeper
@@ -143,6 +156,7 @@ class UpdateInstallService:
         self._staging = config.staging
         self._units = config.units
         self._installer_environment = config.installer_environment
+        self._uow_factory = config.uow_factory
         self._emit = config.emit
         self._clock = config.clock
         self._sleeper = config.sleeper
@@ -167,6 +181,8 @@ class UpdateInstallService:
         # The attempt a previous start's installer stopped without updating, as
         # this start found it; gone once dismissed or a new attempt starts.
         self._stopped: UpdateAttemptRecord | None = None
+        # Whether the panel still owes that attempt's toast.
+        self._stopped_toast_owed = False
         # Judges the record an earlier start's attempt left, once the
         # installer's unit has ended.
         self._judging: asyncio.Task[None] | None = None
@@ -226,12 +242,14 @@ class UpdateInstallService:
         record = self._attempts.read()
         return self._judge_io(record) if record is not None else None
 
-    def _take_stopped(self, stopped: UpdateAttemptRecord) -> None:
+    def _take_stopped(self, stopped: UpdateAttemptRecord, toasted_at: str | None) -> None:
         self._logger.warning(
             f"update: the installer for {stopped.attempted_version} started at {stopped.started_at} stopped without "
             f"updating; still on {self._current_version} — what it said is in journalctl --user -u {INSTALLER_UNIT}"
         )
         self._stopped = stopped
+        self._stopped_toast_owed = toasted_at != stopped.started_at
+        self._installer_started_at = stopped.started_at
         self._attempt = InstallAttempt(
             version=stopped.attempted_version, step=InstallStep.FAILED, failure=InstallFailure.INSTALLER_STOPPED
         )
@@ -246,7 +264,7 @@ class UpdateInstallService:
         if stopped is None:
             return
         try:
-            await self._emit("update_attempt_stopped", _stopped_wire(stopped))
+            await self._emit("update_attempt_stopped", _stopped_wire(stopped, self._stopped_toast_owed))
         except Exception:
             self._logger.exception(
                 f"update: the panel could not be told that the installer for {stopped.attempted_version} stopped "
@@ -277,20 +295,59 @@ class UpdateInstallService:
                 )
             await self._sleeper.sleep(_WATCH_SECONDS)
         stopped = await self._loop.run_in_executor(None, self._judge_the_record_io)
-        if stopped is None or self._attempt is not None:
+        if stopped is None:
             return None
-        self._take_stopped(stopped)
+        toasted_at = await self._loop.run_in_executor(None, self._toasted_at_io)
+        if self._attempt is not None:
+            return None
+        self._take_stopped(stopped, toasted_at)
         return stopped
+
+    def _toasted_at_io(self) -> str | None:
+        with self._uow_factory() as uow:
+            return uow.kv_config.get(STOPPED_TOASTED_KEY)
 
     def get_stopped_update_attempt(self) -> dict[str, Any] | None:
         """The attempt an earlier start's installer stopped without updating, until dismissed or superseded.
 
-        ``{"attempted_version", "from_version", "started_at"}``, or ``None``.
+        ``{"attempted_version", "from_version", "started_at", "toast_owed"}``,
+        or ``None``; ``toast_owed`` says the panel has not raised its toast yet.
         Judged by :meth:`note_start`, whose late judgement pushes the same
         shape as ``update_attempt_stopped``; the notice on Main shows it.
         """
         stopped = self._stopped
-        return _stopped_wire(stopped) if stopped is not None else None
+        return _stopped_wire(stopped, self._stopped_toast_owed) if stopped is not None else None
+
+    async def acknowledge_stopped_attempt_toast(self, started_at: object) -> dict[str, Any]:
+        """Record that the panel raised the toast for the stopped attempt started at *started_at*, for good.
+
+        Per attempt, so a later one owes its own toast. Idempotent. Returns
+        ``{"success": True}``, or the canonical failure shape for a stamp that
+        is not a non-empty string.
+        """
+        if not isinstance(started_at, str) or not started_at:
+            return {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+        await self._loop.run_in_executor(None, self._record_toast_io, started_at)
+        if self._stopped is not None and self._stopped.started_at == started_at:
+            self._stopped_toast_owed = False
+        return {"success": True}
+
+    def _record_toast_io(self, started_at: str) -> None:
+        with self._uow_factory() as uow:
+            uow.kv_config.set(STOPPED_TOASTED_KEY, started_at)
+
+    def failed_installer_started_at(self) -> str | None:
+        """When the latest attempt's installer was started, where that attempt failed after its installer ran.
+
+        ISO-8601 UTC text, or ``None`` where the latest attempt failed before
+        its installer ran, is still under way, or there is none. An attempt a
+        previous start's installer stopped counts, and keeps counting after its
+        notice is dismissed, for as long as the Updates settings show it.
+        """
+        attempt = self._attempt
+        if attempt is None or attempt.failure not in _INSTALLER_RAN:
+            return None
+        return self._installer_started_at
 
     async def dismiss_stopped_attempt(self) -> dict[str, Any]:
         """Wave away the notice of an installer that stopped without updating, and remove its record.
@@ -739,11 +796,12 @@ def _failure_at(attempt: InstallAttempt | None) -> InstallFailure:
     return InstallFailure.INSTALLER_NOT_STARTED
 
 
-def _stopped_wire(stopped: UpdateAttemptRecord) -> dict[str, Any]:
+def _stopped_wire(stopped: UpdateAttemptRecord, toast_owed: bool) -> dict[str, Any]:
     return {
         "attempted_version": stopped.attempted_version,
         "from_version": stopped.from_version,
         "started_at": stopped.started_at,
+        "toast_owed": toast_owed,
     }
 
 

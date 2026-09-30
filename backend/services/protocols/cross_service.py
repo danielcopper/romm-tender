@@ -681,6 +681,18 @@ class HeldClaimsFn(Protocol):
     def __call__(self) -> tuple[str, ...]: ...
 
 
+class FailedInstallerStartFn(Protocol):
+    """When the installer of the latest attempt was started, where that attempt failed after its installer ran.
+
+    ISO-8601 UTC text to the second, or ``None`` where no such attempt is the
+    latest. The composition root satisfies this with
+    ``UpdateInstallService.failed_installer_started_at``. Answered from
+    memory, so it may be asked on the loop.
+    """
+
+    def __call__(self) -> str | None: ...
+
+
 class DownloadQueueFn(Protocol):
     """The ROM download queue as the panel is shown it: ``{"downloads": [entry, ...]}``, each with a ``status``."""
 

@@ -34,6 +34,7 @@ from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.github_releases import GithubReleaseAdapter
 from adapters.hostname import HostnameAdapter
+from adapters.journal import JournalctlAdapter
 from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
@@ -91,6 +92,7 @@ if TYPE_CHECKING:
         FirmwareResolver,
         GameProcessControl,
         HostnameReader,
+        JournalEntriesFn,
         LatestReleaseFn,
         MachineIdReader,
         MigrationFileStore,
@@ -174,6 +176,7 @@ class AdapterBundle:
     download_release_asset: ReleaseAssetDownloadFn
     update_staging: UpdateStagingStore
     transient_units: TransientUnitControl
+    journal: JournalEntriesFn
 
 
 @dataclass(frozen=True)
@@ -425,6 +428,7 @@ def bootstrap(
     update_attempt = UpdateAttemptFileAdapter(state_dir=directories.state_dir, log_debug=debug_logger)
     update_staging = UpdateStagingAdapter(directory=os.path.join(directories.cache_dir, UPDATE_DIR_NAME))
     transient_units = SystemdRunAdapter()
+    journal = JournalctlAdapter()
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
@@ -493,6 +497,7 @@ def bootstrap(
         download_release_asset=github_releases.download_asset,
         update_staging=update_staging,
         transient_units=transient_units,
+        journal=journal,
     )
     stores = StateBundle(
         settings=settings,

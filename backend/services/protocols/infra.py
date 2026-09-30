@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from domain.game_instance import GameInstance
     from domain.sync_action import SyncAction
+    from domain.update_output import JournalEntry
 
 
 class EventEmitter(Protocol):
@@ -200,6 +201,26 @@ class TransientUnitControl(Protocol):
     def start(self, unit: str, command: Sequence[str], environment: Sequence[tuple[str, str]]) -> str | None: ...
 
     def is_active(self, unit: str) -> bool | None: ...
+
+
+class JournalEntriesFn(Protocol):
+    """Read entries of this user's systemd journal, oldest first.
+
+    *unit* narrows them to one unit's, ``None`` reads every unit's; *since*
+    and *until* bound them in epoch seconds, both ends included, and *last*
+    keeps only that many of the newest. Raises ``OSError`` where the journal
+    could not be read, a reader that gave no answer in time among them — an
+    empty answer is always a journal that holds no such entry.
+    """
+
+    def __call__(
+        self,
+        unit: str | None,
+        *,
+        since: float | None = None,
+        until: float | None = None,
+        last: int | None = None,
+    ) -> tuple[JournalEntry, ...]: ...
 
 
 class GameProcessControl(Protocol):

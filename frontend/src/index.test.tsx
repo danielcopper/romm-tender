@@ -1438,6 +1438,31 @@ describe("index.tsx — what the backend pushes about updates", () => {
     expect(getUpdateInstallAttempt()).toEqual(frame);
   });
 
+  it("raises the toast for an install frame that turned failed, from the frame alone", async () => {
+    vi.stubGlobal("App", { GetServicesInitialized: () => true });
+    vi.stubGlobal("securitystore", { IsLockScreenActive: () => false });
+    vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
+    vi.mocked(toaster.toast).mockClear();
+    pluginFactory();
+
+    act(() =>
+      emitHostEvent("update_install_progress", {
+        version: "0.35.0",
+        step: "failed",
+        bytes_done: 0,
+        bytes_total: null,
+        failure: "checksum_mismatch",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Update to 0.35.0 failed. The download did not match its checksum.",
+      }),
+    );
+  });
+
   it("takes a stopped attempt judged after panel load into the store the card on Main reads", () => {
     pluginFactory();
 
@@ -1446,6 +1471,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
         attempted_version: "0.35.0",
         from_version: "0.33.0",
         started_at: "2026-09-29T10:00:00Z",
+        toast_owed: false,
       }),
     );
 
@@ -1490,6 +1516,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
       toast_owed: true,
       failure: null,
       failure_dismissed: false,
+      failure_toast_owed: false,
     });
     pluginFactory();
     await flush();
@@ -1512,6 +1539,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
         kind: "rollback",
       },
       failure_dismissed: false,
+      failure_toast_owed: false,
     });
     pluginFactory();
     await flush();

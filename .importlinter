@@ -184,4 +184,5 @@ modules =
     services.update_check
     services.update_install
     services.update_outcome
+    services.update_output
     services.version_switch

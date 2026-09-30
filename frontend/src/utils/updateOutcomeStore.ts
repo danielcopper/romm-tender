@@ -3,10 +3,11 @@
  *
  * Updated by:
  *   - panel load in index.tsx (fetchUpdateOutcome), detached — which is also
- *     where the toast for a version that moved is raised, once
+ *     where the toast for a version that moved is raised, once, and the toast
+ *     for an update that did not go through, where the backend still owes it
  *   - the `update_failure_recorded` listener in index.tsx
  *     (takePushedUpdateFailure), for a refusal by the pre-install check the
- *     backend saw while it ran
+ *     backend saw while it ran, which raises that refusal's toast
  *   - the announcement card's Dismiss (dismissUpdateAnnouncementCard), after
  *     the backend recorded it
  *   - the rolled-back card's Dismiss (dismissUpdateFailureRecord), after the
@@ -27,17 +28,17 @@
 
 import { useSyncExternalStore } from "react";
 import {
+  acknowledgeUpdateFailureToast,
   acknowledgeUpdateToast,
   dismissUpdateAnnouncement,
   dismissUpdateFailure,
   getUpdateOutcome,
-  logWarn,
+  logError,
   type UpdateDirection,
   type UpdateFailure,
   type UpdateOutcome,
 } from "../api/backend";
-import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamCanShowToasts } from "./steamReadyForToasts";
-import { showToast } from "./toast";
+import { raiseFailureToastOnce, stillOnToast, toastWhenSteamIsReady } from "./failedUpdateToast";
 
 /** An update the installer rolled back, or its pre-install check refused, in this store's spelling. */
 export interface RolledBackUpdate {
@@ -80,8 +81,14 @@ const INSTALLER_OUTPUT =
 /** The same line for an update the pre-install check refused, which never ran the new version as a service. */
 export const UPDATE_CHECK_FAILURE_REASON = `The new version did not start, so nothing was changed. ${INSTALLER_OUTPUT}`;
 
-/** The line for that refusal under Settings › Updates, whose title already says nothing was changed. */
-export const UPDATE_CHECK_FAILURE_NOTE = `The new version did not start. ${INSTALLER_OUTPUT}`;
+/**
+ * The line for that refusal under Settings › Updates, whose title already says
+ * nothing was changed, and whose button shows what the installer said.
+ */
+export const UPDATE_CHECK_FAILURE_NOTE = "The new version did not start.";
+
+/** The line for a rolled-back update under Settings › Updates, whose button shows what the new version said. */
+export const UPDATE_ROLLBACK_NOTE = "The new version did not answer.";
 
 /** The same line for a record of a kind this version does not know: no cause is named, only where it is. */
 export const UPDATE_UNKNOWN_FAILURE_REASON = INSTALLER_OUTPUT;
@@ -199,15 +206,26 @@ export function failureTakesThePlaceOf(latestVersion: string | null, state: Upda
   return state.failure !== null && state.failure.attemptedVersion === latestVersion;
 }
 
+/** Raise the toast for the installer's record once, and tell the backend it was raised. */
+function toastRecord(failure: UpdateFailure): Promise<void> {
+  return raiseFailureToastOnce(
+    `record ${failure.rolled_back_at}`,
+    stillOnToast(failure.attempted_version, failure.restored_version),
+    () => acknowledgeUpdateFailureToast(failure.rolled_back_at),
+  );
+}
+
 /**
  * Ask the backend what the last update did, fill the store — the announcement's
  * card among it — and raise the toast for a version that moved, to a later
- * release or back to an earlier one, where the backend still owes it.
+ * release or back to an earlier one, and for an update that did not go
+ * through, each where the backend still owes it.
  *
- * The toast waits until Steam can show it (what it waits for, how long at most,
- * and why: `steamReadyForToasts.ts`). It is acknowledged only after it was
- * raised: the backend owes it once per process, so a panel reloaded by a Steam
- * restart shows the card again but does not raise the toast a second time. An
+ * Each toast waits until Steam can show it (what it waits for, how long at
+ * most, and why: `steamReadyForToasts.ts`), and is acknowledged only after it
+ * was raised: the backend owes the announcement once per process, so a panel
+ * reloaded by a Steam restart shows the card again but does not raise the
+ * toast a second time, and the record's toast once for good. An
  * acknowledgement that fails leaves it owed, and the next panel load raises it
  * again — a repeat rather than a loss.
  */
@@ -215,14 +233,12 @@ export async function fetchUpdateOutcome(): Promise<void> {
   const seq = ++_seq;
   const outcome = await getUpdateOutcome();
   if (seq === _seq) setUpdateOutcomeState(stateFromOutcome(outcome));
+  if (outcome.failure_toast_owed && outcome.failure !== null) await toastRecord(outcome.failure);
   if (outcome.toast_owed) {
-    const readiness = await waitUntilSteamCanShowToasts();
-    if (!readiness.inTime) {
-      logWarn(
-        `Steam was not ready for a toast after ${TOAST_READINESS_DEADLINE_MS / 1000} s (still waiting for ${readiness.unmet.join(", ")}); raising the update announcement anyway`,
-      );
-    }
-    showToast(updateAnnouncementToast(outcome.announce_version, outcome.announce_direction));
+    await toastWhenSteamIsReady(
+      updateAnnouncementToast(outcome.announce_version, outcome.announce_direction),
+      "the update announcement",
+    );
     await acknowledgeUpdateToast();
   }
 }
@@ -240,11 +256,13 @@ export async function dismissUpdateAnnouncementCard(): Promise<void> {
 
 /**
  * Take the record of a refusal by the pre-install check the backend pushed. It
- * outranks a read still in flight, and it is a new record, so its card is up.
+ * outranks a read still in flight, and it is a new record, so its card is up
+ * and its toast is owed.
  */
 export function takePushedUpdateFailure(pushed: UpdateFailure): void {
   ++_seq;
   setUpdateOutcomeState({ ..._state, failure: failureFromWire(pushed), failureDismissed: false });
+  toastRecord(pushed).catch((e) => logError(`Failed to raise the failed update's toast: ${e}`));
 }
 
 /**

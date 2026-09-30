@@ -56,6 +56,7 @@ import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
+import { toastFailedAttempt } from "./utils/failedUpdateToast";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -564,8 +565,9 @@ const tender = definePlugin(() => {
   );
 
   // What the last update did: fill the store the announcement card and the
-  // rolled-back notice read, and raise the announcement's toast for a version
-  // that moved, up or back. Detached like the release check above.
+  // rolled-back notice read, and raise the toasts still owed — the
+  // announcement's for a version that moved, up or back, and the one for an
+  // update that did not go through. Detached like the release check above.
   detach(
     (async () => {
       try {
@@ -577,7 +579,8 @@ const tender = definePlugin(() => {
   );
 
   // An installer an earlier start ran that stopped without updating: the card
-  // on Main says so. Detached like the two reads above.
+  // on Main says so, and its toast where still owed. Detached like the two
+  // reads above.
   detach(
     (async () => {
       try {
@@ -1041,7 +1044,10 @@ const tender = definePlugin(() => {
   // refusal by the pre-install check seen while the backend ran; each is held
   // in its store for the surfaces.
   addEventListener<UpdateNotice>("update_notice", takePushedUpdateNotice);
-  addEventListener<UpdateInstallAttempt>("update_install_progress", setUpdateInstallAttempt);
+  addEventListener<UpdateInstallAttempt>("update_install_progress", (frame) => {
+    setUpdateInstallAttempt(frame);
+    toastFailedAttempt(frame).catch((e) => logError(`Failed to raise the failed update's toast: ${e}`));
+  });
   addEventListener<StoppedUpdateAttemptWire>("update_attempt_stopped", takePushedStoppedAttempt);
   addEventListener<UpdateFailure>("update_failure_recorded", takePushedUpdateFailure);
 

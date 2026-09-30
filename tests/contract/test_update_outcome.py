@@ -20,7 +20,14 @@ from typing import Any
 
 from domain.identity import VERSION
 
-_OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {
+    "announce_version",
+    "announce_direction",
+    "toast_owed",
+    "failure",
+    "failure_dismissed",
+    "failure_toast_owed",
+}
 _STAMP = "2026-09-25T10:15:00Z"
 
 
@@ -62,6 +69,7 @@ async def test_a_start_after_an_update_owes_one_announcement(harness):
         "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
+        "failure_toast_owed": False,
     }
     assert _last_run(harness) == VERSION
 
@@ -78,6 +86,7 @@ async def test_a_start_after_a_return_to_an_earlier_release_owes_one_announcemen
         "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
+        "failure_toast_owed": False,
     }
     assert _last_run(harness) == VERSION
 
@@ -137,6 +146,7 @@ async def test_a_start_after_a_rollback_announces_nothing_and_reports_the_record
             "kind": "rollback",
         },
         "failure_dismissed": False,
+        "failure_toast_owed": True,
     }
 
 
@@ -185,6 +195,7 @@ async def test_a_record_left_behind_by_an_update_that_went_through_is_no_record(
         "toast_owed": True,
         "failure": None,
         "failure_dismissed": False,
+        "failure_toast_owed": False,
     }
 
 
@@ -221,3 +232,21 @@ async def test_a_stamp_that_is_not_one_takes_the_canonical_failure_shape(harness
 
     assert result == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
     assert "update_failure_dismissed_at" not in _settings_on_disk(harness)
+
+
+async def test_a_failure_s_toast_raised_once_stays_raised_in_sqlite(harness):
+    _record(harness)
+    harness.app.services.update_outcome_service.note_start()
+    assert (await harness.endpoints.get_update_outcome())["failure_toast_owed"] is True
+
+    assert await harness.endpoints.acknowledge_update_failure_toast(_STAMP) == {"success": True}
+
+    assert (await harness.endpoints.get_update_outcome())["failure_toast_owed"] is False
+    with harness.uow_factory() as uow:
+        assert uow.kv_config.get("update_failure_toasted_at") == _STAMP
+
+
+async def test_a_toast_acknowledged_with_no_stamp_is_refused_in_the_canonical_shape(harness):
+    answer = await harness.endpoints.acknowledge_update_failure_toast(None)
+
+    assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}

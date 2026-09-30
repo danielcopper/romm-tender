@@ -53,6 +53,7 @@ from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
 from services.update_outcome import UpdateOutcomeService, UpdateOutcomeServiceConfig
+from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
 if TYPE_CHECKING:
@@ -135,6 +136,7 @@ class ServicesBundle:
     update_check_service: UpdateCheckService
     update_outcome_service: UpdateOutcomeService
     update_install_service: UpdateInstallService
+    update_output_service: UpdateOutputService
     launch_gate_service: LaunchGateService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
@@ -743,6 +745,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             staging=cfg.adapters.update_staging,
             units=cfg.adapters.transient_units,
             installer_environment=cfg.installer_environment,
+            uow_factory=cfg.callbacks.uow_factory,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
             sleeper=cfg.runtime.sleeper,
@@ -752,6 +755,17 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
     update_in_progress_binding.set(update_install_service.is_update_in_progress)
+
+    update_output_service = UpdateOutputService(
+        config=UpdateOutputServiceConfig(
+            current_version=VERSION,
+            read_update_failure=cfg.adapters.update_failure,
+            failed_installer_started_at=update_install_service.failed_installer_started_at,
+            journal=cfg.adapters.journal,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+        ),
+    )
 
     return ServicesBundle(
         prune_conflicts=prune_conflicts,
@@ -782,6 +796,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         update_check_service=update_check_service,
         update_outcome_service=update_outcome_service,
         update_install_service=update_install_service,
+        update_output_service=update_output_service,
         launch_gate_service=launch_gate_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,

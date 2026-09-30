@@ -12,6 +12,7 @@ const stopAt = async (attempted: string) => {
     attempted_version: attempted,
     from_version: "1.0.0",
     started_at: "2026-09-29T10:00:00Z",
+    toast_owed: false,
   });
   await act(() => fetchStoppedUpdateAttempt());
 };

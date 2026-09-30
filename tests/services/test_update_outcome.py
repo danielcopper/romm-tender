@@ -13,6 +13,7 @@ from fakes.running_loop import running_loop
 from domain.update_outcome import UpdateFailure, UpdateFailureKind
 from services.update_outcome import (
     FAILURE_DISMISSED_KEY,
+    FAILURE_TOASTED_KEY,
     LAST_RUN_KEY,
     UpdateOutcomeService,
     UpdateOutcomeServiceConfig,
@@ -25,7 +26,14 @@ _REFUSED = UpdateFailure(
     rolled_back_at="2026-09-25T10:15:00Z",
     kind=UpdateFailureKind.CHECK,
 )
-_OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failure", "failure_dismissed"}
+_OUTCOME_KEYS = {
+    "announce_version",
+    "announce_direction",
+    "toast_owed",
+    "failure",
+    "failure_dismissed",
+    "failure_toast_owed",
+}
 
 
 class _Record:
@@ -355,6 +363,7 @@ class TestARecordThatNoLongerStands:
             "toast_owed": True,
             "failure": None,
             "failure_dismissed": False,
+            "failure_toast_owed": False,
         }
 
     async def test_a_record_whose_restored_version_is_not_running_is_ignored(self, logger, caplog):
@@ -418,6 +427,7 @@ class TestTheRecord:
             "toast_owed": False,
             "failure": None,
             "failure_dismissed": False,
+            "failure_toast_owed": False,
         }
 
     async def test_a_raising_seam_is_no_record_and_reaches_the_log(self, logger, caplog):
@@ -476,3 +486,59 @@ class TestDismissingTheCard:
 
         assert outcome["failure"] is not None
         assert outcome["failure_dismissed"] is False
+
+
+class TestTheFailureToast:
+    async def test_a_standing_record_owes_its_toast(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
+
+        assert (await service.get_update_outcome())["failure_toast_owed"] is True
+
+    async def test_a_raised_toast_is_owed_no_more_and_leaves_the_card_standing(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
+
+        assert await service.acknowledge_update_failure_toast(_FAILURE.rolled_back_at) == {"success": True}
+
+        outcome = await service.get_update_outcome()
+        assert (outcome["failure_toast_owed"], outcome["failure_dismissed"]) == (False, False)
+        assert outcome["failure"] is not None
+
+    async def test_it_stays_raised_for_the_next_start_on_the_same_record(self, logger):
+        factory = FakeUnitOfWorkFactory()
+        first, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE), uow_factory=factory)
+        await first.acknowledge_update_failure_toast(_FAILURE.rolled_back_at)
+
+        second, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE), uow_factory=factory)
+        second.note_start()
+
+        assert (await second.get_update_outcome())["failure_toast_owed"] is False
+
+    async def test_a_later_record_owes_a_toast_of_its_own(self, logger):
+        record = _Record(_FAILURE)
+        service, _, _, _ = _make(logger, running="1.2.3", record=record)
+        await service.acknowledge_update_failure_toast(_FAILURE.rolled_back_at)
+
+        record.failure = UpdateFailure("1.3.0", "1.2.3", "2026-09-26T08:00:00Z", UpdateFailureKind.CHECK)
+
+        assert (await service.get_update_outcome())["failure_toast_owed"] is True
+
+    async def test_a_dismissed_card_owes_no_toast(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
+        service.dismiss_update_failure(_FAILURE.rolled_back_at)
+
+        assert (await service.get_update_outcome())["failure_toast_owed"] is False
+
+    async def test_no_record_owes_no_toast(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3")
+
+        assert (await service.get_update_outcome())["failure_toast_owed"] is False
+
+    @pytest.mark.parametrize("stamp", [None, "", 7, ["2026-09-25T10:15:00Z"]])
+    async def test_a_stamp_that_is_not_one_is_refused_and_records_nothing(self, logger, stamp):
+        service, factory, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
+
+        answer = await service.acknowledge_update_failure_toast(stamp)
+
+        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+        with factory() as uow:
+            assert uow.kv_config.get(FAILURE_TOASTED_KEY) is None

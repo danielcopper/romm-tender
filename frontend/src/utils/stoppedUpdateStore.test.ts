@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { dismissStoppedUpdateAttempt, getStoppedUpdateAttempt as readStopped } from "../api/backend";
+import {
+  acknowledgeStoppedUpdateAttemptToast,
+  dismissStoppedUpdateAttempt,
+  getStoppedUpdateAttempt as readStopped,
+} from "../api/backend";
+import { toaster } from "../api/host";
 import {
   dismissStoppedUpdateCard,
   endStoppedAttempt,
@@ -9,9 +14,15 @@ import {
   stoppedAttemptTakesThePlaceOf,
   takePushedStoppedAttempt,
 } from "./stoppedUpdateStore";
+import { resetFailedUpdateToastsForTests } from "./failedUpdateToast";
 import { onUpdateOutcomeChange } from "./updateOutcomeStore";
 
-const WIRE = { attempted_version: "1.1.0", from_version: "1.0.0", started_at: "2026-09-29T10:00:00Z" };
+const WIRE = {
+  attempted_version: "1.1.0",
+  from_version: "1.0.0",
+  started_at: "2026-09-29T10:00:00Z",
+  toast_owed: false,
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -22,6 +33,12 @@ function deferred<T>() {
 describe("stoppedUpdateStore", () => {
   beforeEach(() => {
     resetStoppedUpdateStoreForTests();
+    resetFailedUpdateToastsForTests();
+    vi.stubGlobal("App", { GetServicesInitialized: () => true });
+    vi.stubGlobal("securitystore", { IsLockScreenActive: () => false });
+    vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
+    vi.mocked(toaster.toast).mockClear();
+    vi.mocked(acknowledgeStoppedUpdateAttemptToast).mockReset().mockResolvedValue({ success: true });
     vi.mocked(readStopped).mockReset().mockResolvedValue(null);
     vi.mocked(dismissStoppedUpdateAttempt).mockReset().mockResolvedValue({ success: true });
   });
@@ -119,5 +136,35 @@ describe("stoppedUpdateStore", () => {
     expect(stoppedAttemptTakesThePlaceOf("1.1.0", stopped)).toBe(true);
     expect(stoppedAttemptTakesThePlaceOf("1.2.0", stopped)).toBe(false);
     expect(stoppedAttemptTakesThePlaceOf("1.1.0", null)).toBe(false);
+  });
+
+  describe("its toast", () => {
+    const TOAST = "Update to 1.1.0 failed. You are still on 1.0.0. Settings › Updates shows why.";
+
+    it("is raised at a read where the backend still owes it, then acknowledged for that attempt", async () => {
+      vi.mocked(readStopped).mockResolvedValue({ ...WIRE, toast_owed: true });
+
+      await fetchStoppedUpdateAttempt();
+
+      expect(vi.mocked(toaster.toast).mock.calls.map(([toast]) => toast.body)).toEqual([TOAST]);
+      expect(acknowledgeStoppedUpdateAttemptToast).toHaveBeenCalledWith("2026-09-29T10:00:00Z");
+    });
+
+    it("is raised for a push the backend still owes it for", async () => {
+      takePushedStoppedAttempt({ ...WIRE, toast_owed: true });
+
+      await vi.waitFor(() => expect(acknowledgeStoppedUpdateAttemptToast).toHaveBeenCalledOnce());
+      expect(toaster.toast).toHaveBeenCalledOnce();
+    });
+
+    it("is not raised where the backend owes none", async () => {
+      vi.mocked(readStopped).mockResolvedValue(WIRE);
+
+      await fetchStoppedUpdateAttempt();
+      takePushedStoppedAttempt(WIRE);
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(acknowledgeStoppedUpdateAttemptToast).not.toHaveBeenCalled();
+    });
   });
 });
