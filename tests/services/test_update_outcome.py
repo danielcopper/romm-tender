@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import Any
 
 import pytest
@@ -488,6 +489,13 @@ class TestDismissingTheCard:
         assert outcome["failure_dismissed"] is False
 
 
+class _LockedStore(FakeUnitOfWorkFactory):
+    """A database no unit of work can be opened on."""
+
+    def __call__(self) -> Any:
+        raise sqlite3.OperationalError("database is locked")
+
+
 class TestTheFailureToast:
     async def test_a_standing_record_owes_its_toast(self, logger):
         service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
@@ -542,3 +550,13 @@ class TestTheFailureToast:
         assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
         with factory() as uow:
             assert uow.kv_config.get(FAILURE_TOASTED_KEY) is None
+
+    async def test_a_raised_stamp_that_cannot_be_read_still_reports_the_record_and_owes_its_toast(self, logger, caplog):
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE), uow_factory=_LockedStore())
+
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            outcome = await service.get_update_outcome()
+
+        assert outcome["failure"] == _FAILURE.to_wire()
+        assert outcome["failure_toast_owed"] is True
+        assert "whether the failed update's toast was raised could not be read" in caplog.text

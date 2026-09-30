@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import sqlite3
 import tarfile
 import threading
 import time
@@ -1292,6 +1293,23 @@ class TestTheStoppedAttemptsToast:
         stopped = rig.service.get_stopped_update_attempt()
         assert stopped is not None
         assert stopped["toast_owed"] is True
+
+    async def test_a_raised_stamp_that_cannot_be_read_still_judges_the_attempt_and_owes_its_toast(
+        self, rigs, tmp_path, caplog
+    ):
+        class LockedStore(FakeUnitOfWorkFactory):
+            def __call__(self) -> Any:
+                raise sqlite3.OperationalError("database is locked")
+
+        _leave_record(tmp_path)
+        rig = await _built(rigs, tmp_path, unit_states=_ENDED, uow_factory=LockedStore())
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            rig.service.note_start()
+            pushed = await _judged(rig)
+
+        assert [payload["toast_owed"] for payload in pushed] == [True]
+        assert "whether the stopped attempt's toast was raised could not be read" in caplog.text
 
     @pytest.mark.parametrize("stamp", [None, "", 7])
     async def test_a_stamp_that_is_not_one_is_refused_and_records_nothing(self, rigs, tmp_path, stamp):

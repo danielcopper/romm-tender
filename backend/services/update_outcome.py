@@ -6,9 +6,9 @@ toast per process and shows as a card until the user dismisses it, and an update
 that did not go through — rolled back by the installer, or refused by its
 pre-install check before anything was replaced — which the panel raises as one
 toast per record, across starts, and shows until the user dismisses that record
-or the installer removes it. What is announced,
-how the installer's record is read, and whether it still stands live in
-``domain/update_outcome.py``; the record itself is behind a seam.
+or the installer removes it. What is announced, how the installer's record is
+read, and whether it still stands live in ``domain/update_outcome.py``; the
+record itself is behind a seam.
 """
 
 from __future__ import annotations
@@ -133,9 +133,9 @@ class UpdateOutcomeService:
         """Report what the panel owes the user about the last update.
 
         Returns ``{"announce_version", "announce_direction", "toast_owed",
-        "failure", "failure_dismissed", "failure_toast_owed"}``. ``announce_version`` is the version
-        this process moved to, until the user dismissed its card, ``None``
-        otherwise, and ``announce_direction`` which way it moved — ``"updated"``
+        "failure", "failure_dismissed", "failure_toast_owed"}``.
+        ``announce_version`` is the version this process moved to, until the
+        user dismissed its card, ``None`` otherwise, and ``announce_direction`` which way it moved — ``"updated"``
         or ``"back"``, ``None`` exactly when ``announce_version`` is.
         ``toast_owed`` says its toast has not been raised yet, and is ``False``
         whenever ``announce_version`` is ``None``. ``failure`` is the
@@ -184,11 +184,20 @@ class UpdateOutcomeService:
             uow.kv_config.set(FAILURE_TOASTED_KEY, rolled_back_at)
 
     def _failure_and_toast_io(self) -> tuple[UpdateFailure | None, str | None]:
+        """The standing record and the stamp whose toast was raised; a stamp that cannot be read is none.
+
+        So the record and its card still reach the panel, and its toast is
+        raised once more — a repeat rather than a loss.
+        """
         failure = self._standing_failure_io()
         if failure is None:
             return None, None
-        with self._uow_factory() as uow:
-            return failure, uow.kv_config.get(FAILURE_TOASTED_KEY)
+        try:
+            with self._uow_factory() as uow:
+                return failure, uow.kv_config.get(FAILURE_TOASTED_KEY)
+        except Exception as e:
+            self._logger.warning(f"whether the failed update's toast was raised could not be read: {e!r}")
+            return failure, None
 
     def dismiss_update_announcement(self) -> dict[str, Any]:
         """Record that the user waved away the announcement's card, for the rest of this process.

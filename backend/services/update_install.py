@@ -304,8 +304,13 @@ class UpdateInstallService:
         return stopped
 
     def _toasted_at_io(self) -> str | None:
-        with self._uow_factory() as uow:
-            return uow.kv_config.get(STOPPED_TOASTED_KEY)
+        """The stamp whose toast was raised; one that cannot be read is none, so the notice is judged all the same."""
+        try:
+            with self._uow_factory() as uow:
+                return uow.kv_config.get(STOPPED_TOASTED_KEY)
+        except Exception as e:
+            self._logger.warning(f"update: whether the stopped attempt's toast was raised could not be read: {e!r}")
+            return None
 
     def get_stopped_update_attempt(self) -> dict[str, Any] | None:
         """The attempt an earlier start's installer stopped without updating, until dismissed or superseded.
