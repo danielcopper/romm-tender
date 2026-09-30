@@ -64,7 +64,7 @@ describe("updateInstallStore", () => {
       expect(installerSeenAt()).toBeNull();
     });
 
-    it("counts as restarting for five minutes and no longer", () => {
+    it("counts as restarting for seven minutes and no longer", () => {
       noteAttempt(STARTED, 1000);
 
       expect(installerRestarting(1000 + INSTALLER_OVERDUE_MS - 1)).toBe(true);

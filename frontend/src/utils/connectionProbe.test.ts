@@ -110,19 +110,19 @@ describe("connectionProbe", () => {
       expect(getConnectionProbeState().connected).toBeNull();
     });
 
-    it("asks again once the installer's five minutes are up, and calls a backend still gone failed then", async () => {
+    it("asks again once the installer's seven minutes are up, and calls a backend still gone failed then", async () => {
       setUpdateInstallAttempt(INSTALLER_STARTED);
       ensureConnectionProbe();
       await vi.advanceTimersByTimeAsync(FULL_LADDER_MS);
       expect(getConnectionProbeState().connected).toBeNull();
 
-      // The second ask starts when the five minutes are up, and runs its whole ladder.
+      // The second ask starts when the seven minutes are up, and runs its whole ladder.
       await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS);
 
       expect(getConnectionProbeState().connected).toBe("backend_failed");
     });
 
-    it("calls it failed once the installer has had its five minutes", async () => {
+    it("calls it failed once the installer has had its seven minutes", async () => {
       setUpdateInstallAttempt(INSTALLER_STARTED);
       await vi.advanceTimersByTimeAsync(INSTALLER_OVERDUE_MS);
 

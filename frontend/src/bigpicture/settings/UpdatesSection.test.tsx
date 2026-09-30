@@ -8,7 +8,7 @@ import { NOT_BACK_LINE, TAKING_LONG_LINE } from "../../utils/updateInstallView";
 import { UpdateFailureNotice } from "../UpdateFailureNotice";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import {
-  UPDATE_CHECK_FAILURE_REASON,
+  UPDATE_CHECK_FAILURE_NOTE,
   UPDATE_FAILURE_REASON,
   UPDATE_UNKNOWN_FAILURE_REASON,
   resetUpdateOutcomeStoreForTests,
@@ -192,12 +192,15 @@ describe("UpdatesSection", () => {
       expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_FAILURE_REASON);
     });
 
-    it("states an update the pre-install check refused as nothing changed, failed at the check, with the check's line", () => {
+    it("states an update the pre-install check refused as nothing changed, failed at the check, saying so once", () => {
       const utils = withRecord("check");
 
       expect(utils.getByTestId("updates-caption").textContent).toBe("Update to 0.34.0 failed — nothing was changed.");
       expect(statuses(utils)).toEqual(["done", "done", "failed", "pending"]);
-      expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_CHECK_FAILURE_REASON);
+      expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_CHECK_FAILURE_NOTE);
+      expect(UPDATE_CHECK_FAILURE_NOTE).toBe(
+        "The new version did not start. The installer's output says why: journalctl --user -u romm-tender-update, or the terminal it was run in.",
+      );
     });
 
     it("states a record of a kind this version does not know with no cause and no step", () => {
@@ -298,18 +301,24 @@ describe("UpdatesSection", () => {
       expect(queryByText("Install update")).toBeNull();
     });
 
-    it("holds the button back and names every reason it waits for", () => {
+    it("holds the button back and names every reason it waits for, a line each under the header", () => {
       const { getByText, getByTestId, getAllByTestId } = withInstall({
         waitReasons: [{ reason: "app_running", apps: ["Celeste"] }, { reason: "library_sync" }],
       });
 
       expect((getByText("Install update") as HTMLButtonElement).disabled).toBe(true);
-      expect(getByText("Waiting for:")).toBeTruthy();
-      expect(getByTestId("updates-waiting")).toBeTruthy();
+      expect(getByTestId("updates-waiting").firstElementChild?.textContent).toBe("Waiting for:");
       expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
         "A game to close (Celeste)",
         "Library sync",
       ]);
+    });
+
+    it("names a single reason on the header's own line", () => {
+      const waiting = withInstall({ waitReasons: [{ reason: "library_sync" }] }).getByTestId("updates-waiting");
+
+      expect(waiting.textContent).toBe("Waiting for: Library sync");
+      expect(waiting.querySelector("div")).toBeNull();
     });
 
     it("names no wait while nothing holds the button back", () => {
@@ -347,7 +356,7 @@ describe("UpdatesSection", () => {
       expect(utils.queryByText("Install update")).toBeNull();
       expect((utils.getByText("Installing…") as HTMLButtonElement).disabled).toBe(true);
       expect(text(utils, "updates-caption")).toBe("Downloading 1.0.0");
-      expect(text(utils, "updates-elapsed")).toBe("25 % · 0:00");
+      expect(text(utils, "updates-elapsed")).toBe("25% · 0:00");
       expect(statuses(utils)).toEqual(["current", "pending", "pending", "pending"]);
       expect(text(utils, "progress-progress")).toBe("25");
       expect(text(utils, "progress-indeterminate")).toBe("false");
@@ -403,19 +412,33 @@ describe("UpdatesSection", () => {
         setUpdateInstallAttempt(DOWNLOADING);
         vi.setSystemTime(103_000);
         const utils = withInstall({ attempt: DOWNLOADING, underWay: true });
-        expect(text(utils, "updates-elapsed")).toBe("25 % · 0:03");
+        expect(text(utils, "updates-elapsed")).toBe("25% · 0:03");
 
         act(() => {
           vi.advanceTimersByTime(62_000);
         });
 
-        expect(text(utils, "updates-elapsed")).toBe("25 % · 1:05");
+        expect(text(utils, "updates-elapsed")).toBe("25% · 1:05");
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it("says the installer is taking unusually long five minutes on, while the backend still answers", () => {
+    it("stops the clock once the attempt is no longer under way", () => {
+      vi.useFakeTimers();
+      try {
+        const utils = withInstall({ attempt: DOWNLOADING, underWay: true });
+        expect(vi.getTimerCount()).toBe(1);
+
+        rerender(utils, failedWith("download_failed"));
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("says the installer is taking unusually long seven minutes on, while the backend still answers", () => {
       const utils = withInstall({ ...INSTALLER_STARTED, overdue: true });
       expect(text(utils, "updates-note")).toBe(TAKING_LONG_LINE);
       expect(TAKING_LONG_LINE).toBe(
@@ -423,7 +446,7 @@ describe("UpdatesSection", () => {
       );
     });
 
-    it("says Tender has not come back five minutes on, once the backend no longer answers", () => {
+    it("says Tender has not come back seven minutes on, once the backend no longer answers", () => {
       const utils = withInstall({ ...INSTALLER_STARTED, overdue: true, readFailed: true });
 
       expect(text(utils, "updates-note")).toBe(NOT_BACK_LINE);
@@ -435,12 +458,14 @@ describe("UpdatesSection", () => {
 
     it("states a failed attempt in one block: nothing changed, the step it stopped at, why, and Try again above it", () => {
       const utils = withInstall(failedWith("checksum_mismatch"));
+      const caption = utils.getByTestId("updates-caption");
 
-      expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
+      expect(caption.textContent).toBe("Update to 1.0.0 failed — nothing was changed.");
+      expect(caption.style.color).toBe("#d4a72c");
       expect(statuses(utils)).toEqual(["done", "failed", "pending", "pending"]);
       expect(["download", "verify", "check", "install"].map((id) => text(utils, `updates-step-${id}`))).toEqual([
         "✓ Download",
-        "✗ Verify",
+        "✕ Verify",
         "○ Check new version",
         "○ Install",
       ]);
@@ -449,25 +474,68 @@ describe("UpdatesSection", () => {
       expect(utils.queryByTestId("progress")).toBeNull();
     });
 
-    it.each<[NonNullable<UpdateInstallAttempt["failure"]>, string[]]>([
-      ["download_failed", ["failed", "pending", "pending", "pending"]],
-      ["installer_not_started", ["done", "done", "failed", "pending"]],
-      ["game_started", ["done", "done", "failed", "pending"]],
-      ["new_version_does_not_start", ["done", "done", "failed", "pending"]],
-    ])("marks %s at the step it stopped at", (failure, expected) => {
-      expect(statuses(withInstall(failedWith(failure)))).toEqual(expected);
+    it("colours a step's mark — done green, current blue, to do muted, failed amber — and leaves its label in the text colour", () => {
+      const colours = (utils: ReturnType<typeof renderSection>, id: string) => {
+        const step = utils.getByTestId(`updates-step-${id}`);
+        return [step.style.color, (step.firstElementChild as HTMLElement).style.color];
+      };
+      const underWay = withInstall(INSTALLER_STARTED);
+      expect(["download", "check", "install"].map((id) => colours(underWay, id))).toEqual([
+        ["", "#5ba32b"],
+        ["", "#1a9fff"],
+        ["", "#8f98a0"],
+      ]);
+      underWay.unmount();
+
+      expect(colours(withInstall(failedWith("download_failed")), "download")).toEqual(["", "#d4a72c"]);
     });
 
-    it("marks an installer that stopped at the check where this panel saw it start, as still on the installed version", () => {
+    it("marks a download that failed at Download", () => {
+      expect(statuses(withInstall(failedWith("download_failed")))).toEqual(["failed", "pending", "pending", "pending"]);
+    });
+
+    it("marks a new version that does not start at the check", () => {
+      expect(statuses(withInstall(failedWith("new_version_does_not_start")))).toEqual([
+        "done",
+        "done",
+        "failed",
+        "pending",
+      ]);
+    });
+
+    it.each<[NonNullable<UpdateInstallAttempt["failure"]>, string, string]>([
+      [
+        "game_started",
+        "Update to 1.0.0 was cancelled — nothing was changed.",
+        "A game was started. Try again once it has closed.",
+      ],
+      [
+        "running_apps_unknown",
+        "Update to 1.0.0 was cancelled — nothing was changed.",
+        "Could not check whether a game is running.",
+      ],
+      ["installer_not_started", "Update to 1.0.0 failed — nothing was changed.", "The installer could not be started."],
+    ])("states %s as %s, with no step line, and its reason", (failure, title, reason) => {
+      const utils = withInstall(failedWith(failure));
+
+      expect(text(utils, "updates-caption")).toBe(title);
+      expect(utils.queryByTestId("updates-step-check")).toBeNull();
+      expect(text(utils, "updates-note")).toBe(reason);
+    });
+
+    it("states an installer that stopped where this panel saw it start as nothing changed, marked at the check", () => {
       setUpdateInstallAttempt({ ...DOWNLOADING, step: "installer_started" });
       const utils = withInstall(failedWith("installer_stopped"));
 
       expect(statuses(utils)).toEqual(["done", "done", "failed", "pending"]);
-      expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — you are still on 0.33.0.");
+      expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
     });
 
-    it("marks an installer that stopped at Install where this panel never saw it start", () => {
-      expect(statuses(withInstall(failedWith("installer_stopped")))).toEqual(["done", "done", "done", "failed"]);
+    it("states an installer that stopped where this panel never saw it start as still on the installed version, marked at Install", () => {
+      const utils = withInstall(failedWith("installer_stopped"));
+
+      expect(statuses(utils)).toEqual(["done", "done", "done", "failed"]);
+      expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — you are still on 0.33.0.");
     });
 
     it("keeps the button's row when what it waited for clears, so focus on it stays put", () => {
@@ -498,6 +566,16 @@ describe("UpdatesSection", () => {
 
       expect(utils.getByText("Install update")).toBeTruthy();
       expect(utils.queryByTestId("updates-caption")).toBeNull();
+    });
+
+    it("keeps the block where an attempt fails before a read has named the version offered", () => {
+      const utils = withInstall({ offered: false, version: null, attempt: DOWNLOADING, underWay: true });
+      const stop = utils.getByTestId("updates-caption").closest('[data-testid="field"]');
+
+      rerender(utils, { offered: false, version: null, ...failedWith("download_failed") });
+
+      expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
+      expect(utils.getByTestId("updates-caption").closest('[data-testid="field"]')).toBe(stop);
     });
 
     it("shows an attempt under way even where nothing is offered any more", () => {

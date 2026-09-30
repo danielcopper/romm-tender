@@ -309,11 +309,11 @@ release.
 - **Install update** — installs the release **Available** names; see [Installing an update](#installing-an-update).
   **Try again** instead, for a version whose install already failed, was rolled back or was refused. A copy of Tender
   run from a source checkout says **Development build — install updates with the installer.** in its place.
-- Under the button, one block for what is happening: an install under way, or an update that did not go through. While
-  the installer's note of a rolled-back update, or of one its pre-install check refused, is there and you are still on
-  the version it names, the block says so — **Update to X failed — Tender went back to Y.** or **Update to X failed —
-  nothing was changed.** — with the step it failed at and where the reason is, whether or not you dismissed the notice
-  on the main panel.
+- Below the versions and the button, one block for what is happening: an install under way, or an update that did not go
+  through. While the installer's note of a rolled-back update, or of one its pre-install check refused, is there and you
+  are still on the version it names, the block says so — **Update to X failed — Tender went back to Y.** or **Update to
+  X failed — nothing was changed.** — with the step it failed at and where the reason is, whether or not you dismissed
+  the notice on the main panel.
 - **Check for updates daily** — on by default. Switch it off and Tender no longer asks GitHub by itself; what the last
   check found stays in **Available** and can still be installed.
 - **Check now** — asks straight away rather than waiting for the day to pass, whether or not the daily check is switched
@@ -352,31 +352,32 @@ says how many there are, because the restart cancels them.
 
 Once you press it, the button says **Installing…** and a block under it shows how far the install got: what is
 happening, with the percent of the download and the time since you pressed, a bar, and the four steps **Download**,
-**Verify**, **Check new version** and **Install**, each marked `✓` done, `●` under way, `○` still to come or `✗` failed.
+**Verify**, **Check new version** and **Install**, each marked `✓` done, `●` under way, `○` still to come or `✕` failed.
 While it downloads and verifies, the block says **Starting a game now cancels the update.** — Tender checks once more
 right before the installer starts, and stops there, with nothing changed, if a game is running.
 
 When the installer has started, it first runs the new version's pre-install check, without stopping Tender: the block
 says **Checking the new version**. Once the check has passed, the installer stops Tender and the block says **Tender is
 restarting**, with **Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if
-Tender has to go back to Y.** Tender does not report this part — it is being replaced — so the panel tells the two apart
-by whether Tender still answers, and counts the time itself. From then on the panel loses touch with the old Tender,
-which is expected; after the reload Tender says it was updated, or, if the new version did not answer once started, that
-the installer [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). The installer waits up
-to a minute for the new version to answer, and up to a minute more for the one you had if it goes back; stopping Tender,
-saving your data and reloading Steam's interface come on top. Where the new version cannot even be put together, the
-check stops the installer there: nothing is replaced, Steam's interface does not reload, and the block says **Update to
-X failed — nothing was changed.** with **Check new version** marked failed and **The new version does not start.**, and
-the main panel says the update failed
+Tender has to go back to Y.** Tender reports nothing once the installer has started, so the panel tells the two apart by
+whether Tender still answers. From then on the panel loses touch with the old Tender, which is expected; after the
+reload Tender says it was updated, or, if the new version did not answer once started, that the installer
+[went back to the version you had](troubleshooting.md#an-update-was-rolled-back). The check may take up to two minutes;
+the installer then waits up to a minute for the new version to answer, and up to a minute more for the one you had if it
+goes back; stopping Tender, saving your data and reloading Steam's interface come on top. Where the new version cannot
+even be put together, the check stops the installer there: nothing is replaced, Steam's interface does not reload, and
+the block says **Update to X failed — nothing was changed.** with **Check new version** marked failed and **The new
+version does not start.**, and the main panel says the update failed
 ([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)). While the install runs, Tender
 refuses to start a library sync, a game download or a save sync.
 
-If Tender is not back five minutes after the installer started, the line in the block changes: **Tender has not come
+If Tender is not back seven minutes after the installer started, the line in the block changes: **Tender has not come
 back.** when it no longer answers — the line names the journal to read and the command that starts it again — or **The
 installer is taking unusually long.** when it still answers and the installer has not stopped it yet.
 
-If a step fails, the block turns amber, says **Update to X failed**, marks the step with `✗` and says why, and the
-button comes back as **Try again**. Nothing tries again by itself.
+If the install fails, the block turns amber, says **Update to X failed** — or **Update to X was cancelled**, where a
+game was started or Tender could not check whether one runs — marks the step that failed with `✕` where it was one of
+the four, and says why, and the button comes back as **Try again**. Nothing tries again by itself.
 [An update from Settings did not go through](troubleshooting.md#an-update-from-settings-did-not-go-through) says what
 each failure means and where to read more.
 

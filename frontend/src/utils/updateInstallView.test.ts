@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
 import {
   INSTALL_FAILURE_SENTENCES,
+  INSTALLER_OVERDUE_MS,
   RELOAD_LIMIT,
   refusalStands,
   downloadPercent,
@@ -133,15 +134,15 @@ describe("installSteps", () => {
 });
 
 describe("failedStep", () => {
-  it.each<[UpdateInstallFailure, string]>([
+  it.each<[UpdateInstallFailure, string | null]>([
     ["download_failed", "download"],
     ["checksum_mismatch", "verify"],
-    ["installer_not_started", "check"],
-    ["game_started", "check"],
-    ["running_apps_unknown", "check"],
+    ["installer_not_started", null],
+    ["game_started", null],
+    ["running_apps_unknown", null],
     ["new_version_does_not_start", "check"],
     ["installer_stopped", "check"],
-  ])("marks %s at %s where this panel saw the installer start", (failure, step) => {
+  ])("marks %s at %s (null: no step line) where this panel saw the installer start", (failure, step) => {
     expect(failedStep(failure, true)).toBe(step);
   });
 
@@ -152,6 +153,13 @@ describe("failedStep", () => {
   it("marks every other failure at the same step either way", () => {
     expect(failedStep("new_version_does_not_start", false)).toBe("check");
     expect(failedStep("download_failed", false)).toBe("download");
+    expect(failedStep("game_started", false)).toBeNull();
+  });
+});
+
+describe("INSTALLER_OVERDUE_MS", () => {
+  it("gives the installer seven minutes before the line under the steps gives way", () => {
+    expect(INSTALLER_OVERDUE_MS).toBe(7 * 60 * 1000);
   });
 });
 

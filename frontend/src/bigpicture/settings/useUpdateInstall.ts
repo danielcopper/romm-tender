@@ -48,7 +48,7 @@ export interface UpdateInstall {
   underWay: boolean;
   /** The installer is running, so this backend is going away and its connection with it. */
   restarting: boolean;
-  /** Five minutes have passed since this panel first saw the installer started, and it is still restarting. */
+  /** Seven minutes have passed since this panel first saw the installer started, and it is still restarting. */
   overdue: boolean;
   /** The last read failed, or has not answered within {@link UPDATE_INSTALL_READ_DEADLINE_MS}. */
   readFailed: boolean;
@@ -136,7 +136,7 @@ export function useUpdateInstall(): UpdateInstall {
   const restarting = attempt?.step === "installer_started";
   const underWay = attempt !== null && attempt.step !== "failed";
 
-  // The line under the steps gives way once the installer has had five minutes.
+  // The line under the steps gives way once the installer has had seven minutes.
   // Timed from the first time this panel saw it started, which the store
   // keeps across the section's unmounts.
   useEffect(() => {

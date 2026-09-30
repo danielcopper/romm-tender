@@ -43,7 +43,7 @@ describe("UpdateInstallRows over useUpdateInstall", () => {
     vi.useRealTimers();
   });
 
-  it("infers the phase from the reads: checking while they answer, restarting once they stop, not back five minutes on", async () => {
+  it("infers the phase from the reads: checking while they answer, restarting once they stop, not back seven minutes on", async () => {
     render(<Install />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);

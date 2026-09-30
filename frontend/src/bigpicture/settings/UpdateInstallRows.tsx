@@ -1,7 +1,7 @@
 import { FC, ReactNode, useEffect, useReducer } from "react";
 import { PanelSectionRow, ButtonItem, Field, ProgressBar } from "@decky/ui";
-import { AMBER, AMBER_WASH, GREEN, MUTED } from "../layout/pane";
-import type { UpdateInstallAttempt } from "../../api/backend";
+import { AMBER, AMBER_WASH, GREEN, MUTED, SELECTION_ACCENT } from "../layout/pane";
+import type { UpdateInstallAttempt, UpdateInstallFailure } from "../../api/backend";
 import { attemptSeenAt, installerSeenAt } from "../../utils/updateInstallStore";
 import {
   GAME_STARTS_CANCEL,
@@ -20,6 +20,7 @@ import {
   type InstallStepStatus,
 } from "../../utils/updateInstallView";
 import {
+  UPDATE_CHECK_FAILURE_NOTE,
   updateDidNotGoThrough,
   updateFailureReason,
   updateFailureSentence,
@@ -43,16 +44,15 @@ export function installStateUnread(install: UpdateInstall): boolean {
   return install.readFailed && !install.restarting;
 }
 
-const MARKS: Record<InstallStepStatus, [string, string?]> = {
+const MARKS: Record<InstallStepStatus, [string, string]> = {
   done: ["✓", GREEN],
-  current: ["●"],
+  current: ["●", SELECTION_ACCENT],
   pending: ["○", MUTED],
-  failed: ["✗", AMBER],
+  failed: ["✕", AMBER],
 };
 
 const SMALL = { fontSize: "12px", color: MUTED, paddingTop: "6px" } as const;
 
-/** `m:ss` of a duration in milliseconds. */
 function clock(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -65,26 +65,36 @@ interface Block {
   aside?: string;
   /** The bar's percent, `null` for an indeterminate one; a failure has none. */
   percent?: number | null;
-  /** The step under way, or the one marked failed; `null` where nothing says which. */
+  /** The step under way, or the one marked failed; `null` for no step line. */
   at: InstallStepId | null;
   failed: boolean;
   note: ReactNode;
 }
 
-/**
- * An attempt under way. After `installer_started` the backend reports nothing
- * more, so the phase is the panel's inference: while reads still answer, the
- * installer is running its pre-install check, which it does before it stops
- * this backend; once they fail, Tender is restarting.
- */
+/** An attempt under way. */
 function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, earlier: string): Block {
-  const percent = attempt.step === "downloading" ? downloadPercent(attempt) : null;
   const elapsed = clock(Date.now() - (attemptSeenAt() ?? Date.now()));
+  if (attempt.step !== "installer_started") {
+    const percent = attempt.step === "downloading" ? downloadPercent(attempt) : null;
+    const verifying = attempt.step === "verifying";
+    return {
+      caption: `${verifying ? "Verifying" : "Downloading"} ${attempt.version}`,
+      aside: percent === null ? elapsed : `${percent}% · ${elapsed}`,
+      percent,
+      at: verifying ? "verify" : "download",
+      failed: false,
+      note: GAME_STARTS_CANCEL,
+    };
+  }
+  // The backend reports nothing more, so the phase is the panel's inference:
+  // while reads still answer, the installer is running its pre-install check,
+  // which it does before it stops this backend; once they fail, Tender is
+  // restarting.
   const gone = install.readFailed;
-  const block: Block = {
+  return {
     caption: gone ? "Tender is restarting" : "Checking the new version",
-    aside: percent === null ? elapsed : `${percent} % · ${elapsed}`,
-    percent,
+    aside: elapsed,
+    percent: null,
     at: gone ? "install" : "check",
     failed: false,
     note: install.overdue ? (
@@ -93,25 +103,33 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
       gone && restartWaitLine(earlier)
     ),
   };
-  if (attempt.step !== "installer_started") {
-    block.at = attempt.step === "verifying" ? "verify" : "download";
-    block.caption = `${block.at === "verify" ? "Verifying" : "Downloading"} ${attempt.version}`;
-    block.note = GAME_STARTS_CANCEL;
-  }
-  return block;
 }
 
 const failedTo = (version: string, outcome: string) => `Update to ${version} failed — ${outcome}.`;
 
+/** Aborts for a game — one started, or no reading of whether one runs — titled as cancelled rather than failed. */
+const CANCELLED_BY: ReadonlySet<UpdateInstallFailure> = new Set(["game_started", "running_apps_unknown"]);
+
+/**
+ * A failed attempt's title. An installer that stopped says nothing was changed
+ * only where this panel saw it start, as `failedStep` marks it: elsewhere it
+ * claims no more than Main's card does.
+ */
+function attemptTitle(attempt: UpdateInstallAttempt, earlier: string, installerSeen: boolean): string {
+  const kind = attempt.failure;
+  if (kind === null || (kind === "installer_stopped" && !installerSeen)) {
+    return updateDidNotGoThrough(attempt.version, earlier);
+  }
+  if (CANCELLED_BY.has(kind)) return `Update to ${attempt.version} was cancelled — nothing was changed.`;
+  return failedTo(attempt.version, "nothing was changed");
+}
+
 function attemptFailure(attempt: UpdateInstallAttempt, earlier: string): Block {
   const kind = attempt.failure;
+  const installerSeen = installerSeenAt() !== null;
   return {
-    // An installer that stopped cannot say what it left behind, so its title claims no more than Main's card does.
-    caption:
-      kind && kind !== "installer_stopped"
-        ? failedTo(attempt.version, "nothing was changed")
-        : updateDidNotGoThrough(attempt.version, earlier),
-    at: kind && failedStep(kind, installerSeenAt() !== null),
+    caption: attemptTitle(attempt, earlier, installerSeen),
+    at: kind && failedStep(kind, installerSeen),
     failed: true,
     note: kind && INSTALL_FAILURE_SENTENCES[kind],
   };
@@ -129,7 +147,7 @@ function recordFailure(record: RolledBackUpdate): Block {
           : updateFailureSentence(record),
     at: kind === "rollback" ? "install" : kind === "check" ? "check" : null,
     failed: true,
-    note: updateFailureReason(record),
+    note: kind === "check" ? UPDATE_CHECK_FAILURE_NOTE : updateFailureReason(record),
   };
 }
 
@@ -148,14 +166,15 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   const { attempt } = install;
   const showButton = installButtonShown(install);
   const earlier = installed || "the earlier version";
-  // A failed attempt for a version no longer offered says nothing about the one that is.
+  // A failed attempt for a version no longer offered says nothing about the one
+  // that is. Where none is named — before the first read answers, say — it
+  // stays, so the block it replaced does not leave under focus.
   const block =
     attempt !== null && install.underWay
       ? progressBlock(install, attempt, earlier)
-      : attempt?.step === "failed" && attempt.version === install.version
+      : attempt?.step === "failed" && (install.version === null || attempt.version === install.version)
         ? attemptFailure(attempt, earlier)
         : record && recordFailure(record);
-  // The clock beside the caption moves once a second while an attempt is under way.
   const [, tick] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
     if (!install.underWay) return;
@@ -164,18 +183,28 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   }, [install.underWay]);
   const pausedHint = pausedDownloadsHint(install.pausedDownloads);
   const waiting = !install.underWay && install.waitReasons.length > 0;
+  const [onlyWait, ...moreWaits] = install.waitReasons;
   const unread = installStateUnread(install);
 
   const description = (
     <>
       {waiting && (
         <div data-testid="updates-waiting">
-          <div>{WAITING_FOR}</div>
-          {install.waitReasons.map((wait) => (
-            <div key={wait.reason} data-testid="updates-wait-reason">
-              {waitReasonLine(wait)}
-            </div>
-          ))}
+          {onlyWait && moreWaits.length === 0 ? (
+            <>
+              {`${WAITING_FOR} `}
+              <span data-testid="updates-wait-reason">{waitReasonLine(onlyWait)}</span>
+            </>
+          ) : (
+            <>
+              <div>{WAITING_FOR}</div>
+              {install.waitReasons.map((wait) => (
+                <div key={wait.reason} data-testid="updates-wait-reason">
+                  {waitReasonLine(wait)}
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
       {pausedHint && <div data-testid="updates-paused-hint">{pausedHint}</div>}
@@ -227,13 +256,8 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
                   style={{ fontSize: "12px", paddingTop: "6px", display: "flex", flexWrap: "wrap", gap: "4px 14px" }}
                 >
                   {installSteps(block.at, block.failed).map(({ id, label, status }) => (
-                    <span
-                      key={id}
-                      data-testid={`updates-step-${id}`}
-                      data-status={status}
-                      style={{ color: MARKS[status][1] }}
-                    >
-                      {MARKS[status][0]} {label}
+                    <span key={id} data-testid={`updates-step-${id}`} data-status={status}>
+                      <span style={{ color: MARKS[status][1] }}>{MARKS[status][0]}</span> {label}
                     </span>
                   ))}
                 </div>

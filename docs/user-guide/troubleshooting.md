@@ -176,26 +176,27 @@ A release from before the pre-install check has none. The installer installs it 
 ## An Update From Settings Did Not Go Through
 
 **Symptom**: After **Install update** in **Settings › Updates**, an amber block under the button says **Update to X
-failed — nothing was changed.**, marks the step it stopped at with `✗`, and says why under that; the button is back as
-**Try again**.
+failed — nothing was changed.** or **Update to X was cancelled — nothing was changed.**, marks the step it stopped at
+with `✕` where one of the four steps failed, and says why under that; the button is back as **Try again**.
 
 **Explanation**: Each of these ends the install before Tender was replaced, and Tender goes on running the version you
-have. The step each is marked at is in brackets:
+have. The step each is marked at is in brackets; the ones with none are not a fault of the new version, and show no
+steps:
 
 - **The download failed.** (Download) The release, or the checksum file beside it, could not be downloaded.
 - **The download did not match its checksum.** (Verify) What arrived is not the file GitHub lists for the release, so
   Tender did not install it.
-- **The installer could not be started.** (Check new version) The installer could not be taken out of the download, or
-  could not be started — for example because an earlier one is still running.
-- **The installer stopped without updating.** (Check new version) The installer started, but ended before it replaced
+- **The installer could not be started.** The installer could not be taken out of the download, or could not be started
+  — for example because an earlier one is still running.
+- **The installer stopped without updating.** (Check new version) The installer started, but ended before it stopped
   Tender — it refused, or it failed. A pre-install check that did not finish
   ([The check did not finish](#the-check-did-not-finish)), and data it could not copy
-  ([Your data could not be copied](#your-data-could-not-be-copied)), end this way. The block's title says **Update to X
-  failed — you are still on Y.** for this one, as the notice on the main panel does.
-- **A game was started. Try again once it has closed.** (Check new version) A game was started while the update
-  downloaded; Tender checks right before the installer starts, and does not start it under a running game.
-- **Could not check whether a game is running.** (Check new version) At that same check Tender could not ask Steam, and
-  did not start the installer on a guess.
+  ([Your data could not be copied](#your-data-could-not-be-copied)), end this way.
+- **A game was started. Try again once it has closed.** The block says the update **was cancelled**: a game was started
+  while the update downloaded; Tender checks right before the installer starts, and does not start it under a running
+  game.
+- **Could not check whether a game is running.** The update **was cancelled** here too: at that same check Tender could
+  not ask Steam, and did not start the installer on a guess.
 - **The new version does not start.** (Check new version) The installer's pre-install check tried the new version before
   stopping Tender, and it could not be built, or it crashed
   ([The New Version Does Not Start](#the-new-version-does-not-start)).
@@ -205,7 +206,7 @@ Nothing tries again by itself; what the attempt downloaded is removed.
 An installer that stops without updating after it has stopped Tender cannot say so itself. If it started Tender again on
 the version you had, the main panel says **Update to X failed — you are still on Y.** with the same line about the
 installer, and **Settings › Updates** says the same in its block, with **Install** marked, and offers **Try again**. If
-it did not start Tender again, the block says after five minutes **Tender has not come back** and how to start it; once
+it did not start Tender again, the block says after seven minutes **Tender has not come back** and how to start it; once
 it is running again, the main panel says the same as above.
 
 **Could not read the update state.** under the button means the section asked Tender how the install stands and got no

@@ -473,10 +473,10 @@ describe("useUpdateInstall", () => {
     });
   });
 
-  describe("an installer that has not stopped this backend within five minutes", () => {
+  describe("an installer that has not stopped this backend within seven minutes", () => {
     const INSTALLER_STARTED: UpdateInstallAttempt = { ...DOWNLOADING, step: "installer_started" };
 
-    it("is not overdue before five minutes have passed since the panel first saw it", async () => {
+    it("is not overdue before seven minutes have passed since the panel first saw it", async () => {
       const { result } = renderHook(() => useUpdateInstall());
       await flush();
       act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
@@ -489,7 +489,7 @@ describe("useUpdateInstall", () => {
       expect(result.current.overdue).toBe(false);
     });
 
-    it("is overdue after five minutes, with reads failing where the backend is gone", async () => {
+    it("is overdue after seven minutes, with reads failing where the backend is gone", async () => {
       const { result } = renderHook(() => useUpdateInstall());
       await flush();
       act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
@@ -503,7 +503,7 @@ describe("useUpdateInstall", () => {
       expect(result.current.readFailed).toBe(true);
     });
 
-    it("is overdue after five minutes with the backend gone, where a read never settles rather than failing", async () => {
+    it("is overdue after seven minutes with the backend gone, where a read never settles rather than failing", async () => {
       const { result } = renderHook(() => useUpdateInstall());
       await flush();
       act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
@@ -517,7 +517,7 @@ describe("useUpdateInstall", () => {
       expect(result.current.readFailed).toBe(true);
     });
 
-    it("is overdue after five minutes with reads still answering where the installer has not stopped it", async () => {
+    it("is overdue after seven minutes with reads still answering where the installer has not stopped it", async () => {
       vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, attempt: INSTALLER_STARTED });
       const { result } = renderHook(() => useUpdateInstall());
       await flush();
@@ -530,7 +530,7 @@ describe("useUpdateInstall", () => {
       expect(result.current.readFailed).toBe(false);
     });
 
-    it("counts the five minutes from when the panel first saw it, across the section leaving the screen", async () => {
+    it("counts the seven minutes from when the panel first saw it, across the section leaving the screen", async () => {
       const first = renderHook(() => useUpdateInstall());
       await flush();
       act(() => setUpdateInstallAttempt(INSTALLER_STARTED));

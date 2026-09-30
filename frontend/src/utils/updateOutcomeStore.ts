@@ -80,6 +80,9 @@ const INSTALLER_OUTPUT =
 /** The same line for an update the pre-install check refused, which never ran the new version as a service. */
 export const UPDATE_CHECK_FAILURE_REASON = `The new version did not start, so nothing was changed. ${INSTALLER_OUTPUT}`;
 
+/** The line for that refusal under Settings › Updates, whose title already says nothing was changed. */
+export const UPDATE_CHECK_FAILURE_NOTE = `The new version did not start. ${INSTALLER_OUTPUT}`;
+
 /** The same line for a record of a kind this version does not know: no cause is named, only where it is. */
 export const UPDATE_UNKNOWN_FAILURE_REASON = INSTALLER_OUTPUT;
 

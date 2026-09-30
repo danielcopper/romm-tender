@@ -4,8 +4,8 @@
  * The backend answers in discriminants (`UpdateWaitReason`,
  * `UpdateInstallStep`, `UpdateInstallFailure`, a refusal's `reason`); the
  * sentence a reader sees for each is here. The button's labels, the captions
- * and the failure titles sit with the block that shows them, in
- * `UpdateInstallRows.tsx`.
+ * and the failure titles are `UpdateInstallRows.tsx`'s; the sentence an update
+ * that did not go through is stated in is `updateOutcomeStore.ts`'s.
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
@@ -14,9 +14,8 @@ export const WAITING_FOR = "Waiting for:";
 
 /**
  * What stands under the steps once this backend has gone: nothing more is
- * reported until Steam's interface reloads. Which of the installer's waits the
- * five minutes cover is `docs/architecture/qam-panel.md`, "The install under
- * Updates".
+ * reported until Steam's interface reloads. What the five minutes are made of
+ * is `docs/architecture/qam-panel.md`, Settings.
  */
 export function restartWaitLine(installed: string): string {
   return `Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if Tender has to go back to ${installed}.`;
@@ -36,14 +35,14 @@ const INSTALLER_UNIT_JOURNAL = "journalctl --user -u romm-tender-update";
 /** Where the installer's own account of an attempt is, as every line about it names it. */
 const INSTALLER_JOURNAL = `Details: ${INSTALLER_UNIT_JOURNAL}`;
 
-/** Five minutes after the installer started, with the backend gone: it has not come back up. */
+/** Seven minutes after the installer started, with the backend gone: it has not come back up. */
 export const NOT_BACK_LINE = `Tender has not come back. ${INSTALLER_JOURNAL} — start it again with: systemctl --user start romm-tender`;
 
-/** Five minutes after the installer started, with the backend still answering: the installer has not stopped it yet. */
+/** Seven minutes after the installer started, with the backend still answering: the installer has not stopped it yet. */
 export const TAKING_LONG_LINE = `The installer is taking unusually long. ${INSTALLER_JOURNAL}`;
 
 /** How long after the panel first sees the installer started the line under the steps gives way to one of the two above. */
-export const INSTALLER_OVERDUE_MS = 5 * 60 * 1000;
+export const INSTALLER_OVERDUE_MS = 7 * 60 * 1000;
 
 /** A press the backend refused for something other than a wait, and a press the connection did not carry. */
 export type InstallRefusalReason = "update_in_progress" | "not_offered" | "version_changed" | "request_failed";
@@ -91,7 +90,7 @@ export function refusalStands(
  */
 export const RELOAD_LIMIT: number = 2;
 
-/** The line under a failed attempt's title, which says for every kind but `installer_stopped` that nothing was changed. */
+/** The line under a failed attempt's title, which leaves out what the title says. */
 export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
   download_failed: "The download failed.",
   checksum_mismatch: "The download did not match its checksum.",
@@ -158,24 +157,27 @@ const STEPS: readonly [InstallStepId, string][] = [
   ["install", "Install"],
 ];
 
-const FAILED_AT: Record<UpdateInstallFailure, InstallStepId> = {
+const FAILED_AT: Record<UpdateInstallFailure, InstallStepId | null> = {
   download_failed: "download",
   checksum_mismatch: "verify",
-  installer_not_started: "check",
+  installer_not_started: null,
   installer_stopped: "check",
-  game_started: "check",
-  running_apps_unknown: "check",
+  game_started: null,
+  running_apps_unknown: null,
   new_version_does_not_start: "check",
 };
 
 /**
- * The step a failure is marked at. Everything between the checksum and the
- * end of the installer's pre-install check is marked at the check, so no step
- * the attempt never reached reads as done. An installer that stopped is marked
- * there only where this panel saw it start: one a backend found at its own
- * start had stopped the backend before it, which is Install.
+ * The step a failure is marked at, or `null` for an abort that is not the new
+ * version's doing — a game, a running-apps reading that could not be taken,
+ * an installer that could not be started — which shows no step line. The
+ * installer's own failures are marked at the check, so no step the attempt
+ * did not reach is marked done. An installer that stopped is marked there
+ * only where this panel saw it start, which is where this backend's watch saw
+ * it end; where it did not — a backend found it at its own start, or Steam's
+ * JavaScript context was reloaded since — it is marked at Install.
  */
-export function failedStep(failure: UpdateInstallFailure, installerSeen: boolean): InstallStepId {
+export function failedStep(failure: UpdateInstallFailure, installerSeen: boolean): InstallStepId | null {
   return failure === "installer_stopped" && !installerSeen ? "install" : FAILED_AT[failure];
 }
 
