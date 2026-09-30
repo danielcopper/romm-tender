@@ -95,7 +95,7 @@ def check(argv: list[str]) -> int:
         return NOT_TRIED
     try:
         # The backend's own entry, which the build alone never reaches; importing
-        # it runs nothing, since its start sits behind ``__name__ == "__main__"``.
+        # it starts nothing, since its start sits behind ``__name__ == "__main__"``.
         importlib.import_module("main")
         asyncio.run(_build_on_copies(directories, user_home, logger))
     except Exception:

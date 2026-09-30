@@ -20,13 +20,13 @@ logic, and it reads no arguments. The pre-install check is an entry of its own, 
 installer runs on a version it has unpacked and not yet put in place — a file rather than a flag on `main.py`, because a
 version whose `main.py` predated the flag would ignore it and start a whole backend. It logs to stderr only, copies the
 live database, the save-sync state and the settings (`bootstrap/check.py`, the database through SQLite's backup API)
-under roots of its own, then imports `main.py` — whose start sits behind `__main__`, so nothing of it runs — and calls
-`build_application()`, and nothing else: no lock, no port, no `backend.log`, no start-up repair, no network. Its exit
-status is its answer: 0 when the `Application` was built; 1 when it was not, or `main.py` did not import, with the
-traceback on stderr, which is also what Python itself answers for a module that does not import; and 2 when the check
-was not tried — arguments it cannot read, a root it may not build under, or live data it could not copy. It refuses to
-build unless the code root is its own tree and every other root, the runtime directory among them, is absent or empty.
-What the installer does with each answer:
+under roots of its own, then imports `main.py` — whose start sits behind `__main__`, so importing it starts nothing —
+and calls `build_application()`, and nothing else: no lock, no port, no `backend.log`, no start-up repair, no network.
+Its exit status is its answer: 0 when the `Application` was built; 1 when it was not, or `main.py` did not import, with
+the traceback on stderr, which is also what Python itself answers for a module that does not import; and 2 when the
+check was not tried — arguments it cannot read, a root it may not build under, or live data it could not copy. It
+refuses to build unless the code root is its own tree and every other root, the runtime directory among them, is absent
+or empty. What the installer does with each answer:
 [Running an installed one](../contributing/development.md#running-an-installed-one).
 
 ```python

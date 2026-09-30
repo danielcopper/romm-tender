@@ -26,8 +26,8 @@ on copies of the live data and runs nothing of it — no start-up repair, no net
 own rather than a flag `main.py` reads, because the installer runs it on the NEW version, and a `main.py` from before
 the flag would ignore it and start a whole backend; `main.py` reads no arguments. It imports what it needs of `host/` —
 the stderr logging, and the event sink and Steam reader `build_application` takes — as `main.py` does. It also imports
-`main.py` itself, which the build never reaches, so a `main.py` that does not import is refused too — and so nothing in
-`main.py` may run at import: its start stays behind `__name__ == "__main__"`.
+`main.py` itself, which the build never reaches, so a `main.py` that does not import is refused too — and so importing
+`main.py` may start nothing: its start stays behind `__name__ == "__main__"`.
 
 `main.py` and `check.py` are also the **only** modules that may import `host/`, which is an `.importlinter` contract in
 both directions. Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the
