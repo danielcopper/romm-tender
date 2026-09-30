@@ -191,7 +191,9 @@ export function useUpdateInstall(): UpdateInstall {
     waitReasons: reading?.wait_reasons ?? [],
     pausedDownloads: reading?.paused_downloads ?? 0,
     attempt,
-    tryAgain: (reading?.try_again ?? false) || (attempt?.step === "failed" && attempt.version === version),
+    tryAgain:
+      (reading?.try_again ?? false) ||
+      (attempt?.step === "failed" && (reading === null || attempt.version === version)),
     pressing,
     refusal: refusal === null ? "" : INSTALL_REFUSAL_SENTENCES[refusal.reason],
     underWay,

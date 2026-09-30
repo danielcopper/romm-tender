@@ -1753,21 +1753,22 @@ section unmounts (`bigpicture/settings/useUpdateInstall.ts`). The button is ther
 release (`offered`), and stays through an attempt — and, until the section's first read answers, beside any attempt this
 panel already knows of, disabled since no version is known yet, so an attempt that ends before that read does not take
 it away under focus: it reads **Install update** — the version is the Available row's to name — **Try again** where that
-version already failed here or was rolled back or refused by the pre-install check, and **Installing…**, disabled, while
-an attempt is under way — **while an attempt is under way, nothing that can hold focus unmounts under it**. It is
-disabled while any wait reason holds, and a press on it then is refused in the handler too, since a disabled control
-still reports a press on the device. What it waits for — **Waiting for:** with the reason on the same line, or a line
-per reason where there are several — rides the button's own description, with the paused-download hint, what refused the
-last press and **Could not read the update state.** after a read that failed or did not answer within five seconds
-(`UPDATE_INSTALL_READ_DEADLINE_MS`; the late read stays the one in flight), so none of them is a row that can leave
-while it holds focus; the reasons go by themselves once a read no longer names any. Where there is no button, that line
-rides the **Available** row's description instead, which is always there. The backend answers in discriminants; the
-sentences for them are in `utils/updateInstallView.ts`, and the button's labels, the block's captions and its failure
-titles in `bigpicture/settings/UpdateInstallRows.tsx`; the sentence an update that did not go through is stated in is
-`utils/updateOutcomeStore.ts`'s. A refusal is worded by the panel, not by the backend's message, and goes once a read
-says it no longer holds (`refusalStands`). After a press the attempt comes from two sources, the
-`update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a press
-fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`).
+version already failed here or was rolled back or refused by the pre-install check, or before that first read where the
+attempt beside it failed, and **Installing…**, disabled, while an attempt is under way — **while an attempt is under
+way, nothing that can hold focus unmounts under it**. It is disabled while any wait reason holds, and a press on it then
+is refused in the handler too, since a disabled control still reports a press on the device. What it waits for —
+**Waiting for:** with the reason on the same line, or a line per reason where there are several — rides the button's own
+description, with the paused-download hint, what refused the last press and **Could not read the update state.** after a
+read that failed or did not answer within five seconds (`UPDATE_INSTALL_READ_DEADLINE_MS`; the late read stays the one
+in flight), so none of them is a row that can leave while it holds focus; the reasons go by themselves once a read no
+longer names any. Where there is no button, that line rides the **Available** row's description instead, which is always
+there. The backend answers in discriminants; the sentences for them are in `utils/updateInstallView.ts`, and the
+button's labels, the block's captions and its failure titles in `bigpicture/settings/UpdateInstallRows.tsx`; the
+sentence an update that did not go through is stated in is `utils/updateOutcomeStore.ts`'s. A refusal is worded by the
+panel, not by the backend's message, and goes once a read says it no longer holds (`refusalStands`). After a press the
+attempt comes from two sources, the `update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads;
+whichever got further wins, and a press fences off the reads that could carry the attempt it replaces (`furtherAttempt`,
+`useUpdateInstall.ts`).
 
 **What is happening is one block**, between the button and the daily-check switch: one focusable field whose content
 changes, so the focus stop stays put from the download through the restart to a failure. While an attempt is under way

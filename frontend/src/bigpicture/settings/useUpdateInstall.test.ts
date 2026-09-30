@@ -291,6 +291,17 @@ describe("useUpdateInstall", () => {
     expect(result.current.tryAgain).toBe(true);
   });
 
+  it("says Try again for a pushed failure before the first read answers", async () => {
+    vi.mocked(getUpdateInstallState).mockReturnValue(deferred<UpdateInstallState>().promise);
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => setUpdateInstallAttempt(FAILED));
+
+    expect(result.current.answered).toBe(false);
+    expect(result.current.tryAgain).toBe(true);
+  });
+
   it("logs a read that failed while no installer is running", async () => {
     vi.mocked(getUpdateInstallState).mockRejectedValue(new Error("boom"));
     renderHook(() => useUpdateInstall());

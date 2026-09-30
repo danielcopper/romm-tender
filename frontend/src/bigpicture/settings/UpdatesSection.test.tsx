@@ -589,11 +589,11 @@ describe("UpdatesSection", () => {
       const stop = utils.getByTestId("updates-caption").closest('[data-testid="field"]');
       const button = utils.getByText("Installing…");
 
-      rerender(utils, { ...unread, ...failedWith("download_failed"), tryAgain: false });
+      rerender(utils, { ...unread, ...failedWith("download_failed"), tryAgain: true });
 
       expect(text(utils, "updates-caption")).toBe("Update to 1.0.0 failed — nothing was changed.");
       expect(utils.getByTestId("updates-caption").closest('[data-testid="field"]')).toBe(stop);
-      expect(utils.getByText("Install update")).toBe(button);
+      expect(utils.getByText("Try again")).toBe(button);
       expect((button as HTMLButtonElement).disabled).toBe(true);
     });
 
