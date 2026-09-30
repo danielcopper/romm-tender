@@ -1,4 +1,4 @@
-"""Contract tests for the version-picker callables over the real Plugin/bootstrap.
+"""Contract tests for the version-picker callables over the real Endpoints/bootstrap.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getVersionList = callable<[number], VersionList>`` and
@@ -82,7 +82,7 @@ async def test_get_version_list_happy_shape(harness):
     _seed_rom(harness, rom_id=2, app_id=None, regions=("Japan",), is_main_sibling=True)
     harness.romm.roms[1] = {"id": 1, "sibling_roms": []}
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     assert result["multi_version"] is True
     assert result["server_query_failed"] is False
     assert result["bound_vanished"] is False
@@ -122,14 +122,14 @@ async def test_get_version_list_cross_group_sibling_not_switchable(harness):
     _seed_rom(harness, rom_id=5, app_id=None, group_key="ss:19274:57")
     harness.romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "name": "Lara", "fs_name_no_ext": "Lara"}]}
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     by_id = {v["rom_id"]: v for v in result["versions"]}
     assert set(by_id) == {1, 5}  # both LISTED
     assert by_id[1]["switchable"] is True
     assert by_id[5]["switchable"] is False
 
     # The backend rejection agrees with the disabled picker row (defense-in-depth).
-    rejected = await harness.plugin.switch_version(_APP_ID, 5, True)
+    rejected = await harness.endpoints.switch_version(_APP_ID, 5, True)
     assert rejected["success"] is False
     assert rejected["reason"] == "not_in_group"
 
@@ -149,7 +149,7 @@ async def test_get_version_list_never_synced_matching_key_switchable(harness):
         "name": "Game (JP)",
     }
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     by_id = {v["rom_id"]: v for v in result["versions"]}
     assert set(by_id) == {1, 5}
     assert by_id[5]["synced"] is False
@@ -157,7 +157,7 @@ async def test_get_version_list_never_synced_matching_key_switchable(harness):
 
     # The backend agrees with the enabled picker row: it persists the server-only
     # row into the bound group and moves the binding.
-    switched = await harness.plugin.switch_version(_APP_ID, 5, True)
+    switched = await harness.endpoints.switch_version(_APP_ID, 5, True)
     assert switched["success"] is True
     assert switched["rom_id"] == 5
     with harness.uow_factory() as uow:
@@ -188,13 +188,13 @@ async def test_get_version_list_uneven_coverage_switchable_adopts_bound_key(harn
         "sibling_roms": [{"id": 1}],
     }
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     by_id = {v["rom_id"]: v for v in result["versions"]}
     assert set(by_id) == {1, 5}
     assert by_id[5]["synced"] is False
     assert by_id[5]["switchable"] is True
 
-    switched = await harness.plugin.switch_version(_APP_ID, 5, True)
+    switched = await harness.endpoints.switch_version(_APP_ID, 5, True)
     assert switched["success"] is True
     assert switched["rom_id"] == 5
     with harness.uow_factory() as uow:
@@ -213,14 +213,14 @@ async def test_get_version_list_never_synced_bridged_key_not_switchable(harness)
     # Rom 6 shares only ss_id with the bound group; its would-be key is igdb:999:57.
     harness.romm.roms[6] = {"id": 6, "platform_id": 57, "igdb_id": 999, "ss_id": 22, "name": "Lara"}
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     by_id = {v["rom_id"]: v for v in result["versions"]}
     assert set(by_id) == {1, 6}  # both LISTED
     assert by_id[6]["synced"] is False
     assert by_id[6]["switchable"] is False
 
     # The backend rejection agrees with the disabled picker row (defense-in-depth).
-    rejected = await harness.plugin.switch_version(_APP_ID, 6, True)
+    rejected = await harness.endpoints.switch_version(_APP_ID, 6, True)
     assert rejected["success"] is False
     assert rejected["reason"] == "not_in_group"
     # Nothing persisted or bound for the rejected target.
@@ -233,7 +233,7 @@ async def test_get_version_list_solo_group_not_multi(harness):
     """A single-version group renders no picker."""
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     harness.romm.roms[1] = {"id": 1, "sibling_roms": []}
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     assert result["multi_version"] is False
     assert result["server_query_failed"] is False
     assert result["bound_vanished"] is False
@@ -243,7 +243,7 @@ async def test_get_version_list_solo_group_not_multi(harness):
 
 async def test_get_version_list_unknown_app_not_multi(harness):
     """An unknown / unbound appId renders no picker."""
-    result = await harness.plugin.get_version_list(999)
+    result = await harness.endpoints.get_version_list(999)
     assert result == {
         "multi_version": False,
         "server_query_failed": False,
@@ -257,7 +257,7 @@ async def test_get_version_list_server_fail_partial_shape(harness):
     _seed_rom(harness, rom_id=2, app_id=None)
     harness.romm.get_rom_side_effect = ConnectionError("down")
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
     assert result["multi_version"] is True
     assert result["server_query_failed"] is True
     assert result["bound_vanished"] is False
@@ -274,7 +274,7 @@ async def test_get_version_list_bound_404_mixed_local_liveness_shape(harness):
     harness.romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("sibling gone")
     harness.romm.roms[3] = {"id": 3}
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
 
     assert set(result) == {"multi_version", "versions", "server_query_failed", "bound_vanished"}
     assert result["multi_version"] is True
@@ -289,7 +289,7 @@ async def test_get_version_list_single_bound_404_preserves_non_multi_verdict(har
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     harness.romm.get_rom_side_effect = RommNotFoundError("bound gone")
 
-    result = await harness.plugin.get_version_list(_APP_ID)
+    result = await harness.endpoints.get_version_list(_APP_ID)
 
     assert set(result) == {"multi_version", "server_query_failed", "bound_vanished", "bound_version"}
     assert result["multi_version"] is False
@@ -311,7 +311,7 @@ def _seed_bound_drift(harness, bound_id: int, *, baseline: str) -> None:
     reproduces a synced state. The save discovery keys the filename off the
     install path stem (``game`` → ``game.srm``), matching ``_DRIFT_CONTENT``.
     """
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), "gba")
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), "gba")
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, "game.srm"), "wb") as fh:
         fh.write(_DRIFT_CONTENT)
@@ -327,7 +327,7 @@ async def test_switch_version_happy_moves_binding(harness):
     _seed_rom(harness, rom_id=2, app_id=None, name="Game 2")
     harness.romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2}]}
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     lease_token = result.pop("prune_lease_token")
     assert lease_token.startswith("version_switch:")
     assert result == {
@@ -344,7 +344,7 @@ async def test_switch_version_happy_moves_binding(harness):
         assert uow.roms.get(2).shortcut_app_id == _APP_ID
         assert uow.roms.get(1).shortcut_app_id is None
     # The picker now reports version 2 as active.
-    follow_up = await harness.plugin.get_version_list(_APP_ID)
+    follow_up = await harness.endpoints.get_version_list(_APP_ID)
     by_id = {v["rom_id"]: v for v in follow_up["versions"]}
     assert by_id[2]["active"] is True
 
@@ -357,7 +357,7 @@ async def test_switch_version_local_404_has_canonical_shape_and_no_mutation(harn
     harness.romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("gone")
     harness.emit.reset_mock()
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
 
     assert result == {
         "success": False,
@@ -382,7 +382,7 @@ async def test_switch_version_local_probe_transport_failure_fails_open_once(harn
     _seed_rom(harness, rom_id=2, app_id=None)
     harness.romm.get_rom_once_side_effect_by_id[2] = ConnectionError("offline")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
 
     assert result["success"] is True
     assert result["rom_id"] == 2
@@ -396,7 +396,7 @@ async def test_switch_version_allow_stranded_still_refuses_local_404(harness):
     _seed_rom(harness, rom_id=2, app_id=None)
     harness.romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("gone")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, True)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, True)
 
     assert result == {
         "success": False,
@@ -414,7 +414,7 @@ async def test_switch_version_server_only_404_is_version_vanished_without_row(ha
     harness.romm.get_rom_side_effect = RommNotFoundError("gone")
     harness.emit.reset_mock()
 
-    result = await harness.plugin.switch_version(_APP_ID, 3, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 3, False)
 
     assert result == {
         "success": False,
@@ -432,7 +432,7 @@ async def test_switch_version_server_only_404_is_version_vanished_without_row(ha
 
 async def test_switch_version_unknown_app_failure_shape(harness):
     """An unknown appId → canonical ``{success, reason, message}``."""
-    result = await harness.plugin.switch_version(999, 2, False)
+    result = await harness.endpoints.switch_version(999, 2, False)
     assert result["success"] is False
     assert result["reason"] == "not_found"
     assert isinstance(result["message"], str)
@@ -446,7 +446,7 @@ async def test_switch_version_not_in_group_failure_shape(harness):
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     _seed_rom(harness, rom_id=2, app_id=None, group_key="igdb:999:57")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False
     assert result["reason"] == "not_in_group"
     assert "error" not in result
@@ -457,7 +457,7 @@ async def test_switch_version_bound_elsewhere_failure_shape(harness):
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     _seed_rom(harness, rom_id=2, app_id=777)
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False
     assert result["reason"] == "bound_elsewhere"
     assert "error" not in result
@@ -468,9 +468,9 @@ async def test_switch_version_blocked_by_active_download(harness):
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID)
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     # Mark sibling 2 as actively downloading in the real DownloadService state.
-    harness.plugin._download_service._download_in_progress.add(2)
+    harness.app.services.download_service._download_in_progress.add(2)
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False
     assert result["reason"] == "download_in_progress"
     assert isinstance(result["message"], str)
@@ -489,7 +489,7 @@ async def test_switch_version_downloaded_synced_is_free(harness):
     # Baseline matches on-disk content → no drift → free switch.
     _seed_bound_drift(harness, 1, baseline=hashlib.md5(_DRIFT_CONTENT).hexdigest())
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is True
     assert result["rom_id"] == 2
     with harness.uow_factory() as uow:
@@ -501,7 +501,7 @@ async def test_switch_version_switch_back_returns_launch_options(harness):
     seed_group_member(harness, 1, group_key=_GROUP, shortcut_app_id=_APP_ID)  # bound, uninstalled
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None, installed=True, file_name="game.gba")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is True
     assert result["rom_id"] == 2
     assert result["target_installed"] is True
@@ -516,7 +516,7 @@ async def test_switch_version_unsynced_saves_online_soft_blocks(harness):
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False
     assert result["reason"] == "unsynced_saves"
     assert result["server_reachable"] is True
@@ -538,7 +538,7 @@ async def test_switch_version_unsynced_saves_offline_soft_blocks(harness):
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
     harness.romm.heartbeat_side_effect = ConnectionError("offline")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert result["success"] is False
     assert result["reason"] == "unsynced_saves"
     assert result["server_reachable"] is False
@@ -550,7 +550,7 @@ async def test_switch_version_switch_anyway_overrides_online(harness):
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, True)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, True)
     assert result["success"] is True
     assert result["rom_id"] == 2
     with harness.uow_factory() as uow:
@@ -565,7 +565,7 @@ async def test_switch_version_switch_anyway_overrides_offline(harness):
     harness.romm.heartbeat_side_effect = ConnectionError("offline")
     harness.romm.get_rom_once_side_effect_by_id[2] = ConnectionError("offline")
 
-    result = await harness.plugin.switch_version(_APP_ID, 2, True)
+    result = await harness.endpoints.switch_version(_APP_ID, 2, True)
     assert result["success"] is True
     assert result["rom_id"] == 2
     assert [args[0] for name, args, _kwargs in harness.romm.call_log if name == "get_rom_once"] == [2]
@@ -577,12 +577,12 @@ async def test_switch_version_sync_then_retry_succeeds(harness):
     seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=None)
     _seed_bound_drift(harness, 1, baseline="stale-baseline-hash")
 
-    blocked = await harness.plugin.switch_version(_APP_ID, 2, False)
+    blocked = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert blocked["reason"] == "unsynced_saves"
 
     # A completed sync records a fresh baseline matching the on-disk save.
     _seed_bound_drift(harness, 1, baseline=hashlib.md5(_DRIFT_CONTENT).hexdigest())
-    retried = await harness.plugin.switch_version(_APP_ID, 2, False)
+    retried = await harness.endpoints.switch_version(_APP_ID, 2, False)
     assert retried["success"] is True
     assert retried["rom_id"] == 2
     assert [args[0] for name, args, _kwargs in harness.romm.call_log if name == "get_rom_once"] == [2]
@@ -601,7 +601,7 @@ async def test_switch_version_unbuildable_target_failure_shape(harness):
         "sibling_roms": [{"id": 1}],
     }
 
-    result = await harness.plugin.switch_version(_APP_ID, 3, False)
+    result = await harness.endpoints.switch_version(_APP_ID, 3, False)
     assert result["success"] is False
     assert result["reason"] == "invalid_target"
     assert isinstance(result["message"], str)

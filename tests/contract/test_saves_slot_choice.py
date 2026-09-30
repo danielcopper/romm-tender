@@ -26,7 +26,7 @@ from ._seed import enable_save_sync, seed_install, seed_rom, seed_server_save
 
 def _write_local_save(harness, *, system: str = "gba", filename: str = "game.srm", content: bytes = b"x") -> str:
     """Materialize a local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -42,7 +42,7 @@ async def test_confirm_named_slot_no_migration(harness):
     enable_save_sync(harness)
     seed_rom(harness, 42)
 
-    result = await harness.plugin.confirm_slot_choice(42, "main", False, None)
+    result = await harness.endpoints.confirm_slot_choice(42, "main", False, None)
 
     assert result["success"] is True
     assert result["needs_conflict_resolution"] is False
@@ -68,7 +68,7 @@ async def test_confirm_legacy_slot_none_rejected(harness):
     enable_save_sync(harness)
     seed_rom(harness, 42)
 
-    result = await harness.plugin.confirm_slot_choice(42, None, False, None)
+    result = await harness.endpoints.confirm_slot_choice(42, None, False, None)
 
     assert result["success"] is False
     assert result["reason"] == "invalid_slot_name"
@@ -102,7 +102,7 @@ async def test_confirm_legacy_migration_content_based_timestamped_filename(harne
     )
     harness.romm.set_server_save_content(700, b"progress")  # byte-identical to local
 
-    result = await harness.plugin.confirm_slot_choice(42, "default", True, None)
+    result = await harness.endpoints.confirm_slot_choice(42, "default", True, None)
 
     assert result["success"] is True
     assert result["needs_conflict_resolution"] is False
@@ -141,7 +141,7 @@ async def test_confirm_legacy_migration_differing_local_needs_resolution(harness
     )
     harness.romm.set_server_save_content(701, b"server-progress")
 
-    result = await harness.plugin.confirm_slot_choice(42, "default", True, None)
+    result = await harness.endpoints.confirm_slot_choice(42, "default", True, None)
 
     assert result["success"] is False
     assert result["needs_conflict_resolution"] is True
@@ -173,7 +173,7 @@ async def test_confirm_legacy_migration_use_server_resolves_conflict(harness):
     )
     harness.romm.set_server_save_content(702, b"server-progress")
 
-    result = await harness.plugin.confirm_slot_choice(42, "default", True, None, True)
+    result = await harness.endpoints.confirm_slot_choice(42, "default", True, None, True)
 
     assert result["success"] is True
     assert result["migrated"] == 1
@@ -204,7 +204,7 @@ async def test_confirm_legacy_migration_server_unreachable_holds_wizard(harness)
     seed_server_save(harness, save_id=703, rom_id=42, slot=None, file_name="game [ts].srm")
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
 
-    result = await harness.plugin.confirm_slot_choice(42, "default", True, None)
+    result = await harness.endpoints.confirm_slot_choice(42, "default", True, None)
 
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
@@ -230,7 +230,7 @@ async def test_switch_slot_empty_rejected(harness):
     enable_save_sync(harness)
     seed_rom(harness, 42)
 
-    result = await harness.plugin.switch_slot(42, "")
+    result = await harness.endpoints.switch_slot(42, "")
 
     assert result["success"] is False
     assert result["reason"] == "invalid_slot_name"
@@ -255,7 +255,7 @@ async def test_delete_slot_legacy_rejected(harness):
     enable_save_sync(harness)
     seed_rom(harness, 42)
 
-    result = await harness.plugin.delete_slot(42, "")
+    result = await harness.endpoints.delete_slot(42, "")
 
     assert result["success"] is False
     assert result["reason"] == "invalid_slot_name"

@@ -53,7 +53,7 @@ async def test_get_metadata_cache_page_paged_shape(harness):
     _seed_metadata(harness, 1, summary="Game 1")
     _seed_metadata(harness, 2, summary="Game 2")
 
-    first = harness.plugin.get_metadata_cache_page(0, 1)
+    first = harness.endpoints.get_metadata_cache_page(0, 1)
     assert set(first.keys()) == {"items", "total"}
     assert first["total"] == 2
     assert list(first["items"].keys()) == ["1"]
@@ -63,7 +63,7 @@ async def test_get_metadata_cache_page_paged_shape(harness):
     assert entry["genres"] == ["RPG"]
     assert isinstance(entry["genres"], list)
 
-    second = harness.plugin.get_metadata_cache_page(1, 1)
+    second = harness.endpoints.get_metadata_cache_page(1, 1)
     assert second["total"] == 2
     assert list(second["items"].keys()) == ["2"]
 
@@ -73,11 +73,11 @@ async def test_get_metadata_cache_page_out_of_range(harness):
     frontend's page loop stops on the empty page while still knowing the count."""
     _seed_metadata(harness, 1, summary="Game 1")
 
-    result = harness.plugin.get_metadata_cache_page(500, 500)
+    result = harness.endpoints.get_metadata_cache_page(500, 500)
     assert result == {"items": {}, "total": 1}
 
 
 async def test_get_metadata_cache_page_empty_db(harness):
     """No cached rows → empty items, zero total."""
-    result = harness.plugin.get_metadata_cache_page(0, 500)
+    result = harness.endpoints.get_metadata_cache_page(0, 500)
     assert result == {"items": {}, "total": 0}

@@ -1,7 +1,7 @@
 """Fixtures for the host tier — a real server on a real port.
 
 Nothing here fakes the transport. The fixture starts a :class:`host.server.HostServer`
-on a free loopback port with a small stand-in for the plugin object, and the
+on a free loopback port with a small stand-in for ``main.Endpoints``, and the
 tests reach it through :mod:`tests.host._client`, which opens a TCP connection.
 What is faked is only what the host is not: the object calls land on.
 
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 SERVER_IDENTITY = "romm-tender/0.0.0-test"
 
 
-class FakePlugin:
-    """Stands in for the plugin object: one method per shape a call can take."""
+class FakeEndpoints:
+    """Stands in for ``main.Endpoints``: one method per shape a call can take."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
@@ -152,9 +152,9 @@ async def close_all(servers: list[asyncio.Server]) -> None:
 class RunningHost:
     """A started server plus the pieces a test needs to make assertions about it."""
 
-    def __init__(self, server: HostServer, plugin: FakePlugin, events: EventSink, static_root: str) -> None:
+    def __init__(self, server: HostServer, endpoints: FakeEndpoints, events: EventSink, static_root: str) -> None:
         self.server = server
-        self.plugin = plugin
+        self.endpoints = endpoints
         self.events = events
         self.static_root = static_root
 
@@ -175,10 +175,10 @@ async def running_host(tmp_path) -> AsyncIterator[RunningHost]:
     static_root.mkdir()
     (static_root / "index.js").write_text("export const panel = 1;\n", encoding="utf-8")
 
-    plugin = FakePlugin()
+    endpoints = FakeEndpoints()
     events = EventSink(logger)
     server = HostServer(
-        dispatcher=CallDispatcher(plugin, logger),
+        dispatcher=CallDispatcher(endpoints, logger),
         events=events,
         static_root=str(static_root),
         logger=logger,
@@ -187,6 +187,6 @@ async def running_host(tmp_path) -> AsyncIterator[RunningHost]:
     )
     await server.start()
     try:
-        yield RunningHost(server, plugin, events, str(static_root))
+        yield RunningHost(server, endpoints, events, str(static_root))
     finally:
         await server.stop()

@@ -10,7 +10,7 @@ import pytest
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.server import DEFAULT_PORT, HostServer
-from tests.host.conftest import SERVER_IDENTITY, FakePlugin, close_all, free_port, squat_run
+from tests.host.conftest import SERVER_IDENTITY, FakeEndpoints, close_all, free_port, squat_run
 from tests.host.ws_client import http_get
 
 LOGGER = logging.getLogger("test_server_bind")
@@ -18,7 +18,7 @@ LOGGER = logging.getLogger("test_server_bind")
 
 def build_server(static_root, port: int, attempts: int = 32) -> HostServer:
     return HostServer(
-        dispatcher=CallDispatcher(FakePlugin(), LOGGER),
+        dispatcher=CallDispatcher(FakeEndpoints(), LOGGER),
         events=EventSink(LOGGER),
         static_root=str(static_root),
         logger=LOGGER,

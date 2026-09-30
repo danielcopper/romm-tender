@@ -200,7 +200,7 @@ class RetryLadder:
         """Fire the optional retry listener, swallowing any listener failure.
 
         The listener surfaces best-effort UI progress; a raise from it (e.g. a
-        closed loop during plugin unload) must never abort the real HTTP retry
+        closed loop during the backend's shutdown) must never abort the real HTTP retry
         underway, so it is caught and logged rather than propagated.
         """
         if self.on_retry is None:

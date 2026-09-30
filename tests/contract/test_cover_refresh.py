@@ -35,15 +35,15 @@ _URL_COVER = "https://cdn2.steamgriddb.com/grid/abc123.png"
 
 
 def _orchestrator(harness):
-    return harness.plugin._sync_service._orchestrator
+    return harness.app.services.sync_service._orchestrator
 
 
 def _dispatcher(harness):
-    return harness.plugin._sync_service._chunk_dispatcher
+    return harness.app.services.sync_service._chunk_dispatcher
 
 
 def _box(harness):
-    return harness.plugin._sync_service._box
+    return harness.app.services.sync_service._box
 
 
 def _ack_with(bindings):
@@ -76,7 +76,7 @@ def _seed_library(harness, *, cover: str, updated_at: str | None = None) -> None
     if updated_at is not None:
         rom["updated_at"] = updated_at
     harness.romm.roms[10] = rom
-    harness.plugin.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"1": True}
 
 
 def _make_grid_resolvable(harness) -> None:
@@ -119,7 +119,7 @@ async def _drain_apply(harness, tries: int = 5000) -> None:
     the harness's own loop (everything behind it is fake/fast).
     """
     for _ in range(tries):
-        if harness.plugin._sync_service._sync_state is SyncState.IDLE:
+        if harness.app.services.sync_service._sync_state is SyncState.IDLE:
             return
         await asyncio.sleep(0.001)
     raise AssertionError("sync_apply_delta's background apply task never finished")
@@ -237,7 +237,7 @@ async def test_cover_only_change_flows_from_preview_to_apply_via_callables(harne
     harness.emit.reset_mock()
     downloads_before = len(_download_cover_urls(harness))
 
-    preview = await harness.plugin.sync_preview()
+    preview = await harness.endpoints.sync_preview()
     assert preview["success"] is True
     summary = preview["summary"]
     assert summary["cover_refresh_count"] == 1
@@ -254,7 +254,7 @@ async def test_cover_only_change_flows_from_preview_to_apply_via_callables(harne
     assert rom is not None
     assert rom.cover_source == _COVER_OLD
 
-    apply_result = await harness.plugin.sync_apply_delta(preview["preview_id"])
+    apply_result = await harness.endpoints.sync_apply_delta(preview["preview_id"])
     assert apply_result == {"success": True, "message": "Applying changes"}
     await _drain_apply(harness)
 
@@ -308,7 +308,7 @@ async def test_pure_no_changes_preview_keeps_zero_cover_count(harness):
     await _run_sync(harness, "run-seed-settled")
     harness.emit.reset_mock()
 
-    preview = await harness.plugin.sync_preview()
+    preview = await harness.endpoints.sync_preview()
 
     assert preview["success"] is True
     summary = preview["summary"]

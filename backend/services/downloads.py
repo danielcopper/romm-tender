@@ -176,11 +176,11 @@ class DownloadService:
         self._control_tokens: dict[int, _DownloadControl] = {}
 
     async def shutdown(self) -> None:
-        """Cancel in-flight per-ROM download tasks on plugin unload.
+        """Cancel in-flight per-ROM download tasks when the backend shuts down.
 
         Per-ROM tasks are cancelled fire-and-forget; their ``finally``
         clauses run on the event loop after this method returns, which
-        is acceptable on plugin unload.
+        is acceptable at shutdown.
         """
         for task in self._download_tasks.values():
             task.cancel()

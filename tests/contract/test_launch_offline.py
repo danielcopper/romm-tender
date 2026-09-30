@@ -35,7 +35,7 @@ def _write_local_save(harness, *, system: str, content: bytes, filename: str = "
     the ROM's parent folder name (``seed_install`` lays the ROM under
     ``…/roms/<system>/<file>``), so it equals *system* here.
     """
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -48,7 +48,7 @@ def _write_local_save(harness, *, system: str, content: bytes, filename: str = "
 
 async def test_check_local_drift_not_installed_shape(harness):
     """Not installed → {"drifted": False, "rom_id"} (no local files to probe)."""
-    result = await harness.plugin.check_local_drift(99)
+    result = await harness.endpoints.check_local_drift(99)
 
     assert result == {"drifted": False, "rom_id": 99}
 
@@ -65,7 +65,7 @@ async def test_check_local_drift_matching_hash_not_drifted(harness):
     state.adopt_baseline("game.srm", tracked_save_id=10, last_sync_hash=baseline)
     seed_save_state(harness, 1, state, platform_slug="gba")
 
-    result = await harness.plugin.check_local_drift(1)
+    result = await harness.endpoints.check_local_drift(1)
 
     assert result == {"drifted": False, "rom_id": 1}
 
@@ -78,7 +78,7 @@ async def test_check_local_drift_changed_content_drifted(harness):
     state.adopt_baseline("game.srm", tracked_save_id=11, last_sync_hash="stale-baseline-hash")
     seed_save_state(harness, 2, state, platform_slug="gba")
 
-    result = await harness.plugin.check_local_drift(2)
+    result = await harness.endpoints.check_local_drift(2)
 
     assert result == {"drifted": True, "rom_id": 2}
 
@@ -88,7 +88,7 @@ async def test_check_local_drift_changed_content_drifted(harness):
 
 async def test_probe_reachability_online_shape(harness):
     """Healthy heartbeat → {"online": True}."""
-    result = await harness.plugin.probe_reachability()
+    result = await harness.endpoints.probe_reachability()
 
     assert result == {"online": True}
 
@@ -97,7 +97,7 @@ async def test_probe_reachability_offline_shape(harness):
     """Heartbeat failure → {"online": False}, never raises."""
     harness.romm.heartbeat_side_effect = RuntimeError("connection refused")
 
-    result = await harness.plugin.probe_reachability()
+    result = await harness.endpoints.probe_reachability()
 
     assert result == {"online": False}
 
@@ -112,9 +112,9 @@ async def test_refresh_save_status_returns_success_and_schedules_emit(harness):
     ``save_status_updated``; we let the loop drain and assert the emit fired.
     """
     seed_install(harness, 3, system="gba", file_name="game.gba")
-    harness.plugin.settings["save_sync_enabled"] = True
+    harness.settings["save_sync_enabled"] = True
 
-    result = await harness.plugin.refresh_save_status(3)
+    result = await harness.endpoints.refresh_save_status(3)
 
     assert result == {"success": True}
     # Drain the fire-and-forget task scheduled via loop.create_task.

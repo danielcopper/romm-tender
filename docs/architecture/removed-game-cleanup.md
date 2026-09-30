@@ -158,12 +158,12 @@ session's start begins — and take and release the leases the use case hands th
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
 start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `prune_complete` and
 `migration_relaunch_options` carry. The lease service (`services/prune_leases.py`) renews and releases a lease by its
-token, and disowns the ones a gone frontend left behind; `Plugin` reads none of it. The prune service takes the start's
-reservation through the rules' `hold_start`, before it asks the migration and sync rules. The reservation lasts from the
-moment `hold_start` takes it until the start returns; the run claim, from the moment the revalidated preview becomes a
-run until that run ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's
-done callback. The run is registered before the reservation is given back, so the two overlap and a conflicting endpoint
-finds no gap between them.
+token, and disowns the ones a gone frontend left behind; `Endpoints` reads none of it. The prune service takes the
+start's reservation through the rules' `hold_start`, before it asks the migration and sync rules. The reservation lasts
+from the moment `hold_start` takes it until the start returns; the run claim, from the moment the revalidated preview
+becomes a run until that run ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the
+task's done callback. The run is registered before the reservation is given back, so the two overlap and a conflicting
+endpoint finds no gap between them.
 
 The start is atomic in the part that matters: `hold_start` takes the prune conflicts' lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the

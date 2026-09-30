@@ -8,7 +8,7 @@ operation still running or holding a lease (``operation_active``). Where more
 than one applies, they are asked in the order exclusive start, migration, sync,
 prune active.
 
-Every test here but the five at the bottom drives ``harness.plugin.<endpoint>``
+Every test here but the five at the bottom drives ``harness.endpoints.<endpoint>``
 with frontend-shaped arguments and reads the answer, so it holds wherever the
 rules are enforced. Four of those five, the ``test_*_names_every_endpoint_*``
 tests, read where each rule is declared instead, to keep each list from falling
@@ -16,7 +16,7 @@ behind an endpoint that gains or loses a rule: the ``hold("<endpoint>", …)`` o
 ``hold_start("<endpoint>", …)`` call at the entry of the use case it calls
 (``tests/_conflict_rules.py``). The fifth,
 ``test_every_endpoint_with_a_rule_has_its_arguments``, reads only the lists.
-Outside this module, ``tests/test_plugin.py``'s ``TestMigrationRuleCoverage``
+Outside this module, ``tests/test_endpoints.py``'s ``TestMigrationRuleCoverage``
 reads the migration rule the same way.
 """
 
@@ -247,7 +247,7 @@ _IN_FLIGHT = [SyncState.RUNNING, SyncState.CANCELLING]
 
 
 async def _call(harness, endpoint: str) -> dict[str, Any]:
-    return await getattr(harness.plugin, endpoint)(*_ARGS[endpoint])
+    return await getattr(harness.endpoints, endpoint)(*_ARGS[endpoint])
 
 
 def _assert_refused(result: dict[str, Any], reason: str) -> None:
@@ -293,7 +293,7 @@ async def test_a_held_cleanup_refuses_the_endpoint(harness, endpoint):
     # The refusal registered nothing: once the cleanup lets go, the exclusive
     # start finds no conflicting operation.
     release_prune_active(harness)
-    assert (await harness.plugin.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
+    assert (await harness.endpoints.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
 
 
 @pytest.mark.parametrize("endpoint", MIGRATION)
@@ -314,7 +314,7 @@ async def test_a_sync_in_flight_refuses_the_endpoint(harness, endpoint, state):
 async def test_the_migration_refusal_is_the_canonical_failure_shape(harness):
     hold_migration_pending(harness)
 
-    assert await harness.plugin.save_platform_sync(*_ARGS["save_platform_sync"]) == {
+    assert await harness.endpoints.save_platform_sync(*_ARGS["save_platform_sync"]) == {
         "success": False,
         "reason": "blocked_by_migration",
         "message": _MIGRATION_MESSAGE,
@@ -323,18 +323,18 @@ async def test_the_migration_refusal_is_the_canonical_failure_shape(harness):
 
 async def test_start_prune_is_refused_while_a_lease_is_held_and_no_longer_once_it_is_released(harness):
     seed_rom(harness, 41)
-    removed = await harness.plugin.remove_all_shortcuts()
+    removed = await harness.endpoints.remove_all_shortcuts()
     token = removed["prune_lease_token"]
 
-    _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
+    _assert_refused(await harness.endpoints.start_prune(_START_PRUNE_REQUEST), "operation_active")
 
-    await harness.plugin.release_prune_conflict_lease(token)
-    assert (await harness.plugin.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
+    await harness.endpoints.release_prune_conflict_lease(token)
+    assert (await harness.endpoints.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
 
 
 async def test_start_prune_is_refused_while_a_conflicting_endpoint_is_running(harness, monkeypatch):
-    harness.plugin.settings["romm_url"] = "https://server.example"
-    harness.plugin.settings["romm_api_token"] = "token"
+    harness.settings["romm_url"] = "https://server.example"
+    harness.settings["romm_api_token"] = "token"
     entered = asyncio.Event()
     release = threading.Event()
     loop = asyncio.get_running_loop()
@@ -346,16 +346,16 @@ async def test_start_prune_is_refused_while_a_conflicting_endpoint_is_running(ha
         return answer_heartbeat()
 
     monkeypatch.setattr(harness.romm, "heartbeat", held_heartbeat)
-    running = asyncio.create_task(harness.plugin.test_connection())
+    running = asyncio.create_task(harness.endpoints.test_connection())
     await _until_entered(entered, running)
 
     try:
-        _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
+        _assert_refused(await harness.endpoints.start_prune(_START_PRUNE_REQUEST), "operation_active")
     finally:
         release.set()
         await running
 
-    assert (await harness.plugin.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
+    assert (await harness.endpoints.start_prune(_START_PRUNE_REQUEST))["reason"] == "stale_preview"
 
 
 # ── Which condition answers first ────────────────────────────────────────────
@@ -371,7 +371,7 @@ async def test_a_pending_migration_answers_before_a_held_cleanup(harness, endpoi
     # go, the exclusive start, asked first, finds no conflicting operation and
     # the migration answers.
     release_prune_active(harness)
-    _assert_migration_refusal(await harness.plugin.start_prune(_START_PRUNE_REQUEST))
+    _assert_migration_refusal(await harness.endpoints.start_prune(_START_PRUNE_REQUEST))
 
 
 @pytest.mark.parametrize("endpoint", sorted(set(MIGRATION) & set(SYNC_ACTIVE)))
@@ -401,34 +401,34 @@ async def test_a_pending_migration_answers_before_both_other_conditions(harness,
 
 async def test_a_held_lease_answers_start_prune_before_a_pending_migration(harness):
     seed_rom(harness, 41)
-    assert (await harness.plugin.remove_all_shortcuts())["prune_lease_token"]
+    assert (await harness.endpoints.remove_all_shortcuts())["prune_lease_token"]
     hold_migration_pending(harness)
 
-    _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
+    _assert_refused(await harness.endpoints.start_prune(_START_PRUNE_REQUEST), "operation_active")
 
 
 async def test_a_held_lease_answers_start_prune_before_a_sync_in_flight(harness):
     seed_rom(harness, 41)
-    assert (await harness.plugin.remove_all_shortcuts())["prune_lease_token"]
+    assert (await harness.endpoints.remove_all_shortcuts())["prune_lease_token"]
     hold_sync_in_flight(harness)
 
-    _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "operation_active")
+    _assert_refused(await harness.endpoints.start_prune(_START_PRUNE_REQUEST), "operation_active")
 
 
 async def test_start_prune_refused_for_a_pending_migration_leaves_no_cleanup_claim_behind(harness):
     hold_migration_pending(harness)
 
-    _assert_migration_refusal(await harness.plugin.start_prune(_START_PRUNE_REQUEST))
+    _assert_migration_refusal(await harness.endpoints.start_prune(_START_PRUNE_REQUEST))
 
-    assert (await harness.plugin.test_connection())["reason"] == "config_error"
+    assert (await harness.endpoints.test_connection())["reason"] == "config_error"
 
 
 async def test_start_prune_refused_for_a_sync_in_flight_leaves_no_cleanup_claim_behind(harness):
     hold_sync_in_flight(harness)
 
-    _assert_refused(await harness.plugin.start_prune(_START_PRUNE_REQUEST), "sync_active")
+    _assert_refused(await harness.endpoints.start_prune(_START_PRUNE_REQUEST), "sync_active")
 
-    assert (await harness.plugin.test_connection())["reason"] == "config_error"
+    assert (await harness.endpoints.test_connection())["reason"] == "config_error"
 
 
 # ── The lists above against the rules they stand for ─────────────────────────

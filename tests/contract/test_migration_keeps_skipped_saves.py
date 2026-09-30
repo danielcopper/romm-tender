@@ -1,6 +1,6 @@
 """Contract test — a save the home migration's ``skip`` kept stays kept at the next sync.
 
-Drives the real ``Plugin`` through the real ``bootstrap()`` + real SQLite. A game's
+Drives the real ``Endpoints`` through the real ``bootstrap()`` + real SQLite. A game's
 save exists under both the old RetroDECK home and the new one; the user migrates
 with ``skip``, which keeps the new home's copy and leaves the old one where it
 is. The recorded save directory still names the old home until the migration
@@ -56,13 +56,13 @@ def _read(path: str) -> bytes:
 
 
 async def _detect_at(harness, home: str) -> None:
-    harness.plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(
+    harness.app.services.migration_service._retrodeck_paths = FakeRetroDeckPaths(
         home=home,
         saves=os.path.join(home, "saves"),
         roms=os.path.join(home, "roms"),
         bios=os.path.join(home, "bios"),
     )
-    harness.plugin._migration_service.detect_retrodeck_path_change()
+    harness.app.services.migration_service.detect_retrodeck_path_change()
     await asyncio.sleep(0)
 
 
@@ -98,16 +98,16 @@ async def test_a_save_kept_by_skip_is_neither_replaced_nor_backed_up(harness):
             )
         )
         uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=_ROM, directory=old_saves))
-    save_locations = cast("FakeSaveLocationReader", harness.plugin._save_sync_service._rom_info._save_locations)
+    save_locations = cast("FakeSaveLocationReader", harness.app.services.save_sync_service._rom_info._save_locations)
     save_locations.answer_with("gba", _answer(new_saves))
     await _detect_at(harness, old_home)
     await _detect_at(harness, new_home)
 
-    migrated = await harness.plugin.migrate_retrodeck_files("skip")
+    migrated = await harness.endpoints.migrate_retrodeck_files("skip")
     # The save existed at both ends, so ``skip`` left both copies where they were.
     assert sorted(os.listdir(old_saves)) == ["pokemon.srm"]
-    harness.plugin.settings["save_sync_enabled"] = True
-    await harness.plugin.sync_rom_saves(_ROM)
+    harness.settings["save_sync_enabled"] = True
+    await harness.endpoints.sync_rom_saves(_ROM)
 
     assert migrated["success"] is True
     assert _read(os.path.join(new_saves, "pokemon.srm")) == b"kept"
@@ -149,12 +149,12 @@ async def test_a_status_read_during_a_running_migration_moves_nothing(harness):
             )
         )
         uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=_ROM, directory=old_saves))
-    save_locations = cast("FakeSaveLocationReader", harness.plugin._save_sync_service._rom_info._save_locations)
+    save_locations = cast("FakeSaveLocationReader", harness.app.services.save_sync_service._rom_info._save_locations)
     save_locations.answer_with("gba", _answer(new_saves))
-    harness.plugin.settings["save_sync_enabled"] = True
-    harness.plugin._migration_service._migrations_in_flight = 1
+    harness.settings["save_sync_enabled"] = True
+    harness.app.services.migration_service._migrations_in_flight = 1
 
-    await harness.plugin.get_save_status(_ROM)
+    await harness.endpoints.get_save_status(_ROM)
 
     assert _read(os.path.join(old_saves, "pokemon.srm")) == b"old home"
     assert not os.path.exists(os.path.join(new_saves, "pokemon.srm"))

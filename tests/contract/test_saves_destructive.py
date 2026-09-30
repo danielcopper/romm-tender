@@ -32,7 +32,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 def _write_local_save(harness, *, system: str = "gba", filename: str = "game.srm", content: bytes = b"x") -> str:
     """Materialize a local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -80,7 +80,7 @@ async def test_delete_slot_deletes_only_the_slots_server_saves_and_leaves_local_
     seed_server_save(harness, save_id=700, rom_id=42, slot="other", file_name="game.srm")
     seed_server_save(harness, save_id=701, rom_id=42, slot="other", file_name="game.rtc")
 
-    result = await harness.plugin.delete_slot(42, "other")
+    result = await harness.endpoints.delete_slot(42, "other")
 
     assert result == {"success": True, "deleted_server_saves": 2, "cleaned_files": 0}
     deletes = [c[1][0] for c in harness.romm.call_log if c[0] == "delete_server_saves"]
@@ -110,7 +110,7 @@ async def test_delete_slot_server_unreachable_keeps_the_slot(harness):
     seed_server_save(harness, save_id=700, rom_id=42, slot="other", file_name="game.srm")
     harness.romm.delete_server_saves_side_effect = RommConnectionError("offline")
 
-    result = await harness.plugin.delete_slot(42, "other")
+    result = await harness.endpoints.delete_slot(42, "other")
 
     _assert_canonical_unreachable(result)
     assert 700 in harness.romm.saves
@@ -138,7 +138,7 @@ async def test_resolve_sync_conflict_server_unreachable_changes_nothing(harness,
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", system="gba"))
     harness.romm.list_saves_side_effect = RommConnectionError("offline")
 
-    result = await harness.plugin.resolve_sync_conflict(42, "game.srm", 100, action)
+    result = await harness.endpoints.resolve_sync_conflict(42, "game.srm", 100, action)
 
     _assert_canonical_unreachable(result)
     with open(local_path, "rb") as fh:

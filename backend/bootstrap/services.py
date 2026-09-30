@@ -1,11 +1,11 @@
 """Service half of the composition root — bundles in, live services out.
 
 Service construction is separated from adapter construction because it
-needs runtime state only ``main.py`` can supply (the event loop, the event
-sink's emit) plus plugin state that exists once ``bootstrap()`` has
-run. Services never reach each other by import: every cross-service
-reference is threaded through a ``*ServiceConfig`` here, or deferred
-through a ``LateBinding`` when the two constructors form a cycle.
+needs runtime state only the entry point can supply (the event loop, the
+event sink's emit) plus state that exists once ``bootstrap()`` has run.
+Services never reach each other by import: every cross-service reference is
+threaded through a ``*ServiceConfig`` here, or deferred through a
+``LateBinding`` when the two constructors form a cycle.
 """
 
 from __future__ import annotations
@@ -70,23 +70,22 @@ if TYPE_CHECKING:
 class WiringConfig:
     """Composition-root inputs for ``wire_services``.
 
-    Four bundles carry the wiring; ``min_required_version`` sits at the
-    top level — it's plugin metadata, not a runtime seam, and only
-    ConnectionService consumes it. ``directories`` sits beside it for the
-    same reason: it is where this program's directories are, resolved
-    from the environment by the entry point rather than derived. It is
-    the same value ``bootstrap()`` was handed, carried on so that a
-    service's wiring reads a directory rather than composing one — the
-    entry point is the only caller of ``resolve_directories``, and
-    nothing downstream of it builds a root out of a home. ``launcher``
-    sits beside
-    it for the same reason: it says where the launcher a Steam shortcut
-    runs through lives, and whether this start got it there. Its path is
-    the data directory's only where this start actually put the launcher
-    under it — otherwise it is the copy the release ships. ``update_source``
-    is the entry point's other environment answer — where releases are asked
-    for, and whether this process is the installed program — handed to
-    ``bootstrap()`` too.
+    Four bundles carry the wiring; ``min_required_version`` sits at the top
+    level — it is the oldest RomM release this program accepts
+    (``MIN_ROMM_VERSION``), a constant rather than a runtime seam.
+    ``directories`` sits beside it for the same reason: it is where this
+    program's directories are, resolved from the environment by the entry
+    point rather than derived. It is the same value ``bootstrap()`` was
+    handed, carried on so that a service's wiring reads a directory rather
+    than composing one — the entry point is the only caller of
+    ``resolve_directories``, and nothing downstream of it builds a root out
+    of a home. ``launcher`` sits beside it for the same reason: it says
+    where the launcher a Steam shortcut runs through lives, and whether this
+    start got it there. Its path is the data directory's only where this
+    start actually put the launcher under it — otherwise it is the copy the
+    release ships. ``update_source`` is the entry point's other environment
+    answer — where releases are asked for, and whether this process is the
+    installed program — handed to ``bootstrap()`` too.
     """
 
     adapters: AdapterBundle
@@ -138,11 +137,11 @@ class ServicesBundle:
 
 
 def wire_services(cfg: WiringConfig) -> ServicesBundle:
-    """Create service instances after plugin state is initialised.
+    """Create service instances once ``bootstrap()`` has loaded the state they share.
 
-    Called from ``Plugin._main()`` after save-sync state is populated
-    so that services receive live references to the fully-populated
-    state dicts.
+    Called from ``build_application`` after ``bootstrap()`` has loaded
+    and migrated the settings, so that services receive a live reference
+    to the migrated settings dict.
 
     Returns
     -------

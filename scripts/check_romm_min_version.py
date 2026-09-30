@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Keep every stated RomM minimum version equal to the one the plugin enforces.
+"""Keep every stated RomM minimum version equal to the one the program enforces.
 
-``Plugin._MIN_REQUIRED_VERSION`` in ``main.py`` is the single source of truth:
-it is the floor ``test_connection()`` rejects servers against, so the plugin is
-inert below it. Several places restate that number for humans — the README's
-badge and requirements list, the trap note in CLAUDE.md, the save-sync user
-guide and its architecture page — and a restated number drifts. Each is listed
-in ``CLAIMS``; a new restatement is checked only once it is added there.
+``MIN_ROMM_VERSION`` in ``backend/domain/identity.py`` is the single source of
+truth: it is the floor ``test_connection()`` rejects servers against, so the
+program is inert below it. Several places restate that number for humans — the
+README's badge and requirements list, the trap note in CLAUDE.md, the save-sync
+user guide and its architecture page — and a restated number drifts. Each is
+listed in ``CLAIMS``; a new restatement is checked only once it is added there.
 
 Frozen history is deliberately out of scope: ADRs record the floor as it stood
 when the decision was taken and must not be rewritten.
@@ -25,8 +25,8 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "backend" / "main.py"
-CONSTANT = "_MIN_REQUIRED_VERSION"
+SOURCE = ROOT / "backend" / "domain" / "identity.py"
+CONSTANT = "MIN_ROMM_VERSION"
 
 # Each claim site: file, a regex with the version as group 1, and a label.
 # The regexes are deliberately narrow — a loose one would rewrite unrelated
@@ -110,7 +110,7 @@ CLAIMS = [
 
 
 def enforced_version() -> str:
-    """The floor as ``main.py`` states it, e.g. ``5.3.0``."""
+    """The floor as ``identity.py`` states it, e.g. ``5.3.0``."""
     tree = ast.parse(SOURCE.read_text(encoding="utf-8"), filename=str(SOURCE))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):

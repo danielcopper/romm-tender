@@ -24,19 +24,19 @@ def _seed_one_platform(harness):
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.plugin.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"1": True}
 
 
 async def test_nothing_pending_is_a_success_not_a_failure(harness):
     """No preview staged is a normal answer — the failure shape is for failures."""
-    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.endpoints.get_pending_preview() == {"success": True, "preview": None}
 
 
 async def test_restores_the_payload_sync_preview_answered_with(harness):
     _seed_one_platform(harness)
 
-    fresh = await harness.plugin.sync_preview()
-    restored = harness.plugin.get_pending_preview()
+    fresh = await harness.endpoints.sync_preview()
+    restored = harness.endpoints.get_pending_preview()
 
     assert fresh["success"] is True
     assert restored == {"success": True, "preview": fresh}
@@ -50,13 +50,13 @@ async def test_restores_the_payload_sync_preview_answered_with(harness):
 async def test_restored_preview_id_still_applies(harness):
     """The point of restoring the card: its Apply Sync must still be honoured."""
     _seed_one_platform(harness)
-    await harness.plugin.sync_preview()
+    await harness.endpoints.sync_preview()
 
-    restored = harness.plugin.get_pending_preview()
+    restored = harness.endpoints.get_pending_preview()
     preview = restored["preview"]
     assert preview is not None
 
-    applied = await harness.plugin.sync_apply_delta(preview["preview_id"])
+    applied = await harness.endpoints.sync_apply_delta(preview["preview_id"])
     assert applied == {"success": True, "message": "Applying changes"}
 
 
@@ -70,31 +70,31 @@ async def test_withheld_while_a_run_is_in_flight_then_handed_back(harness):
     run. Withheld, not discarded: once the run ends the same payload comes back.
     """
     _seed_one_platform(harness)
-    fresh = await harness.plugin.sync_preview()
-    box = harness.plugin._sync_service._box
+    fresh = await harness.endpoints.sync_preview()
+    box = harness.app.services.sync_service._box
     assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
 
-    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.endpoints.get_pending_preview() == {"success": True, "preview": None}
     assert box.pending_delta is not None
 
     # An overlapping apply keeps its own refusal — the withholding is the
     # restore reader's alone and must not leak into the apply's verdict.
-    rejected = await harness.plugin.sync_apply_delta(fresh["preview_id"])
+    rejected = await harness.endpoints.sync_apply_delta(fresh["preview_id"])
     assert rejected == {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
 
     box.finish_run("run-1")
-    assert harness.plugin.get_pending_preview() == {"success": True, "preview": fresh}
+    assert harness.endpoints.get_pending_preview() == {"success": True, "preview": fresh}
 
 
 async def test_over_age_snapshot_is_dropped(harness):
     """Past the TTL the read answers "nothing pending" and clears the staged
     snapshot, on the same rule the apply refuses it by."""
     _seed_one_platform(harness)
-    await harness.plugin.sync_preview()
-    box = harness.plugin._sync_service._box
+    await harness.endpoints.sync_preview()
+    box = harness.app.services.sync_service._box
     assert box.pending_delta is not None
 
-    harness.plugin._sync_service._orchestrator._clock.advance(1801)
+    harness.app.services.sync_service._orchestrator._clock.advance(1801)
 
-    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.endpoints.get_pending_preview() == {"success": True, "preview": None}
     assert box.pending_delta is None

@@ -144,8 +144,8 @@ class PlaytimeService:
     async def shutdown(self) -> None:
         """Cancel and await any outbox flush a session start left running.
 
-        Called from ``main._unload`` so a detached flush does not outlive the
-        backend. No-op when none is pending.
+        Called from ``Application.shutdown`` so a detached flush does not
+        outlive the backend. No-op when none is pending.
         """
         for task in self._flush_tasks:
             task.cancel()

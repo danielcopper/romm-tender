@@ -82,7 +82,7 @@ async def test_clear_game_core_bakes_post_clear_core_not_old_pin(harness):
     with harness.uow_factory() as uow:
         uow.roms.set_emulator_override(42, "VBA Next")
 
-    result = await harness.plugin.clear_game_core(42)
+    result = await harness.endpoints.clear_game_core(42)
 
     assert result["success"] is True
     assert result["app_id"] == 42
@@ -96,7 +96,7 @@ async def test_clear_game_core_bakes_post_clear_core_not_old_pin(harness):
 
 async def test_clear_game_core_unknown_rom_returns_canonical_failure(harness):
     """An unknown ROM returns the canonical ``{success, reason, message}`` failure."""
-    result = await harness.plugin.clear_game_core(999)
+    result = await harness.endpoints.clear_game_core(999)
 
     assert result["success"] is False
     assert result["reason"] == "not_found"
@@ -117,7 +117,7 @@ async def test_set_system_core_rebakes_only_unpinned_rom(harness):
     with harness.uow_factory() as uow:
         uow.roms.set_emulator_override(2, "mGBA")
 
-    result = await harness.plugin.set_system_core("gba", "VBA Next")
+    result = await harness.endpoints.set_system_core("gba", "VBA Next")
 
     assert result["success"] is True
     items = result["rebake_items"]
@@ -133,7 +133,7 @@ async def test_set_system_core_answers_exactly_its_rebake_list_and_lease(harness
     seed_es_systems(harness)
     seed_install(harness, 1, system="gba", platform_slug="gba", file_name="a.gba")
 
-    result = await harness.plugin.set_system_core("gba", "VBA Next")
+    result = await harness.endpoints.set_system_core("gba", "VBA Next")
 
     assert set(result) == {"success", "rebake_items", "prune_lease_token"}
     assert result["success"] is True
@@ -144,7 +144,7 @@ async def test_set_game_core_unbakeable_label_returns_canonical_failure(harness)
     seed_es_systems(harness)
     seed_install(harness, 5, system="gba", platform_slug="gba", file_name="c.gba")
 
-    result = await harness.plugin.set_game_core(5, "Not A Real Emulator")
+    result = await harness.endpoints.set_game_core(5, "Not A Real Emulator")
 
     assert result["success"] is False
     assert result["reason"] == "core_unavailable"
@@ -159,7 +159,7 @@ async def test_get_platform_core_info_payload_shape(harness):
     seed_es_systems(harness)
     seed_rom(harness, 42, platform_slug="gba")
 
-    result = await harness.plugin.get_platform_core_info(42)
+    result = await harness.endpoints.get_platform_core_info(42)
 
     assert set(result) == {
         "emulators",
@@ -185,7 +185,7 @@ async def test_get_platform_core_info_unavailable_when_no_es_systems(harness):
     """No es_systems (RetroDECK not detected) → emulator data flagged unavailable."""
     seed_rom(harness, 43, platform_slug="gba")
 
-    result = await harness.plugin.get_platform_core_info(43)
+    result = await harness.endpoints.get_platform_core_info(43)
 
     assert result["emulator_data_available"] is False
     assert result["emulators"] == []
@@ -195,7 +195,7 @@ async def test_get_system_core_info_payload_shape(harness):
     """The platform-keyed picker payload pins its keys and the resolved label."""
     seed_es_systems(harness)
 
-    result = await harness.plugin.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba")
 
     # No `success`: the callable has no in-band failure branch, so a key that
     # could only ever read True would be an offer of an answer it never gives.
@@ -214,7 +214,7 @@ async def test_get_system_core_info_answers_without_a_rom(harness):
     """
     seed_es_systems(harness)
 
-    result = await harness.plugin.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba")
 
     with harness.uow_factory() as uow:
         assert list(uow.roms.iter_all()) == []
@@ -225,15 +225,15 @@ async def test_get_system_core_info_reflects_a_landed_platform_core(harness):
     """After ``set_system_core`` the read answers with the new label, not the default."""
     seed_es_systems(harness)
 
-    assert (await harness.plugin.set_system_core("gba", "VBA Next"))["success"] is True
-    result = await harness.plugin.get_system_core_info("gba")
+    assert (await harness.endpoints.set_system_core("gba", "VBA Next"))["success"] is True
+    result = await harness.endpoints.get_system_core_info("gba")
 
     assert result["active_core_label"] == "VBA Next"
 
 
 async def test_get_system_core_info_unavailable_when_no_es_systems(harness):
     """No es_systems (RetroDECK not detected) → emulator data flagged unavailable."""
-    result = await harness.plugin.get_system_core_info("gba")
+    result = await harness.endpoints.get_system_core_info("gba")
 
     assert result["emulator_data_available"] is False
     assert result["emulators"] == []
@@ -252,7 +252,7 @@ async def test_the_firmware_overview_names_platforms_without_reading_them(harnes
     seed_rom(harness, 6, platform_slug="gba")  # bound → has_games
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
 
-    result = await harness.plugin.get_firmware_status()
+    result = await harness.endpoints.get_firmware_status()
 
     assert result["success"] is True
     assert result["server_offline"] is False
@@ -270,9 +270,9 @@ async def _named_platform(harness, slug: str) -> dict[str, Any]:
     and the per-platform call cannot answer — has to fail these, and a test that
     hardcoded the slug would pass through either.
     """
-    named = await harness.plugin.get_firmware_status()
+    named = await harness.endpoints.get_firmware_status()
     assert slug in [p["platform_slug"] for p in named["platforms"]]
-    answer = await harness.plugin.get_platform_firmware_status(slug)
+    answer = await harness.endpoints.get_platform_firmware_status(slug)
     assert answer["success"] is True
     assert answer["platform"] is not None
     return answer["platform"]
@@ -351,7 +351,7 @@ async def test_a_detected_installation_without_a_catalogue_reads_nothing_off_the
     seed_retrodeck_marker(harness)
     seed_rom(harness, 60, platform_slug="gba")
 
-    result = await harness.plugin.get_platform_core_info(60)
+    result = await harness.endpoints.get_platform_core_info(60)
 
     assert result["emulator_data_available"] is False
     assert result["emulators"] == []
@@ -371,7 +371,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
     seed_es_systems(harness, _SWITCH_ES_SYSTEMS_XML)
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
 
-    result = await harness.plugin.get_system_core_info("switch")
+    result = await harness.endpoints.get_system_core_info("switch")
 
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [
@@ -403,7 +403,7 @@ async def test_the_same_standalone_is_the_default_once_its_component_is_there(ha
     seed_es_find_rules(harness, _SWITCH_ES_FIND_RULES_XML)
     seed_component_launcher(harness, "ryubing")
 
-    result = await harness.plugin.get_system_core_info("switch")
+    result = await harness.endpoints.get_system_core_info("switch")
 
     assert [(e["label"], e["bakeable"], e["is_default"]) for e in result["emulators"]] == [
         ("Ryubing (Standalone)", True, True),

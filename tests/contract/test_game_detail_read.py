@@ -43,7 +43,7 @@ async def test_cached_game_detail_carries_version_metadata(harness):
     """The payload pins the version-metadata keys as JSON-native shapes."""
     app_id = _seed_versioned_rom(harness)
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["found"] is True
     assert result["rom_id"] == 42
@@ -61,7 +61,7 @@ async def test_cached_game_detail_empty_version_metadata_is_empty_shapes(harness
     so the frontend can hide the row without probing for undefined."""
     app_id = _seed_versioned_rom(harness, regions=(), languages=(), revision="", tags=(), is_main_sibling=False)
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["found"] is True
     assert result["regions"] == []
@@ -75,7 +75,7 @@ async def test_cached_game_detail_carries_fs_size_bytes(harness):
     """The payload pins the server-reported ROM size as an int (#1395)."""
     app_id = _seed_versioned_rom(harness, fs_size_bytes=3_145_728)
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["found"] is True
     assert result["fs_size_bytes"] == 3_145_728
@@ -86,7 +86,7 @@ async def test_cached_game_detail_null_fs_size_bytes_rides_as_none(harness):
     frontend hides it without probing for undefined."""
     app_id = _seed_versioned_rom(harness, fs_size_bytes=None)
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["found"] is True
     assert result["fs_size_bytes"] is None
@@ -94,7 +94,7 @@ async def test_cached_game_detail_null_fs_size_bytes_rides_as_none(harness):
 
 async def test_cached_game_detail_unknown_app_id_is_not_found(harness):
     """An app_id with no ROM returns the ``{found: False}`` sentinel — no version keys."""
-    result = await harness.plugin.get_cached_game_detail(999999)
+    result = await harness.endpoints.get_cached_game_detail(999999)
 
     assert result == {"found": False}
 
@@ -111,7 +111,7 @@ async def test_cached_game_detail_cold_firmware_cache_is_unknown(harness):
     """A never-filled firmware cache carries no BIOS answer and says so."""
     app_id = _seed_versioned_rom(harness, platform_slug="psvita")
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["bios_status"] is None
     assert result["bios_status_unknown"] is True
@@ -126,9 +126,9 @@ async def test_cached_game_detail_never_carries_a_bios_answer(harness):
     """
     app_id = _seed_versioned_rom(harness, platform_slug="psvita")
     # The overview read fills every cache the game-detail path could draw on.
-    await harness.plugin.get_firmware_status()
+    await harness.endpoints.get_firmware_status()
 
-    result = await harness.plugin.get_cached_game_detail(app_id)
+    result = await harness.endpoints.get_cached_game_detail(app_id)
 
     assert result["bios_status"] is None
     assert result["bios_status_unknown"] is True
@@ -147,7 +147,7 @@ async def test_bios_status_unreachable_server_is_unknown(harness):
     _seed_versioned_rom(harness, platform_slug="psvita")
     harness.romm.list_firmware_side_effect = RuntimeError("offline")
 
-    result = await harness.plugin.get_bios_status(42)
+    result = await harness.endpoints.get_bios_status(42)
 
     assert result["bios_status"] is None
     assert result["bios_level"] == "unknown"
@@ -166,7 +166,7 @@ async def test_bios_status_without_an_emulator_list_is_unknown(harness):
     """
     _seed_versioned_rom(harness, platform_slug="psvita")
 
-    result = await harness.plugin.get_bios_status(42)
+    result = await harness.endpoints.get_bios_status(42)
 
     assert result["bios_status"] is None
     assert result["bios_status_unknown"] is True

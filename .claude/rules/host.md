@@ -50,13 +50,13 @@ policy built from the wish refuses every request there is.
 
 ## 4. An event carrying a claim is awaited, never scheduled
 
-`EventSink.emit` answers whether anybody heard. `main.py` hands every service that `emit` itself, so the answer reaches
-the service that emitted, and four act on it for a prune claim on an event whose Steam-side work outlives the backend's:
-the library service for the ones it attaches to `sync_complete` and `sync_stale`, the download service for the one it
-attaches to `download_complete`, the prune service for the one on `prune_complete`, and the migration service for the
-one on `migration_relaunch_options`. Each can only act on it if the emit was **awaited**. Scheduled as a task, the
-answer arrives after the claim has already been handed out, and a claim nobody can discharge holds off every
-removed-game cleanup until it expires.
+`EventSink.emit` answers whether anybody heard. Every service is handed that `emit` itself (`main.py` passes it to
+`build_application`), so the answer reaches the service that emitted, and four act on it for a prune claim on an event
+whose Steam-side work outlives the backend's: the library service for the ones it attaches to `sync_complete` and
+`sync_stale`, the download service for the one it attaches to `download_complete`, the prune service for the one on
+`prune_complete`, and the migration service for the one on `migration_relaunch_options`. Each can only act on it if the
+emit was **awaited**. Scheduled as a task, the answer arrives after the claim has already been handed out, and a claim
+nobody can discharge holds off every removed-game cleanup until it expires.
 
 ## 5. The size cap is judged before the payload is buffered
 

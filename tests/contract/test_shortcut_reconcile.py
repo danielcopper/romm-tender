@@ -23,7 +23,7 @@ async def test_unbinds_dead_appid_keeps_live(harness):
     seed_rom(harness, 2, shortcut_app_id=200)
     seed_rom(harness, 3, shortcut_app_id=300)
 
-    result = await harness.plugin.reconcile_shortcuts([100, 200])
+    result = await harness.endpoints.reconcile_shortcuts([100, 200])
 
     assert result["success"] is True
     assert result["unbound_count"] == 1
@@ -40,7 +40,7 @@ async def test_all_present_no_unbind(harness):
     seed_rom(harness, 1, shortcut_app_id=100)
     seed_rom(harness, 2, shortcut_app_id=200)
 
-    result = await harness.plugin.reconcile_shortcuts([100, 200])
+    result = await harness.endpoints.reconcile_shortcuts([100, 200])
 
     assert result == {
         "success": True,
@@ -57,7 +57,7 @@ async def test_empty_live_set_unbinds_all(harness):
     seed_rom(harness, 1, shortcut_app_id=100)
     seed_rom(harness, 2, shortcut_app_id=200)
 
-    result = await harness.plugin.reconcile_shortcuts([])
+    result = await harness.endpoints.reconcile_shortcuts([])
 
     assert result["success"] is True
     assert result["unbound_count"] == 2
@@ -76,11 +76,11 @@ async def test_unbind_drops_row_from_app_id_rom_id_map(harness):
     seed_rom(harness, 1, shortcut_app_id=100)
     seed_rom(harness, 2, shortcut_app_id=200)
 
-    before = harness.plugin.get_app_id_rom_id_map()
+    before = harness.endpoints.get_app_id_rom_id_map()
     assert before == {"100": 1, "200": 2}
 
-    await harness.plugin.reconcile_shortcuts([100])
+    await harness.endpoints.reconcile_shortcuts([100])
 
-    after = harness.plugin.get_app_id_rom_id_map()
+    after = harness.endpoints.get_app_id_rom_id_map()
     assert after == {"100": 1}
     assert "200" not in after

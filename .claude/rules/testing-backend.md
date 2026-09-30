@@ -36,7 +36,7 @@ it, so nothing is created and nothing is left unclosed (#806).
 Neither answers for a service that touches its loop from a **worker thread** (an executor callback calling
 `call_soon_threadsafe`, as the download progress does): off the loop thread there is no running loop to resolve against,
 so that service needs the real loop object. Take it in an **async** fixture — at construction, the way
-`tests/contract/_harness.py` builds the real `Plugin`, or afterwards through an autouse fixture that rebinds each
+`tests/contract/_harness.py` builds the real services, or afterwards through an autouse fixture that rebinds each
 service's `_loop`, the way `tests/services/test_downloads.py` does.
 
 Neither shape is available where the test **body** builds the service: no fixture does the constructing, and at fixture
@@ -62,13 +62,15 @@ belongs in a vector; stating it as a property too is two places to maintain for 
 FAILS today — pin it `@pytest.mark.xfail(strict=True, reason="#<issue>: <one-line>")`. When the fix lands the property
 passes → XPASS → CI fails → the marker must be removed. A property is never weakened to go green.
 
-## Contract tests — real `Plugin` over real `bootstrap`
+## Contract tests — real `Endpoints` over real `bootstrap`
 
-`tests/contract/` crosses the frontend↔backend wire: it builds the **real** `Plugin` through the **real** `bootstrap()`
-and `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under `tmp_path`) and
-drives the actual `main.py` callables. Only the outermost edges are faked (`romm_api`, `sgdb_adapter`,
+`tests/contract/` crosses the frontend↔backend wire: it builds the **real** `Endpoints` through the **real**
+`bootstrap()` and `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under
+`tmp_path`) and drives the actual endpoints. Only the outermost edges are faked (`romm_api`, `sgdb_adapter`,
 Clock/UuidGen/Sleeper, `emit`, and `http_adapter.with_retry` as a single-attempt pass-through). Harness lives in
-`tests/contract/_harness.py`; seeding helpers in `tests/contract/_seed.py`.
+`tests/contract/_harness.py`; seeding helpers in `tests/contract/_seed.py`. The harness constructs the `Application`
+itself from the wired services and runs none of its start-up repairs, `open_network` or `shutdown`; a test reaches a
+service through `harness.app.services` and the live settings dict through `harness.settings`.
 
 - **Call callables exactly as the frontend does** — positional, JSON-shaped arguments with the arg types declared in
   `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`).
@@ -78,8 +80,8 @@ Clock/UuidGen/Sleeper, `emit`, and `http_adapter.with_retry` as a single-attempt
 - The `harness` fixture is **async** so it binds the test's running event loop. Each test gets a fresh `tmp_path`.
 
 `scripts/check_callable_manifest.py` derives the frontend surface from every `callable<[Args], Return>("name")` in
-`frontend/src/**/*.ts` and the backend surface from the endpoints on `Plugin` (public, `@route` first), failing on any
-name or arity divergence. It runs standalone in CI and inside pytest via `tests/contract/test_callable_manifest.py`.
+`frontend/src/**/*.ts` and the backend surface from the endpoints on `Endpoints` (public, `@route` first), failing on
+any name or arity divergence. It runs standalone in CI and inside pytest via `tests/contract/test_callable_manifest.py`.
 
 ## Gate tests — `tests/scripts/`
 

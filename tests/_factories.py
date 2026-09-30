@@ -12,10 +12,14 @@ Import as ``from _factories import _make_retry`` — ``tests/`` is on the path
 via the root conftest, the same way ``fakes/`` is reached.
 """
 
+import dataclasses
 import logging
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from bootstrap import Application, ServicesBundle
+from fakes.running_loop import running_loop
 
 from lib.conflict_rules import ConflictRuleSet
 from lib.prune_conflicts import PruneConflicts
@@ -68,8 +72,18 @@ def _make_conflict_rules(
     )
 
 
-def _make_testable_plugin():
-    """Return a bare ``Plugin`` for the endpoint delegation tests to hang their mocked services on."""
-    from main import Plugin
+def _make_services_bundle(**services: Any) -> ServicesBundle:
+    """A ``ServicesBundle`` whose every field is a ``MagicMock``, except the ones named."""
+    wired: dict[str, Any] = {field.name: MagicMock() for field in dataclasses.fields(ServicesBundle)}
+    wired.update(services)
+    return ServicesBundle(**wired)
 
-    return Plugin()
+
+def _make_application(services: ServicesBundle) -> Application:
+    """A real ``Application`` over *services*, as a synchronous fixture can build one."""
+    return Application(
+        services,
+        logger=logging.getLogger("test-application"),
+        loop=running_loop(),
+        user_agent="romm-tender/0.0.0-test",
+    )

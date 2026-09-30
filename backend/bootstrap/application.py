@@ -1,0 +1,159 @@
+"""The built backend — every wired service, and what the process does with them as a whole.
+
+Contract: :func:`build_application` composes :func:`bootstrap` and
+:func:`wire_services` into an :class:`Application`, and runs nothing. What runs,
+and when, is the entry point's to decide: the start-up repairs before the port
+is bound, :meth:`Application.open_network` after it, :meth:`Application.shutdown`
+at the end. The endpoints are not here — they are ``main.py``'s, and reach the
+services through :attr:`Application.services`.
+
+The failure recorder is handed to :meth:`Application.run_startup_repairs` as a
+callable rather than as the host's status record, because ``bootstrap/`` may not
+import ``host/``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
+
+from domain.identity import MIN_ROMM_VERSION
+
+from .adapters import RuntimeBundle, bootstrap
+from .services import WiringConfig, wire_services
+from .startup import StartupSteps
+
+if TYPE_CHECKING:
+    import logging
+    from collections.abc import Callable
+
+    from domain.app_directories import AppDirectories
+    from domain.update_release import UpdateSource
+    from services.protocols import EventEmitter
+
+    from .services import ServicesBundle
+
+
+class Application:
+    """Every wired service, the start-up repairs, and the process's network step and shutdown."""
+
+    def __init__(
+        self,
+        services: ServicesBundle,
+        *,
+        logger: logging.Logger,
+        loop: asyncio.AbstractEventLoop,
+        user_agent: str,
+    ) -> None:
+        self.services = services
+        self.user_agent = user_agent
+        self._logger = logger
+        self._loop = loop
+        # The one-time save-directory backfill, held so the loop cannot collect it.
+        self._save_directory_backfill: asyncio.Task[None] | None = None
+
+    def run_startup_repairs(self, report_failure: Callable[[str], None]) -> None:
+        """Run the start-up repairs, each one reporting a failure rather than raising it.
+
+        Everything here must be through before the port is bound, which is what
+        makes the port file mean "ready". The one start-up step that talks to the
+        network is deliberately not here — see :meth:`open_network`.
+        """
+        steps = StartupSteps(self._logger, report_failure)
+        services = self.services
+        steps.run("note_update_outcome", services.update_outcome_service.note_start)
+        # The prune may run only after a SUCCESSFUL detection: it reads the
+        # pending homes the detection writes, and without them it takes every
+        # install under the home RetroDECK just left for orphaned.
+        if steps.run("detect_retrodeck_path_change", services.migration_service.detect_retrodeck_path_change):
+            steps.run("prune_stale_installed_roms", services.startup_healing_service.prune_stale_installed_roms)
+        steps.run("reconcile_orphaned_sync_runs", services.startup_healing_service.reconcile_orphaned_sync_runs)
+        # No save-sync orphan prune: roms rows are permanent identity anchors
+        # and saves/playtime survive a ROM leaving RomM (ADR-0007).
+        steps.run("prune_orphaned_artwork_cache", services.sgdb_service.prune_orphaned_artwork_cache)
+        steps.run("prune_orphaned_staging_artwork", services.artwork_service.prune_orphaned_staging_artwork)
+        steps.run("prune_orphaned_cover_cache", services.artwork_service.prune_orphaned_cover_cache)
+        steps.run("cleanup_leftover_tmp_files", services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files)
+        steps.run("record_save_directories", self._start_save_directory_backfill)
+
+    async def open_network(self) -> None:
+        """The one start-up step that makes a network request.
+
+        Runs after the port is announced, so an unreachable or slow RomM costs
+        the panel nothing: readiness is not held hostage to a server this backend
+        does not control. Upgrades a stored-password install to a Client API
+        Token; the method swallows every failure, so a mint failure never blocks
+        anything.
+        """
+        await self.services.connection_service.migrate_legacy_credentials()
+
+    async def shutdown(self) -> None:
+        """Stop the save-directory backfill if it is still running, then shut the services down."""
+        backfill = self._save_directory_backfill
+        if backfill is not None:
+            backfill.cancel()
+            await asyncio.gather(backfill, return_exceptions=True)
+        services = self.services
+        services.sync_service.shutdown()
+        await services.prune_service.shutdown()
+        await services.download_service.shutdown()
+        await services.migration_service.shutdown()
+        await services.session_lifecycle_service.shutdown()
+        await services.playtime_service.shutdown()
+
+    def _start_save_directory_backfill(self) -> None:
+        """Start the one-time save-directory backfill without holding up start-up.
+
+        It asks the resolver once per installed ROM, which on a large library
+        takes a while; the task is kept here so the loop cannot collect it
+        mid-run and :meth:`shutdown` can cancel it.
+        """
+        self._save_directory_backfill = self._loop.create_task(
+            self.services.save_sync_service.record_save_directories_once()
+        )
+
+
+def build_application(
+    *,
+    directories: AppDirectories,
+    update_source: UpdateSource,
+    user_home: str,
+    logger: logging.Logger,
+    loop: asyncio.AbstractEventLoop,
+    emit: EventEmitter,
+) -> Application:
+    """Build every adapter and wire every service into an :class:`Application`.
+
+    Runs none of the start-up repairs; the caller does, once it has somewhere
+    to record a failure. Settings are loaded and migrated inside
+    :func:`bootstrap`, so every adapter that binds the live settings dict binds
+    the migrated one.
+    """
+    result = bootstrap(
+        directories=directories,
+        update_source=update_source,
+        user_home=user_home,
+        logger=logger,
+    )
+    services = wire_services(
+        WiringConfig(
+            adapters=result.adapters,
+            stores=result.stores,
+            runtime=RuntimeBundle(
+                loop=loop,
+                logger=logger,
+                emit=emit,
+                clock=result.runtime_adapters.clock,
+                uuid_gen=result.runtime_adapters.uuid_gen,
+                sleeper=result.runtime_adapters.sleeper,
+                hostname_provider=result.runtime_adapters.hostname_provider,
+                machine_id_provider=result.runtime_adapters.machine_id_provider,
+            ),
+            callbacks=result.callbacks,
+            min_required_version=MIN_ROMM_VERSION,
+            directories=directories,
+            launcher=result.launcher,
+            update_source=update_source,
+        )
+    )
+    return Application(services, logger=logger, loop=loop, user_agent=result.user_agent)

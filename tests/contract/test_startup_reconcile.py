@@ -17,14 +17,14 @@ from ._seed import seed_install, seed_rom
 
 async def test_no_installs_returns_empty_list(harness):
     """Nothing installed → empty list (the frontend no-ops on it)."""
-    result = await harness.plugin.get_installed_relaunch_options()
+    result = await harness.endpoints.get_installed_relaunch_options()
     assert result == {"success": True, "items": [], "prune_lease_token": None}
 
 
 async def test_installed_bound_rom_shape(harness):
     """An installed+bound ROM → one {app_id, launch_options} item with a real command."""
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
-    result = await harness.plugin.get_installed_relaunch_options()
+    result = await harness.endpoints.get_installed_relaunch_options()
     assert result["success"] is True
     assert result["prune_lease_token"].startswith("installed_reconcile:")
     assert len(result["items"]) == 1
@@ -40,5 +40,5 @@ async def test_installed_bound_rom_shape(harness):
 async def test_bound_rom_without_install_is_excluded(harness):
     """A ROM bound to a shortcut but not installed → no item (no install row)."""
     seed_rom(harness, 7, platform_slug="gba", shortcut_app_id=7)
-    result = await harness.plugin.get_installed_relaunch_options()
+    result = await harness.endpoints.get_installed_relaunch_options()
     assert result == {"success": True, "items": [], "prune_lease_token": None}

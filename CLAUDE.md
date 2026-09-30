@@ -75,8 +75,8 @@ new code in it.
   entity proof is the default and only the three byte-stream fetches opt out. Tests pin both directions; nothing else
   does. Also owns the transport's reachability state: a new request method sends through `_urlopen` (checked) and passes
   `romm_origin=False` if it does not talk to RomM (not checked).
-- `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, which half of `bootstrap/` new wiring belongs in, and why
-  `Plugin.run` is a synchronous classmethod.
+- `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, which module of `bootstrap/` new wiring belongs in, what
+  the `Application` and `Endpoints` each hold, and why `run()` is synchronous.
 - `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-callable failure shapes, the
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
@@ -186,16 +186,16 @@ locally with `mise run docs`.
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
-  `Plugin` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the one
-  placement `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public method
-  as such: the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so those
-  declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
-  `tests/host/test_dispatch.py`.
+  `Endpoints` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the
+  one placement `scripts/check_callable_manifest.py` accepts. Nothing flags a missing or stray `@route` on a public
+  method as such: the gate sees either only as a name the frontend's `callable("name")` declarations disagree with, so
+  those declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's
+  by `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
-- **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`_MIN_REQUIRED_VERSION` in
-  `main.py`) — the plugin is inert until the server is updated.
+- **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
+  `domain/identity.py`) — the plugin is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403, and GitHub's API refuses a request with no UA at all. The three adapters that talk to a server off this
   machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`, `adapters/github_releases.py`) take a `user_agent: str`
@@ -372,7 +372,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   a call reached through `getattr`; and a subprocess
 - **Where this program's directories are is resolved once from the environment, and every consumer reads them off
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
-  built-in defaults); `Plugin.run` resolves it once and hands it to `bootstrap()`, which derives nothing, and
+  built-in defaults); `main.run()` resolves it once and hands it to `bootstrap()`, which derives nothing, and
   `RuntimeBundle` carries no directory. Re-derivable data goes under `cache_dir`, data that is not re-derivable under
   `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
   second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
@@ -566,7 +566,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
-- **Every RomM minimum stated for a reader matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
+- **Every RomM minimum stated for a reader matches the enforced `MIN_ROMM_VERSION`** — check —
   `scripts/check_romm_min_version.py`, over the statements its `CLAIMS` list names; unchecked: a restatement not yet
   added there, and the examples above the floor (`5.3.1-beta`, `5.4.0-alpha.1`) beside those statements. ADRs are out of
   scope: frozen history

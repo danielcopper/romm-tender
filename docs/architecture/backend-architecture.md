@@ -14,13 +14,15 @@ application. Code is split into layers with a strictly enforced dependency direc
 
 Services depend on **Protocols** (defined in `services/protocols/`), never on concrete adapter classes. Adapters
 implement those Protocols. `bootstrap/` is the composition root — the only place where concrete adapters meet services.
-`main.py` owns the process lifecycle and the callable surface; it holds no business logic.
+`bootstrap/` also builds the `Application` — every wired service, the start-up repairs, the network step and the
+shutdown. `main.py` owns the process entry (`run()` and `build_backend()`) and the endpoints; it holds no business
+logic.
 
 ```python
-class Plugin:
-    # No base classes — pure composition
-    # Owns: the lifecycle (_main / _unload) and the callable surface
-    # Delegates: all business logic to services, all I/O to adapters
+class Endpoints:
+    # Holds: the Application's services and the host's status record, both handed in
+    # Owns: the endpoints — one public method marked @route each
+    # Delegates: every use case to a service, every I/O to an adapter behind it
 ```
 
 ## The host (`backend/host/`)
@@ -39,7 +41,7 @@ transport exists.
 | -------------------- | -------------------------------------------------------------------------------- |
 | `protocol.py`        | The four message kinds and the transport-reason vocabulary                       |
 | `access.py`          | The three admission checks — Host, Origin, Token — in that order                 |
-| `dispatch.py`        | Name resolution onto the plugin object, the exception boundary, the answer cap   |
+| `dispatch.py`        | Name resolution onto `Endpoints`, the exception boundary, the answer cap         |
 | `connection.py`      | One live WebSocket: frame reading, the frame cap, the heartbeat, calls in flight |
 | `events.py`          | Where an event leaves the process, and whether anybody heard it                  |
 | `server.py`          | The bind and its fallback, the file route, the upgrade, newest-connection-wins   |
@@ -64,9 +66,9 @@ event  {type, name, payload}
 `error.reason` is the **transport** layer — `method_unknown`, `payload_too_large`, `backend_exception`,
 `malformed_message`, `connection_lost`. A callable's own failure is a successful transport and arrives inside `result`
 in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so
-keeping the two apart is prose and review. Reachable methods are exactly the endpoints on `Plugin`: the public methods
-marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set is the
-one `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
+keeping the two apart is prose and review. Reachable methods are exactly the endpoints on `Endpoints`: the public
+methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
+is the one `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
@@ -75,10 +77,10 @@ socket. Breaking the second rejects every call in flight, which is why one overs
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
 
-**Events leave through a seam `Plugin._main` is handed, never a module-level call.** It is the host sink's `emit`, an
-`EventEmitter` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered: an event with no
-panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and "sync
-finished" delivered three hours later lands in a session that never started one.
+**Events leave through a seam `build_application` is handed, never a module-level call.** It is the host sink's `emit`,
+an `EventEmitter` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered: an event with
+no panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and
+"sync finished" delivered three hours later lands in a session that never started one.
 
 The answer is what a prune claim on an event needs. Five events carry one, because their Steam-side work outlives the
 backend's, and the service that emits each takes it when it emits, through `ConflictRules.emit_under_lease`: the library
@@ -105,18 +107,22 @@ So "the port file is there" means "the backend is ready", and there is no readin
 backend never reaches the port fallback — the lock refused it first — so a fallback always means some other program
 holds the port. The port file is a hint; connecting to it is the proof.
 
-**A start-up routine's failure is counted, not fatal** (`bootstrap/startup.py`). One edge binds two of them:
+**A start-up routine's failure is counted, not fatal** (`bootstrap/startup.py`). `Application.run_startup_repairs` runs
+them all, in one order, and reports each failure to the recorder it is handed. One edge binds two of them:
 `prune_stale_installed_roms` runs only after `detect_retrodeck_path_change` **succeeded**, because the prune reads the
-pending homes the detection writes.
+pending homes the detection writes. `build_application` runs none of them; the entry point runs them after building and
+before the port is bound. The network step (`Application.open_network`) and the shutdown (`Application.shutdown`) reach
+the host only on the `BackendBuild` the build answers with; a build that failed answers none, and the host shuts nothing
+down.
 
 ## Dependency Diagram
 
 ```text
 host/ (the process: lock, port, protocol, lifetime — imports none of the below)
     ↑ dispatches onto
-main.py (Plugin — lifecycle + callable routing; the only importer of host/)
+main.py (run(), build_backend() — the process; Endpoints — the endpoints; the only importer of host/)
     ↓ calls
-bootstrap/ (composition root: adapters.bootstrap() builds adapters, services.wire_services() builds services)
+bootstrap/ (composition root: build_application() composes adapters.bootstrap() and services.wire_services() into an Application)
     ↓ creates
 ┌─────────────────────────────────────────────────────────┐
 │ Adapters (own all I/O — implement Protocols)            │
@@ -1514,10 +1520,10 @@ early exit so a concurrent `start_download` for the same rom is rejected rather 
 #### ConnectionService notes
 
 **The minimum-version gate is SemVer-aware on `SYSTEM.VERSION`.** `domain.version.meets_min_version` compares the
-numeric core against `_MIN_REQUIRED_VERSION`; when the core equals the floor, a `-alpha` / `-beta` suffix
-(case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1` fails at
-floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. Why the floor sits where
-it does is recorded in [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md).
+numeric core against `MIN_ROMM_VERSION` (`domain/identity.py`); when the core equals the floor, a `-alpha` / `-beta`
+suffix (case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1`
+fails at floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. Why the floor
+sits where it does is recorded in [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md).
 
 **A Client API Token is bound to the server it was minted against.** When the token is minted, the canonical origin of
 `romm_url` (full `scheme://host[:port]`, default ports folded out, path/query dropped — `lib/url_host.normalize_origin`)
@@ -2346,12 +2352,12 @@ from the other layers.
 
 ### Other
 
-| File                 | Role                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| `main.py`            | Plugin class — lifecycle (`_main`/`_unload`) and the endpoints (one method marked `@route` per endpoint) |
-| `bootstrap/`         | Composition root — `adapters.bootstrap()` builds adapters, `services.wire_services()` builds services    |
-| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                   |
-| `lib/list_result.py` | `ErrorCode` and the canonical callable failure shape                                                     |
+| File                 | Role                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `main.py`            | `run()` and `build_backend()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint) |
+| `bootstrap/`         | Composition root — `build_application()` composes `bootstrap()` and `wire_services()` into an `Application` |
+| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                      |
+| `lib/list_result.py` | `ErrorCode` and the canonical callable failure shape                                                        |
 
 ## Where user data lives
 
@@ -2452,30 +2458,40 @@ whether a later start re-reads Steam's file at all.
 
 ## Composition Root (`bootstrap/`)
 
-The composition root is a package of two halves, one per phase, plus an `__init__.py` that is namespace and re-exports
-only — consumers write `from bootstrap import …` and never deep-import a submodule:
+The composition root is a package of two halves, one per phase, the `Application` that composes them, the wrapper each
+start-up repair runs through (`startup.py`), and an `__init__.py` that is namespace and re-exports only — consumers
+write `from bootstrap import …` and never deep-import a submodule:
 
 1. **`adapters.py`** — owns `bootstrap()`, which is **told** where the directories are, and where releases are asked
    for, rather than deriving them, then builds every adapter, applies the SQLite schema migrations, and loads + migrates
    `settings.json` (folding in the one-time legacy `save_sync_state.json` settings) so the settings persister binds the
    live mutable `settings` dict at construction. Returns a typed `BootstrapResult` carrying four bundles (`adapters`,
-   `stores`, `callbacks`, `runtime_adapters`), a small `handles` struct for Plugin-only outputs, `directories` — the
-   `AppDirectories` this run was handed, seven fields — `launcher`, where the shortcut launcher lives in the bin root
-   and whether this start got it there, and `user_agent`, `<package name>/<version>` composed once from the constants in
-   `domain/identity.py`: the outgoing User-Agent, which is also the identity the host answers under. The bundle
-   dataclasses are defined here too — they are the vocabulary the second half consumes.
+   `stores`, `callbacks`, `runtime_adapters`), `directories` — the `AppDirectories` this run was handed, seven fields —
+   `launcher`, where the shortcut launcher lives in the bin root and whether this start got it there, and `user_agent`,
+   `<package name>/<version>` composed once from the constants in `domain/identity.py`: the outgoing User-Agent, which
+   is also the identity the host answers under. The bundle dataclasses are defined here too — they are the vocabulary
+   the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
    `min_required_version`, `directories`, `launcher` and `update_source`, and constructs every service, injecting each
    one's `*ServiceConfig`. Returns a frozen `ServicesBundle` holding every service and the prune conflicts as typed
    fields.
 
-The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`
-composes the runtime bundle (event loop, the event sink's emit) and calls `wire_services()`. Services receive the
-`settings` dict (the only field on `StateBundle`) plus the SQLite Unit-of-Work factory / repository handles for all
-relational state — no plural in-memory state dicts remain. Some services are constructed before others to satisfy
-ordering constraints (e.g. `MigrationService` before `SaveService` so save sync can gate on a pending RetroDECK home
-migration). Forward references between peers are threaded via `LateBinding`.
+3. **`application.py`** — owns `Application` and `build_application()`. `build_application()` is synchronous: it calls
+   `bootstrap()`, composes the runtime bundle from the loop and the event sink's emit the entry point hands it, passes
+   `MIN_ROMM_VERSION` from `domain/identity.py` as `min_required_version`, calls `wire_services()`, and answers an
+   `Application` holding the `ServicesBundle` as one field (`services`). It runs nothing. The `Application` runs the
+   start-up repairs (`run_startup_repairs`, which also starts the save-directory backfill it holds), `open_network()`
+   and `shutdown()` — each when the entry point calls it. Its constructor takes a ready `ServicesBundle`, which is the
+   seam the contract harness uses: it swaps adapters between `bootstrap()` and `wire_services()` and constructs the
+   `Application` itself.
+
+The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then
+`build_application()` composes the runtime bundle (event loop, the event sink's emit) and calls `wire_services()`.
+Services receive the `settings` dict (the only field on `StateBundle`) plus the SQLite Unit-of-Work factory / repository
+handles for all relational state — no plural in-memory state dicts remain. Some services are constructed before others
+to satisfy ordering constraints (e.g. `MigrationService` before `SaveService` so save sync can gate on a pending
+RetroDECK home migration). Forward references between peers are threaded via `LateBinding`.
 
 `bootstrap()` also logs, at info rather than behind the debug toggle, which interpreter the vendored resolver would run
 its core probe under: `describe_core_probe_interpreter()` (`adapters/atlas_saves.py`). The resolver derives it from the
@@ -2487,9 +2503,9 @@ Nothing fails when that happens, which is why the answer is logged: the caveats 
 `core-generation-unestablished`) do reach the debug log and the wire, but that line is the only place their cause is
 named.
 
-Per the process-boundary rule, adapter instantiation never happens in `main.py`, and no service wiring happens in
-`bootstrap/`'s caller other than via `wire_services()`. Both modules are governed by the ~1000-LOC decomposition
-threshold (`scripts/check_module_size.py`), neither is grandfathered.
+Per the process-boundary rule, adapter instantiation never happens in `main.py`, and no service wiring happens outside
+`bootstrap/`. Every module in `bootstrap/` is governed by the ~1000-LOC decomposition threshold
+(`scripts/check_module_size.py`), and none is grandfathered.
 
 ## Protocol Interfaces
 

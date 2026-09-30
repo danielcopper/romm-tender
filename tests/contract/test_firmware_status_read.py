@@ -96,11 +96,11 @@ async def _compose(harness) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     it was asked about — or answers nothing where the skeleton named it — is a
     composition failure rather than a result to carry on with.
     """
-    skeleton = await harness.plugin.get_firmware_status()
+    skeleton = await harness.endpoints.get_firmware_status()
     assert skeleton["success"] is True
     entries: list[dict[str, Any]] = []
     for named in skeleton["platforms"]:
-        answer = await harness.plugin.get_platform_firmware_status(named["platform_slug"])
+        answer = await harness.endpoints.get_platform_firmware_status(named["platform_slug"])
         assert answer["success"] is True
         entry = answer["platform"]
         if entry is None:

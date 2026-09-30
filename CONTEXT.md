@@ -254,12 +254,25 @@ session it can happen at most once and counting inside a session counts to one f
 
 The word names two different things:
 
-- **Tender endpoint** — a public method marked `@route`, which the panel reaches over the host's socket; nothing else is
-  reachable that way. Its name is the name the panel calls it by, through its `callable()` function.
+- **Tender endpoint** — a public method marked `@route` on **Endpoints**, which the panel reaches over the host's
+  socket; nothing else is reachable that way. Its name is the name the panel calls it by, through its `callable()`
+  function.
 - **Server endpoint** — an HTTP route of a server Tender talks to: RomM's (`/api/roms`, …), in RomM's own sense of the
   word, and likewise SteamGridDB's.
 
 _Avoid_: **callable** for a Tender endpoint — that is the panel's function that reaches one, not the method it reaches.
+
+### Application / Endpoints
+
+Two objects the backend is made of, built in this order:
+
+- **Application** — the backend as `bootstrap/` builds it (`build_application()`): every wired service, plus what the
+  process does with them as a whole — the start-up repairs, the one start-up step that talks to the network, and the
+  shutdown. It runs none of them by itself; the entry point calls each at its moment.
+- **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application and the host's status
+  record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
+
+_Avoid_: **Plugin** for either — "the plugin" is Tender itself ([What Tender is](#what-tender-is)).
 
 ### Persistence boundary (settings.json / SQLite)
 

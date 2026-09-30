@@ -1,6 +1,6 @@
 """Contract tests for the upload-time 409 backstop (ADR-0017, #1276).
 
-Driven frontend-shaped through the real ``Plugin`` / ``bootstrap`` harness.
+Driven frontend-shaped through the real ``Endpoints`` / ``bootstrap`` harness.
 The automatic save-sync dispatch always POSTs a new save with
 ``overwrite=false``; RomM answers a stale-current race with a 409 that the
 matrix backstops by re-fetching the slot and re-deciding purely from hashes
@@ -26,7 +26,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> str:
     """Write a real local save under the resolved saves dir; return its path."""
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -66,7 +66,7 @@ async def test_saves_upload_409_stale_downgrades_to_download(harness):
         content=b"newer from device B",
     )
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
 
     assert result["success"] is True
     assert result["synced"] == 1
@@ -81,7 +81,7 @@ async def test_saves_upload_409_stale_downgrades_to_download(harness):
     # …then the backstop downloaded the fresh server head into the local file.
     downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
     assert [c[1][0] for c in downloads] == [foreign["id"]]
-    local = os.path.join(harness.plugin._retrodeck_paths.saves_path(), "gba", "game.srm")
+    local = os.path.join(harness.retrodeck_paths.saves_path(), "gba", "game.srm")
     with open(local, "rb") as fh:
         assert fh.read() == b"newer from device B"
 
@@ -110,7 +110,7 @@ async def test_saves_upload_409_stale_with_local_edit_surfaces_conflict(harness)
         "device_syncs": [{"device_id": "device-1", "is_current": True, "last_synced_at": "2026-03-01T00:00:00Z"}],
     }
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
 
     assert result["synced"] == 0
     assert result["errors"] == []
@@ -147,7 +147,7 @@ async def test_saves_upload_never_synced_device_existing_slot_conflicts(harness)
         content=b"server content",
     )
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
 
     assert result["synced"] == 0
     assert result["errors"] == []
@@ -175,7 +175,7 @@ async def test_saves_resolve_conflict_keep_local_reposts_with_overwrite(harness)
     harness.romm.set_server_save_content(100, b"server content")
     seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", system="gba"))
 
-    result = await harness.plugin.resolve_sync_conflict(42, "game.srm", 100, "keep_local")
+    result = await harness.endpoints.resolve_sync_conflict(42, "game.srm", 100, "keep_local")
 
     assert result["success"] is True
     assert result["action"] == "keep_local"

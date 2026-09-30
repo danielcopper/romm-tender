@@ -1,6 +1,6 @@
 """Fixtures for the callable contract-test tier.
 
-Exposes the ``harness`` fixture: a real :class:`main.Plugin` wired through
+Exposes the ``harness`` fixture: a real :class:`main.Endpoints` wired through
 the real :func:`bootstrap` with only the network edges faked. See
 :mod:`tests.contract._harness` for the build recipe and the real-vs-faked
 boundary.
@@ -52,7 +52,7 @@ def _isolate_system_flatpak_root(tmp_path):
 
 @pytest.fixture
 async def harness(tmp_path) -> ContractHarness:
-    """A wired real ``Plugin`` plus the fake edges a contract test drives.
+    """The real wired ``Endpoints`` plus the fake edges a contract test drives.
 
     Async so the harness binds the test's *running* event loop into the
     services' ``RuntimeBundle.loop`` — the callables ``await`` on that loop,

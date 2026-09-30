@@ -48,12 +48,11 @@ from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
-from domain.identity import PACKAGE_NAME, VERSION
+from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
 from lib.conflict_rules import sync_refusal
 from lib.prune_conflicts import PruneConflicts
-from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.data_inventory import DataInventoryService
@@ -177,13 +176,8 @@ class TestBootstrap:
         assert result.stores.settings is not None
         assert not hasattr(result.stores, "state")
 
-    def test_handles_debug_logger_exposed(self, tmp_path):
-        """``BootstrapHandles.debug_logger`` is the same instance the CallbackBundle wires."""
-        result = _bootstrap_for(tmp_path)
-        assert result.handles.debug_logger is result.callbacks.log_debug
-
     def test_runtime_adapters_bundle_populated(self, tmp_path):
-        """Bootstrap instantiates clock/uuid/sleeper/hostname/machine-id for ``main.py`` to compose RuntimeBundle."""
+        """Bootstrap builds the clock/uuid/sleeper/hostname/machine-id seams a RuntimeBundle is composed from."""
         result = _bootstrap_for(tmp_path)
         assert result.runtime_adapters.clock is not None
         assert result.runtime_adapters.uuid_gen is not None
@@ -273,7 +267,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
                     machine_id_provider=result.runtime_adapters.machine_id_provider,
                 ),
                 callbacks=result.callbacks,
-                min_required_version=Plugin._MIN_REQUIRED_VERSION,
+                min_required_version=MIN_ROMM_VERSION,
                 directories=directories,
                 launcher=result.launcher,
                 update_source=_UPDATE_SOURCE,
@@ -482,7 +476,7 @@ class TestWireServices:
             "sleeper": FakeSleeper(),
             "hostname_provider": FakeHostnameReader(),
             "machine_id_provider": FakeMachineIdReader(),
-            "min_required_version": Plugin._MIN_REQUIRED_VERSION,
+            "min_required_version": MIN_ROMM_VERSION,
             "retrodeck_paths": FakeRetroDeckPaths(
                 saves=str(tmp_path / "saves"),
                 roms=str(tmp_path / "retrodeck" / "roms"),

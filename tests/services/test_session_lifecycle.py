@@ -1030,7 +1030,7 @@ class TestBackgroundTaskTracking:
     ``finalize`` schedules the achievement refresh detached from its
     return value via ``asyncio.create_task``. Without strong refs into
     ``_background_tasks`` and a cancellation hook in ``shutdown()``,
-    those tasks leak across plugin unload. These tests pin the contract.
+    those tasks outlive the backend's shutdown. These tests pin the contract.
     """
 
     @pytest.mark.asyncio

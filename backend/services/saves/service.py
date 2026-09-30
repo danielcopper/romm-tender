@@ -51,7 +51,7 @@ class SaveService:
 
     Composes the save-sync sub-services (sync_engine, status, versions, slots,
     rom_info, prune_support) over the SQLite ``rom_save_sync_states``
-    aggregate. Exposes the use cases the endpoints on ``Plugin`` call — every
+    aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — every
     public method delegates to a sub-service or reads ``settings.json``. A use
     case an endpoint calls checks its conflict rules at its entry, under that
     endpoint's name, and answers the canonical refusal when one holds; a peer

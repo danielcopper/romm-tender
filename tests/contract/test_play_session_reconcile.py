@@ -29,19 +29,19 @@ async def test_reconcile_flushes_outbox_then_unions_server(harness):
     """A locally-recorded session is flushed, unioned with a foreign device's, and max'd in."""
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
     # Record a 300s local session (folded + ingested on exit).
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(300)
-    await harness.plugin.finalize_game_session(1)
+    await harness.endpoints.finalize_game_session(1)
 
     # A foreign device already holds 500s on the server for this ROM.
     harness.romm.play_sessions.setdefault(1, []).append(
         {"id": 9000, "rom_id": 1, "device_id": "device-B", "duration_ms": 500_000}
     )
 
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     # Server union is our 300s + the foreign 500s = 800s; max(local 300, 800) = 800.
     assert result["total_seconds"] == 800
@@ -57,7 +57,7 @@ async def test_reconcile_restores_session_count_and_last_played_from_server(harn
     """A fresh device with no local play restores session_count + last_played from the server union (#903)."""
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
     # The server already holds a prior device's two sessions — the cutover history.
     harness.romm.play_sessions[1] = [
@@ -65,7 +65,7 @@ async def test_reconcile_restores_session_count_and_last_played_from_server(harn
         {"id": 9002, "rom_id": 1, "device_id": "device-B", "duration_ms": 300_000, "end_time": "2026-02-03T10:00:00Z"},
     ]
 
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     assert result["total_seconds"] == 900  # 600s + 300s union
     assert result["session_count"] == 2  # restored from the server rows, not 0
@@ -77,14 +77,14 @@ async def test_reconcile_local_ahead_is_not_regressed(harness):
     """When local play exceeds the server union, reconcile never lowers the total."""
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(900)  # 900s local
-    await harness.plugin.finalize_game_session(1)
+    await harness.endpoints.finalize_game_session(1)
 
     # Server only knows about our 900s session (ingested on exit) — no foreign play.
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     assert result["total_seconds"] == 900
     assert result["server_query_failed"] is False
@@ -94,15 +94,15 @@ async def test_reconcile_server_unreachable_keeps_local_total(harness):
     """A failed GET degrades to local-only with the partial-success flag set."""
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
-    await harness.plugin.record_session_start(1)
+    await harness.endpoints.record_session_start(1)
     harness.clock.advance(120)
-    await harness.plugin.finalize_game_session(1)  # local total 120s
+    await harness.endpoints.finalize_game_session(1)  # local total 120s
 
     harness.romm.list_play_sessions_side_effect = RommApiError("offline")
 
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     assert result["server_query_failed"] is True
     assert result["total_seconds"] == 120
@@ -116,7 +116,7 @@ async def test_queued_poison_session_is_healed_on_flush(harness):
     """
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
     # Seed the outbox directly with a poison + a healthy row (bypassing the
     # recording seam, which now filters sub-second windows at enqueue).
@@ -137,7 +137,7 @@ async def test_queued_poison_session_is_healed_on_flush(harness):
     # RomM rejects the whole POST while any entry is below one second.
     harness.romm.reject_batch_below_duration_ms = 1
 
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     # The outbox is fully drained: poison dropped, survivor ingested.
     with harness.uow_factory() as uow:
@@ -154,18 +154,18 @@ async def test_forbidden_reconcile_raises_scope_notice_then_clears(harness):
     """A 403 GET (token lacks roms.user.read) sets the durable notice; a later 200 clears it."""
     seed_rom(harness, 1)
     await _register(harness)
-    harness.plugin.settings["save_sync_enabled"] = False
+    harness.settings["save_sync_enabled"] = False
 
     # A token predating the roms.user.read scope: the reconcile GET is forbidden.
     harness.romm.list_play_sessions_side_effect = RommForbiddenError("token lacks roms.user.read")
 
-    result = await harness.plugin.reconcile_playtime(1)
+    result = await harness.endpoints.reconcile_playtime(1)
 
     assert result["server_query_failed"] is True
-    assert harness.plugin.get_playtime_scope_notice() == {"pending": True}
+    assert harness.endpoints.get_playtime_scope_notice() == {"pending": True}
 
     # The next sign-in (or scope grant) lets the GET succeed — the notice clears.
     harness.romm.list_play_sessions_side_effect = None
-    await harness.plugin.reconcile_playtime(1)
+    await harness.endpoints.reconcile_playtime(1)
 
-    assert harness.plugin.get_playtime_scope_notice() == {"pending": False}
+    assert harness.endpoints.get_playtime_scope_notice() == {"pending": False}

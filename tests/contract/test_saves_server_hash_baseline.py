@@ -1,6 +1,6 @@
 """Contract tests for the server-hash baseline identity check (#1468).
 
-Drives the real ``Plugin`` over the real ``bootstrap`` to prove the two identity
+Drives the real ``Endpoints`` over the real ``bootstrap`` to prove the two identity
 routes at the wire:
 
 - **Provenance** (primary): a file with sync history whose stored server hash
@@ -24,7 +24,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> None:
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, filename), "wb") as fh:
         fh.write(content)
@@ -72,12 +72,12 @@ async def test_provenance_syncs_cleanly_under_scheme_drift(harness):
     entry = seed_server_save(harness, save_id=100, rom_id=42, slot="default", file_name="game.srm")
     entry["content_hash"] = drifted_server_hash
 
-    status = await harness.plugin.get_save_status(42)
+    status = await harness.endpoints.get_save_status(42)
     files = {f["filename"]: f for f in status["files"]}
     assert files["game.srm"]["status"] == "synced"
     assert status["conflicts"] == []
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
     assert result["success"] is True
     assert result["synced"] == 0
     assert result["conflicts"] == []
@@ -107,7 +107,7 @@ async def test_parity_fallback_adopts_fresh_install(harness):
     entry = seed_server_save(harness, save_id=100, rom_id=42, slot="default", file_name="game.srm")
     entry["content_hash"] = local_hash  # byte-identical → parity route
 
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
     assert result["success"] is True
     assert result["synced"] == 0
     assert result["conflicts"] == []

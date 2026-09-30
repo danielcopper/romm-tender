@@ -7,7 +7,7 @@ without a re-run signal the frontend short-circuits: the platform never
 re-stamps (every future sync full-fetches it) and "Last sync: interrupted"
 lingers indefinitely.
 
-This drives the real Plugin through the real bootstrap: it builds that
+This drives the real Endpoints through the real bootstrap: it builds that
 complete-but-unstamped residue with real verbs (the repository stamp delete a
 timeout leaves un-rewritten, plus a ``SyncRun.mark_interrupted`` newest attempt),
 asserts the preview surfaces ``restamp_platform_count``, then asserts the gated
@@ -27,11 +27,11 @@ _ONE_DAY_SEC = 86400
 
 
 def _orchestrator(harness):
-    return harness.plugin._sync_service._orchestrator
+    return harness.app.services.sync_service._orchestrator
 
 
 def _dispatcher(harness):
-    return harness.plugin._sync_service._chunk_dispatcher
+    return harness.app.services.sync_service._chunk_dispatcher
 
 
 def _ack_with(bindings):
@@ -59,17 +59,17 @@ def _seed_library(harness) -> None:
         "platform_name": "N64",
         "platform_slug": "n64",
     }
-    harness.plugin.settings["enabled_platforms"] = {"1": True}
+    harness.settings["enabled_platforms"] = {"1": True}
 
 
 async def _run_sync(harness, run_id: str) -> None:
-    assert harness.plugin._sync_service._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
+    assert harness.app.services.sync_service._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
     await _orchestrator(harness)._do_sync_per_unit()
 
 
 async def _drain_apply(harness, tries: int = 5000) -> None:
     for _ in range(tries):
-        if harness.plugin._sync_service._sync_state is SyncState.IDLE:
+        if harness.app.services.sync_service._sync_state is SyncState.IDLE:
             return
         await asyncio.sleep(0.001)
     raise AssertionError("sync_apply_delta's background apply task never finished")
@@ -100,13 +100,13 @@ async def test_unstamped_platform_rerun_restamps_and_heals_run_status(harness):
     # Pre-state: no stamp, and the lingering interrupted attempt.
     with harness.uow_factory() as uow:
         assert uow.platform_sync_state.get("n64") is None
-    stats = harness.plugin.get_sync_stats()
+    stats = harness.endpoints.get_sync_stats()
     assert stats["last_attempt"]["status"] == "interrupted"
 
     # The next preview surfaces the re-stamp need with an otherwise-empty delta,
     # so the frontend offers Apply instead of short-circuiting on "no changes".
     harness.clock.advance(_ONE_DAY_SEC)  # t2 — the heal run becomes the newest terminal
-    preview = await harness.plugin.sync_preview()
+    preview = await harness.endpoints.sync_preview()
     assert preview["success"] is True
     summary = preview["summary"]
     assert summary["restamp_platform_count"] == 1
@@ -118,7 +118,7 @@ async def test_unstamped_platform_rerun_restamps_and_heals_run_status(harness):
     # The gated apply's empty chunk re-stamps the platform and records a fresh
     # completed SyncRun. The empty chunk acks nothing (no shortcut to bind).
     _dispatcher(harness)._wait_for_unit_complete = _ack_with({})
-    apply_result = await harness.plugin.sync_apply_delta(preview["preview_id"])
+    apply_result = await harness.endpoints.sync_apply_delta(preview["preview_id"])
     assert apply_result == {"success": True, "message": "Applying changes"}
     await _drain_apply(harness)
 
@@ -131,5 +131,5 @@ async def test_unstamped_platform_rerun_restamps_and_heals_run_status(harness):
         assert completed.id not in ("run-seed", "run-timeout")
 
     # The interrupted attempt no longer lingers — the fresh completed run heals it.
-    healed = harness.plugin.get_sync_stats()
+    healed = harness.endpoints.get_sync_stats()
     assert healed["last_attempt"] is None

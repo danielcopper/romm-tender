@@ -1,14 +1,14 @@
-"""The real plugin, reached the way the panel will reach it: over a socket.
+"""The real endpoints, reached the way the panel will reach them: over a socket.
 
 Two halves are already covered separately and neither one covers this. The host
-tier drives a real socket onto a stand-in plugin, so it proves the protocol and
-nothing about the callables; the rest of this tier drives the real callables by
-calling them, so it proves the answers and nothing about the wire. What is only
-here is the seam between them — a real callable resolved by name out of the
-loaded `Plugin`, its answer encoded by `encode_reply`, and the size cap judged
-against a payload a real callable actually produced.
+tier drives a real socket onto a stand-in for the endpoints, so it proves the
+protocol and nothing about the real ones; the rest of this tier drives the real
+endpoints by calling them, so it proves the answers and nothing about the wire.
+What is only here is the seam between them — a real endpoint resolved by name
+out of the loaded `Endpoints`, its answer encoded by `encode_reply`, and the
+size cap judged against a payload a real endpoint actually produced.
 
-Every case builds the real `Plugin` through the real `bootstrap()` (the shared
+Every case builds the real `Endpoints` through the real `bootstrap()` (the shared
 harness) and puts a `HostServer` in front of it, then speaks to that server the
 way `frontend/src/api/backend.ts` will: positional, JSON-shaped arguments in a
 `call` message.
@@ -66,8 +66,8 @@ def _seed_metadata(harness: ContractHarness, rom_id: int) -> None:
         )
 
 
-class ServedPlugin:
-    """A started `HostServer` in front of the harness's real `Plugin`."""
+class ServedEndpoints:
+    """A started `HostServer` in front of the harness's real `Endpoints`."""
 
     def __init__(self, server: HostServer, harness: ContractHarness) -> None:
         self.server = server
@@ -83,12 +83,12 @@ class ServedPlugin:
 
 
 @pytest.fixture
-async def served(harness, tmp_path) -> AsyncIterator[ServedPlugin]:
-    """Serve the real plugin on a free loopback port for the length of one test."""
+async def served(harness, tmp_path) -> AsyncIterator[ServedEndpoints]:
+    """Serve the real endpoints on a free loopback port for the length of one test."""
     static_root = tmp_path / "dist"
     static_root.mkdir(exist_ok=True)
     server = HostServer(
-        dispatcher=CallDispatcher(harness.plugin, LOGGER),
+        dispatcher=CallDispatcher(harness.endpoints, LOGGER),
         events=EventSink(LOGGER),
         static_root=str(static_root),
         logger=LOGGER,
@@ -97,7 +97,7 @@ async def served(harness, tmp_path) -> AsyncIterator[ServedPlugin]:
     )
     await server.start()
     try:
-        yield ServedPlugin(server, harness)
+        yield ServedEndpoints(server, harness)
     finally:
         await server.stop()
 
@@ -142,15 +142,15 @@ class TestARealCallableOverTheRealConnection:
         assert "reason" in answer["result"]
         assert "message" in answer["result"]
 
-    async def test_a_name_the_plugin_does_not_have_is_a_transport_error(self, served):
+    async def test_a_name_the_endpoints_do_not_have_is_a_transport_error(self, served):
         answer = await served.call("no_such_callable")
 
         assert answer["type"] == TYPE_ERROR
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
-    async def test_a_private_method_of_the_real_plugin_is_unreachable(self, served):
-        """`_main` exists on the loaded class and is not callable surface."""
-        answer = await served.call("_main")
+    async def test_an_underscored_name_on_the_real_endpoints_is_unreachable(self, served):
+        """`__init__` exists on the loaded class, and an underscored name is never an endpoint."""
+        answer = await served.call("__init__")
 
         assert answer["reason"] == REASON_METHOD_UNKNOWN
 
@@ -174,7 +174,7 @@ class TestTheSizeCapAgainstARealAnswer:
         static_root = tmp_path / "dist"
         static_root.mkdir(exist_ok=True)
         server = HostServer(
-            dispatcher=CallDispatcher(harness.plugin, LOGGER, payload_limit=8),
+            dispatcher=CallDispatcher(harness.endpoints, LOGGER, payload_limit=8),
             events=EventSink(LOGGER),
             static_root=str(static_root),
             logger=LOGGER,
@@ -196,7 +196,7 @@ class TestTheSizeCapAgainstARealAnswer:
         assert after["reason"] == "payload_too_large"
 
 
-class TestAdmissionInFrontOfTheRealPlugin:
+class TestAdmissionInFrontOfTheRealEndpoints:
     async def test_no_token_reaches_no_callable(self, served):
         status, _, _ = await http_get(served.server.port, "/ws", token=None)
 

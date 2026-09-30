@@ -22,14 +22,11 @@ makes a network request. Ahead of the bind it would hold readiness hostage to a
 server that may be unreachable; behind it, a slow or failing RomM costs the
 panel nothing.
 
-**What is fatal and what is not is decided here, and the two are not the same
-question.** Without the lock, the schema, the wiring or a port there is no
-backend, so those end the process. The start-up routines are repairs: most
-contain no exception handling at all, and under the plugin loader that was
-harmless because the lifecycle hook was a detached task. Hosted, an unhandled
-failure in a cover-cache sweep would take the whole backend down — and with a
-service manager's restart policy, do it again on every start. So each routine
-runs inside a reporting wrapper, and a failure is counted rather than fatal.
+**What is fatal and what is not are not the same question.** Without the lock,
+the schema, the wiring or a port there is no backend, so those end the process.
+The start-up routines are repairs, so each runs inside the build through the
+reporting wrapper in ``bootstrap/startup.py`` (which says why), and a failure is
+counted rather than fatal.
 """
 
 from __future__ import annotations
@@ -65,10 +62,18 @@ class BackendBuild:
     in the entry point would be a second spelling of the program's identity,
     free to drift from the one every request to a server off this machine
     already carries.
+
+    *open_network* is the network-touching start-up step, run once the port has
+    been announced. *shutdown* is awaited before the process ends — an
+    interrupted shutdown would leave the very state the start-up routines exist
+    to repair. Both come with the build because both act on what it built: a
+    build that never finished has nothing to open and nothing to shut down.
     """
 
     dispatcher: CallDispatcher
     server_identity: str
+    open_network: Callable[[], Awaitable[None]]
+    shutdown: Callable[[], Awaitable[None]]
 
 
 class AlreadyRunningError(RuntimeError):
@@ -83,8 +88,6 @@ class AlreadyRunningError(RuntimeError):
 async def run_backend(
     *,
     build: Callable[[], Awaitable[BackendBuild]],
-    after_bind: Callable[[], Awaitable[None]],
-    shutdown: Callable[[], Awaitable[None]],
     events: EventSink,
     status: HostStatus,
     static_root: str,
@@ -98,17 +101,14 @@ async def run_backend(
     """Start the backend, serve until a termination signal, then shut it down.
 
     *build* performs the schema migration, the wiring and the start-up routines
-    and answers with the dispatcher for the object calls reach, plus the identity
-    this server answers under. *token* is this process's admission token, created
-    by the caller because the logging formatter that keeps it out of the log file
-    has to exist before the first line is written. *after_bind* is
-    the network-touching start-up step, run once the port has been announced.
-    *injection* is what the panel is loaded into Steam with, or ``None`` to serve
-    the panel and load it nowhere.
-    *shutdown* is awaited before the process ends — an interrupted unload would
-    leave the very state the start-up routines exist to repair. *preferred_port*
-    is the port asked for first; the bind falls back past a port some other
-    program holds.
+    and answers with the dispatcher for the object calls reach, the identity
+    this server answers under, and the network step and shutdown of what it
+    built (:class:`BackendBuild`). *token* is this process's admission token,
+    created by the caller because the logging formatter that keeps it out of the
+    log file has to exist before the first line is written. *injection* is what
+    the panel is loaded into Steam with, or ``None`` to serve the panel and load
+    it nowhere. *preferred_port* is the port asked for first; the bind falls
+    back past a port some other program holds.
 
     Raises :class:`AlreadyRunningError` when another backend holds the lock.
     """
@@ -123,6 +123,7 @@ async def run_backend(
     # behind exactly the half-finished state the start-up routines exist to
     # repair.
     stop = _listen_for_termination()
+    built: BackendBuild | None = None
     server: HostServer | None = None
     injector: asyncio.Task[None] | None = None
     try:
@@ -175,7 +176,7 @@ async def run_backend(
                 ).run()
             )
 
-        await after_bind()
+        await built.open_network()
         await stop.wait()
         logger.info("host: termination signal received")
     finally:
@@ -185,8 +186,9 @@ async def run_backend(
             injector.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await injector
-        with contextlib.suppress(Exception):
-            await shutdown()
+        if built is not None:
+            with contextlib.suppress(Exception):
+                await built.shutdown()
         if server is not None:
             await server.stop()
         port_file.remove()
@@ -199,8 +201,8 @@ _TERMINATION_SIGNALS = (signal.SIGTERM, signal.SIGINT)
 def _listen_for_termination() -> asyncio.Event:
     """Arrange for SIGTERM and SIGINT to set an event, and return it.
 
-    The unload runs after the wait returns rather than inside the handler,
-    because unloading is asynchronous and a signal handler is not a place to
+    The shutdown runs after the wait returns rather than inside the handler,
+    because shutting down is asynchronous and a signal handler is not a place to
     await anything.
     """
     loop = asyncio.get_running_loop()

@@ -43,7 +43,7 @@ async def test_dry_run_counts_candidates_without_deleting(harness):
     for f in (orphan, foreign, store_art):
         f.write_bytes(b"art")
 
-    result = await harness.plugin.cleanup_orphaned_grid_images([_FOREIGN_APP_ID], True)
+    result = await harness.endpoints.cleanup_orphaned_grid_images([_FOREIGN_APP_ID], True)
 
     assert result == {"success": True, "candidate_count": 1}
     assert orphan.exists()
@@ -62,7 +62,7 @@ async def test_real_run_deletes_only_the_orphan(harness):
     for f in (orphan_portrait, orphan_hero, bound_art, foreign, store_art):
         f.write_bytes(b"art")
 
-    result = await harness.plugin.cleanup_orphaned_grid_images([_BOUND_APP_ID, _FOREIGN_APP_ID], False)
+    result = await harness.endpoints.cleanup_orphaned_grid_images([_BOUND_APP_ID, _FOREIGN_APP_ID], False)
 
     assert result == {"success": True, "candidate_count": 2, "removed_count": 2}
     assert not orphan_portrait.exists()
@@ -79,7 +79,7 @@ async def test_incomplete_scan_refusal_shape_and_no_deletion(harness):
     orphan.write_bytes(b"art")
 
     # The live set omits the bound appId — the scan is provably incomplete.
-    result = await harness.plugin.cleanup_orphaned_grid_images([_FOREIGN_APP_ID], False)
+    result = await harness.endpoints.cleanup_orphaned_grid_images([_FOREIGN_APP_ID], False)
 
     assert set(result) == {"success", "reason", "message"}
     assert result["success"] is False
@@ -91,7 +91,7 @@ async def test_incomplete_scan_refusal_shape_and_no_deletion(harness):
 
 async def test_no_grid_dir_failure_shape(harness):
     # No Steam userdata dir under the harness home — grid_dir() resolves None.
-    result = await harness.plugin.cleanup_orphaned_grid_images([], True)
+    result = await harness.endpoints.cleanup_orphaned_grid_images([], True)
 
     assert result == {
         "success": False,
@@ -107,7 +107,7 @@ async def test_refused_while_sync_in_flight(harness, state):
     orphan.write_bytes(b"art")
     hold_sync_in_flight(harness, state)
 
-    result = await harness.plugin.cleanup_orphaned_grid_images([], False)
+    result = await harness.endpoints.cleanup_orphaned_grid_images([], False)
 
     assert set(result) == {"success", "reason", "message"}
     assert result["success"] is False

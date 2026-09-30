@@ -17,14 +17,14 @@ from ._seed import seed_install, seed_rom
 
 
 async def test_an_untouched_install_reports_every_population_as_empty(harness):
-    result = await harness.plugin.get_data_inventory()
+    result = await harness.endpoints.get_data_inventory()
 
     assert result == {
         "installed_roms": 0,
         "installed_bytes": 0,
         "recovery_bundles": 0,
         "recovery_bytes": 0,
-        "recovery_root": harness.plugin._data_inventory_service._recovery_inventory.root(),
+        "recovery_root": harness.app.services.data_inventory_service._recovery_inventory.root(),
         "recovery_bundle_list": [],
     }
     # The real adapter's root, derived from the package name rather than spelled
@@ -42,7 +42,7 @@ async def test_it_counts_the_installed_rows_and_sums_the_size_romm_reported(harn
         uow.roms.set_fs_size_bytes(2, 2_500_000)
         uow.roms.set_fs_size_bytes(3, 900_000_000)
 
-    result = await harness.plugin.get_data_inventory()
+    result = await harness.endpoints.get_data_inventory()
 
     assert result["installed_roms"] == 2
     assert result["installed_bytes"] == 6_500_000
@@ -54,7 +54,7 @@ async def test_an_installed_row_whose_size_romm_never_reported_counts_and_adds_n
     with harness.uow_factory() as uow:
         uow.roms.set_fs_size_bytes(1, 1_024)
 
-    result = await harness.plugin.get_data_inventory()
+    result = await harness.endpoints.get_data_inventory()
 
     assert result["installed_roms"] == 2
     assert result["installed_bytes"] == 1_024
@@ -66,7 +66,7 @@ async def test_a_sealed_bundle_is_counted_and_measured_on_disk(harness):
     (source_root / "rom.gba").write_bytes(b"r" * 2048)
     # The very adapter the read is wired to, so the bundle it counts is the
     # bundle this test sealed.
-    recovery = harness.plugin._data_inventory_service._recovery_inventory
+    recovery = harness.app.services.data_inventory_service._recovery_inventory
     sealed = recovery.seal_bundle(
         "Game_2026-07-24_abc123",
         {"roms": [], "installs": [], "metadata": [], "save_sync": [], "playtime": [], "warnings": []},
@@ -87,7 +87,7 @@ async def test_a_sealed_bundle_is_counted_and_measured_on_disk(harness):
         "none\n",
     )
 
-    result = await harness.plugin.get_data_inventory()
+    result = await harness.endpoints.get_data_inventory()
 
     assert result["recovery_bundles"] == 1
     # The bundle holds the copied ROM plus its own seal, checksum and README,

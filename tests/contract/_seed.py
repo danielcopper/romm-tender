@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def enable_save_sync(harness: ContractHarness, *, device_id: str = "device-1") -> None:
     """Flip on save sync and bind a server device id (matches FakeRommApi seeds)."""
-    harness.plugin.settings["save_sync_enabled"] = True
+    harness.settings["save_sync_enabled"] = True
     with harness.uow_factory() as uow:
         uow.kv_config.set("device_id", device_id)
 

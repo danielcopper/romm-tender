@@ -11,7 +11,7 @@ import sys
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.server import HostServer
-from tests.host.conftest import SERVER_IDENTITY, FakePlugin, free_port
+from tests.host.conftest import SERVER_IDENTITY, FakeEndpoints, free_port
 
 LOGGER = logging.getLogger("test_server_stop")
 
@@ -21,7 +21,7 @@ STOP_BOUND_SECONDS = 2.0
 
 def _server(static_root: str) -> HostServer:
     return HostServer(
-        dispatcher=CallDispatcher(FakePlugin(), LOGGER),
+        dispatcher=CallDispatcher(FakeEndpoints(), LOGGER),
         events=EventSink(LOGGER),
         static_root=static_root,
         logger=LOGGER,

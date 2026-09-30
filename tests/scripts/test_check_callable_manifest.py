@@ -45,7 +45,7 @@ def _write_ts(tmp_path: Path, name: str, body: str) -> Path:
 
 
 def _write_main(tmp_path: Path, body: str) -> Path:
-    """Write a synthetic ``main.py`` with a ``Plugin`` class body and return its path."""
+    """Write a synthetic ``main.py`` with an ``Endpoints`` class body and return its path."""
     path = tmp_path / "main.py"
     path.write_text(body, encoding="utf-8")
     return path
@@ -242,7 +242,7 @@ class TestParseBackendCallables:
     def test_public_methods_with_arity(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 async def get_settings(self):
                     ...
@@ -261,13 +261,28 @@ class TestParseBackendCallables:
             "switch_slot": 2,
         }
 
+    def test_only_the_endpoints_class_is_read(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Application:
+                @route
+                async def elsewhere(self):
+                    ...
+            class Endpoints:
+                @route
+                async def test_connection(self):
+                    ...
+            """
+        )
+        assert check.parse_backend_callables(_write_main(tmp_path, body)) == {"test_connection": 0}
+
     def test_underscore_internal_excluded(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
-                async def _main(self):
+            class Endpoints:
+                async def _helper(self):
                     ...
-                async def _unload(self):
+                async def _other_helper(self):
                     ...
                 @route
                 async def test_connection(self):
@@ -280,7 +295,7 @@ class TestParseBackendCallables:
     def test_default_param_counts_as_positional_slot(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 async def connect_with_credentials(self, url, user, pw, allow_insecure_ssl=None):
                     ...
@@ -292,7 +307,7 @@ class TestParseBackendCallables:
     def test_vararg_method_has_none_arity_name_recorded(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 async def flexible(self, *args):
                     ...
@@ -304,7 +319,7 @@ class TestParseBackendCallables:
     def test_unmarked_methods_ignored(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 def helper(self):
                     ...
                 async def unmarked_coroutine(self):
@@ -320,7 +335,7 @@ class TestParseBackendCallables:
     def test_a_marked_synchronous_method_counts_with_its_arity(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 def get_settings(self, section, key=None):
                     ...
@@ -332,7 +347,7 @@ class TestParseBackendCallables:
     def test_route_below_another_decorator_is_not_counted(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @other_decorator
                 @route
                 async def start_sync(self):
@@ -342,7 +357,7 @@ class TestParseBackendCallables:
         main_py = _write_main(tmp_path, body)
         assert check.parse_backend_callables(main_py) == {}
 
-    def test_no_plugin_class_returns_empty(self, tmp_path: Path):
+    def test_no_endpoints_class_returns_empty(self, tmp_path: Path):
         main_py = _write_main(tmp_path, "class Other:\n    async def foo(self):\n        ...\n")
         assert check.parse_backend_callables(main_py) == {}
 
@@ -351,7 +366,7 @@ class TestParseBackendCallables:
         # so arity counts only the positional params (a, b) -> 2.
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 async def m(self, a, b, *, c):
                     ...
@@ -364,7 +379,7 @@ class TestParseBackendCallables:
         # **kwargs is not positional — the two positional params still count as 2.
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 async def m(self, a, b, **kwargs):
                     ...
@@ -378,7 +393,7 @@ class TestFindMisplacedRoutes:
     def test_route_first_on_a_public_name_is_no_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
                 @other_decorator
                 async def start_sync(self):
@@ -393,7 +408,7 @@ class TestFindMisplacedRoutes:
     def test_route_below_another_decorator_is_a_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @other_decorator
                 @route
                 async def start_sync(self):
@@ -408,25 +423,25 @@ class TestFindMisplacedRoutes:
     def test_route_on_an_underscored_name_is_a_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
+            class Endpoints:
                 @route
-                async def _main(self):
+                async def _helper(self):
                     ...
             """
         )
         findings = check.find_misplaced_routes(_write_main(tmp_path, body))
         assert len(findings) == 1
-        assert findings[0].startswith("_main:")
+        assert findings[0].startswith("_helper:")
         assert "underscored name" in findings[0]
 
     def test_unmarked_methods_are_no_finding(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
-            class Plugin:
-                async def _main(self):
+            class Endpoints:
+                async def _helper(self):
                     ...
                 @classmethod
-                def run(cls):
+                def make(cls):
                     ...
             """
         )
@@ -482,8 +497,8 @@ class TestMainEntryPoint:
 
     def test_real_repo_run_is_clean(self, capsys: pytest.CaptureFixture[str]):
         # Locks the actual frontend/src/**/*.ts callable declarations in sync
-        # with the Plugin async methods in main.py. If this fails, a callable
-        # was added/renamed/removed on one side only, or an arity drifted.
+        # with the endpoints on Endpoints in main.py. If this fails, a name was
+        # added/renamed/removed on one side only, or an arity drifted.
         rc = check.main([])
         assert rc == 0
         assert "OK:" in capsys.readouterr().out
@@ -494,7 +509,7 @@ class TestMainEntryPoint:
         src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");\ncallable<[number], B>("frontend_only");')
         main_py = _write_main(
             tmp_path,
-            "class Plugin:\n    @route\n    async def present(self):\n        ...\n",
+            "class Endpoints:\n    @route\n    async def present(self):\n        ...\n",
         )
         monkeypatch.setattr(check, "SRC_DIR", src)
         monkeypatch.setattr(check, "MAIN_PY", main_py)
@@ -511,7 +526,7 @@ class TestMainEntryPoint:
         src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");')
         main_py = _write_main(
             tmp_path,
-            "class Plugin:\n    @route\n    async def present(self):\n        ...\n"
+            "class Endpoints:\n    @route\n    async def present(self):\n        ...\n"
             "    @route\n    async def _hidden(self):\n        ...\n",
         )
         monkeypatch.setattr(check, "SRC_DIR", src)
@@ -522,7 +537,9 @@ class TestMainEntryPoint:
 
     def test_in_sync_fake_repo_returns_zero(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         src = _write_ts(tmp_path, "a.ts", 'callable<[number], A>("match");')
-        main_py = _write_main(tmp_path, "class Plugin:\n    @route\n    async def match(self, rom_id):\n        ...\n")
+        main_py = _write_main(
+            tmp_path, "class Endpoints:\n    @route\n    async def match(self, rom_id):\n        ...\n"
+        )
         monkeypatch.setattr(check, "SRC_DIR", src)
         monkeypatch.setattr(check, "MAIN_PY", main_py)
         monkeypatch.setattr(check, "EXEMPT", frozenset())

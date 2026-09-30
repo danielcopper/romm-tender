@@ -96,7 +96,7 @@ def _selection_request(preview_id, selection_id, rom_ids, final):
 async def test_preview_is_local_paged_and_frontend_shaped(harness):
     _seed_bulk_candidate(harness)
 
-    result = await harness.plugin.get_prune_preview(_preview_request())
+    result = await harness.endpoints.get_prune_preview(_preview_request())
 
     assert set(result) == {
         "success",
@@ -126,7 +126,7 @@ async def test_preview_discovers_on_a_platform_whose_skip_was_revoked(harness):
     with harness.uow_factory() as uow:
         uow.platform_sync_state.revoke_skip("gba")
 
-    result = await harness.plugin.get_prune_preview(_preview_request())
+    result = await harness.endpoints.get_prune_preview(_preview_request())
 
     assert result["success"] is True
     assert result["candidate_total"] == 1
@@ -137,7 +137,7 @@ async def test_preview_discovers_on_a_platform_whose_skip_was_revoked(harness):
 async def test_preview_refuses_active_sync_with_canonical_shape(harness, state):
     hold_sync_in_flight(harness, state)
 
-    result = await harness.plugin.get_prune_preview(_preview_request())
+    result = await harness.endpoints.get_prune_preview(_preview_request())
 
     assert set(result) == {"success", "reason", "message"}
     assert result["success"] is False
@@ -148,9 +148,9 @@ async def test_preview_refuses_active_sync_with_canonical_shape(harness, state):
 async def test_unbound_exact_404_cleanup_deletes_real_aggregate_and_emits_completion(harness):
     _seed_bulk_candidate(harness)
     harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
 
-    started = await harness.plugin.start_prune(
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -165,7 +165,7 @@ async def test_unbound_exact_404_cleanup_deletes_real_aggregate_and_emits_comple
     assert set(started) == {"success", "run_id", "status"}
     assert started["success"] is True
     assert started["status"] == "running"
-    task = harness.plugin._prune_service._task
+    task = harness.app.services.prune_service._task
     assert task is not None
     await task
 
@@ -190,9 +190,9 @@ async def test_a_misrouted_404_removes_nothing_over_the_real_wire(harness):
     _seed_bulk_candidate(harness)
     harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("misrouted")
     harness.romm.get_rom_once_side_effect_by_id[CONTROL_ROM_ID] = RommNotFoundError("misrouted")
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
 
-    await harness.plugin.start_prune(
+    await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -203,7 +203,7 @@ async def test_a_misrouted_404_removes_nothing_over_the_real_wire(harness):
             "include_installed_rom_ids": [],
         }
     )
-    task = harness.plugin._prune_service._task
+    task = harness.app.services.prune_service._task
     assert task is not None
     await task
 
@@ -218,8 +218,8 @@ async def test_a_misrouted_404_removes_nothing_over_the_real_wire(harness):
 async def test_cancel_prune_stops_the_running_run_over_the_real_wire(harness):
     _seed_bulk_candidate(harness)
     harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
-    preview = await harness.plugin.get_prune_preview(_preview_request())
-    started = await harness.plugin.start_prune(
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -231,29 +231,29 @@ async def test_cancel_prune_stops_the_running_run_over_the_real_wire(harness):
         }
     )
 
-    result = await harness.plugin.cancel_prune(started["run_id"])
+    result = await harness.endpoints.cancel_prune(started["run_id"])
 
     assert set(result) == {"success", "run_id", "already_cancelling", "message"}
     assert result["success"] is True
     assert result["run_id"] == started["run_id"]
     assert result["already_cancelling"] is False
-    task = harness.plugin._prune_service._task
+    task = harness.app.services.prune_service._task
     assert task is not None
     with pytest.raises(asyncio.CancelledError):
         await task
     # The claim is released, so cleanup is reachable again immediately and
     # nothing it conflicts with is refused any longer.
-    assert harness.plugin._prune_service.is_active() is False
+    assert harness.app.services.prune_service.is_active() is False
     assert harness.prune_conflicts.cleanup_running is False
 
 
 async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end(harness, monkeypatch):
     """No gap: the start's reservation covers validation, and the run claim is taken before it is given back."""
     _seed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
     entered = threading.Event()
     release = threading.Event()
-    service = harness.plugin._prune_service
+    service = harness.app.services.prune_service
     original = service._preview_builder.build
 
     def held_refresh(*args):
@@ -264,7 +264,7 @@ async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end
 
     monkeypatch.setattr(service._preview_builder, "build", held_refresh)
     start = asyncio.create_task(
-        harness.plugin.start_prune(
+        harness.endpoints.start_prune(
             {
                 "preview_id": preview["preview_id"],
                 "confirmed": True,
@@ -281,22 +281,22 @@ async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end
 
         # Validating: only the reservation stands, since no run is registered yet.
         assert service._run_id is None
-        assert (await harness.plugin.reconcile_shortcuts([]))["reason"] == "prune_active"
+        assert (await harness.endpoints.reconcile_shortcuts([]))["reason"] == "prune_active"
     finally:
         release.set()
     assert (await start)["success"] is True
     # Started: the reservation is given back, and the run claim refuses instead.
-    assert (await harness.plugin.reconcile_shortcuts([]))["reason"] == "prune_active"
+    assert (await harness.endpoints.reconcile_shortcuts([]))["reason"] == "prune_active"
 
     task = service._task
     assert task is not None
     await task
-    assert (await harness.plugin.reconcile_shortcuts([])).get("reason") != "prune_active"
+    assert (await harness.endpoints.reconcile_shortcuts([])).get("reason") != "prune_active"
 
 
 @pytest.mark.parametrize("run_id", ["no-such-run", "", None])
 async def test_cancel_prune_refuses_an_unknown_run_with_the_canonical_shape(harness, run_id):
-    result = await harness.plugin.cancel_prune(run_id)
+    result = await harness.endpoints.cancel_prune(run_id)
 
     assert set(result) == {"success", "reason", "message"}
     assert result["success"] is False
@@ -305,7 +305,7 @@ async def test_cancel_prune_refuses_an_unknown_run_with_the_canonical_shape(harn
 
 
 async def test_action_report_rejects_stale_token_with_canonical_shape(harness):
-    result = await harness.plugin.report_prune_action(
+    result = await harness.endpoints.report_prune_action(
         {
             "phase": "complete",
             "run_id": "old-run",
@@ -325,7 +325,7 @@ async def test_action_report_rejects_stale_token_with_canonical_shape(harness):
 @pytest.mark.parametrize("operation", ["save_status", "download"])
 async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch, operation):
     _seed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
     release = asyncio.Event()
     task = None
     if operation == "save_status":
@@ -337,8 +337,8 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
             await release.wait()
             finished.set()
 
-        monkeypatch.setattr(harness.plugin._save_sync_service, "check_save_status_background", delayed_status)
-        assert (await harness.plugin.refresh_save_status(41))["success"] is True
+        monkeypatch.setattr(harness.app.services.save_sync_service, "check_save_status_background", delayed_status)
+        assert (await harness.endpoints.refresh_save_status(41))["success"] is True
         await entered.wait()
     else:
         task = asyncio.create_task(release.wait())
@@ -346,11 +346,11 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
         async def begin_download(_rom_id, **_answers):
             return {"success": True, "message": "started"}
 
-        monkeypatch.setattr(harness.plugin._download_service, "_begin_download", begin_download)
-        monkeypatch.setattr(harness.plugin._download_service, "task_for_rom", lambda _rom_id: task)
-        assert (await harness.plugin.start_download(41))["success"] is True
+        monkeypatch.setattr(harness.app.services.download_service, "_begin_download", begin_download)
+        monkeypatch.setattr(harness.app.services.download_service, "task_for_rom", lambda _rom_id: task)
+        assert (await harness.endpoints.start_download(41))["success"] is True
 
-    blocked = await harness.plugin.start_prune(
+    blocked = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -370,7 +370,7 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
         await finished.wait()
     await asyncio.sleep(0)
     await asyncio.sleep(0)
-    started = await harness.plugin.start_prune(
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -382,23 +382,23 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
         }
     )
     assert started["success"] is True
-    running = harness.plugin._prune_service._task
+    running = harness.app.services.prune_service._task
     assert running is not None
     await running
 
 
 async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, monkeypatch):
     _seed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
 
     def set_game_core_io(_rom_id, _label):
         return {"success": True, "app_id": 0x80000001, "launch_options": "launch"}
 
-    monkeypatch.setattr(harness.plugin._core_service, "_set_game_core_io", set_game_core_io)
-    result = await harness.plugin.set_game_core(41, "core")
+    monkeypatch.setattr(harness.app.services.core_service, "_set_game_core_io", set_game_core_io)
+    result = await harness.endpoints.set_game_core(41, "core")
     token = result["prune_lease_token"]
 
-    blocked = await harness.plugin.start_prune(
+    blocked = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -411,8 +411,8 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
     )
     assert blocked["reason"] == "operation_active"
 
-    assert (await harness.plugin.release_prune_conflict_lease(token))["success"] is True
-    started = await harness.plugin.start_prune(
+    assert (await harness.endpoints.release_prune_conflict_lease(token))["success"] is True
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -424,7 +424,7 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
         }
     )
     assert started["success"] is True
-    await harness.plugin._prune_service.shutdown()
+    await harness.app.services.prune_service.shutdown()
 
 
 async def _wait_for_prune_action(harness, action: str, *, timeout: float = 5.0):
@@ -495,8 +495,8 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
         )
     harness.romm.roms[42] = {"id": 42}
     harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
-    preview = await harness.plugin.get_prune_preview(_preview_request())
-    staged = await harness.plugin.stage_prune_installed_selection(
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
         {
             "preview_id": preview["preview_id"],
             "selection_id": None,
@@ -505,7 +505,7 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
         }
     )
 
-    started = await harness.plugin.start_prune(
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -517,7 +517,7 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
         }
     )
     action = await _wait_for_prune_action(harness, "repoint_shortcut")
-    claim = await harness.plugin.report_prune_action(
+    claim = await harness.endpoints.report_prune_action(
         {
             "phase": "claim",
             "run_id": action["run_id"],
@@ -529,7 +529,7 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
     )
     assert claim["success"] is True
     assert (
-        await harness.plugin.report_prune_action(
+        await harness.endpoints.report_prune_action(
             {
                 "phase": "complete",
                 "run_id": action["run_id"],
@@ -539,7 +539,7 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
             }
         )
     )["success"] is True
-    task = harness.plugin._prune_service._task
+    task = harness.app.services.prune_service._task
     assert task is not None
     await task
 
@@ -568,9 +568,9 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
 
 async def test_stage_selection_rejects_a_foreign_preview_id(harness):
     _seed_installed_bulk_candidate(harness)
-    await harness.plugin.get_prune_preview(_preview_request())
+    await harness.endpoints.get_prune_preview(_preview_request())
 
-    result = await harness.plugin.stage_prune_installed_selection(
+    result = await harness.endpoints.stage_prune_installed_selection(
         _selection_request("not-the-live-preview", None, [41], True)
     )
 
@@ -583,9 +583,9 @@ async def test_stage_selection_rejects_a_foreign_preview_id(harness):
 
 async def test_stage_selection_rejects_a_rom_without_disclosed_installed_content(harness):
     _seed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
 
-    result = await harness.plugin.stage_prune_installed_selection(
+    result = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], None, [41], False)
     )
 
@@ -598,14 +598,14 @@ async def test_stage_selection_rejects_a_rom_without_disclosed_installed_content
 
 async def test_stage_selection_rejects_a_foreign_selection_id(harness):
     _seed_installed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
-    staged = await harness.plugin.stage_prune_installed_selection(
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], None, [41], False)
     )
     assert set(staged) == {"success", "selection_id", "selected_count", "finalized"}
     assert (staged["success"], staged["selected_count"], staged["finalized"]) == (True, 1, False)
 
-    result = await harness.plugin.stage_prune_installed_selection(
+    result = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], "not-the-live-selection", [], True)
     )
 
@@ -618,13 +618,13 @@ async def test_stage_selection_rejects_a_foreign_selection_id(harness):
 
 async def test_stage_selection_rejects_a_page_after_the_selection_was_finalized(harness):
     _seed_installed_bulk_candidate(harness)
-    preview = await harness.plugin.get_prune_preview(_preview_request())
-    staged = await harness.plugin.stage_prune_installed_selection(
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], None, [41], True)
     )
     assert staged["finalized"] is True
 
-    result = await harness.plugin.stage_prune_installed_selection(
+    result = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], staged["selection_id"], [41], True)
     )
 
@@ -641,16 +641,16 @@ async def test_conflict_lease_renewal_extends_a_live_lease_and_denies_a_released
     def set_game_core_io(_rom_id, _label):
         return {"success": True, "app_id": 0x80000041, "launch_options": "launch"}
 
-    monkeypatch.setattr(harness.plugin._core_service, "_set_game_core_io", set_game_core_io)
-    token = (await harness.plugin.set_game_core(41, "core"))["prune_lease_token"]
+    monkeypatch.setattr(harness.app.services.core_service, "_set_game_core_io", set_game_core_io)
+    token = (await harness.endpoints.set_game_core(41, "core"))["prune_lease_token"]
 
-    assert await harness.plugin.renew_prune_conflict_lease(token) == {
+    assert await harness.endpoints.renew_prune_conflict_lease(token) == {
         "success": True,
         "message": "Operation lease renewed.",
     }
 
-    assert (await harness.plugin.release_prune_conflict_lease(token))["success"] is True
-    assert await harness.plugin.renew_prune_conflict_lease(token) == {
+    assert (await harness.endpoints.release_prune_conflict_lease(token))["success"] is True
+    assert await harness.endpoints.renew_prune_conflict_lease(token) == {
         "success": False,
         "reason": "stale_lease",
         "message": "Operation lease is no longer active.",
@@ -658,7 +658,7 @@ async def test_conflict_lease_renewal_extends_a_live_lease_and_denies_a_released
 
 
 async def test_release_wait_rejects_an_empty_run_id(harness):
-    assert await harness.plugin.wait_for_prune_release("") == {
+    assert await harness.endpoints.wait_for_prune_release("") == {
         "success": False,
         "reason": "invalid_run_id",
         "message": "Cleanup run id must be a non-empty string.",
@@ -666,7 +666,7 @@ async def test_release_wait_rejects_an_empty_run_id(harness):
 
 
 async def test_release_wait_returns_immediately_for_an_unknown_run(harness):
-    assert await harness.plugin.wait_for_prune_release("no-such-run") == {
+    assert await harness.endpoints.wait_for_prune_release("no-such-run") == {
         "success": True,
         "message": "Cleanup claim is released.",
     }
@@ -699,12 +699,12 @@ async def test_full_purge_leaves_save_states_completely_untouched(harness):
             RomSaveSyncState(system="gba", files={"Removed Game.srm": FileSyncState(last_sync_hash="known")}),
         )
     harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
-    preview = await harness.plugin.get_prune_preview(_preview_request())
-    staged = await harness.plugin.stage_prune_installed_selection(
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
         _selection_request(preview["preview_id"], None, [41], True)
     )
 
-    started = await harness.plugin.start_prune(
+    started = await harness.endpoints.start_prune(
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
@@ -716,7 +716,7 @@ async def test_full_purge_leaves_save_states_completely_untouched(harness):
         }
     )
     assert started["success"] is True
-    task = harness.plugin._prune_service._task
+    task = harness.app.services.prune_service._task
     assert task is not None
     await task
 

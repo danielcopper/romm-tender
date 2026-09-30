@@ -29,7 +29,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> str:
-    saves_dir = os.path.join(harness.plugin._retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -61,7 +61,7 @@ async def test_get_save_status_and_sync_share_kernel(harness):
     entry["content_hash"] = local_hash
 
     # 1. The status view: the matrix says "synced", no conflict surfaced.
-    status = await harness.plugin.get_save_status(42)
+    status = await harness.endpoints.get_save_status(42)
     files = {f["filename"]: f for f in status["files"]}
     assert "game.srm" in files
     assert files["game.srm"]["status"] == "synced"
@@ -69,7 +69,7 @@ async def test_get_save_status_and_sync_share_kernel(harness):
 
     # 2. The sync dispatch derives the same verdict from the same kernel: nothing
     #    transferred, no conflict, no error.
-    result = await harness.plugin.sync_rom_saves(42)
+    result = await harness.endpoints.sync_rom_saves(42)
     assert result["success"] is True
     assert result["synced"] == 0
     assert result["conflicts"] == []

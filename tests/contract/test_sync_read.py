@@ -38,7 +38,7 @@ async def test_get_sync_status_idle_shape(harness):
     slot, so there is no kind, and the frontend renders neither of the two real
     answers rather than picking one.
     """
-    result = harness.plugin.get_sync_status()
+    result = harness.endpoints.get_sync_status()
     assert result == {
         "running": False,
         "stage": "",
@@ -60,7 +60,7 @@ async def test_get_sync_status_idle_shape(harness):
 
 
 async def test_sync_heartbeat_shape(harness):
-    result = harness.plugin.sync_heartbeat()
+    result = harness.endpoints.sync_heartbeat()
     assert result == {"success": True}
 
 
@@ -69,7 +69,7 @@ async def test_sync_heartbeat_shape(harness):
 
 async def test_get_sync_stats_shape(harness):
     """Stats dict: every count key present and an int; last_sync + last_attempt None when never synced."""
-    result = harness.plugin.get_sync_stats()
+    result = harness.endpoints.get_sync_stats()
     assert set(result.keys()) == {
         "last_sync",
         "last_attempt",
@@ -96,7 +96,7 @@ async def test_get_sync_stats_surfaces_cancelled_attempt(harness):
     with harness.uow_factory() as uow:
         uow.sync_runs.save(run)
 
-    result = harness.plugin.get_sync_stats()
+    result = harness.endpoints.get_sync_stats()
     assert result["last_sync"] is None
     assert result["last_attempt"] == {"finished_at": "2025-06-01T17:48:00", "status": "cancelled"}
 
@@ -112,7 +112,7 @@ async def test_get_sync_stats_surfaces_interrupted_attempt(harness):
     with harness.uow_factory() as uow:
         uow.sync_runs.save(run)
 
-    result = harness.plugin.get_sync_stats()
+    result = harness.endpoints.get_sync_stats()
     assert result["last_sync"] is None
     assert result["last_attempt"] == {"finished_at": "2025-06-01T17:48:00", "status": "interrupted"}
 
@@ -120,7 +120,7 @@ async def test_get_sync_stats_surfaces_interrupted_attempt(harness):
 async def test_get_sync_stats_counts_bound_roms(harness):
     """A bound ROM row lifts the roms / total_shortcuts counts."""
     seed_rom(harness, 11, platform_slug="snes")
-    result = harness.plugin.get_sync_stats()
+    result = harness.endpoints.get_sync_stats()
     assert result["roms"] == 1
     assert result["total_shortcuts"] == 1
 
@@ -130,7 +130,7 @@ async def test_get_sync_stats_counts_bound_roms(harness):
 
 async def test_get_sync_runs_empty_history_shape(harness):
     """No runs recorded: the answer succeeds and carries an empty list."""
-    result = harness.plugin.get_sync_runs()
+    result = harness.endpoints.get_sync_runs()
     assert result == {"success": True, "runs": []}
 
 
@@ -155,7 +155,7 @@ async def test_get_sync_runs_seeded_history_shape(harness):
         reason="Sync cancelled",
     )
 
-    result = harness.plugin.get_sync_runs()
+    result = harness.endpoints.get_sync_runs()
     assert result["success"] is True
     assert [run["id"] for run in result["runs"]] == ["run-x", "run-ok"]
     for run in result["runs"]:
@@ -200,10 +200,10 @@ async def test_clear_sync_cache_preserves_last_sync(harness):
         uow.sync_runs.save(completed)
         uow.sync_runs.save(cancelled)
 
-    result = await harness.plugin.clear_sync_cache()
+    result = await harness.endpoints.clear_sync_cache()
     assert result == {"success": True, "message": "Next sync will fully re-fetch and re-apply"}
 
-    stats = harness.plugin.get_sync_stats()
+    stats = harness.endpoints.get_sync_stats()
     assert stats["last_sync"] == "2025-06-01T17:10:00"
     assert stats["last_attempt"] == {"finished_at": "2025-06-01T18:05:00", "status": "cancelled"}
 
@@ -225,13 +225,13 @@ async def test_clear_sync_cache_takes_both_skip_authorities(harness):
         rom.record_applied_launch_options("flatpak run app 'game.zip'")
         uow.roms.set_applied_launch_options(11, rom.applied_launch_options)
 
-    before = harness.plugin.get_sync_stats()
+    before = harness.endpoints.get_sync_stats()
     assert before["resumable_games"] == 1
     assert before["has_completion_stamp"] is True
 
-    await harness.plugin.clear_sync_cache()
+    await harness.endpoints.clear_sync_cache()
 
-    after = harness.plugin.get_sync_stats()
+    after = harness.endpoints.get_sync_stats()
     assert after["resumable_games"] == 0
     assert after["has_completion_stamp"] is False
     # The shortcut survives the clear — only what the next run could skip is gone.
@@ -246,7 +246,7 @@ async def test_get_platforms_happy_shape(harness):
         {"id": 1, "name": "Super Nintendo", "slug": "snes", "rom_count": 3},
         {"id": 2, "name": "Empty", "slug": "empty", "rom_count": 0},  # filtered out
     ]
-    result = await harness.plugin.get_platforms()
+    result = await harness.endpoints.get_platforms()
     assert result["success"] is True
     assert isinstance(result["platforms"], list)
     # rom_count==0 platform is filtered out
@@ -270,7 +270,7 @@ async def test_get_platforms_reports_romms_count_for_a_synced_platform(harness):
     harness.romm.platforms = [{"id": 1, "name": "Super Nintendo", "slug": "snes", "rom_count": 3}]
     seed_rom(harness, 11, platform_slug="snes")
     seed_platform_stamp(harness, "snes", rom_count=3)
-    result = await harness.plugin.get_platforms()
+    result = await harness.endpoints.get_platforms()
     p = result["platforms"][0]
     assert p["rom_count"] == 3
     assert set(p.keys()) == {"id", "name", "slug", "rom_count", "sync_enabled"}
@@ -279,7 +279,7 @@ async def test_get_platforms_reports_romms_count_for_a_synced_platform(harness):
 async def test_get_platforms_server_failure_shape(harness):
     """Server unreachable → canonical failure shape: success False + reason + message."""
     harness.romm.list_platforms_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_platforms()
+    result = await harness.endpoints.get_platforms()
     assert result["success"] is False
     assert "platforms" not in result
     assert isinstance(result["message"], str)
@@ -297,7 +297,7 @@ async def test_get_collections_happy_shape(harness):
     harness.romm.collections = [
         {"id": 7, "name": "Favorites", "rom_count": 2, "is_favorite": True},
     ]
-    result = await harness.plugin.get_collections()
+    result = await harness.endpoints.get_collections()
     assert result["success"] is True
     assert isinstance(result["collections"], list)
     assert len(result["collections"]) == 1
@@ -328,7 +328,7 @@ async def test_get_collections_states_each_collections_in_steam_count_and_its_ow
         "franchise": [{"id": "fr-1", "name": "Franchise", "rom_count": 2, "rom_ids": [40, 31]}],
     }
 
-    result = await harness.plugin.get_collections()
+    result = await harness.endpoints.get_collections()
 
     assert result["success"] is True
     by_id = {c["id"]: c for c in result["collections"]}
@@ -346,7 +346,7 @@ async def test_get_collections_virtual_shape(harness):
         "franchise": [{"id": "fr-1", "name": "Franchise One", "rom_count": 3}],
         "collection": [{"id": "vc-1", "name": "Series One", "rom_count": 4}],
     }
-    result = await harness.plugin.get_collections()
+    result = await harness.endpoints.get_collections()
     assert result["success"] is True
     by_id = {c["id"]: c for c in result["collections"]}
     assert by_id["fr-1"]["kind"] == "virtual"
@@ -362,17 +362,17 @@ async def test_virtual_collection_enable_round_trips(harness):
     harness.romm.virtual_collections = {
         "collection": [{"id": "vc-1", "name": "Series One", "rom_count": 4}],
     }
-    result = await harness.plugin.save_collection_sync("vc-1", "virtual", True)
+    result = await harness.endpoints.save_collection_sync("vc-1", "virtual", True)
     assert result == {"success": True}
-    assert harness.plugin.settings["enabled_collections"]["virtual"]["vc-1"] is True
+    assert harness.settings["enabled_collections"]["virtual"]["vc-1"] is True
 
     # And it now reads back as enabled through get_collections.
-    listing = await harness.plugin.get_collections()
+    listing = await harness.endpoints.get_collections()
     vc = next(c for c in listing["collections"] if c["id"] == "vc-1")
     assert vc["sync_enabled"] is True
 
     # The legacy "franchise" kind string is rejected by the canonical failure shape.
-    rejected = await harness.plugin.save_collection_sync("vc-1", "franchise", True)
+    rejected = await harness.endpoints.save_collection_sync("vc-1", "franchise", True)
     assert rejected["success"] is False
     assert isinstance(rejected["reason"], str)
     assert isinstance(rejected["message"], str) and rejected["message"]
@@ -387,14 +387,14 @@ async def test_save_collections_sync_batch_round_trips(harness):
         {"id": 2, "name": "Beta", "rom_count": 1},
         {"id": 3, "name": "Gamma", "rom_count": 1},
     ]
-    result = await harness.plugin.save_collections_sync(["1", "3"], "standard", True)
+    result = await harness.endpoints.save_collections_sync(["1", "3"], "standard", True)
     assert result == {"success": True}
-    bucket = harness.plugin.settings["enabled_collections"]["standard"]
+    bucket = harness.settings["enabled_collections"]["standard"]
     assert bucket["1"] is True
     assert bucket["3"] is True
     assert "2" not in bucket
 
-    listing = await harness.plugin.get_collections()
+    listing = await harness.endpoints.get_collections()
     by_id = {c["id"]: c for c in listing["collections"]}
     assert by_id["1"]["sync_enabled"] is True
     assert by_id["2"]["sync_enabled"] is False
@@ -403,66 +403,66 @@ async def test_save_collections_sync_batch_round_trips(harness):
 
 async def test_save_collections_sync_rejects_invalid_kind(harness):
     """An unknown kind returns the canonical failure shape and stamps nothing."""
-    result = await harness.plugin.save_collections_sync(["1"], "franchise", True)
+    result = await harness.endpoints.save_collections_sync(["1"], "franchise", True)
     assert result["success"] is False
     assert isinstance(result["reason"], str)
     assert isinstance(result["message"], str) and result["message"]
     assert "error" not in result
     assert "error_code" not in result
-    assert harness.plugin.settings["enabled_collections"]["standard"] == {}
+    assert harness.settings["enabled_collections"]["standard"] == {}
 
 
 async def test_save_collections_sync_empty_ids_is_no_op(harness):
     """An empty id list is a success no-op — nothing stamped."""
-    result = await harness.plugin.save_collections_sync([], "standard", True)
+    result = await harness.endpoints.save_collections_sync([], "standard", True)
     assert result == {"success": True}
-    assert harness.plugin.settings["enabled_collections"]["standard"] == {}
+    assert harness.settings["enabled_collections"]["standard"] == {}
 
 
 async def test_set_collection_owner_scope_persists(harness):
     """set_collection_owner_scope stores the value and get_settings reports it back."""
-    result = harness.plugin.set_collection_owner_scope("own")
+    result = harness.endpoints.set_collection_owner_scope("own")
     assert result == {"success": True}
-    assert harness.plugin.settings["collection_owner_scope"] == "own"
-    assert harness.plugin.get_settings()["collection_owner_scope"] == "own"
+    assert harness.settings["collection_owner_scope"] == "own"
+    assert harness.endpoints.get_settings()["collection_owner_scope"] == "own"
 
-    result = harness.plugin.set_collection_owner_scope("all")
+    result = harness.endpoints.set_collection_owner_scope("all")
     assert result == {"success": True}
-    assert harness.plugin.settings["collection_owner_scope"] == "all"
+    assert harness.settings["collection_owner_scope"] == "all"
 
 
 async def test_set_collection_owner_scope_rejects_invalid(harness):
     """An unrecognised scope returns the canonical failure shape and stores nothing."""
-    result = harness.plugin.set_collection_owner_scope("everyone")
+    result = harness.endpoints.set_collection_owner_scope("everyone")
     assert result["success"] is False
     assert isinstance(result["reason"], str)
     assert isinstance(result["message"], str) and result["message"]
     assert "error" not in result
     assert "error_code" not in result
-    assert harness.plugin.settings.get("collection_owner_scope", "all") == "all"
+    assert harness.settings.get("collection_owner_scope", "all") == "all"
 
 
 async def test_set_collection_naming_mode_persists(harness):
     """set_collection_naming_mode stores the value and get_settings reports it back."""
-    result = harness.plugin.set_collection_naming_mode("by_label")
+    result = harness.endpoints.set_collection_naming_mode("by_label")
     assert result == {"success": True}
-    assert harness.plugin.settings["collection_naming_mode"] == "by_label"
-    assert harness.plugin.get_settings()["collection_naming_mode"] == "by_label"
+    assert harness.settings["collection_naming_mode"] == "by_label"
+    assert harness.endpoints.get_settings()["collection_naming_mode"] == "by_label"
 
-    result = harness.plugin.set_collection_naming_mode("merge")
+    result = harness.endpoints.set_collection_naming_mode("merge")
     assert result == {"success": True}
-    assert harness.plugin.settings["collection_naming_mode"] == "merge"
+    assert harness.settings["collection_naming_mode"] == "merge"
 
 
 async def test_set_collection_naming_mode_rejects_invalid(harness):
     """An unrecognised mode returns the canonical failure shape and stores nothing."""
-    result = harness.plugin.set_collection_naming_mode("fancy")
+    result = harness.endpoints.set_collection_naming_mode("fancy")
     assert result["success"] is False
     assert result["reason"] == "invalid_mode"
     assert isinstance(result["message"], str) and result["message"]
     assert "error" not in result
     assert "error_code" not in result
-    assert harness.plugin.settings.get("collection_naming_mode", "merge") == "merge"
+    assert harness.settings.get("collection_naming_mode", "merge") == "merge"
 
 
 async def test_save_skip_preview_persists_and_reads_back(harness):
@@ -471,32 +471,32 @@ async def test_save_skip_preview_persists_and_reads_back(harness):
     The default is off, and it lands in settings.json through its owner.
     Nothing reads it back yet — Main's toggle is still its own local state.
     """
-    assert harness.plugin.get_settings()["skip_preview"] is False
+    assert harness.endpoints.get_settings()["skip_preview"] is False
 
-    assert harness.plugin.save_skip_preview(True) == {"success": True}
-    assert harness.plugin.settings["skip_preview"] is True
-    assert harness.plugin.get_settings()["skip_preview"] is True
+    assert harness.endpoints.save_skip_preview(True) == {"success": True}
+    assert harness.settings["skip_preview"] is True
+    assert harness.endpoints.get_settings()["skip_preview"] is True
 
-    assert harness.plugin.save_skip_preview(False) == {"success": True}
-    assert harness.plugin.get_settings()["skip_preview"] is False
+    assert harness.endpoints.save_skip_preview(False) == {"success": True}
+    assert harness.endpoints.get_settings()["skip_preview"] is False
 
 
 async def test_save_skip_preview_rejects_non_bool(harness):
     """A non-bool from the wire returns the canonical failure shape and stores nothing."""
-    result = harness.plugin.save_skip_preview("yes")
+    result = harness.endpoints.save_skip_preview("yes")
     assert result["success"] is False
     assert result["reason"] == "invalid_value"
     assert isinstance(result["message"], str)
     assert result["message"]
     assert "error" not in result
     assert "error_code" not in result
-    assert harness.plugin.settings.get("skip_preview", False) is False
+    assert harness.settings.get("skip_preview", False) is False
 
 
 async def test_get_collections_server_failure_shape(harness):
     """User-collection fetch failure → canonical failure shape."""
     harness.romm.list_collections_side_effect = RommConnectionError("offline")
-    result = await harness.plugin.get_collections()
+    result = await harness.endpoints.get_collections()
     assert result["success"] is False
     assert "collections" not in result
     assert isinstance(result["message"], str)
@@ -510,7 +510,7 @@ async def test_get_collections_server_failure_shape(harness):
 
 
 async def test_get_registry_platforms_empty_shape(harness):
-    result = harness.plugin.get_registry_platforms()
+    result = harness.endpoints.get_registry_platforms()
     assert result == {"platforms": []}
 
 
@@ -518,7 +518,7 @@ async def test_get_registry_platforms_counts_bound_roms(harness):
     """Registry read is offline (no RomM call) and counts bound ROMs per slug."""
     seed_rom(harness, 21, platform_slug="snes")
     seed_rom(harness, 22, platform_slug="snes")
-    result = harness.plugin.get_registry_platforms()
+    result = harness.endpoints.get_registry_platforms()
     assert "platforms" in result
     assert len(result["platforms"]) == 1
     entry = result["platforms"][0]
@@ -537,18 +537,18 @@ async def test_report_unit_results_signal_shape(harness):
     """The happy path (orchestrator still waiting): record + signal, pin the shape."""
     import asyncio
 
-    box = harness.plugin._sync_service._box
+    box = harness.app.services.sync_service._box
     box.current_sync_id = "run-1"
     box.active_unit_id = 1
     box.active_chunk_index = 0
     box.unit_complete_event = asyncio.Event()
 
-    result = await harness.plugin.report_unit_results({"10": 9001}, "run-1", 1, 0)
+    result = await harness.endpoints.report_unit_results({"10": 9001}, "run-1", 1, 0)
 
     assert result == {"success": True, "count": 1}
     assert box.unit_complete_event.is_set()
     # The orchestrator drives the commit on the happy path — nothing bound yet.
-    assert harness.plugin.get_app_id_rom_id_map() == {}
+    assert harness.endpoints.get_app_id_rom_id_map() == {}
 
 
 async def test_report_unit_results_stale_run_ignored(harness):
@@ -557,7 +557,7 @@ async def test_report_unit_results_stale_run_ignored(harness):
     the active run's wait event stays unset."""
     import asyncio
 
-    box = harness.plugin._sync_service._box
+    box = harness.app.services.sync_service._box
     # Active run B, waiting on its own unit's event.
     box.current_sync_id = "run-B"
     box.active_unit_id = 7
@@ -565,12 +565,12 @@ async def test_report_unit_results_stale_run_ignored(harness):
     box.unit_complete_event = asyncio.Event()
 
     # Stale ack from the cancelled run A.
-    result = await harness.plugin.report_unit_results({"10": 9001}, "run-A", 1, 0)
+    result = await harness.endpoints.report_unit_results({"10": 9001}, "run-A", 1, 0)
 
     assert result == {"success": True, "count": 0, "ignored": True}
     # Run B's wait is untouched and nothing was bound.
     assert not box.unit_complete_event.is_set()
-    assert harness.plugin.get_app_id_rom_id_map() == {}
+    assert harness.endpoints.get_app_id_rom_id_map() == {}
 
 
 async def test_report_unit_results_stale_chunk_ignored(harness):
@@ -579,18 +579,18 @@ async def test_report_unit_results_stale_chunk_ignored(harness):
     the in-flight chunk's wait event stays unset."""
     import asyncio
 
-    box = harness.plugin._sync_service._box
+    box = harness.app.services.sync_service._box
     box.current_sync_id = "run-1"
     box.active_unit_id = 1
     box.active_chunk_index = 1  # chunk 1 is in flight
     box.unit_complete_event = asyncio.Event()
 
     # Late ack for the already-committed chunk 0.
-    result = await harness.plugin.report_unit_results({"10": 9001}, "run-1", 1, 0)
+    result = await harness.endpoints.report_unit_results({"10": 9001}, "run-1", 1, 0)
 
     assert result == {"success": True, "count": 0, "ignored": True}
     assert not box.unit_complete_event.is_set()
-    assert harness.plugin.get_app_id_rom_id_map() == {}
+    assert harness.endpoints.get_app_id_rom_id_map() == {}
 
 
 async def test_report_unit_results_late_ack_binds_orphan(harness):
@@ -598,12 +598,12 @@ async def test_report_unit_results_late_ack_binds_orphan(harness):
     frontend-created shortcut becomes a bound row instead of an orphan that the
     next sync re-creates as a duplicate (#1052 / #1367).
 
-    End-to-end over the real Plugin/bootstrap: drive the box into the real
+    End-to-end over the real Endpoints/bootstrap: drive the box into the real
     production post-timeout state (chunk stashed via ``stash_abandoned_chunk``,
     run wound down via ``finish_run`` so ``current_sync_id`` is None), call the
     callable frontend-shaped, then assert ``get_app_id_rom_id_map`` resolves the
     appId to the rom_id."""
-    box = harness.plugin._sync_service._box
+    box = harness.app.services.sync_service._box
     _entry = {
         "name": "Orphan Game",
         "fs_name": "orphan.gba",
@@ -625,14 +625,14 @@ async def test_report_unit_results_late_ack_binds_orphan(harness):
     assert box.current_sync_id is None
 
     # Before the ack: the appId is NOT in the map (would be an orphan).
-    assert harness.plugin.get_app_id_rom_id_map() == {}
+    assert harness.endpoints.get_app_id_rom_id_map() == {}
 
-    result = await harness.plugin.report_unit_results({"42": 100001}, "run-1", 1, 0)
+    result = await harness.endpoints.report_unit_results({"42": 100001}, "run-1", 1, 0)
 
     assert result == {"success": True, "count": 1}
     # The orphan is now a bound row — the next sync's getExistingRomMShortcuts
     # maps it and takes the update branch (no duplicate).
-    assert harness.plugin.get_app_id_rom_id_map() == {"100001": 42}
+    assert harness.endpoints.get_app_id_rom_id_map() == {"100001": 42}
     # The abandoned-chunk stash is cleared so a duplicate late ack no-ops.
     assert box.abandoned_chunk is None
 
@@ -645,7 +645,7 @@ async def test_get_session_budget_status_shape_rss_none(harness):
     the callable still resolves with success + the fixed budget lines (#1383)."""
     from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB, POST_RUN_ADVISORY_KB
 
-    result = await harness.plugin.get_session_budget_status()
+    result = await harness.endpoints.get_session_budget_status()
     assert result == {
         "success": True,
         "rss_kb": None,
@@ -663,9 +663,9 @@ async def test_get_session_budget_status_shape_rss_present(harness):
     """A readable RSS flows through unchanged alongside the fixed budget lines."""
     from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB, POST_RUN_ADVISORY_KB
 
-    harness.plugin._sync_service._session_budget._renderer_rss.rss_kb = 2_100_000
+    harness.app.services.sync_service._session_budget._renderer_rss.rss_kb = 2_100_000
 
-    result = await harness.plugin.get_session_budget_status()
+    result = await harness.endpoints.get_session_budget_status()
     assert result == {
         "success": True,
         "rss_kb": 2_100_000,
