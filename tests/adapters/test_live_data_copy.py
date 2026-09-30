@@ -52,15 +52,24 @@ class TestCopyDatabase:
         assert [path.name for path in live.iterdir()] == ["romm_sync.db"]
         assert (live / "romm_sync.db").read_bytes() == before
 
-    def test_a_database_held_open_is_copied_with_what_its_wal_holds(self, tmp_path):
-        _database(tmp_path / "live.db", "in the file")
-        writer = sqlite3.connect(tmp_path / "live.db")
+    def test_a_database_held_open_is_copied_with_what_its_wal_holds_and_nothing_is_put_beside_it(self, tmp_path):
+        """The WAL index is left out of the byte comparison: every reader writes its read marks there."""
+        live = tmp_path / "live"
+        live.mkdir()
+        _database(live / "romm_sync.db", "in the file")
+        writer = sqlite3.connect(live / "romm_sync.db")
         try:
             writer.execute("PRAGMA wal_autocheckpoint=0")
             writer.execute("INSERT INTO marker VALUES ('in the wal')")
             writer.commit()
+            names = sorted(path.name for path in live.iterdir())
+            assert names == ["romm_sync.db", "romm_sync.db-shm", "romm_sync.db-wal"]
+            before = {name: (live / name).read_bytes() for name in names if not name.endswith("-shm")}
 
-            copy_database(str(tmp_path / "live.db"), str(tmp_path / "copy.db"))
+            copy_database(str(live / "romm_sync.db"), str(tmp_path / "copy.db"))
+
+            assert sorted(path.name for path in live.iterdir()) == names
+            assert {name: (live / name).read_bytes() for name in before} == before
         finally:
             writer.close()
 
@@ -104,6 +113,28 @@ class TestCopyDatabase:
         assert {path.name: path.read_bytes() for path in live.iterdir()} == before
         assert _notes(tmp_path / "copy" / "romm_sync.db") == ["in the file", "in the wal"]
         assert sorted(path.name for path in (tmp_path / "copy").iterdir()) == ["romm_sync.db"]
+
+    def test_an_index_left_without_its_wal_gets_no_wal_put_beside_it(self, tmp_path):
+        """A read-only open would create the WAL in the live directory; with no WAL the file holds every page."""
+        held = tmp_path / "held"
+        held.mkdir()
+        _database(held / "romm_sync.db", "in the file")
+        live = tmp_path / "live"
+        live.mkdir()
+        reader = sqlite3.connect(held / "romm_sync.db")
+        try:
+            assert reader.execute("SELECT count(*) FROM marker").fetchone() == (1,)
+            for name in ("romm_sync.db", "romm_sync.db-shm"):
+                (live / name).write_bytes((held / name).read_bytes())
+        finally:
+            reader.close()
+        before = {path.name: path.read_bytes() for path in live.iterdir()}
+        assert sorted(before) == ["romm_sync.db", "romm_sync.db-shm"]
+
+        assert copy_database(str(live / "romm_sync.db"), str(tmp_path / "copy" / "romm_sync.db")) is True
+
+        assert {path.name: path.read_bytes() for path in live.iterdir()} == before
+        assert _notes(tmp_path / "copy" / "romm_sync.db") == ["in the file"]
 
     def test_a_write_during_a_copy_that_takes_no_lock_is_seen_and_the_copy_taken_again(self, tmp_path, monkeypatch):
         """The first copy reads a quiet database; a writer opens it meanwhile, and the second copy has its row."""

@@ -49,9 +49,11 @@ def copy_database(source: str, target: str) -> bool:
     - a WAL and its index, or a rollback journal: something has the database
       open, or left it open. A read-only open reads it inside one transaction,
       through SQLite's backup API, and creates nothing.
-    - nothing: every committed page is in the file itself, and ``immutable=1``
-      reads it without creating anything (https://sqlite.org/uri.html#uriimmutable)
+    - no WAL and no journal, with or without an index: every committed page is
+      in the file itself, and ``immutable=1`` reads it without creating anything
+      and without looking at the index (https://sqlite.org/uri.html#uriimmutable)
       — and without any lock, so nothing stops a writer that opens it meanwhile.
+      A read-only open beside an index alone would create the WAL.
     - a WAL without its index: no connection has it open, and a read-only open
       would create the index. The two files are copied as bytes beside the
       target and opened there, which folds the WAL into the copy.
@@ -81,7 +83,7 @@ def _copy_once(source: str, target: str) -> bool:
         raise FileNotFoundError(source)
     if wal is not None and shm is None:
         _fold_bytes(source, target)
-    elif wal is None and shm is None and journal is None:
+    elif wal is None and journal is None:
         _backup(f"{Path(source).absolute().as_uri()}?mode=ro&immutable=1", target)
     else:
         _backup(f"{Path(source).absolute().as_uri()}?mode=ro", target)
