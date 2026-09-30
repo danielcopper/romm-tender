@@ -467,7 +467,7 @@ describe("UpdatesSection", () => {
       expect(["download", "verify", "check", "install"].map((id) => text(utils, `updates-step-${id}`))).toEqual([
         "✓ Download",
         "✕ Verify",
-        "○ Check new version",
+        "○ Check the new version",
         "○ Install",
       ]);
       expect(text(utils, "updates-note")).toBe("The download did not match its checksum.");

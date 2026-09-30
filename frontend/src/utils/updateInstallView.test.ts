@@ -114,7 +114,7 @@ describe("installSteps", () => {
     expect(installSteps("download", false).map((row) => row.label)).toEqual([
       "Download",
       "Verify",
-      "Check new version",
+      "Check the new version",
       "Install",
     ]);
   });

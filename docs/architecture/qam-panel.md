@@ -1774,10 +1774,10 @@ changes, so the focus stop stays put from the download through the restart to a 
 it holds a caption — what is happening on the left; `NN% · m:ss`, or `m:ss`, on the right in tabular figures — then
 Steam's own `ProgressBar`, determinate while a download with an announced size runs and indeterminate otherwise, as
 Main's sync slot uses it (the panel draws no animation of its own), then the step line — **Download**, **Verify**,
-**Check new version**, **Install**, wrapping where the pane is narrow — each step's mark coloured and its label in the
-text colour: done `✓` green, current `●` in the selection accent, still to do `○` muted, failed `✕` amber; then a line
-under it: **Starting a game now cancels the update.** while it downloads and verifies. The clock is the panel's own —
-the attempt on the wire carries no timestamp — and counts from when this panel first saw the attempt under way, in the
+**Check the new version**, **Install**, wrapping where the pane is narrow — each step's mark coloured and its label in
+the text colour: done `✓` green, current `●` in the selection accent, still to do `○` muted, failed `✕` amber; then a
+line under it: **Starting a game now cancels the update.** while it downloads and verifies. The clock is the panel's own
+— the attempt on the wire carries no timestamp — and counts from when this panel first saw the attempt under way, in the
 press's answer, a frame or a read (`attemptSeenAt`, `utils/updateInstallStore.ts`); like the moment the installer was
 first seen, it survives the section leaving the screen but not a reload of Steam's JavaScript context.
 
@@ -1814,14 +1814,14 @@ says **— you are still on Y.** as its card on Main does, since what it left be
 sentence in `INSTALL_FAILURE_SENTENCES`, which leaves out what the title says. The step it is marked at (`failedStep`,
 `utils/updateInstallView.ts`):
 
-| Failure                                                         | Marked at                                                                                                                     |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `download_failed`                                               | Download                                                                                                                      |
-| `checksum_mismatch`                                             | Verify                                                                                                                        |
-| `new_version_does_not_start`                                    | Check new version — the installer's own failures are marked at the check, so no step the attempt did not reach is marked done |
-| `installer_stopped`, where this panel saw the installer start   | Check new version — it ended before it stopped this backend                                                                   |
-| `installer_stopped`, where it did not                           | Install — the installer had stopped the backend before the one that found it                                                  |
-| `installer_not_started`, `game_started`, `running_apps_unknown` | no step line — the attempt ended at the installer's start, through no fault of the new version                                |
+| Failure                                                         | Marked at                                                                                                                         |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `download_failed`                                               | Download                                                                                                                          |
+| `checksum_mismatch`                                             | Verify                                                                                                                            |
+| `new_version_does_not_start`                                    | Check the new version — the installer's own failures are marked at the check, so no step the attempt did not reach is marked done |
+| `installer_stopped`, where this panel saw the installer start   | Check the new version — it ended before it stopped this backend                                                                   |
+| `installer_stopped`, where it did not                           | Install — the installer had stopped the backend before the one that found it                                                      |
+| `installer_not_started`, `game_started`, `running_apps_unknown` | no step line — the attempt ended at the installer's start, through no fault of the new version                                    |
 
 Whether this panel saw the installer start is `installerSeenAt` (`utils/updateInstallStore.ts`), a proxy for whether
 this backend's watch saw it end: the two agree while the panel that saw the start is the one still loaded. A reload of
@@ -1831,9 +1831,9 @@ record at its own start, which refuses its socket
 ([a panel an earlier backend left behind](loading-the-panel.md#a-panel-an-earlier-backend-left-behind)).
 
 Where no failed attempt of this backend's is shown, the installer's record takes the block: **Update to X failed —
-Tender went back to Y.** at Install for a rollback, **Update to X failed — nothing was changed.** at Check new version
-for a refusal by the check, and the card's sentence with no step line for a kind this version does not know; the reason
-is the record's own line (`updateFailureReason`), except a refusal's, which leaves out what its title says
+Tender went back to Y.** at Install for a rollback, **Update to X failed — nothing was changed.** at Check the new
+version for a refusal by the check, and the card's sentence with no step line for a kind this version does not know; the
+reason is the record's own line (`updateFailureReason`), except a refusal's, which leaves out what its title says
 (`UPDATE_CHECK_FAILURE_NOTE`). An attempt takes the block over a record, so a refusal by the check this backend saw
 while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows only while its version is
 the one offered, or until the first read answers, so the block does not leave under focus, and leaves once a read offers

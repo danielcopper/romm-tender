@@ -352,9 +352,9 @@ says how many there are, because the restart cancels them.
 
 Once you press it, the button says **Installing…** and a block under it shows how far the install got: what is
 happening, with the percent of the download and the time since you pressed, a bar, and the four steps **Download**,
-**Verify**, **Check new version** and **Install**, each marked `✓` done, `●` under way, `○` still to come or `✕` failed.
-While it downloads and verifies, the block says **Starting a game now cancels the update.** — Tender checks once more
-right before the installer starts, and stops there, with nothing changed, if a game is running.
+**Verify**, **Check the new version** and **Install**, each marked `✓` done, `●` under way, `○` still to come or `✕`
+failed. While it downloads and verifies, the block says **Starting a game now cancels the update.** — Tender checks once
+more right before the installer starts, and stops there, with nothing changed, if a game is running.
 
 When the installer has started, it first runs the new version's pre-install check, without stopping Tender: the block
 says **Checking the new version**. Once the check has passed, the installer stops Tender and the block says **Tender is
@@ -366,7 +366,7 @@ reload Tender says it was updated, or, if the new version did not answer once st
 the installer then waits up to a minute for the new version to answer, and up to a minute more for the one you had if it
 goes back; stopping Tender, saving your data and reloading Steam's interface come on top. Where the new version cannot
 even be put together, the check stops the installer there: nothing is replaced, Steam's interface does not reload, and
-the block says **Update to X failed — nothing was changed.** with **Check new version** marked failed and **The new
+the block says **Update to X failed — nothing was changed.** with **Check the new version** marked failed and **The new
 version does not start.**, and the main panel says the update failed
 ([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)). While the install runs, Tender
 refuses to start a library sync, a game download or a save sync.

@@ -153,7 +153,7 @@ export interface InstallStepRow {
 const STEPS: readonly [InstallStepId, string][] = [
   ["download", "Download"],
   ["verify", "Verify"],
-  ["check", "Check new version"],
+  ["check", "Check the new version"],
   ["install", "Install"],
 ];
 

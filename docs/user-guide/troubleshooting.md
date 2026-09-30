@@ -119,7 +119,7 @@ newer one wrote. Start Tender instead if it is not running, with `systemctl --us
 prints what the pre-install check said, and ends with `install.sh: the new version does not start` and
 `nothing was changed`. After an update, Tender's main panel says **Update to X failed — you are still on Y.** with **The
 new version did not start, so nothing was changed.** under it, and **Settings › Updates** says **Update to X failed —
-nothing was changed.** with **Check new version** marked as the step that failed, until a later update goes through.
+nothing was changed.** with **Check the new version** marked as the step that failed, until a later update goes through.
 
 **Explanation**: Before it stops anything, the installer runs the new version's pre-install check: it builds Tender from
 the new files on copies of your library database and settings, the way a start would, without starting it. That failed,
@@ -188,7 +188,7 @@ steps:
   Tender did not install it.
 - **The installer could not be started.** The installer could not be taken out of the download, or could not be started
   — for example because an earlier one is still running.
-- **The installer stopped without updating.** (Check new version) The installer started, but ended before it stopped
+- **The installer stopped without updating.** (Check the new version) The installer started, but ended before it stopped
   Tender — it refused, or it failed. A pre-install check that did not finish
   ([The check did not finish](#the-check-did-not-finish)), and data it could not copy
   ([Your data could not be copied](#your-data-could-not-be-copied)), end this way.
@@ -197,8 +197,8 @@ steps:
   game.
 - **Could not check whether a game is running.** The update **was cancelled** here too: at that same check Tender could
   not ask Steam, and did not start the installer on a guess.
-- **The new version does not start.** (Check new version) The installer's pre-install check tried the new version before
-  stopping Tender, and it could not be built, or it crashed
+- **The new version does not start.** (Check the new version) The installer's pre-install check tried the new version
+  before stopping Tender, and it could not be built, or it crashed
   ([The New Version Does Not Start](#the-new-version-does-not-start)).
 
 Nothing tries again by itself; what the attempt downloaded is removed.
