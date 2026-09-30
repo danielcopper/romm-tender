@@ -1,16 +1,18 @@
 """What became of the last update, as a start of this program finds it.
 
 Contract: everything pure about an update's outcome — the record the installer
-leaves when it rolled an update back (its filename, how it is read, and whether
-it still stands), and which announcement, if any, a start owes the user: the
-version running now and which way it moved. Reading the
-record stays in the adapter; the version a start remembers stays in the service.
+leaves when it rolled an update back or its check refused the new version (its
+filename, how it is read, and whether it still stands), and which announcement,
+if any, a start owes the user: the version running now and which way it moved.
+Reading the record stays in the adapter; the version a start remembers stays in
+the service.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal, TypeGuard
 
 from domain.version import is_newer_version
@@ -25,26 +27,48 @@ UpdateDirection = Literal["updated", "back"]
 UPDATE_FAILURE_FILENAME = "update-failure.json"
 
 
+class UpdateFailureKind(StrEnum):
+    """What the installer's record says became of the update, as its ``kind`` key spells it.
+
+    A record without the key is a rollback: that is the only record an installer
+    wrote before its check existed, and an older backend reading a ``check``
+    record ignores the key and tells it as one too.
+    """
+
+    ROLLBACK = "rollback"
+    # The installer's check refused the new version before anything was stopped
+    # or replaced (``check_the_new_version`` in ``install.sh``).
+    CHECK = "check"
+
+
 @dataclass(frozen=True)
 class UpdateFailure:
-    """An update the installer rolled back, as its record states it.
+    """An update that did not go through, as the installer's record states it.
 
-    ``rolled_back_at`` is the record's own ISO-8601 UTC text, kept as written: it
-    is shown and compared, never computed with, and it is what tells one record
-    from the next.
+    ``restored_version`` is the version the user is still on: the one a
+    rollback put back, or the one a refused check never replaced.
+    ``rolled_back_at`` is the record's own ISO-8601 UTC text — when the
+    rollback or the refusal happened — kept as written: it is shown and
+    compared, never computed with, and it is what tells one record from the
+    next. The key keeps its name for both kinds so that an older backend still
+    reads a ``check`` record.
     """
 
     attempted_version: str
     restored_version: str
     rolled_back_at: str
+    kind: UpdateFailureKind = UpdateFailureKind.ROLLBACK
 
 
 def decode_update_failure(raw: str) -> UpdateFailure | None:
     """Read the installer's record, or ``None`` where it says nothing usable.
 
-    Every one of its three keys has to be a non-empty string. A record short of
-    that is treated as no record at all rather than shown in part, because a
-    card naming half an update would state something the installer did not.
+    Every one of its three version and time keys has to be a non-empty string.
+    A record short of that is treated as no record at all rather than shown in
+    part, because a card naming half an update would state something the
+    installer did not. ``kind`` is optional and read as a rollback where it is
+    absent; a ``kind`` this reader does not know is no record either, for the
+    same reason.
     """
     try:
         decoded = json.loads(raw)
@@ -57,7 +81,15 @@ def decode_update_failure(raw: str) -> UpdateFailure | None:
     rolled_back_at = decoded.get("rolled_back_at")
     if not (_is_text(attempted) and _is_text(restored) and _is_text(rolled_back_at)):
         return None
-    return UpdateFailure(attempted_version=attempted, restored_version=restored, rolled_back_at=rolled_back_at)
+    kind = decoded.get("kind", UpdateFailureKind.ROLLBACK.value)
+    if not isinstance(kind, str) or kind not in UpdateFailureKind:
+        return None
+    return UpdateFailure(
+        attempted_version=attempted,
+        restored_version=restored,
+        rolled_back_at=rolled_back_at,
+        kind=UpdateFailureKind(kind),
+    )
 
 
 def standing_update_failure(failure: UpdateFailure | None, running: str) -> UpdateFailure | None:

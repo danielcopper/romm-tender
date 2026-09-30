@@ -32,7 +32,7 @@ from domain.update_install import (
     claims_named_by,
     encode_attempt_record,
 )
-from domain.update_outcome import UpdateFailure
+from domain.update_outcome import UpdateFailure, UpdateFailureKind
 from domain.update_release import LatestRelease, ReleaseTarball
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
 from tests._conflict_rules import call_sites_with_rule, claim_names_in_source, claims_held_on_the_prune_conflicts
@@ -47,6 +47,8 @@ _STATE_KEYS = {"offered", "version", "wait_reasons", "paused_downloads", "attemp
 _ENVIRONMENT = (("TENDER_CODE_DIR", "/code"), ("TENDER_PYTHON", "/usr/bin/python3.13"))
 # The installer's unit, asked about at a start, has ended: the record may be judged.
 _ENDED: list[bool | None] = [False]
+# When an attempt's installer starts, as its record states it: FakeClock's instant.
+_CLOCK_STAMP = "2026-01-01T00:00:00Z"
 
 
 def _tarball(installer: bytes | None = _INSTALLER, *, as_link: bool = False) -> bytes:
@@ -781,6 +783,69 @@ class TestAFailedAttempt:
 
         assert frames[-1]["failure"] == "installer_stopped"
         assert rig.units.asked == [INSTALLER_UNIT, INSTALLER_UNIT]
+
+    @staticmethod
+    async def _ended_with(rig: _Rig) -> dict[str, Any]:
+        """Press, let the installer run for one watch and end, and answer the last frame."""
+        await rig.service.install_update(_OFFERED)
+        for _ in range(200):
+            frames = [payload for name, payload in rig.events.events if name == "update_install_progress"]
+            if frames[-1]["step"] == "failed":
+                return frames[-1]
+            await asyncio.sleep(0.01)
+        raise AssertionError(f"the attempt never failed: {rig.events.events}")
+
+    async def test_an_installer_whose_check_refused_this_attempt_is_new_version_does_not_start(
+        self, rigs, tmp_path, caplog
+    ):
+        """The record names this version, leaves the running one in place, and was written after the press."""
+        refused = UpdateFailure(
+            attempted_version=_OFFERED,
+            restored_version=_RUNNING,
+            rolled_back_at=_CLOCK_STAMP,
+            kind=UpdateFailureKind.CHECK,
+        )
+        rig = await _built(
+            rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5), failure_record=refused
+        )
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            last = await self._ended_with(rig)
+
+        assert last["failure"] == "new_version_does_not_start"
+        assert rig.service.is_update_in_progress() is False
+        assert f"update: the installer's check refused {_OFFERED}" in caplog.text
+
+    @pytest.mark.parametrize(
+        "record",
+        [
+            # An earlier attempt's refusal of the same version, written before this press.
+            UpdateFailure(_OFFERED, _RUNNING, "2025-12-31T23:59:59Z", UpdateFailureKind.CHECK),
+            # A refusal of another version.
+            UpdateFailure("1.2.0", _RUNNING, _CLOCK_STAMP, UpdateFailureKind.CHECK),
+            # A refusal that names another version as still running: a leftover.
+            UpdateFailure(_OFFERED, "0.9.0", _CLOCK_STAMP, UpdateFailureKind.CHECK),
+            # A rollback: the installer that writes one has stopped this process first.
+            UpdateFailure(_OFFERED, _RUNNING, _CLOCK_STAMP, UpdateFailureKind.ROLLBACK),
+            None,
+        ],
+    )
+    async def test_any_other_record_leaves_it_installer_stopped(self, rigs, tmp_path, record):
+        rig = await _built(
+            rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5), failure_record=record
+        )
+
+        assert (await self._ended_with(rig))["failure"] == "installer_stopped"
+
+    async def test_a_record_that_cannot_be_read_leaves_it_installer_stopped(self, rigs, tmp_path, monkeypatch):
+        rig = await _built(rigs, tmp_path, unit_states=[True, False], sleeper=_ParkingSleeper(free=5))
+
+        def raising() -> UpdateFailure | None:
+            raise OSError("state directory gone")
+
+        monkeypatch.setattr(rig.service, "_read_update_failure", raising)
+
+        assert (await self._ended_with(rig))["failure"] == "installer_stopped"
 
     async def test_a_unit_seam_that_raises_is_installer_not_started(self, rigs, tmp_path, monkeypatch):
         rig = await _built(rigs, tmp_path)

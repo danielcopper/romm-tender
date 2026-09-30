@@ -10,7 +10,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
-from domain.update_outcome import UpdateFailure
+from domain.update_outcome import UpdateFailure, UpdateFailureKind
 from services.update_outcome import (
     FAILURE_DISMISSED_KEY,
     LAST_RUN_KEY,
@@ -19,6 +19,12 @@ from services.update_outcome import (
 )
 
 _FAILURE = UpdateFailure(attempted_version="1.3.0", restored_version="1.2.3", rolled_back_at="2026-09-25T10:15:00Z")
+_REFUSED = UpdateFailure(
+    attempted_version="1.3.0",
+    restored_version="1.2.3",
+    rolled_back_at="2026-09-25T10:15:00Z",
+    kind=UpdateFailureKind.CHECK,
+)
 _OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failure", "failure_dismissed"}
 
 
@@ -272,6 +278,18 @@ class TestAStartAfterARollback:
 
         assert len(_lines(caplog, logger, logging.WARNING)) == 1
 
+    def test_a_refusal_by_the_check_is_logged_as_one_and_not_as_a_rollback(self, logger, caplog):
+        service, _, _, _ = _make(logger, running="1.2.3", last_run="1.2.3", record=_Record(_REFUSED))
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            service.note_start()
+
+        assert _lines(caplog, logger, logging.WARNING) == [
+            "the installer's check refused 1.3.0 at 2026-09-25T10:15:00Z: it did not start, so nothing was changed"
+            " and this is still 1.2.3 — what it said is in journalctl --user -u romm-tender-update,"
+            " or in the terminal the installer ran in"
+        ]
+
     def test_no_record_logs_no_warning(self, logger, caplog):
         service, _, _, _ = _make(logger, running="1.2.3", last_run="1.2.3")
 
@@ -340,7 +358,7 @@ class TestARecordThatNoLongerStands:
 
 
 class TestTheRecord:
-    async def test_is_reported_with_its_three_fields(self, logger):
+    async def test_is_reported_with_its_four_fields(self, logger):
         service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
 
         outcome = await service.get_update_outcome()
@@ -350,8 +368,21 @@ class TestTheRecord:
             "attempted_version": "1.3.0",
             "restored_version": "1.2.3",
             "rolled_back_at": "2026-09-25T10:15:00Z",
+            "kind": "rollback",
         }
         assert outcome["failure_dismissed"] is False
+
+    async def test_a_refusal_by_the_check_is_reported_as_the_check_s(self, logger):
+        service, _, _, _ = _make(logger, running="1.2.3", record=_Record(_REFUSED))
+
+        outcome = await service.get_update_outcome()
+
+        assert outcome["failure"] == {
+            "attempted_version": "1.3.0",
+            "restored_version": "1.2.3",
+            "rolled_back_at": "2026-09-25T10:15:00Z",
+            "kind": "check",
+        }
 
     async def test_is_read_afresh_so_it_goes_when_the_installer_removes_it(self, logger):
         record = _Record(_FAILURE)

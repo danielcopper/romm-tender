@@ -1,4 +1,4 @@
-"""The installer's record of an update it rolled back, read from the state directory.
+"""The installer's record of an update it rolled back or its check refused, read from the state directory.
 
 Owns reading ``update-failure.json`` and nothing else: the installer writes it
 and removes it, and this program never does either, so a record that is here is
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class UpdateFailureFileAdapter:
-    """Reads the rolled-back-update record under *state_dir*.
+    """Reads the installer's record of an update that did not go through, under *state_dir*.
 
     Parameters
     ----------

@@ -9,6 +9,7 @@ import pytest
 from domain.update_outcome import (
     UpdateAnnouncement,
     UpdateFailure,
+    UpdateFailureKind,
     announced_update,
     decode_update_failure,
     standing_update_failure,
@@ -39,6 +40,35 @@ class TestDecodeUpdateFailure:
     def test_a_record_short_of_any_key_is_no_record(self, key, value):
         """Half an update on a card would state something the installer did not."""
         assert decode_update_failure(json.dumps({**_RECORD, key: value})) is None
+
+    def test_a_record_without_a_kind_is_a_rollback(self):
+        """What every installer wrote before its check existed, and what a rollback still writes."""
+        failure = decode_update_failure(json.dumps(_RECORD))
+        assert failure is not None
+        assert failure.kind is UpdateFailureKind.ROLLBACK
+
+    @pytest.mark.parametrize(
+        ("kind", "read"), [("rollback", UpdateFailureKind.ROLLBACK), ("check", UpdateFailureKind.CHECK)]
+    )
+    def test_a_kind_it_knows_is_read(self, kind, read):
+        assert decode_update_failure(json.dumps({**_RECORD, "kind": kind})) == UpdateFailure(
+            attempted_version="1.3.0", restored_version="1.2.3", rolled_back_at="2026-09-25T10:15:00Z", kind=read
+        )
+
+    def test_reads_a_refusal_as_the_installer_prints_it(self):
+        """``record_update_failure`` in install.sh, handed the check's kind."""
+        raw = (
+            '{"attempted_version": "1.3.0", "restored_version": "1.2.3", "rolled_back_at": "2026-09-25T10:15:00Z", '
+            '"kind": "check"}\n'
+        )
+        failure = decode_update_failure(raw)
+        assert failure is not None
+        assert failure.kind is UpdateFailureKind.CHECK
+
+    @pytest.mark.parametrize("kind", ["CHECK", "refused", "", None, 1, ["check"], {"check": True}])
+    def test_a_kind_it_does_not_know_is_no_record(self, kind):
+        """Told as a rollback it would state something the installer did not."""
+        assert decode_update_failure(json.dumps({**_RECORD, "kind": kind})) is None
 
     @pytest.mark.parametrize("key", ["attempted_version", "restored_version", "rolled_back_at"])
     def test_a_record_missing_any_key_is_no_record(self, key):

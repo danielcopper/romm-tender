@@ -24,12 +24,15 @@ _OUTCOME_KEYS = {"announce_version", "announce_direction", "toast_owed", "failur
 _STAMP = "2026-09-25T10:15:00Z"
 
 
-def _record(harness, *, attempted: str = "99.0.0", restored: str = VERSION, at: str = _STAMP) -> None:
+def _record(
+    harness, *, attempted: str = "99.0.0", restored: str = VERSION, at: str = _STAMP, kind: str | None = None
+) -> None:
     """Leave the installer's record where the installer leaves it, spelled as it spells it."""
     state = harness.tmp_path / "state"
     state.mkdir(parents=True, exist_ok=True)
+    tail = f', "kind": "{kind}"' if kind is not None else ""
     (state / "update-failure.json").write_text(
-        f'{{"attempted_version": "{attempted}", "restored_version": "{restored}", "rolled_back_at": "{at}"}}\n',
+        f'{{"attempted_version": "{attempted}", "restored_version": "{restored}", "rolled_back_at": "{at}"{tail}}}\n',
         encoding="utf-8",
     )
 
@@ -127,8 +130,28 @@ async def test_a_start_after_a_rollback_announces_nothing_and_reports_the_record
         "announce_version": None,
         "announce_direction": None,
         "toast_owed": False,
-        "failure": {"attempted_version": "99.0.0", "restored_version": VERSION, "rolled_back_at": _STAMP},
+        "failure": {
+            "attempted_version": "99.0.0",
+            "restored_version": VERSION,
+            "rolled_back_at": _STAMP,
+            "kind": "rollback",
+        },
         "failure_dismissed": False,
+    }
+
+
+async def test_a_refusal_by_the_installer_s_check_is_reported_with_its_kind(harness):
+    _last_run(harness, VERSION)
+    _record(harness, kind="check")
+    harness.app.services.update_outcome_service.note_start()
+
+    outcome = await harness.endpoints.get_update_outcome()
+
+    assert outcome["failure"] == {
+        "attempted_version": "99.0.0",
+        "restored_version": VERSION,
+        "rolled_back_at": _STAMP,
+        "kind": "check",
     }
 
 

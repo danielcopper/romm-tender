@@ -27,6 +27,7 @@ from domain.app_directories import (
     ENV_STATE_DIR,
     XDG_CONFIG_HOME,
 )
+from domain.update_outcome import UpdateFailureKind
 from domain.update_release import ENV_RELEASE_API
 
 if TYPE_CHECKING:
@@ -211,6 +212,9 @@ class InstallFailure(StrEnum):
     # download, or no reading of whether one had, ends the attempt there.
     GAME_STARTED = "game_started"
     RUNNING_APPS_UNKNOWN = "running_apps_unknown"
+    # The installer ended while this process still ran, and its record says its
+    # check refused the new version before stopping anything.
+    NEW_VERSION_DOES_NOT_START = "new_version_does_not_start"
 
 
 @dataclass(frozen=True)
@@ -316,11 +320,11 @@ def stopped_attempt(
     Judged at every start while the record stands, once the installer's
     unit has ended. Running the
     attempted version, the update went through. A standing record of the
-    installer's that this attempt was rolled back is that record's story to
-    tell. Running neither the attempted nor the starting version, the version
-    moved some other way since. Only a start on the version that started the
-    attempt, with no rollback of it recorded, is an installer that stopped
-    without updating — which, having stopped this program first, it never got
+    installer's that this attempt was rolled back, or refused by its check, is
+    that record's story to tell. Running neither the attempted nor the starting
+    version, the version moved some other way since. Only a start on the version
+    that started the attempt, with no record of it from the installer, is an
+    installer that stopped without updating — which, having stopped this program first, it never got
     to report.
     """
     if record is None or running != record.from_version:
@@ -328,6 +332,27 @@ def stopped_attempt(
     if failure is not None and failure.attempted_version == record.attempted_version:
         return None
     return record
+
+
+def refused_by_the_check(failure: UpdateFailure | None, attempted_version: str, running: str, started_at: str) -> bool:
+    """Whether *failure* is the installer's record that its check refused this attempt.
+
+    This attempt is the one at *attempted_version* that *running* started at
+    *started_at*. A record of the check's kind answers for it only when it
+    names that version, leaves *running* in place, and was written no earlier
+    than the attempt started: a refusal of the same version by an earlier
+    attempt stands until a later update goes through, and is that attempt's.
+    Both stamps are ISO-8601 UTC text in one format to the second, the
+    installer's from ``date -u`` and this program's from
+    :func:`new_attempt_record`, so the later one sorts no earlier.
+    """
+    return (
+        failure is not None
+        and failure.kind is UpdateFailureKind.CHECK
+        and failure.attempted_version == attempted_version
+        and failure.restored_version == running
+        and failure.rolled_back_at >= started_at
+    )
 
 
 def installer_command(installer: str, tarball: str) -> tuple[str, ...]:

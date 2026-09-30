@@ -3,8 +3,9 @@
 Owns the two outcomes a start can find: a version that moved — an update that
 went through, or a return to an earlier release — which the panel raises as one
 toast per process and shows as a card until the user dismisses it, and an update
-the installer rolled back, which the panel shows until the user dismisses that
-record or the installer removes it. What is announced, how the installer's
+that did not go through — rolled back by the installer, or refused by its check
+before anything was replaced — which the panel shows until the user dismisses
+that record or the installer removes it. What is announced, how the installer's
 record is read, and whether it still stands live in ``domain/update_outcome.py``;
 the record itself is behind a seam.
 """
@@ -14,7 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.update_outcome import announced_update, standing_update_failure
+from domain.update_install import INSTALLER_UNIT
+from domain.update_outcome import UpdateFailureKind, announced_update, standing_update_failure
 
 if TYPE_CHECKING:
     import asyncio
@@ -78,10 +80,11 @@ class UpdateOutcomeService:
 
         Runs once, at start. A version that moved — to a later release, or back
         to an earlier one — is logged at INFO and owed to the panel as one
-        announcement, its toast not yet raised; a record of a rolled-back update
-        is logged at WARNING whether or not it has been dismissed, because the
-        log is where the reason is looked for — but only while it stands. The
-        first start that records a version announces nothing.
+        announcement, its toast not yet raised; the installer's record of an
+        update that did not go through is logged at WARNING whether or not it
+        has been dismissed, because the log is where the reason is looked for —
+        but only while it stands, and in the words of its kind. The first start
+        that records a version announces nothing.
         """
         failure = self._standing_failure_io()
         with self._uow_factory() as uow:
@@ -96,7 +99,13 @@ class UpdateOutcomeService:
                 if self._announcement.direction == "updated"
                 else f"back on {self._current_version} after {last_run}"
             )
-        if failure is not None:
+        if failure is not None and failure.kind is UpdateFailureKind.CHECK:
+            self._logger.warning(
+                f"the installer's check refused {failure.attempted_version} at {failure.rolled_back_at}: it did not "
+                f"start, so nothing was changed and this is still {failure.restored_version} — what it said is in "
+                f"journalctl --user -u {INSTALLER_UNIT}, or in the terminal the installer ran in"
+            )
+        elif failure is not None:
             self._logger.warning(
                 f"the update to {failure.attempted_version} was rolled back at {failure.rolled_back_at}; "
                 f"back on {failure.restored_version} — what {failure.attempted_version} logged when it tried to "
@@ -113,10 +122,11 @@ class UpdateOutcomeService:
         or ``"back"``, ``None`` exactly when ``announce_version`` is.
         ``toast_owed`` says its toast has not been raised yet, and is ``False``
         whenever ``announce_version`` is ``None``. ``failure`` is the
-        installer's record of a rolled-back update as
-        ``{"attempted_version", "restored_version", "rolled_back_at"}``, read
-        afresh on every call so it goes when the installer removes it, and
-        ``None`` where there is none or it no longer stands.
+        installer's record of an update that did not go through as
+        ``{"attempted_version", "restored_version", "rolled_back_at", "kind"}``
+        — ``kind`` ``"rollback"`` or ``"check"`` — read afresh on every call so
+        it goes when the installer removes it, and ``None`` where there is none
+        or it no longer stands.
         ``failure_dismissed`` says the user waved away that exact record.
         """
         failure = await self._loop.run_in_executor(None, self._standing_failure_io)
@@ -182,4 +192,5 @@ def _failure_payload(failure: UpdateFailure) -> dict[str, str]:
         "attempted_version": failure.attempted_version,
         "restored_version": failure.restored_version,
         "rolled_back_at": failure.rolled_back_at,
+        "kind": failure.kind.value,
     }
