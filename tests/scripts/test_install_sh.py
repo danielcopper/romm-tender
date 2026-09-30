@@ -295,8 +295,36 @@ esac
 
 # Runs the installer's own version question under a real interpreter that reports
 # the version the test names, so the comparison under test is the installer's
-# rather than one this stub makes up.
+# rather than one this stub makes up. It also stands in for the new version's
+# check (`-B <tree>/backend/main.py --check …`), which the synthetic tree cannot
+# answer: it notes the call in STUB_CHECK_LOG where a test asks, leaves a file
+# in each root it was given — where a real build writes — and fails for a
+# version named in STUB_UNSTARTABLE_VERSIONS, saying why on stderr.
 _PYTHON_STUB = """#!/usr/bin/env bash
+if [ "$1" = "-B" ] && [ "$3" = "--check" ]; then
+    version="$(tr -d '[:space:]' < "$TENDER_CODE_DIR/version.txt")"
+    if [ -n "${STUB_CHECK_LOG:-}" ]; then
+        {
+            printf 'version=%s\\n' "$version"
+            printf 'argv=%s\\n' "$*"
+            for name in TENDER_CODE_DIR TENDER_CONFIG_DIR TENDER_DATA_DIR TENDER_CACHE_DIR \\
+                TENDER_STATE_DIR TENDER_BIN_DIR; do
+                printf '%s=%s\\n' "$name" "${!name}"
+            done
+        } >> "$STUB_CHECK_LOG"
+    fi
+    for root in "$TENDER_CONFIG_DIR" "$TENDER_DATA_DIR" "$TENDER_CACHE_DIR" "$TENDER_STATE_DIR" "$TENDER_BIN_DIR"; do
+        mkdir -p "$root"
+        printf 'written by the check of %s\\n' "$version" > "$root/written-by-the-check"
+    done
+    case " ${STUB_UNSTARTABLE_VERSIONS:-} " in
+        *" $version "*)
+            printf 'Traceback (most recent call last):\\nImportError: %s cannot be imported\\n' "$version" >&2
+            exit 1
+            ;;
+    esac
+    exit 0
+fi
 [ "$1" = "-c" ] || exit 2
 exec "$STUB_REAL_PYTHON" -c '
 import sys
@@ -1894,6 +1922,206 @@ class TestAnUpdateThatDoesNotStart:
         assert machine.failure_record.is_file()
 
 
+def _check_calls(log: Path) -> list[dict[str, str]]:
+    """Every check the stubbed interpreter was asked for, as the ``name=value`` lines it noted."""
+    calls: list[dict[str, str]] = []
+    for line in log.read_text(encoding="utf-8").splitlines():
+        name, value = line.split("=", 1)
+        if name == "version":
+            calls.append({})
+        calls[-1][name] = value
+    return calls
+
+
+class TestTheNewVersionIsCheckedFirst:
+    """The staged version is built on copies before anything is stopped, and one that cannot be is refused.
+
+    ``Install.env`` sets all six ``TENDER_*`` roots to the live ones, which is
+    what a panel install's environment carries too — so every case here is also
+    the case where a root the installer forgot would be a live one.
+    """
+
+    def _refused_update(self, machine) -> tuple[dict[Path, bytes], subprocess.CompletedProcess[str]]:
+        """1.2.3 installed, 1.3.0 installed over it, then 1.4.0 refused by its check."""
+        _installed(machine)
+        assert (
+            machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up").returncode
+            == 0
+        )
+        before = _seed_data(machine)
+        before.update({path: path.read_bytes() for path in machine.backup.iterdir()})
+        machine.backend_log.write_text("", encoding="utf-8")
+        machine.systemctl_log.write_text("", encoding="utf-8")
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, "1.4.0")),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_UNSTARTABLE_VERSIONS="1.4.0",
+        )
+        return before, result
+
+    def test_an_update_it_refuses_changes_nothing(self, machine):
+        """The install, the tree it kept, the data, the backup and the unit as they were; the unit never stopped."""
+        before, result = self._refused_update(machine)
+
+        assert result.returncode == 1
+        assert _tree_version(machine.code) == _NEW
+        assert _tree_version(machine.old) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert machine.backend_events() == []
+        assert "--user stop romm-tender" not in machine.systemctl_calls()
+
+    def test_it_says_the_new_version_does_not_start_and_that_nothing_was_changed(self, machine):
+        _before, result = self._refused_update(machine)
+
+        assert _refusals(result.stderr) == ["install.sh: the new version does not start"]
+        assert "  nothing was changed" in result.stderr.splitlines()
+        assert "[!!] Installing   the new version does not start" in result.stdout
+        assert "is stopped" not in result.stderr
+
+    def test_what_the_check_said_ends_the_run(self, machine):
+        """A panel install's run output is its journal, which is where the notice sends the reader."""
+        _before, result = self._refused_update(machine)
+
+        lines = result.stderr.splitlines()
+        said = lines.index("  ImportError: 1.4.0 cannot be imported")
+        assert lines[said - 2 : said] == [
+            "what the new version said as it was checked:",
+            "  Traceback (most recent call last):",
+        ]
+        assert said < lines.index("install.sh: the new version does not start")
+
+    def test_it_records_the_refusal_as_the_check_s(self, machine):
+        _before, _result = self._refused_update(machine)
+
+        record = json.loads(machine.failure_record.read_text(encoding="utf-8"))
+        assert set(record) == {"attempted_version", "restored_version", "rolled_back_at", "kind"}
+        assert (record["attempted_version"], record["restored_version"], record["kind"]) == ("1.4.0", _NEW, "check")
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", record["rolled_back_at"])
+
+    def test_the_record_is_one_the_backend_reads_as_the_check_s(self, machine):
+        from adapters.update_failure import UpdateFailureFileAdapter
+        from domain.update_outcome import UpdateFailureKind
+
+        _before, _result = self._refused_update(machine)
+
+        failure = UpdateFailureFileAdapter(state_dir=str(machine.state), log_debug=print).read_update_failure()
+        assert failure is not None
+        assert (failure.attempted_version, failure.restored_version, failure.kind) == (
+            "1.4.0",
+            _NEW,
+            UpdateFailureKind.CHECK,
+        )
+
+    def test_a_later_update_that_starts_removes_the_record_of_the_refusal(self, machine):
+        self._refused_update(machine)
+        assert machine.failure_record.is_file()
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path, "1.4.0")), "--yes", STUB_BACKEND="up")
+
+        assert result.returncode == 0, result.stderr
+        assert not machine.failure_record.exists()
+
+    def test_a_refusal_that_cannot_be_recorded_is_said_and_still_changes_nothing(self, machine):
+        _installed(machine)
+        machine.state.chmod(0o555)
+        try:
+            result = machine.run(
+                "--from",
+                str(_build_tarball(machine.tmp_path, _NEW)),
+                "--yes",
+                STUB_BACKEND="up",
+                STUB_UNSTARTABLE_VERSIONS=_NEW,
+            )
+        finally:
+            machine.state.chmod(0o755)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: could not record the refused update in {machine.failure_record}; Tender will not show it",
+            "install.sh: the new version does not start",
+        ]
+        assert "could not record the refused update; Tender will not show it" in (
+            line.strip() for line in result.stdout.splitlines()
+        )
+        assert _tree_version(machine.code) == _VERSION
+        assert not machine.failure_record.exists()
+
+    def test_a_first_install_it_refuses_writes_no_unit_no_tree_and_no_record(self, machine):
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_UNSTARTABLE_VERSIONS=_VERSION,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the new version does not start"]
+        assert not machine.unit.exists()
+        assert not machine.code.exists()
+        assert not Path(f"{machine.code}.new").exists()
+        assert not machine.failure_record.exists()
+        assert [
+            call
+            for call in machine.systemctl_calls()
+            if any(verb in call.split() for verb in ("enable", "start", "stop", "daemon-reload"))
+        ] == []
+
+    @pytest.mark.parametrize("updating", [False, True])
+    def test_a_version_that_passes_is_checked_once_and_installed(self, machine, updating):
+        log = machine.tmp_path / "check.log"
+        if updating:
+            _installed(machine)
+        version = _NEW if updating else _VERSION
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, version)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_CHECK_LOG=str(log),
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert [call["version"] for call in _check_calls(log)] == [version]
+        assert _tree_version(machine.code) == version
+
+    def test_the_check_runs_the_staged_tree_with_every_root_its_own(self, machine):
+        """Code from the staged tree; the other five in a directory of the run's own, gone once it ends."""
+        log = machine.tmp_path / "check.log"
+        _installed(machine)
+
+        machine.run(
+            "--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up", STUB_CHECK_LOG=str(log)
+        )
+
+        (call,) = _check_calls(log)
+        staged = f"{machine.code}.new"
+        assert call["argv"] == (
+            f"-B {staged}/backend/main.py --check --data-from {machine.data} --config-from {machine.config}"
+        )
+        assert call["TENDER_CODE_DIR"] == staged
+        roots = [
+            Path(call[name])
+            for name in (
+                "TENDER_CONFIG_DIR",
+                "TENDER_DATA_DIR",
+                "TENDER_CACHE_DIR",
+                "TENDER_STATE_DIR",
+                "TENDER_BIN_DIR",
+            )
+        ]
+        live = (machine.config, machine.data, machine.cache, machine.state, machine.bin, machine.home, machine.tmp_path)
+        assert len({root.parent for root in roots}) == 1
+        assert not any(root == place or place in root.parents for root in roots for place in live)
+        assert not any(root.exists() for root in roots)
+        assert list(machine.tmp_path.rglob("written-by-the-check")) == []
+
+
 class TestRollingBackByHand:
     def test_it_puts_back_the_previous_version_and_its_data(self, machine):
         _installed(machine)
@@ -2793,6 +3021,11 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         from domain.update_outcome import UPDATE_FAILURE_FILENAME
 
         assert f'UPDATE_FAILURE="{UPDATE_FAILURE_FILENAME}"' in _INSTALL.read_text(encoding="utf-8")
+
+    def test_the_kind_a_refused_check_records_matches_the_backend(self):
+        from domain.update_outcome import UpdateFailureKind
+
+        assert f'CHECK_REFUSED="{UpdateFailureKind.CHECK.value}"' in _INSTALL.read_text(encoding="utf-8")
 
 
 class TestHowTheRunLooks:

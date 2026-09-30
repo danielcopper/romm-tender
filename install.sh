@@ -106,9 +106,13 @@ BACKUP_VERSION="data-of-version"
 # lasts until the next rollback by hand.
 ROLLBACK_BACKUP="$DATA/rollback-backup"
 
-# The note an update that was rolled back leaves in the state directory: the
-# version it tried, the version it went back to, and when.
+# The note an update that did not go through leaves in the state directory: the
+# version it tried, the version it left running, and when. A rolled-back update
+# writes it with no `kind`; one the check refused writes the kind below
+# (UpdateFailureKind in backend/domain/update_outcome.py, which
+# tests/scripts/test_install_sh.py holds equal).
 UPDATE_FAILURE="update-failure.json"
+CHECK_REFUSED="check"
 
 # The name every answer from the backend's server carries in its `Server` field,
 # before the version: `<PACKAGE_NAME>/<VERSION>` (backend/domain/identity.py,
@@ -1696,16 +1700,18 @@ start_the_reverted_unit() {
 
 # Written through a temporary file and renamed, so a reader never sees half of
 # it. The versions come off tree_version, so the only characters JSON needs
-# escaped in them are the quote and the backslash. Non-zero where the record
+# escaped in them are the quote and the backslash. A third argument is the
+# record's `kind`, which a rollback leaves out. Non-zero where the record
 # could not be written. The steps are chained by hand because `set -e` does not
 # reach into a function whose status its caller tests. Their own errors are
 # dropped, since the caller says once that the record was not written; `2>`
 # stands before `>` so the error of a redirect that fails is dropped as well.
 record_update_failure() {
-    local record="$STATE/$UPDATE_FAILURE"
+    local record="$STATE/$UPDATE_FAILURE" kind=""
+    [ $# -lt 3 ] || kind=", \"kind\": \"$3\""
     mkdir -p "$STATE" 2> /dev/null &&
-        printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"}\n' \
-            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2> /dev/null > "$record.tmp" &&
+        printf '{"attempted_version": "%s", "restored_version": "%s", "rolled_back_at": "%s"%s}\n' \
+            "$(json_text "$1")" "$(json_text "$2")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$kind" 2> /dev/null > "$record.tmp" &&
         mv "$record.tmp" "$record" 2> /dev/null &&
         return 0
     rm -f "$record.tmp"
@@ -1920,7 +1926,11 @@ do_install() {
     local previous="" new=""
     if [ "$UPDATING" = "yes" ]; then
         previous="$(tree_version "$CODE")" || previous=""
-        new="$(tree_version "$CODE.new")" || new=""
+    fi
+    new="$(tree_version "$CODE.new")" || new=""
+    row_detail "$INSTALLING" "trying ${new:-the new version}"
+    check_the_new_version || refuse_the_new_version "$new" "$previous"
+    if [ "$UPDATING" = "yes" ]; then
         set_the_install_aside
     fi
     swap_tree
@@ -1960,6 +1970,45 @@ do_install() {
         echo "  $new did not answer within ${UPDATE_WAIT}s; what it logged is in $(tilde "$STATE/backend.log"), and a start that failed early only in journalctl --user -u $UNIT_NAME" >&2
         exit 1
     fi
+}
+
+# Builds the staged version's backend without starting it (check in
+# backend/main.py): every module imported, the native library loaded, and the
+# database and settings migrated — on copies of the live ones, taken while the
+# installed version may still be writing them. Every one of the six roots is
+# named here, because a root left out falls back to one the running version
+# uses, and a panel install hands this run the live ones in its environment.
+# They lie under WORK_DIR, which the EXIT trap removes. `-B` because the staged
+# tree is the one put in place, and bytecode this run wrote into it would be
+# files the tarball did not bring.
+check_the_new_version() {
+    local roots="$WORK_DIR/check"
+    TENDER_CODE_DIR="$CODE.new" \
+        TENDER_CONFIG_DIR="$roots/config" \
+        TENDER_DATA_DIR="$roots/data" \
+        TENDER_CACHE_DIR="$roots/cache" \
+        TENDER_STATE_DIR="$roots/state" \
+        TENDER_BIN_DIR="$roots/bin" \
+        "$PYTHON" -B "$CODE.new/backend/main.py" --check --data-from "$DATA" --config-from "$CONFIG" \
+        > "$WORK_DIR/check.log" 2>&1
+}
+
+# Nothing has been stopped or replaced yet, so the staged tree is all there is
+# to take away. An update records the refusal for the panel, naming the version
+# still running; a first install has no panel to tell. What the check said ends
+# the run's output — the journal's, for an install started from the panel.
+refuse_the_new_version() {
+    local new="$1" previous="$2"
+    rm -rf "$CODE.new"
+    if [ "$UPDATING" = "yes" ] && ! record_update_failure "$new" "$previous" "$CHECK_REFUSED"; then
+        row_sub "$INSTALLING" "could not record the refused update; Tender will not show it" fail
+        echo "install.sh: could not record the refused update in $(tilde "$STATE/$UPDATE_FAILURE"); Tender will not show it" >&2
+    fi
+    row_detail "$INSTALLING" "the new version does not start"
+    fail_open_row
+    echo "what the new version said as it was checked:" >&2
+    tail -n 20 "$WORK_DIR/check.log" | sed 's/^/  /' >&2
+    abort "the new version does not start" "nothing was changed"
 }
 
 # Stops the unit and backs the data up, before the tree is swapped. Either one
