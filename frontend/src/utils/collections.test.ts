@@ -54,6 +54,20 @@ describe("createOrUpdateRomMCollections — case-insensitive identity (#1569)", 
     expect(existing.dnd.AddApps).toHaveBeenCalledTimes(1);
   });
 
+  // Known gap (#2131): the backend's str.casefold() joins "STRASSE" and
+  // "Straße" into one collection; toLowerCase() does not, so the find misses
+  // the collection Steam already holds and a second one is created.
+  it.fails("updates an existing collection whose name differs only by case folding (#2131)", async () => {
+    const existing = fakeCollection("RomM: [STRASSE] (test)");
+    const NewUnsavedCollection = vi.fn(() => fakeCollection("RomM: [Straße] (test)"));
+    vi.stubGlobal("collectionStore", { userCollections: [existing], NewUnsavedCollection });
+
+    await createOrUpdateRomMCollections({ Straße: [1001] });
+
+    expect(NewUnsavedCollection).not.toHaveBeenCalled();
+    expect(existing.Save).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a new collection when nothing matches even case-insensitively", async () => {
     // Non-vacuous complement: the find isn't matching everything — a genuinely
     // new name still creates.
