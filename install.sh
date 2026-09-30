@@ -1995,7 +1995,7 @@ check_the_new_version() {
 
 # Nothing has been stopped or replaced yet, so the staged tree is all there is
 # to take away. An update records the refusal for the panel, naming the version
-# still running; a first install has no panel to tell. What the check said ends
+# still installed; a first install has no panel to tell. What the check said ends
 # the run's output — the journal's, for an install started from the panel.
 refuse_the_new_version() {
     local new="$1" previous="$2"
