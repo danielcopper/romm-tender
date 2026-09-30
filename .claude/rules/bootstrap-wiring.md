@@ -22,9 +22,10 @@ wiring and the `Application`. The split is binding — no endpoints in `bootstra
 `main.py` is also the **only** module that may import `host/`, which is an `.importlinter` contract in both directions.
 Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the directories the
 entry point resolved. `bootstrap()` is **told** where those directories are and derives none of them. What the
-`Application` needs from the host it takes as a plain callable — `run_startup_repairs` gets the failure recorder, never
-the status record — and what the host needs from the `Application` it gets on the `BackendBuild`: the dispatcher, the
-identity, `open_network` and `shutdown`.
+`Application` needs from the host it takes as a plain callable or a Protocol-typed reader, never the status record —
+`run_startup_repairs` gets the failure recorder, and `build_application` the event sink's emit and the host's reading of
+Steam (`SteamInterfaceReader`) — and what the host needs from the `Application` it gets on the `BackendBuild`: the
+dispatcher, the identity, `open_network` and `shutdown`.
 
 What `bootstrap()` does NOT read is the program's own name and version: they are constants in `domain/identity.py`,
 imported directly, and the outgoing User-Agent and the recovery root's name are composed from them. No seam, adapter or

@@ -2601,20 +2601,21 @@ write `from bootstrap import …` and never deep-import a submodule:
    fields.
 
 3. **`application.py`** — owns `Application` and `build_application()`. `build_application()` is synchronous: it calls
-   `bootstrap()`, composes the runtime bundle from the loop and the event sink's emit the entry point hands it, passes
-   `MIN_ROMM_VERSION` from `domain/identity.py` as `min_required_version`, calls `wire_services()`, and answers an
-   `Application` holding the `ServicesBundle` as one field (`services`). It runs nothing. The `Application` runs the
-   start-up repairs (`run_startup_repairs`, which also starts the save-directory backfill it holds), `open_network()`
-   and `shutdown()` — each when the entry point calls it. Its constructor takes a ready `ServicesBundle`, which is the
-   seam the contract harness uses: it swaps adapters between `bootstrap()` and `wire_services()` and constructs the
-   `Application` itself.
+   `bootstrap()`, composes the runtime bundle from the loop, the event sink's emit and the host's reading of Steam the
+   entry point hands it, passes `MIN_ROMM_VERSION` from `domain/identity.py` as `min_required_version`, calls
+   `wire_services()`, and answers an `Application` holding the `ServicesBundle` as one field (`services`). It runs
+   nothing. The `Application` runs the start-up repairs (`run_startup_repairs`, which also starts the two background
+   tasks it holds — the save-directory backfill and the running release check), `open_network()` and `shutdown()` — each
+   when the entry point calls it. Its constructor takes a ready `ServicesBundle`, which is the seam the contract harness
+   uses: it swaps adapters between `bootstrap()` and `wire_services()` and constructs the `Application` itself.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then
-`build_application()` composes the runtime bundle (event loop, the event sink's emit) and calls `wire_services()`.
-Services receive the `settings` dict (the only field on `StateBundle`) plus the SQLite Unit-of-Work factory / repository
-handles for all relational state — no plural in-memory state dicts remain. Some services are constructed before others
-to satisfy ordering constraints (e.g. `MigrationService` before `SaveService` so save sync can gate on a pending
-RetroDECK home migration). Forward references between peers are threaded via `LateBinding`.
+`build_application()` composes the runtime bundle (event loop, the event sink's emit, the host's reading of Steam) and
+calls `wire_services()`. Services receive the `settings` dict (the only field on `StateBundle`) plus the SQLite
+Unit-of-Work factory / repository handles for all relational state — no plural in-memory state dicts remain. Some
+services are constructed before others to satisfy ordering constraints (e.g. `MigrationService` before `SaveService` so
+save sync can gate on a pending RetroDECK home migration). Forward references between peers are threaded via
+`LateBinding`.
 
 `bootstrap()` also logs, at info rather than behind the debug toggle, which interpreter the vendored resolver would run
 its core probe under: `describe_core_probe_interpreter()` (`adapters/atlas_saves.py`). The resolver derives it from the
