@@ -17,8 +17,8 @@ import { UpdateCard } from "./UpdateCard";
  *
  * States the fact and where its reason is, and jumps to its home, Settings ›
  * Updates, which states it too. Dismiss is per record, so the next record the
- * installer writes raises it again; the record going away — a later update that answered —
- * takes it down as well.
+ * installer writes raises it again; the record going away — a later update
+ * that answered — takes it down as well.
  */
 export const UpdateFailureNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates }) => {
   const state = useUpdateOutcomeState();

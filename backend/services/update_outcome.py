@@ -4,10 +4,10 @@ Owns the two outcomes a start can find: a version that moved — an update that
 went through, or a return to an earlier release — which the panel raises as one
 toast per process and shows as a card until the user dismisses it, and an update
 that did not go through — rolled back by the installer, or refused by its
-pre-install check before anything was replaced — which the panel shows until the user dismisses
-that record or the installer removes it. What is announced, how the installer's
-record is read, and whether it still stands live in ``domain/update_outcome.py``;
-the record itself is behind a seam.
+pre-install check before anything was replaced — which the panel shows until
+the user dismisses that record or the installer removes it. What is announced,
+how the installer's record is read, and whether it still stands live in
+``domain/update_outcome.py``; the record itself is behind a seam.
 """
 
 from __future__ import annotations
@@ -134,10 +134,10 @@ class UpdateOutcomeService:
         whenever ``announce_version`` is ``None``. ``failure`` is the
         installer's record of an update that did not go through as
         ``{"attempted_version", "restored_version", "rolled_back_at", "kind"}``
-        — ``kind`` ``"rollback"``, ``"check"`` or ``"unknown"`` — read afresh on every call so
-        it goes when the installer removes it, and ``None`` where there is none
-        or it no longer stands.
-        ``failure_dismissed`` says the user waved away that exact record.
+        — ``kind`` ``"rollback"``, ``"check"`` or ``"unknown"`` — read afresh on
+        every call so it goes when the installer removes it, and ``None`` where
+        there is none or it no longer stands. ``failure_dismissed`` says the
+        user waved away that exact record.
         """
         failure = await self._loop.run_in_executor(None, self._standing_failure_io)
         return {

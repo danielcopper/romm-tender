@@ -1233,9 +1233,9 @@ export type UpdateDirection = "updated" | "back";
  * `announce_direction` which way it moved, `null` exactly when the version is.
  * `toast_owed` says its toast has not been raised yet, and is `false` whenever
  * there is no version to name. `failure` is the installer's record of an update
- * that did not go through, read afresh on every call, so it is gone once the installer
- * removes it, and `null` too where the running version is not the one it
- * restored. `failure_dismissed` says the user waved away that exact record.
+ * that did not go through, read afresh on every call, so it is gone once the
+ * installer removes it, and `null` too where the running version is not the one
+ * it restored. `failure_dismissed` says the user waved away that exact record.
  */
 export type UpdateOutcome = (
   | { announce_version: null; announce_direction: null; toast_owed: false }

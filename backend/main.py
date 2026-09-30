@@ -818,8 +818,9 @@ class Endpoints:
         """Record that the user waved away the card for one update that did not go through.
 
         Per record — named by its ``rolled_back_at`` — so the next record the
-        installer writes raises the card again. Returns ``{"success": True}``, or the canonical
-        failure shape for a stamp that is not a non-empty string.
+        installer writes raises the card again. Returns ``{"success": True}``,
+        or the canonical failure shape for a stamp that is not a non-empty
+        string.
         """
         return self._services.update_outcome_service.dismiss_update_failure(rolled_back_at)
 
