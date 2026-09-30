@@ -123,9 +123,9 @@ update goes through.
 
 **Explanation**: Before it stops anything, the installer runs the new version's pre-install check: it builds Tender from
 the new files on copies of your library database and settings, the way a start would, without starting it. That failed,
-so the installer removed the new files and stopped there. Tender was not stopped, nothing was replaced, and Steam's
-interface did not reload. An update leaves `~/.local/state/romm-tender/update-failure.json` naming both versions and the
-time, marked as refused (`"kind": "check"`); Tender's log repeats it in one line each time Tender starts
+or crashed, so the installer removed the new files and stopped there. Tender was not stopped, nothing was replaced, and
+Steam's interface did not reload. An update leaves `~/.local/state/romm-tender/update-failure.json` naming both versions
+and the time, marked as refused (`"kind": "check"`); Tender's log repeats it in one line each time Tender starts
 (`the pre-install check refused <new> at <time>: …`). A first install leaves nothing behind.
 
 The check catches a new version that cannot be put together at all: a file of it that does not load, a part of it built
@@ -147,10 +147,12 @@ reason names.
 ### The check did not finish
 
 The installer ends with `install.sh: the check did not finish` and `nothing was changed`, after
-`the pre-install check was stopped after 120s` or `the pre-install check was killed`. Building Tender takes seconds; a
-check still running after two minutes was waiting on something — usually the library database, held by another program,
-or storage that stopped answering. A check that was killed was ended by force: by the installer, when it did not stop
-ten seconds after it was told to, or by something else, such as the system running out of memory. Neither is a verdict
+`the pre-install check was stopped after 120s`, `the pre-install check was killed` or
+`the pre-install check ended with status <N>`. Building Tender takes seconds; a check still running after two minutes
+was waiting on something — usually the library database, held by another program, or storage that stopped answering. A
+check that was killed was ended by force: by the installer, when it did not stop ten seconds after it was told to, or by
+something else, such as the system running out of memory. Any other status is one the installer cannot put down to the
+new version — a check stopped from outside, for example, or one that could not be run at all. None of these is a verdict
 on the new version, so nothing is recorded and the main panel does not mention it. An update started from **Settings ›
 Updates** says **The installer stopped without updating.** there, and these lines are in the installer's journal
 (`journalctl --user -u romm-tender-update`). Run the installer again once the cause is resolved.

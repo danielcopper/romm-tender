@@ -95,12 +95,12 @@ _CHECKOUT_FILES = (
 
 # Stands in for coreutils' timeout(1) around the pre-install check: notes its
 # own arguments in STUB_TIMEOUT_LOG where a test asks, and answers
-# STUB_CHECK_TIMES_OUT (124 or 137) without running the check where one is set —
-# the statuses the real one gives a command it stopped or killed. Otherwise it
-# runs the command in its place.
+# STUB_CHECK_STATUS without running the check where one is set — a status the
+# real one gives for a command it stopped, one a signal ended, or one it could
+# not run. Otherwise it runs the command in its place.
 _TIMEOUT_STUB = """#!/usr/bin/env bash
 [ -z "${STUB_TIMEOUT_LOG:-}" ] || printf '%s %s\\n' "$1" "$2" >> "$STUB_TIMEOUT_LOG"
-[ -z "${STUB_CHECK_TIMES_OUT:-}" ] || exit "$STUB_CHECK_TIMES_OUT"
+[ -z "${STUB_CHECK_STATUS:-}" ] || exit "$STUB_CHECK_STATUS"
 shift 2
 exec "$@"
 """
@@ -2189,10 +2189,18 @@ class TestTheNewVersionIsCheckedFirst:
         [
             ("124", "the pre-install check was stopped after 120s", "the pre-install check was killed"),
             ("137", "the pre-install check was killed", "the pre-install check was stopped after 120s"),
+            ("143", "the pre-install check ended with status 143", "the pre-install check was"),
+            ("125", "the pre-install check ended with status 125", "the pre-install check was"),
+            ("126", "the pre-install check ended with status 126", "the pre-install check was"),
+            ("127", "the pre-install check ended with status 127", "the pre-install check was"),
         ],
     )
     def test_a_check_that_did_not_finish_changes_nothing_and_records_nothing(self, machine, status, said, not_said):
-        """Stopped at the limit, or killed — by `timeout` or by anything else: nothing is known about the version."""
+        """Stopped at the limit, killed, stopped from outside, or never run: nothing is known about the version.
+
+        143 is a SIGTERM from outside; 125, 126 and 127 are `timeout` failing
+        itself or failing to run the interpreter.
+        """
         _installed(machine)
         before = _seed_data(machine)
         machine.systemctl_log.write_text("", encoding="utf-8")
@@ -2202,7 +2210,7 @@ class TestTheNewVersionIsCheckedFirst:
             str(_build_tarball(machine.tmp_path, _NEW)),
             "--yes",
             STUB_BACKEND="up",
-            STUB_CHECK_TIMES_OUT=status,
+            STUB_CHECK_STATUS=status,
         )
 
         assert result.returncode == 1
@@ -2213,6 +2221,42 @@ class TestTheNewVersionIsCheckedFirst:
         assert _tree_version(machine.code) == _VERSION
         assert not Path(f"{machine.code}.new").exists()
         assert not machine.failure_record.exists()
+        for path, content in before.items():
+            assert path.read_bytes() == content, path
+        assert "--user stop romm-tender" not in machine.systemctl_calls()
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            pytest.param("1", id="not-built"),
+            pytest.param("132", id="SIGILL"),
+            pytest.param("134", id="SIGABRT"),
+            pytest.param("135", id="SIGBUS"),
+            pytest.param("136", id="SIGFPE"),
+            pytest.param("139", id="SIGSEGV"),
+        ],
+    )
+    def test_a_check_the_version_failed_or_crashed_is_refused_as_the_version_s(self, machine, status):
+        """A build that failed, or the version's own code taking the interpreter down: recorded as the check's."""
+        _installed(machine)
+        before = _seed_data(machine)
+        machine.systemctl_log.write_text("", encoding="utf-8")
+
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path, _NEW)),
+            "--yes",
+            STUB_BACKEND="up",
+            STUB_CHECK_STATUS=status,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the new version does not start"]
+        assert "  nothing was changed" in result.stderr.splitlines()
+        record = json.loads(machine.failure_record.read_text(encoding="utf-8"))
+        assert (record["attempted_version"], record["restored_version"], record["kind"]) == (_NEW, _VERSION, "check")
+        assert _tree_version(machine.code) == _VERSION
+        assert not Path(f"{machine.code}.new").exists()
         for path, content in before.items():
             assert path.read_bytes() == content, path
         assert "--user stop romm-tender" not in machine.systemctl_calls()
@@ -3199,6 +3243,11 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         assert f'CHECK_ENTRY="{_CHECK}"' in text
         assert (_REPO / _CHECK).resolve() == Path(check.__file__).resolve()
         assert f"CHECK_NOT_TRIED={check.NOT_TRIED}" in text
+
+    def test_its_status_for_a_version_that_could_not_be_built_is_the_backend_s(self):
+        import check
+
+        assert f"CHECK_NOT_BUILT={check.NOT_BUILT}" in _INSTALL.read_text(encoding="utf-8")
 
 
 class TestHowTheRunLooks:

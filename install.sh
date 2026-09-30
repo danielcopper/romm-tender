@@ -119,7 +119,14 @@ CHECK_REFUSED="check"
 # 2 a check that was not tried, which says nothing about the version. A tree
 # without the file predates the check and is installed without one.
 CHECK_ENTRY="backend/check.py"
+CHECK_NOT_BUILT=1
 CHECK_NOT_TRIED=2
+
+# The signals a check dies of when the new version's own code crashed — its
+# native library among it — rather than something outside stopping it. A shell
+# answers 128 plus the signal's number for a command a signal ended, and
+# `timeout` answers the same for its command (coreutils' timeout(1)).
+CHECK_CRASH_SIGNALS="SEGV ABRT BUS ILL FPE"
 
 # How long the pre-install check may run before it is stopped, and how long it
 # then has before it is killed, in seconds. Building the application takes a few
@@ -2024,11 +2031,12 @@ check_the_new_version() {
 
 # Nothing has been stopped or replaced yet, so the staged tree is all there is
 # to take away, whatever the check answered (*status*). Only a version the check
-# could not build is the version's: an update records that refusal for the
-# panel, naming the version still installed, and a first install has no panel to
-# tell. A check that did not finish, or was not tried, says nothing about the
-# version, and is recorded nowhere. What the check said is printed above the
-# abort's two lines — the journal's, for an install started from the panel.
+# could not build, or one that crashed it, is the version's: an update records
+# that refusal for the panel, naming the version still installed, and a first
+# install has no panel to tell. A check that did not finish, was not tried, or
+# ended with a status this script does not know says nothing about the version,
+# and is recorded nowhere. What the check said is printed above the abort's two
+# lines — the journal's, for an install started from the panel.
 refuse_the_new_version() {
     local status="$1" new="$2" previous="$3" reason
     rm -rf "$CODE.new" || echo "could not remove the new version from $(tilde "$CODE.new")" >&2
@@ -2040,6 +2048,9 @@ refuse_the_new_version() {
         echo "the pre-install check was killed" >&2
     elif [ "$status" -eq "$CHECK_NOT_TRIED" ]; then
         reason="could not try the new version: your data could not be copied"
+    elif ! the_version_ended_the_check "$status"; then
+        reason="the check did not finish"
+        echo "the pre-install check ended with status $status" >&2
     else
         reason="the new version does not start"
         if [ "$UPDATING" = "yes" ] && ! record_update_failure "$new" "$previous" "$CHECK_REFUSED"; then
@@ -2051,6 +2062,17 @@ refuse_the_new_version() {
     fail_open_row
     say_what_the_check_said
     abort "$reason" "nothing was changed"
+}
+
+# Whether the check's exit *status* is the new version's own doing: a build that
+# failed, or a crash.
+the_version_ended_the_check() {
+    local status="$1" signal
+    [ "$status" -ne "$CHECK_NOT_BUILT" ] || return 0
+    for signal in $CHECK_CRASH_SIGNALS; do
+        [ "$status" -ne $((128 + $(kill -l "$signal"))) ] || return 0
+    done
+    return 1
 }
 
 # The check's last error line and the last line of its last traceback first, then

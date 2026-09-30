@@ -258,12 +258,15 @@ order:
    temporary directory, and the check refuses to build where one of them already holds something. It ends one of four
    ways:
    - The application was built, and the update goes on.
-   - It could not be built: the run ends with `the new version does not start` and `nothing was changed`, the staged
-     tree is removed, and `update-failure.json` is written with `"kind": "check"` (below). The check's reason and the
-     last lines it printed come just above those two lines.
-   - It did not finish — stopped at the limit (`the pre-install check was stopped after 120s`), or killed, by `timeout`
-     or by anything else (`the pre-install check was killed`): `the check did not finish` and `nothing was changed`, and
-     no record, since nothing is known about the version.
+   - It could not be built (exit status 1), or it crashed — ended by `SIGSEGV`, `SIGABRT`, `SIGBUS`, `SIGILL` or
+     `SIGFPE`: the run ends with `the new version does not start` and `nothing was changed`, the staged tree is removed,
+     and `update-failure.json` is written with `"kind": "check"` (below). The check's reason and the last lines it
+     printed come just above those two lines.
+   - It did not finish — stopped at the limit (`the pre-install check was stopped after 120s`), killed, by `timeout` or
+     by anything else (`the pre-install check was killed`), or ended with any other status the installer does not know,
+     such as a `SIGTERM` from outside or `timeout` unable to run the interpreter
+     (`the pre-install check ended with status <N>`): `the check did not finish` and `nothing was changed`, and no
+     record, since nothing is known about the version.
    - The live data could not be copied: `could not try the new version: your data could not be copied` and
      `nothing was changed`, and no record, for the same reason.
 
