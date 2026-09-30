@@ -1375,7 +1375,9 @@ on `SessionFinalizeSyncResult`.
 
 Triggered from the game detail page when the user clicks the Play button (if `sync_before_launch` is enabled). This is
 **not** triggered automatically via `RegisterForAppLifetimeNotifications` — pre-launch sync runs explicitly from
-`CustomPlayButton.handlePlay()`.
+`CustomPlayButton.handlePlay()`. Measured on the device on 2026-09-30: only Tender's Play button runs it — a start
+through Steam's own Play in the desktop client or a `steam://rungameid` link reaches no gate, because the launch watcher
+does not act (#2139).
 
 1. User clicks Play on the game detail page.
 2. `CustomPlayButton` calls `preLaunchSync(romId)` on the backend (15s timeout).
@@ -1585,7 +1587,7 @@ parallelised, for an outcome that costs one deferred sync — deliberately defer
 ### Surviving a JS-context rebuild mid-session
 
 The in-memory sessions live in the JS context, so a context rebuild while a game is running would leave the next
-game-stop with nothing to finalize — the pre-reload playtime is lost and the post-exit sync never runs. Two signals let
+game-stop with nothing to finalize — the pre-rebuild playtime is lost and the post-exit sync never runs. Two signals let
 the re-initialized `sessionManager` recover them:
 
 - **Steam running-state (liveness).** A guarded reader (`utils/runningApps`) is the authority for _whether_ the games
@@ -1619,16 +1621,16 @@ At `initSessionManager` the recovery runs on the lifecycle chain (so a stop even
 after adoption — adopt first, then finalize). The attested set and the running set are then reconciled **per app**, so
 any number of concurrent games recovers together:
 
-- **Attested + running** → adopted as attested, durable marker untouched. Re-stamping would discard the pre-reload span
+- **Attested + running** → adopted as attested, durable marker untouched. Re-stamping would discard the pre-rebuild span
   the backend already holds. The **breadcrumb's own romId** is adopted, never the one the `appId → romId` map resolves
   now: the binding is 1:1 at any instant but not stable over time (a version switch moves a shortcut to a different rom
   row), and the open marker belongs to the rom the start opened — re-stamping the current one would open a second marker
   and leave the original dangling.
 - **Running + ours + unattested** → adopted with the marker re-stamped to a truthful lower bound (`recordSessionStart`),
   then attested so a subsequent reload adopts it as attested instead of re-stamping again.
-- **Attested but not running** once the poll settles → the session ended while the plugin was down; a truthful finalize
-  is impossible without an observed end, so the entry is dropped and logged as orphaned — never a fabricated end time. A
-  stale breadcrumb left by a reboot resolves the same way at the next init; no expiry timers.
+- **Attested but not running** once the poll settles → the session ended while no panel was loaded to see it stop; a
+  truthful finalize is impossible without an observed end, so the entry is dropped and logged as orphaned — never a
+  fabricated end time. A stale breadcrumb left by a reboot resolves the same way at the next init; no expiry timers.
 - **Running but not ours** → ignored entirely. A foreign app is never adopted, and never a reason to orphan anything
   else. Before #1624 adoption read only the head of the running list, so a foreign app in the foreground orphaned a RomM
   game still running behind it.
