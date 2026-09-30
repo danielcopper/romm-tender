@@ -1792,26 +1792,27 @@ The seven minutes of the mark below count from the installer's start, so they co
 minutes, `CHECK_SECONDS` in `install.sh`, and ten seconds' grace before it is killed), the wait for the new version to
 answer (up to a minute, `UPDATE_WAIT`) and, on a rollback, up to a minute more for the previous one; stopping the
 service, backing up the data and the reload that ends this screen are not bounded, so the mark is where the panel stops
-waiting quietly rather than a sum. The restart line's "about 5 minutes" is what is left once the check is over. A
-version the check refuses ends in a failure without a restart at all. **From `installer_started` on, a lost connection
-is the expected outcome** — the installer stops this backend — so a read it takes down is not logged, Main's connection
-row stays at Checking... rather than calling the backend failed, and Check now is disabled while an attempt is under way
-— in its handler too — since a check in flight when the connection goes would fail on it and say so. Seven minutes after
-the panel first saw the installer started (`INSTALLER_OVERDUE_MS`, counted from that moment across the section leaving
-the screen), the line under the steps gives way, in amber: **Tender has not come back.** with the journal and the
-command to start it where reads no longer answer — a call to a backend that is gone waits rather than fails, so it is
-the read deadline that says so — and **The installer is taking unusually long.** with the journal where they still do.
-From then on the connection row is left to its own verdict too: a probe that held it at Checking... asks again when the
-seven minutes are up.
+waiting quietly rather than a sum. The restart line's "about 5 minutes" leaves the check out, since it shows only once
+the check is over. A version the check refuses ends in a failure without a restart at all. **From `installer_started`
+on, a lost connection is the expected outcome** — the installer stops this backend — so a read it takes down is not
+logged, Main's connection row stays at Checking... rather than calling the backend failed, and Check now is disabled
+while an attempt is under way — in its handler too — since a check in flight when the connection goes would fail on it
+and say so. Seven minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`, counted from that
+moment across the section leaving the screen), the line under the steps gives way, in amber: **Tender has not come
+back.** with the journal and the command to start it where reads no longer answer — a call to a backend that is gone
+waits rather than fails, so it is the read deadline that says so — and **The installer is taking unusually long.** with
+the journal where they still do. From then on the connection row is left to its own verdict too: a probe that held it at
+Checking... asks again when the seven minutes are up.
 
 **A failure is the same block in amber**, drawn in the frame Main's update cards use (`cardFrame`,
-`bigpicture/UpdateCard.tsx`): a title, the step line with the step it stopped at marked failed, and the reason, with
-where to read more for the installer's own failures; **Try again** is the button above it. A failed attempt of this
-backend's is titled **Update to X failed — nothing was changed.**, and one a game ended — `game_started`, or
-`running_apps_unknown` — **Update to X was cancelled — nothing was changed.**; an installer that stopped where this
-panel did not see it start says **— you are still on Y.** as its card on Main does, since what it left behind is not
-known here. Its reason is its sentence in `INSTALL_FAILURE_SENTENCES`, which leaves out what the title says. The step it
-is marked at (`failedStep`, `utils/updateInstallView.ts`):
+`bigpicture/UpdateCard.tsx`): a title, the step line with the step it stopped at marked failed — where the failure has
+one, as the table below says — and the reason, with where to read more for the installer's own failures; **Try again**
+is the button above it. A failed attempt of this backend's is titled **Update to X failed — nothing was changed.**, and
+one cancelled for a game — `game_started`, or `running_apps_unknown` where Tender could not check whether one runs —
+**Update to X was cancelled — nothing was changed.**; an installer that stopped where this panel did not see it start
+says **— you are still on Y.** as its card on Main does, since what it left behind is not known here. Its reason is its
+sentence in `INSTALL_FAILURE_SENTENCES`, which leaves out what the title says. The step it is marked at (`failedStep`,
+`utils/updateInstallView.ts`):
 
 | Failure                                                         | Marked at                                                                                                                     |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -1825,8 +1826,9 @@ is marked at (`failedStep`, `utils/updateInstallView.ts`):
 Whether this panel saw the installer start is `installerSeenAt` (`utils/updateInstallStore.ts`), a proxy for whether
 this backend's watch saw it end: the two agree while the panel that saw the start is the one still loaded. A reload of
 Steam's JavaScript context forgets the sighting, so a watch-reported `installer_stopped` read after one is marked at
-Install; and a panel still loaded beside a backend that found the record at its own start — a backend replaces a
-stranded panel only once no app runs — marks that one at the check.
+Install. The other mismatch does not arise: a panel an earlier backend loaded cannot read the backend that found the
+record at its own start, which refuses its socket
+([a panel an earlier backend left behind](loading-the-panel.md#a-panel-an-earlier-backend-left-behind)).
 
 Where no failed attempt of this backend's is shown, the installer's record takes the block: **Update to X failed —
 Tender went back to Y.** at Install for a rollback, **Update to X failed — nothing was changed.** at Check new version
