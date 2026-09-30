@@ -462,8 +462,9 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      // The router's rule, run over exactly what it is handed: the plugin's own
-      // content, with Decky's panel title and back arrow outside it.
+      // The router's rule, run over exactly what it is handed: the panel's own
+      // content, with the entry's heading and whatever the menu draws around the
+      // panel outside it.
       expect(placeEntryFocus(container, pageEntryStop)).toBe(true);
 
       const focused = document.activeElement as HTMLElement | null;
@@ -3323,7 +3324,7 @@ describe("MainPage", () => {
       // so, and it has to be enough: "Cancel Sync" for an unknown run is answered
       // "No sync in progress" with no terminal to follow, and Data Management and
       // Library › Platforms gate removals on the same flag — so a panel
-      // that cannot leave this state is stuck until a plugin reload.
+      // that cannot leave this state is stuck until a JS-context rebuild.
       vi.mocked(backend.getSyncStats).mockResolvedValue(statsWithEveryStartControl());
       setSyncProgress({
         running: true,

@@ -1,5 +1,5 @@
 /**
- * Exercises the plugin-load pass that points every RomM-owned shortcut at the
+ * Exercises the panel-load pass that points every RomM-owned shortcut at the
  * launcher's home outside every directory this program owns (ADR-0038).
  *
  * Which shortcuts need the write is the backend's answer, read out of
@@ -106,8 +106,8 @@ describe("relocateShortcutsToLauncher", () => {
 
     await expect(relocateShortcutsToLauncher()).resolves.toEqual({ status: "blocked" });
 
-    // The shortcuts it never reached are still in a plugin folder, so the card
-    // must not say otherwise; the next start's reading hands them over again.
+    // The shortcuts it never reached still name a launcher other than the bin
+    // root's, so the card must not say otherwise; the next start's reading hands them over again.
     expect(setExe.mock.calls.map(([appId]) => appId)).toEqual([10, 20]);
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("Steam said no"));
   });

@@ -172,7 +172,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     # start-up install copies it to the bin root, and without it every contract
     # test would run against the one state a real device never has — a program
     # package with no launcher in it.
-    shipped_launcher = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
+    shipped_launcher = tmp_path / "code" / "bin" / "tender-rom-launcher"
     shipped_launcher.parent.mkdir(parents=True, exist_ok=True)
     shipped_launcher.write_bytes(_SHIPPED_LAUNCHER)
 
@@ -185,7 +185,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
             cache_dir=str(tmp_path / "cache"),
             state_dir=str(tmp_path / "state"),
             runtime_dir=str(tmp_path / "run"),
-            code_dir=str(tmp_path / "plugin"),
+            code_dir=str(tmp_path / "code"),
             bin_dir=str(tmp_path / "home" / ".local" / "bin"),
         ),
         update_source=_UPDATE_SOURCE,

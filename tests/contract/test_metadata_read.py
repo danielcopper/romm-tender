@@ -3,7 +3,7 @@
 ``get_metadata_cache_page`` is driven exactly as ``frontend/src/api/backend.ts``
 declares it — positional ``(offset, limit)`` numbers — and the assertions pin
 the ``{items, total}`` response shape (the contract), not delegation. The
-frontend pages this endpoint at plugin start so a large library never sends a
+frontend pages this endpoint at each panel load so a large library never sends a
 multi-MB dump as one answer, which the host caps (``DEFAULT_PAYLOAD_LIMIT`` in
 ``host/dispatch.py``) (#1025).
 """

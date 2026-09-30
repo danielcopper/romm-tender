@@ -362,7 +362,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
   });
 });
 
-describe("index.tsx — launcher relocation at plugin load", () => {
+describe("index.tsx — launcher relocation at panel load", () => {
   beforeEach(() => {
     setLauncherRelocated(false);
     relocateShortcutsToLauncher.mockReset().mockResolvedValue({ status: "relocated" });

@@ -587,7 +587,7 @@ class TestCaching:
 
     def test_a_detection_that_found_nothing_is_re_run(self, traces):
         # The one state where memoising would cost something real: RetroDECK
-        # installed mid-session must be picked up without a plugin reload.
+        # installed mid-session must be picked up without a backend restart.
         found: list[_Installation | None] = [None]
         adapter = AtlasCatalogueAdapter(
             choose_installation=lambda: found[0],

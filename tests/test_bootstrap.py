@@ -97,7 +97,7 @@ def _directories_at(tmp_path) -> AppDirectories:
         cache_dir=str(tmp_path / "cache"),
         state_dir=str(tmp_path / "state"),
         runtime_dir=str(tmp_path / "run"),
-        code_dir=str(tmp_path / "plugin"),
+        code_dir=str(tmp_path / "code"),
         bin_dir=str(tmp_path / "home" / ".local" / "bin"),
     )
 
@@ -308,11 +308,11 @@ class TestTheCacheRootAndTheDataRootStayApart:
 
 
 class TestBootstrapInstallsTheLauncher:
-    """The launcher leaves the plugin folder, and every start puts this release's there."""
+    """The launcher leaves the code root, and every start puts this release's there."""
 
     @staticmethod
     def _ship(tmp_path) -> bytes:
-        shipped = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
+        shipped = tmp_path / "code" / "bin" / "tender-rom-launcher"
         shipped.parent.mkdir(parents=True, exist_ok=True)
         shipped.write_bytes(b'#!/bin/bash\nexec "$@"\n')
         shipped.chmod(0o755)
@@ -342,7 +342,7 @@ class TestBootstrapInstallsTheLauncher:
 
         result = _bootstrap_for(tmp_path)
 
-        assert str(tmp_path / "plugin") not in result.launcher.path
+        assert str(tmp_path / "code") not in result.launcher.path
         assert str(tmp_path / "cache") not in result.launcher.path
         assert str(tmp_path / "data") not in result.launcher.path
 
@@ -359,7 +359,7 @@ class TestBootstrapInstallsTheLauncher:
         assert mode == 0o777 & ~_current_umask()
 
     def test_a_launcher_the_release_did_not_ship_leaves_the_start_running(self, tmp_path):
-        """The one thing that must not happen is the plugin failing to start over it.
+        """The one thing that must not happen is the backend failing to start over it.
 
         The path falls back to the copy the release ships, which in this one case
         is the file that is missing — there is nowhere honest left to point, and
@@ -368,12 +368,12 @@ class TestBootstrapInstallsTheLauncher:
         result = _bootstrap_for(tmp_path)
 
         assert result.launcher.at_home is False
-        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "tender-rom-launcher")
+        assert result.launcher.path == str(tmp_path / "code" / "bin" / "tender-rom-launcher")
 
 
 class TestBootstrapSettingsResetMarker:
     """Bootstrap folds a corrupt-settings reset into the persistent
-    ``_settings_reset_notice`` marker so it survives a plugin reload."""
+    ``_settings_reset_notice`` marker so it survives a backend restart."""
 
     def test_corrupt_boot_persists_marker_into_settings(self, tmp_path):
         import json
@@ -668,7 +668,7 @@ class TestWireServices:
         deps["loop"].close()
 
     def test_library_service_bakes_the_launcher_it_was_given(self, tmp_path):
-        """Every shortcut this run writes names the launcher's home, not the plugin folder."""
+        """Every shortcut this run writes names the launcher's home, not the code root."""
         deps = self._make_deps(tmp_path)
 
         result = wire_services(self._make_config(deps))

@@ -8,7 +8,7 @@ Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 The harness runs the REAL ``DiscLaunchResolver`` over the REAL download
 file-store, so a folder-backed install with real ``.cue`` files on disk under
 ``tmp_path`` enumerates exactly as production would. es_systems.xml does not
-exist under the fake plugin dir, so ``get_supported_extensions`` returns empty
+exist under the fake code root, so ``get_supported_extensions`` returns empty
 and the resolver falls back to the full disc set — deterministic.
 """
 

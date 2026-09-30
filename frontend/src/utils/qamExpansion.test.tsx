@@ -59,8 +59,8 @@ interface QamFixture {
 }
 
 /**
- * The QAM shape the hook walks up through: the panel Decky's tab renders into,
- * inside the parent Steam marks with `ActiveTab`.
+ * The QAM shape the hook walks up through: the panel an entry's tab renders
+ * into, inside the parent Steam marks with `ActiveTab`.
  *
  * `tabPanelClassOn` says which element carries `TabGroupPanel`. On the device it
  * is the panel itself, measured — but `:has()` matches from any ancestor, so a
@@ -194,7 +194,7 @@ describe("useWideQamPanel", () => {
     expect(lastMessage()).toBe("QamFriendsHidden");
   });
 
-  it("never expands when the page mounts under an inactive Decky tab", async () => {
+  it("never expands when the page mounts under an inactive QAM tab", async () => {
     const mod = await loadQamExpansion(PROBE_CLASSES);
     const { host, panelParent } = mountQamDom();
     panelParent.classList.remove(ACTIVE_TAB_CLASS);
@@ -220,7 +220,7 @@ describe("useWideQamPanel", () => {
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(0);
   });
 
-  it("clears when the Decky tab stops being the active QAM tab, and re-expands when it returns", async () => {
+  it("clears when the QAM tab stops being active, and re-expands when it returns", async () => {
     const mod = await loadQamExpansion(PROBE_CLASSES);
     const { host, panelParent } = mountQamDom();
     renderWidePage(mod, host);

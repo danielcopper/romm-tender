@@ -26,14 +26,14 @@ def _umask() -> int:
 
 def _make(tmp_path, *, source: str | None = None, destination: str | None = None) -> LauncherInstallAdapter:
     return LauncherInstallAdapter(
-        source=source if source is not None else str(tmp_path / "plugin" / "bin" / "tender-rom-launcher"),
+        source=source if source is not None else str(tmp_path / "code" / "bin" / "tender-rom-launcher"),
         destination=destination if destination is not None else str(tmp_path / "data" / "bin" / "tender-rom-launcher"),
         logger=logging.getLogger("test"),
     )
 
 
 def _ship(tmp_path, content: bytes = _SHIPPED) -> None:
-    shipped = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
+    shipped = tmp_path / "code" / "bin" / "tender-rom-launcher"
     shipped.parent.mkdir(parents=True, exist_ok=True)
     shipped.write_bytes(content)
     shipped.chmod(0o755)

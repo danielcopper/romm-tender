@@ -128,7 +128,7 @@ class TestTheCompletionStamp:
 
     @pytest.mark.asyncio
     async def test_a_stamped_install_reads_no_shortcut_file_at_all(self):
-        """The plugin start already carries enough checks; this one must not be permanent."""
+        """A panel load already carries enough checks; this one must not be permanent."""
         service, steam_config, _ = _make(exes={10: _ELSEWHERE}, uow=_stamped())
 
         assert await service.get_shortcut_relocation() == {"status": "done"}

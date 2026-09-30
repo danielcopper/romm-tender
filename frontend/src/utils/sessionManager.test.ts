@@ -110,7 +110,7 @@ async function initDrainingAdoptionPoll(): Promise<void> {
 // Liveness comes from `SteamUIStore.RunningApps` — the one running-app surface
 // (#1588). It is a membership set, so a single-entry list seeds a running game
 // and an empty list seeds "the store reports nothing", which is exactly what the
-// post-loader-restart adoption window looks like on-device.
+// empty-store adoption window looks like on-device.
 function stubRunningApp(appid: number, displayName = "Game"): void {
   vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid, display_name: displayName }] });
 }
@@ -1008,15 +1008,15 @@ describe("sessionManager reload adoption", () => {
     expect(backend.recordSessionStart).not.toHaveBeenCalled();
   });
 
-  // #1054 follow-up: after a full plugin_loader restart the store reports an
-  // EMPTY running-app list for several seconds while the game is still running,
-  // so a one-shot read wrongly orphaned a live session. Adoption now polls.
+  // The store can report an EMPTY running-app list for several seconds while
+  // the game is still running (`runningApps.ts` states the measurement), so a
+  // one-shot read would orphan a live session. Adoption polls.
   it("adopts a matching breadcrumb once the store reports the app mid-poll, no orphan log", async () => {
     seedSessions([{ appId: APP_ID, romId: ROM_ID, startMs: 5_000 }]);
     stubNothingRunning();
 
     const init = initSessionManager();
-    // Four polls into the loader-restart window, the store is still empty.
+    // Four polls into the empty-store window, the store is still empty.
     await vi.advanceTimersByTimeAsync(2_000);
     expect(backend.recordSessionStart).not.toHaveBeenCalled();
     // Steam finally populates the running app; the next poll sees it.

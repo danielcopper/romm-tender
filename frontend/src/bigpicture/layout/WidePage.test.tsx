@@ -282,12 +282,13 @@ describe("WidePage", () => {
   });
 
   it("claims the space its ancestors hang below the panel, and pulls them back inside it", async () => {
-    // Decky wraps a plugin's content in a box that overhangs its parent, from
-    // its own inset plus padding. Nothing of ours is painted in those pixels,
-    // but the panel scrolls by them, and that is enough to take the frame's
-    // Back row off the top. Giving the height up instead is what left a band of
-    // the panel empty under every wide page; the pull-up cancels the overhang
-    // without buying room for it.
+    // A menu can wrap the panel's content in a box that overhangs its parent,
+    // from its own inset plus padding — Decky's did, which is where this was
+    // measured. Nothing of ours is painted in those pixels, but the panel
+    // scrolls by them, and that is enough to take the frame's Back row off the
+    // top. Giving the height up instead is what left a band of the panel empty
+    // under every wide page; the pull-up cancels the overhang without buying
+    // room for it.
     const fitWithOverhang = await measuredFit(50);
 
     // 600 − 100, the whole of the panel below the body's top. Subtracting the
@@ -303,7 +304,7 @@ describe("WidePage", () => {
     // margin that cancels it overflows the scroller by exactly that much, and
     // the panel then scrolls the Back row off the top. So the margin has to
     // follow whatever this chain actually overhangs by, whatever the display,
-    // scale or Decky version makes that — the whole reason it is measured
+    // scale or Steam version makes that — the whole reason it is measured
     // rather than written down.
     const shallower = await measuredFit(30);
 

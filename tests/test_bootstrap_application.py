@@ -257,7 +257,7 @@ def _directories_at(tmp_path) -> AppDirectories:
         cache_dir=str(tmp_path / "cache"),
         state_dir=str(tmp_path / "state"),
         runtime_dir=str(tmp_path / "run"),
-        code_dir=str(tmp_path / "plugin"),
+        code_dir=str(tmp_path / "code"),
         bin_dir=str(tmp_path / "home" / ".local" / "bin"),
     )
 

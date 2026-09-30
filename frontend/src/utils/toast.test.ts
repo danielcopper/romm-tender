@@ -26,7 +26,7 @@ describe("showToast", () => {
     });
   });
 
-  it("names the plugin the same way the manifest does", () => {
+  it("calls the program by its display name", () => {
     expect(PLUGIN_NAME).toBe("Tender");
   });
 

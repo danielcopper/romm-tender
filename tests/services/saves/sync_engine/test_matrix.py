@@ -1590,7 +1590,7 @@ class TestPromoteLocalSlotPersistsState:
 
     The PUT-path edge case from the issue: server save tracked but the slot
     marker is still ``'local'`` (stale). On promotion, the in-memory mutation
-    must reach disk so the next plugin start sees ``source='server'``.
+    must reach disk so the next backend start sees ``source='server'``.
     """
 
     def test_put_path_promotion_survives_reload(self, tmp_path):
@@ -1633,7 +1633,7 @@ class TestDoUploadSaveFileStatePersistence:
     for slot promotion. Without an unconditional persist at the end of
     ``do_upload_save``, the per-file ``last_sync_hash`` / ``tracked_save_id``
     written by ``update_file_sync_state`` never reaches disk on that path —
-    so after a plugin restart the next sync re-detects drift and re-uploads
+    so after a backend restart the next sync re-detects drift and re-uploads
     the same content. This test asserts the upload outcome is persisted
     regardless of which slot-promotion branch fired.
     """

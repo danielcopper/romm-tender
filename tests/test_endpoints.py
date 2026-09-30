@@ -119,8 +119,8 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # Steam's own shortcut file and the two writes are a kv_config row and a
     # settings key. They have to answer while a migration is pending for the
     # same reason as the notice above: the frontend points the shortcuts at the
-    # launcher at plugin load, whatever page the panel happens to be showing,
-    # and a shortcut left naming a file inside the plugin folder is the
+    # launcher at panel load, whatever page the panel happens to be showing,
+    # and a shortcut left naming a file inside the code root is the
     # condition the relocation exists to end.
     "get_shortcut_relocation",
     # The release check: whether a newer release exists, the card's per-version
