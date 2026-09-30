@@ -115,8 +115,10 @@ export function waitReasonLine(wait: UpdateWaitReason): string {
   switch (wait.reason) {
     case "app_running":
       return `A game to close (${wait.apps.join(", ")})`;
-    case "interface_reload_limit":
-      return `Steam's interface was just reloaded ${RELOAD_LIMIT === 2 ? "twice" : `${RELOAD_LIMIT} times`} — possible again at ${clockTime(wait.frees_at)}`;
+    case "interface_reload_limit": {
+      const times = RELOAD_LIMIT === 2 ? "twice" : `${RELOAD_LIMIT} times`;
+      return `Steam's interface was just reloaded ${times} — possible again at ${clockTime(wait.frees_at)}`;
+    }
     default:
       return PLAIN_WAIT_LINES[wait.reason];
   }

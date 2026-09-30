@@ -84,41 +84,47 @@ async function runProbe(): Promise<void> {
       return;
     } catch {
       if (attempt >= CONNECTION_RETRY_DELAYS.length) {
-        // Retry budget exhausted. test_connection() also waits out the server
-        // round-trip — a hanging RomM server keeps the backend's retrying
-        // heartbeat busy for up to ~90s, far past our per-attempt deadline — so
-        // an exhausted budget alone can't tell a dead backend from an
-        // unreachable server. Ping get_settings (a pure in-memory read that
-        // resolves iff the backend RPC bridge is alive) to decide: alive ⇒ the
-        // server is merely unreachable ("Not connected"); dead ⇒ the backend
-        // never came up ("Backend error").
-        try {
-          await withTimeout(getSettings(), CONNECTION_CALLABLE_TIMEOUT);
-          publish({ connected: false, failure: null });
-        } catch (pingErr) {
-          // A backend an update's installer is restarting is expected to be
-          // gone for a while; the row stays at "Checking..." rather than
-          // calling it failed until INSTALLER_OVERDUE_MS after the installer
-          // was first seen started, and is asked again then, so a verdict
-          // follows without the panel having to be opened again.
-          if (installerRestarting()) {
-            publish({ connected: null, failure: null });
-            const seenAt = installerSeenAt();
-            if (seenAt !== null) {
-              setTimeout(ensureConnectionProbe, Math.max(0, seenAt + INSTALLER_OVERDUE_MS - Date.now()));
-            }
-            return;
-          }
-          publish({ connected: "backend_failed", failure: null });
-          // logError is itself a callable and would hang against a dead
-          // backend — log to the console instead.
-          console.error("[RomM] backend RPC bridge unreachable (get_settings ping failed):", pingErr);
-        }
+        await pingAfterExhaustedBudget();
         return;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, CONNECTION_RETRY_DELAYS[attempt]));
     }
   }
+}
+
+/** test_connection() also waits out the server round-trip — a hanging RomM
+ *  server keeps the backend's retrying heartbeat busy for up to ~90s, far past
+ *  our per-attempt deadline — so an exhausted budget alone can't tell a dead
+ *  backend from an unreachable server. Ping get_settings (a pure in-memory read
+ *  that resolves iff the backend RPC bridge is alive) to decide: alive ⇒ the
+ *  server is merely unreachable ("Not connected"); dead ⇒ the backend never
+ *  came up ("Backend error"). */
+async function pingAfterExhaustedBudget(): Promise<void> {
+  try {
+    await withTimeout(getSettings(), CONNECTION_CALLABLE_TIMEOUT);
+    publish({ connected: false, failure: null });
+  } catch (pingErr) {
+    if (holdVerdictForInstaller()) return;
+    publish({ connected: "backend_failed", failure: null });
+    // logError is itself a callable and would hang against a dead
+    // backend — log to the console instead.
+    console.error("[RomM] backend RPC bridge unreachable (get_settings ping failed):", pingErr);
+  }
+}
+
+/** A backend an update's installer is restarting is expected to be gone for a
+ *  while; the row stays at "Checking..." rather than calling it failed until
+ *  INSTALLER_OVERDUE_MS after the installer was first seen started, and is
+ *  asked again then, so a verdict follows without the panel having to be
+ *  opened again. */
+function holdVerdictForInstaller(): boolean {
+  if (!installerRestarting()) return false;
+  publish({ connected: null, failure: null });
+  const seenAt = installerSeenAt();
+  if (seenAt !== null) {
+    setTimeout(ensureConnectionProbe, Math.max(0, seenAt + INSTALLER_OVERDUE_MS - Date.now()));
+  }
+  return true;
 }
 
 /** Start a probe unless one is already in flight. Re-entrant by design: every
