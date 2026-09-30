@@ -454,9 +454,9 @@ sync that reaches the collection creates it under its new name, and the first sy
 `steam_collection_key`, so an unchanged set of Steam collections shows no collection change in either mode, and the
 Added and Removed names the Sync page lists are those keys, the name-part of each Steam collection (`Filter (Smart)`
 under `by_label`). It compares them without regard to case ("Name identity is case-insensitive", below). A mode flip is
-a real rename: the preview lists each labelled collection's new name as added and its old name as removed, unless
-another collection still carries it; this holds until a run completes. Under `by_label` the same holds for a standard
-collection over a run recorded while standard collections still carried a `(Standard)` label.
+a real rename: the preview lists each labelled collection's new name as added and its old name as removed, except a name
+another collection already carries on that side; this holds until a run completes. Under `by_label` the same holds for a
+standard collection over a run recorded while standard collections still carried a `(Standard)` label.
 
 **Name identity is case-insensitive (#1569).** Steam collapses collection names by a **case-insensitive** identity — two
 collections whose display names differ only in case (`RomM: [7 up]` vs `RomM: [7 Up]`) are the same Steam collection, so
