@@ -6,6 +6,7 @@ import os
 import pytest
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 
+from domain.collection_name import fold_collection_name
 from domain.rom import Rom
 from domain.sync_diff import BIND_ROM_ID_KEY
 from services.library._state import CollectionMembership
@@ -2123,6 +2124,28 @@ class TestFinalizePerUnitRun:
         assert payload["romm_collection_app_ids"] == {"7 up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
 
     @pytest.mark.asyncio
+    async def test_merge_unions_names_joined_only_through_upper_case(self, library, emit):
+        """Names the frontend's fold joins union here too: a dotless i and ``I`` are one key."""
+
+        library.settings["collection_naming_mode"] = "merge"
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="B")
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={
+                ("standard", "7"): CollectionMembership(name="\u0131x", rom_ids=[1], kind="standard"),
+                ("standard", "8"): CollectionMembership(name="Ix", rom_ids=[2], kind="standard"),
+            },
+            pending_platform_rom_ids={1, 2},
+            platform_names={"n64": "Nintendo 64"},
+            processed_platform_slugs={"n64"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert payload["romm_collection_app_ids"] == {"\u0131x": [1001, 1002]}
+
+    @pytest.mark.asyncio
     async def test_by_label_merges_same_type_case_variants(self, library, emit):
         """Under by_label, same-TYPE case variants merge (both bare standard names → folded keys match)."""
 
@@ -2193,8 +2216,27 @@ class TestFinalizePerUnitRun:
         # ONE bucket, both appIds present, keyed by a case-variant of "retro".
         assert len(platform_map) == 1
         (display, app_ids) = next(iter(platform_map.items()))
-        assert display.casefold() == "retro"
+        assert fold_collection_name(display) == "retro"
         assert set(app_ids) == {1001, 1002}
+
+    @pytest.mark.asyncio
+    async def test_platform_names_union_when_joined_only_through_upper_case(self, library, emit):
+        """Platform names fold by the rule collection keys do: a dotless i and ``I`` are one bucket."""
+
+        uow = library.uow
+        _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
+        _seed_rom(uow, 2, app_id=1002, platform_slug="b", name="B")
+
+        await library.sync._reporter.finalize_per_unit_run(
+            pending_collection_memberships={},
+            pending_platform_rom_ids={1, 2},
+            platform_names={"a": "\u0131x", "b": "Ix"},
+            processed_platform_slugs={"a", "b"},
+        )
+
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        assert len(payload["platform_app_ids"]) == 1
+        assert set(next(iter(payload["platform_app_ids"].values()))) == {1001, 1002}
 
     @pytest.mark.asyncio
     async def test_emit_sync_complete_terminal(self, library, emit):

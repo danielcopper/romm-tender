@@ -1,0 +1,77 @@
+[
+  {
+    "name": "7 Up",
+    "fold": "7 up",
+    "case": "a change of case alone"
+  },
+  {
+    "name": "Stra\u00dfe",
+    "fold": "strasse",
+    "case": "sharp s reaches ss only through upper case"
+  },
+  {
+    "name": "STRASSE",
+    "fold": "strasse",
+    "case": "the upper-case spelling of the same name"
+  },
+  {
+    "name": "STRA\u1e9eE",
+    "fold": "strasse",
+    "case": "capital sharp s reaches ss through lower case first"
+  },
+  {
+    "name": "\u039f\u0394\u039f\u03a3",
+    "fold": "\u03bf\u03b4\u03bf\u03c2",
+    "case": "a final capital sigma lowers to final sigma"
+  },
+  {
+    "name": "\u03bf\u03b4\u03bf\u03c3",
+    "fold": "\u03bf\u03b4\u03bf\u03c2",
+    "case": "a non-final small sigma at the end of a word"
+  },
+  {
+    "name": "\u017f",
+    "fold": "s",
+    "case": "long s"
+  },
+  {
+    "name": "\ufb01nal",
+    "fold": "final",
+    "case": "a ligature expands in upper case"
+  },
+  {
+    "name": "\u00b5",
+    "fold": "\u03bc",
+    "case": "micro sign joins Greek mu"
+  },
+  {
+    "name": "\u0130stanbul",
+    "fold": "i\u0307stanbul",
+    "case": "capital I with dot keeps its combining dot"
+  },
+  {
+    "name": "\u0131stanbul",
+    "fold": "istanbul",
+    "case": "dotless i joins i"
+  },
+  {
+    "name": "\u01c5emal",
+    "fold": "\u01c6emal",
+    "case": "a title-case digraph"
+  },
+  {
+    "name": "\u13a0\uab70",
+    "fold": "\uab70\uab70",
+    "case": "Cherokee, which str.casefold maps to upper case and this fold to lower case"
+  },
+  {
+    "name": "\u1f88\u1f80",
+    "fold": "\u1f00\u03b9\u1f00\u03b9",
+    "case": "Greek with iota subscript"
+  },
+  {
+    "name": "RomM: [\u039f\u0394\u039f\u03a3] (steamdeck)",
+    "fold": "romm: [\u03bf\u03b4\u03bf\u03c2] (steamdeck)",
+    "case": "a whole collection name"
+  }
+]

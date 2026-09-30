@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+from domain.collection_name import fold_collection_name
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, resolve_group_representative
 
 if TYPE_CHECKING:
@@ -392,7 +393,8 @@ def compute_collection_diff(
     keys. The reporter records no key for a collection none of whose members
     resolved to a Steam appId, so such a collection reads as added.
 
-    Names are compared **case-insensitively** (``str.casefold``), because Steam's
+    Names are compared **case-insensitively**
+    (:func:`domain.collection_name.fold_collection_name`), because Steam's
     collection identity ignores case: the reporter merges keys that differ only in
     case into one Steam collection and records one spelling of it. So a change of
     case alone is no change, and case variants on one side count once. An added
@@ -415,10 +417,10 @@ def compute_collection_diff(
 
 
 def _spelling_by_fold(names: Iterable[str]) -> dict[str, str]:
-    """Map each case-folded name to its sorted-first spelling among *names*."""
+    """Map each folded name to its sorted-first spelling among *names*."""
     spelling: dict[str, str] = {}
     for name in sorted(names):
-        spelling.setdefault(name.casefold(), name)
+        spelling.setdefault(fold_collection_name(name), name)
     return spelling
 
 

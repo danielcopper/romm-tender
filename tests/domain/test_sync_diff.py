@@ -368,8 +368,14 @@ class TestComputeCollectionDiff:
         assert result["added"] == ["7 Up"]
 
     def test_names_are_folded_beyond_lower_case(self):
-        """``casefold`` maps ``ß`` to ``ss``, which ``lower`` leaves alone."""
+        """``ß`` reaches ``ss`` through upper case, which ``lower`` alone leaves alone."""
         result = compute_collection_diff({"STRASSE"}, ["Straße"])
+        assert result["added"] == []
+        assert result["removed"] == []
+
+    def test_names_are_folded_by_the_rule_the_frontend_shares(self):
+        """A dotless i and ``I`` are one name under the fold both sides compute; ``casefold`` keeps them apart."""
+        result = compute_collection_diff({"\u0131x"}, ["Ix"])
         assert result["added"] == []
         assert result["removed"] == []
 

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.collection_label import steam_collection_key
+from domain.collection_name import fold_collection_name
 from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
 from domain.rom import Rom
@@ -183,12 +184,13 @@ class SyncReporter:
         smallest rom_id's binding wins, deterministically.
 
         Platform display names are grouped **case-insensitively** (keyed by
-        ``display.casefold()``, first-seen original casing kept for display): Steam
-        collapses collection names by a case-insensitive identity, so two display
-        names differing only in case must land in one Steam collection or the
-        second create overwrites the first. Two distinct slugs colliding this way
-        is rare, but the union keeps it lossless and matches the collection-map
-        rule (:meth:`_resolve_collection_memberships`).
+        :func:`domain.collection_name.fold_collection_name`, first-seen original
+        casing kept for display): Steam collapses collection names by a
+        case-insensitive identity, so two display names differing only in case
+        must land in one Steam collection or the second create overwrites the
+        first. Two distinct slugs colliding this way is rare, but the union keeps
+        it lossless and matches the collection-map rule
+        (:meth:`_resolve_collection_memberships`).
         """
         create_groups = self._settings.get("collection_create_platform_groups", False)
         display_by_fold: dict[str, str] = {}
@@ -199,7 +201,7 @@ class SyncReporter:
                 continue
             if should_include_in_platform_collection(rom.rom_id, pending_platform_rom_ids, create_groups):
                 display = platform_names.get(rom.platform_slug, rom.platform_slug)
-                fold = display.casefold()
+                fold = fold_collection_name(display)
                 display_by_fold.setdefault(fold, display)
                 platform_app_ids_by_fold.setdefault(fold, []).append(rom.shortcut_app_id)
             self._note_group_binding(group_bound, rom)
@@ -243,8 +245,9 @@ class SyncReporter:
         mode). Injecting the label here (not in the frontend) keeps the
         create-name and the reconcile ``activeNames`` derived from this one key.
 
-        Grouping is **case-insensitive** (keyed by ``key.casefold()``, first-seen
-        original casing kept for display): Steam collapses collection names by a
+        Grouping is **case-insensitive** (keyed by
+        :func:`domain.collection_name.fold_collection_name`, first-seen original
+        casing kept for display): Steam collapses collection names by a
         case-insensitive identity, so two keys differing only in case ("7 up" vs
         "7 Up") must union or the second Steam create overwrites the first and its
         games are lost (#1569). Under ``by_label`` this merges case variants of
@@ -257,7 +260,7 @@ class SyncReporter:
         seen_by_fold: dict[str, set[int]] = {}
         for membership in pending_collection_memberships.values():
             key = steam_collection_key(membership.name, membership.kind, membership.virtual_type, naming_mode)
-            fold = key.casefold()
+            fold = fold_collection_name(key)
             display_key_by_fold.setdefault(fold, key)
             app_ids = app_ids_by_fold.setdefault(fold, [])
             seen = seen_by_fold.setdefault(fold, set())
