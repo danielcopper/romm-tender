@@ -1208,8 +1208,6 @@ const tender = definePlugin(() => {
   };
 });
 
-export default tender;
-
 /**
  * The bundle's last act: put Tender's entry in Steam's Quick Access strip.
  *

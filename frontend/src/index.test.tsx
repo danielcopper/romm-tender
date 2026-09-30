@@ -204,12 +204,17 @@ import {
 } from "./utils/notificationsHealth";
 import { steamToaster } from "./utils/steamToaster";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
-import definePluginResult from "./index";
+import { installQuickAccessEntry } from "./qam/installEntry";
+import "./index";
 
-// `definePlugin` is stubbed in test-setup to return its factory unchanged, so
-// the default export IS the factory. Calling it registers the listeners and
+// Importing `./index` runs its last act, which hands the factory to the Quick
+// Access installer mocked above — so the factory is taken from that call, the
+// one argument index.tsx really passes. Calling it registers the listeners and
 // returns the plugin descriptor (with onDismount and the panel itself).
-const pluginFactory = definePluginResult as unknown as () => { onDismount: () => void; content: ReactNode };
+const pluginFactory = vi.mocked(installQuickAccessEntry).mock.calls[0]![0] as unknown as () => {
+  onDismount: () => void;
+  content: ReactNode;
+};
 
 function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
