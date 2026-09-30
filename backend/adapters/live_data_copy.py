@@ -48,7 +48,9 @@ def copy_database(source: str, target: str) -> bool:
 
     - a WAL and its index, or a rollback journal: something has the database
       open, or left it open. A read-only open reads it inside one transaction,
-      through SQLite's backup API, and creates nothing.
+      through SQLite's backup API, and creates nothing. An index and a journal
+      with no WAL beside them, which no one journal mode leaves, is read this
+      way too: ``mode=ro``, not ``immutable=1``.
     - no WAL and no journal, with or without an index: every committed page is
       in the file itself, and ``immutable=1`` reads it without creating anything
       and without looking at the index (https://sqlite.org/uri.html#uriimmutable)
