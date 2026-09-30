@@ -1,9 +1,9 @@
-"""The installer's check: ``main.py --check`` builds the application on copies and touches nothing live.
+"""The pre-install check: ``backend/check.py`` builds the application on copies and touches nothing live.
 
 Every case but the in-process ones runs the real entry point in a process of its
-own, the way the installer does (``$PYTHON -B backend/main.py --check …``), over
-a fake install laid out in the test's home: the live roots where the backend's
-own ladder puts them when nothing names them, and the check's roots beside them
+own, the way the installer does (``$PYTHON -B backend/check.py …``), over a fake
+install laid out in the test's home: the live roots where the backend's own
+ladder puts them when nothing names them, and the check's roots beside them
 under ``tmp_path``.
 """
 
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -19,10 +20,10 @@ from pathlib import Path
 
 import pytest
 
-import main
+import check
 from adapters.sqlite_migrations import apply_migrations
 
-_MAIN = Path(__file__).resolve().parents[1] / "backend" / "main.py"
+_CHECK = Path(__file__).resolve().parents[1] / "backend" / "check.py"
 
 _ROOTS = (
     "TENDER_CODE_DIR",
@@ -44,7 +45,7 @@ class _Machine:
         self.live_state = home / ".local" / "state" / "romm-tender"
         self.live_cache = home / ".cache" / "romm-tender"
         self.launcher = home / ".local" / "bin" / "tender-rom-launcher"
-        self.runtime = tmp_path / "run"
+        self.live_runtime = tmp_path / "run"
         self.check = tmp_path / "check"
         self.code = Path(__file__).resolve().parents[1]
 
@@ -68,13 +69,18 @@ class _Machine:
         self.launcher.parent.mkdir(parents=True)
         self.launcher.write_text("#!/bin/sh\n# the launcher the installed version put here\n", encoding="utf-8")
         self.launcher.chmod(0o700)
-        self.runtime.mkdir()
+        (self.live_runtime / "romm-tender").mkdir(parents=True)
+        (self.live_runtime / "romm-tender" / "port").write_text("8123\n", encoding="utf-8")
+
+    def snapshot(self) -> dict[str, dict[str, tuple[int, bytes | None]]]:
+        """The whole live install: the home, and the runtime directory beside it."""
+        return {"home": _snapshot(self.home), "runtime": _snapshot(self.live_runtime)}
 
     def env(self, **overrides: str) -> dict[str, str]:
         base = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(self.home),
-            "XDG_RUNTIME_DIR": str(self.runtime),
+            "XDG_RUNTIME_DIR": str(self.check / "run"),
             "TENDER_CODE_DIR": str(self.code),
             "TENDER_CONFIG_DIR": str(self.check / "config"),
             "TENDER_DATA_DIR": str(self.check / "data"),
@@ -90,8 +96,7 @@ class _Machine:
             [
                 sys.executable,
                 "-B",
-                str(_MAIN),
-                "--check",
+                str(_CHECK),
                 "--data-from",
                 str(self.live_data),
                 "--config-from",
@@ -126,20 +131,22 @@ class TestItBuildsOnCopies:
     def test_it_answers_zero_once_the_application_is_built(self, machine):
         result = machine.run()
 
-        assert result.returncode == 0, result.stderr
+        assert result.returncode == check.BUILT == 0, result.stderr
         assert "check: " in result.stderr
         assert result.stdout == ""
 
     def test_the_live_install_is_left_exactly_as_it_was(self, machine):
-        """Names, modes and bytes, the launcher among them — with no backend holding the database open."""
-        before = _snapshot(machine.home)
+        """Names, modes and bytes, the launcher and the port note among them — with no backend holding the database."""
+        before = machine.snapshot()
 
         result = machine.run()
 
         assert result.returncode == 0, result.stderr
-        assert _snapshot(machine.home) == before
+        assert machine.snapshot() == before
 
     def test_the_copies_are_migrated_where_the_check_was_pointed(self, machine):
+        (machine.live_data / "save_sync_state.json").write_text('{"device_name": "deck"}\n', encoding="utf-8")
+
         result = machine.run()
 
         assert result.returncode == 0, result.stderr
@@ -150,6 +157,7 @@ class TestItBuildsOnCopies:
         finally:
             copy.close()
         assert (machine.check / "config" / "settings.json").is_file()
+        assert (machine.check / "data" / "save_sync_state.json").is_file()
         assert (machine.check / "bin" / "tender-rom-launcher").is_file()
 
     def test_it_takes_no_lock_writes_no_log_and_notes_no_port(self, machine):
@@ -158,7 +166,34 @@ class TestItBuildsOnCopies:
         assert result.returncode == 0, result.stderr
         assert not (machine.check / "data" / "backend.lock").exists()
         assert not (machine.check / "state").exists()
-        assert list(machine.runtime.iterdir()) == []
+        assert not (machine.check / "run").exists()
+
+    def test_it_writes_nothing_into_the_tree_it_checks(self, machine, tmp_path):
+        """The installer puts that tree in place as it is: a byte the build left there is one no tarball brought."""
+        tree = tmp_path / "staged"
+        for part in ("backend", "bin", "defaults"):
+            shutil.copytree(machine.code / part, tree / part, ignore=shutil.ignore_patterns("__pycache__"))
+        before = _snapshot(tree)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(tree / "backend" / "check.py"),
+                "--data-from",
+                str(machine.live_data),
+                "--config-from",
+                str(machine.live_config),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=machine.env(TENDER_CODE_DIR=str(tree)),
+            timeout=120,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert _snapshot(tree) == before
 
     def test_a_first_install_has_nothing_to_copy_and_builds_all_the_same(self, machine, tmp_path):
         nowhere = tmp_path / "no-install-yet"
@@ -167,8 +202,7 @@ class TestItBuildsOnCopies:
             [
                 sys.executable,
                 "-B",
-                str(_MAIN),
-                "--check",
+                str(_CHECK),
                 "--data-from",
                 str(nowhere / "data"),
                 "--config-from",
@@ -217,29 +251,29 @@ class TestADatabaseHeldOpen:
 
 
 class TestAVersionThatCannotBeBuilt:
-    def test_a_migration_that_fails_on_the_copy_answers_non_zero_with_the_traceback(self, machine):
+    def test_a_migration_that_fails_on_the_copy_answers_one_with_the_traceback(self, machine):
         """A table in the user's database that the first migration also creates: the build stops there."""
         (machine.live_data / "romm_sync.db").unlink()
         db = sqlite3.connect(machine.live_data / "romm_sync.db")
         with db:
             db.execute("CREATE TABLE roms (clashes TEXT)")
         db.close()
-        before = _snapshot(machine.home)
+        before = machine.snapshot()
 
         result = machine.run()
 
-        assert result.returncode == 1
+        assert result.returncode == check.NOT_BUILT == 1
         assert "Traceback (most recent call last)" in result.stderr
         assert "could not be built" in result.stderr
-        assert _snapshot(machine.home) == before
+        assert machine.snapshot() == before
 
-    def test_a_module_that_does_not_import_answers_non_zero_with_the_traceback(self, machine):
+    def test_a_module_that_does_not_import_answers_one_with_the_traceback(self, machine):
         """Python's own answer to a failed import, which is the one the installer relies on."""
         poisoned = (
             "import runpy, sys; "
             "sys.modules['bootstrap'] = None; "
-            f"sys.argv = [{str(_MAIN)!r}, *sys.argv[1:]]; "
-            f"runpy.run_path({str(_MAIN)!r}, run_name='__main__')"
+            f"sys.argv = [{str(_CHECK)!r}, *sys.argv[1:]]; "
+            f"runpy.run_path({str(_CHECK)!r}, run_name='__main__')"
         )
 
         result = subprocess.run(
@@ -248,7 +282,6 @@ class TestAVersionThatCannotBeBuilt:
                 "-B",
                 "-c",
                 poisoned,
-                "--check",
                 "--data-from",
                 str(machine.live_data),
                 "--config-from",
@@ -267,47 +300,110 @@ class TestAVersionThatCannotBeBuilt:
         assert not machine.check.exists()
 
 
+class TestACheckNotTried:
+    """What says nothing about the version answers two, and nothing is built."""
+
+    def test_live_data_that_cannot_be_copied_answers_two(self, machine):
+        (machine.live_data / "romm_sync.db").write_bytes(b"not a database, and long enough to have a header" * 4)
+        before = machine.snapshot()
+
+        result = machine.run()
+
+        assert result.returncode == check.NOT_TRIED == 2
+        assert "check: the live data could not be copied" in result.stderr
+        assert "could not be built" not in result.stderr
+        assert machine.snapshot() == before
+
+    def test_arguments_it_cannot_read_answer_two(self, machine):
+        result = subprocess.run(
+            [sys.executable, "-B", str(_CHECK), "--data-from", str(machine.live_data)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=machine.env(),
+            timeout=120,
+        )
+
+        assert result.returncode == check.NOT_TRIED
+        assert "--config-from" in result.stderr
+
+
 class TestItRefusesToBuildOnALiveRoot:
     @pytest.mark.parametrize("unset", _ROOTS)
     def test_a_root_the_environment_does_not_name_is_refused(self, machine, unset):
-        before = _snapshot(machine.home)
+        before = machine.snapshot()
 
         result = machine.run(**{unset: ""})
 
-        assert result.returncode == 1
+        assert result.returncode == check.NOT_TRIED
         assert f"check: refused, {unset} not set" in result.stderr
-        assert _snapshot(machine.home) == before
+        assert machine.snapshot() == before
         assert not machine.check.exists()
 
     @pytest.mark.parametrize(("root", "live"), [("TENDER_DATA_DIR", "live_data"), ("TENDER_CONFIG_DIR", "live_config")])
     def test_a_root_that_is_where_the_live_data_is_copied_from_is_refused(self, machine, root, live):
-        before = _snapshot(machine.home)
+        """Checked before emptiness, so it holds for a live directory that is still empty."""
+        for path in getattr(machine, live).iterdir():
+            path.unlink()
+        before = machine.snapshot()
 
         result = machine.run(**{root: str(getattr(machine, live))})
 
-        assert result.returncode == 1
+        assert result.returncode == check.NOT_TRIED
         assert "is where the live data is copied from" in result.stderr
-        assert _snapshot(machine.home) == before
+        assert machine.snapshot() == before
+
+    @pytest.mark.parametrize(
+        ("root", "live"),
+        [
+            ("TENDER_CONFIG_DIR", "live_config"),
+            ("TENDER_DATA_DIR", "live_data"),
+            ("TENDER_CACHE_DIR", "live_cache"),
+            ("TENDER_STATE_DIR", "live_state"),
+            ("TENDER_BIN_DIR", "launcher"),
+            ("XDG_RUNTIME_DIR", "live_runtime"),
+        ],
+    )
+    def test_a_root_that_already_holds_something_is_refused(self, machine, tmp_path, root, live):
+        """A live root named by mistake holds something; the runtime one holds the running backend's port note."""
+        target = getattr(machine, live)
+        named = target.parent if live == "launcher" else target
+        other_sources = {"--data-from": tmp_path / "elsewhere-data", "--config-from": tmp_path / "elsewhere-config"}
+        before = machine.snapshot()
+
+        result = subprocess.run(
+            [sys.executable, "-B", str(_CHECK), *(str(part) for pair in other_sources.items() for part in pair)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=machine.env(**{root: str(named)}),
+            timeout=120,
+        )
+
+        assert result.returncode == check.NOT_TRIED, result.stderr
+        assert "already exists and is not an empty directory" in result.stderr
+        assert machine.snapshot() == before
+
+    def test_an_empty_root_is_one_it_may_build_under(self, machine):
+        (machine.check / "data").mkdir(parents=True)
+
+        result = machine.run()
+
+        assert result.returncode == 0, result.stderr
+
+    def test_a_code_root_other_than_the_tree_being_checked_is_refused(self, machine, tmp_path):
+        before = machine.snapshot()
+
+        result = machine.run(TENDER_CODE_DIR=str(tmp_path / "another-tree"))
+
+        assert result.returncode == check.NOT_TRIED
+        assert "not the tree being checked" in result.stderr
+        assert machine.snapshot() == before
+        assert not machine.check.exists()
 
 
 class TestTheEntryPoint:
-    """In process: which of the two the entry point runs, and what a raising build answers."""
-
-    def test_no_argument_runs_the_backend(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr(sys, "argv", ["main.py"])
-        monkeypatch.setattr(main, "run", lambda: 7)
-        monkeypatch.setattr(main, "check", lambda argv: pytest.fail(f"the check ran with {argv}"))
-
-        assert main.main() == 7
-
-    def test_check_first_runs_the_check_with_what_follows_it(self, monkeypatch: pytest.MonkeyPatch):
-        asked: list[list[str]] = []
-        monkeypatch.setattr(sys, "argv", ["main.py", "--check", "--data-from", "/d", "--config-from", "/c"])
-        monkeypatch.setattr(main, "run", lambda: pytest.fail("the backend ran"))
-        monkeypatch.setattr(main, "check", lambda argv: asked.append(argv) or 0)
-
-        assert main.main() == 0
-        assert asked == [["--data-from", "/d", "--config-from", "/c"]]
+    """In process: what a raising build answers, and that the backend's own entry knows nothing of a check."""
 
     def test_a_build_that_raises_answers_one_and_logs_why(
         self, machine, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
@@ -317,12 +413,37 @@ class TestTheEntryPoint:
 
         for name, value in machine.env().items():
             monkeypatch.setenv(name, value)
-        monkeypatch.setattr(main, "build_application", broken)
-        monkeypatch.setattr(main, "configure_stderr_logging", lambda: logging.getLogger("test_main_check"))
+        monkeypatch.setattr(check, "build_application", broken)
+        monkeypatch.setattr(check, "configure_stderr_logging", lambda: logging.getLogger("test_check"))
 
-        with caplog.at_level(logging.ERROR, logger="test_main_check"):
-            answer = main.check(["--data-from", str(machine.live_data), "--config-from", str(machine.live_config)])
+        with caplog.at_level(logging.ERROR, logger="test_check"):
+            answer = check.check(["--data-from", str(machine.live_data), "--config-from", str(machine.live_config)])
 
-        assert answer == 1
+        assert answer == check.NOT_BUILT
         raised = [record.exc_info[1] for record in caplog.records if record.exc_info is not None]
         assert [str(error) for error in raised] == ["a service that cannot be built"]
+
+    def test_a_copy_that_raises_answers_two_and_builds_nothing(
+        self, machine, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ):
+        def uncopyable(**_kwargs: object) -> None:
+            raise OSError(28, "No space left on device")
+
+        for name, value in machine.env().items():
+            monkeypatch.setenv(name, value)
+        monkeypatch.setattr(check, "copy_live_data", uncopyable)
+        monkeypatch.setattr(check, "build_application", lambda **_kwargs: pytest.fail("the build ran"))
+        monkeypatch.setattr(check, "configure_stderr_logging", lambda: logging.getLogger("test_check"))
+
+        with caplog.at_level(logging.ERROR, logger="test_check"):
+            answer = check.check(["--data-from", str(machine.live_data), "--config-from", str(machine.live_config)])
+
+        assert answer == check.NOT_TRIED
+        assert [record.getMessage() for record in caplog.records] == ["check: the live data could not be copied"]
+
+    def test_the_backend_s_entry_takes_no_check_flag(self):
+        """A check call can never reach the backend's start: main.py does not read its arguments at all."""
+        source = (Path(__file__).resolve().parents[1] / "backend" / "main.py").read_text(encoding="utf-8")
+
+        assert "--check" not in source
+        assert "sys.argv" not in source

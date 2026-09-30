@@ -77,6 +77,7 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "backend/main.py" = ["E402"]
+"backend/check.py" = ["E402"]
 # pytest-asyncio test bodies legitimately do blocking setup I/O (open,
 # os.path) — ASYNC's event-loop concern is a production-only worry, not
 # a test one, so the group is disabled under tests/ (same rationale as ARG).
@@ -102,8 +103,8 @@ select = [
 "asyncio.get_event_loop".msg = "Use asyncio.get_running_loop() — get_event_loop() has no implicit loop left to answer with (#806)."
 
 [tool.ruff.lint.isort]
-# ``main`` is listed like the packages beside it: ruff resolves a first-party
-# module against ``src`` (the repo root), and the entry point now lives under
-# ``backend/``, where that lookup does not reach it.
-known-first-party = ["lib", "domain", "services", "adapters", "host", "main"]
+# ``main`` and ``check`` are listed like the packages beside them: ruff resolves
+# a first-party module against ``src`` (the repo root), and the two entry points
+# live under ``backend/``, where that lookup does not reach them.
+known-first-party = ["lib", "domain", "services", "adapters", "host", "main", "check"]
 known-third-party = ["_vendor"]

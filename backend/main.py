@@ -1,4 +1,3 @@
-import argparse
 import asyncio
 import functools
 import logging
@@ -15,18 +14,9 @@ sys.path.insert(0, backend_dir)
 # checkout, where the built panel and the shipped launcher sit one level up.
 _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
-from bootstrap import Application, build_application, copy_live_data
+from bootstrap import Application, build_application
 
-from domain.app_directories import (
-    ENV_BIN_DIR,
-    ENV_CACHE_DIR,
-    ENV_CODE_DIR,
-    ENV_CONFIG_DIR,
-    ENV_DATA_DIR,
-    ENV_STATE_DIR,
-    AppDirectories,
-    resolve_directories,
-)
+from domain.app_directories import AppDirectories, resolve_directories
 from domain.identity import VERSION
 from domain.update_install import installer_environment
 from domain.update_release import UpdateSource, resolve_update_source
@@ -40,7 +30,6 @@ from host import (
     HostStatus,
     InjectionSetup,
     configure_logging,
-    configure_stderr_logging,
     new_token,
     route,
     run_backend,
@@ -798,11 +787,13 @@ class Endpoints:
         ``announce_version`` is. ``toast_owed`` is true until
         :meth:`acknowledge_update_toast` says the panel raised its toast, and
         false whenever ``announce_version`` is ``None``. ``failure`` is the
-        installer's record of an update it rolled back, ``{"attempted_version",
-        "restored_version", "rolled_back_at"}``, read afresh so it goes when the
-        installer removes it; ``None`` where there is none, or where the running
-        version is not the one it restored. ``failure_dismissed`` says the user
-        waved away that exact record.
+        installer's record of an update that did not go through,
+        ``{"attempted_version", "restored_version", "rolled_back_at", "kind"}``
+        with ``kind`` ``"rollback"``, ``"check"`` (refused by the pre-install
+        check) or ``"unknown"`` (a kind a later installer wrote), read afresh so
+        it goes when the installer removes it; ``None`` where there is none, or
+        where the running version is not the one it names as still running.
+        ``failure_dismissed`` says the user waved away that exact record.
         """
         return await self._services.update_outcome_service.get_update_outcome()
 
@@ -824,10 +815,10 @@ class Endpoints:
 
     @route
     def dismiss_update_failure(self, rolled_back_at):
-        """Record that the user waved away the card for one rolled-back update.
+        """Record that the user waved away the card for one update that did not go through.
 
-        Per record — named by its ``rolled_back_at`` — so the next rollback
-        raises the card again. Returns ``{"success": True}``, or the canonical
+        Per record — named by its ``rolled_back_at`` — so the next record the
+        installer writes raises the card again. Returns ``{"success": True}``, or the canonical
         failure shape for a stamp that is not a non-empty string.
         """
         return self._services.update_outcome_service.dismiss_update_failure(rolled_back_at)
@@ -1031,75 +1022,8 @@ def run() -> int:
     return 0
 
 
-# The six roots a check builds under. Each one the environment leaves unset
-# falls back to where the installed program keeps its own, and the build writes
-# there: the launcher into the bin root, the settings into the config root.
-_CHECK_ROOTS = (ENV_CODE_DIR, ENV_CONFIG_DIR, ENV_DATA_DIR, ENV_CACHE_DIR, ENV_STATE_DIR, ENV_BIN_DIR)
-
-
-def check(argv: list[str]) -> int:
-    """Build the application on copies of the live data, and answer whether it could be built.
-
-    What the installer runs on the version it unpacked, before it stops or
-    replaces anything (``check_the_new_version`` in ``install.sh``). The
-    database under ``--data-from`` and the settings under ``--config-from`` are
-    copied into the roots the environment names, and the build migrates the
-    copies. Nothing else a start does happens here: no lock, no port, no port
-    file, no ``backend.log``, no start-up repair, no network, no Steam.
-
-    Answers 0 when the application was built, and 1 with the reason on stderr
-    when it was not — or when a root is unset, or is the one the live data is
-    copied from, since the build would then write where the running version
-    keeps its own.
-    """
-    parser = argparse.ArgumentParser(prog="main.py --check")
-    parser.add_argument("--data-from", required=True)
-    parser.add_argument("--config-from", required=True)
-    arguments = parser.parse_args(argv)
-    logger = configure_stderr_logging()
-    unset = [name for name in _CHECK_ROOTS if not os.environ.get(name, "").strip()]
-    if unset:
-        logger.error(f"check: refused, {', '.join(unset)} not set")
-        return 1
-    user_home = os.path.expanduser("~")
-    directories = resolve_directories(os.environ, user_home, _CODE_DIR_FALLBACK)
-    for root, source in ((directories.data_dir, arguments.data_from), (directories.config_dir, arguments.config_from)):
-        if os.path.realpath(root) == os.path.realpath(source):
-            logger.error(f"check: refused, {root} is where the live data is copied from")
-            return 1
-    try:
-        copy_live_data(
-            data_from=arguments.data_from,
-            config_from=arguments.config_from,
-            directories=directories,
-            logger=logger,
-        )
-        asyncio.run(_build_on_copies(directories, user_home, logger))
-    except Exception:
-        logger.exception(f"check: {VERSION} could not be built")
-        return 1
-    logger.info(f"check: {VERSION} was built")
-    return 0
-
-
-async def _build_on_copies(directories: AppDirectories, user_home: str, logger: logging.Logger) -> None:
-    """Build the application exactly as :func:`build_backend` does, and run nothing of it."""
-    build_application(
-        directories=directories,
-        update_source=resolve_update_source(os.environ, _CODE_DIR_FALLBACK),
-        installer_environment=installer_environment(os.environ, directories, sys.executable),
-        user_home=user_home,
-        logger=logger,
-        loop=asyncio.get_running_loop(),
-        emit=EventSink(logger).emit,
-        steam=HostStatus().steam,
-    )
-
-
 def main() -> int:
-    """Process entry point: the backend, or with ``--check`` first, the installer's check."""
-    if sys.argv[1:2] == ["--check"]:
-        return check(sys.argv[2:])
+    """Process entry point."""
     return run()
 
 

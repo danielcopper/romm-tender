@@ -27,8 +27,9 @@ forbidden_modules =
 # ...and the other direction, which is the half that rots without a check. The
 # first service that wants to send an event would reach in here for the sink,
 # and from then on the composition root would no longer be the only place that
-# knows a transport exists. ``main.py`` is the one module allowed to know, and
-# it is not a package, so nothing in this list can name it.
+# knows a transport exists. ``main.py`` and ``check.py``, the two entry points,
+# are the modules allowed to know, and neither is a package, so nothing in this
+# list can name them.
 [importlinter:contract:nobody-imports-the-host]
 name = Only the entry point may import the host
 type = forbidden

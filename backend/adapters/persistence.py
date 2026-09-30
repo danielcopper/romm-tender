@@ -23,11 +23,13 @@ _LOCK_EXT = ".lock"
 # ``scripts/check_settings_owner.py`` confines the literal here as a PROXY for
 # "every write goes through the owner" — name-confinement, not dataflow: a
 # module handed an already-built path is not caught, as that gate's own
-# docstring says. It is public for a reader that no longer exists — a start-up
-# probe that had to recognise a configured install without opening it — and
-# today nothing outside this module imports it; the gate carries its own copy of
-# the literal rather than importing this one.
+# docstring says. It is public for the pre-install check, which copies the live
+# file (``bootstrap/check.py``); the gate carries its own copy of the literal
+# rather than importing this one.
 SETTINGS_FILENAME = "settings.json"
+
+# The legacy save-sync state, read once by the settings fold and never written.
+SAVE_SYNC_STATE_FILENAME = "save_sync_state.json"
 
 
 class _ClockPort(Protocol):
@@ -314,7 +316,7 @@ class PersistenceAdapter:
         lifts the legacy save-sync toggles + device label out of this
         file into ``settings.json``.
         """
-        state_path = os.path.join(self._data_dir, "save_sync_state.json")
+        state_path = os.path.join(self._data_dir, SAVE_SYNC_STATE_FILENAME)
         try:
             with open(state_path) as f:
                 loaded = json.load(f)

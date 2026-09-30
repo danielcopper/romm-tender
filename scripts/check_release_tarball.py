@@ -77,6 +77,7 @@ VERSION_FILE = "version.txt"
 REQUIRED_FILES = (
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
+    "backend/check.py",
     "backend/main.py",
     "backend/native/libgavel-x86_64-linux.so",
     "bin/tender-rom-launcher",
