@@ -392,6 +392,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   neither `install.sh` nor a file under `scripts/` (`*.sh`) or `bin/` spells the literal. Unseen by it: a record path
   assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess. Prompt-only: only
   `UpdateInstallService` calls the adapter's `write` and `remove`
+- **No journal line reaches the panel with an admission token in it: every line read back from the journal is shown
+  through `domain/update_output.py::output_section`, which replaces each `token=` value with `[hidden]`** — test +
+  prompt-only — `tests/domain/test_update_output.py::TestHideToken` over a line in the start-up address line's shape,
+  and the rollback cases in `tests/services/test_update_output.py` and `tests/contract/test_update_output.py`, each over
+  such a line in the failed version's part. Prompt-only: a new reader of journal text answers through `output_section`
+  or `hide_token`, never with the raw `JournalEntry.message`
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
   from, and the live database is read without a file created or removed beside it, and with no write to one but a

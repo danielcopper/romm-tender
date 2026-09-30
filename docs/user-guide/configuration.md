@@ -301,6 +301,15 @@ It also goes away by itself once a later update goes through. While it is there,
 available — you have just seen it fail — although a release newer than X brings back an **is available** notice for that
 release.
 
+A failed update also says so in a message that goes by itself, once Steam has finished starting, so you hear of it
+without opening the panel — in Game Mode it shows over the game. After the installer went back to the version you had,
+refused the new version, or stopped without updating, it says **Update to X failed. You are still on Y. Settings ›
+Updates shows why.** An install you started from **Settings › Updates** that fails before the installer runs says what
+stopped it — **Update to X failed. The download failed.**, for example — and one a game stopped says **Update to X was
+cancelled. A game was started. Nothing was changed.** Each failed update says it once: reopening the panel, restarting
+Steam or restarting Tender does not bring it back, and one whose notice you already dismissed on the main panel does not
+say it at all.
+
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
@@ -312,8 +321,9 @@ release.
 - Below the versions and the button, one block for what is happening: an install under way, or an update that did not go
   through. While the installer's note of a rolled-back update, or of one its pre-install check refused, is there and you
   are still on the version it names, the block says so — **Update to X failed — Tender went back to Y.** or **Update to
-  X failed — nothing was changed.** — with the step it failed at and where the reason is, whether or not you dismissed
-  the notice on the main panel.
+  X failed — nothing was changed.** — with the step it failed at, whether or not you dismissed the notice on the main
+  panel. Where the installer ran, **Show what the installer said** stands under the block; see
+  [What the installer said](#what-the-installer-said).
 - **Check for updates daily** — on by default. Switch it off and Tender no longer asks GitHub by itself; what the last
   check found stays in **Available** and can still be installed.
 - **Check now** — asks straight away rather than waiting for the day to pass, whether or not the daily check is switched
@@ -377,9 +387,35 @@ installer is taking unusually long.** when it still answers and the installer ha
 
 If the install fails, the block turns amber, says **Update to X failed** — or **Update to X was cancelled**, where a
 game was started or Tender could not check whether one runs — marks the step that failed with `✕` where it was one of
-the four, and says why, and the button comes back as **Try again**. Nothing tries again by itself.
+the four, and says why, and the button comes back as **Try again**. Nothing tries again by itself. Where the installer
+ran — it stopped without updating, or refused the new version — **Show what the installer said** stands under the block.
 [An update from Settings did not go through](troubleshooting.md#an-update-from-settings-did-not-go-through) says what
 each failure means and where to read more.
+
+### What the installer said
+
+**Show what the installer said** is under the failure block in **Settings › Updates** wherever the installer ran: an
+update it went back from, one its pre-install check refused, and one where it stopped without updating. It is not there
+for a download that failed, a checksum that did not match, an installer that could not be started, or an update a game
+cancelled — the installer did not run for those, and Tender's log, `backend.log`, says why.
+
+It opens a window titled **What the installer said** with the time the installer ran. **The installer** shows that
+installer's output — the run that belongs to this failure, not the latest one if the installer has run again since.
+After the installer went back to the version you had, a second part, **X, when it tried to start**, shows what the new
+version printed between the installer starting and going back — where the reason usually is, since the installer itself
+only says that the new version did not answer. Each part shows its last 300 lines and says how many earlier ones it
+leaves out, and a line longer than 500 characters is cut. Tender's own address, which the new version prints with the
+key that lets the panel in, shows that key as `[hidden]`. Move down through the lines with the D-pad, and press
+**Close** to go back.
+
+Tender reads this from the system journal, where it stays on the Deck. Sometimes there is nothing to show, and the
+window says why instead:
+
+- **This output is no longer in the system journal — it keeps only the last hours of logs.** The journal keeps a fixed
+  amount for everything on the Deck, so older output is gone.
+- **This update was run in a terminal, so its output is there, not in the journal.** The installer ran by hand, so its
+  output went to that terminal.
+- **The installer's output could not be read.** The journal could not be read, or Tender did not answer.
 
 ## RetroArch Input Driver Fix
 

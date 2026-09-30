@@ -69,9 +69,9 @@ panel went with it but the new one did not arrive — so the missing panel, not 
 ## An Update Was Rolled Back
 
 **Symptom**: An update marks the **Service** row failed, says **Rolled back** instead of **Done**, and ends with
-`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log and at the journal. Tender's
-main panel says the same — that the update to the new version failed and you are still on the one you had — until you
-dismiss it there or a later update goes through.
+`install.sh: update to <new> failed; back on <previous>` and a line pointing at the log and at the journal. Tender says
+the same once in a message, and its main panel says it — that the update to the new version failed and you are still on
+the one you had — until you dismiss it there or a later update goes through.
 
 **Explanation**: The new version did not answer within about a minute of being started, so the installer put the version
 you had back, together with the library database and settings it had before the update, and started it again. Tender is
@@ -82,9 +82,11 @@ panel's notice and **Settings › Updates** show, and what Tender's log repeats 
 removes it. Where the installer also said `could not record the rolled-back update`, there is no note of this rollback,
 and neither the panel nor Tender's log says anything about it.
 
-**Fix**: Look at what the new version logged — the log is shared by both versions, so the lines just before the previous
-version's start are the new version's. A version that failed before it could open its log left nothing there, and its
-reason is only in the journal:
+**Fix**: Look at what the new version printed. **Show what the installer said** under the block in **Settings ›
+Updates** shows it, in Game Mode too: the installer's run, and then **X, when it tried to start** with the new version's
+own lines from that start ([What the installer said](configuration.md#what-the-installer-said)). From a terminal, the
+log is shared by both versions, so the lines just before the previous version's start are the new version's; a version
+that failed before it could open its log left nothing there, and its reason is only in the journal:
 
 ```bash
 tail -n 100 ~/.local/state/romm-tender/backend.log
@@ -135,7 +137,8 @@ after the update, by the rollback above.
 
 **Fix**: The installer printed the check's reason, and the last lines the check printed, just above its last two lines —
 for a crash, after a line naming the signal that ended it (`the pre-install check crashed (SIGSEGV)`). For an update
-from **Settings › Updates** that output is in the installer's journal:
+from **Settings › Updates**, **Show what the installer said** there shows that output; it is also in the installer's
+journal:
 
 ```bash
 journalctl --user -u romm-tender-update
@@ -155,8 +158,9 @@ check that was killed was ended by force: by the installer, when it did not stop
 something else, such as the system running out of memory. Any other status is one the installer cannot put down to the
 new version — a check stopped from outside, for example, or one that could not be run at all. None of these is a verdict
 on the new version, so nothing is recorded and the main panel does not mention it. An update started from **Settings ›
-Updates** says **The installer stopped without updating.** there, and these lines are in the installer's journal
-(`journalctl --user -u romm-tender-update`). Run the installer again once the cause is resolved.
+Updates** says **The installer stopped without updating.** there, and **Show what the installer said** under it shows
+these lines, which are also in the installer's journal (`journalctl --user -u romm-tender-update`). Run the installer
+again once the cause is resolved.
 
 ### Your data could not be copied
 
@@ -164,8 +168,9 @@ The installer ends with `install.sh: could not try the new version: your data co
 `nothing was changed`, with the reason just above. The check could not copy your library database or settings to try the
 new version on — a full disk, or a file it could not read. That is about your data, not the new version, so nothing is
 recorded and the main panel does not mention it. An update started from **Settings › Updates** says **The installer
-stopped without updating.** there, and these lines are in the installer's journal
-(`journalctl --user -u romm-tender-update`). Free space, or fix the file the reason names, and run the installer again.
+stopped without updating.** there, and **Show what the installer said** under it shows these lines, which are also in
+the installer's journal (`journalctl --user -u romm-tender-update`). Free space, or fix the file the reason names, and
+run the installer again.
 
 ### No pre-install check
 
@@ -177,7 +182,8 @@ A release from before the pre-install check has none. The installer installs it 
 
 **Symptom**: After **Install update** in **Settings › Updates**, an amber block under the button says **Update to X
 failed — nothing was changed.** or **Update to X was cancelled — nothing was changed.**, marks the step it stopped at
-with `✕` where one of the four steps failed, and says why under that; the button is back as **Try again**.
+with `✕` where one of the four steps failed, and says why under that; the button is back as **Try again**. Tender also
+says it once in a message, which shows even when the panel is closed.
 
 **Explanation**: Each of these ends the install before Tender was replaced, and Tender goes on running the version you
 have. The step each is marked at is in brackets; the ones with none are not a fault of the new version, and show no
@@ -212,8 +218,9 @@ it is running again, the main panel says the same as above.
 **Could not read the update state.** under the button means the section asked Tender how the install stands and got no
 answer; it asks again every few seconds, and the line goes once an answer comes.
 
-**Fix**: Tender's log names what went wrong, on its lines that say `update:`. For an installer that stopped, the
-installer's own output is in the journal:
+**Fix**: Tender's log names what went wrong, on its lines that say `update:`. For an installer that stopped, or a new
+version that does not start, **Show what the installer said** under the block shows the installer's own output; from a
+terminal it is in the journal:
 
 ```bash
 grep "update:" ~/.local/state/romm-tender/backend.log | tail -n 20

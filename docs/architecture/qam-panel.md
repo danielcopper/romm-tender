@@ -691,18 +691,19 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
 plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                                      | On Main                                                           | Home                                                                                                   |
-| -------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Settings were reset                                            | text, backup path, Dismiss                                        | none — the card is the whole of it                                                                     |
-| Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                               | Settings › Connections, where the accounts are                                                         |
-| RetroDECK paths missing or unreadable                          | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
-| Steam answers for no notifications                             | warning card, no action                                           | none — the fix is outside the plugin                                                                   |
-| RetroArch `input_driver` is wrong                              | text, **Open Controller**                                         | Settings › Controller, which holds the Fix button                                                      |
-| Sync paused on the session budget                              | text, **Open Sync**                                               | Sync, which holds Restart Steam now and Resume                                                         |
-| An update was rolled back, or refused by its pre-install check | both versions, where the reason is, **Open Updates**, Dismiss     | Settings › Updates, which states the same fact whether or not the card was dismissed                   |
-| An update's installer stopped without updating                 | both versions, the installer's journal, **Open Updates**, Dismiss | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run         |
-| A newer Tender release is out                                  | both versions, **Open Updates**, Dismiss                          | Settings › Updates, which states both versions and holds the install, the check's switch and Check now |
-| Tender was updated, or went back                               | the version, Dismiss — and a toast, once                          | none — the card is the whole of it                                                                     |
+| Condition                                                      | On Main                                                                               | Home                                                                                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Settings were reset                                            | text, backup path, Dismiss                                                            | none — the card is the whole of it                                                                                                |
+| Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                                                   | Settings › Connections, where the accounts are                                                                                    |
+| RetroDECK paths missing or unreadable                          | warning card, no action                                                               | none — the fix is outside the plugin                                                                                              |
+| Steam answers for no notifications                             | warning card, no action                                                               | none — the fix is outside the plugin                                                                                              |
+| RetroArch `input_driver` is wrong                              | text, **Open Controller**                                                             | Settings › Controller, which holds the Fix button                                                                                 |
+| Sync paused on the session budget                              | text, **Open Sync**                                                                   | Sync, which holds Restart Steam now and Resume                                                                                    |
+| An update was rolled back, or refused by its pre-install check | both versions, where the reason is, **Open Updates**, Dismiss — and a toast, once     | Settings › Updates, which states the same fact whether or not the card was dismissed, and shows what the installer said           |
+| An update's installer stopped without updating                 | both versions, the installer's journal, **Open Updates**, Dismiss — and a toast, once | Settings › Updates, where the attempt stands as failed with Try again for the rest of that run, and shows what the installer said |
+| An install from Settings failed or was cancelled               | none — a toast, once                                                                  | Settings › Updates, where the attempt stands as failed with Try again                                                             |
+| A newer Tender release is out                                  | both versions, **Open Updates**, Dismiss                                              | Settings › Updates, which states both versions and holds the install, the check's switch and Check now                            |
+| Tender was updated, or went back                               | the version, Dismiss — and a toast, once                                              | none — the card is the whole of it                                                                                                |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -750,22 +751,22 @@ pre-install check left (`kind` `check`) takes the same notice with its own line 
 start, so nothing was changed.** and where the reason is — the installer's output, in its journal
 (`journalctl --user -u romm-tender-update`) or the terminal it was run in, since that version never ran as the service
 and wrote nothing to `backend.log` (`UPDATE_CHECK_FAILURE_REASON`, chosen by `updateFailureReason`); the failure block
-under Updates, whose title already says nothing was changed, names the same place without that clause
-(`UPDATE_CHECK_FAILURE_NOTE`). A record of a kind this version does not know — a later installer's, `kind` `unknown` on
-the wire — takes the notice with no cause named, only where the installer's output is (`UPDATE_UNKNOWN_FAILURE_REASON`).
-The notice stands while the installer's record does — which the backend reports only while the running version is the
-one the record names as still running ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes))
-— and its Dismiss is **per record**: it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the
-next record the installer writes raises it again, and the record going away — the next update whose new version answers
-removes it — takes it down too. Its home states the same failure in the card's amber frame (`cardFrame`,
-`bigpicture/UpdateCard.tsx`), whether or not it was dismissed (§ Settings). It **takes the place of the update notice**
-for the version that update tried: after a rollback that version is still newer than the running one, and the two cards
-side by side would call a release available and failed at once. So for as long as the record stands, that version raises
-no "is available" card, dismissed or not; a newer release raises one as usual (`failureTakesThePlaceOf` in
-`utils/updateOutcomeStore.ts`). The backend's answer (`get_update_outcome`) is read at panel load by a detached call,
-like the update notice's. A refusal by the pre-install check that the running backend sees while an install from
-Settings is under way is also pushed (`update_failure_recorded`, taken by `takePushedUpdateFailure`), so the notice is
-up at once rather than at the next panel load; it outranks a read still in flight, as the other pushes do.
+under Updates names no place at all, since the button under it shows the installer's output (§ Settings). A record of a
+kind this version does not know — a later installer's, `kind` `unknown` on the wire — takes the notice with no cause
+named, only where the installer's output is (`UPDATE_UNKNOWN_FAILURE_REASON`). The notice stands while the installer's
+record does — which the backend reports only while the running version is the one the record names as still running
+([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is **per record**:
+it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next record the installer writes raises
+it again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
+states the same failure in the card's amber frame (`cardFrame`, `bigpicture/UpdateCard.tsx`), whether or not it was
+dismissed (§ Settings). It **takes the place of the update notice** for the version that update tried: after a rollback
+that version is still newer than the running one, and the two cards side by side would call a release available and
+failed at once. So for as long as the record stands, that version raises no "is available" card, dismissed or not; a
+newer release raises one as usual (`failureTakesThePlaceOf` in `utils/updateOutcomeStore.ts`). The backend's answer
+(`get_update_outcome`) is read at panel load by a detached call, like the update notice's. A refusal by the pre-install
+check that the running backend sees while an install from Settings is under way is also pushed
+(`update_failure_recorded`, taken by `takePushedUpdateFailure`), so the notice is up at once rather than at the next
+panel load; it outranks a read still in flight, as the other pushes do.
 
 The notice that an **update's installer stopped without updating** is the rolled-back notice's sibling for the one
 failure the installer cannot report: it stopped Tender, then gave up and started the same version again. It uses the
@@ -782,8 +783,8 @@ as failed with **Try again** for the rest of that run.
 The update announcement is the one condition shown twice over, as a toast and as a card, both from that same read. The
 **toast** says **Tender updated to X** after an update, **Tender is back on X** after a return to an earlier release.
 The backend owes it once per process (`toast_owed`) and the panel acknowledges it after raising it, so a Steam restart
-that reloads the panel does not raise it again. It is the one toast that **waits until Steam can show it**; past a
-deadline it is raised anyway, and either way it is acknowledged only once raised. What it waits for, how long at most,
+that reloads the panel does not raise it again. Like the failure toast below, it **waits until Steam can show it**; past
+a deadline it is raised anyway, and either way it is acknowledged only once raised. What it waits for, how long at most,
 and why: `utils/steamReadyForToasts.ts`. The **card** is there because a toast raised as Steam comes up can be gone
 before it is seen: in windowed Big Picture on the desktop the toast's popup is laid out again with the rebuilt window
 after the JavaScript context reloads, and may show for a second or two or not at all. It says **Tender was updated to
@@ -793,6 +794,22 @@ down, and dismissing it before the toast was raised does not stop a toast alread
 process's memory ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)): a backend restart
 on the same version owes neither, so the card is gone then too. The store is filled before the toast's wait, so neither
 card is held back by it.
+
+**A failed update is announced by a toast too**, once, in Tender's name like every other toast: **Update to X failed.
+You are still on Y. Settings › Updates shows why.** for the installer's record and for an installer an earlier start
+found stopped, and for an attempt of this backend's the attempt's own reason — **Update to X failed. The download
+failed.**, or **Update to X was cancelled. A game was started. Nothing was changed.** for the two aborts titled
+cancelled (`utils/failedUpdateToast.ts`). The record and the stopped attempt stand across starts, so a flag held for one
+process would raise their toasts at every start: the backend owes each one per identity — the record's `rolled_back_at`,
+the stopped attempt's `started_at` — until the panel acknowledges that stamp, which it keeps in `kv_config`
+(`failure_toast_owed` on `get_update_outcome`, `toast_owed` on the stopped attempt;
+[UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)). A record whose card was dismissed
+owes none, and dismissing a stopped attempt removes it. An attempt of this backend's lives in this process only, so its
+toast is raised off the `update_install_progress` frame that turns failed and never off a read, which is what keeps a
+reloaded panel from raising it again; a refusal by the pre-install check is the one live failure that is not, because
+its record is pushed (`update_failure_recorded`) just before that frame and raises the toast — once, the record's. A
+push and a read of the same failure in one JavaScript context raise one toast between them. Where Steam has no
+notification store the cards and Settings › Updates are the only word of it, as for every toast.
 
 The three update notices stack in one order: the announcement card, then the rolled-back card, then the "is available"
 card — what this start runs on, then an update that did not go through, then a release still to be had. The announcement
@@ -1807,13 +1824,14 @@ that held it at Checking... asks again when the seven minutes are up.
 
 **A failure is the same block in amber**, drawn in the frame Main's update cards use (`cardFrame`,
 `bigpicture/UpdateCard.tsx`): a title, the step line with the step it stopped at marked failed — where the failure has
-one, as the table below says — and the reason, with where to read more for the installer's own failures; **Try again**
-is the button above it. A failed attempt of this backend's is titled **Update to X failed — nothing was changed.**, and
-one cancelled for a game — `game_started`, or `running_apps_unknown` where Tender could not check whether one runs —
-**Update to X was cancelled — nothing was changed.**; an installer that stopped where this panel did not see it start
-says **— you are still on Y.** as its card on Main does, since what it left behind is not known here. Its reason is its
-sentence in `INSTALL_FAILURE_SENTENCES`, which leaves out what the title says. The step it is marked at (`failedStep`,
-`utils/updateInstallView.ts`):
+one, as the table below says — and the reason; **Try again** is the button above it. A failed attempt of this backend's
+is titled **Update to X failed — nothing was changed.**, and one cancelled for a game — `game_started`, or
+`running_apps_unknown` where Tender could not check whether one runs — **Update to X was cancelled — nothing was
+changed.**; an installer that stopped where this panel did not see it start says **— you are still on Y.** as its card
+on Main does, since what it left behind is not known here. Its reason is its line in `INSTALL_FAILURE_NOTES`, which
+leaves out what the title says and names no journal; Main's card for a stopped installer takes the same line with the
+installer's journal named (`INSTALL_FAILURE_SENTENCES`), since no button stands beside it there. The step it is marked
+at (`failedStep`, `utils/updateInstallView.ts`):
 
 | Failure                                                         | Marked at                                                                                                                         |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -1834,13 +1852,35 @@ record at its own start, which refuses its socket
 Where no failed attempt of this backend's is shown, the installer's record takes the block: **Update to X failed —
 Tender went back to Y.** at Install for a rollback, **Update to X failed — nothing was changed.** at Check the new
 version for a refusal by the check, and the card's sentence with no step line for a kind this version does not know; the
-reason is the record's own line (`updateFailureReason`), except a refusal's, which leaves out what its title says
-(`UPDATE_CHECK_FAILURE_NOTE`). An attempt takes the block over a record, so a refusal by the check this backend saw
-while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows only while its version is
-the one offered, or until the first read answers, so the block does not leave under focus, and leaves once a read offers
-another version, or none; a record standing then takes the block. Check now reads whatever the switch says, and its own
-line under its button says only what the rows above do not: **GitHub gave no usable answer. Try again later.** and **The
-check failed.** — a release found is the Available row's to name, and so is none newer.
+reason is **The new version did not answer.** for a rollback (`UPDATE_ROLLBACK_NOTE`), **The new version did not
+start.** for a refusal (`UPDATE_CHECK_FAILURE_NOTE`), and none for the kind this version does not know — each names no
+place to read more, since the button under the block shows it. An attempt takes the block over a record, so a refusal by
+the check this backend saw while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows
+only while its version is the one offered, or until the first read answers, so the block does not leave under focus, and
+leaves once a read offers another version, or none; a record standing then takes the block. Check now reads whatever the
+switch says, and its own line under its button says only what the rows above do not: **GitHub gave no usable answer. Try
+again later.** and **The check failed.** — a release found is the Available row's to name, and so is none newer.
+
+**Show what the installer said** is a row of its own directly under a failed block, a `ButtonItem`, where the installer
+ran: an attempt that failed as `installer_stopped` or `new_version_does_not_start` (`INSTALLER_RAN`,
+`utils/updateInstallView.ts`) — a stopped attempt an earlier start found among them — and a record of every kind. It is
+not a control inside the block's field, which would change that stop; it comes and goes with the block, so it too leaves
+only when a read offers another version or none, never while an attempt is under way. A press asks the backend for that
+failure's output (`get_update_output`, with the record's `rolled_back_at`, or `null` for this backend's attempt) and
+opens a modal over the answer (`bigpicture/settings/UpdateOutputModal.tsx`) through the `showModal` and `ModalRoot` the
+panel already imports, so the start-up check has no new name to classify. The modal renders in Big Picture's document
+rather than the QAM view's; it reads no DOM global, so the two realms do not meet in it. It is titled **What the
+installer said — HH:MM**, the local time the installer's run began, and holds **The installer** and, after a rollback,
+**X, when it tried to start** — which run each is, and what the backend cuts and hides, is
+[UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and wrap, and
+the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines are cut
+into stops of twelve, each a `Focusable` declaring `focusableIfEmpty`, so a controller walks several hundred lines a
+screenful at a time and every line is reachable. A part that leaves lines out says how many above them. Where the
+journal holds no run it says why in a stop of its own instead of an empty box — **This output is no longer in the system
+journal — it keeps only the last hours of logs.** (`missing` `rotated`) or **This update was run in a terminal, so its
+output is there, not in the journal.** (`terminal`) — and **The installer's output could not be read.** where the
+journal or the call failed. **Close** ends it. Main's cards keep their journal sentence and **Open Updates**; the button
+is Settings' alone.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

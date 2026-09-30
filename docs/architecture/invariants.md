@@ -67,6 +67,20 @@ Format: **invariant** — tier — enforced by.
   path assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess slip past it.
   **Prompt-only**: only `UpdateInstallService` calls the adapter's `write` and `remove`
   ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes))
+- **No journal line reaches the panel with an admission token in it: every line read back from the journal is shown
+  through `domain/update_output.py::output_section`, which replaces each `token=` value with `[hidden]`** — test +
+  prompt-only — every start logs the address the panel is loaded from, admission token included, on stderr, which under
+  the service is this unit's journal (`host/runtime.py`; only the log file's formatter redacts it,
+  `host/logging_setup.py`). The window "Show what the installer said" shows the failed version's lines from that journal
+  after a rollback, so without the rule the panel would print a token — a dead one, since each process draws its own,
+  but a token all the same, on a screen that can be photographed or shared. The token is not known by value to the
+  reader (it belonged to another process), so the rule hides the parameter's value by pattern; the parameter's name is
+  held equal to `host/access.py::TOKEN_PARAM` by a test, since `domain/` may not import the host.
+  `tests/domain/test_update_output.py::TestHideToken` pins the address line's shape, a token among other parameters and
+  a word that merely ends in `token`; `tests/services/test_update_output.py::TestAfterARollback` and
+  `tests/contract/test_update_output.py` pin it end to end. **Prompt-only**: a new reader of journal text answers
+  through `output_section` or `hide_token`, never with the raw `JournalEntry.message`
+  ([UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes))
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
   from, and the live database is read without a file created or removed beside it, and with no write to one but a
