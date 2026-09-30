@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -25,6 +27,8 @@ from domain.update_install import (
     stopped_attempt,
 )
 from domain.update_outcome import UpdateFailure
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _DIRECTORIES = AppDirectories(
     config_dir="/home/u/.config/romm-tender",
@@ -107,6 +111,26 @@ class TestWaitOnTheWire:
     )
     def test_every_other_reason_is_its_name_alone(self, reason):
         assert Wait(reason, apps=("ignored",), frees_at=1.0).to_wire() == {"reason": reason.value}
+
+
+class TestTheWaitReasonsAgreeAcrossTheWire:
+    """The backend's ``WaitReason`` values and the frontend's ``UpdateWaitReason`` union are the same set.
+
+    The panel words each reason by its name, so one added on the backend alone
+    reaches a panel with no sentence for it. The frontend suite cannot see the
+    backend's enum and the backend suite does not read TypeScript, which is why
+    the check lives here and reads the other side's source directly.
+    """
+
+    @staticmethod
+    def _frontend_reasons() -> set[str]:
+        source = (_REPO_ROOT / "frontend" / "src" / "api" / "backend.ts").read_text(encoding="utf-8")
+        union = re.search(r"export type UpdateWaitReason =(.*?)\n\n", source, re.DOTALL)
+        assert union is not None, "UpdateWaitReason is not declared as a type alias in backend.ts any more"
+        return set(re.findall(r'"([a-z_]+)"', union.group(1)))
+
+    def test_both_sides_carry_the_same_reasons(self):
+        assert self._frontend_reasons() == {reason.value for reason in WaitReason}
 
 
 class TestAttemptOnTheWire:
