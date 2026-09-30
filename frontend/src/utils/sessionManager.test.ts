@@ -934,7 +934,7 @@ describe("sessionManager reload adoption", () => {
     stubRunningApp(999, "Other");
 
     // The attested app never surfaces, so the poll waits out its budget before
-    // concluding the session ended while the plugin was down.
+    // concluding the session ended while no panel was loaded to see it stop.
     await initDrainingAdoptionPoll();
 
     expect(readCrumb()).toBeNull();
@@ -1371,7 +1371,7 @@ describe("sessionManager stop scoping (#1621)", () => {
 
   // #1589: `record_session_start` RE-OPENS the durable marker instead of
   // extending it, so a second start for a live session discards the span already
-  // played. The observed symptom was a launch inside the plugin's startup window
+  // played. The observed symptom was a launch landing during the panel load
   // being stamped twice, ~1.3s apart, and measured short by the gap.
   it("does not re-open a live session when the same game reports a second start", async () => {
     await initDrainingAdoptionPoll();

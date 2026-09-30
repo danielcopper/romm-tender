@@ -59,8 +59,8 @@ interface QamFixture {
 }
 
 /**
- * The QAM shape the hook walks up through: the panel an entry's tab renders
- * into, inside the parent Steam marks with `ActiveTab`.
+ * The QAM shape the hook walks up through: the panel a Quick Access entry
+ * renders into, inside the parent Steam marks with `ActiveTab`.
  *
  * `tabPanelClassOn` says which element carries `TabGroupPanel`. On the device it
  * is the panel itself, measured — but `:has()` matches from any ancestor, so a

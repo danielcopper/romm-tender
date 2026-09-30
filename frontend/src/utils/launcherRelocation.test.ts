@@ -107,7 +107,8 @@ describe("relocateShortcutsToLauncher", () => {
     await expect(relocateShortcutsToLauncher()).resolves.toEqual({ status: "blocked" });
 
     // The shortcuts it never reached still name a launcher other than the bin
-    // root's, so the card must not say otherwise; the next start's reading hands them over again.
+    // root's, so the card must not say otherwise; the next panel load's reading
+    // hands them over again.
     expect(setExe.mock.calls.map(([appId]) => appId)).toEqual([10, 20]);
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("Steam said no"));
   });

@@ -120,8 +120,8 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # settings key. They have to answer while a migration is pending for the
     # same reason as the notice above: the frontend points the shortcuts at the
     # launcher at panel load, whatever page the panel happens to be showing,
-    # and a shortcut left naming a file inside the code root is the
-    # condition the relocation exists to end.
+    # and a shortcut of ours left naming a launcher other than the bin root's
+    # is the condition the relocation exists to end.
     "get_shortcut_relocation",
     # The release check: whether a newer release exists, the card's per-version
     # Dismiss, the daily-check switch and the reader's own Check now. None of
