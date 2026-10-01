@@ -16,6 +16,8 @@
  *     the step an installer that stopped is marked at
  *   - utils/connectionProbe.ts, which does not call a backend the installer
  *     is restarting failed until {@link INSTALLER_OVERDUE_MS} has passed
+ *   - utils/updateAvailableToast.ts, which holds the "is available" toast
+ *     while an attempt is under way
  *
  * Holds only what the event carries and that one moment: whether an install
  * is offered and what it waits for is a read (`getUpdateInstallState`), not a

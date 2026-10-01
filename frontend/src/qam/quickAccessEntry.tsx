@@ -34,8 +34,10 @@
  * 2. **Re-assert the position on every pass** ({@link keepLast}).
  * 3. **Anything bound to the menu's own window is bound from inside the menu's
  *    React tree**, so the remount re-binds it. Nothing in this module binds
- *    anything there, and neither does the glyph — it is static and reads no
- *    state; what does is inside effects of the pages the panel mounts. A
+ *    anything there, and neither does the glyph — the stores its update dot
+ *    reads are module state of the plugin's own window, not the menu's, and it
+ *    subscribes to them from the tree, through `useSyncExternalStore`; what
+ *    does bind there is inside effects of the pages the panel mounts. A
  *    listener attached here at module scope would be attached to a view that is
  *    already gone by the second remount.
  */
@@ -136,9 +138,8 @@ export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
     // The boundary wraps the panel and not the icon, because a boundary in the
     // strip has no panel mounted to render its fallback into — a throw there
     // takes the menu down whatever we do. That is the whole of the reason, and
-    // it would stand for an icon of any size: this one is static artwork that
-    // reads no state, but a busier one would be left unwrapped for the same
-    // reason.
+    // it is why the icon guards the one read it makes rather than relying on a
+    // boundary.
     panel: <PanelErrorBoundary>{plugin.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };

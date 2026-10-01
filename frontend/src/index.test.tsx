@@ -23,6 +23,8 @@ import {
   getUpdateOutcome,
   acknowledgeUpdateToast,
   acknowledgeUpdateAttemptToast,
+  acknowledgeUpdateAvailableToast,
+  getStoppedUpdateAttempt as readStoppedUpdateAttempt,
   getUpdateAttemptToast,
   getAllPlaytime,
   getAppIdRomIdMap,
@@ -1606,6 +1608,83 @@ describe("index.tsx — what the last update did, at panel load", () => {
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to read what the last update did"));
     expect(vi.mocked(toaster.toast).mock.calls.filter(([t]) => /updated to/.test(String(t.body)))).toHaveLength(0);
+  });
+});
+
+describe("index.tsx — the toast that a newer release is out, at panel load", () => {
+  const OWED = {
+    available: true,
+    newer: true,
+    latest_version: "1.4.0",
+    current_version: "1.3.0",
+    enabled: true,
+    installed_program: true,
+    toast_owed: true,
+  };
+  const availableToasts = () =>
+    vi.mocked(toaster.toast).mock.calls.filter(([t]) => /is available/.test(String(t.body)));
+
+  beforeEach(() => {
+    vi.stubGlobal("App", { GetServicesInitialized: () => true });
+    vi.stubGlobal("securitystore", { IsLockScreenActive: () => false });
+    vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
+    resetFailedUpdateToastsForTests();
+    resetUpdateNoticeStoreForTests();
+    resetUpdateOutcomeStoreForTests();
+    resetStoppedUpdateStoreForTests();
+    setUpdateInstallAttempt(null);
+    vi.mocked(toaster.toast).mockClear();
+    vi.mocked(getUpdateNotice).mockReset().mockResolvedValue(OWED);
+    vi.mocked(getUpdateOutcome).mockReset();
+    vi.mocked(readStoppedUpdateAttempt).mockReset().mockResolvedValue(null);
+    vi.mocked(acknowledgeUpdateAvailableToast).mockReset().mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    vi.mocked(getUpdateNotice).mockReset();
+    vi.mocked(getUpdateOutcome).mockReset();
+    vi.mocked(readStoppedUpdateAttempt).mockReset();
+  });
+
+  it("raises it once the three reads answered, and acknowledges it", async () => {
+    pluginFactory();
+
+    await vi.waitFor(() => expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledWith("1.4.0"));
+    expect(availableToasts()).toEqual([
+      [{ title: "Tender", body: "Tender 1.4.0 is available. Settings › Updates to install it." }],
+    ]);
+  });
+
+  it("raises none where the last read to answer names a failed update to that release", async () => {
+    let answerOutcome!: () => void;
+    vi.mocked(getUpdateOutcome).mockReturnValue(
+      new Promise((resolve) => {
+        answerOutcome = () =>
+          resolve({
+            announce_version: null,
+            announce_direction: null,
+            toast_owed: false,
+            failure: {
+              attempted_version: "1.4.0",
+              restored_version: "1.3.0",
+              rolled_back_at: "2026-09-25T10:15:00Z",
+              kind: "rollback",
+            },
+            failure_dismissed: true,
+            failure_toast_owed: false,
+          });
+      }),
+    );
+    pluginFactory();
+    await flush();
+    await flush();
+
+    answerOutcome();
+    await flush();
+    await flush();
+
+    expect(availableToasts()).toHaveLength(0);
+    expect(acknowledgeUpdateAvailableToast).not.toHaveBeenCalled();
   });
 });
 

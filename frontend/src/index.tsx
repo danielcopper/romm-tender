@@ -57,6 +57,7 @@ import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeS
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
 import { logToastFailure, toastOwedAttempt } from "./utils/failedUpdateToast";
+import { watchUpdateAvailableToast } from "./utils/updateAvailableToast";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -554,42 +555,43 @@ const tender = definePlugin(() => {
 
   // Whether a newer release is out. Detached, never awaited — why is at
   // fetchUpdateNotice.
-  detach(
-    (async () => {
-      try {
-        await fetchUpdateNotice();
-      } catch (e) {
-        logError(`Failed to check for a newer release: ${e}`);
-      }
-    })(),
-  );
+  const releaseRead = (async () => {
+    try {
+      await fetchUpdateNotice();
+    } catch (e) {
+      logError(`Failed to check for a newer release: ${e}`);
+    }
+  })();
+  detach(releaseRead);
 
   // What the last update did: fill the store the announcement card and the
   // rolled-back notice read, and raise the toasts still owed — the
   // announcement's for a version that moved, up or back, and the one for an
   // update that did not go through. Detached like the release check above.
-  detach(
-    (async () => {
-      try {
-        await fetchUpdateOutcome();
-      } catch (e) {
-        logError(`Failed to read what the last update did: ${e}`);
-      }
-    })(),
-  );
+  const outcomeRead = (async () => {
+    try {
+      await fetchUpdateOutcome();
+    } catch (e) {
+      logError(`Failed to read what the last update did: ${e}`);
+    }
+  })();
+  detach(outcomeRead);
 
   // An installer an earlier start ran that stopped without updating: the card
   // on Main says so, and its toast where still owed. Detached like the two
   // reads above.
-  detach(
-    (async () => {
-      try {
-        await fetchStoppedUpdateAttempt();
-      } catch (e) {
-        logError(`Failed to read whether the last update attempt stopped: ${e}`);
-      }
-    })(),
-  );
+  const stoppedRead = (async () => {
+    try {
+      await fetchStoppedUpdateAttempt();
+    } catch (e) {
+      logError(`Failed to read whether the last update attempt stopped: ${e}`);
+    }
+  })();
+  detach(stoppedRead);
+
+  // The toast that a newer release is out, once all three reads above have
+  // settled, and again as the stores they fill change.
+  watchUpdateAvailableToast([releaseRead, outcomeRead, stoppedRead]);
 
   // An install attempt of this backend's that failed while no panel was loaded
   // to take its frame: its toast is still owed.

@@ -9,7 +9,10 @@
  *   - the backend's own check while it runs (takePushedUpdateNotice), from `update_notice`
  *
  * Read by:
- *   - bigpicture/UpdateNotice.tsx, the card on Main, which shows nothing unless `available`
+ *   - utils/updateAvailableView.ts, whether the card on Main shows — for the
+ *     card itself, the dot on Tender's Quick Access glyph and the "is
+ *     available" toast
+ *   - utils/updateAvailableToast.ts, which raises that toast where `toastOwed`
  *   - bigpicture/settings/UpdatesSection.tsx through SettingsPage, the card's home
  *
  * `enabled` starts true because that is the default: an install that never

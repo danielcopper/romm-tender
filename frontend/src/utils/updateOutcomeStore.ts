@@ -17,8 +17,9 @@
  *   - bigpicture/UpdateAnnouncementNotice.tsx, the card on Main for a version
  *     that moved
  *   - bigpicture/UpdateFailureNotice.tsx, the rolled-back card on Main
- *   - bigpicture/UpdateNotice.tsx, which gives way to that card (see
- *     {@link failureTakesThePlaceOf})
+ *   - utils/updateAvailableView.ts, whose "is available" card gives way to
+ *     that card (see {@link failureTakesThePlaceOf}) — and with it the dot on
+ *     Tender's Quick Access glyph and the "is available" toast
  *   - bigpicture/settings/UpdatesSection.tsx through SettingsPage, which states
  *     the same fact whether or not the card was dismissed
  *

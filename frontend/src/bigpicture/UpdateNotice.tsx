@@ -1,8 +1,7 @@
 import { FC } from "react";
 import { UpdateCard } from "./UpdateCard";
 import { dismissUpdateForVersion, useUpdateNoticeState } from "../utils/updateNoticeStore";
-import { failureTakesThePlaceOf, useUpdateOutcomeState } from "../utils/updateOutcomeStore";
-import { stoppedAttemptTakesThePlaceOf, useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
+import { UPDATE_AVAILABLE_COLOR, useAvailableCardVersion } from "../utils/updateAvailableView";
 import { logError } from "../api/backend";
 
 /**
@@ -16,15 +15,8 @@ import { logError } from "../api/backend";
  */
 export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates }) => {
   const state = useUpdateNoticeState();
-  const outcome = useUpdateOutcomeState();
-  const stopped = useStoppedUpdateAttempt();
-
-  // `available` is decided by comparing a version, so it implies one; this is
-  // the type narrowing, not a second condition.
-  if (!state.available || state.latestVersion === null) return null;
-  if (failureTakesThePlaceOf(state.latestVersion, outcome)) return null;
-  if (stoppedAttemptTakesThePlaceOf(state.latestVersion, stopped)) return null;
-  const latestVersion = state.latestVersion;
+  const latestVersion = useAvailableCardVersion();
+  if (latestVersion === null) return null;
 
   const handleDismiss = () => {
     dismissUpdateForVersion(latestVersion).catch((e) => logError(`Failed to dismiss the update notice: ${e}`));
@@ -33,7 +25,7 @@ export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates 
   return (
     <UpdateCard
       testId="update-notice"
-      color="#3d9df6"
+      color={UPDATE_AVAILABLE_COLOR}
       wash="rgba(61, 157, 246, 0.15)"
       title={`Tender ${latestVersion} is available`}
       detail={`Installed version: ${state.currentVersion}.`}

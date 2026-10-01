@@ -17,8 +17,9 @@
  *
  * Read by:
  *   - bigpicture/UpdateStoppedNotice.tsx, the card on Main
- *   - bigpicture/UpdateNotice.tsx, which gives way to that card for the version
- *     it tried
+ *   - utils/updateAvailableView.ts, whose "is available" card gives way to
+ *     that card for the version it tried — and with it the dot on Tender's
+ *     Quick Access glyph and the "is available" toast
  *
  * Settings › Updates states it through the install's own read — the failed
  * attempt and Try again — so it is not read there.

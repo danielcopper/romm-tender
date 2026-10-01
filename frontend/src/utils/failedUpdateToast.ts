@@ -1,7 +1,9 @@
 /**
- * The toast for an update that failed: its words, and raising it once.
+ * The toast for an update that failed: its words, and raising it once — and
+ * raising any update toast once, which the "is available" toast
+ * (`updateAvailableToast.ts`) does through here too.
  *
- * Raised by:
+ * A failed update's toast is raised by:
  *   - updateOutcomeStore.ts, for the installer's record — at panel load where
  *     the backend still owes it, and for a refusal by the pre-install check
  *     the backend pushed
@@ -30,7 +32,7 @@ import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamCanShowToasts } from "./stea
 import { showToast } from "./toast";
 import { INSTALL_FAILURE_REASONS } from "./updateInstallView";
 
-/** What a toast raised in this JavaScript context was for, so a push and a read of the same failure raise one. */
+/** What a toast raised in this JavaScript context was for, so a push and a read of the same update raise one. */
 const raised = new Set<string>();
 
 /** Test seam: forget what was raised, as a fresh JavaScript context has it. */
@@ -55,20 +57,31 @@ export async function toastWhenSteamIsReady(body: string, what: string): Promise
 
 /**
  * Raise the toast *key* names, unless this context raised it already, then
- * *acknowledge* it to the backend. An acknowledgement that fails or is refused
+ * *acknowledge* it to the backend; *what* names it as {@link
+ * toastWhenSteamIsReady} takes it. An acknowledgement that fails or is refused
  * leaves the toast owed, and the next panel load raises it again — a repeat
  * rather than a loss; a refusal is logged.
  */
-export async function raiseFailureToastOnce(
+export async function raiseUpdateToastOnce(
   key: string,
   body: string,
+  what: string,
   acknowledge?: () => Promise<UpdateSettingWrite | void>,
 ): Promise<void> {
   if (raised.has(key)) return;
   raised.add(key);
-  await toastWhenSteamIsReady(body, "the failed update's toast");
+  await toastWhenSteamIsReady(body, what);
   const answer = await acknowledge?.();
   if (answer?.success === false) logWarn(`The toast for ${key} was not acknowledged: ${answer.reason}`);
+}
+
+/** {@link raiseUpdateToastOnce} for the toast of an update that failed. */
+export function raiseFailureToastOnce(
+  key: string,
+  body: string,
+  acknowledge?: () => Promise<UpdateSettingWrite | void>,
+): Promise<void> {
+  return raiseUpdateToastOnce(key, body, "the failed update's toast", acknowledge);
 }
 
 /** The toast for an update that did not go through and left *stillOn* in place: a record, or a stopped installer. */

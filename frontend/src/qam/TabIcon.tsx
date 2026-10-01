@@ -8,11 +8,16 @@
  * capsules with nothing marking the button positions. The one number of its own
  * is the default edge length, {@link GLYPH_SIZE}.
  *
- * **It does not animate, and that is a measurement rather than a taste.** It
- * shipped with a turning ring and a folding body, and the fold alone cost
- * roughly 29% of one core for as long as the menu was open — measured on the
- * device over CDP. An animation added back here costs that again:
- * `docs/architecture/qam-panel.md` holds the reading in full.
+ * It carries one piece of state: a dot, drawn while the "is available" card on
+ * Main would show (`utils/updateAvailableView.ts`). The stores are read through
+ * `useSyncExternalStore`, which subscribes on mount and lets go on unmount, so
+ * the glyph binds nothing that outlives the Quick Access view it renders in.
+ *
+ * **It does not animate, and that is a measurement rather than a taste** — the
+ * dot neither. It shipped with a turning ring and a folding body, and the fold
+ * alone cost roughly 29% of one core for as long as the menu was open —
+ * measured on the device over CDP. An animation added back here costs that
+ * again: `docs/architecture/qam-panel.md` holds the reading in full.
  *
  * **Two things about this are UNMEASURED**, and neither is guessed at here.
  * Whether `size` below lands at the 28 px it is aiming for: its `1.633em` is
@@ -25,6 +30,10 @@
 
 import type { FC } from "react";
 import { TAB_ICON_ARC, TAB_ICON_BARS, TAB_ICON_CENTRE, TAB_ICON_VIEW_BOX } from "./tabIconArt";
+import { useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
+import { UPDATE_AVAILABLE_COLOR, availableCardVersion } from "../utils/updateAvailableView";
+import { useUpdateNoticeState } from "../utils/updateNoticeStore";
+import { useUpdateOutcomeState } from "../utils/updateOutcomeStore";
 
 /**
  * Where the glyph's halves are defined, for the `<use>` that draws each one a
@@ -48,6 +57,29 @@ const BODY_ID = "tender-tab-icon-body";
  * glyph scaling with Steam's UI where a pixel length would pin it.
  */
 const GLYPH_SIZE = "1.633em";
+
+/**
+ * The dot, in the 200-unit square: in the top-right corner, clear of the arc
+ * and its arrowhead. How large it reads on the strip, and whether it sits where
+ * it should there, is a device question nothing here can answer.
+ */
+const DOT = { cx: 176, cy: 24, r: 22 } as const;
+
+/**
+ * Whether the dot shows. The strip has no error boundary — a throw here takes
+ * Steam's whole Quick Access menu down — so a store state the answer cannot be
+ * worked out from draws no dot rather than throwing.
+ */
+function useUpdateDot(): boolean {
+  const notice = useUpdateNoticeState();
+  const outcome = useUpdateOutcomeState();
+  const stopped = useStoppedUpdateAttempt();
+  try {
+    return availableCardVersion(notice, outcome, stopped) !== null;
+  } catch {
+    return false;
+  }
+}
 
 export interface TabIconProps {
   /** Edge length. See {@link GLYPH_SIZE} for what the default is and why. */
@@ -73,6 +105,7 @@ const Arc: FC = () => (
 
 export const TabIcon: FC<TabIconProps> = ({ size = GLYPH_SIZE }) => {
   const turn = `rotate(180 ${TAB_ICON_CENTRE})`;
+  const dot = useUpdateDot();
 
   return (
     <svg
@@ -103,6 +136,9 @@ export const TabIcon: FC<TabIconProps> = ({ size = GLYPH_SIZE }) => {
         </g>
         <use href={`#${BODY_ID}`} transform={turn} />
       </g>
+      {dot && (
+        <circle cx={DOT.cx} cy={DOT.cy} r={DOT.r} fill={UPDATE_AVAILABLE_COLOR} data-testid="tender-update-dot" />
+      )}
     </svg>
   );
 };
