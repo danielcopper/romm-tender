@@ -33,8 +33,8 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
   can end in "(2 optional missing)": files that same emulator lists as optional and that are not in place. Another
   emulator's optional files are not counted there.
 - **Amber** — some required files present: "1 of 2 files mGBA requires are in place", or "Beetle PSX has a BIOS image
-  for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start" where the console needs one
-  image per region and only some regions have theirs
+  for USA only — Japan and Europe discs will not start" where the console needs one image per region and only some
+  regions have theirs
 - **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
   one), or "Beetle PSX cannot start this system without a BIOS image" where the console itself will not start without
   one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
@@ -46,9 +46,9 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 Every one of those sentences is written in one place and both surfaces read it, so the game page and the Library page's
 platform pane can never word the same state differently. The pane has a heading to hang a short form on, so it shows
-that short form beside **BIOS FILES** — "Nothing required", "Readiness unknown", "1 / 2 required", "0 / 1 required ·
-North America only" — with the sentence under it. Both pages put the same library ratio behind the sentence, whichever
-state it is in, and neither prints one where your library holds nothing for the platform.
+that short form beside **BIOS FILES** — "Nothing required", "Readiness unknown", "1 / 2 required", "0 / 1 required · USA
+only" — with the sentence under it. Both pages put the same library ratio behind the sentence, whichever state it is in,
+and neither prints one where your library holds nothing for the platform.
 
 The sentence says what the dot says, and both are about the **required** files. Where the system has none, the dot is
 green because nothing required is missing — so the line says that the emulator you launch with requires none of the
@@ -104,11 +104,11 @@ but not worth a warning next to Play, so they live in the tab.
 
 The second: the **console itself** does not start without a BIOS image, and the image this game needs is not in place —
 none of the core's images at all ("Beetle PSX cannot start this system without a BIOS image"), or none for **this game's
-region** ("Beetle PSX has no BIOS image for this game's region (Japan)"; see
+region** ("Beetle PSX needs scph5500.bin to start this game (Japan) — it is missing"; see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)). It follows the same rule as the first:
-shown to be absent raises it, not-yet-established does not. So a PlayStation with only a North American image raises no
-badge on a game whose region the plugin cannot tell — the image may well be the one it needs — and none where whether
-the image is in place could not be checked.
+shown to be absent raises it, not-yet-established does not. So a PlayStation with only a USA image raises no badge on a
+game whose region the plugin cannot tell — the image may well be the one it needs — and none where whether the image is
+in place could not be checked.
 
 The badge is always **red**. It is a warning, not a status: the four-colour dot above belongs to the tab's readiness
 line, and every state that raises the badge is one where firmware the emulator needs is not there. Having one of three
@@ -156,9 +156,9 @@ the file applies to.
 
 A core's word for a file is the core's own, and the plugin prints it unchanged — with one exception. Where the file is
 one of the images a core needs **one of**, picked by the region of the disc, the line says which region it serves
-instead: _Beetle PSX (one of these · Japan (NTSC-J))_, or _SwanStation (one of these · every region)_ for an image that
-core starts every disc from. None of those images is _required_ on its own: each is what the discs of its own region
-start from, and the group, not the image, is the requirement. See
+instead: _Beetle PSX (for Japan discs)_, or _SwanStation (boots it for every region)_ for an image that core starts
+every disc from. None of those images is _required_ on its own: each is what the discs of its own region start from, and
+the group, not the image, is the requirement. See
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for what the line above the list does with
 them.
 
@@ -271,15 +271,15 @@ and the row you focus is the one the right-hand pane describes.
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
    Where no emulator can be pinned for the platform there is no name to print, and the line says "The launching
    emulator" instead. A console that needs one BIOS image per region counts that as one requirement: "1 / 1 required"
-   where every region has its image, "0 / 1 required · North America only" where only some do, with the line under it
-   naming the regions whose discs will not start — see
-   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
-   could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
-   [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
-   line 5: pick a different one from the chip button and the numbers, the dot and the file rows are answered for it, so
-   this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a **standalone** emulator
-   too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the plugin has no source for the
-   emulator, the files are shown against every emulator that declares them instead of against one
+   where every region has its image, "0 / 1 required · USA only" where only some do, with the line under it naming the
+   regions whose discs will not start — see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image).
+   A system with a required row the plugin could not judge — a declared folder it could not read, say — reads "Readiness
+   unknown" instead — see [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about
+   the emulator named on line 5: pick a different one from the chip button and the numbers, the dot and the file rows
+   are answered for it, so this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a
+   **standalone** emulator too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the
+   plugin has no source for the emulator, the files are shown against every emulator that declares them instead of
+   against one
 8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
@@ -293,12 +293,12 @@ and the row you focus is the one the right-hand pane describes.
    checked at all. Where the system needs **one image per region** (see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) each of those images is marked as one of
    the group: a green ✓ where it is there, a red ✗ where it is not — that region's discs have nothing to start from —
-   and a line under the row says which region it serves: _one of these · North America (NTSC-U) · ✓ in place_. A violet
-   ⊘ appears **beside** that mark — never in place of it — when your RomM library does not hold the file: a file you
-   already have keeps its green ✓, one you still need keeps its red ✗, and the ⊘ adds that the plugin cannot fetch it
-   for you. A legend under the table, one line per mark, names the marks that are actually on it. Anything else a row
-   has to say is printed **under** the row rather than in the column — that a file was provided by RetroDECK, that a
-   folder holds no image, that a location could not be read
+   and a line under the row says which region it serves: _for USA discs · ✓ in place_. A violet ⊘ appears **beside**
+   that mark — never in place of it — when your RomM library does not hold the file: a file you already have keeps its
+   green ✓, one you still need keeps its red ✗, and the ⊘ adds that the plugin cannot fetch it for you. A legend under
+   the table, one line per mark, names the marks that are actually on it. Anything else a row has to say is printed
+   **under** the row rather than in the column — that a file was provided by RetroDECK, that a folder holds no image,
+   that a location could not be read
 9. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
    under the row, in the emulator's own words so you can match one against its picker — or that it holds none, or that
    its contents could not be established. A plain file reads an em dash in this column, which must not be read as
@@ -508,19 +508,19 @@ core like SwanStation marks every PlayStation BIOS image _optional_ — which is
 one of them will do, and misleading about the console, which needs one of them.
 
 Where the plugin's emulator-knowledge library knows how a core picks its image, it states the requirement the way the
-core boots: **one of these images**, picked by the region of the disc. A PlayStation disc is Japanese (NTSC-J), North
-American (NTSC-U) or European (PAL), and Beetle PSX opens `scph5500.bin` for the first, `scph5501.bin` for the second
-and `scph5502.bin` for the third. SwanStation opens the image its settings name for the disc's region and, where that is
-not there, searches your BIOS folder for any image it knows — so one image it finds can serve every region.
+core boots: **one of these images**, picked by the region of the disc. A PlayStation disc is from Japan, the USA or
+Europe — the regions RomM names a game by, and the ones the BIOS descriptions name (_PS1 US BIOS_) — and Beetle PSX
+opens `scph5500.bin` for the first, `scph5501.bin` for the second and `scph5502.bin` for the third. SwanStation opens
+the image its settings name for the disc's region and, where that is not there, searches your BIOS folder for any image
+it knows — so one image it finds can serve every region.
 
 That group is **one requirement**, however many images it lists, and the page counts it once:
 
 - **Green — "The BIOS image SwanStation needs is in place for every region"**, _1 / 1 required_. Every region the core
   names has an image.
-- **Amber — "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will
-  not start"**, _0 / 1 required · North America only_. Some regions have their image and some are shown not to. It
-  counts as not met, because a Japanese disc will not start, and it is amber rather than red, because a North American
-  one will.
+- **Amber — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start"**, _0 / 1 required · USA
+  only_. Some regions have their image and some are shown not to. It counts as not met, because a Japanese disc will not
+  start, and it is amber rather than red, because a USA one will.
 - **Red — "Beetle PSX cannot start this system without a BIOS image"**. No image of the group is there.
 - **Grey — "Whether the BIOS image Beetle PSX needs is in place could not be checked"**. An image is there and could not
   be read, or a region could not be checked at all — a folder that would not list, say — beside regions that do have
@@ -529,19 +529,27 @@ That group is **one requirement**, however many images it lists, and the page co
   regions stay red. Where a region does have its image, one shown to have nothing makes the line amber whatever else
   could not be read. Where no image is there at all, the line is red whatever else could not be checked.
 
-Each image of the group is its own row, and says which region it serves: on the Library page's platform table _one of
-these · Japan (NTSC-J) · ✗ missing_ under the row, with a red ✗ or a green ✓ in its On disk column; on the game page
-_Beetle PSX (one of these · Japan (NTSC-J))_ on that emulator's line. A file the core also lists in its own description
-file under the same name is still one row, not two; an image the core found under another of the names it tries is a row
-of its own.
+Each image of the group is its own row, and says which region it serves: on the Library page's platform table _for Japan
+discs · ✗ missing_ under the row, with a red ✗ or a green ✓ in its On disk column; on the game page _Beetle PSX (for
+Japan discs)_ on that emulator's line. An image a core found by searching the BIOS folder is described _found in the
+BIOS folder_. A file the core also lists in its own description file under the same name is still one row, not two; an
+image the core found under another of the names it tries is a row of its own.
 
 **The game page answers for the game's own region.** RomM records which regions a game was released in, and the plugin
-maps them onto the console's: USA and Canada are NTSC-U, Japan is NTSC-J, Europe, the European countries and Australia
-are PAL. With a Japanese game and only a North American image the page reads red — _Beetle PSX has no BIOS image for
-this game's region (Japan)_ — and the **BIOS** badge appears beside Play. With a North American game it reads green —
-_The BIOS image Beetle PSX needs for this game's region (North America) is in place_. A game released in several regions
-is covered where any of them is. A game whose region does not map — World, Asia, Korea, Brazil, or none recorded — gets
-the platform's answer, and no badge for a group that is only partly covered: the image that is there may be the one it
+reads them as the console's disc regions: USA and Canada as USA, Japan as Japan, and Europe, the European countries and
+Australia as Europe. With a Japanese game and only a USA image the page reads red — _Beetle PSX needs scph5500.bin to
+start this game (Japan) — it is missing_ — and the **BIOS** badge appears beside Play. With a USA game it reads green —
+_The BIOS image Beetle PSX needs for this game's region (USA) is in place_. A game released in several regions is
+covered where any of them is, and where none is the sentence names the file of each. Where the image that covers the
+game is one the core found in the BIOS folder and starts every disc from, the page names it instead — _SwanStation
+starts this game with scph1001.bin — found in the BIOS folder, it serves every region_.
+
+Under that line the game page lists the group itself, above the file list, one line per region: _Beetle PSX needs one
+BIOS image per disc region:_, then _Japan · scph5500.bin · missing ← this game_, _USA · scph5501.bin · in place_,
+_Europe · scph5502.bin · missing_ — each with a dot, red for this game's region where it is missing and grey for another
+region's. An image that serves every region is that one line alone: _every region · scph1001.bin · in place_. The file
+list below stays complete. A game whose region does not map — World, Asia, Korea, Brazil, or none recorded — gets the
+platform's answer, and no badge for a group that is only partly covered: the image that is there may be the one it
 needs.
 
 **Download required** fetches the images of the regions that have none yet, where your RomM library holds them, and

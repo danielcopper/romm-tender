@@ -1293,23 +1293,23 @@ it, for the focused platform:
   here, and only in the state that said nothing was required; the shared sentence replaced that line and took the ratio
   with it, while the game page went on appending it to every sentence — one platform, two surfaces, two different
   amounts said about it. (A one-of group the launching emulator states is worded first — an `unmet` one always, any
-  other only where no plain required file is missing or withheld beside it — "`<emulator>` has a BIOS image for North
-  America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start", with "0 / 1 required · North America
-  only" as its status — off `one_of_groups` alone, so a group on any console reads the same way; region names and a
-  file's place in a group are `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and
-  the decline alike, tested before either inside that module, because the console asks for one of the images and no
-  count can state that; `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither
-  reaches `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.)
-  Then a table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library
-  (#164) — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and
-  a **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where
-  no record carries the row's name and the button counts the distinct files our records name underneath it
-  (`Delete (N)`): a folder is never a download, which says nothing about the files already inside one. Same authority as
-  `Delete BIOS`, described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS
-  behind a `ConfirmModal`. _N_ counts the fetchable rows the backend marks `fetch_for_required` — the rule the download
-  applies too, which takes the options of a one-of group's uncovered regions as well as the files the emulator requires.
-  **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on
-  PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
+  other only where no plain required file is missing or withheld beside it — "`<emulator>` has a BIOS image for USA only
+  — Japan and Europe discs will not start", with "0 / 1 required · USA only" as its status — off `one_of_groups` alone,
+  so a group on any console reads the same way; region names and a file's place in a group are
+  `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and the decline alike, tested
+  before either inside that module, because the console asks for one of the images and no count can state that;
+  `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
+  `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.) Then a
+  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
+  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
+  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
+  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
+  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
+  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
+  `ConfirmModal`. _N_ counts the fetchable rows the backend marks `fetch_for_required` — the rule the download applies
+  too, which takes the options of a one-of group's uncovered regions as well as the files the emulator requires. **All
+  three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2
+  all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
   `DialogButton` is still a focus stop, so the row stays walkable.
 
   **Every sentence names the emulator**, off the firmware payload's own `active_core_label` — the label half of the pick
@@ -1325,17 +1325,20 @@ it, for the focused platform:
   core, and the whole answer is keyed on the emulator's identity for that reason.
 
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
-  same words — a third set again, which is why it rides along on both rather than being folded in. **The ratio names
-  that set in its own words**, because the sentence in front of it counts another one and the numbers cannot say which
-  is which: `The one file DuckStation requires is in place (1/20 RomM library files)` states three correct numbers over
-  three sets, and the words are the only thing that tells them apart. The pair is the library's inventory for the
-  platform — what it holds, and how many of those the plugin found at their destination (CONTEXT.md → Library inventory)
-  — and the tail names no axis of its own deliberately: the ratio form carries that, and each candidate word for the
-  numerator was worse than none. Two of them are already on the screen under this sentence and stand for something else
-  there — `present` is the row marks and `on disk` the column beside them, both the row's own verdict rather than this
-  pair — and the third, `downloaded`, would read as a claim about who put the file there, which is more than
-  `local_count` counts: `on_server` rows whose file is at its destination, the field itself answering presence and
-  nothing more. Neither surface prints the ratio where the library holds nothing for the platform:
+  same words. Where the launching emulator states a one-of group, the tab lists it between that sentence and the file
+  list — "`<emulator>` needs one BIOS image per disc region:", then one line per option with its regions, file and state
+  and "← this game" on the game's own region (`groupBlock` in `frontend/src/utils/biosGroup.ts`) — and the file list
+  below it stays whole. The ratio is a third set again, which is why it rides along on both rather than being folded in.
+  **The ratio names that set in its own words**, because the sentence in front of it counts another one and the numbers
+  cannot say which is which: `The one file DuckStation requires is in place (1/20 RomM library files)` states three
+  correct numbers over three sets, and the words are the only thing that tells them apart. The pair is the library's
+  inventory for the platform — what it holds, and how many of those the plugin found at their destination (CONTEXT.md →
+  Library inventory) — and the tail names no axis of its own deliberately: the ratio form carries that, and each
+  candidate word for the numerator was worse than none. Two of them are already on the screen under this sentence and
+  stand for something else there — `present` is the row marks and `on disk` the column beside them, both the row's own
+  verdict rather than this pair — and the third, `downloaded`, would read as a claim about who put the file there, which
+  is more than `local_count` counts: `on_server` rows whose file is at its destination, the field itself answering
+  presence and nothing more. Neither surface prints the ratio where the library holds nothing for the platform:
   `(0/0 RomM library files)` counts a set that does not exist. What stops a surface writing one of these sentences back
   into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase
   the module builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts`
@@ -1412,9 +1415,10 @@ it, for the focused platform:
   four-way scheme drew grey "missing, not required" marks under a headline saying the console needs one of them. An
   option is drawn strong like a required row instead: green `✓` where it is there ("one of these, here"), red `✗` where
   it is not ("one of these, missing"), because the regions it serves have nothing else to boot. Which region that is
-  goes under the row — `one of these · Japan (NTSC-J) · ✗ missing`, or `every region` for an image its core starts every
-  disc from. The two amber states above are tested FIRST and are not displaced: an unestablished verdict is still `?`,
-  and an unestablished need is still amber.
+  goes under the row — `for Japan discs · ✗ missing`, or `for every region` for an image its core starts every disc
+  from. Regions are worded USA, Japan and Europe, as RomM and the BIOS descriptions name them. The two amber states
+  above are tested FIRST and are not displaced: an unestablished verdict is still `?`, and an unestablished need is
+  still amber.
 
   **Mark 2, `⊘` in violet, appears beside mark 1 wherever `on_server` is `false` and the declaration is a file** — the
   RomM library does not hold this one. A declared **folder** is excluded, and not as a special case: no library holds a

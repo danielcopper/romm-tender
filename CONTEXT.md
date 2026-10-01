@@ -652,10 +652,11 @@ words of the file-by-file reading this replaced.
 
 ### Console region (firmware)
 
-The region a console boots a disc as — `ntsc-j`, `ntsc-u`, `pal` in the resolver's spelling, worded Japan (NTSC-J),
-North America (NTSC-U) and Europe (PAL). It is the selector a **one-of group** is judged over. Not RomM's region, which
-is a release's name tag (`USA`, `Germany`, `World`) and maps onto at most one console region each; RomM's that map onto
-none leave the game's console region unknown.
+The region a console boots a disc as — `ntsc-j`, `ntsc-u`, `pal` in the resolver's spelling, worded to a user as Japan,
+USA and Europe, the names RomM gives a game's region and the emulators' BIOS descriptions use (`PS1 US BIOS`). It is the
+selector a **one-of group** is judged over. _Avoid_ in user-facing text: North America, NTSC-U, NTSC-J, PAL. Not RomM's
+region, which is a release's name tag (`USA`, `Germany`, `World`) and maps onto at most one console region each; RomM's
+that map onto none leave the game's console region unknown.
 
 ### System image (firmware): held / absent / unsettled / not demanded
 
