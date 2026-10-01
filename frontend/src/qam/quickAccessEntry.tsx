@@ -138,8 +138,8 @@ export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
     // The boundary wraps the panel and not the icon, because a boundary in the
     // strip has no panel mounted to render its fallback into — a throw there
     // takes the menu down whatever we do. That is the whole of the reason, and
-    // it is why the icon guards the one read it makes rather than relying on a
-    // boundary.
+    // it is why the icon guards the answer it works out for its dot rather than
+    // relying on a boundary.
     panel: <PanelErrorBoundary>{plugin.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };

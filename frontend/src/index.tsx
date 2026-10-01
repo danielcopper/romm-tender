@@ -609,7 +609,8 @@ const tender = definePlugin(() => {
   detach(installRead);
 
   // The toast that a newer release is out, once the four reads above have
-  // settled, and again as the stores they fill change.
+  // answered — none in this context where one of the last three failed — and
+  // again as the stores they fill change.
   watchUpdateAvailableToast(releaseRead, [outcomeRead, stoppedRead, installRead]);
 
   // An install attempt of this backend's that failed while no panel was loaded

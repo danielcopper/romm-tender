@@ -13,8 +13,8 @@
  * `useSyncExternalStore`, which subscribes on mount and lets go on unmount, so
  * the glyph binds nothing that outlives the Quick Access view it renders in.
  *
- * **It does not animate, and that is a measurement rather than a taste** — the
- * dot neither. It shipped with a turning ring and a folding body, and the fold
+ * **It does not animate, nor does the dot, and that is a measurement rather than
+ * a taste**. It shipped with a turning ring and a folding body, and the fold
  * alone cost roughly 29% of one core for as long as the menu was open —
  * measured on the device over CDP. An animation added back here costs that
  * again: `docs/architecture/qam-panel.md` holds the reading in full.

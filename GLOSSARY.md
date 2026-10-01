@@ -322,8 +322,10 @@ Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): t
 (platform_slug → display_name cache), `save_directories_recorded`, the marker that the one-time pass recording the
 installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
 with no ROM failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
-and `last_run_version`, the version the previous start ran as (see _Rolled-back update_ below). The schema version is
-**not** a `kv_config` key — it lives in `PRAGMA user_version`.
+`update_available_toasted_version`, the release the user has been told about, `last_run_version`, the version the
+previous start ran as (see _Rolled-back update_ below), and `update_failure_toasted_at` and `update_stopped_toasted_at`,
+the failed update and the stopped attempt whose toasts were raised (see _Failed-update toast_ below). The schema version
+is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.

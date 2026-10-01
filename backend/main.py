@@ -749,9 +749,9 @@ class Endpoints:
         Answers everything :meth:`get_update_notice` does, plus ``reached`` —
         whether the release read answered at all, which is what lets the Settings
         section tell "nothing newer" from "nothing found out". A dismissed card
-        comes back. A newer release a read that answered shows counts as told,
-        so no toast follows for it. The check's switch does not hold this back:
-        it governs only what the program asks by itself.
+        comes back. A newer release this read found counts as told, so no toast
+        follows for it. The check's switch does not hold this back: it governs
+        only what the program asks by itself.
         """
         return await self._services.update_check_service.check_for_update_now()
 

@@ -3,7 +3,7 @@
  * while the "is available" card would show, and no motion.
  *
  * happy-dom performs no layout and runs no animation, so what these cases
- * establish is what is in the tree — which is all the animation case needs,
+ * establish is what is in the tree — which is all the two motion cases need,
  * because an animation that is not authored cannot run. Whether the strip draws
  * the glyph at the size and in the colour it asks for is a device question, and
  * nothing in this suite reaches it.

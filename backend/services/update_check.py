@@ -158,9 +158,9 @@ class UpdateCheckService:
 
         The dismissal is forgotten because the button's second job is bringing
         a waved-away card back. The switch governs only the reads this program
-        makes by itself; a press is the user asking. A newer release a read that
-        answered shows is recorded as told: the user has just read it, so no
-        toast follows for it.
+        makes by itself; a press is the user asking. A newer release this read
+        found counts as told: the user has just read it, so no toast follows
+        for it.
         """
         # The dismissal this press is undoing is the one standing when it was
         # made; a Dismiss pressed while it waited for the lock is newer intent.

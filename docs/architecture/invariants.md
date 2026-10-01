@@ -510,10 +510,10 @@ Format: **invariant** — tier — enforced by.
   window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet
   and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`,
   and `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
-  there either: its update dot reads stores that are module state of the plugin's own window, and subscribes to them
-  from the tree through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is
-  the game page's and not the menu's.) One added at module scope would work perfectly until the first
-  Gaming-Mode-to-Desktop switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
+  there: its update dot reads stores that are module state of the plugin's own window, and subscribes to them from the
+  tree through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game
+  page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
+  switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts` pins the half
   that is decidable without Steam: the factory predicate in both directions, that two matching factories answer as no

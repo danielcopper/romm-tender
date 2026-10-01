@@ -137,16 +137,16 @@ it and what it would have added is simply unknown. On a handheld, that is not a 
 gets to make. `TabIcon.test.tsx` fails if any of SMIL's animation elements comes back, or a `<style>`, a `class` a
 stylesheet could reach, or an inline `animation` or `transition` — with the update dot drawn — because the cost is
 invisible to every other check here. It can see nothing else: a rAF loop, or a stylesheet elsewhere that targets the
-glyph's elements by tag, would pass it.
+glyph's elements by tag, id or attribute, would pass it.
 
 **The update dot** is the one thing on the glyph that reads state: a filled circle in the top-right corner, clear of the
 arc, in the "is available" card's blue (`UPDATE_AVAILABLE_COLOR`), drawn while that card would show on Main — the same
 answer, `availableCardVersion` in `utils/updateAvailableView.ts`, so the two cannot disagree (§ Notices and homes). It
-is static like the rest. The strip has no error boundary (§ The boundary), so a store state the answer cannot be worked
-out from draws no dot rather than throwing; with every store as it starts — the start-up failure page's case — there is
-none. Its size and place on the strip are checked on the device; nothing in the suite can see them.
+does not move either. The strip has no error boundary (§ The boundary), so a store state the answer cannot be worked out
+from draws no dot rather than throwing; with every store as it starts — the start-up failure page's case — there is
+none. Its size and place on the strip are a device question; nothing in the suite can see them.
 
-Two things about it are unmeasured, and neither is guessed at:
+Two things about the glyph are unmeasured, and neither is guessed at:
 
 - **Whether it lands at the 28 px it asks for.** It asks in em rather than in pixels so it scales with Steam's UI, and
   the `1.633em` it asks with is scaled off a measurement rather than arithmetic: the `1.4em` it used to carry drew a box
@@ -744,31 +744,43 @@ the playtime notice's sit in Steam's `Field` with its children below, because th
 update notice's Dismiss is **per version**: it records the version the card names (`update_notice_dismissed_version`),
 so the next release raises the card again, and **Check now** in its home forgets it. The home states the versions and
 holds the install, the check's switch and Check now, and to a run from a checkout it shows a line naming this a
-development build in place of the install. The card's condition is `available` on the backend's answer and nothing else
-— a newer release with its tarball, a valid digest and its checksum file attached, not the dismissed version, whatever
-the check's switch says: the switch governs only what the program asks GitHub by itself, so a release Check now found is
-announced and offered to install with it off too. The answer is fetched at panel load by a detached call nothing awaits
-(the store's `fetchUpdateNotice` says why), rewritten by Dismiss, the switch and Check now, and replaced by the notice
-the backend pushes (`update_notice`) when its own check while it runs finds a different answer, so the card and its home
-follow without a reload.
+development build in place of the install. The card's condition is `availableCardVersion`
+(`utils/updateAvailableView.ts`): `available` on the backend's answer — a newer release with its tarball, a valid digest
+and its checksum file attached, not the dismissed version, whatever the check's switch says — unless a failed update to
+that release takes the card's place (below). The switch governs only what the program asks GitHub by itself, so a
+release Check now found is announced and offered to install with it off too. The answer is fetched at panel load by a
+detached call nothing awaits (the store's `fetchUpdateNotice` says why), rewritten by Dismiss, the switch and Check now,
+and replaced by the notice the backend pushes (`update_notice`) when its own check while it runs finds a different
+answer, so the card and its home follow without a reload.
 
-**The card has two companions that follow it**, both off the one answer `availableCardVersion`
-(`utils/updateAvailableView.ts`) the card itself renders from: the dot on Tender's glyph in the Quick Access strip (§
-The glyph), which shows exactly while the card would, the switch off included, and a **toast**, **Tender X is available.
-Settings › Updates to install it.**, in Tender's name, which does nothing when tapped (`utils/updateAvailableToast.ts`).
-The toast is owed by the backend once per version, across every start: `toast_owed` on the notice holds while the card
-is up, the daily check's switch is on and that version is not the one recorded as told
-(`update_available_toasted_version`, in `kv_config`;
-[UpdateCheckService notes](backend-architecture.md#updatecheckservice-notes)). The panel acknowledges it after raising
-it, and a release Check now found counts as told, since the user has just read it. Beyond `toast_owed` the panel holds
-it back in three cases. It waits until all three reads made at panel load — the notice, what the last update did and a
-stopped attempt — have settled, answered or failed, so a failure record for the same version that answers last still
-suppresses it rather than being overtaken. It is not raised while an install attempt is under way, and is asked again
-when the attempt's frame changes, so a failed attempt raises it then. And it re-reads the switch from the store, since
-`toast_owed` is the backend's answer as last read. It is asked again whenever the notice, the outcome, a stopped attempt
-or the install attempt changes, so a pushed `update_notice` raises it without a reload. Like the other update toasts it
-waits until Steam can show it (`utils/steamReadyForToasts.ts`); a running game does not hold it back. A push and a read
-of the same version in one JavaScript context raise one toast between them.
+**The card has two companions that follow it**, both off the one answer `availableCardVersion` the card itself renders
+from: the dot on Tender's glyph in the Quick Access strip ([The glyph](#the-glyph)), which shows exactly while the card
+would, the switch off included, and a **toast**, **Tender X is available. Settings › Updates to install it.**, in
+Tender's name, which does nothing when tapped (`utils/updateAvailableToast.ts`). The backend owes the toast once per
+version, across every start — `toast_owed` on the notice; when it holds, and what records a version as told, is
+[UpdateCheckService notes](backend-architecture.md#updatecheckservice-notes) — and the panel acknowledges it once
+raised. Beyond `toast_owed` and the card's own answer, the panel holds it back in five cases:
+
+- **Until the reads made at panel load have answered.** The notice only has to settle; what the last update did, a
+  stopped attempt and the install's state have to have succeeded, so a failure record for the same version that answers
+  last still suppresses it rather than being overtaken. Where one of those three failed, this JavaScript context raises
+  none at all and the toast stays owed for the next load: what was not read might be what holds it back.
+- **While an update is being installed**, from the press of Install until the attempt has ended — before its first frame
+  too, while the press waits for its answer and once the backend accepted it. An attempt under way when the JavaScript
+  context was replaced is known at load from the install's state read (`updateInstallStore.ts`'s
+  `seedUpdateInstallAttempt`), not only from its next frame. Once an attempt failed, it is raised where nothing else
+  holds it back.
+- **While Steam's notification lookups are missing** (`notificationsUnavailable`), since a toast raised then is never
+  seen and its acknowledgement would take it away for good.
+- **While the switch is off as the store holds it**, since `toast_owed` is the backend's answer as last read.
+- **Until Steam can show it**, as the other update toasts wait (`utils/steamReadyForToasts.ts`); a running game does not
+  hold it back. Once Steam can, it is asked again: where the card was dismissed, the switch went off, Install was
+  pressed or a newer release arrived meanwhile, it is neither raised nor acknowledged, and a later change can ask for it
+  again.
+
+It is asked again whenever the notice, the outcome, a stopped attempt or the install attempt changes, so a pushed
+`update_notice` or the end of an attempt raises it without a reload. A push and a read of the same version in one
+JavaScript context raise one toast between them.
 
 The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is. For a
 rollback that is Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was

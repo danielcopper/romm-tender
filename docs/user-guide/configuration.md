@@ -287,12 +287,15 @@ names the version you have — a check made while the panel is open brings it up
 you to **Settings › Updates**, where you can install it, and **Dismiss** puts the notice away for that version only —
 the next release brings it back.
 
-Tender also says so in a message that goes by itself, once Steam has finished starting, so you hear of it without
-opening the panel: **Tender X is available. Settings › Updates to install it.** Tapping it does nothing. It says it once
-for each release: reopening the panel, restarting Steam or restarting Tender does not bring it back, and a release you
-found yourself with **Check now** does not say it at all. It says nothing while the daily check is switched off, for a
-release whose notice you dismissed, or while a failed update to that release is shown (see below). While an update is
-being installed it waits, and comes once the install has ended without updating.
+Tender also says so in a message that goes by itself — once Steam has finished starting, or as soon as a check while
+Tender runs finds the release — so you hear of it without opening the panel: **Tender X is available. Settings › Updates
+to install it.** Tapping it does nothing. It says it once for each release: reopening the panel, restarting Steam or
+restarting Tender does not bring it back, and a release you found yourself with **Check now** does not say it at all. It
+says nothing while the daily check is switched off, for a release whose notice you dismissed, or while the main panel
+does not call that release available because an update to it failed (see below) — after the installer went back or
+refused the new version, that holds even once you dismissed the failure's notice. From the moment you press **Install**
+until the install has ended it waits; if the update did not go through, it comes then, unless one of the above holds it
+back.
 
 While the notice is on the main panel, a small blue dot sits on Tender's icon in the Quick Access menu — with the daily
 check switched off too. It goes when you dismiss the notice, and once the update is installed.
