@@ -278,7 +278,7 @@ and the row you focus is the one the right-hand pane describes.
    emulator" instead. A console that needs one BIOS image per region is counted in regions rather than files: "3 / 3
    regions" where every region has its image, "1 / 3 regions · USA only" where only some do, with the line under it
    naming the regions whose discs will not start, and "0 / 3 regions" where none does. An emulator that requires plain
-   files as well counts those first and the regions after them — "1 / 1 required · 1 / 3 regions · USA only" — see
+   files as well counts those first and the regions after them — see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
    could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
    [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
@@ -535,11 +535,12 @@ regions — how many of the regions the core names have their image — rather t
   and no region has its image, the line is grey even when other regions are shown to have nothing; the rows of those
   regions stay red. Where a region does have its image, one shown to have nothing makes the line amber whatever else
   could not be read. Where no image is there at all, the line is red whatever else could not be checked. The pane's
-  short form stays "Readiness unknown" here.
+  short form stays "Readiness unknown" here, unless a missing plain file words the line (below).
 
 A region nobody could check is never counted as having its image: it is in the second number of the region count and not
 in the first. Where the emulator requires plain files beside the group, those are counted first, on their own, and the
-regions after them — "1 / 1 required · 1 / 3 regions · USA only".
+regions after them — "1 / 1 required · 1 / 3 regions · USA only". A group nothing could check is not counted there at
+all, so it never reads like one with no image in place: "0 / 1 required · regions not checked".
 
 Each image of the group is its own row, and says which region it serves: on the Library page's platform table _for Japan
 discs · ✗ missing_ under the row, with a red ✗ or a green ✓ in its On disk column; on the game page _Beetle PSX (for

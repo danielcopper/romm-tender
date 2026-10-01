@@ -293,6 +293,26 @@ describe("a one-of group", () => {
     expect(statusOf(unread("unmet", []))).toBe("0 / 2 regions");
   });
 
+  it("says a group nothing could check was not checked, never a count that reads as unmet", () => {
+    // A plain file is missing, so the plain files word the line; the group
+    // beside them could not be checked and must not read "0 / 3 regions".
+    const both = summary(
+      {
+        required_count: 2,
+        required_downloaded: 0,
+        required_withheld: 1,
+        one_of_groups: [
+          { ...group("unknown", [], []), unchecked: ["north", "south", "east"], regions: ["north", "south", "east"] },
+        ],
+      },
+      "unknown",
+    );
+    expect(both).toEqual({
+      status: "0 / 1 required · regions not checked",
+      sentence: "The one file SwanStation requires is not in place",
+    });
+  });
+
   it("counts the plain required files apart from the group's regions", () => {
     const both = summary(
       {
@@ -497,7 +517,7 @@ describe("a one-of group", () => {
       "unknown",
     );
     expect(both).toEqual({
-      status: "0 / 1 required · 0 / 1 regions",
+      status: "0 / 1 required · regions not checked",
       sentence: "The one file SwanStation requires is not in place",
     });
   });

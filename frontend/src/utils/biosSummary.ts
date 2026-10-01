@@ -156,6 +156,7 @@ const GROUP_NO_IMAGE_FOR = "and there is no BIOS image for";
 
 const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
 const STATUS_READINESS_UNKNOWN = "Readiness unknown";
+const STATUS_REGIONS_NOT_CHECKED = "regions not checked";
 const STATUS_REQUIREMENT_UNKNOWN = "Requirement unknown";
 const STATUS_NOTHING_REQUIRED = "Nothing required";
 
@@ -202,6 +203,7 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   `"${ROLE_MID}"`,
   STATUS_NEEDS_IMAGE,
   STATUS_READINESS_UNKNOWN,
+  STATUS_REGIONS_NOT_CHECKED,
   STATUS_REQUIREMENT_UNKNOWN,
   STATUS_NOTHING_REQUIRED,
 ];
@@ -320,8 +322,14 @@ function plainRequirements(
  * only". The first number is the regions an option in place serves
  * (`covered`), so a region nobody checked is in the second number and never in
  * the first; the tag names the covered ones where the group is partly met.
+ *
+ * A group whose verdict nothing could settle (`unknown`) gets no count: "0 / 3
+ * regions" is what an unmet group reads, and the two must not look alike. It
+ * reaches a status only beside plain files, since alone it words the line as
+ * `Readiness unknown`.
  */
 function regionCount(group: OneOfGroupVerdict): string {
+  if (group.state === "unknown") return STATUS_REGIONS_NOT_CHECKED;
   const counted = `${group.covered.length} / ${group.regions.length} regions`;
   return group.state === "partial" ? `${counted} · ${regionNames(group.covered)} only` : counted;
 }

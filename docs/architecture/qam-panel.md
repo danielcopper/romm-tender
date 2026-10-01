@@ -1298,10 +1298,12 @@ it, for the focused platform:
   so a group on any console reads the same way. A group's status counts REGIONS: the first number is the regions an
   option in place serves (`covered`), so a region nobody checked is in the second number and never the first; where the
   emulator also requires plain files the status is "`X / Y required · A / B regions`", the plain files alone in `X / Y`,
-  and the same plain counts feed the sentence; an `unknown` group keeps "Readiness unknown"; region names and a file's
-  place in a group are `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and the
-  decline alike, tested before either inside that module, because the console asks for one of the images and no count
-  can state that; `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither
+  and the same plain counts feed the sentence; an `unknown` group reads "Readiness unknown" where it words the line, and
+  where a missing plain file words it instead the status is that count followed by "regions not checked"
+  ("`0 / 1 required · regions not checked`") — never "`0 / N regions`", which is an unmet group's; region names and a
+  file's place in a group are `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and
+  the decline alike, tested before either inside that module, because the console asks for one of the images and no
+  count can state that; `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither
   reaches `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.)
   Then a table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library
   (#164) — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and
