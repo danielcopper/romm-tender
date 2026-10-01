@@ -58,6 +58,16 @@
       "automerge": true
     },
     {
+      "description": "Shared reusable workflows (danielcopper/.github) are pinned to a commit of its main branch (`# main`). Renovate proposes the new commit, but every bump gets human review: the shared check can block every pull request here. Overrides the digest auto-merge in the rule above.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepTypes": [
+        "workflow"
+      ],
+      "automerge": false
+    },
+    {
       "description": "Toolchain versions (node, pnpm, python, uv, deno) are pinned and cross-file-coupled: each appears in mise.toml AND in frontend/package.json's packageManager and/or the workflow setup-* version inputs, and all copies must match (python = docs/contributing/dependency-management.md says why, uv pinned for lock reproducibility, pnpm = packageManager, node = CI). Disabled by NAME across every manager so a bot bump can't desync one copy. The setup-* action SHAs themselves stay updatable (different dep names).",
       "matchDepNames": [
         "node",

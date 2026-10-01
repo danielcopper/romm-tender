@@ -45,6 +45,7 @@ maintenance, pins and replacements are exempt, and GitHub Actions updates carry 
 | npm / GitHub-Actions minor / patch / digest        | ✅                              |
 | Monthly lock-file maintenance (transitive refresh) | ✅                              |
 | **Any major** (any ecosystem)                      | ❌ → human review               |
+| **Shared workflows** (`danielcopper/.github`)      | ❌ → human review               |
 | **Toolchain** (`node`/`pnpm`/`python`/`uv`/`deno`) | ❌ not even proposed (excluded) |
 | **Raising a deliberate ceiling** (see below)       | ❌ not even proposed            |
 
