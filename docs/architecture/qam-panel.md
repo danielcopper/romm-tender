@@ -1876,7 +1876,7 @@ that failure (`get_update_output`, with the record's `rolled_back_at`, or `null`
 press while that answer is on its way opens nothing. The modal renders in Big Picture's document rather than the QAM
 view's; it reads no DOM global, so the two realms do not meet in it. Where it shows output it is titled **What the
 installer said — HH:MM**, the local time the installer's run began, and holds **The installer** and, after a rollback,
-**X, when it tried to start** — which run each is, and what the backend cuts and hides, is
+**X, when it tried to start** — which run each is, and what the backend cuts, hides and folds, is
 [UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and wrap, each
 in the colour its start gives it (`outputLineColour`) — a step that failed (`[!!]`) and the installer's own failure
 lines (`install.sh:`) amber, a step done (`[ok]`) green, a step under way (`[..]`) muted, anything else the text colour

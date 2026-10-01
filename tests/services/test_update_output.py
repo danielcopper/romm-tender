@@ -83,10 +83,7 @@ class TestAfterARollback:
             "success": True,
             "ran_at": _AT - 120,
             "installer": {
-                "lines": [
-                    "[..] Service      waiting for 1.0.32 to answer",
-                    "[!!] Service      update to 1.0.32 failed; back on 1.0.31",
-                ],
+                "lines": ["[!!] Service      update to 1.0.32 failed; back on 1.0.31"],
                 "earlier": 0,
             },
             "new_version": {
@@ -148,7 +145,7 @@ class TestAPreInstallCheckRefusal:
 
         answer = await service.get_update_output(_STAMP)
 
-        assert answer["installer"]["lines"][0] == "[..] Service      waiting for 1.0.32 to answer"
+        assert answer["installer"]["lines"] == ["[!!] Service      update to 1.0.32 failed; back on 1.0.31"]
         assert answer["new_version"] is None
         assert all(read[0] == INSTALLER_UNIT for read in journal.reads)
 

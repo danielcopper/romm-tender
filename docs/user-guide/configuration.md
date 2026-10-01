@@ -405,8 +405,10 @@ the answer; pressing the button again meanwhile opens no second one. Where there
 the installer ran, and **The installer** shows that installer's output — the run that belongs to this failure, not the
 latest one if the installer has run again since. After the installer went back to the version you had, a second part,
 **X, when it tried to start**, shows what the new version printed between the installer starting and going back — where
-the reason usually is, since the installer itself only says that the new version did not answer. Each part shows its
-last 300 lines and says how many earlier ones it leaves out, and a line longer than 500 characters is cut. Tender's own
+the reason usually is, since the installer itself only says that the new version did not answer. The installer prints a
+line each time one of its steps — Checking, Installing, Service, Steam — gets further, and the window shows each step
+once, in its last line: how it ended, or for the step the installer stopped in, how far it got. Each part shows its last
+300 lines and says how many earlier ones it leaves out, and a line longer than 500 characters is cut. Tender's own
 address, which the new version prints with the key that lets the panel in, shows that key as `[hidden]`. A step that
 failed and the installer's own failure lines are amber, a step done green, and a step under way grey. Move down through
 the lines with the D-pad, and press **Close** to go back.

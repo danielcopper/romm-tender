@@ -20,6 +20,7 @@ from domain.update_output import (
     SERVICE_UNIT,
     OutputGap,
     first_run_from,
+    installer_section,
     last_invocation,
     output_section,
     run_around,
@@ -152,7 +153,7 @@ def _found(run: tuple[JournalEntry, ...], new_version: tuple[JournalEntry, ...] 
     return {
         "success": True,
         "ran_at": run[0].at,
-        "installer": output_section(run).to_wire(),
+        "installer": installer_section(run).to_wire(),
         "new_version": output_section(new_version).to_wire() if new_version is not None else None,
         "missing": None,
     }

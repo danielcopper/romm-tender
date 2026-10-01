@@ -41,10 +41,7 @@ async def test_after_a_rollback_both_runs_are_answered_with_the_token_hidden(har
     answer = await harness.endpoints.get_update_output(_STAMP)
 
     assert answer["success"] is True
-    assert answer["installer"]["lines"] == [
-        "[..] Service      waiting for 99.0.0 to answer",
-        "[!!] Service      update to 99.0.0 failed",
-    ]
+    assert answer["installer"]["lines"] == ["[!!] Service      update to 99.0.0 failed"]
     assert answer["new_version"] == {
         "lines": ["host: load the panel from http://127.0.0.1:1/index.js?token=[hidden]"],
         "earlier": 0,
