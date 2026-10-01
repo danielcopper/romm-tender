@@ -1,0 +1,35 @@
+name: Planned change
+description: Propose or take on a change
+assignees: ["danielcopper"]
+body:
+  - type: textarea
+    id: today
+    attributes:
+      label: Today
+      description: How it works today and what is missing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: wanted
+    attributes:
+      label: Wanted
+      description: What should change, for users or in the code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: to_decide
+    attributes:
+      label: To decide
+      description: Open questions. They are settled before implementation; the section is then renamed Decisions.
+    validations:
+      required: false
+
+  - type: textarea
+    id: done_when
+    attributes:
+      label: Done when
+      description: Observable criteria. Each becomes a test that is seen failing first, or is marked (device) when only a manual check on hardware can show it.
+    validations:
+      required: true
