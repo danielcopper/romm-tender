@@ -524,6 +524,12 @@ non-zero. It is slow — the two test suites one after the other, with a product
 a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are the two that feed Sonar —
 `pr-metadata`, which needs a pull request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
 
+Outside `ci.yml`, every pull request also runs the `decisions` check (`.github/workflows/decisions.yml`), which the gate
+does not run because it reads the pull request and its linked issues on GitHub. It asks that the pull request link an
+issue whose decisions are written down under `## Decisions`, with nothing left under `## To decide`, and that
+`CLAUDE.md` keep its `## Where decisions live` section. The rules, the exemptions and the opt-outs are in the
+[shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check).
+
 ## Code Quality
 
 - **SonarCloud** — CI-based analysis on every PR to `main` and every push to `main`. Quality Gate enforces 80% coverage
