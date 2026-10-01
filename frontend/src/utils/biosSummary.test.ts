@@ -240,7 +240,7 @@ describe("a one-of group", () => {
       one_of_groups: [group("met", ["ntsc-j", "ntsc-u", "pal"], [])],
     });
     expect(met).toEqual({
-      status: "1 / 1 required",
+      status: "3 / 3 regions",
       sentence: "The BIOS image SwanStation needs is in place for every region",
     });
   });
@@ -258,7 +258,7 @@ describe("a one-of group", () => {
       "partial",
     );
     expect(partial).toEqual({
-      status: "0 / 1 required · USA only",
+      status: "1 / 3 regions · USA only",
       sentence: "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start",
     });
   });
@@ -274,7 +274,36 @@ describe("a one-of group", () => {
       [],
       "missing",
     );
-    expect(unmet.sentence).toBe("Beetle PSX cannot start this system without a BIOS image");
+    expect(unmet).toEqual({
+      status: "0 / 3 regions",
+      sentence: "Beetle PSX cannot start this system without a BIOS image",
+    });
+  });
+
+  it("never counts a region nobody checked as covered", () => {
+    const unread = (state: OneOfGroupVerdict["state"], covered: string[]): OneOfGroupVerdict => ({
+      ...group(state, covered, ["pal"]),
+      unchecked: ["ntsc-j"],
+      regions: ["ntsc-j", ...covered, "pal"],
+    });
+    const statusOf = (verdict: OneOfGroupVerdict) =>
+      summary({ required_count: 1, required_downloaded: 0, one_of_groups: [verdict] }, "partial").status;
+
+    expect(statusOf(unread("partial", ["ntsc-u"]))).toBe("1 / 3 regions · USA only");
+    expect(statusOf(unread("unmet", []))).toBe("0 / 2 regions");
+  });
+
+  it("counts the plain required files apart from the group's regions", () => {
+    const both = summary(
+      {
+        required_count: 3,
+        required_downloaded: 2,
+        required_partial: 1,
+        one_of_groups: [group("partial", ["ntsc-u"], ["ntsc-j", "pal"])],
+      } as BiosSummarySource,
+      "partial",
+    );
+    expect(both.status).toBe("2 / 2 required · 1 / 3 regions · USA only");
   });
 
   it("says whether it is in place could not be checked, never a colour of its own", () => {
@@ -422,7 +451,7 @@ describe("a one-of group", () => {
       "partial",
     );
     expect(invented).toEqual({
-      status: "0 / 1 required · NORTH only",
+      status: "1 / 3 regions · NORTH only",
       sentence: "Arcadia has a BIOS image for NORTH only — SOUTH and EAST discs will not start",
     });
   });
@@ -434,9 +463,10 @@ describe("a one-of group", () => {
       { required_count: 2, required_downloaded: 1, one_of_groups: [group("met", ["ntsc-u"], [])] },
       "partial",
     );
+    // The plain file alone is counted, in the status and in the sentence.
     expect(both).toEqual({
-      status: "1 / 2 required",
-      sentence: "1 of 2 files SwanStation requires are in place",
+      status: "0 / 1 required · 1 / 1 regions",
+      sentence: "The one file SwanStation requires is not in place",
     });
   });
 
@@ -462,11 +492,14 @@ describe("a one-of group", () => {
         required_count: 2,
         required_downloaded: 0,
         required_withheld: 1,
-        one_of_groups: [{ ...group("unknown", [], []), unchecked: ["ntsc-u"] }],
+        one_of_groups: [{ ...group("unknown", [], []), unchecked: ["ntsc-u"], regions: ["ntsc-u"] }],
       },
       "unknown",
     );
-    expect(both).toEqual({ status: "0 / 2 required", sentence: "0 of 2 files SwanStation requires are in place" });
+    expect(both).toEqual({
+      status: "0 / 1 required · 0 / 1 regions",
+      sentence: "The one file SwanStation requires is not in place",
+    });
   });
 
   it("counts only the plain files nothing could judge beside an unknown group", () => {

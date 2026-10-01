@@ -47,16 +47,18 @@
  * in place keeps its sentence whatever else is open, because the console does
  * not start either way. Any other group gives way to a plain required file that
  * is open beside it, worded by that file's own state: a missing one by the
- * count, one nothing could judge by the declined rung, which then counts the
- * plain files alone and never a group as a file. The console's own demand
- * (`system_image`) is tested next, ahead of the level's decline: it is the one
- * requirement no count can state — the console asks for ONE of the images the
- * emulator declares, and a libretro `.info` can mark a file required or
- * optional and say nothing else — so a count-derived sentence would stand over
- * a system that will not boot. Today the pair never arrives, because the backend
- * lands an established absence on `missing` rather than on `unknown`; the order
- * is a guard rather than a rule about a live case, and it is now a guard in one
- * place rather than three.
+ * count, one nothing could judge by the declined rung — and both count the
+ * plain files alone, never a group as a file. Where the status beside a group
+ * is a count, the group is counted in regions, behind the plain files' ratio
+ * where there are any. The console's own demand (`system_image`) is tested
+ * next, ahead of the level's decline: it is the one requirement no count can
+ * state — the console asks for ONE of the images the emulator declares, and a
+ * libretro `.info` can mark a file required or optional and say nothing else —
+ * so a count-derived sentence would stand over a system that will not boot.
+ * Today the pair never arrives, because the backend lands an established
+ * absence on `missing` rather than on `unknown`; the order is a guard rather
+ * than a rule about a live case, and it is now a guard in one place rather than
+ * three.
  *
  * What this module does NOT hold is the library's own ratio —
  * `(d/t RomM library files)`, which counts a third set and is written next door
@@ -248,10 +250,14 @@ export function biosSummary(
   const group = groupToWord(groups);
   if (group) {
     const plain = plainRequirements(groups, requiredCount, requiredDone, withheld);
+    const regions = regionCount(group);
     if (group.state === "unmet" || (plain.missing === 0 && plain.withheld === 0)) {
-      return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`, rows);
+      const ratio = plain.count > 0 ? `${plain.done} / ${plain.count} required · ${regions}` : regions;
+      return groupSummary(group, named, leading, ratio, rows);
     }
-    if (plain.missing > 0) return requiredFilesSummary(named, rows, requiredDone, requiredCount, level);
+    if (plain.missing > 0) {
+      return requiredFilesSummary(named, rows, plain.done, plain.count, level, ` · ${regions}`);
+    }
     return declinedSummary(named, plain.withheld, systemImage);
   }
 
@@ -283,8 +289,8 @@ export function biosSummary(
 const GROUP_PRECEDENCE: readonly OneOfGroupVerdict["state"][] = ["unmet", "unknown", "partial", "met"];
 
 /**
- * How many required files that are NOT a one-of group are missing, and how many
- * nothing could judge.
+ * The required files that are NOT a one-of group: how many there are, how many
+ * are in place, how many are missing, and how many nothing could judge.
  *
  * The payload's counts take each group once — `required_downloaded` only where
  * it is met, `required_withheld` where it is unknown — so what is left after
@@ -296,12 +302,28 @@ function plainRequirements(
   requiredCount: number,
   requiredDone: number,
   withheld: number,
-): { missing: number; withheld: number } {
+): { count: number; done: number; missing: number; withheld: number } {
   const count = (state: OneOfGroupVerdict["state"]) => groups.filter((group) => group.state === state).length;
   const plainCount = requiredCount - groups.length;
   const plainDone = requiredDone - count("met");
   const plainWithheld = withheld - count("unknown");
-  return { missing: plainCount - plainDone - plainWithheld, withheld: plainWithheld };
+  return {
+    count: plainCount,
+    done: plainDone,
+    missing: plainCount - plainDone - plainWithheld,
+    withheld: plainWithheld,
+  };
+}
+
+/**
+ * A group's own count, in regions rather than files: "1 / 3 regions · Japan
+ * only". The first number is the regions an option in place serves
+ * (`covered`), so a region nobody checked is in the second number and never in
+ * the first; the tag names the covered ones where the group is partly met.
+ */
+function regionCount(group: OneOfGroupVerdict): string {
+  const counted = `${group.covered.length} / ${group.regions.length} regions`;
+  return group.state === "partial" ? `${counted} · ${regionNames(group.covered)} only` : counted;
 }
 
 function groupToWord(groups: readonly OneOfGroupVerdict[]): OneOfGroupVerdict | null {
@@ -316,11 +338,10 @@ function groupToWord(groups: readonly OneOfGroupVerdict[]): OneOfGroupVerdict | 
  * State 0: a one-of group, one requirement however many files it lists.
  *
  * Every word comes from the verdict — the emulator's name and the regions — so a
- * group on any console reads the same way. The ratio is the payload's own, in
- * which the group counts once and a partly covered group counts as not met;
- * beside it the status names the regions that ARE covered, because "0 / 1"
- * alone reads as nothing in place. On the game page the verdict was narrowed to
- * the game's own regions (`game_regions`), and the sentence says so.
+ * group on any console reads the same way. The status is the caller's
+ * ({@link regionCount}, behind the plain required files' ratio where there are
+ * any). On the game page the verdict was narrowed to the game's own regions
+ * (`game_regions`), and the sentence says so.
  */
 function groupSummary(
   group: OneOfGroupVerdict,
@@ -340,7 +361,7 @@ function groupSummary(
       };
     case "partial":
       return {
-        status: `${ratio} · ${regionNames(group.covered)} only`,
+        status: ratio,
         sentence:
           `${leading} ${GROUP_PARTIAL_HEAD} ${regionNames(group.covered)} only — ` +
           `${regionNames(group.missing)} ${GROUP_PARTIAL_TAIL}`,
@@ -456,7 +477,8 @@ function declinedSummary(named: string, withheld: number, systemImage: SystemIma
  * the same ratio, and which sentence stands is the level's verdict over exactly
  * the comparison that ratio is. Splitting them would put the ratio in two
  * places and invite a second readiness rule beside the one the level already
- * made.
+ * made. *groupTail* is a one-of group's region count, appended to the status
+ * where the counts passed in are the plain files beside that group.
  */
 function requiredFilesSummary(
   named: string,
@@ -464,8 +486,9 @@ function requiredFilesSummary(
   requiredDone: number,
   requiredCount: number,
   level: BiosLevel | null,
+  groupTail = "",
 ): BiosSummary {
-  const ratio = `${requiredDone} / ${requiredCount} required`;
+  const ratio = `${requiredDone} / ${requiredCount} required${groupTail}`;
   // "Ready" is the level, which decides it on exactly this comparison — the
   // fallback is that same comparison, not a second rule.
   const ready = level === null ? requiredDone >= requiredCount : level === "ok";

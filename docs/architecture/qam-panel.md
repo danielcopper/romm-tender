@@ -1294,22 +1294,25 @@ it, for the focused platform:
   with it, while the game page went on appending it to every sentence — one platform, two surfaces, two different
   amounts said about it. (A one-of group the launching emulator states is worded first — an `unmet` one always, any
   other only where no plain required file is missing or withheld beside it — "`<emulator>` has a BIOS image for USA only
-  — Japan and Europe discs will not start", with "0 / 1 required · USA only" as its status — off `one_of_groups` alone,
-  so a group on any console reads the same way; region names and a file's place in a group are
-  `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and the decline alike, tested
-  before either inside that module, because the console asks for one of the images and no count can state that;
-  `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
-  `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.) Then a
-  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
-  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
-  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
-  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
-  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
-  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
-  `ConfirmModal`. _N_ counts the fetchable rows the backend marks `fetch_for_required` — the rule the download applies
-  too, which takes the options of a one-of group's uncovered regions as well as the files the emulator requires. **All
-  three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2
-  all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
+  — Japan and Europe discs will not start", with "1 / 3 regions · USA only" as its status — off `one_of_groups` alone,
+  so a group on any console reads the same way. A group's status counts REGIONS: the first number is the regions an
+  option in place serves (`covered`), so a region nobody checked is in the second number and never the first; where the
+  emulator also requires plain files the status is "`X / Y required · A / B regions`", the plain files alone in `X / Y`,
+  and the same plain counts feed the sentence; an `unknown` group keeps "Readiness unknown"; region names and a file's
+  place in a group are `frontend/src/utils/biosGroup.ts`'s. Then `system_image: "absent"` outranks the counts and the
+  decline alike, tested before either inside that module, because the console asks for one of the images and no count
+  can state that; `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither
+  reaches `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.)
+  Then a table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library
+  (#164) — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and
+  a **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where
+  no record carries the row's name and the button counts the distinct files our records name underneath it
+  (`Delete (N)`): a folder is never a download, which says nothing about the files already inside one. Same authority as
+  `Delete BIOS`, described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS
+  behind a `ConfirmModal`. _N_ counts the fetchable rows the backend marks `fetch_for_required` — the rule the download
+  applies too, which takes the options of a one-of group's uncovered regions as well as the files the emulator requires.
+  **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on
+  PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
   `DialogButton` is still a focus stop, so the row stays walkable.
 
   **Every sentence names the emulator**, off the firmware payload's own `active_core_label` — the label half of the pick

@@ -2176,6 +2176,9 @@ describe("Library › Platforms", () => {
         return container;
       };
 
+      const statusNote = (container: HTMLElement, text: string): HTMLElement | undefined =>
+        [...container.querySelectorAll<HTMLElement>("span")].find((el) => el.textContent === text);
+
       const beetleRows = () => [
         option("scph5500.bin", "ntsc-j"),
         option("scph5501.bin", "ntsc-u", { downloaded: true, satisfied: true }),
@@ -2236,16 +2239,56 @@ describe("Library › Platforms", () => {
 
         expect(container.textContent).toContain("for every region · ✓ in place");
         expect(container.textContent).toContain("The BIOS image SwanStation needs is in place for every region");
-        expect(container.textContent).toContain("1 / 1 required");
+        expect(statusNote(container, "3 / 3 regions")?.style.color).toBe(biosColorForLevel("ok"));
+        expect(container.textContent).not.toContain("/ 1 required");
       });
 
       it("states a partly covered group with the regions it covers and the ones it does not", async () => {
         const container = await renderPlatform(beetleRows());
 
-        expect(container.textContent).toContain("0 / 1 required · USA only");
+        expect(statusNote(container, "1 / 3 regions · USA only")?.style.color).toBe(biosColorForLevel("partial"));
         expect(container.textContent).toContain(
           "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start",
         );
+      });
+
+      it("counts the plain required files apart from the group's regions", async () => {
+        const container = await renderPlatform(
+          [
+            ...beetleRows(),
+            firmwareFile({ file_name: "plain.bin", required_by_active: true, downloaded: true, satisfied: true }),
+          ],
+          { required_count: 2, required_downloaded: 1 },
+        );
+
+        expect(statusNote(container, "1 / 1 required · 1 / 3 regions · USA only")?.style.color).toBe(
+          biosColorForLevel("partial"),
+        );
+      });
+
+      it("counts the regions of a group on any system from the payload alone", async () => {
+        // An invented system with two regions and nothing in place.
+        const container = await renderPlatform([option("north.rom", "north"), option("south.rom", "south")], {
+          bios_level: "missing",
+          required_partial: 0,
+          active_core_label: "Arcadia",
+          one_of_groups: [
+            {
+              state: "unmet",
+              covered: [],
+              missing: ["north", "south"],
+              unchecked: [],
+              game_regions: [],
+              regions: ["north", "south"],
+              options: [
+                { file_name: "north.rom", regions: ["north"], satisfied: false },
+                { file_name: "south.rom", regions: ["south"], satisfied: false },
+              ],
+            },
+          ],
+        });
+
+        expect(statusNote(container, "0 / 2 regions")?.style.color).toBe(biosColorForLevel("missing"));
       });
 
       it("keeps an unestablished verdict and an unestablished need ahead of it", async () => {

@@ -46,7 +46,7 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 Every one of those sentences is written in one place and both surfaces read it, so the game page and the Library page's
 platform pane can never word the same state differently. The pane has a heading to hang a short form on, so it shows
-that short form beside **BIOS FILES** — "Nothing required", "Readiness unknown", "1 / 2 required", "0 / 1 required · USA
+that short form beside **BIOS FILES** — "Nothing required", "Readiness unknown", "1 / 2 required", "1 / 3 regions · USA
 only" — with the sentence under it. Both pages put the same library ratio behind the sentence, whichever state it is in,
 and neither prints one where your library holds nothing for the platform.
 
@@ -270,16 +270,17 @@ and the row you focus is the one the right-hand pane describes.
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
    Where no emulator can be pinned for the platform there is no name to print, and the line says "The launching
-   emulator" instead. A console that needs one BIOS image per region counts that as one requirement: "1 / 1 required"
-   where every region has its image, "0 / 1 required · USA only" where only some do, with the line under it naming the
-   regions whose discs will not start — see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image).
-   A system with a required row the plugin could not judge — a declared folder it could not read, say — reads "Readiness
-   unknown" instead — see [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about
-   the emulator named on line 5: pick a different one from the chip button and the numbers, the dot and the file rows
-   are answered for it, so this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a
-   **standalone** emulator too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the
-   plugin has no source for the emulator, the files are shown against every emulator that declares them instead of
-   against one
+   emulator" instead. A console that needs one BIOS image per region is counted in regions rather than files: "3 / 3
+   regions" where every region has its image, "1 / 3 regions · USA only" where only some do, with the line under it
+   naming the regions whose discs will not start, and "0 / 3 regions" where none does. An emulator that requires plain
+   files as well counts those first and the regions after them — "1 / 1 required · 1 / 3 regions · USA only" — see
+   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
+   could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
+   [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
+   line 5: pick a different one from the chip button and the numbers, the dot and the file rows are answered for it, so
+   this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a **standalone** emulator
+   too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the plugin has no source for the
+   emulator, the files are shown against every emulator that declares them instead of against one
 8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
@@ -514,20 +515,26 @@ opens `scph5500.bin` for the first, `scph5501.bin` for the second and `scph5502.
 the image its settings name for the disc's region and, where that is not there, searches your BIOS folder for any image
 it knows — so one image it finds can serve every region.
 
-That group is **one requirement**, however many images it lists, and the page counts it once:
+That group is **one requirement**, however many images it lists, and the Library page's platform pane counts it in
+regions — how many of the regions the core names have their image — rather than as files:
 
-- **Green — "The BIOS image SwanStation needs is in place for every region"**, _1 / 1 required_. Every region the core
-  names has an image.
-- **Amber — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start"**, _0 / 1 required · USA
+- **Green — "The BIOS image SwanStation needs is in place for every region"**, _3 / 3 regions_. Every region the core
+  names has an image; one image that serves every region counts for all three.
+- **Amber — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start"**, _1 / 3 regions · USA
   only_. Some regions have their image and some are shown not to. It counts as not met, because a Japanese disc will not
   start, and it is amber rather than red, because a USA one will.
-- **Red — "Beetle PSX cannot start this system without a BIOS image"**. No image of the group is there.
+- **Red — "Beetle PSX cannot start this system without a BIOS image"**, _0 / 3 regions_. No image of the group is there.
 - **Grey — "Whether the BIOS image Beetle PSX needs is in place could not be checked"**. An image is there and could not
   be read, or a region could not be checked at all — a folder that would not list, say — beside regions that do have
   their image. The page never shows green over a region nobody checked. Where an image is there and could not be read
   and no region has its image, the line is grey even when other regions are shown to have nothing; the rows of those
   regions stay red. Where a region does have its image, one shown to have nothing makes the line amber whatever else
-  could not be read. Where no image is there at all, the line is red whatever else could not be checked.
+  could not be read. Where no image is there at all, the line is red whatever else could not be checked. The pane's
+  short form stays "Readiness unknown" here.
+
+A region nobody could check is never counted as having its image: it is in the second number of the region count and not
+in the first. Where the emulator requires plain files beside the group, those are counted first, on their own, and the
+regions after them — "1 / 1 required · 1 / 3 regions · USA only".
 
 Each image of the group is its own row, and says which region it serves: on the Library page's platform table _for Japan
 discs · ✗ missing_ under the row, with a red ✗ or a green ✓ in its On disk column; on the game page _Beetle PSX (for
