@@ -233,7 +233,7 @@ describe("a one-of group", () => {
     options: [],
   });
 
-  it("says the image is in place for every region", () => {
+  it("says the emulator has a BIOS image for every region", () => {
     const met = summary({
       required_count: 1,
       required_downloaded: 1,
@@ -241,7 +241,7 @@ describe("a one-of group", () => {
     });
     expect(met).toEqual({
       status: "3 / 3 regions",
-      sentence: "The BIOS image SwanStation needs is in place for every region",
+      sentence: "SwanStation has a BIOS image for every region",
     });
   });
 
@@ -311,6 +311,30 @@ describe("a one-of group", () => {
       status: "0 / 1 required · regions not checked",
       sentence: "The one file SwanStation requires is not in place",
     });
+  });
+
+  it("says a core has an image for every region however many images it takes", () => {
+    // SwanStation may open one image for Japan and another for USA and Europe.
+    const several: OneOfGroupVerdict = {
+      ...group("met", ["ntsc-j", "ntsc-u", "pal"], []),
+      options: [
+        { file_name: "scph5500.bin", regions: ["ntsc-j"], satisfied: true },
+        { file_name: "scph1001.bin", regions: ["ntsc-u", "pal"], satisfied: true },
+      ],
+    };
+    const invented: OneOfGroupVerdict = { ...group("met", ["north", "south"], []), regions: ["north", "south"] };
+
+    expect(summary({ required_count: 1, required_downloaded: 1, one_of_groups: [several] })).toEqual({
+      status: "3 / 3 regions",
+      sentence: "SwanStation has a BIOS image for every region",
+    });
+    expect(
+      biosSummary(
+        { active_core_label: "Arcadia", required_count: 1, required_downloaded: 1, one_of_groups: [invented] },
+        [],
+        "ok",
+      ),
+    ).toEqual({ status: "2 / 2 regions", sentence: "Arcadia has a BIOS image for every region" });
   });
 
   it("counts the plain required files apart from the group's regions", () => {
@@ -551,7 +575,7 @@ describe("a one-of group", () => {
       required_downloaded: 1,
       one_of_groups: [group("met", ["ntsc-u"], [])],
     });
-    expect(both.sentence).toBe("The BIOS image SwanStation needs is in place for every region");
+    expect(both.sentence).toBe("SwanStation has a BIOS image for every region");
   });
 });
 

@@ -2238,7 +2238,7 @@ describe("Library › Platforms", () => {
         );
 
         expect(container.textContent).toContain("for every region · ✓ in place");
-        expect(container.textContent).toContain("The BIOS image SwanStation needs is in place for every region");
+        expect(container.textContent).toContain("SwanStation has a BIOS image for every region");
         expect(statusNote(container, "3 / 3 regions")?.style.color).toBe(biosColorForLevel("ok"));
         expect(container.textContent).not.toContain("/ 1 required");
       });

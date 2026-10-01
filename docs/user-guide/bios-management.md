@@ -27,11 +27,11 @@ When you open a game whose platform has BIOS files — on your RomM server, or a
 unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
-  files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs, or "The BIOS
-  image SwanStation needs is in place for every region". An emulator that asks for exactly one file — DuckStation, on a
-  stock RetroDECK — reads "The one file DuckStation requires is in place". A line saying the required files are in place
-  can end in "(2 optional missing)": files that same emulator lists as optional and that are not in place. Another
-  emulator's optional files are not counted there.
+  files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs, or "SwanStation
+  has a BIOS image for every region". An emulator that asks for exactly one file — DuckStation, on a stock RetroDECK —
+  reads "The one file DuckStation requires is in place". A line saying the required files are in place can end in "(2
+  optional missing)": files that same emulator lists as optional and that are not in place. Another emulator's optional
+  files are not counted there.
 - **Amber** — some required files present: "1 of 2 files mGBA requires are in place", or "Beetle PSX has a BIOS image
   for USA only — Japan and Europe discs will not start" where the console needs one image per region and only some
   regions have theirs
@@ -523,8 +523,9 @@ it knows — so one image it finds can serve every region.
 That group is **one requirement**, however many images it lists, and the Library page's platform pane counts it in
 regions — how many of the regions the core names have their image — rather than as files:
 
-- **Green — "The BIOS image SwanStation needs is in place for every region"**, _3 / 3 regions_. Every region the core
-  names has an image; one image that serves every region counts for all three.
+- **Green — "SwanStation has a BIOS image for every region"**, _3 / 3 regions_. Every region the core names has an image
+  — one image that serves every region, or one image per region, or a mix: SwanStation may open `scph5500.bin` for Japan
+  and `scph1001.bin` for USA and Europe.
 - **Amber — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start"**, _1 / 3 regions · USA
   only_. Some regions have their image and some are shown not to. It counts as not met, because a Japanese disc will not
   start, and it is amber rather than red, because a USA one will.

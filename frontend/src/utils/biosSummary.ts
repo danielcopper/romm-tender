@@ -136,11 +136,14 @@ const REQUIRES_IS_NOT_IN_PLACE = "requires is not in place";
 const MARKS_NONE_REQUIRED = "marks none of its BIOS files as required";
 const OPTIONAL_MISSING_TAIL = "optional missing";
 // The one-of group's own sentences. The runs below are the halves no other
-// sentence shares; "The BIOS image" opens two of them and is too common a run
+// sentence shares; "The BIOS image" opens one of them and is too common a run
 // to search for on its own.
 const GROUP_IMAGE_HEAD = "The BIOS image";
-const GROUP_MET_TAIL = "needs is in place for every region";
 const GROUP_PARTIAL_HEAD = "has a BIOS image for";
+// "for every region" rather than "the image … is in place": a core may open a
+// different image for each region (SwanStation, one for Japan and one for USA
+// and Europe), so the met state is about the regions and not one file.
+const GROUP_MET_TAIL = `${GROUP_PARTIAL_HEAD} every region`;
 const GROUP_PARTIAL_TAIL = "discs will not start";
 const GROUP_UNCHECKED_TAIL = "needs is in place could not be checked";
 const GROUP_GAME_MET = "needs for this game's region";
@@ -363,9 +366,7 @@ function groupSummary(
     case "met":
       return {
         status: ratio,
-        sentence: forTheGame
-          ? gameCovered(group, named, leading, rows)
-          : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
+        sentence: forTheGame ? gameCovered(group, named, leading, rows) : `${leading} ${GROUP_MET_TAIL}`,
       };
     case "partial":
       return {
