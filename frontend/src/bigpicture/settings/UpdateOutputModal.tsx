@@ -9,12 +9,12 @@
  * line reaches the panel.
  */
 
-import { FC, ReactNode, useEffect, useState } from "react";
+import { FC, Fragment, ReactNode, useEffect, useState } from "react";
 import { DialogButton, Focusable, ModalRoot, showModal } from "@decky/ui";
 import { getUpdateOutput, logError, type UpdateOutput, type UpdateOutputSection } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { clockTime } from "../../utils/updateInstallView";
-import { MUTED } from "../layout/pane";
+import { AMBER, GREEN, MUTED } from "../layout/pane";
 
 const TITLE = "What the installer said";
 
@@ -69,6 +69,32 @@ export function outputStops(lines: string[]): string[] {
   return stops;
 }
 
+/**
+ * The colour of one line, read off how the installer starts it: a step that
+ * failed (`[!!]`) and the installer's own failure lines (`install.sh: `) in
+ * amber, a step done (`[ok]`) in green, a step under way (`[..]`) muted — the
+ * marks it writes where it draws no glyphs, as it does in the journal.
+ * Anything else keeps the text colour.
+ */
+export function outputLineColour(line: string): string | undefined {
+  if (line.startsWith("[!!]") || line.startsWith("install.sh: ")) return AMBER;
+  if (line.startsWith("[ok]")) return GREEN;
+  if (line.startsWith("[..]")) return MUTED;
+  return undefined;
+}
+
+/** One stop's text, each of its lines in its colour. */
+const StopLines: FC<{ text: string }> = ({ text }) => (
+  <>
+    {text.split("\n").map((line, i) => (
+      <Fragment key={i}>
+        {i > 0 && "\n"}
+        <span style={{ color: outputLineColour(line) }}>{line}</span>
+      </Fragment>
+    ))}
+  </>
+);
+
 const Part: FC<{ heading: string; section: UpdateOutputSection }> = ({ heading, section: { lines, earlier } }) => (
   <div style={{ marginTop: "12px" }}>
     <b>{heading}</b>
@@ -79,7 +105,7 @@ const Part: FC<{ heading: string; section: UpdateOutputSection }> = ({ heading, 
     )}
     {outputStops(lines).map((text, i) => (
       <Focusable key={i} {...TEXT_STOP} style={MONO}>
-        {text}
+        <StopLines text={text} />
       </Focusable>
     ))}
   </div>

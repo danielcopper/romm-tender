@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, fireEvent, render } from "@testing-library/react";
 import { showModal } from "@decky/ui";
 import { getUpdateOutput, logError, type UpdateOutput } from "../../api/backend";
+import { AMBER, GREEN, MUTED } from "../layout/pane";
 import {
   OUTPUT_GONE,
   OUTPUT_MISSING,
   OUTPUT_READING,
   OUTPUT_UNREAD,
   UpdateOutputModal,
+  outputLineColour,
   outputStops,
   showUpdateOutput,
 } from "./UpdateOutputModal";
@@ -72,6 +74,34 @@ describe("UpdateOutputModal", () => {
     expect(stops(container).map((stop) => stop.textContent)).toEqual([
       "[..] Installing   trying 1.0.52\n[!!] Installing   the new version does not start",
     ]);
+  });
+
+  it("colours each line by the installer's mark, within the one stop that holds them", async () => {
+    const output: UpdateOutput = {
+      ...CHECK_REFUSED,
+      installer: {
+        lines: [
+          "[ok] Download     1.0.52",
+          "[..] Installing   trying 1.0.52",
+          "[!!] Installing   the new version does not start",
+          "install.sh: the new version did not start; nothing was changed",
+          "the last lines it printed:",
+        ],
+        earlier: 0,
+      },
+    };
+
+    const { container } = await shown(output);
+
+    const [stop] = stops(container);
+    expect([...stop!.querySelectorAll("span")].map((line) => [line.textContent, line.style.color])).toEqual([
+      ["[ok] Download     1.0.52", GREEN],
+      ["[..] Installing   trying 1.0.52", MUTED],
+      ["[!!] Installing   the new version does not start", AMBER],
+      ["install.sh: the new version did not start; nothing was changed", AMBER],
+      ["the last lines it printed:", ""],
+    ]);
+    expect(stop!.textContent).toBe(output.installer!.lines.join("\n"));
   });
 
   it("adds what the version it tried printed after a rollback, named after that version", async () => {
@@ -156,6 +186,21 @@ describe("UpdateOutputModal", () => {
     fireEvent.click(getByText("Close"));
 
     expect(closeModal).toHaveBeenCalledOnce();
+  });
+});
+
+describe("outputLineColour", () => {
+  it.each<[string, string | undefined]>([
+    ["[!!] Checking     the new version does not start", AMBER],
+    ["install.sh: update to 1.0.52 failed; back on 1.0.51", AMBER],
+    ["[ok] Verify       sha256 matches", GREEN],
+    ["[..] Downloading  40%", MUTED],
+    ["[--] Steam        not answering yet", undefined],
+    ["  the pre-install check said: no module named x", undefined],
+    ["  [!!] a mark that does not start the line", undefined],
+    ["", undefined],
+  ])("colours %j by how it starts", (line, colour) => {
+    expect(outputLineColour(line)).toBe(colour);
   });
 });
 
