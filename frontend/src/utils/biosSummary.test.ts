@@ -323,6 +323,33 @@ describe("a one-of group", () => {
     });
   });
 
+  it("leaves the headline to a required file that is missing beside a met group", () => {
+    // The group sentence says everything is in place; with a plain required
+    // file absent beside it, that is not what the dot means.
+    const both = summary(
+      { required_count: 2, required_downloaded: 1, one_of_groups: [group("met", ["ntsc-u"], [])] },
+      "partial",
+    );
+    expect(both).toEqual({
+      status: "1 / 2 required",
+      sentence: "1 of 2 files SwanStation requires are in place",
+    });
+  });
+
+  it("leaves the headline to a required file nothing could judge beside a partial group", () => {
+    const both = summary(
+      {
+        required_count: 2,
+        required_downloaded: 0,
+        required_withheld: 1,
+        required_partial: 1,
+        one_of_groups: [group("partial", ["ntsc-u"], ["pal"])],
+      } as BiosSummarySource,
+      "unknown",
+    );
+    expect(both.sentence).toBe("One file SwanStation requires could not be checked");
+  });
+
   it("speaks for the group ahead of the console's coarser reading", () => {
     // The backend never sends the two together; the order is a guard.
     const both = summary({

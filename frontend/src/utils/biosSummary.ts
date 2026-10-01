@@ -4,9 +4,10 @@
  * Seven states and a one-of group's, and before this module each surface worded
  * the seven for itself: the game page's BIOS tab, the platform pane, and the
  * platform list's tooltip all held their own spelling of them, some naming the
- * launching emulator and some not. Nothing joined them, so the drift was invisible to every test —
- * each surface's own expectations passed while the three said different things
- * about one platform, which is what a reader moving between them saw.
+ * launching emulator and some not. Nothing joined them, so the drift was
+ * invisible to every test — each surface's own expectations passed while the
+ * three said different things about one platform, which is what a reader moving
+ * between them saw.
  *
  * **Every claim below is about what the code does today, never about where it is
  * headed**, and that is a rule this file earned the hard way: it named all three
@@ -40,17 +41,19 @@
  *
  * **The order of the conditions is load-bearing and is the order the three
  * surfaces already read in.** A one-of group the launching emulator states is
- * worded before anything else ({@link groupSummary}): it IS the console's demand,
- * said region by region, and where an emulator states one the backend answers
- * `system_image` with the neutral value, so the two never stand together. The
+ * worded first ({@link groupSummary}) wherever no plain required file is missing
+ * or withheld beside it: it IS the console's demand, said region by region, and
+ * where an emulator states one the backend answers `system_image` with the
+ * neutral value, so the two never stand together. Where a plain required file is
+ * open, that file is what the dot reports, and the rungs below word it. The
  * console's own demand (`system_image`) is tested next, ahead of the level's
- * decline: it is the one requirement no count
- * can state — the console asks for ONE of the images the emulator declares, and
- * a libretro `.info` can mark a file required or optional and say nothing else —
- * so a count-derived sentence would stand over a system that will not boot.
- * Today the pair never arrives, because the backend lands an established absence
- * on `missing` rather than on `unknown`; the order is a guard rather than a rule
- * about a live case, and it is now a guard in one place rather than three.
+ * decline: it is the one requirement no count can state — the console asks for
+ * ONE of the images the emulator declares, and a libretro `.info` can mark a
+ * file required or optional and say nothing else — so a count-derived sentence
+ * would stand over a system that will not boot. Today the pair never arrives,
+ * because the backend lands an established absence on `missing` rather than on
+ * `unknown`; the order is a guard rather than a rule about a live case, and it
+ * is now a guard in one place rather than three.
  *
  * What this module does NOT hold is the library's own ratio —
  * `(d/t RomM library files)`, which counts a third set and is written next door
@@ -179,17 +182,17 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
  * The seven states and a one-of group's, in the order the surfaces read them.
  *
  * **What is decided here is the order of the five rungs**: a one-of group the
- * launching emulator states, the console's own demand, then the level's
- * decline, then the emulator's required files, then the finished answer. The
- * group's own states are worded next door ({@link groupSummary}), and two of the
- * other rungs hold more than one state and are worded next door too —
- * {@link declinedSummary} holds states 2-4, which are a precedence of their own,
- * and {@link requiredFilesSummary} holds states 5-6, which are one comparison
- * read two ways. So the seven are two orders and not
- * one: the console's demand standing ahead of the decline and the withheld row
- * standing ahead of the unsettled console are different statements, resting on
- * different reasons, and a body holding all seven tests in a row says they are
- * the same kind of thing.
+ * launching emulator states (unless a plain required file is open beside it),
+ * the console's own demand, then the level's decline, then the emulator's
+ * required files, then the finished answer. The group's own states are worded
+ * next door ({@link groupSummary}), and two of the other rungs hold more than
+ * one state and are worded next door too — {@link declinedSummary} holds states
+ * 2-4, which are a precedence of their own, and {@link requiredFilesSummary}
+ * holds states 5-6, which are one comparison read two ways. So the seven are two
+ * orders and not one: the console's demand standing ahead of the decline and the
+ * withheld row standing ahead of the unsettled console are different statements,
+ * resting on different reasons, and a body holding all seven tests in a row says
+ * they are the same kind of thing.
  *
  * *level* is the backend's own readiness verdict and is taken as an argument
  * rather than off *source*: the game page holds it beside the payload (a
@@ -213,9 +216,14 @@ export function biosSummary(
   const requiredDone = source.required_downloaded ?? requiredRows.filter((row) => row.downloaded).length;
 
   // 0. A one-of group the launching emulator states: the console's demand, said
-  //    region by region. See the header.
-  const group = groupToWord(source.one_of_groups ?? []);
-  if (group) return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`);
+  //    region by region. See the header. It words the headline only where no
+  //    plain required file is open beside it — one missing or withheld is what
+  //    the dot then reports, and the rungs below word that file.
+  const groups = source.one_of_groups ?? [];
+  const group = groupToWord(groups);
+  if (group && !plainRequirementOpen(groups, requiredCount, requiredDone, withheld)) {
+    return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`);
+  }
 
   // 1. The console's own demand, ahead of everything: see the header.
   if (systemImage === "absent") {
@@ -243,6 +251,26 @@ export function biosSummary(
 // than one: the one the level rests on first — nothing in place is `missing`,
 // an unchecked one declines, a partial one is amber.
 const GROUP_PRECEDENCE: readonly OneOfGroupVerdict["state"][] = ["unmet", "unknown", "partial", "met"];
+
+/**
+ * Is a required file that is NOT a one-of group missing or withheld?
+ *
+ * The payload's counts take each group once — `required_downloaded` only where
+ * it is met, `required_withheld` where it is unknown — so what is left after
+ * taking the groups back out is the plain required files alone.
+ */
+function plainRequirementOpen(
+  groups: readonly OneOfGroupVerdict[],
+  requiredCount: number,
+  requiredDone: number,
+  withheld: number,
+): boolean {
+  const count = (state: OneOfGroupVerdict["state"]) => groups.filter((group) => group.state === state).length;
+  const plainCount = requiredCount - groups.length;
+  const plainDone = requiredDone - count("met");
+  const plainWithheld = withheld - count("unknown");
+  return plainWithheld > 0 || plainDone + plainWithheld < plainCount;
+}
 
 function groupToWord(groups: readonly OneOfGroupVerdict[]): OneOfGroupVerdict | null {
   for (const state of GROUP_PRECEDENCE) {
