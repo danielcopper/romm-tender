@@ -836,6 +836,17 @@ class TestOneOfGroups:
 
         assert len(catalogue.groups) == 1
 
+    def test_a_first_row_stating_no_group_does_not_hide_a_later_rows_group(self, adapter, monkeypatch):
+        """One emulator under two rows, only the second carrying the group: the group still reaches the catalogue."""
+        plain = _core(
+            core_so="mednafen_psx_libretro.so",
+            label="Beetle PSX (plain)",
+            requirements=(_requirement(core_so="mednafen_psx_libretro.so", file_name="scph5501.bin", need="optional"),),
+        )
+        catalogue = self._catalogue(adapter, monkeypatch, plain, self._beetle())
+
+        assert [group.emulator for group in catalogue.groups] == ["mednafen_psx_libretro.so"]
+
 
 class TestUnreadEmulators:
     def test_an_unreadable_core_is_named(self, adapter, monkeypatch):

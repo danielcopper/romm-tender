@@ -62,12 +62,11 @@ resolver states one for a standalone emulator's SEARCH directory too — the
 directory DuckStation ranks its images in is the BIOS root, which is also where a
 declaration that collapses onto the root resolves — so a row takes a statement
 only where the caveat is not attributed to another emulator
-(:func:`_speaks_for`). The attribution keys are the resolver's own
-(``core_so``, ``token``, ``core``), and ``core`` carries a libretro core's
-short name (``pcsx2``) rather than an identity; a caveat that names none of
-them is a statement about the place with no owner, and stays. What a row may
-hear at all is decided by what it declares, and only a folder row hears a
-listing (:func:`_speaking_for`).
+(:func:`_speaks_for`), under the resolver's own attribution keys
+(:data:`_ATTRIBUTION_KEYS`); a caveat that names none of them is a statement
+about the place with no owner, and stays. What a row may hear at all is decided
+by what it declares, and only a folder row hears a listing
+(:func:`_speaking_for`).
 """
 
 from __future__ import annotations
@@ -84,6 +83,9 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
     detect,
 )
+
+# Neither name is in emu-atlas's ``__all__``; whether they are public API is
+# emu-atlas#555's question.
 from _vendor.atlas.firmware import core_short_name, declared_directory_of
 
 from adapters.atlas_identity import emulator_identity
@@ -129,12 +131,16 @@ _ATTRIBUTION_KEYS = ("core_so", "token", "core")
 # uncatalogued dump is the ordinary case rather than a lesser answer.
 _IDENTIFIED_IMAGE_CODES = frozenset({CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, CAVEAT_FIRMWARE_IMAGE_UNLISTED})
 
-# The codes an entry states beside a one-of group to name the console regions
-# that have no option, under ``regions``. The first two name regions whose
-# answer rests on a read that settled nothing — a listing that failed, files
-# nobody hashed — and the third regions for which nothing boots. The group's own
-# ``core-mode-unestablished`` names regions too, and they are the regions its
-# options DO serve, so it says nothing about a region left out.
+# The codes an entry states beside a one-of group that name console regions
+# under ``regions``. The first two name regions whose answer rests on a read that
+# settled nothing — a listing that failed, files nobody hashed — and the third
+# regions for which nothing boots. A region named here may have an option too;
+# the verdict's precedence decides between the two
+# (:mod:`domain.firmware_groups`). The group's own ``core-mode-unestablished``
+# names regions as well, and they are the regions its options DO serve, so it
+# says nothing about a region left out. A region whose every name the resolver
+# refused (it leaves the root) arrives with neither an option nor one of these
+# codes — emu-atlas#556 asks for it.
 _UNCHECKED_REGION_CODES = frozenset({CAVEAT_FIRMWARE_SCAN_INCOMPLETE, CAVEAT_FIRMWARE_SEARCH_UNVERIFIED})
 _ABSENT_REGION_CODES = frozenset({CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE})
 
@@ -341,21 +347,21 @@ def _groups(answer: Any) -> tuple[FirmwareGroup, ...]:
     """Every one-of group the answer states, keyed on the emulator that states it.
 
     An entry the resolver could not identify contributes none — a group nothing
-    can be scoped to answers for no launch — and a second row of one identity
-    is folded into the first, the rule :func:`_wants` applies for the same
-    reason. The regions an entry names beside its group come off that entry's
-    own caveats (:data:`_UNCHECKED_REGION_CODES`, :data:`_ABSENT_REGION_CODES`).
+    can be scoped to answers for no launch. Of two rows of one identity that
+    state groups, the first stands and the second is skipped, the rule
+    :func:`_wants` applies for the same reason; a row stating no group takes no
+    part in that, so it never hides a later row's group. The regions an entry
+    names beside its group come off that entry's own caveats
+    (:data:`_UNCHECKED_REGION_CODES`, :data:`_ABSENT_REGION_CODES`).
     """
     groups: list[FirmwareGroup] = []
     seen: set[str] = set()
     for core in answer.cores:
         identity = emulator_identity(core)
-        if identity is None or identity in seen:
+        stated = [entry for entry in core.requirements if getattr(entry, "options", None) is not None]
+        if identity is None or identity in seen or not stated:
             continue
         seen.add(identity)
-        stated = [entry for entry in core.requirements if getattr(entry, "options", None) is not None]
-        if not stated:
-            continue
         names = _names_of(core)
         spoken = [caveat for caveat in core.caveats if _speaks_for(caveat, names)]
         unchecked = _caveat_regions(spoken, _UNCHECKED_REGION_CODES)
@@ -486,9 +492,11 @@ def _wants(pairs: list[Any]) -> tuple[FirmwareWant, ...]:
 
     ``required`` is read off the emulator's PLAIN declarations of the file and
     never off a one-of option, whose ``need`` speaks for the group: Beetle PSX
-    lists ``scph5501.bin`` both as an optional row and as its group's NTSC-U
-    option, and the option's ``required`` would make the file a prerequisite of
-    every launch where it is one only of an NTSC-U one.
+    lists ``scph5501.bin`` both as a plain row — its ``.info`` marks it required
+    and the resolver states that row ``optional``, because the group beside it
+    speaks for the image — and as its group's NTSC-U option, and the option's
+    ``required`` would make the file a prerequisite of every launch where it is
+    one only of an NTSC-U one.
     """
     wants: list[FirmwareWant] = []
     at: dict[str, int] = {}
@@ -648,10 +656,10 @@ def _speaking_for(
 def _names_of(core: Any) -> frozenset[str]:
     """Every name a caveat may give *core*'s emulator under :data:`_ATTRIBUTION_KEYS`.
 
-    The identity, and for a libretro core its short name too, read through the
-    resolver's own rule (``core_short_name``) so the two cannot drop the suffix
-    differently. Empty for an entry with neither, which no attributed caveat
-    can then name.
+    The identity, and for a libretro core its short name too
+    (:data:`_ATTRIBUTION_KEYS` says why), read through the resolver's own rule
+    (``core_short_name``) so the two cannot drop the suffix differently. Empty
+    for an entry with neither, which no attributed caveat can then name.
     """
     names: set[str] = set()
     identity = emulator_identity(core)
