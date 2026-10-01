@@ -15,4 +15,4 @@ jobs:
       contents: read        # read CLAUDE.md
       issues: read          # read the linked issues
       pull-requests: read   # read the pull request, its labels and linked issues
-    uses: danielcopper/.github/.github/workflows/decisions.yml@917139073cc6691c712fe816e428c561a9a6873c # main
+    uses: danielcopper/.github/.github/workflows/decisions.yml@034732d331f0605fcb801999ffd8011e6421bdc4 # main

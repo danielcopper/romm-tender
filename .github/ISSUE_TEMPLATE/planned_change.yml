@@ -33,3 +33,11 @@ body:
       description: Observable criteria. Each becomes a test that is seen failing first, or is marked (device) when only a manual check on hardware can show it.
     validations:
       required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What a reader might expect from this change that it does not do, and where that went (an issue number) if anywhere.
+    validations:
+      required: false
