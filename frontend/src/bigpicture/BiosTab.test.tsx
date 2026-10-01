@@ -1243,16 +1243,21 @@ describe("BiosTab", () => {
     it("lists every group the launching emulator states, each under its own intro", () => {
       const status = forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]);
       const [beetleGroup] = status.one_of_groups ?? [];
+      // A second group of its own, unmet for the game's region like the first.
       const second = {
         ...beetleGroup!,
-        options: [{ file_name: "extra.rom", regions: ["ntsc-j"], satisfied: true }],
+        regions: ["ntsc-j", "pal"],
+        options: [
+          { file_name: "extra.rom", regions: ["ntsc-j"], satisfied: false },
+          { file_name: "extra-pal.rom", regions: ["pal"], satisfied: false },
+        ],
       };
       const container = renderFor({ ...status, one_of_groups: [beetleGroup!, second] }, "missing");
 
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
       expect(block?.textContent.match(/Beetle PSX needs one BIOS image per disc region:/g)).toHaveLength(2);
       expect([...(block?.querySelectorAll(".romm-panel-group-line") ?? [])].map((line) => line.textContent)).toContain(
-        "Japan · extra.rom · in place ← this game",
+        "Japan · extra.rom · missing ← this game",
       );
     });
 

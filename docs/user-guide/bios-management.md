@@ -541,7 +541,7 @@ Australia as Europe. With a Japanese game and only a USA image the page reads re
 start this game (Japan) — it is missing_ — and the **BIOS** badge appears beside Play. With a USA game it reads green —
 _The BIOS image Beetle PSX needs for this game's region (USA) is in place_. A game released in several regions is
 covered where any of them is, and where none is the sentence names the file of each, and only the regions those files
-serve — a region no image is listed for gets a clause of its own: _Beetle PSX needs scph5502.bin to start this game
+serve — a region no image is listed for gets a clause of its own: _SwanStation needs scph5502.bin to start this game
 (Europe) — it is missing, and there is no BIOS image for USA_. Where the image that covers the game is one the core
 starts every disc from, the page names it instead — _SwanStation starts this game with scph1001.bin — found in the BIOS
 folder, it serves every region_ where the core's own search of the BIOS folder found it, and _SwanStation starts this
