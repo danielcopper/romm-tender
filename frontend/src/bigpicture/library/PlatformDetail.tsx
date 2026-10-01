@@ -164,11 +164,11 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * the two channels above cannot carry**, and it is the fifth state rather than a
  * shade of the fourth: the emulator marks no such file required, because the
  * group is the requirement and the file one way to meet it, yet a missing one
- * leaves the regions it serves with nothing to boot. So it is strong like a required row, under
- * its own words, and it is asked between the two above and the required/spare
- * pair below: an unestablished verdict is still `?`, and an unestablished NEED is
- * still amber, both tested first. Which region it serves is the line under the
- * row ({@link oneOfRowLine}).
+ * leaves the regions it serves with nothing to boot. So it is strong like a
+ * required row, under its own words, and it is asked between the two above and
+ * the required/spare pair below: an unestablished verdict is still `?`, and an
+ * unestablished NEED is still amber, both tested first. Which region it serves is
+ * the line under the row ({@link oneOfRowLine}).
  *
  * The `Contents` cell reads the same `satisfied`, so the two columns are two
  * renderings of one field and cannot contradict each other.
