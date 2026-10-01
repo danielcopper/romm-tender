@@ -136,7 +136,7 @@ declare var appStore: {
 // `SteamUIStore` — a Steam SP global, genuinely absent (hence `undefined`) or
 // `null` on some builds/timing, so every read guards. `RunningApps` is optional
 // for the same reason; it is the running-app surface behind `utils/runningApps`,
-// and its head is the foreground app (Steam's `MainRunningApp` is `RunningApps[0]`).
+// which states what its order does and does not mean.
 declare var SteamUIStore:
   | {
       RunningApps?: SteamAppOverview[];
