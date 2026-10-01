@@ -8,11 +8,9 @@ Deck, then continue where you left off on your HTPC — your saves travel with y
 The plugin uploads and downloads your RetroArch game saves to and from your RomM server. When you start a game, the
 plugin checks if the server has a newer save and downloads it. When you stop playing, it uploads your updated save.
 
-> **Important:** Save sync runs around a game you start with **Tender's Play button** on the game detail page in Big
-> Picture (in Game Mode, or Big Picture on the desktop): before the game starts and after it ends. Any other start —
-> Steam's own Play in the desktop client, a `steam://rungameid` link — gets only the sync after the game ends: a newer
-> save from another device is not downloaded first. If you play over an older save that way, the upload after the game
-> reports a conflict, which you settle the next time you start the game with Tender's Play button.
+> **Important:** Save sync runs before and after a RomM game you start with **Tender's Play button** on the game detail
+> page, with Steam's own Play, or through a `steam://rungameid` link. If Tender does not answer when you start a game
+> with Steam's own Play or a link, the game starts without the sync before it, and a message says so.
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 
@@ -70,8 +68,8 @@ Open **Save Sync** from the main QAM page to configure sync behavior.
 
 ### Auto Sync
 
-- **Sync before launch** (default: on) — runs sync before a game you start with Tender's Play button starts. If the
-  server is unreachable, the game launches with whatever local save exists.
+- **Sync before launch** (default: on) — runs sync before a game starts. If the server is unreachable, the game starts
+  with your local save — or asks first, if that save has changed since its last sync.
 - **Sync after exit** (default: on) — runs sync after closing a game. A toast confirms what moved and which way — "Saves
   uploaded to RomM", "Saves downloaded from RomM", or "Saves synced with RomM (1 up, 2 down)" when a run went both ways;
   a sync that transferred nothing shows no toast. If the sync fails, the toast names the actual cause (see
@@ -183,7 +181,8 @@ hardware, not the emulator. However, there are exceptions:
 
 If the RomM server is unreachable when a sync is attempted:
 
-- **Before launch**: the game starts normally with your local save (a toast notification informs you).
+- **Before launch**: the game starts with your local save. If that save has changed since its last sync, you are asked
+  first whether to start anyway, retry the connection, or cancel.
 - **After exit**: the upload is skipped. Your local save is untouched, and the next sync attempt produces the same
   outcome — typically pushing your changes once the server is reachable again.
 - No save data is ever lost due to a failed sync.

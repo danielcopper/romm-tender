@@ -14,6 +14,14 @@ open there and under [#831](https://github.com/danielcopper/decky-romm-sync/issu
 > [#1588](https://github.com/danielcopper/decky-romm-sync/issues/1588). The already-running guard was decided by
 > `SteamUIStore.RunningApps` alone from the start; the decision and the guard's behaviour are unchanged. Corrected
 > model: [Running-app detection](../architecture/save-file-sync-architecture.md#running-app-detection-utilsrunningapps).
+>
+> **Errata (2026-09).** The watcher below took `RegisterForGameActionStart`'s second argument for the appId. It is the
+> 64-bit game ID in decimal — for a non-Steam shortcut, the appId in the upper 32 bits and the shortcut mark
+> `0x02000000` in the lower 32 — so the RomM-app check could never match: until
+> [#2139](https://github.com/danielcopper/decky-romm-sync/issues/2139) the watcher gated no start. The game ID's form
+> was measured on the device on 2026-09-30. The skip-set's marks now also expire after `LAUNCH_SKIP_WINDOW_MS`, so the
+> one-shot skip-set and its self-healing lifetime below are read against that. Corrected model:
+> [Pre-launch sync](../architecture/save-file-sync-architecture.md#pre-launch-sync).
 
 ## Context
 

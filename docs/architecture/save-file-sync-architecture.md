@@ -1373,11 +1373,41 @@ on `SessionFinalizeSyncResult`.
 
 ### Pre-launch sync
 
-Triggered from the game detail page when the user clicks the Play button (if `sync_before_launch` is enabled). This is
-**not** triggered automatically via `RegisterForAppLifetimeNotifications` — pre-launch sync runs explicitly from
-`CustomPlayButton.handlePlay()`. Measured on the device on 2026-09-30: only Tender's Play button runs it — a start
-through Steam's own Play in the desktop client or a `steam://rungameid` link reaches no gate, because the launch watcher
-does not act (#2139).
+Runs before a RomM game starts (if `sync_before_launch` is enabled), through one of two funnels that share
+`runLaunchGate` (`frontend/src/utils/launchGate.ts`). Tender's Play button runs it from `CustomPlayButton.handlePlay()`
+before it starts the game itself; the launch watcher (`frontend/src/utils/launchInterceptor.ts`) gates the starts that
+do not come through the Play button — Steam's own Play and a `steam://rungameid` link. Pre-launch sync is **not**
+triggered via `RegisterForAppLifetimeNotifications`.
+
+The watcher listens on `SteamClient.Apps.RegisterForGameActionStart`, which reports a start with `action` `"LaunchApp"`
+before Steam creates the game's process. Its second argument is **not the appId but the 64-bit game ID** in decimal: for
+a non-Steam shortcut the appId sits in the upper 32 bits and the lower 32 bits hold the shortcut mark `0x02000000` — a
+shortcut with appId `3000000001` starts as `"12884901892328521728"`. `appIdFromGameId` (`frontend/src/utils/gameId.ts`)
+turns it back into the appId with `BigInt` (the value is far above 2^53); a value that fits in 32 bits is taken as the
+appId itself, and any other game-ID kind names nothing of ours. Every later step of the watcher reads that appId. For an
+appId Tender owns (`rommAppIds`), it cancels the start synchronously (`CancelGameAction`), runs the gate, and on
+approval starts the game again with `RunGame`, handing it the game ID the start was reported by — or, for a start
+reported by a value that fits in 32 bits, the shortcut's game ID from Steam's app store where it has an overview.
+
+The start is cancelled before the watcher asks the backend anything, and an endpoint call has no timeout: it waits for a
+backend that is away, and one uninstalled while Steam keeps running never comes back. So the watcher's first backend
+contact — the map refresh below, when one is needed, and the installed check — races `FIRST_CONTACT_DEADLINE_MS` (5 s).
+Past it the watcher fails open: if the start's prune-lease admission is still current, it starts the game again without
+the pre-launch sync, shows "Tender isn't responding — started without syncing saves." and logs it. An answer that
+arrives after the deadline is abandoned and starts nothing more. The later steps — the dialogs, the pre-launch sync's
+own 15 s race and the rest of the gate — are not bounded by it.
+
+The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
+while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the
+watcher then refreshes the map once (`refreshAppIdMap`) and looks again, and if the romId is still missing it starts the
+game again without the gate.
+
+Both funnels mark the appId in the gate's skip-set (`markLaunchSkipped`) immediately before their own `RunGame`, and the
+watcher consumes that mark when the start reaches it, so a start a caller has already handled is not gated a second
+time. A mark lets a direct start through only within `LAUNCH_SKIP_WINDOW_MS` (10 s) of being set; why the window exists
+is stated at the skip set in `frontend/src/utils/launchGate.ts`.
+
+The Play button's path:
 
 1. User clicks Play on the game detail page.
 2. `CustomPlayButton` calls `preLaunchSync(romId)` on the backend (15s timeout).

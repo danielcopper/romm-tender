@@ -361,6 +361,24 @@ case, and the [save sync support matrix](save-sync-support-matrix.md) shows how 
 Also check that the game has saved at all — some games use in-game passwords instead of battery saves, so there is
 nothing to sync.
 
+### A newer save wasn't downloaded before the game started
+
+**Symptom**: You start a game and it loads an older save, although another device uploaded a newer one.
+
+**Fix**: The sync before a game starts runs when you start a RomM game with Tender's Play button, Steam's own Play or a
+`steam://rungameid` link, but it can end without downloading. Check:
+
+- That the sync before launch is on — see [Auto-sync is disabled](#auto-sync-is-disabled).
+- Whether RomM was reachable when the game started. If it was not, the game started on the save already on the device —
+  or, if that save had changed since its last sync, you were asked first.
+- Whether the other device uploaded to the same save slot. Each device syncs the slot that is active for the game on it;
+  the game's **Saves** tab shows which one that is.
+- Whether the message "Tender isn't responding — started without syncing saves." appeared. It comes only with a start
+  through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
+  so the game started without the sync before it.
+- Whether save sync covers the game at all —
+  [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
+
 ### Saves being overwritten unexpectedly
 
 **Symptom**: Your save keeps reverting to an older version after syncing.

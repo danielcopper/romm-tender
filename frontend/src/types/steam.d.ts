@@ -24,7 +24,7 @@ declare var SteamClient: {
     RunGame(gameId: string | number, launchId: string, param2: number, param3: number): void;
     TerminateApp(appId: number, force: boolean): void;
     RegisterForGameActionStart(
-      callback: (gameActionId: number, appIdStr: string, action: string, launchSource: number) => void,
+      callback: (gameActionId: number, gameId: string, action: string, launchSource: number) => void,
     ): { unregister: () => void };
     CancelGameAction(gameActionId: number): void;
   };

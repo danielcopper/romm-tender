@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip } from "./launchGate";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip, LAUNCH_SKIP_WINDOW_MS } from "./launchGate";
 import type { LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import type { SyncConflict } from "../types";
 
@@ -170,5 +170,41 @@ describe("skip-set — markLaunchSkipped / consumeLaunchSkip", () => {
 
   it("consumeLaunchSkip returns false for an unmarked id", () => {
     expect(consumeLaunchSkip(777)).toBe(false);
+  });
+
+  describe("the skip window", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("a mark consumed at the end of the window still skips", () => {
+      markLaunchSkipped(555);
+      vi.advanceTimersByTime(LAUNCH_SKIP_WINDOW_MS);
+      expect(consumeLaunchSkip(555)).toBe(true);
+    });
+
+    it("a mark consumed just after the window no longer skips, and is gone", () => {
+      markLaunchSkipped(555);
+      vi.advanceTimersByTime(LAUNCH_SKIP_WINDOW_MS + 1);
+      expect(consumeLaunchSkip(555)).toBe(false);
+      // Back inside the old window, a mark still held would let the start through;
+      // the consume above deleted it, so nothing does.
+      vi.setSystemTime(Date.now() - LAUNCH_SKIP_WINDOW_MS);
+      expect(consumeLaunchSkip(555)).toBe(false);
+    });
+
+    it("an expired mark on another appId is dropped when a new mark is set", () => {
+      markLaunchSkipped(777);
+      vi.advanceTimersByTime(LAUNCH_SKIP_WINDOW_MS + 1);
+      markLaunchSkipped(555);
+      // Moving the clock back is the only way to ask whether 777's mark is still
+      // held: had the new mark left it standing, it would be inside the window again.
+      vi.setSystemTime(Date.now() - LAUNCH_SKIP_WINDOW_MS - 1);
+      expect(consumeLaunchSkip(777)).toBe(false);
+    });
   });
 });
