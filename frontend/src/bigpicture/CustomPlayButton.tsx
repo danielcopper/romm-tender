@@ -736,11 +736,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // open and manufacture a conflict at exit. Skip the whole gate/sync funnel and
     // just bring the game to front — `dispatchLaunch` skip-marks the appId so the
     // resulting RunGame doesn't re-enter the interceptor and get gated there either.
-    if (readGameRunning(appId, romId).running) {
-      detach(debugLog(`CustomPlayButton: appId=${appId} already running — skipping pre-launch sync`));
+    const running = readGameRunning(appId, romId);
+    if (running.running) {
+      detach(
+        debugLog(`CustomPlayButton: appId=${appId} already running — skipping pre-launch sync [${running.diagnostics}]`),
+      );
       await dispatchLaunch(gameId, admission);
       return;
     }
+    detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
     // `runPreLaunchSync` flips the button to "syncing"; an unexpected throw from
     // the gate or a verdict's modal helper (framework-level) would otherwise

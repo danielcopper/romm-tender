@@ -343,6 +343,25 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(sessionManager.readGameRunning).toHaveBeenCalledWith(APP_ID, 42);
     });
 
+    it("logs which signal decided, whether the guard skips the funnel or runs it", async () => {
+      register();
+      const handler = captureHandler();
+
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(STORE_RUNNING);
+      handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+      expect(backend.logInfo).toHaveBeenCalledWith(
+        `Launch interceptor: appId=${APP_ID} already running — skipping pre-launch sync [decided by store]`,
+      );
+
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
+      handler(78, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+      expect(backend.logInfo).toHaveBeenCalledWith(
+        `Launch interceptor: appId=${APP_ID} not running — running the launch gate [decided by stop]`,
+      );
+    });
+
     it("does NOT skip when nothing is running — normal funnel runs", async () => {
       // Defaults: nothing running → guard inert, funnel runs.
       register();

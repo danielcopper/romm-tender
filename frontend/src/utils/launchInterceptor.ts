@@ -394,8 +394,11 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // the pre-launch gate, and upload the save MID-SESSION while the emulator
       // holds the file open. Skip the whole funnel while the game is running.
       const pressedRomId = getAppIdRomIdMapSnapshot()[String(appId)];
-      if (readGameRunning(appId, pressedRomId).running) {
-        logInfo(`Launch interceptor: appId=${appId} already running — skipping pre-launch sync`);
+      const running = readGameRunning(appId, pressedRomId);
+      if (running.running) {
+        logInfo(
+          `Launch interceptor: appId=${appId} already running — skipping pre-launch sync [${running.diagnostics}]`,
+        );
         return;
       }
 
@@ -403,6 +406,7 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // against the un-pausable launch: from here the launch is stopped and we
       // relaunch only on approval.
       SteamClient.Apps.CancelGameAction(gameActionId);
+      logInfo(`Launch interceptor: appId=${appId} not running — running the launch gate [${running.diagnostics}]`);
       const admission = capturePruneLeaseAdmission();
       const start: CancelledStart = { appId, gameId };
 

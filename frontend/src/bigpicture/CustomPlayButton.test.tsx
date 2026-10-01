@@ -1063,6 +1063,36 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     expect(vi.mocked(readGameRunning)).toHaveBeenCalledWith(100, 42);
   });
 
+  it("logs which signal decided when the guard skips the gate", async () => {
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+    vi.mocked(readGameRunning).mockReturnValue(STORE_RUNNING);
+    await act(async () => {
+      playBtn.click();
+    });
+
+    await waitFor(() =>
+      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+        "CustomPlayButton: appId=100 already running — skipping pre-launch sync [decided by store]",
+      ),
+    );
+  });
+
+  it("logs which signal decided when the guard runs the gate", async () => {
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+    vi.mocked(readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
+    await act(async () => {
+      playBtn.click();
+    });
+
+    await waitFor(() =>
+      expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+        "CustomPlayButton: appId=100 not running — running the launch gate [decided by stop]",
+      ),
+    );
+  });
+
   it("runs the normal pre-launch funnel when nothing is running", async () => {
     // Defaults: nothing running → guard inert.
     const { findByText } = render(<CustomPlayButton appId={100} />);
