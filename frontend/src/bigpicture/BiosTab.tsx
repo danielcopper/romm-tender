@@ -190,9 +190,9 @@ function buildGroupBlock(bios: BiosStatus): ReactElement | null {
       className="romm-panel-group"
       style={{ display: "flex", flexDirection: "column", gap: "2px" }}
     >
-      {blocks.map((block, index) => {
+      {blocks.map((block) => {
         return (
-          <div key={`group-${index}`}>
+          <div key={[block.heading, ...block.lines.map((line) => line.text)].join("\n")}>
             <div className="romm-panel-section-title" style={SUBHEADING_STYLE}>
               {block.heading}
             </div>

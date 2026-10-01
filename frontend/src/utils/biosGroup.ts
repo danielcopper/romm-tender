@@ -33,6 +33,8 @@ const IN_PLACE = "in place";
 const MISSING = "missing";
 const NOT_CHECKED = "not checked";
 const THIS_GAMES_REGION = "← this game's region";
+const MARKED_IN_PLACE = `✓ ${IN_PLACE}`;
+const MARKED_MISSING = `✗ ${MISSING}`;
 const ONE_IMAGE_PER_DISC_REGION = "one image per disc region";
 
 /**
@@ -54,7 +56,9 @@ function nameOf(region: string): string {
 /** "A", "A and B", "A, B and C" — the order is the caller's. */
 export function joined(names: readonly string[], word = "and"): string {
   if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} ${word} ${names[names.length - 1]}`;
+  // `slice` rather than `.at(-1)`: the panel compiles against ES2020, which has no `Array.prototype.at`.
+  const last = names.slice(-1).join("");
+  return `${names.slice(0, -1).join(", ")} ${word} ${last}`;
 }
 
 /** The regions as one phrase — "Japan and Europe". */
@@ -90,7 +94,8 @@ export function oneOfWords(membership: OneOfMembership): string {
 export function oneOfRowLine(membership: OneOfMembership, inPlace: boolean | null): string {
   const words = forDiscs(membership);
   if (inPlace === null) return words;
-  return `${words} · ${inPlace ? `✓ ${IN_PLACE}` : `✗ ${MISSING}`}`;
+  const mark = inPlace ? MARKED_IN_PLACE : MARKED_MISSING;
+  return `${words} · ${mark}`;
 }
 
 /**
@@ -126,12 +131,17 @@ export function groupBlock(group: OneOfGroupVerdict, named: string): GroupBlock 
   const forTheGame = (option: { regions: readonly string[] }) =>
     option.regions.some((region) => group.game_regions.includes(region));
   const lines = group.options.map((option): GroupBlockLine => {
-    const state = option.satisfied === true ? IN_PLACE : option.satisfied === false ? MISSING : NOT_CHECKED;
     const regions = servesEveryRegion(option, group) ? EVERY_REGION : regionNames(option.regions);
-    const text = `${regions} · ${option.file_name} · ${state}${forTheGame(option) ? ` ${THIS_GAMES_REGION}` : ""}`;
+    const mark = forTheGame(option) ? ` ${THIS_GAMES_REGION}` : "";
+    const text = `${regions} · ${option.file_name} · ${stateWord(option.satisfied)}${mark}`;
     return { text, tone: toneOf(option, group) };
   });
   return { heading: `${named} · ${ONE_IMAGE_PER_DISC_REGION}`, lines };
+}
+
+function stateWord(satisfied: boolean | null): string {
+  if (satisfied === null) return NOT_CHECKED;
+  return satisfied ? IN_PLACE : MISSING;
 }
 
 function toneOf(

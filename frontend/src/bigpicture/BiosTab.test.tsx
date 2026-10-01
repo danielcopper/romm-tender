@@ -1204,7 +1204,7 @@ describe("BiosTab", () => {
       // Above the file list, and the list keeps every row.
       const list = container.querySelector(".romm-panel-file-list");
       expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row").length).toBe(3);
+      expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row")).toHaveLength(3);
     });
 
     it("heads the group and the file list each with a subheading in the section label's style", () => {
@@ -1227,7 +1227,7 @@ describe("BiosTab", () => {
       const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
 
       const lines = [...container.querySelectorAll<HTMLElement>(".romm-panel-group-line")];
-      expect(lines.length).toBe(3);
+      expect(lines).toHaveLength(3);
       for (const line of lines) expect(line.style.paddingLeft).toBe("8px");
     });
 

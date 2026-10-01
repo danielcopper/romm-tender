@@ -425,9 +425,14 @@ function gameUncovered(group: OneOfGroupVerdict, leading: string): string {
   if (files.length === 0) return `${leading} ${GROUP_GAME_UNMET} (${regionNames(group.missing)})`;
   const named = group.missing.filter((region) => serving.some((option) => option.regions.includes(region)));
   const bare = group.missing.filter((region) => !named.includes(region));
-  const state = files.length === 1 ? GROUP_ONE_MISSING : files.length === 2 ? GROUP_TWO_MISSING : GROUP_MANY_MISSING;
+  const state = missingClause(files.length);
   const rest = bare.length > 0 ? `, ${GROUP_NO_IMAGE_FOR} ${regionNames(bare)}` : "";
   return `${leading} needs ${joined(files, "or")} ${GROUP_GAME_NEEDS} (${regionNames(named)}) — ${state}${rest}`;
+}
+
+function missingClause(files: number): string {
+  if (files === 1) return GROUP_ONE_MISSING;
+  return files === 2 ? GROUP_TWO_MISSING : GROUP_MANY_MISSING;
 }
 
 /**

@@ -356,9 +356,9 @@ def _group_membership(file_name: str, groups: tuple[FirmwareGroup, ...]) -> dict
     naming = [group for group in groups if group.regions_of(file_name)]
     if not naming:
         return None
-    regions = tuple(dict.fromkeys(region for group in naming for region in group.regions_of(file_name)))
+    regions = list(dict.fromkeys(region for group in naming for region in group.regions_of(file_name)))
     every = all(set(group.regions_of(file_name)) >= set(group.regions) for group in naming)
-    return {"regions": list(regions), "every_region": every}
+    return {"regions": regions, "every_region": every}
 
 
 @dataclass(frozen=True)
