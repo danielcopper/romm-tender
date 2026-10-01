@@ -10,8 +10,9 @@
  * imperative modals).
  *
  * The gate also owns the cross-cutting skip-set (`markLaunchSkipped` /
- * `consumeLaunchSkip`): a one-shot handshake by which a gated launch tells the
- * global watcher "I already gated this appId — don't re-gate it".
+ * `consumeLaunchSkip`): a one-shot handshake by which a caller about to start a
+ * game tells the global watcher "I have already handled this start — don't
+ * gate it".
  */
 
 import type { SyncConflict } from "../types";
@@ -192,28 +193,51 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
 }
 
 // ---------------------------------------------------------------------------
-// Skip-set — shared one-shot handshake between a gated launch and the watcher.
+// Skip-set — shared one-shot handshake between a caller that starts a game
+// itself and the watcher.
 //
-// When a caller (Play button or watcher) has already run the gate and is about
-// to start the game itself, it marks the appId here. The global watcher checks
-// (and consumes) the mark at its entry so it does not re-gate a launch the
-// caller already gated. The check is one-shot: `consumeLaunchSkip` deletes the
-// mark as it reads it, so a later genuine launch of the same appId is gated
-// normally.
+// When a caller (Play button or watcher) has already handled a start — run the
+// gate, or decided the start needs none — and is about to start the game
+// itself, it marks the appId here. The global watcher checks (and consumes) the
+// mark at its entry so it does not gate a start the caller already handled. The
+// check is one-shot: `consumeLaunchSkip` deletes the mark as it reads it, so a
+// later genuine launch of the same appId is gated normally.
+//
+// A mark lets a start through only within LAUNCH_SKIP_WINDOW_MS of being set.
+// Steam reported the start that follows the Play button's RunGame well inside
+// that window. A start Steam never reports would otherwise leave the mark
+// standing, and the next direct start of that game — minutes or days later —
+// would go through ungated.
 // ---------------------------------------------------------------------------
 
-const _skip = new Set<number>();
+export const LAUNCH_SKIP_WINDOW_MS = 10_000;
 
-/** Mark `appId` as already-gated so the next watcher pass skips it once. */
-export function markLaunchSkipped(appId: number): void {
-  _skip.add(appId);
+const _skipMarkedAt = new Map<number, number>();
+
+function isWithinSkipWindow(markedAt: number, now: number): boolean {
+  return now - markedAt <= LAUNCH_SKIP_WINDOW_MS;
 }
 
 /**
- * One-shot check-and-delete: returns `true` (and clears the mark) if `appId`
- * was marked skipped, else `false`. The next launch of the same appId is gated
- * normally.
+ * Mark `appId` as a start a caller has already handled, so the next watcher
+ * pass within the window lets it through once.
+ */
+export function markLaunchSkipped(appId: number): void {
+  const now = Date.now();
+  for (const [markedId, markedAt] of _skipMarkedAt) {
+    if (!isWithinSkipWindow(markedAt, now)) _skipMarkedAt.delete(markedId);
+  }
+  _skipMarkedAt.set(appId, now);
+}
+
+/**
+ * One-shot check-and-delete: returns `true` if `appId` was marked skipped
+ * within the window, else `false`. The mark is cleared either way, so the next
+ * launch of the same appId is gated normally.
  */
 export function consumeLaunchSkip(appId: number): boolean {
-  return _skip.delete(appId);
+  const markedAt = _skipMarkedAt.get(appId);
+  if (markedAt === undefined) return false;
+  _skipMarkedAt.delete(appId);
+  return isWithinSkipWindow(markedAt, Date.now());
 }

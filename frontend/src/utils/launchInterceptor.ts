@@ -8,9 +8,10 @@
  * race against the un-pausable launch), runs the shared {@link runLaunchGate}
  * funnel, and on approval relaunches via `RunGame`.
  *
- * The one-shot skip-set (`markLaunchSkipped` / `consumeLaunchSkip`, owned by
- * `launchGate.ts`) exempts exactly one launch: the watcher's own relaunch and
- * the Play button's gated launch — so neither gets re-gated (no double-gate).
+ * The skip-set (`markLaunchSkipped` / `consumeLaunchSkip`, owned by
+ * `launchGate.ts`) lets one start through that a caller has just handled — the
+ * watcher's own relaunch and the Play button's start — so neither is gated
+ * twice.
  *
  * Registered once, from the panel's factory; nothing unregisters it.
  */
@@ -334,8 +335,8 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       const appId = appIdFromGameId(gameId);
       if (appId === null || !isRomMAppId(appId)) return;
 
-      // One-shot skip: a gated relaunch (the watcher's own RunGame) or a
-      // Play-button launch already ran the funnel — do NOT re-gate it.
+      // One-shot skip: a start a caller has already handled (the watcher's own
+      // relaunch, or a Play-button start) — do NOT gate it again.
       if (consumeLaunchSkip(appId)) return;
 
       // Already-running guard (#1148 round 2). A Play press on a game that is
