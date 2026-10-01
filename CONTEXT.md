@@ -613,8 +613,8 @@ either way.
 ### One-of group (firmware): met / partial / unmet / unknown
 
 A firmware requirement a launch meets with exactly **one** of several files, chosen by the **console region** of the
-disc being booted — Beetle PSX opens `scph5500.bin` for an NTSC-J disc, `scph5501.bin` for NTSC-U and `scph5502.bin` for
-PAL. The resolver states it as a group of **options**, each naming the console regions whose launch opens it, the
+disc being booted — Beetle PSX opens `scph5500.bin` for a Japan disc, `scph5501.bin` for USA and `scph5502.bin` for
+Europe. The resolver states it as a group of **options**, each naming the console regions whose launch opens it, the
 regions disjoint across the options; one file may stand under two options and then serves both their regions. Where the
 core finds its image by searching the BIOS folder, the image the search found is one option serving every region the
 search answered for — all of them for SwanStation, where no region's own setting settled it first.
