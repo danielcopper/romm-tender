@@ -67,7 +67,7 @@
  */
 
 import type { BiosLevel, FirmwareWanted, OneOfGroupVerdict, SystemImage } from "../types/firmware";
-import { regionsFull, regionsShort } from "./biosGroup";
+import { joined, regionNames, servesEveryRegion } from "./biosGroup";
 
 /**
  * One state, in the two lengths a surface can have room for. Both are always
@@ -140,6 +140,9 @@ const GROUP_PARTIAL_TAIL = "discs will not start";
 const GROUP_UNCHECKED_TAIL = "needs is in place could not be checked";
 const GROUP_GAME_MET = "needs for this game's region";
 const GROUP_GAME_UNMET = "has no BIOS image for this game's region";
+const GROUP_GAME_NEEDS = "to start this game";
+const GROUP_GAME_STARTS = "starts this game with";
+const GROUP_GAME_FOUND = "found in the BIOS folder, it serves every region";
 
 const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
 const STATUS_READINESS_UNKNOWN = "Readiness unknown";
@@ -175,6 +178,9 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   GROUP_UNCHECKED_TAIL,
   GROUP_GAME_MET,
   GROUP_GAME_UNMET,
+  GROUP_GAME_NEEDS,
+  GROUP_GAME_STARTS,
+  GROUP_GAME_FOUND,
   STATUS_NEEDS_IMAGE,
   STATUS_READINESS_UNKNOWN,
   STATUS_REQUIREMENT_UNKNOWN,
@@ -305,30 +311,61 @@ function groupSummary(group: OneOfGroupVerdict, named: string, leading: string, 
     case "met":
       return {
         status: ratio,
-        sentence: forTheGame
-          ? `${GROUP_IMAGE_HEAD} ${named} ${GROUP_GAME_MET} (${regionsShort(group.covered)}) is in place`
-          : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
+        sentence: forTheGame ? gameCovered(group, named, leading) : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
       };
     case "partial":
       return {
-        status: `${ratio} · ${regionsShort(group.covered)} only`,
+        status: `${ratio} · ${regionNames(group.covered)} only`,
         sentence:
-          `${leading} ${GROUP_PARTIAL_HEAD} ${regionsFull(group.covered)} only — ` +
-          `${regionsFull(group.missing)} ${GROUP_PARTIAL_TAIL}`,
+          `${leading} ${GROUP_PARTIAL_HEAD} ${regionNames(group.covered)} only — ` +
+          `${regionNames(group.missing)} ${GROUP_PARTIAL_TAIL}`,
       };
     case "unmet":
-      return {
-        status: ratio,
-        sentence: forTheGame
-          ? `${leading} ${GROUP_GAME_UNMET} (${regionsShort(group.missing)})`
-          : `${leading} ${CANNOT_START}`,
-      };
+      return { status: ratio, sentence: forTheGame ? gameUncovered(group, leading) : `${leading} ${CANNOT_START}` };
     case "unknown":
       return {
         status: STATUS_READINESS_UNKNOWN,
         sentence: `${IMAGE_UNSETTLED_HEAD} ${named} ${GROUP_UNCHECKED_TAIL}`,
       };
   }
+}
+
+/**
+ * The game page's sentence for a game whose region is covered. Where the image
+ * covering it serves every region the group speaks about — an image the core
+ * found in the BIOS folder, SwanStation's — the sentence names that image,
+ * because it is the one this game starts with whatever its disc says.
+ */
+function gameCovered(group: OneOfGroupVerdict, named: string, leading: string): string {
+  const covering = (group.options ?? []).find(
+    (option) => option.satisfied === true && option.regions.some((region) => group.covered.includes(region)),
+  );
+  if (covering && servesEveryRegion(covering, group)) {
+    return `${leading} ${GROUP_GAME_STARTS} ${covering.file_name} — ${GROUP_GAME_FOUND}`;
+  }
+  return `${GROUP_IMAGE_HEAD} ${named} ${GROUP_GAME_MET} (${regionNames(group.covered)}) is in place`;
+}
+
+/**
+ * The game page's sentence for a game whose region is not covered: the file
+ * its region needs, and that it is missing. A game of several regions names
+ * the file of each, since any of them would start it. Where no option is
+ * listed for the game's region — the resolver stated only that nothing boots
+ * for it — there is no file to name, and the sentence names the region alone.
+ */
+function gameUncovered(group: OneOfGroupVerdict, leading: string): string {
+  const files = [
+    ...new Set(
+      (group.options ?? [])
+        .filter((option) => option.regions.some((region) => group.missing.includes(region)))
+        .map((option) => option.file_name),
+    ),
+  ];
+  const regions = regionNames(group.missing);
+  if (files.length === 0) return `${leading} ${GROUP_GAME_UNMET} (${regions})`;
+  const state =
+    files.length === 1 ? "it is missing" : files.length === 2 ? "neither is in place" : "none of them is in place";
+  return `${leading} needs ${joined(files, "or")} ${GROUP_GAME_NEEDS} (${regions}) — ${state}`;
 }
 
 /**

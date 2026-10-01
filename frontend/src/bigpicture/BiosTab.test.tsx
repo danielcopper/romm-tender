@@ -770,7 +770,7 @@ describe("BiosTab", () => {
       const cores = {
         "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-j"], every_region: false } },
       };
-      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (one of these · Japan (NTSC-J))");
+      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (for Japan discs)");
     });
 
     it("says every region for the image that serves them all", () => {
@@ -780,7 +780,7 @@ describe("BiosTab", () => {
           one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
         },
       };
-      expect(lineFor(cores, "swanstation")).toBe("swanstation (one of these · every region)");
+      expect(lineFor(cores, "swanstation")).toBe("swanstation (boots it for every region)");
     });
 
     it("keeps the core's own word — the declaration is never rewritten", () => {
@@ -814,7 +814,7 @@ describe("BiosTab", () => {
         "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-u"], every_region: false } },
         "pcsx_rearmed_libretro.so": { required: false, one_of: null },
       };
-      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (one of these · North America (NTSC-U))");
+      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (for USA discs)");
       expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
     });
   });
@@ -1143,7 +1143,21 @@ describe("BiosTab", () => {
       required_downloaded: state === "met" ? 1 : 0,
       required_withheld: 0,
       required_partial: 0,
-      one_of_groups: [{ state, covered, missing, unchecked: [], game_regions: game }],
+      one_of_groups: [
+        {
+          state,
+          covered,
+          missing,
+          unchecked: [],
+          game_regions: game,
+          regions: ["ntsc-j", "ntsc-u", "pal"],
+          options: [
+            { file_name: "scph5500.bin", regions: ["ntsc-j"], satisfied: false },
+            { file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: true },
+            { file_name: "scph5502.bin", regions: ["pal"], satisfied: false },
+          ],
+        },
+      ],
       active_core_label: "Beetle PSX",
       files,
     });
@@ -1158,14 +1172,70 @@ describe("BiosTab", () => {
       const container = renderFor(forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), "ok");
 
       expect(container.textContent).toContain(
-        "The BIOS image Beetle PSX needs for this game's region (North America) is in place",
+        "The BIOS image Beetle PSX needs for this game's region (USA) is in place",
       );
     });
 
-    it("says the game's own region has no image", () => {
+    it("names the file the game's own region needs, and that it is missing", () => {
       const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
 
-      expect(container.textContent).toContain("Beetle PSX has no BIOS image for this game's region (Japan)");
+      expect(container.textContent).toContain(
+        "Beetle PSX needs scph5500.bin to start this game (Japan) — it is missing",
+      );
+    });
+
+    it("lists the group above the file list, one line per region, the game's marked", () => {
+      const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
+
+      const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
+      expect(block?.textContent).toContain("Beetle PSX needs one BIOS image per disc region:");
+      const lines = [...(block?.querySelectorAll<HTMLElement>(".romm-panel-group-line") ?? [])];
+      expect(lines.map((line) => line.textContent)).toEqual([
+        "Japan · scph5500.bin · missing ← this game",
+        "USA · scph5501.bin · in place",
+        "Europe · scph5502.bin · missing",
+      ]);
+      expect(lines.map((line) => line.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor)).toEqual([
+        "#d94126",
+        "#5ba32b",
+        "#8f98a0",
+      ]);
+      // Above the file list, and the list keeps every row.
+      const list = container.querySelector(".romm-panel-file-list");
+      expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row").length).toBe(3);
+    });
+
+    it("says which image starts the game where one found in the folder serves every region", () => {
+      const swanstation: BiosStatus = {
+        ...forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]),
+        active_core_label: "SwanStation",
+        one_of_groups: [
+          {
+            state: "met",
+            covered: ["ntsc-u"],
+            missing: [],
+            unchecked: [],
+            game_regions: ["ntsc-u"],
+            regions: ["ntsc-j", "ntsc-u", "pal"],
+            options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
+          },
+        ],
+      };
+      const container = renderFor(swanstation, "ok");
+
+      expect(container.textContent).toContain(
+        "SwanStation starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
+      );
+      const lines = [...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent);
+      expect(lines).toEqual(["every region · scph1001.bin · in place ← this game"]);
+      expect(container.textContent).not.toContain("needs one BIOS image per disc region");
+    });
+
+    it("shows no group block where the launching emulator states no group", () => {
+      const container = renderFor({ ...forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), one_of_groups: [] }, "ok");
+
+      expect(container.querySelector('[data-testid="bios-group"]')).toBeNull();
     });
 
     it("draws the missing image of the game's region red and another region's grey", () => {

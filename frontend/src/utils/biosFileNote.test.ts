@@ -227,6 +227,20 @@ describe("a stale configured image name", () => {
 });
 
 describe("biosFileDescription", () => {
+  it("says a file the reading identified by its contents was found in the BIOS folder", () => {
+    // The resolver's own prose for such a file is about its search; what the
+    // reader needs is where the file is.
+    expect(
+      biosFileDescription({
+        file_name: "scph1001.bin",
+        description: "the image this core boots — found by its directory search, named by no option",
+        declared_kind: "file",
+        declaration: "read",
+        caveats: ["firmware-image-identified"],
+      }),
+    ).toBe("found in the BIOS folder");
+  });
+
   // One example per shape the function's own docstring classifies the `.info`
   // corpus into, so the rule is pinned beside the code holding it rather than
   // only through whichever surface happens to render it. The strings are that

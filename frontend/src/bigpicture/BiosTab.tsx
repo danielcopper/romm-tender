@@ -40,7 +40,7 @@ import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted, O
 import { biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
-import { oneOfWords } from "../utils/biosGroup";
+import { groupBlock, oneOfWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary } from "../utils/biosSummary";
 import { section } from "./panelSection";
@@ -158,6 +158,50 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
       <span className="romm-panel-value">{biosLabel}</span>
     </div>,
   ];
+}
+
+/** The dot beside one line of the group block — the same colours a file row's dot uses. */
+const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
+  here: "#5ba32b",
+  missing: "#d94126",
+  other: "#8f98a0",
+  unchecked: "#d4a72c",
+};
+
+/**
+ * The launching emulator's one-of groups, between the headline and the file
+ * list: which image each disc region needs and whether it is there, with the
+ * game's own region marked. The file list below stays whole — the block is a
+ * reading of some of its rows, not a replacement for them. What it says is
+ * `utils/biosGroup.ts`'s; this lays it out.
+ */
+function buildGroupBlock(bios: BiosStatus): ReactElement | null {
+  const groups = bios.one_of_groups ?? [];
+  if (groups.length === 0) return null;
+  const named = bios.active_core_label ?? "The launching emulator";
+  return (
+    <div
+      key="bios-group"
+      data-testid="bios-group"
+      className="romm-panel-group"
+      style={{ display: "flex", flexDirection: "column", gap: "2px", margin: "8px 0" }}
+    >
+      {groups.map((group, index) => {
+        const block = groupBlock(group, named);
+        return (
+          <div key={`group-${index}`}>
+            {block.intro && <div className="romm-panel-value">{block.intro}</div>}
+            {block.lines.map((line) => (
+              <div key={line.text} className="romm-panel-group-line romm-panel-file-row">
+                <span className="romm-status-dot" style={{ backgroundColor: GROUP_TONE_COLOR[line.tone] }} />
+                <span className="romm-panel-file-name">{line.text}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 /**
@@ -409,8 +453,10 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
 export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isActive }) => {
   if (!isActive || !biosStatus) return null;
 
-  // Left column: BIOS status + file list
+  // Left column: BIOS status, the launching emulator's group, then the file list
   const biosColumn = buildBiosHeader(biosStatus, biosLevel);
+  const groupBlockElement = buildGroupBlock(biosStatus);
+  if (groupBlockElement) biosColumn.push(groupBlockElement);
 
   const fileElements = buildBiosFileList(biosStatus, coreInfo);
   if (fileElements.length > 0) {

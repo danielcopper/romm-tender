@@ -244,9 +244,8 @@ describe("a one-of group", () => {
       "partial",
     );
     expect(partial).toEqual({
-      status: "0 / 1 required · North America only",
-      sentence:
-        "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start",
+      status: "0 / 1 required · USA only",
+      sentence: "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start",
     });
   });
 
@@ -302,8 +301,56 @@ describe("a one-of group", () => {
       [],
       "missing",
     );
-    expect(covered.sentence).toBe("The BIOS image Beetle PSX needs for this game's region (North America) is in place");
+    expect(covered.sentence).toBe("The BIOS image Beetle PSX needs for this game's region (USA) is in place");
     expect(uncovered.sentence).toBe("Beetle PSX has no BIOS image for this game's region (Japan)");
+  });
+
+  it("names the file the game's own region needs where the verdict lists it", () => {
+    const beetle: OneOfGroupVerdict = {
+      ...group("unmet", [], ["ntsc-u"], ["ntsc-u"]),
+      regions: ["ntsc-j", "ntsc-u", "pal"],
+      options: [
+        { file_name: "scph5500.bin", regions: ["ntsc-j"], satisfied: true },
+        { file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: false },
+      ],
+    };
+    const missing = biosSummary(
+      { active_core_label: "Beetle PSX", required_count: 1, required_downloaded: 0, one_of_groups: [beetle] },
+      [],
+      "missing",
+    );
+    expect(missing.sentence).toBe("Beetle PSX needs scph5501.bin to start this game (USA) — it is missing");
+  });
+
+  it("names every file a game of several regions could start from", () => {
+    const beetle: OneOfGroupVerdict = {
+      ...group("unmet", [], ["ntsc-u", "pal"], ["ntsc-u", "pal"]),
+      regions: ["ntsc-j", "ntsc-u", "pal"],
+      options: [
+        { file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: false },
+        { file_name: "scph5502.bin", regions: ["pal"], satisfied: false },
+      ],
+    };
+    const missing = biosSummary(
+      { active_core_label: "Beetle PSX", required_count: 1, required_downloaded: 0, one_of_groups: [beetle] },
+      [],
+      "missing",
+    );
+    expect(missing.sentence).toBe(
+      "Beetle PSX needs scph5501.bin or scph5502.bin to start this game (USA and Europe) — neither is in place",
+    );
+  });
+
+  it("names the image that starts the game where one found in the folder serves every region", () => {
+    const swanstation: OneOfGroupVerdict = {
+      ...group("met", ["ntsc-u"], [], ["ntsc-u"]),
+      regions: ["ntsc-j", "ntsc-u", "pal"],
+      options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
+    };
+    const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] });
+    expect(met.sentence).toBe(
+      "SwanStation starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
+    );
   });
 
   it("words a group of any console the same way, naming regions it has no name for in their own spelling", () => {

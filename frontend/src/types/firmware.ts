@@ -104,6 +104,22 @@ export interface OneOfGroupVerdict {
   missing: string[];
   unchecked: string[];
   game_regions: string[];
+  /** Every region the group speaks about, whatever the scope. Absent on a
+   *  payload from before the field existed. */
+  regions?: string[];
+  /** Every option the group lists, whatever the scope — see {@link OneOfOption}.
+   *  Absent on a payload from before the field existed. */
+  options?: OneOfOption[];
+}
+
+/**
+ * One file a one-of group accepts: the console regions whose launch opens it,
+ * and the resolver's verdict over it — in place, not, or nothing settled.
+ */
+export interface OneOfOption {
+  file_name: string;
+  regions: string[];
+  satisfied: boolean | null;
 }
 
 /**

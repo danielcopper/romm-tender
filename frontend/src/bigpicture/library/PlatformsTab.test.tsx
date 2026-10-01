@@ -2189,9 +2189,9 @@ describe("Library › Platforms", () => {
       it("says under each option which region it serves", async () => {
         const container = await renderPlatform(beetleRows());
 
-        expect(container.textContent).toContain("one of these · Japan (NTSC-J) · ✗ missing");
-        expect(container.textContent).toContain("one of these · North America (NTSC-U) · ✓ in place");
-        expect(container.textContent).toContain("one of these · Europe (PAL) · ✗ missing");
+        expect(container.textContent).toContain("for Japan discs · ✗ missing");
+        expect(container.textContent).toContain("for USA discs · ✓ in place");
+        expect(container.textContent).toContain("for Europe discs · ✗ missing");
       });
 
       it("says every region for the image that serves them all", async () => {
@@ -2214,7 +2214,7 @@ describe("Library › Platforms", () => {
           },
         );
 
-        expect(container.textContent).toContain("one of these · every region · ✓ in place");
+        expect(container.textContent).toContain("for every region · ✓ in place");
         expect(container.textContent).toContain("The BIOS image SwanStation needs is in place for every region");
         expect(container.textContent).toContain("1 / 1 required");
       });
@@ -2222,9 +2222,9 @@ describe("Library › Platforms", () => {
       it("states a partly covered group with the regions it covers and the ones it does not", async () => {
         const container = await renderPlatform(beetleRows());
 
-        expect(container.textContent).toContain("0 / 1 required · North America only");
+        expect(container.textContent).toContain("0 / 1 required · USA only");
         expect(container.textContent).toContain(
-          "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start",
+          "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start",
         );
       });
 

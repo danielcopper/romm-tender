@@ -54,7 +54,10 @@ export type BiosNoteRow = Pick<
 >;
 
 /** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
-export type BiosDescriptionRow = Pick<BiosFileStatus, "file_name" | "description" | "declared_kind" | "declaration">;
+export type BiosDescriptionRow = Pick<
+  BiosFileStatus,
+  "file_name" | "description" | "declared_kind" | "declaration" | "caveats"
+>;
 
 /**
  * Everything a row says about itself: one sentence, and the lines under it.
@@ -99,6 +102,13 @@ const HOLDS_NO_IMAGE = ["firmware-directory-holds-no-image", "firmware-directory
 /** The identity table names the bytes and the core's own header check denies
  *  them: two reads that disagree, and neither is taken over the other. */
 const IMAGE_CONTRADICTED = "firmware-image-contradicted";
+/** The reading identified the file by its CONTENT — the emulator's own search of
+ *  the BIOS folder found it — whether or not its packaged table also files
+ *  those bytes. */
+const IDENTIFIED_BY_CONTENT = ["firmware-image-identified", "firmware-image-unlisted"];
+/** What a file found that way says about itself, in place of the resolver's
+ *  own prose about its search. */
+const FOUND_IN_THE_BIOS_FOLDER = "found in the BIOS folder";
 /** The folder could not be listed in full, or a candidate's bytes would not come
  *  back — a read failure, never a finding about what is in there. */
 const READ_INCOMPLETE = ["firmware-scan-incomplete", "firmware-unreadable"];
@@ -231,8 +241,12 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * for a row no placement covers, the file name itself (`build_file_entry`'s
  * `else file_name`). Both spell the name into the words.
  *
- * **Only a `read` declaration's prose is shown at all**, which is the first
- * thing decided here. That prose is a packager's LABEL for the file and says
+ * **A file the reading identified by its contents is described as "found in
+ * the BIOS folder"**, whichever declaration it came from, and that is decided
+ * first: the emulator's own search found it, and the resolver's prose for such a
+ * file explains the search rather than the file.
+ *
+ * **Otherwise only a `read` declaration's prose is shown at all**. That prose is a packager's LABEL for the file and says
  * what the row's own name does not — `(PS1 JP BIOS)` on `scph5500.bin`, a
  * region the name never states. A `packaged` row's is a different
  * kind of writing under the same field: atlas explaining the requirement in
@@ -284,6 +298,10 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
   // "folder": a restatement of `declared_kind`. This is a rule about what a
   // folder ROW shows, not a prediction about what descriptions exist.
   if (file.declared_kind === "directory") return null;
+  // A file the reading identified by its contents was found by a search of the
+  // BIOS folder, and the resolver's description of such a file explains that
+  // search ("named by no option"). Where the file is is what a reader needs.
+  if (IDENTIFIED_BY_CONTENT.some((code) => (file.caveats ?? []).includes(code))) return FOUND_IN_THE_BIOS_FOLDER;
   if (file.declaration !== "read") return null;
   const description = file.description.trim();
   if (!description) return null;
