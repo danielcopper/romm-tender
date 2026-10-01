@@ -440,6 +440,47 @@ of the panel renders and works and Steam's game page carries no Tender section; 
 thing, because every read of it is in that same patch. The registration in `gameDetailPatch.tsx` logs a line of its own
 naming the game page, for whoever reads the log with the game page in mind.
 
+## Third-party package budgets
+
+What a size cap on the panel is for is catching a large library slipping in — a whole icon set, a utility library
+imported from its root. A cap on the whole bundle stops doing that once ordinary features have grown the bundle up to
+it: every feature then raises it, and a library slipping in reads as one raise more. So the third-party code is budgeted
+on its own, **per package and per bundle**, and the bundle's total is only a coarse net.
+
+**What is budgeted** is every package under `node_modules/` that puts code into a bundle, separately in each of the
+three bundles. The package a module belongs to is named by the LAST `node_modules/` segment of its path — pnpm keeps
+every package at `node_modules/.pnpm/<name>@<version>/node_modules/<name>/`, so the first segment names only the store —
+and a scoped one as `@scope/name`. Its bytes are the UTF-8 length of its modules' code as Rollup rendered it into the
+bundle, after tree-shaking. A package a build leaves external — React in all three, which the panel takes from the
+`SP_*` globals, and `@decky/ui` in the coexistence bundle, taken from `DFL` — is not in that bundle and has no budget
+there.
+
+**What is not budgeted** is the panel's own code: every module outside `node_modules/`, and the modules a plugin makes
+up, whose ids start with `\0` — the bundle stamp above today, and `@rollup/plugin-commonjs`'s helpers and proxies once a
+CommonJS package is bundled. It grows with every feature, and a budget per area of it would move the raise rather than
+remove it. `frontend/.size-limit.json` watches it through the total instead — 1.5 MB raw for each panel bundle, 20 KB
+for `globals.js` — which `pnpm -C frontend size` checks; that is the net for something large slipping into our own code.
+
+**Where it lives.** The build records, for each bundle, the bytes per package and the SHA-256 of the bundle as written,
+in `frontend/bundle-packages.json` (the `record-package-bytes` plugin in `frontend/rollup.config.js`). It is gitignored
+and stays out of `dist/` on purpose: `scripts/package.sh` ships the whole of `dist/`, and the record describes the build
+rather than being part of it. The budgets are `frontend/package-budgets.json`, bytes per package per bundle.
+`pnpm -C frontend check:packages` (`frontend/scripts/check-package-budgets.mjs`) holds the one against the other and
+fails, one line per problem, when
+
+- a package puts more into a bundle than its budget there;
+- a package is in a bundle and has no budget there;
+- a budget names a package the bundle no longer carries;
+- there is no record, a bundle has budgets and no record or a record and no budgets, or the record's digest is not that
+  of the file `dist/` holds — a record older than the build is refused rather than judged.
+
+It runs after the build beside `check:bundle`, in `mise run gate` and in CI.
+
+**Adding a package** fails the check, naming the package, the bundle and its bytes. Give it a budget deliberately: an
+entry under each bundle that carries it, at its recorded size plus about a tenth, which is the margin the first budgets
+were set with. Raising a budget is the same edit and reads the same in a diff: the package that grew, by how much. A
+package that leaves a bundle takes its budget with it.
+
 ## What the tests here can and cannot see
 
 The frontend suite replaces `@decky/ui` with a stub — 33 files plus a global mock in `frontend/src/test-setup.ts` — so

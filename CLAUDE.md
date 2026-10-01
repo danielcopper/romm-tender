@@ -584,6 +584,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
   `frontend/scripts/check-bundle-shape.mjs`, over the built artifact; which bundle the injector loads
   (`backend/host/inject/bundles.py`) it does not see
+- **Every third-party package a bundle carries has a budget of its own in `frontend/package-budgets.json`, and a package
+  without one, a package over its budget, or a budget for a package the bundle no longer carries fails the build check**
+  — check — `frontend/scripts/check-package-budgets.mjs` (`pnpm -C frontend check:packages`), over the record the build
+  writes to `frontend/bundle-packages.json`, refused when it is older than `dist/`; the panel's own code has no budget
+  of its own and only `frontend/.size-limit.json`'s total watches it
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts` against the pinned `decky-globals-block.txt`; the pinned copy itself is held
   by hand, its provenance header naming the upstream commit
