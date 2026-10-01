@@ -42,6 +42,7 @@ from domain.firmware_wants import (
     SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
     SYSTEM_FIRMWARE_OPEN,
     SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    WANTED_NEEDED,
     WANTED_OPTIONAL,
     WANTED_UNKNOWN,
     CoreFirmwareVerdict,
@@ -505,29 +506,51 @@ class TestAOneOfGroupIsOneRequirement:
 
 
 class TestThePlayRowTokenCountsPlainFilesOnly:
-    """The game page's badge token: "Missing" for a group that does not cover the game, else plain files only.
+    """The badge token: "Missing" for a group that does not cover the game, else plain files only.
 
-    The verdicts here are the game-scoped ones (``judge_group_for_game``), and the
-    regions are invented: the token reads the group's state and nothing else.
+    The verdicts here are the game-scoped ones (``judge_group_for_game``). The
+    system is invented — its slug, core, regions and rows — because the token
+    reads the group's state and the rows' verdicts and nothing about a console.
     """
 
-    @staticmethod
-    def _plain(name: str, *, here: bool) -> BiosFileEntry:
-        return dataclasses.replace(
-            _withheld_folder_row(), file_name=name, declared_path=name, satisfied=here, downloaded=here
+    _CORE = "arcadia_libretro"
+
+    @classmethod
+    def _plain(cls, name: str, *, here: bool | None) -> BiosFileEntry:
+        """A file the invented core requires: in place, shown missing, or nothing could judge it (``None``)."""
+        return BiosFileEntry(
+            file_name=name,
+            downloaded=bool(here),
+            local_path=f"/bios/arcadia/{name}",
+            declared_path=f"arcadia/{name}",
+            description=f"{name} (Arcadia system ROM)",
+            wanted=WANTED_NEEDED,
+            required_by_active=True,
+            cores={cls._CORE: {"required": True}},
+            used_by_active=True,
+            satisfied=here,
         )
 
     @staticmethod
     def _verdict(state: str) -> GroupVerdict:
         covered = ("north",) if state in {GROUP_MET, GROUP_PARTIAL} else ()
         missing = ("south",) if state in {GROUP_PARTIAL, GROUP_UNMET} else ()
-        return GroupVerdict(state=state, covered=covered, missing=missing, unchecked=())
+        unchecked = ("east",) if state == GROUP_UNKNOWN else ()
+        return GroupVerdict(state=state, covered=covered, missing=missing, unchecked=unchecked)
 
-    def _label(self, *states: str, plain: tuple[bool, ...] = ()) -> str:
-        files = tuple(self._plain(f"plain{index}.bin", here=here) for index, here in enumerate(plain))
+    def _label(self, *states: str, plain: tuple[bool | None, ...] = ()) -> str:
+        files = tuple(self._plain(f"plain{index}.rom", here=here) for index, here in enumerate(plain))
         groups = tuple(self._verdict(state) for state in states)
         required, done = count_required(files, groups)
-        return compute_bios_label(_status(files, required_count=required, required_downloaded=done, groups=groups))
+        return compute_bios_label(
+            _status(
+                files,
+                platform_slug="arcadia",
+                required_count=required,
+                required_downloaded=done,
+                groups=groups,
+            )
+        )
 
     def test_a_group_that_does_not_cover_the_game_is_missing_whatever_the_plain_files_say(self):
         assert self._label(GROUP_UNMET, plain=(True, False)) == BIOS_LABEL_MISSING
@@ -548,6 +571,19 @@ class TestThePlayRowTokenCountsPlainFilesOnly:
         assert self._label(plain=(False, False)) == BIOS_LABEL_MISSING
         assert self._label(plain=(True, False)) == "1/2 required"
         assert self._label(plain=(True,)) == "OK"
+
+    def test_a_plain_file_shown_missing_is_counted_beside_a_group_nothing_could_check(self):
+        assert self._label(GROUP_UNKNOWN, plain=(False,)) == "0/1 required"
+        assert self._label(GROUP_UNKNOWN, plain=(True, False)) == "1/2 required"
+
+    def test_a_plain_file_shown_missing_is_counted_beside_a_row_nothing_could_judge(self):
+        """The row nothing could judge is one of the plain files, so it is in the second number."""
+        assert self._label(plain=(None, False)) == "0/2 required"
+
+    def test_with_nothing_shown_missing_a_declined_verdict_stays_unknown(self):
+        assert self._label(GROUP_UNKNOWN, plain=(True,)) == BIOS_LABEL_UNKNOWN
+        assert self._label(GROUP_UNKNOWN) == BIOS_LABEL_UNKNOWN
+        assert self._label(plain=(None, True)) == BIOS_LABEL_UNKNOWN
 
 
 class TestAStaleConfiguredNameChangesNothing:

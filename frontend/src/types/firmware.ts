@@ -511,8 +511,11 @@ export interface BiosStatus {
   // so the frontend reads the decision off the payload instead of re-deriving the
   // threshold logic. Present only when needs_bios is true.
   bios_level?: BiosLevel | null;
-  // The compact token for that level (compute_bios_label), derived beside it so
-  // the two can never disagree. Present only when needs_bios is true.
+  // The play row's compact token (compute_bios_label): "Missing", "Unknown",
+  // "OK", or the plain required files' "X/Y required", never counting a one-of
+  // group. It is not a restatement of the level — a partial group beside plain
+  // files all in place reads "OK" — so read the level for the verdict. Present
+  // only when needs_bios is true.
   bios_label?: string;
   // Set when the check could not determine the requirement — it found no file
   // to speak for AND its reading of the platform's emulators was not complete,

@@ -2411,15 +2411,17 @@ the keys is a statement about the place with no owner — a listing that failed 
 the row, which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
 
 **A required row nothing could judge declines the verdict instead of guessing it.** `_requirement_verdict_withheld`
-takes both `compute_bios_level` and `compute_bios_label` to `unknown` while every file row keeps its own answer. The
-count travels as `required_withheld` because three surfaces need it: the platform detail tells its two unknowns apart
-with it, the shared `utils/biosSummary.ts` picks between "Nothing could be established about what X needs" and "One file
-X requires could not be checked", and the play-row badge subtracts it so a required file whose absence _was_ established
-still warns. What a withheld row SAYS comes from its caveat codes and, for a declared FILE, from its `checked` — the
-resolver's own word for what became of the bytes, carried from the same entry `declaration` is, because a file the
-emulator read and does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict
-cannot say which. The verdict is the answer alone and carries none of its causes; the verdict decides only which family
-of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
+takes `compute_bios_level` to `unknown` while every file row keeps its own answer, and `compute_bios_label` with it —
+unless a plain required file is shown missing beside it, which the decline does not unsay: the token is then the plain
+files' ratio, the withheld row in the second number and never the first (`_declined_label`). The count travels as
+`required_withheld` because three surfaces need it: the platform detail tells its two unknowns apart with it, the shared
+`utils/biosSummary.ts` picks between "Nothing could be established about what X needs" and "One file X requires could
+not be checked", and the play-row badge subtracts it so a required file whose absence _was_ established still warns.
+What a withheld row SAYS comes from its caveat codes and, for a declared FILE, from its `checked` — the resolver's own
+word for what became of the bytes, carried from the same entry `declaration` is, because a file the emulator read and
+does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict cannot say which.
+The verdict is the answer alone and carries none of its causes; the verdict decides only which family of codes can apply
+and what to say when none of them is recognised, which is the one sentence written off it —
 `frontend/src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines
 under it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
 description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
@@ -2470,8 +2472,9 @@ to the ROM's own console regions (`console_regions_of` over `Rom.regions`) and k
 maps. The play row's badge subtracts `required_partial` as it subtracts `required_withheld`, so a group partly covered
 for a game whose region is unknown raises nothing. Its token (`compute_bios_label`) is `Missing` for an `unmet` group
 whatever the plain files say, and otherwise counts the plain required files alone, never a group — stated as a ratio
-beside a group even with none of them in place, because an image is (`_counted_label`). Nothing in the module knows
-which console it is judging.
+beside a group even with none of them in place, because an image is (`_counted_label`); beside an `unknown` group it is
+`Unknown` unless a plain file is shown missing (`_declined_label`). Nothing in the module knows which console it is
+judging.
 
 **The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
 own held/offered ratio — and it is a value rather than a count, for a core that states no one-of group.** A libretro

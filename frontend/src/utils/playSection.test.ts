@@ -194,7 +194,7 @@ describe("extractBiosInfo", () => {
       const answer = {
         bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_partial: 1 },
         bios_level: "partial" as const,
-        bios_label: "0/1 required",
+        bios_label: "OK",
       };
       expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
     });
@@ -214,7 +214,7 @@ describe("extractBiosInfo", () => {
       const answer = {
         bios_status: { ...requirement, required_count: 2, required_downloaded: 0, required_partial: 1 },
         bios_level: "partial" as const,
-        bios_label: "0/2 required",
+        bios_label: "0/1 required",
       };
       expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
     });
@@ -249,7 +249,7 @@ describe("extractBiosInfo", () => {
       const answer = {
         bios_status: { ...requirement, required_count: 2, required_downloaded: 0, required_withheld: 1 },
         bios_level: "unknown" as const,
-        bios_label: "Unknown",
+        bios_label: "0/2 required",
       };
       expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
     });

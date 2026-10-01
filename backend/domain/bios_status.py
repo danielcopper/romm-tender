@@ -731,12 +731,14 @@ def compute_bios_level(status: BiosStatus) -> str:
 def compute_bios_label(status: BiosStatus) -> str:
     """Compute the compact BIOS status token (verbose phrasing stays per-surface).
 
-    Declines on exactly the shapes :func:`compute_bios_level` declines on — by
-    asking it rather than by repeating them, so the token beside a grey dot can
-    never read as a ratio the verdict withheld.
+    Where :func:`compute_bios_level` declines, the token declines too — unless a
+    plain required file is shown missing, which is established whatever else
+    could not be judged; then it counts the plain files (:func:`_declined_label`).
+    The level is asked rather than its shapes repeated, so a token beside a grey
+    dot is a ratio only over a file whose absence was established.
     """
     if compute_bios_level(status) == BIOS_LEVEL_UNKNOWN:
-        return BIOS_LABEL_UNKNOWN
+        return _declined_label(status)
     # A console that needs one of these images and holds none: the ratio would
     # count the wrong set, and the disjunction has no ratio to state.
     if status.system_image == SYSTEM_IMAGE_ABSENT or _a_group_is_unmet(status):
@@ -744,15 +746,33 @@ def compute_bios_label(status: BiosStatus) -> str:
     return _counted_label(status)
 
 
+def _declined_label(status: BiosStatus) -> str:
+    """The token for a declined level: the plain files' ratio where one of them is shown missing.
+
+    A group nothing could check, a required row nothing could judge, or a
+    console demand nobody settled declines the level; none of them unsays a
+    plain required file the reading answered ``False`` for. The ratio counts
+    the plain required rows alone — a row nothing could judge is in the second
+    number and never the first — and no group at all.
+    """
+    plain = [f for f in status.files if f.required_by_active]
+    if any(f.satisfied is False for f in plain):
+        return f"{sum(1 for f in plain if f.satisfied)}/{len(plain)} required"
+    return BIOS_LABEL_UNKNOWN
+
+
 def _counted_label(status: BiosStatus) -> str:
     """The token the plain required files give — never a one-of group.
 
-    Reached only once no group is ``unmet`` or ``unknown``, so each group here
-    covers the game, or is partial over a game whose region is not known; the
-    counts take each once, as held only where it is met, and taking them back
-    out leaves the plain files. Beside a group the ratio is stated even with
-    none of them in place, because an image is: ``"Missing"`` would overstate
-    it. Without a group, nothing in place is ``"Missing"``, as it always was.
+    The same token for a platform and for a game: the platform's payload carries
+    it beside its level, and the play row's badge shows the game's, whose groups
+    were narrowed to the game's own regions. Reached only once no group is
+    ``unmet`` or ``unknown``, so each group here is met, or partial — over a
+    platform, or over a game whose region is not known; the counts take each
+    once, as held only where it is met, and taking them back out leaves the
+    plain files. Beside a group the ratio is stated even with none of them in
+    place, because an image is: ``"Missing"`` would overstate it. Without a
+    group, nothing in place is ``"Missing"``, as it always was.
     """
     req_count = status.required_count
     req_done = status.required_downloaded
