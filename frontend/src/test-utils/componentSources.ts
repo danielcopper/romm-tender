@@ -69,6 +69,6 @@ export function componentSources(): ComponentSource[] {
     return found;
   })
     .map((relative) => relative.split(/[\\/]/).join("/"))
-    .sort();
+    .sort((a, b) => Number(a > b) - Number(a < b));
   return files.map((path) => ({ path, source: readFileSync(`${SRC_DIR}${path}`, "utf8") }));
 }
