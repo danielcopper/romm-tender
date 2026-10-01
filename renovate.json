@@ -58,12 +58,15 @@
       "automerge": true
     },
     {
-      "description": "Shared reusable workflows (danielcopper/.github) are pinned to a commit of its main branch (`# main`). Renovate proposes the new commit, but every bump gets human review: the shared check can block every pull request here. Overrides the digest auto-merge in the rule above.",
+      "description": "The shared reusable workflow from danielcopper/.github is pinned to a commit of its main branch (`# main`). Renovate proposes the new commit, but every bump gets human review: the shared check can block every pull request here. Overrides the digest auto-merge in the rule above.",
       "matchManagers": [
         "github-actions"
       ],
       "matchDepTypes": [
         "workflow"
+      ],
+      "matchDepNames": [
+        "danielcopper/.github"
       ],
       "automerge": false
     },
@@ -80,7 +83,7 @@
       "enabled": false
     },
     {
-      "description": "Never auto-merge a major update, in any ecosystem — a major dep bump (or, for pip, raising a `<next-major` ceiling such as pytest <10.0) always gets human review. Overrides the manager auto-merge rules above for major updates; minor/patch/digest and lock-file maintenance still auto-merge.",
+      "description": "Never auto-merge a major update, in any ecosystem — a major dep bump (or, for pip, raising a `<next-major` ceiling such as pytest <10.0) always gets human review. Overrides the manager auto-merge rules above for major updates; minor/patch/digest (except the shared reusable workflow from danielcopper/.github) and lock-file maintenance still auto-merge.",
       "matchUpdateTypes": [
         "major"
       ],
