@@ -2630,7 +2630,8 @@ class TestAOneOfGroupIsOneRequirement:
         page = await _one_of_service(present=("scph5501.bin",)).check_platform_bios("psx")
 
         assert (page["required_count"], page["required_downloaded"], page["required_partial"]) == (1, 0, 1)
-        assert (page["bios_level"], page["bios_label"]) == ("partial", "0/1 required")
+        # The token counts plain required files only, and this core has none.
+        assert (page["bios_level"], page["bios_label"]) == ("partial", "OK")
         assert page["system_image"] == "not_demanded"
         assert page["one_of_groups"] == [
             {
