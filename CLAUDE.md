@@ -115,6 +115,19 @@ change to it as well.
 Docs are Material for MkDocs, published to GitHub Pages by `.github/workflows/docs.yml` on push to `main`. Preview
 locally with `mise run docs`.
 
+## Where decisions live
+
+- Work starts from an issue. Open questions go under `## To decide`; once answered, that section becomes `## Decisions`.
+  No implementation starts while `## To decide` exists.
+- An epic's decisions live in the epic's body. A sub-issue says "See epic #N" instead of copying them.
+- A decision that is hard to reverse, surprising without context, and a real trade-off also becomes an ADR in
+  `docs/adr/`; the issue links it.
+- Each `## Done when` criterion becomes a test that is seen failing first, or is marked "(device)" when only the owner's
+  Game-Mode pass can show it.
+- The PR body repeats the final decisions; it becomes the squash commit body.
+- Nothing needed to understand a change lives outside this repo and its issues.
+- The `decisions` CI check enforces these headings and fails a PR that removes this section.
+
 ## Traps — non-obvious rules that bite silently
 
 - **The build output lives at `<repo>/dist/`, not under `frontend/`** — and the frontend package writes one directory UP
