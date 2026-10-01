@@ -17,8 +17,11 @@ the tag's presence on the layer (:class:`CatalogueLayer`); honoring it — only
 ever for the custom layer, exactly as ES-DE does — is the callers' work.
 
 A command containing ``*_libretro.so`` is a libretro entry (the ``.so`` basename
-is extracted); anything else is a standalone entry. Classification only — no
-path knowledge is derived from the command text.
+is extracted). A RetroArch launch naming a core file under some other host's
+suffix is neither that nor a standalone emulator, and says so in a kind of its
+own (:data:`KIND_RETROARCH_FOREIGN_CORE`); everything else is a standalone
+entry. Classification only — no path knowledge is derived from the command
+text.
 
 Honest degradations: a missing layer is skipped; a malformed layer is skipped
 the same way (recorded per answer as its absence — structured catalogue error
@@ -45,7 +48,7 @@ import os
 import re
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Iterator, Mapping
+from typing import Iterator, Literal, Mapping
 
 from . import _xml as ET
 
@@ -54,6 +57,31 @@ from . import _xml as ET
 # rescans a long name from every position it fails at, and no run longer than
 # a file name can be one anyway.
 _CORE_SO_RE = re.compile(r"([A-Za-z0-9_\-\[\]]{1,255}_libretro\.so)")
+
+# The same run with its suffix left open: on the desktop platforms a libretro
+# core file is named ``<core>_libretro.<suffix>``, and the suffix is the part
+# that says which host it was built for. ES-DE ships one catalogue per
+# platform and RetroDECK's flatpak carries all seven; running this classifier
+# over each of them counts the launch entries it yields, and the numbers below
+# are rows of one kind out of that catalogue's total. Two spell a suffix this
+# host cannot load — ``windows`` 414 of 889 and ``macos`` 394 of 752. Four
+# spell none and name this host's suffix instead: ``linux`` 391 libretro rows
+# of 509, ``linuxarm`` 413 of 775, ``unix`` 414 of 808, ``haiku`` 187 of 396.
+# The seventh, ``android``, is the one this deliberately does NOT read: 372 of
+# its 658 entries name ``<core>_libretro_android.so``, which matches neither
+# run — the suffix is this host's and the stem is not the one taken apart — so
+# all 372 classify standalone, as they always did. The name run is bounded exactly as above;
+# the suffix is bounded because no shared-library suffix anyone writes is
+# longer than that, and an unbounded quantifier here would rescan for the same
+# reason.
+_CORE_FILE_RE = re.compile(r"([A-Za-z0-9_\-\[\]]{1,255}_libretro\.[A-Za-z0-9]{1,16})")
+
+# This host's shared-object suffix — the one a ``.so`` name carries and the one
+# RetroArch's ``-L`` can open here. Compared case-insensitively, so a file
+# spelled ``.SO`` is never called another host's: the suffix does not settle
+# whether this host can load it, and only a suffix that is certainly not this
+# host's is read as one.
+_HOST_CORE_SUFFIX = ".so"
 
 # The emulator ES-DE would run, as its command names it: ``%EMULATOR_DOLPHIN%``,
 # ``%EMULATOR_DOSBOX-STAGING%``. For a standalone entry this token is the only
@@ -67,8 +95,44 @@ _EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_([A-Za-z0-9_-]{1,255})%")
 # command names, and a command that names none has identified nothing.
 _RETROARCH_TOKEN = "RETROARCH"
 
-KIND_LIBRETRO = "libretro"
-KIND_STANDALONE = "standalone"
+CatalogueKind = Literal["libretro", "standalone", "retroarch-foreign-core"]
+
+KIND_LIBRETRO: CatalogueKind = "libretro"
+"""The command names a ``*_libretro.so``: RetroArch loads that core, and the basename is the identity.
+
+The one kind whose :attr:`EmulatorSpec.core_so` is not ``None`` — the file is
+this host's shared object, so what runs the content is a core this machine can
+be asked about.
+"""
+KIND_STANDALONE: CatalogueKind = "standalone"
+"""The command launches an emulator of its own: no core is loaded, whatever the command names.
+
+ES-DE's ``%EMULATOR_…%`` token, an arrangement's launcher script, a bare path.
+Such a command may still spell a core file — ``%EMULATOR_AZAHAR% --core
+citra_libretro.dll`` names one, and so does a launch naming
+``citra_libretro_android.so`` — and what makes it this word is that nothing
+hands that name to this host's RetroArch, so no core of this machine is loaded
+by it. The word says what the launch does, not what atlas knows about it: an
+emulator no packaged card covers is a standalone entry like any other.
+"""
+KIND_RETROARCH_FOREIGN_CORE: CatalogueKind = "retroarch-foreign-core"
+"""The command launches RetroArch and names a core file this host cannot load, so nothing runs.
+
+Both halves of the word are read off the command: ``retroarch``, because the
+launch goes through ES-DE's own ``%EMULATOR_RETROARCH%`` rule, and ``foreign
+core``, because the file it hands that runner is named the libretro way
+(``<core>_libretro.<suffix>``) under a suffix that is not this host's
+shared object. EmuDeck's ``n3ds`` overlay is the shape: two rows, each naming
+a Windows ``*_libretro.dll``. Neither of the other two words fits — nothing
+is loaded, so it is not a libretro entry, and no emulator of its own is
+launched, so calling it standalone would state an emulator this machine does
+not have. ``core_so`` stays ``None`` because no core of this host is named, and
+the file that *was* named rides a caveat instead.
+"""
+
+# The closed vocabulary those three make up: every word a catalogue entry's
+# kind may be, and nothing else.
+CATALOGUE_KINDS = (KIND_LIBRETRO, KIND_STANDALONE, KIND_RETROARCH_FOREIGN_CORE)
 
 
 def emulator_token(command: str) -> str | None:
@@ -114,13 +178,53 @@ def emulator_identity(command: str) -> str | None:
     return None if token is None or token == _RETROARCH_TOKEN else token
 
 
+def foreign_core_file(command: str) -> str | None:
+    """The core file *command* hands RetroArch that this host cannot load, or ``None``.
+
+    One reading, used twice: it is what puts an entry in
+    :data:`KIND_RETROARCH_FOREIGN_CORE`, and it is where the caveat on such an
+    entry gets the file name it states — so the kind and the name can never be
+    two readings of one command.
+
+    Three things must hold, and each is read off the command text alone. No
+    ``*_libretro.so`` is named, because a core of this host's own is what the
+    launch loads and settles the entry as libretro. The launch goes through
+    ES-DE's RetroArch rule (``%EMULATOR_RETROARCH%``), because only that rule
+    hands a ``-L`` argument to a runner; a command naming a ``.dll`` while
+    launching something else says nothing about a core. And the file it names
+    is spelled the libretro way under a suffix that is not this host's shared
+    object — ``citra_libretro.dll`` in EmuDeck's ``n3ds`` overlay, and a
+    ``.dylib`` the same way, neither of them enumerated here: what the suffix
+    says is that this host cannot load the file, and nothing more about where
+    it came from. What is read is
+    *not this host's suffix*, which is one rule rather than a list of the
+    platforms someone thought of.
+
+    A RetroArch launch naming no core file at all is not this: nothing was
+    named, so there is nothing this host cannot load, and the entry stays
+    standalone as it always was.
+    """
+    if _CORE_SO_RE.search(command) is not None:
+        return None
+    if emulator_token(command) != _RETROARCH_TOKEN:
+        return None
+    match = _CORE_FILE_RE.search(command)
+    if match is None or match.group(1).lower().endswith(_HOST_CORE_SUFFIX):
+        return None
+    return match.group(1)
+
+
 @dataclass(frozen=True, slots=True)
 class EmulatorSpec:
     """One launch entry of one system, as declared in ``es_systems.xml``.
 
-    ``core_so`` is the extracted ``.so`` basename for libretro entries, ``None``
-    for standalone ones. ``provenance`` names the file layer that defined the
-    system (bundled or custom overlay).
+    ``kind`` is one of :data:`CATALOGUE_KINDS` and ``core_so`` the extracted
+    ``.so`` basename, which stands on a ``libretro`` entry and on no other.
+    ``__post_init__`` is where those are rules rather than habits: a word
+    outside the vocabulary is refused, so is a libretro entry with no core and
+    an entry of either other kind that names one, and so is the third word on a
+    command :func:`foreign_core_file` does not read that way. ``provenance``
+    names the file layer that defined the system (bundled or custom overlay).
 
     ``emulator`` is what the command identifies, read by
     :func:`emulator_identity`: the catalogue's own reading and nothing more.
@@ -144,13 +248,34 @@ class EmulatorSpec:
 
     system: str
     label: str
-    kind: str
+    kind: CatalogueKind
     core_so: str | None
     command: str
     provenance: str
     emulator: str | None = None
     declared_index: int | None = None
     selection: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in CATALOGUE_KINDS:
+            raise ValueError(
+                f"EmulatorSpec: kind must be one of {CATALOGUE_KINDS}, got {self.kind!r}"
+            )
+        if self.kind == KIND_LIBRETRO and self.core_so is None:
+            raise ValueError(
+                f"EmulatorSpec: a {KIND_LIBRETRO!r} entry is one whose command names the core "
+                "it loads — without that basename there is nothing to have classified it"
+            )
+        if self.kind != KIND_LIBRETRO and self.core_so is not None:
+            raise ValueError(
+                f"EmulatorSpec: core_so is the loaded core's basename, so a {self.kind!r} entry "
+                f"carrying {self.core_so!r} would name a core no launch here loads"
+            )
+        if self.kind == KIND_RETROARCH_FOREIGN_CORE and foreign_core_file(self.command) is None:
+            raise ValueError(
+                f"EmulatorSpec: {KIND_RETROARCH_FOREIGN_CORE!r} states what the command was read "
+                "to say — a command naming no core file of another host cannot carry the word"
+            )
 
 
 def _stored_commands(system_el: ET.Element) -> Iterator[tuple[int, ET.Element]]:
@@ -212,12 +337,30 @@ def _stored_commands(system_el: ET.Element) -> Iterator[tuple[int, ET.Element]]:
         yield len(kept) - 1, command_el
 
 
+def _classify(command: str, *, loads_core: bool) -> CatalogueKind:
+    """Which of the three words *command* is, given whether it named a core of this host.
+
+    *loads_core* is the ``.so`` reading the caller already made — the same
+    search that produced ``core_so``, so the kind and the basename cannot come
+    from two readings that disagree. :func:`foreign_core_file` makes that check
+    again for itself, because it answers for any command handed to it; what the
+    flag decides here is only that the libretro case is settled once.
+    """
+    if loads_core:
+        return KIND_LIBRETRO
+    if foreign_core_file(command) is not None:
+        return KIND_RETROARCH_FOREIGN_CORE
+    return KIND_STANDALONE
+
+
 def _launch_entries(system_el: ET.Element, *, system: str, provenance: str) -> tuple[EmulatorSpec, ...]:
     """The launch entries one ``<system>`` declares, in declared order.
 
     A command naming a ``*_libretro.so`` is a libretro entry (the basename is
-    extracted); anything else is standalone. Classification only — which
-    elements count, and at which position, is :func:`_stored_commands`.
+    extracted); one that hands RetroArch a core file of another host is
+    :data:`KIND_RETROARCH_FOREIGN_CORE` (:func:`foreign_core_file` is the whole
+    rule); anything else is standalone. Classification only — which elements
+    count, and at which position, is :func:`_stored_commands`.
 
     An entry is stated only where the command has text. An empty or
     whitespace-only one names nothing to launch, and stating an entry that
@@ -236,7 +379,7 @@ def _launch_entries(system_el: ET.Element, *, system: str, provenance: str) -> t
             EmulatorSpec(
                 system=system,
                 label=(command_el.get("label") or "").strip(),
-                kind=KIND_LIBRETRO if match else KIND_STANDALONE,
+                kind=_classify(command, loads_core=match is not None),
                 core_so=match.group(1) if match else None,
                 command=command,
                 provenance=provenance,

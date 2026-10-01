@@ -1,0 +1,152 @@
+{
+  "_meta": {
+    "generated_from": "libretro/swanstation src/core/bios.cpp and src/core/bios.h",
+    "revision": "4d309c0",
+    "generated_at": "2026-09-13",
+    "images": 27
+  },
+  "sizes": {
+    "ps1": 524288,
+    "ps2": 4194304,
+    "ps3": 4089584
+  },
+  "hash_scope": 524288,
+  "unknown": "refused",
+  "images": [
+    {
+      "name": "SCPH-1000, DTL-H1000 (v1.0)",
+      "region": "ntsc-j",
+      "md5": "239665b1a3dade1b5a52c06338011044"
+    },
+    {
+      "name": "SCPH-1001, 5003, DTL-H1201, H3001 (v2.2 12-04-95 A)",
+      "region": "ntsc-u",
+      "md5": "924e392ed05558ffdb115408c263dccf"
+    },
+    {
+      "name": "SCPH-1002, DTL-H1002 (v2.0 05-10-95 E)",
+      "region": "pal",
+      "md5": "54847e693405ffeb0359c6287434cbef"
+    },
+    {
+      "name": "SCPH-1002, DTL-H1102 (v2.1 07-17-95 E)",
+      "region": "pal",
+      "md5": "417b34706319da7cf001e76e40136c23"
+    },
+    {
+      "name": "SCPH-1002, DTL-H1202, H3002 (v2.2 12-04-95 E)",
+      "region": "pal",
+      "md5": "e2110b8a2b97a8e0b857a45d32f7e187"
+    },
+    {
+      "name": "DTL-H1100 (v2.2 03-06-96 D)",
+      "region": "ntsc-j",
+      "md5": "ca5cfc321f916756e3f0effbfaeba13b"
+    },
+    {
+      "name": "SCPH-3000, DTL-H1000H (v1.1 01-22-95)",
+      "region": "ntsc-j",
+      "md5": "849515939161e62f6b866f6853006780"
+    },
+    {
+      "name": "SCPH-1001, DTL-H1001 (v2.0 05-07-95 A)",
+      "region": "ntsc-u",
+      "md5": "dc2b9bf8da62ec93e868cfd29f0d067d"
+    },
+    {
+      "name": "SCPH-3500 (v2.1 07-17-95 J)",
+      "region": "ntsc-j",
+      "md5": "cba733ceeff5aef5c32254f1d617fa62"
+    },
+    {
+      "name": "SCPH-1001, DTL-H1101 (v2.1 07-17-95 A)",
+      "region": "ntsc-u",
+      "md5": "da27e8b6dab242d8f91a9b25d80c63b8"
+    },
+    {
+      "name": "SCPH-5000, DTL-H1200, H3000 (v2.2 12-04-95 J)",
+      "region": "ntsc-j",
+      "md5": "57a06303dfa9cf9351222dfcbb4a29d9"
+    },
+    {
+      "name": "SCPH-5500 (v3.0 09-09-96 J)",
+      "region": "ntsc-j",
+      "md5": "8dd7d5296a650fac7319bce665a6a53c"
+    },
+    {
+      "name": "SCPH-5501, 5503, 7003 (v3.0 11-18-96 A)",
+      "region": "ntsc-u",
+      "md5": "490f666e1afb15b7362b406ed1cea246"
+    },
+    {
+      "name": "SCPH-5502, 5552 (v3.0 01-06-97 E)",
+      "region": "pal",
+      "md5": "32736f17079d0b2b7024407c39bd3050"
+    },
+    {
+      "name": "SCPH-7000, 7500, 9000 (v4.0 08-18-97 J)",
+      "region": "ntsc-j",
+      "md5": "8e4c14f567745eff2f0408c8129f72a6"
+    },
+    {
+      "name": "SCPH-7000W (v4.1 11-14-97 A)",
+      "region": "ntsc-j",
+      "md5": "b84be139db3ee6cbd075630aa20a6553"
+    },
+    {
+      "name": "SCPH-7001, 7501, 7503, 9001, 9003, 9903 (v4.1 12-16-97 A)",
+      "region": "ntsc-u",
+      "md5": "1e68c231d0896b7eadcad1d7d8e76129"
+    },
+    {
+      "name": "SCPH-7002, 7502, 9002 (v4.1 12-16-97 E)",
+      "region": "pal",
+      "md5": "b9d9a0286c33dc6b7237bb13cd46fdee"
+    },
+    {
+      "name": "SCPH-100 (v4.3 03-11-00 J)",
+      "region": "ntsc-j",
+      "md5": "8abc1b549a4a80954addc48ef02c4521"
+    },
+    {
+      "name": "SCPH-101 (v4.4 03-24-00 A)",
+      "region": "ntsc-u",
+      "md5": "9a09ab7e49b422c007e6d54d7c49b965"
+    },
+    {
+      "name": "SCPH-101 (v4.5 05-25-00 A)",
+      "region": "ntsc-u",
+      "md5": "6e3735ff4c7dc899ee98981385f6f3d0"
+    },
+    {
+      "name": "SCPH-102 (v4.4 03-24-00 E)",
+      "region": "pal",
+      "md5": "b10f5e0e3d9eb60e5159690680b1e774"
+    },
+    {
+      "name": "SCPH-102 (v4.5 05-25-00 E)",
+      "region": "pal",
+      "md5": "de93caec13d1a141a40a79f5c86168d6"
+    },
+    {
+      "name": "PSP, SCPH-1000R (v4.5 05-25-00 J)",
+      "region": "any",
+      "md5": "c53ca5908936d412331790f4426c6c33"
+    },
+    {
+      "name": "SCPH-1000R (v4.5 05-25-00 J)",
+      "region": "ntsc-j",
+      "md5": "476d68a94ccec3b9c8303bbd1daf2810"
+    },
+    {
+      "name": "PS3 (v5.0 06-23-03 A)",
+      "region": "any",
+      "md5": "c02a6fbb1b27359f84e92fae8bc21316"
+    },
+    {
+      "name": "PS3 (v5.0 06-23-03 A)",
+      "region": "any",
+      "md5": "81bbe60ba7a3d1cea1d48c14cbcc647b"
+    }
+  ]
+}

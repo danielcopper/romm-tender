@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.20.0"  # x-release-please-version
+__version__ = "0.21.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -212,7 +212,7 @@ from .placement import (
 # annotates with the type. The seam's own two (`PathKind`, `ReadStatus`) are
 # here because answers carry them — a requirement's `found` is a path kind, a
 # health finding's `status` is a read status.
-from .esde import KIND_LIBRETRO, KIND_STANDALONE
+from .esde import CATALOGUE_KINDS, KIND_LIBRETRO, KIND_RETROARCH_FOREIGN_CORE, KIND_STANDALONE
 from .retroarch_cfg import (
     CFG_LAYER_CONTENT_DIR_OVERRIDE,
     CFG_LAYER_CORE_OVERRIDE,
@@ -233,19 +233,24 @@ from .firmware import (
     CAVEAT_CORE_DIR_UNRESOLVED,
     CAVEAT_CORE_ENUMERATION_INCOMPLETE,
     CAVEAT_CORE_INFO_UNREADABLE,
+    CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_NOT_INSTALLED,
     CAVEAT_CORE_WITHOUT_SYSTEMNAME,
     CAVEAT_EMULATOR_CONFIG_UNREADABLE,
     CAVEAT_FIRMWARE_BUILTIN_REPLACEMENT,
+    CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_CONTENT_CONTRADICTORY,
     CAVEAT_FIRMWARE_CONTENT_UNIDENTIFIED,
     CAVEAT_FIRMWARE_CONTENT_UNSTATED,
     CAVEAT_FIRMWARE_IDENTITY_NOT_COMPARABLE,
     CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
+    CAVEAT_FIRMWARE_IMAGE_CONFIGURED,
     CAVEAT_FIRMWARE_IMAGE_CONTRADICTED,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_REFUSED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
+    CAVEAT_FIRMWARE_INSTALLER_DOWNLOAD,
+    CAVEAT_FIRMWARE_NAME_SPELLINGS,
     CAVEAT_FIRMWARE_DECLARATION_UNKNOWN,
     CAVEAT_FIRMWARE_PACKAGED_DECLARATION,
     CAVEAT_FIRMWARE_DECLARATION_UNREAD,
@@ -343,6 +348,12 @@ from .content_tree_wiring import (
     load_content_tree_wiring,
     lookup_content_tree_wiring,
 )
+from .distribution_downloads import (
+    DistributionDownloads,
+    DownloadEntry,
+    load_distribution_downloads,
+    lookup_distribution_downloads,
+)
 from .distribution_labels import (
     DistributionLabel,
     distribution_label,
@@ -366,6 +377,15 @@ from .installations import (
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
 )
 from .machine import (
+    CORE_READ_ANSWERED,
+    CORE_READ_BINARY_INACCESSIBLE,
+    CORE_READ_CRASHED,
+    CORE_READ_NO_INTERPRETER,
+    CORE_READ_NOT_STARTED,
+    CORE_READ_TIMED_OUT,
+    CORE_READ_UNLOADABLE,
+    CORE_READ_UNUSABLE,
+    CORE_UNANSWERED_STATUSES,
     KIND_DIRECTORY,
     KIND_FILE,
     KIND_INACCESSIBLE,
@@ -374,6 +394,8 @@ from .machine import (
     READ_MISSING,
     READ_OK,
     READ_UNREADABLE,
+    CoreReadStatus,
+    CoreUnansweredStatus,
     PathKind,
     ReadStatus,
 )
@@ -486,6 +508,7 @@ from .placement import (
     REASON_CONFIGURED_USER_ID_UNREAD,
     REASON_CONFIGURED_USER_TREE_NAMED,
     REASON_CONFIGURED_USER_NOT_SET_UP,
+    REASON_CONFIGURED_USER_REACH_UNESTABLISHED,
     REASON_CONFIGURED_USER_SETUP_UNESTABLISHED,
     REASON_CONTENT_CLASS_UNNAMED,
     REASON_CONTENT_CLASS_UNRECORDED,
@@ -511,6 +534,7 @@ from .placement import (
     REASON_SESSION_OVERRIDE_SET,
     REASON_SLOT_DEVICE_UNINTERPRETED,
     REASON_SLOT_HOLDS_AGP_DEVICE,
+    REASON_UNSET_USER_ID_IS_LISTED,
     REASON_USER_LISTING_UNESTABLISHED,
     REASON_VOLUME_BOOTS_ITSELF,
     REASON_VIRTUAL_SD_DISABLED,
@@ -539,6 +563,7 @@ from .placement import (
     SCREENSHOT_ROOT_DIRECTORY,
     SCREENSHOT_ROOT_CONTENT_DIRECTORY,
     STATE_ROOT_KINDS,
+    UNRESOLVED_CORE_FILE_FOREIGN,
     UNRESOLVED_CORE_NOT_INSTALLED,
     UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE,
     UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
@@ -677,6 +702,8 @@ __all__ = [
     # Vocabulary types
     "PathKind",
     "ReadStatus",
+    "CoreReadStatus",
+    "CoreUnansweredStatus",
     "RootKind",
     "StateRootKind",
     "FileSetState",
@@ -700,8 +727,22 @@ __all__ = [
     "READ_MISSING",
     "READ_UNREADABLE",
     "READ_INVALID_TEXT",
+    # Vocabulary values — how a core probe came back. The unanswered ones are
+    # the vocabulary of `core-unqueryable`'s `reason`; `answered` is not a
+    # failure and the caveat refuses it.
+    "CORE_UNANSWERED_STATUSES",
+    "CORE_READ_ANSWERED",
+    "CORE_READ_BINARY_INACCESSIBLE",
+    "CORE_READ_NO_INTERPRETER",
+    "CORE_READ_NOT_STARTED",
+    "CORE_READ_UNLOADABLE",
+    "CORE_READ_CRASHED",
+    "CORE_READ_TIMED_OUT",
+    "CORE_READ_UNUSABLE",
     # Vocabulary values — emulator kinds, save roots, firmware axes
+    "CATALOGUE_KINDS",
     "KIND_LIBRETRO",
+    "KIND_RETROARCH_FOREIGN_CORE",
     "KIND_STANDALONE",
     "ROOT_SAVEFILE_DIRECTORY",
     "ROOT_CONTENT_DIRECTORY",
@@ -791,6 +832,7 @@ __all__ = [
     "REASON_CONFIGURED_USER_ID_UNREAD",
     "REASON_CONFIGURED_USER_TREE_NAMED",
     "REASON_CONFIGURED_USER_NOT_SET_UP",
+    "REASON_CONFIGURED_USER_REACH_UNESTABLISHED",
     "REASON_CONFIGURED_USER_SETUP_UNESTABLISHED",
     "REASON_CONTENT_CLASS_UNNAMED",
     "REASON_CONTENT_CLASS_UNRECORDED",
@@ -816,6 +858,7 @@ __all__ = [
     "REASON_SESSION_OVERRIDE_SET",
     "REASON_SLOT_DEVICE_UNINTERPRETED",
     "REASON_SLOT_HOLDS_AGP_DEVICE",
+    "REASON_UNSET_USER_ID_IS_LISTED",
     "REASON_USER_LISTING_UNESTABLISHED",
     "REASON_VOLUME_BOOTS_ITSELF",
     "REASON_VIRTUAL_SD_DISABLED",
@@ -882,6 +925,11 @@ __all__ = [
     "WiringRow",
     "load_content_tree_wiring",
     "lookup_content_tree_wiring",
+    # Directories a distribution's installer fills by download (which trees EmuDeck fetches)
+    "DistributionDownloads",
+    "DownloadEntry",
+    "load_distribution_downloads",
+    "lookup_distribution_downloads",
     # Distribution-supplied firmware (which files RetroDECK places itself)
     "DistributionSupplied",
     "SuppliedEntry",
@@ -892,6 +940,7 @@ __all__ = [
     "distribution_label",
     "load_distribution_labels",
     # Typed outcome codes
+    "UNRESOLVED_CORE_FILE_FOREIGN",
     "UNRESOLVED_CORE_NOT_INSTALLED",
     "UNRESOLVED_STANDALONE",
     "UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED",
@@ -914,6 +963,7 @@ __all__ = [
     "CAVEAT_CORE_GENERATION_UNESTABLISHED",
     "CAVEAT_CORE_INFO_UNREADABLE",
     "CAVEAT_CORE_MULTI_OPTION",
+    "CAVEAT_CORE_FILE_FOREIGN",
     "CAVEAT_CORE_NOT_INSTALLED",
     "CAVEAT_CORE_MODE_UNESTABLISHED",
     "CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED",
@@ -941,14 +991,18 @@ __all__ = [
     "CAVEAT_FILE_SET_SPANS_ROOTS",
     "CAVEAT_EMULATOR_CONFIG_UNREADABLE",
     "CAVEAT_FIRMWARE_BUILTIN_REPLACEMENT",
+    "CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING",
     "CAVEAT_FIRMWARE_CONTENT_CONTRADICTORY",
     "CAVEAT_FIRMWARE_CONTENT_UNIDENTIFIED",
     "CAVEAT_FIRMWARE_CONTENT_UNSTATED",
     "CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS",
+    "CAVEAT_FIRMWARE_IMAGE_CONFIGURED",
     "CAVEAT_FIRMWARE_IMAGE_CONTRADICTED",
     "CAVEAT_FIRMWARE_IMAGE_IDENTIFIED",
     "CAVEAT_FIRMWARE_IMAGE_REFUSED",
     "CAVEAT_FIRMWARE_IMAGE_UNLISTED",
+    "CAVEAT_FIRMWARE_INSTALLER_DOWNLOAD",
+    "CAVEAT_FIRMWARE_NAME_SPELLINGS",
     "CAVEAT_FIRMWARE_DECLARATION_UNKNOWN",
     "CAVEAT_FIRMWARE_PACKAGED_DECLARATION",
     "CAVEAT_FIRMWARE_DECLARATION_UNREAD",

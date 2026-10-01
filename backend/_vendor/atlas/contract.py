@@ -632,7 +632,9 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     (Proton)`` are one emulator under two rows, and ``Dolphin (Standalone)``
     beside ``PrimeHack (Standalone)`` two emulators whose labels differ by one
     word. ``core_so`` carries the identity only for a libretro entry; this
-    field carries it for both kinds.
+    field carries it on a standalone one too. On the third kind both are
+    ``null``: a command that hands RetroArch a core file this host cannot load
+    names no emulator at all, and ``kind`` is where such a row is told apart.
 
     ``declared_index`` is the entry's 0-based place in the launch list ES-DE
     builds from the declaring layer's ``<command>`` elements, and ``selection``

@@ -24,6 +24,14 @@ caller can tell "atlas did not read this" from "this is not set":
   reader never saw — so they refuse the whole file, not one key.
 - a **substitution cycle** refuses rather than looping.
 
+One thing more is stated rather than read: a key written with **no value at
+all** is named in :attr:`YamlScalars.null`. Its text is the empty string and
+that is what it reads as here, but ``key:`` and ``key: ""`` are not the same
+line, and the program the file belongs to may make two different values of
+them — yaml-cpp's *string* conversion answers the first with the literal
+``null`` and the second with the empty string — so which one the file holds is
+a fact this reader keeps rather than one it collapses.
+
 What this is not: a YAML parser. It does not build a tree, it does not type
 values (everything is the text as written), and it will refuse or skip a great
 deal of legal YAML. That is the point — the alternative is a half-parser whose
@@ -74,16 +82,32 @@ _MAX_SUBSTITUTION_DEPTH = 8
 class YamlScalars:
     """What the reader established, and what it deliberately did not.
 
-    ``values`` holds the top-level scalars it read, substitutions resolved.
-    ``skipped`` names the top-level keys whose value was a construct this
-    reader does not read — the caller decides whether that matters for the key
-    it wants. ``refusal`` is set exactly when the whole file was refused, and
-    then ``values`` is empty: a file carrying an alias may mean something
-    different from what its plain lines say, so no line from it is reported.
+    Three statements about the top-level keys, and they answer three different
+    questions. ``values`` holds the scalars it read, substitutions resolved.
+    ``skipped`` names the keys whose value was a construct this reader does not
+    read — the caller decides whether that matters for the key it wants.
+    ``null`` names the keys stated with nothing after the colon and no block
+    under them, in the order the file states them.
+
+    A key in ``null`` is in ``values`` too, holding the empty string, and that
+    is deliberate: what the *text* states there is nothing, which is what this
+    reader has always answered, so a caller that has not asked the third
+    question reads exactly what it always read. The third statement is for the
+    caller that must ask, because the program reading the file need not treat
+    the two spellings alike — yaml-cpp's conversion to ``std::string`` answers
+    ``key:`` with the literal ``null`` where it answers ``key: ""`` with the
+    empty string, while its conversion to ``bool`` throws for both — and an
+    answer built on ``values`` alone would state the one file's value of the
+    other.
+
+    ``refusal`` is set exactly when the whole file was refused, and then
+    ``values`` is empty: a file carrying an alias may mean something different
+    from what its plain lines say, so no line from it is reported.
     """
 
     values: Mapping[str, str] = field(default_factory=dict)
     skipped: tuple[str, ...] = ()
+    null: tuple[str, ...] = ()
     refusal: str | None = None
 
     def get(self, key: str) -> str | None:
@@ -304,8 +328,10 @@ def _classify(line: str) -> _KeyLine:
     if _is_skipping_value(value):
         return _KeyLine(key=key, skip=True, pending=True)
     if value == "":
-        # An empty scalar, or the head of a nested block — the lines that
-        # follow decide, so it is recorded as empty and stays pending.
+        # Nothing after the colon: a key stated with no value, or the head of a
+        # nested block — the lines that follow decide, so it is recorded as
+        # stated with none and stays pending. A quoted empty scalar does not
+        # come through here; it is a value, and ``_scalar`` below reads it.
         return _KeyLine(key=key, value="", pending=True)
     return _KeyLine(key=key, value=_scalar(raw_value))
 
@@ -341,23 +367,33 @@ def _first_document(text: str) -> tuple[tuple[str, ...], str | None]:
 
 
 def _absorb_indent(
-    pending_key: str | None, values: dict[str, str], skipped: list[str]
+    pending_key: str | None,
+    values: dict[str, str],
+    skipped: list[str],
+    null_keys: dict[str, None],
 ) -> bool:
     """Take an indented line into the key above it — ``False`` if there is none.
 
     An indented line makes the key above it a nested block after all: it stops
     being a scalar and becomes one this reader names as unread. Indentation
     under no key at all is a file this reader cannot attribute lines from.
+
+    A block is a value, so the key stops being one stated with none: it leaves
+    ``null_keys`` here for the same reason it leaves ``values``.
     """
     if pending_key is None:
         return False
     if values.pop(pending_key, None) is not None:
         skipped.append(pending_key)
+        null_keys.pop(pending_key, None)
     return True
 
 
 def _absorb_key(
-    outcome: _KeyLine, values: dict[str, str], skipped: list[str]
+    outcome: _KeyLine,
+    values: dict[str, str],
+    skipped: list[str],
+    null_keys: dict[str, None],
 ) -> str | None:
     """Record one key line, and return the key the following lines still decide.
 
@@ -365,11 +401,20 @@ def _absorb_key(
     above it, this one takes the key itself. A pending key is one whose
     meaning is not settled by its own line — an empty value is a scalar until
     something indented follows it.
+
+    ``null_keys`` is an ordered set carried as a mapping, so a key stated with
+    no value twice is named once. A key stated again *with* a value drops out
+    of it the way it is overwritten in ``values``: the two statements are the
+    reader's account of one key, and they may not contradict each other.
     """
     if outcome.skip:
         skipped.append(outcome.key)
     else:
         values[outcome.key] = outcome.value or ""
+        if outcome.pending:
+            null_keys[outcome.key] = None
+        else:
+            null_keys.pop(outcome.key, None)
     return outcome.key if outcome.pending else None
 
 
@@ -385,17 +430,18 @@ def read_scalars(text: str, *, fallbacks: Mapping[str, str] | None = None) -> Ya
         return YamlScalars(refusal=refusal)
     values: dict[str, str] = {}
     skipped: list[str] = []
+    null_keys: dict[str, None] = {}
     pending_key: str | None = None
     for raw_line in lines:
         if raw_line[:1].isspace():
-            if not _absorb_indent(pending_key, values, skipped):
+            if not _absorb_indent(pending_key, values, skipped, null_keys):
                 return YamlScalars(refusal=REFUSAL_NOT_A_FLAT_MAPPING)
             continue
         outcome = _classify(raw_line.rstrip())
         if outcome.refusal is not None:
             return YamlScalars(refusal=outcome.refusal)
-        pending_key = _absorb_key(outcome, values, skipped)
+        pending_key = _absorb_key(outcome, values, skipped, null_keys)
     resolved, refusal = _substitute(values, fallbacks or {})
     if refusal is not None:
         return YamlScalars(refusal=refusal)
-    return YamlScalars(values=resolved, skipped=tuple(skipped))
+    return YamlScalars(values=resolved, skipped=tuple(skipped), null=tuple(null_keys))

@@ -49,10 +49,14 @@ from .content_path import (
     split_content_path,
 )
 from .content_tree_wiring import WiringRow, lookup_content_tree_wiring
+from .core_options import CoreOptionsChain, core_options_value
 from .core_info import parse_core_info
 from .esde import (
     INVALID_PARSE,
     KIND_LIBRETRO,
+    KIND_RETROARCH_FOREIGN_CORE,
+    KIND_STANDALONE,
+    CatalogueKind,
     CatalogueLayer,
     EmulatorSpec,
     GamelistSelections,
@@ -61,6 +65,7 @@ from .esde import (
     emulator_token,
     esde_extension,
     expand_home_path,
+    foreign_core_file,
     merge_layers,
     parse_es_settings,
     parse_es_systems,
@@ -79,6 +84,7 @@ from .platforms import (
 from .systems import known_systems, vocabulary_platform_tags
 from .firmware import (
     CAVEAT_CORE_DIR_UNRESOLVED,
+    CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_ENUMERATION_INCOMPLETE,
     CAVEAT_CORE_INFO_UNREADABLE,
     CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE,
@@ -171,6 +177,7 @@ from .textures import (
     lookup_texture_card,
 )
 from .placement import (
+    UNRESOLVED_CORE_FILE_FOREIGN,
     UNRESOLVED_CORE_NOT_INSTALLED,
     CAVEAT_APP_RELATIVE_PATH_UNEXPANDED,
     CAVEAT_CFG_LINE_DROPPED,
@@ -268,6 +275,7 @@ from .placement import (
     REASON_CONFIGURED_USER_ID_UNREAD,
     REASON_CONFIGURED_USER_TREE_NAMED,
     REASON_CONFIGURED_USER_NOT_SET_UP,
+    REASON_CONFIGURED_USER_REACH_UNESTABLISHED,
     REASON_CONFIGURED_USER_SETUP_UNESTABLISHED,
     REASON_HDD_PATH_UNSET,
     REASON_KEY_UNREAD,
@@ -279,6 +287,7 @@ from .placement import (
     REASON_SESSION_OVERRIDE_SET,
     REASON_SLOT_DEVICE_UNINTERPRETED,
     REASON_SLOT_HOLDS_AGP_DEVICE,
+    REASON_UNSET_USER_ID_IS_LISTED,
     REASON_USER_LISTING_UNESTABLISHED,
     REASON_VIRTUAL_SD_DISABLED,
     Caveat,
@@ -984,131 +993,6 @@ def _global_options_file(
     )
 
 
-def _option_file_candidates(
-    *,
-    override_config_dir: str,
-    global_file: str,
-    library_name: str | None,
-    content_dir_name: str | None,
-    rom_stem: str | None,
-    game_specific_options: bool,
-    per_core_options: bool,
-) -> list[str]:
-    """The options files that could govern an option, in RetroArch's priority order.
-
-    Game ``.opt``, folder ``.opt``, per-core ``.opt`` (when
-    ``global_core_options`` is off), then the global options file — the same
-    order ``validate_per_core_options`` walks.
-
-    Every path but the global file is keyed by ``library_name``, so an unknown
-    one leaves only the global file to read. That is not a degradation this
-    function has to state any more: ``library_name`` is unknown exactly when the
-    core could not be queried, and :func:`_select_card` does not let a card
-    reach this code path at all in that case.
-    """
-    candidates: list[str] = []
-    if library_name and game_specific_options:
-        if rom_stem:
-            candidates.append(os.path.join(override_config_dir, library_name, f"{rom_stem}.opt"))
-        if content_dir_name:
-            candidates.append(os.path.join(override_config_dir, library_name, f"{content_dir_name}.opt"))
-    if library_name and per_core_options:
-        candidates.append(os.path.join(override_config_dir, library_name, f"{library_name}.opt"))
-    candidates.append(global_file)
-    return candidates
-
-
-def _core_options_value(
-    machine: Machine,
-    *,
-    override_config_dir: str,
-    global_file: str,
-    library_name: str | None,
-    content_dir_name: str | None,
-    rom_stem: str | None,
-    option_key: str,
-    option_default: str | None,
-    game_specific_options: bool,
-    per_core_options: bool,
-    retired: tuple[RetiredOption, ...] = (),
-) -> tuple[str | None, str, str, tuple[tuple[RetiredOption, str], ...]]:
-    """Read a core option the way RetroArch does — first existing file is THE source.
-
-    Priority (``runloop.c`` ``validate_per_core_options``): game ``.opt``,
-    folder ``.opt``, per-core ``.opt`` (when ``global_core_options`` is off),
-    then *global_file*. A key absent from the governing file falls back to the
-    core default — it does not fall through to another file.
-
-    Returns ``(value, provenance, options_file, retired_found)``, where
-    ``options_file`` is the file a caller would edit to change the option. The
-    value is ``None`` when the governing file states none and *option_default*
-    is ``None`` too: the core itself did not state a default and none is
-    recorded, so what governs here was never established. Substituting the
-    empty string would put a value nobody read into the answer's own
-    provenance.
-
-    ``retired_found`` are the entries of *retired* the governing file carries,
-    with the value each states — read off the same parse the value lookup
-    already made, so stating them costs no second read of anything. Only the
-    governing file is checked: a stale entry in a file RetroArch would not
-    read for this core is dead twice over, and naming it would tell a caller
-    to prune a file that decides nothing here.
-    """
-    candidates = _option_file_candidates(
-        override_config_dir=override_config_dir,
-        global_file=global_file,
-        library_name=library_name,
-        content_dir_name=content_dir_name,
-        rom_stem=rom_stem,
-        game_specific_options=game_specific_options,
-        per_core_options=per_core_options,
-    )
-
-    for path in candidates:
-        text = machine.read_text(path).text
-        if text is None:
-            continue
-        parsed = parse_cfg_text(text)
-        retired_found = tuple(
-            (option, parsed[option.key]) for option in retired if option.key in parsed
-        )
-        if option_key in parsed:
-            return (
-                parsed[option_key],
-                f'{os.path.basename(path)}: {option_key} = "{parsed[option_key]}"',
-                path,
-                retired_found,
-            )
-        if option_default is None:
-            return (
-                None,
-                f"{os.path.basename(path)} has no entry for {option_key} and no default for it was "
-                "established — the installed core states none and none is recorded",
-                path,
-                retired_found,
-            )
-        return (
-            option_default,
-            f'core default: {option_key} = "{option_default}" ({os.path.basename(path)} has no entry)',
-            path,
-            retired_found,
-        )
-    if option_default is None:
-        return (
-            None,
-            f"no options file states {option_key} and no default for it was established — the "
-            "installed core states none and none is recorded",
-            global_file,
-            (),
-        )
-    return (
-        option_default,
-        f'core default: {option_key} = "{option_default}" (no options file present)',
-        global_file,
-        (),
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class _SaveQuery:
     """One save-location question: the arrangement, its configs, and what is asked.
@@ -1311,14 +1195,21 @@ def _identify_core(
             )
         )
     so_path = lookup.so_path
-    info = machine.query_core(so_path) if so_path else None
+    reading = machine.read_core(so_path) if so_path else None
+    info = reading.info if reading is not None else None
     if info is None:
+        # The reason is the machine's observation of the probe, so it is there
+        # whenever a probe was made. Where the configuration named no location
+        # to probe, nothing was observed and the caveat states the core alone.
+        stated: dict[str, DataValue] = {"core_so": core_so}
+        if reading is not None:
+            stated["reason"] = reading.status
         return _CoreIdentity(
             caveats=(
                 Caveat(
                     CAVEAT_CORE_UNQUERYABLE,
                     f"core {core_so!r} could not be queried — library_name unknown, per-core overrides not checked",
-                    {"core_so": core_so},
+                    stated,
                 ),
             )
         )
@@ -2165,7 +2056,7 @@ def _apply_card(
     option_gates = _option_gates(
         layers, sandbox=sandbox, retroarch_config_dir=retroarch_config_dir
     )
-    opt_value, opt_source, options_file, retired_found = _core_options_value(
+    opt_value, opt_source, options_file, retired_found = core_options_value(
         machine,
         override_config_dir=gates.override_config_dir,
         global_file=option_gates.global_file,
@@ -2209,7 +2100,7 @@ def _apply_card(
 
         def _read_gate_option(key: str) -> OptionReading:
             live = (live_options or {}).get(key)
-            value, source, gate_file, _ = _core_options_value(
+            value, source, gate_file, _ = core_options_value(
                 machine,
                 override_config_dir=gates.override_config_dir,
                 global_file=option_gates.global_file,
@@ -2308,7 +2199,7 @@ def _rule_option_readings(
     for key in card.rule_options or ():
         live = (live_options or {}).get(key)
         default = live.default if live is not None else None
-        value, source, options_file, retired_found = _core_options_value(
+        value, source, options_file, retired_found = core_options_value(
             machine,
             override_config_dir=gates.override_config_dir,
             global_file=option_gates.global_file,
@@ -5342,7 +5233,7 @@ def _texture_enabled(
     option_gates = _option_gates(
         chain.layers, sandbox=query.sandbox, retroarch_config_dir=chain.retroarch_config_dir
     )
-    value, provenance, _, _ = _core_options_value(
+    value, provenance, _, _ = core_options_value(
         machine,
         override_config_dir=chain.gates.override_config_dir,
         global_file=option_gates.global_file,
@@ -5673,7 +5564,7 @@ def _pcsx2_texture_placement(
                 "because a wrongly-cased directory is warned about and left unused on a "
                 "case-sensitive filesystem",
                 {
-                    "core": card.token,
+                    "token": card.token,
                     "root": root,
                     "save_id": "the disc's serial, as PCSX2 reads it off the running game",
                     "load_stage": _PCSX2_TEXTURE_LOAD_STAGE,
@@ -5719,7 +5610,7 @@ def _pcsx2_rejected_switch(
             "untouched when it yields nothing (INISettingsInterface.cpp:198-210), so the "
             f"compiled default {str(governing).lower()} governs; the setting does not become "
             "false because the value was unreadable",
-            {"core": token, "key": f"{switch.section}/{switch.key}", "value": raw},
+            {"token": token, "key": f"{switch.section}/{switch.key}", "value": raw},
         )
     ]
 
@@ -5861,7 +5752,7 @@ def _pcsx2_game_settings_caveats(
                     "per-game settings file is unknown — PCSX2 layers such a file over the "
                     f"whole configuration while that game runs ({_PCSX2_LAYER}), and the "
                     f"{plural} {spelled} would be read through it ({read_through}). {governs}",
-                    {"core": token, "dir": raw, "key": keys},
+                    {"token": token, "dir": raw, "key": keys},
                 ),
             ]
         directory = host.path
@@ -5876,7 +5767,7 @@ def _pcsx2_game_settings_caveats(
                 "a per-game settings file is unknown — PCSX2 layers such a file over the whole "
                 f"configuration while that game runs ({_PCSX2_LAYER}), and the {plural} "
                 f"{spelled} would be read through it ({read_through}). {governs}",
-                {"core": token, "dir": directory, "key": keys},
+                {"token": token, "dir": directory, "key": keys},
             )
         ]
     if not listing.matches:
@@ -5890,7 +5781,7 @@ def _pcsx2_game_settings_caveats(
             f"through that layer ({read_through}), so this answer is the one that holds for "
             f"every game without such a file. {governs}",
             {
-                "core": token,
+                "token": token,
                 "count": str(len(listing.matches)),
                 "dir": directory,
                 "key": keys,
@@ -6012,7 +5903,7 @@ def _duckstation_texture_placement(
         homes=homes,
         sandbox=sandbox,
         extra_caveats=extra_caveats,
-        reads="texture packs",
+        reads=_READS_TEXTURE_PACKS,
         named="texture",
         switch="texture replacement",
     )
@@ -6376,7 +6267,7 @@ def _dolphin_game_settings_caveats(
         f"file may set ({layer.unfiltered}), so the {plural} {spelled} — {governs} — can be "
         f"answered differently there for a game this answer cannot name; the user's own "
         f"{directory} outranks it ({layer.order})",
-        {"core": token, "key": keys, "layer": "GlobalGame"},
+        {"token": token, "key": keys, "layer": "GlobalGame"},
     )
     # What the USER's directory has to say comes first, where it says anything:
     # it is the layer that outranks the build's, so a reader meets the stronger
@@ -6395,7 +6286,7 @@ def _dolphin_game_settings_caveats(
                 f"file over the whole configuration while that game runs, above every value "
                 f"Dolphin.ini states ({layer.loader}, {layer.order} at {layer.build}), and the "
                 f"{plural} {spelled} — {governs} — would be read through it",
-                {"core": token, "dir": directory, "key": keys},
+                {"token": token, "dir": directory, "key": keys},
             )
         )
     elif listing.matches:
@@ -6409,7 +6300,7 @@ def _dolphin_game_settings_caveats(
                 f"read through that layer, so this answer is the one that holds for every game "
                 f"without such a file",
                 {
-                    "core": token,
+                    "token": token,
                     "count": str(len(listing.matches)),
                     "dir": directory,
                     "key": keys,
@@ -6704,7 +6595,7 @@ def _dolphin_slot(
                     "its saves go onto the cartridge image the emulator is configured with, which "
                     "this answer does not model; the other slot's statement stands on its own",
                     {
-                        "core": "DOLPHIN",
+                        "token": "DOLPHIN",
                         "reason": REASON_SLOT_HOLDS_AGP_DEVICE,
                         "slot": letter,
                     },
@@ -6721,7 +6612,7 @@ def _dolphin_slot(
                     f'Dolphin.ini sets Slot{letter} to "{raw_value}", a device this card cannot '
                     "interpret — what sits in that slot and where it saves is unestablished",
                     {
-                        "core": "DOLPHIN",
+                        "token": "DOLPHIN",
                         "reason": REASON_SLOT_DEVICE_UNINTERPRETED,
                         "slot": letter,
                         # A slot whose key is absent takes the compiled
@@ -6775,7 +6666,7 @@ def _dolphin_gc_answer(
                     "makercode, gamecode and the save's internal filename — which follow from "
                     "nothing atlas reads; back the directory up whole",
                     {
-                        "core": card.token,
+                        "token": card.token,
                         "dir": g.dir,
                         "role": g.role,
                         "citation": f"{cite('gci_names')} at {cite('build')}",
@@ -6797,7 +6688,7 @@ def _dolphin_gc_answer(
                 "no memory card sits in either slot (Dolphin.ini [Core] SlotA/SlotB) — a "
                 "GameCube game finds nowhere to save and nothing is kept; the granularity "
                 "block names the switches that would change that",
-                {"core": card.token, "mode": mode},
+                {"token": card.token, "mode": mode},
             )
         )
     physical, link_caveats = (
@@ -6970,7 +6861,7 @@ def _dolphin_wii_answer(
             "a Wii save lives in title/<title id>/data below the NAND root, and the title id "
             "is the disc's own — it follows from nothing atlas reads; back the tree up whole",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": directory,
                 "role": ROLE_BATTERY,
                 "citation": f"{cite('nand_tree')} at {cite('build')}",
@@ -7047,7 +6938,7 @@ def _dolphin_savefile_placement(
             f"Dolphin.ini carries {key}, a per-session override a movie or netplay session "
             f"sets ({cite('session_overrides')}) — while one runs, the cards live at its "
             "path, not at the answer's",
-            {"core": card.token, "reason": REASON_SESSION_OVERRIDE_SET, "key": key},
+            {"token": card.token, "reason": REASON_SESSION_OVERRIDE_SET, "key": key},
         )
         for key in ("GCIFolderAPathOverride", "GCIFolderBPathOverride")
         if _simpleini_value(values, "Core", key)[0]
@@ -7108,7 +6999,7 @@ def _ppsspp_savefile_placement(
             "from its own id and save name — it follows from nothing atlas reads; back the "
             "tree up whole",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": directory,
                 "role": ROLE_BATTERY,
                 "citation": "the game names its savedata directory; the tree is "
@@ -7160,7 +7051,7 @@ def _standalone_settings_path(card: StandaloneSaveCard, homes: _XdgHomes) -> str
 # ---------------------------------------------------------------------------
 
 
-def _xemu_launch_dependent_caveat(core: str, key: str, value: str) -> Caveat:
+def _xemu_launch_dependent_caveat(token: str, key: str, value: str) -> Caveat:
     """The relative-value rider: xemu opens the value from the launch's own cwd.
 
     A relative ``[sys.files]`` value is composed verbatim into the QEMU machine
@@ -7180,7 +7071,7 @@ def _xemu_launch_dependent_caveat(core: str, key: str, value: str) -> Caveat:
         "fopen/access, vl.c:2527-2535 and :2918 with osdep.h:645-653, at v0.8.135) — "
         "a property of the launch, not of the machine; fill 'cwd' with the launcher's "
         "working directory to complete the path",
-        {"core": core, "key": key, "path": value},
+        {"token": token, "key": key, "path": value},
     )
 
 
@@ -7190,14 +7081,14 @@ def _cwd_templated(directory: str) -> bool:
 
 
 def _xemu_group(
-    sandbox: _Sandbox, key: str, value: str, *, role: str, core: str
+    sandbox: _Sandbox, key: str, value: str, *, role: str, token: str
 ) -> tuple[FileGroup | None, tuple[Caveat, ...]]:
     if not os.path.isabs(value):
         head, name = os.path.split(value)
         directory = os.path.join(TEMPLATE_CWD, head) if head else TEMPLATE_CWD
         return (
             FileGroup(dir=directory, files=(name,), granularity=GRANULARITY_SHARED_FILE, role=role),
-            (_xemu_launch_dependent_caveat(core, key, value),),
+            (_xemu_launch_dependent_caveat(token, key, value),),
         )
     resolved = sandbox.host(key, value)
     if resolved.path is None:
@@ -7257,11 +7148,11 @@ def _xemu_disk_pieces(
                 CAVEAT_CORE_MODE_UNESTABLISHED,
                 "xemu.toml names no hard-disk image ([sys.files] hdd_path) — the machine has "
                 "no disk to save onto, and where one would be attached is unknowable here",
-                {"core": card.token, "reason": REASON_HDD_PATH_UNSET},
+                {"token": card.token, "reason": REASON_HDD_PATH_UNSET},
             ),
         )
     group, group_caveats = _xemu_group(
-        sandbox, "hdd_path", hdd, role=ROLE_BATTERY, core=card.token
+        sandbox, "hdd_path", hdd, role=ROLE_BATTERY, token=card.token
     )
     if group is None or not group.files:
         return (), group_caveats
@@ -7336,7 +7227,7 @@ def _xemu_savefile_placement(
     readings = _xemu_readings(hdd, eeprom, stated_toml)
     disk_groups, disk_caveats = _xemu_disk_pieces(sandbox, card, hdd)
     eeprom_group, eeprom_caveats = (
-        _xemu_group(sandbox, "eeprom_path", eeprom, role=ROLE_SETTINGS, core=card.token)
+        _xemu_group(sandbox, "eeprom_path", eeprom, role=ROLE_SETTINGS, token=card.token)
         if eeprom
         else (None, ())
     )
@@ -7502,7 +7393,7 @@ def _cemu_savefile_placement(
                 "the launch command carries an --mlc flag, which outranks settings.xml "
                 "(ActiveSettings.cpp:242-251 at 2.6) — the tree below may not be the one "
                 "this launch uses",
-                {"core": card.token, "reason": REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG},
+                {"token": card.token, "reason": REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG},
             )
         )
     mlc_root, reading, root_refusal = _cemu_mlc_root(doc, homes, sandbox, card.token, xml_path)
@@ -7530,7 +7421,7 @@ def _cemu_savefile_placement(
             "<save_id> with the title id, high word then low word, each 8 lowercase "
             "hex digits, as two path segments",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": directory,
                 "role": ROLE_BATTERY,
                 "save_id": "the Wii U title id: <high 8 hex>/<low 8 hex>, lowercase",
@@ -7612,7 +7503,7 @@ def _azahar_virtual_sd_caveat(
         "use_virtual_sd is switched off — no SD card is emulated, so whether and where "
         "a game's save lands is not established; the tree below is where the "
         "configuration would put it",
-        {"core": card.token, "reason": REASON_VIRTUAL_SD_DISABLED},
+        {"token": card.token, "reason": REASON_VIRTUAL_SD_DISABLED},
     )
 
 
@@ -7745,7 +7636,7 @@ def _azahar_savefile_placement(
             "directory whole; fill <save_id> with the title id, high word then low word, each "
             "8 lowercase hex digits, as two path segments",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": directory,
                 "role": ROLE_BATTERY,
                 "save_id": "the 3DS title id: <high 8 hex>/<low 8 hex>, lowercase",
@@ -7762,7 +7653,7 @@ def _azahar_savefile_placement(
             "title's own extdata id — an id the title id does not fill — so the tree is stated "
             "and its entries refused; back it up whole to be safe",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": extdata,
                 "role": ROLE_BATTERY,
                 "citation": "archive_extsavedata.cpp at Azahar 2125.1.1 — "
@@ -8022,7 +7913,7 @@ def _duckstation_per_game_slot(
         f"slot {n} names its card by {fill}; a running game without that fact falls back to "
         f"the shared card ({shared_fallback})",
         {
-            "core": card.token,
+            "token": card.token,
             "mode": mode,
             "files": (name,),
             "files_without_save_id": (shared_fallback,),
@@ -8087,7 +7978,7 @@ def _duckstation_slot(
                     CAVEAT_SAVE_WRITES_DISCARDED,
                     f"slot {n} holds a non-persistent card — writes into it are discarded at "
                     "shutdown and nothing is kept (MemoryCardType::NonPersistent)",
-                    {"core": card.token, "mode": f"Card{n}Type = NonPersistent"},
+                    {"token": card.token, "mode": f"Card{n}Type = NonPersistent"},
                 ),
             ),
         )
@@ -8310,7 +8201,7 @@ def _duckstation_savefile_placement(
                 "no slot keeps a card (Card1Type/Card2Type) — a game finds nowhere to save "
                 "and nothing is kept; the granularity block names the switches that would "
                 "change that",
-                {"core": card.token, "mode": mode},
+                {"token": card.token, "mode": mode},
             )
         )
     # The answer's own directory, which is the memory-card one only while no
@@ -8571,7 +8462,7 @@ def _pcsx2_slot_group(
             "as subdirectories inside, auto-managed by the emulator — so the tree is stated "
             "and its entries refused; back it up whole",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": full,
                 "role": "memory-card",
                 "citation": "FileMcd_SetType, MemoryCardFile.cpp:584-604 at v2.6.3 — a "
@@ -8760,7 +8651,7 @@ def _pcsx2_savefile_placement(
                 "no slot holds a card (SlotN_Enable / an empty SlotN_Filename) — a game finds "
                 "nowhere to save and nothing is kept; the granularity block names the switches "
                 "that would change that",
-                {"core": card.token, "mode": mode},
+                {"token": card.token, "mode": mode},
             )
         )
     # The answer's own directory — `physical_dir` speaks for `dir`.
@@ -9023,7 +8914,7 @@ def _melonds_root(
                     "composes it verbatim, EmuInstance.cpp:445-484) — a property of the "
                     "launch, not of the machine; fill 'cwd' with the launcher's working "
                     "directory to complete the path",
-                    {"core": card.token},
+                    {"token": card.token},
                 ),
             ),
         )
@@ -9068,7 +8959,7 @@ def _melonds_files(
         CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
         sentence,
         {
-            "core": card.token,
+            "token": card.token,
             "files": (f"{TEMPLATE_ROM_STEM}.sav",),
             "rom_stem": "the loaded file's name without its last extension — for an "
             "archive, the archived file's",
@@ -9155,7 +9046,11 @@ def _melonds_savefile_placement(
 # $(EmulatorDir)dev_hdd0/, vfs_config.h:13). Below it, one directory per title
 # id under home/<user>/savedata; the user is a runtime selection nothing on
 # disk records, so the homes RPCS3's own GetUserAccounts would list are
-# stated as trees, the ones it passes over as skipped.
+# stated as trees, the ones it passes over as skipped — and that those trees
+# are the emulator's whole list is a claim the answer makes only where every
+# entry found was decided. No clause says that list could have ended early,
+# because neither entry this reading leaves undecided can end it (see
+# ``_rpcs3_listing_claim``).
 # ---------------------------------------------------------------------------
 
 _RPCS3_EMULATOR_DIR_KEY = "$(EmulatorDir)"
@@ -9222,15 +9117,16 @@ class _PerUserSaves:
     preselection instead of only the directory listing.
 
     ``headline_user`` names the user whose tree the answer's ``dir`` points
-    at, where the caller established one: Vita3K sets it to the recorded user
-    exactly when the listing found that user's directory, because a frontend
-    launch reopens exactly that user then — and the caller resolves it
-    together with the sentence that explains it, so the two cannot drift.
-    RPCS3 never sets it: no file records its user, so its headline stays the
-    first tree found. Vita3K withholds it where the listing came back short,
-    because a user a failed listing handed back is not a user found here —
-    and the assembly names the stand-in tree on a short listing whatever this
-    field holds, so the two cannot disagree there either.
+    at, where the caller established one: Vita3K sets it where its own
+    listing settles which user a frontend launch reopens — the recorded id
+    when the listing holds it and nothing found here can end the walk short
+    of it, or the empty id an unset or empty record resolves to, whose tree
+    is the user root itself — and drops it where the reach of that walk is
+    not established; the caller resolves it together with the sentence that
+    explains it, so the two cannot drift. RPCS3 never sets it: no file
+    records its user, so its headline stays the first tree found. A short
+    listing is answered once, by the assembly naming the stand-in tree before
+    it reads this field, so nothing this field holds is read there.
     """
 
     user_root: str
@@ -9289,7 +9185,7 @@ def _per_user_state(
     else:
         sentence, reason = shape.user_sentence, shape.user_reason
     data: dict[str, DataValue] = {
-        "core": card.token,
+        "token": card.token,
         "reason": reason,
         # The users whose trees the per-user groups point at, as the list they
         # are — where none was found, the one the emulator starts with, which
@@ -9446,7 +9342,7 @@ def _per_user_savedata_placement(
             "each directory below savedata is one title's own, named by its title id and "
             "written by the game — move a directory whole rather than its files",
             {
-                "core": card.token,
+                "token": card.token,
                 "dir": directory,
                 "role": ROLE_BATTERY,
                 "citation": shape.names_citation,
@@ -9467,7 +9363,7 @@ def _per_user_savedata_placement(
                 f"{shape.user_root} could not be listed, so which user directories are under "
                 "it is unknown — the tree this answer names is what the compiled default "
                 "names, not one this listing established",
-                {"path": shape.user_root, "core": card.token},
+                {"path": shape.user_root, "token": card.token},
             )
         )
     physical, link_caveats = _link_view(machine, directory)
@@ -9782,6 +9678,39 @@ def _rpcs3_users(
     )
 
 
+def _rpcs3_listing_claim(survey: _PerUserSurvey) -> str:
+    """How far the accounts stated here are the accounts RPCS3 itself would list.
+
+    Two claims over one reading, the survey's own state — and the one this
+    answer used to make in every state was the first. Where every entry found
+    was decided, the accounts stated are the emulator's own list and the
+    answer says so. Where one was not, they are not: an undecided entry may be
+    a directory ``GetUserAccounts`` keeps, so claiming every account it would
+    list is stated claims of that entry exactly what is unsettled.
+
+    Two fates reach ``_PerUserSurvey.unestablished`` here, and the claim is
+    the same for both because both leave the same thing open —
+    ``_RPCS3_USER_UNESTABLISHED``, a ``localusername`` whose stat failed, and
+    ``_RPCS3_USER_STAT_FAILED``, an entry whose own stat failed. What the
+    claim does not say is where the emulator's listing could stop, which is
+    the clause Vita3K's claim carries and this one does not: RPCS3 reaches
+    these entries through ``fs::dir``, a ``readdir`` walk that stats every one
+    and, where the ``fstatat`` fails, reads on into the next entry rather than
+    ending ("ignore and skip to next file", ``unix_dir::read``,
+    File.cpp:2091-2105 at build 7c6b3dcd). So an undecided entry costs the
+    emulator's list that entry at most, never whatever came after it.
+
+    The claim carries no aside: the sentence that takes it appends
+    ``survey.aside``, which names every undecided entry and why it is one.
+    """
+    if not survey.unestablished:
+        return "every user account RPCS3 itself would list is stated"
+    return (
+        "the user accounts stated are the ones established here rather than every "
+        "account RPCS3 itself would list"
+    )
+
+
 def _rpcs3_savefile_placement(
     machine: Machine,
     *,
@@ -9803,10 +9732,14 @@ def _rpcs3_savefile_placement(
 
     The user is where this answer stops short of certainty: it is a runtime
     selection (``m_usr``, System.h:164) and no file records which one is in
-    force, so every user account the emulator's own listing keeps — the
-    directories ``GetUserAccounts`` takes, read here the way it runs — becomes
-    a group and the caveat says the running emulator uses one of them; the
-    directories that listing passes over are stated as such, not as users.
+    force, so every user account the emulator's own listing keeps and this
+    reading decided — the directories ``GetUserAccounts`` takes, read here the
+    way it runs — becomes a group and the caveat says the running emulator
+    uses one of them; the directories that listing passes over are stated as
+    such, not as users. An entry this reading could not decide becomes no
+    group either, and the caveat's sentence then claims the accounts
+    established here rather than the emulator's whole list (see
+    :func:`_rpcs3_listing_claim`).
     """
     settings = _standalone_settings(card)
     config_dir = homes.emulator_root(settings.bases[0], card.token)
@@ -9870,6 +9803,7 @@ def _rpcs3_savefile_placement(
     found = _per_user_listing(machine, user_root)
     listing = found.listing
     survey = _rpcs3_users(machine, user_root, found.users, found.unstatable)
+    claim = _rpcs3_listing_claim(survey)
     if survey.unestablished:
         # At least one entry found here is one atlas could not decide —
         # the opening clause cannot assert "no account exists" when that is
@@ -9916,10 +9850,10 @@ def _rpcs3_savefile_placement(
             user_sentence=(
                 "which user account the emulator runs as is a runtime selection — it starts "
                 f"at {_RPCS3_FIRST_USER} (Emulator::m_usr, System.h:164) and the user manager "
-                "changes it — and no file records the current one, so every user account "
-                "RPCS3 itself would list is stated: a directory below home named by eight "
-                "bytes opening with a non-zero number and holding a localusername file "
-                f"({_RPCS3_SELECTION_CITATION}), read here the same way{survey.aside}"
+                f"changes it — and no file records the current one, so {claim}: a directory "
+                "below home named by eight bytes opening with a non-zero number and holding "
+                f"a localusername file ({_RPCS3_SELECTION_CITATION}), read here the same "
+                f"way{survey.aside}"
             ),
             no_user_sentence=no_user_sentence,
             user_reason=REASON_ACTIVE_USER_UNRECORDED,
@@ -9958,7 +9892,7 @@ def _rpcs3_savefile_placement(
                 "been read, so the place is stated and its contents are not; it is in "
                 "file_set.groups with its names left open",
                 {
-                    "core": card.token,
+                    "token": card.token,
                     "mode": "hdd0",
                     "dir": vmc,
                     # Not read rather than none. This key is always stated,
@@ -9977,7 +9911,9 @@ def _rpcs3_savefile_placement(
 # tree. ``pref-path`` in config.yml, and everything the emulator keeps hangs
 # off it as ``ux0/…``; saves are ``ux0/user/<user id>/savedata/<title id>``
 # (io.cpp:136-143). Same user-account shape as RPCS3, and the same answer to
-# it: every user directory the emulator itself would list is stated.
+# it: every user directory the emulator itself would list is stated — a claim
+# the answer makes only where every entry found was decided, because this walk
+# can also end early (see ``_vita3k_listing_claim``).
 # ---------------------------------------------------------------------------
 
 _VITA3K_PREF_PATH_KEY = "pref-path"
@@ -9987,7 +9923,54 @@ _VITA3K_PREF_PATH_KEY = "pref-path"
 # only matter through init_home (gui.cpp:688-696) — see the caveat sentence.
 _VITA3K_USER_ID_KEY = "user-id"
 _VITA3K_AUTO_CONNECT_KEY = "user-auto-connect"
+# The id that ``user-id``, stated with nothing after the colon, hands the
+# emulator. Vita3K reads the key as a std::string (config.h:189) and yaml-cpp's
+# string conversion answers a null node with this literal rather than with an
+# empty string (as_if<std::string, void>, impl.h:145-146) — so the key the
+# emulator looks up in gui.users is these four letters, and a directory listed
+# under them is the user that record preselects. Read and run at the commit
+# this build pins, external/yaml-cpp@2f86d137.
+#
+# WHAT THIS READING REACHES, AND WHAT IT DOES NOT. A plain scalar is a null
+# node whenever ``IsNullString`` says so — an empty one, ``~``, ``null``,
+# ``Null`` or ``NULL`` (null.cpp:13-16), asked of every untagged plain scalar
+# at singledocparser.cpp:96-97 — and all five convert to this same literal,
+# measured by running each of them at the pin above. atlas reaches the id by
+# two roads only: the key stated with no value, which the scalar reader names
+# (YamlScalars.null), and a file writing ``null`` out, which that reader reads
+# as the text it is. The other three are read here as ``~``, ``Null`` and
+# ``NULL`` — ids the emulator never looks up — which is a limit of this
+# reading, not a shape the answer states anything about.
+_VITA3K_NULL_ID = "null"
+# The sentence for a key stated with no value, said once because two readings
+# publish it — the record clause and the key's provenance — and a yaml-cpp bump
+# must move one citation, not two copies of it.
+_VITA3K_VALUELESS_ID_SENTENCE = (
+    f"config.yml states user-id with no value, which yaml-cpp reads as "
+    f'the id "{_VITA3K_NULL_ID}" (impl.h:145-146, read and run at '
+    "external/yaml-cpp@2f86d137)"
+)
 _VITA3K_USER_TREE = os.path.join("ux0", "user")
+# How the emulator's own listing decides what a user is, said once because
+# four sentences interpolate it and one drifting copy would make them four
+# rules.
+_VITA3K_LISTING_RULE = (
+    "the directories under ux0/user whose user.xml loads, keyed by the file's id or the "
+    "directory name's stem (get_users_list, user_management.cpp:83-97), read here the same way"
+)
+# Why a user this read found among the listed ones still settles nothing when
+# an entry beside it can end the emulator's walk. The entries themselves are
+# named by the listing claim the same sentence carries, and the order of the
+# walk is ``fs::directory_iterator``'s, which is the directory's own — so
+# whether the walk reaches this user before the entry it throws on is not a
+# fact this or any other read of the tree can establish.
+_VITA3K_REACH_CLAUSE = (
+    "but whether a frontend launch reopens that user or the user manager opens instead is "
+    "not established here: Vita3K's own listing can end before its walk reaches that user "
+    "(get_users_list, user_management.cpp:87-89), leaving gui.users without it when "
+    "init_home asks (gui.cpp:688-696), and the order that walk takes is the directory's "
+    "own, written nowhere"
+)
 # The user the emulator's own redirect comment names (io.cpp:203), used where
 # no user directory can be listed — never as a claim that it is the one in use.
 _VITA3K_FIRST_USER = "00"
@@ -10054,7 +10037,10 @@ class _Vita3kListedUser:
     ``id`` attribute where its root ``<user>`` element carries one (present
     but empty counts as present, matching pugixml's attribute test), and the
     directory name's stem otherwise — or ``None`` when the directory yields
-    no user at all, or when whether it does could not be read.
+    no user at all, or when whether it does could not be read. The empty
+    string is one of those keys rather than a missing one: both roads reach it
+    — an ``id`` attribute stated empty, and a name :func:`_vita3k_stem` cuts
+    away entirely — and the map the emulator fills takes it (state.h:304).
     """
 
     directory: str
@@ -10063,37 +10049,52 @@ class _Vita3kListedUser:
 
 
 def _vita3k_stem(name: str) -> str:
-    """``path::stem`` of a name — boost::filesystem's, since ``fs`` is boost.
+    """``path::stem`` of a name — the ``stem_v3`` Vita3K's own build compiles.
 
-    What this mirrors: the name cut at the rightmost period, left whole where
-    that period leads it or the name is ``.`` or ``..`` — so ``01.bak`` stems
-    to ``01`` and ``..bak`` to ``.``, while ``.hidden`` keeps its period. That
-    is ``stem_v4``'s rule (path.cpp:836-846). Neither stdlib spelling is that
-    mirror: ``os.path.splitext`` skips a leading run of periods and
-    ``PurePath.stem`` keeps a trailing one.
+    What this mirrors: the name cut at the rightmost period wherever that
+    period falls, left whole only where the name is ``.`` or ``..`` — so
+    ``01.bak`` stems to ``01``, ``..bak`` to ``.``, ``.hidden.bak`` to
+    ``.hidden``, and ``.hidden``, a leading period with no later one, to the
+    empty string. Neither stdlib spelling is that mirror: ``os.path.splitext``
+    skips a leading run of periods and ``PurePath.stem`` keeps a trailing one.
 
-    [D] Vita3K compiles ``stem_v3``, and this mirror is known to differ from it
-    for one shape of name. ``path::stem`` dispatches on
-    ``BOOST_FILESYSTEM_VERSION`` (path.hpp:1596-1599 through
-    ``BOOST_FILESYSTEM_VERSIONED_SYM``, config.hpp:34), which boost defaults to
-    3 for any consumer that does not set it (config.hpp:27-32) — and an
-    unfiltered scan of Vita3K's own tree at cb1f592c finds the macro nowhere,
-    nor ``BOOST_FILESYSTEM_SOURCE``. ``stem_v3`` cuts at the rightmost period
-    even where that period leads the name (path.cpp:824-834), while ``stem_v4``
-    leaves it alone (:836-846); both leave ``.`` and ``..`` whole. So a name
-    that is a leading period followed by more, with no later period
-    (``.hidden``), keys the empty string there and ``.hidden`` here. Every
-    other shape agrees, ``.hidden.bak`` and ``..bak`` included, because their
-    cut falls at a period that does not lead the name.
+    [V] Which of boost's two stems runs is the consumer's choice, not the
+    library's: ``path::stem`` dispatches on ``BOOST_FILESYSTEM_VERSION``
+    (path.hpp:1596-1599 through ``BOOST_FILESYSTEM_VERSIONED_SYM``,
+    config.hpp:34), which boost defines as 4 only while the library itself is
+    built and as 3 for every other consumer that does not set it
+    (config.hpp:27-32). A byte-level scan of every file Vita3K tracks at
+    cb1f592c — the 916 regular files among the 947 entries ``git ls-files``
+    names, read as bytes, no filter and no exclusion — finds neither
+    ``BOOST_FILESYSTEM_VERSION`` nor ``BOOST_FILESYSTEM_SOURCE``, so the
+    translation unit that calls ``path.stem()`` compiles ``stem_v3``: the
+    rightmost period erased whatever its position (path.cpp:824-834), where
+    ``stem_v4`` guards ``pos != 0`` and leaves a leading period alone
+    (:836-846). Both leave ``.`` and ``..`` whole. Read at the Boost the build
+    bundles, Vita3K/ext-boost@ff5f55bd, which is 1.89 (version.hpp:22); the
+    oldest it accepts instead, a system Boost 1.81 (CMakeLists.txt:170-193,
+    which names no upper bound), reads alike — the same default
+    (config.hpp:27-32), the same dispatch (path.hpp:974) and the same two
+    bodies (path.cpp:472-494) — so the oldest accepted and the bundled key a
+    name identically.
 
-    This commit does not change that: the v4 answer is what one test here
-    encodes (no vector reaches the shape), so moving the mirror is a behaviour
-    change of its own and belongs to its own review.
+    This mirrored ``stem_v4`` until that reading, a [D] claim then, and it
+    keyed ``.hidden`` as itself. That was the one shape the two stems disagree
+    on: every other name agrees under both, ``.hidden.bak`` and ``..bak``
+    included, because their cut falls at a period that does not lead the name.
+
+    An empty key is a key, not a hole. ``gui.users`` is a
+    ``std::map<std::string, User>`` (state.h:304) and ``gui.users[user_id]``
+    takes the empty string like any other (user_management.cpp:97,100), so such
+    a directory is listed, under the empty id — see
+    :func:`_vita3k_recorded_user_state` for what that leaves a recorded id, and
+    :func:`_vita3k_unset_user_state` for the id an unset record resolves to,
+    which is that same empty one.
     """
     if name in (".", ".."):
         return name
-    i = name.rfind(".")
-    return name[:i] if i > 0 else name
+    cut = name.rfind(".")
+    return name if cut < 0 else name[:cut]
 
 
 def _vita3k_listed_user(machine: Machine, user_root: str, user: str) -> _Vita3kListedUser:
@@ -10201,7 +10202,62 @@ def _vita3k_survey(homes: tuple[_Vita3kListedUser, ...]) -> _PerUserSurvey:
     )
 
 
-def _vita3k_survey_tail(survey: _PerUserSurvey) -> str:
+def _vita3k_truncating(homes: tuple[_Vita3kListedUser, ...]) -> tuple[str, ...]:
+    """The entries found here at which the emulator's own listing can stop.
+
+    Of the two fates that leave an entry unestablished, one can cut the listing
+    short and the other cannot, so they are not one list here. An entry whose
+    own ``stat`` failed is one the walk may hand ``get_users_list`` as
+    DT_UNKNOWN or DT_LNK, and that road runs a deferred stat that throws
+    ``filesystem_error`` out of ``gui::init`` with ``gui.users`` cleared
+    already, so the emulator's list is then whatever prefix the walk had
+    reached — ``_VITA3K_WALK_CITATION`` traces all three roads such an entry
+    can take. A user.xml atlas could not read cuts nothing: the emulator's own
+    ``load_file`` decides that one directory and the walk goes on
+    (user_management.cpp:89).
+    """
+    return tuple(sorted(h.directory for h in homes if h.fate == _VITA3K_USER_STAT_FAILED))
+
+
+def _vita3k_listing_claim(survey: _PerUserSurvey, truncating: tuple[str, ...]) -> str:
+    """How far the users stated here are the users the emulator would list.
+
+    Three claims over two readings — the survey's own state, and whether what
+    it left undecided can end the walk — because the survey alone cannot say
+    the second: ``_PerUserSurvey`` flattens both undecided fates into one
+    ``unestablished`` tuple, which is why ``truncating`` arrives beside it. The
+    one this answer used to make in every state was the first of the three.
+    Where every entry found was decided, the list is the emulator's own and the
+    answer says so.
+    Where one was not, it is not: an undecided entry may be a directory
+    ``get_users_list`` keeps, so claiming every user it would list is stated
+    claims of that entry exactly what is unsettled. And where an undecided
+    entry is one that can end the walk, the shortfall is not bounded by the
+    entry itself — see :func:`_vita3k_truncating` — so the claim says where the
+    listing can stop rather than only that it is short. Where several entries
+    could end it, the listing ends at whichever of them its walk reaches first
+    and throws on, which is one ending and not one per entry, so the clause
+    says "any of" rather than naming them as a series of endings.
+
+    The clause carries no aside: each sentence that takes it appends
+    ``survey.aside``, which names every undecided entry and why it is one.
+    """
+    if not survey.unestablished:
+        return "every user Vita3K itself would list is stated"
+    if truncating:
+        named = _series(list(truncating))
+        where = named if len(truncating) == 1 else f"any of {named}"
+        return (
+            "the users stated are the ones established here, since Vita3K's own listing can "
+            f"end at {where}, leaving whatever its walk had not reached by then unlisted"
+        )
+    return (
+        "the users stated are the ones established here rather than every user Vita3K "
+        "itself would list"
+    )
+
+
+def _vita3k_survey_tail(survey: _PerUserSurvey, claim: str) -> str:
     """How a sentence ends where the headline does not follow the record.
 
     Where a user is listed the headline is the first listed tree; where none
@@ -10210,12 +10266,13 @@ def _vita3k_survey_tail(survey: _PerUserSurvey) -> str:
     endings reach a message only where the listing completed: a short one is
     answered by :func:`_per_user_state`'s own sentence, and the tree it names
     is the stand-in whatever was listed.
+
+    ``claim`` is :func:`_vita3k_listing_claim`'s — how completely the listed
+    users are the emulator's own list, which only the first ending states,
+    because the other two claim no list at all.
     """
     if survey.listed:
-        return (
-            "the tree named is the first user listed, and every user Vita3K itself would "
-            f"list is stated{survey.aside}"
-        )
+        return f"the tree named is the first user listed, and {claim}{survey.aside}"
     if survey.unestablished:
         # At least one entry found here is one atlas could not decide —
         # the ending cannot assert "no directory is a user Vita3K would list"
@@ -10237,10 +10294,25 @@ def _vita3k_survey_tail(survey: _PerUserSurvey) -> str:
 class _Vita3kUser:
     """What config.yml records about which user a launch would open.
 
-    ``headline`` is the recorded user where the emulator's own listing holds
-    it — the one user a frontend launch reopens, and so the tree the answer
-    names — and ``None`` everywhere the launch's user is not settled by what
-    was read.
+    ``headline`` is the user a frontend launch reopens where the emulator's
+    own listing settles that — the recorded id, or the empty id an unset or
+    empty record resolves to, whose tree is the user root itself — and
+    ``None`` everywhere the launch's user is not settled by what was read. The
+    empty string is therefore a headline and not the absence of one.
+
+    A headline is only ever *read* where the listing of the user root
+    completed: :func:`_per_user_savedata_placement` names the stand-in tree
+    for a short listing before it looks at this field at all. So the states
+    below settle the headline against what they found and leave the short
+    listing to that one place, rather than each taking the headline back
+    again — a second guard here would be a line that never runs, claiming to
+    hold something that is already held.
+
+    ``configured`` is the id ``user-id`` hands the emulator, which is ``None``
+    only where the key is absent or unread: a key stated as the empty value
+    states the empty id, the one the emulator starts from, and a key stated
+    with no value at all states the id ``null``, the literal its own reader
+    makes of that spelling (:data:`_VITA3K_NULL_ID`).
     """
 
     configured: str | None
@@ -10250,46 +10322,136 @@ class _Vita3kUser:
     reason: str
 
 
+def _vita3k_identities(homes: tuple[_Vita3kListedUser, ...]) -> tuple[str, ...]:
+    """Every gui.users key the entries found here yield, in the listing's order.
+
+    The keys, not the directory names: a user.xml's ``id`` attribute answers
+    for the directory it sits in, and the empty string is one of those keys
+    (see :func:`_vita3k_stem`). An entry that yields no user at all, or whose
+    fate could not be read, contributes none — which is why the states that
+    ask "is this id listed?" and the states that ask "what became of this
+    directory?" read two different things off one survey.
+    """
+    return tuple(home.identity for home in homes if home.identity is not None)
+
+
+def _vita3k_recorded_record(configured: str, *, valueless: bool) -> str:
+    """How config.yml states the id the answer holds against the listing.
+
+    The twin of :func:`_vita3k_unset_record`, and there for the same reason: a
+    reader who opens config.yml sees which spelling is in it, and an answer
+    that named only the resulting id would be describing a file nobody has. A
+    key with nothing after the colon reaches the id ``null`` through yaml-cpp's
+    string conversion and a file writing ``null`` out reaches it as the text it
+    is — see :data:`_VITA3K_NULL_ID` for what that conversion takes for a null
+    node and which of those spellings this reading reaches — so the clause says
+    which file was read rather than making one state what the other does.
+    """
+    if valueless:
+        return _VITA3K_VALUELESS_ID_SENTENCE
+    return f'config.yml records {_VITA3K_USER_ID_KEY} "{configured}"'
+
+
+def _vita3k_listed_recorded_state(
+    configured: str,
+    record: str,
+    survey: _PerUserSurvey,
+    claim: str,
+    truncating: tuple[str, ...],
+    tail: str,
+) -> tuple[str | None, str, str]:
+    """The recorded id is one the listing holds — reached, or not established.
+
+    Returns ``(headline, sentence, reason)``. ``init_home`` reopens the
+    recorded user only where ``gui.users`` holds its id and the launch names
+    an app on the command line or ``user-auto-connect`` is on (gui.cpp:689),
+    and that map is whatever ``get_users_list``'s walk filled in before it
+    ended. Where an
+    entry found here can end that walk — :func:`_vita3k_truncating` traces the
+    road it takes — the map may never reach this user, and the walk's order is
+    ``fs::directory_iterator``'s, which is the directory's own and written
+    nowhere. So the finding "the recorded user is listed here" stands and the
+    reopening does not: the headline drops rather than pointing a client at a
+    tree a launch may not open, and the ending names the tree that is pointed
+    at instead.
+
+    This used to be one state whose prose alone softened, which left ``dir``,
+    ``configured_user`` and the reason saying the launch opens that user while
+    the sentence beside them said it might not.
+
+    ``record`` opens both sentences with how config.yml states the id —
+    :func:`_vita3k_recorded_record` — and ``configured`` is the id itself,
+    which is what the headline names.
+    """
+    if truncating:
+        sentence = (
+            f"{record} and that user is among the ones listed here — "
+            f"{_VITA3K_LISTING_RULE} — {_VITA3K_REACH_CLAUSE}, so the record does not move "
+            f"the headline: {tail}"
+        )
+        return None, sentence, REASON_CONFIGURED_USER_REACH_UNESTABLISHED
+    sentence = (
+        f"{record} and that user is among the ones Vita3K itself would list — "
+        f"{_VITA3K_LISTING_RULE} — so a frontend launch, "
+        "naming an app on the command line, reopens exactly that user (init_home, "
+        "gui.cpp:688-696) and the tree named is its, created on the first save where no "
+        "directory of that name exists yet; a plain launch without user-auto-connect opens "
+        f"the user manager instead — {claim}{survey.aside}"
+    )
+    return configured, sentence, REASON_CONFIGURED_USER_TREE_NAMED
+
+
 def _vita3k_recorded_user_state(
     configured: str,
     homes: tuple[_Vita3kListedUser, ...],
     user_root: str,
     survey: _PerUserSurvey,
+    claim: str,
+    truncating: tuple[str, ...],
+    *,
+    valueless: bool,
 ) -> tuple[str | None, str, str]:
-    """The recorded user held against the emulator's own listing — four states.
+    """The recorded user held against the emulator's own listing — five states.
 
     Returns ``(headline, sentence, reason)``. The listing holds the recorded
-    id — the headline follows it; some user.xml could not be read — whether
-    the emulator would list the recorded user is not established, and nothing
-    is decided; the recorded directory exists but nothing lists it as that
-    user — not set up; or nothing here answers to the id at all — no tree.
-    ``homes`` is every directory found, whatever its fate, because the third
-    state is about a directory the emulator does not list.
+    id — the headline follows it, or, where an entry found can end the walk
+    that fills the listing, nothing is settled about the reopening and the
+    headline drops, which are the two states
+    :func:`_vita3k_listed_recorded_state` tells apart; some user.xml could not
+    be read — whether the emulator would list the recorded user is not
+    established, and nothing is decided; the recorded directory exists but
+    nothing lists it as that user — not set up; or nothing here answers to the
+    id at all — no tree. ``homes`` is every directory found, whatever its
+    fate, because the not-set-up state is about a directory the emulator does
+    not list.
+
+    ``claim`` is :func:`_vita3k_listing_claim`'s, and every state carries it —
+    directly where the headline follows the record, and inside ``tail``
+    everywhere else — for the same reason: the recorded id being among the
+    listed ones says nothing about the entries that were never decided.
+    ``truncating`` is what the listed state needs beyond the clause — see
+    :func:`_vita3k_listed_recorded_state`, which is where that state's two
+    halves live, because the reopening it used to assert is withdrawn there.
+    ``valueless`` says that the id came from a key stated with nothing after
+    the colon rather than from a value, which every sentence here opens with
+    (:func:`_vita3k_recorded_record`) and none of them turns on: what the
+    listing is held against is the id, however the file spells it.
     """
-    identities = tuple(u.identity for u in homes if u.identity is not None)
+    identities = _vita3k_identities(homes)
     own = next((u for u in homes if u.directory == configured), None)
+    tail = _vita3k_survey_tail(survey, claim)
+    record = _vita3k_recorded_record(configured, valueless=valueless)
     if configured in identities:
-        sentence = (
-            f"config.yml records {_VITA3K_USER_ID_KEY} {configured} and that user is "
-            "among the ones Vita3K itself would list — the directories under ux0/user "
-            "whose user.xml loads, keyed by the file's id or the directory name's stem "
-            "(get_users_list, user_management.cpp:83-97), read here the same way — so "
-            "a frontend launch, naming an app on the command line, reopens exactly "
-            "that user (init_home, gui.cpp:688-696) and the tree named is its, created "
-            "on the first save where no directory of that name exists yet; a plain "
-            "launch without user-auto-connect opens the user manager instead — every "
-            f"user Vita3K itself would list is stated{survey.aside}"
+        return _vita3k_listed_recorded_state(
+            configured, record, survey, claim, truncating, tail
         )
-        return configured, sentence, REASON_CONFIGURED_USER_TREE_NAMED
-    tail = _vita3k_survey_tail(survey)
     if survey.unestablished:
         # Reason-neutral on purpose: the entries reach this state by more than
         # one route — a user.xml that could not be read, an entry whose own
         # stat failed — and naming one of them here would state it of both.
         # The aside inside ``tail`` carries each entry's own reason already.
         sentence = (
-            f"config.yml records {_VITA3K_USER_ID_KEY} {configured}, and whether "
-            "Vita3K would list that user is not established — what "
+            f"{record}, and whether Vita3K would list that user is not established — what "
             f"{', '.join(survey.unestablished)} holds could not be established here, and "
             "the listing is keyed by exactly that (get_users_list, "
             f"user_management.cpp:83-97) — so the record does not move the headline: {tail}"
@@ -10300,32 +10462,151 @@ def _vita3k_recorded_user_state(
             detail = "the directory has no user.xml"
         elif own.fate == _VITA3K_USER_XML_INVALID:
             detail = "its user.xml does not parse"
-        else:
+        elif own.identity:
             # "it" is the directory: the id may come from the user.xml's
             # own attribute or from the directory name's stem, and the
             # sentence must not claim the file states what the stem does.
             detail = f'it answers to id "{own.identity}" instead'
+        else:
+            # The same fact for the key that has no spelling to quote: an id
+            # attribute stated empty, or a name ``stem_v3`` cuts away whole.
+            # Quoting it as `id ""` reads as a missing value, which is the one
+            # thing it is not — the emulator holds the directory under that
+            # key, and a record naming anything else misses it.
+            detail = "it answers to the empty id instead"
         sentence = (
-            f"config.yml records {_VITA3K_USER_ID_KEY} {configured} and its directory "
-            f"exists, but no user.xml here lists it as that user — {detail} — so "
+            f"{record} and its directory exists, but no user.xml here lists it as that "
+            f"user — {detail} — so "
             "Vita3K would skip it and open the user manager for the player to pick "
             "(get_users_list, user_management.cpp:83-97; init_home, gui.cpp:688-696); "
             f"the record does not move the headline: {tail}"
         )
         return None, sentence, REASON_CONFIGURED_USER_NOT_SET_UP
     sentence = (
-        f"config.yml records {_VITA3K_USER_ID_KEY} {configured}, no directory of "
-        f"that name exists below {user_root}, and no user.xml here names that id — "
+        f"{record}, no directory of that name exists below {user_root}, and no user.xml "
+        "here names that id — "
         "nothing for a launch to reopen, so the user manager opens and the player "
         f"picks (init_home, gui.cpp:688-696) — {tail}"
     )
     return None, sentence, REASON_CONFIGURED_USER_HAS_NO_TREE
 
 
+def _vita3k_unset_record(stated_empty: bool) -> str:
+    """How config.yml states the id the emulator starts from, absent or empty.
+
+    One value, two readings. ``user-id`` defaults to an empty ``std::string``
+    (config.h:189), so a key that is not there and a key stated as the empty
+    value ``""`` hand ``init_home`` the same id — and the sentence still says
+    which of the two the file holds, because a reader who opens config.yml
+    sees the difference and an answer that denied it would be describing a
+    file nobody has.
+
+    A key stated with nothing after the colon is neither of them. It is a null
+    node, which yaml-cpp's string conversion answers with the literal ``null``
+    (:data:`_VITA3K_NULL_ID`) — an id like any other, held against the listing
+    by :func:`_vita3k_recorded_user_state` rather than here.
+    """
+    if stated_empty:
+        return (
+            f'config.yml states {_VITA3K_USER_ID_KEY} as the empty value "", which is the id '
+            "the emulator starts from (config.h:189)"
+        )
+    return (
+        f"config.yml records no {_VITA3K_USER_ID_KEY}, so the id a launch would open is the "
+        "empty one the emulator starts from (config.h:189)"
+    )
+
+
+def _vita3k_unset_user_state(
+    *,
+    stated_empty: bool,
+    homes: tuple[_Vita3kListedUser, ...],
+    user_root: str,
+    survey: _PerUserSurvey,
+    claim: str,
+    truncating: tuple[str, ...],
+) -> tuple[str | None, str, str]:
+    """What an unset — or empty — user-id answers to, against the listing.
+
+    Two readings reach here and ``stated_empty`` tells them apart: the key the
+    file does not state at all, and the key stated as the empty value ``""``.
+    A key stated with nothing after the colon reaches neither — yaml-cpp makes
+    the id ``null`` of it, not the empty one (:data:`_VITA3K_NULL_ID`).
+
+    Returns ``(headline, sentence, reason)``. The record's own emptiness is
+    not the end of the question, which is what this answer used to make of it:
+    ``cfg.user_id`` is an empty ``std::string`` when nothing sets it
+    (config.h:189), ``init_home`` asks ``gui.users.contains(cfg.user_id)``
+    (gui.cpp:689), and the empty string is a key that map takes like any other
+    — a user.xml whose ``id`` attribute is stated empty is keyed by it
+    (user_management.cpp:94-95), and so is a directory whose name
+    :func:`_vita3k_stem` cuts away whole. So where a directory is listed under
+    the empty id, that record preselects it, and a launch naming an app on the
+    command line — or one made with ``user-auto-connect`` on — reopens it
+    instead of opening the user manager (gui.cpp:688-696).
+
+    The tree such a user writes to is the user root itself. ``io.user_id``
+    becomes the ``gui.users`` key (init_user, user_management.cpp:227) and
+    ``init_savedata_app_path`` composes ``pref_path / "ux0" / "user" /
+    io.user_id / "savedata"`` (io.cpp:136-143) — where ``append_v3``, the
+    append this build compiles for the same reason it compiles ``stem_v3``
+    (path.hpp:1550-1554 through ``BOOST_FILESYSTEM_VERSIONED_SYM``,
+    config.hpp:27-32), adds an empty component by adding nothing at all,
+    separator included: the ``begin != end`` guard at path.cpp:485-502 in the
+    bundled Boost 1.89 and :155-172 in 1.81, the oldest this build accepts.
+    ``append_v4`` is the sibling that differs, pushing a separator for an
+    empty component where the left side has a filename (path.cpp:558-561) —
+    so under it the same id would compose ``ux0/user/`` and the same savedata
+    path, which is why only the stem's reading, not this one, turns on which
+    of the two compiles. The id contributes no segment either way and the
+    saves land beside the listed directory rather than inside it. [V]
+
+    The three states: the empty id is listed and an entry found can end the
+    walk before it — nothing about the reopening is settled, the same reading
+    :func:`_vita3k_listed_recorded_state` makes of a recorded id, and for the
+    same reason; the empty id is listed and every entry was decided — the
+    record preselects that user and the headline is the tree it composes; or
+    nothing here answers to the empty id — no user is preselected after all,
+    which is the one state this answer used to give all three.
+    """
+    record = _vita3k_unset_record(stated_empty)
+    tail = _vita3k_survey_tail(survey, claim)
+    if "" not in _vita3k_identities(homes):
+        if stated_empty:
+            sentence = (
+                f"{record}, and nothing here answers to it, so the user manager opens for "
+                f"the player to pick (init_home, gui.cpp:688-696) — {tail}"
+            )
+        else:
+            sentence = (
+                f"config.yml records no {_VITA3K_USER_ID_KEY}, so nothing preselects a user "
+                "and the user manager opens for the player to pick (init_home, "
+                f"gui.cpp:688-696) — {tail}"
+            )
+        return None, sentence, REASON_NO_USER_PRESELECTED
+    if truncating:
+        sentence = (
+            f"{record}, and that id is among the ones listed here — {_VITA3K_LISTING_RULE} "
+            f"— {_VITA3K_REACH_CLAUSE}, so nothing read here moves the headline: {tail}"
+        )
+        return None, sentence, REASON_CONFIGURED_USER_REACH_UNESTABLISHED
+    sentence = (
+        f"{record}, and that id is among the ones Vita3K itself would list — "
+        f"{_VITA3K_LISTING_RULE} — so a frontend launch, naming an app on the command "
+        "line, reopens that user rather than opening the user manager (init_home, "
+        "gui.cpp:688-696), and the tree named is its: an empty id composes no segment of "
+        f"its own, so those saves land in {os.path.join(user_root, 'savedata')}, the user "
+        "root's own, and not under the directory that was listed (init_savedata_app_path, "
+        "io.cpp:136-143); a "
+        "plain launch without user-auto-connect opens the user manager whatever is "
+        f"recorded — {claim}{survey.aside}"
+    )
+    return "", sentence, REASON_UNSET_USER_ID_IS_LISTED
+
+
 def _vita3k_user(
     read: YamlScalars,
     *,
-    listing: GlobResult,
     homes: tuple[_Vita3kListedUser, ...],
     survey: _PerUserSurvey,
     user_root: str,
@@ -10347,34 +10628,57 @@ def _vita3k_user(
     frontend launch reopens exactly that user and the headline follows it: the
     tree composes from the identity (io.user_id is the gui.users key —
     init_user, user_management.cpp:227), which the first save creates where no
-    directory of that name exists yet. Everywhere else nothing read here
-    settles the launch's user, and the sentence says what stands in the way —
-    including the two states that are atlas's own — a user.xml it could not
-    read, and an entry whose own stat failed — each of which leaves the
-    emulator's listing unknowable rather than decided.
+    directory of that name exists yet. Where the listing does not hold that
+    id, or holds it behind an entry that can end the walk before it, nothing
+    read here settles the launch's user, and the sentence says what stands in
+    the way — including the states that are atlas's own rather than the
+    emulator's verdict, a user.xml it could not read and an entry whose own
+    stat failed, each of which leaves the emulator's listing unknowable rather
+    than decided.
+
+    A record that names nothing is a record all the same, which is why the
+    reading below keeps a stated empty value apart from an absent key and why
+    both roads go to :func:`_vita3k_unset_user_state` rather than to a
+    sentence about nothing being preselected: ``user-id`` defaults to an empty
+    ``std::string`` (config.h:189), and the empty string is an id a directory
+    can be listed under.
+
+    A key stated with nothing after the colon takes neither of those roads. It
+    is an id of its own, ``null``, because that is what the emulator's own
+    reader makes of it — see :data:`_VITA3K_NULL_ID`, which is where what that
+    reading reaches, and what it does not, is written down.
     """
     unread = _VITA3K_USER_ID_KEY in read.skipped
-    configured = None if unread else (read.get(_VITA3K_USER_ID_KEY) or None)
+    # Which spelling the file holds, which the scalar reader's own third
+    # statement answers: its ``values`` say the empty string for a key stated
+    # with nothing after the colon and for an empty quoted scalar alike, and
+    # the emulator does not, so reading the value alone made one file's id of
+    # the other.
+    valueless = not unread and _VITA3K_USER_ID_KEY in read.null
+    if unread:
+        configured = None
+    elif valueless:
+        configured = _VITA3K_NULL_ID
+    else:
+        # Stated as written, and ``""`` is written: collapsing a stated empty
+        # value into ``None`` is what made the answer read it as an absent key.
+        configured = read.get(_VITA3K_USER_ID_KEY)
     auto = None if _VITA3K_AUTO_CONNECT_KEY in read.skipped else read.get(_VITA3K_AUTO_CONNECT_KEY)
     headline = None
+    # How completely the listed users are the emulator's own list — read off
+    # the survey once, here, and handed to whichever sentence is earned, so the
+    # sentences that state it cannot drift into separate accounts of one fact.
+    truncating = _vita3k_truncating(homes)
+    claim = _vita3k_listing_claim(survey, truncating)
     if unread:
         sentence = (
             f"config.yml states {_VITA3K_USER_ID_KEY} as a construct atlas does not read, so "
-            f"which user it preselects is unread here — {_vita3k_survey_tail(survey)}"
+            f"which user it preselects is unread here — {_vita3k_survey_tail(survey, claim)}"
         )
         reason = REASON_CONFIGURED_USER_ID_UNREAD
-    elif configured is None:
-        sentence = (
-            f"config.yml records no {_VITA3K_USER_ID_KEY}, so nothing preselects a user and "
-            "the user manager opens for the player to pick (init_home, gui.cpp:688-696) — "
-            f"{_vita3k_survey_tail(survey)}"
-        )
-        reason = REASON_NO_USER_PRESELECTED
-    else:
-        # Everywhere else the recorded id is held against the emulator's own
-        # listing — and then the headline is taken back if that listing came
-        # back short. The two halves used to be one branch and are not one
-        # fact:
+    elif configured:
+        # Everywhere a user is named the recorded id is held against the
+        # emulator's own listing.
         #
         # The REASON this state used to carry ("a launch's user depends on how
         # the launch was made") was unreadable. :func:`_per_user_state` takes
@@ -10383,41 +10687,32 @@ def _vita3k_user(
         # condition — listing short, or no homes — excluded the only path that
         # reads it. A value the guide documents and no machine produces is the
         # defect in data that the sentences were in prose, so the slug is gone.
-        #
-        # The HEADLINE was a different matter, and dropping the branch dropped
-        # a guard with it: a home a failed listing handed back is not a home
-        # found here, so the record does not move the headline until the
-        # listing that would confirm it succeeded. What reaches a short
-        # listing that still carries matches is set out at
-        # :func:`_per_user_savedata_placement`, which names the stand-in tree
-        # there for both emulators; this branch is what keeps ``headline``
-        # itself true to what it means here — a user the read did not settle
-        # is not one this answer records.
         headline, sentence, reason = _vita3k_recorded_user_state(
-            configured, homes, user_root, survey
+            configured, homes, user_root, survey, claim, truncating, valueless=valueless
         )
-        if listing.status != GLOB_COMPLETE:
-            headline = None
+    else:
+        # No user named — which names one all the same, the empty id, and the
+        # state says what this tree holds under it.
+        headline, sentence, reason = _vita3k_unset_user_state(
+            stated_empty=configured is not None,
+            homes=homes,
+            user_root=user_root,
+            survey=survey,
+            claim=claim,
+            truncating=truncating,
+        )
     readings = (
         OptionReading(
             _VITA3K_USER_ID_KEY,
-            None if unread else read.get(_VITA3K_USER_ID_KEY),
-            _vita3k_key_provenance(
-                _VITA3K_USER_ID_KEY,
-                configured,
-                unread=unread,
-                unset="no user is preselected (config.h:189)",
-            ),
+            configured,
+            _vita3k_user_id_provenance(configured, unread=unread, valueless=valueless),
             None,
         ),
         OptionReading(
             _VITA3K_AUTO_CONNECT_KEY,
             auto,
-            _vita3k_key_provenance(
-                _VITA3K_AUTO_CONNECT_KEY,
-                auto,
-                unread=_VITA3K_AUTO_CONNECT_KEY in read.skipped,
-                unset="the default false governs (config.h:190)",
+            _vita3k_auto_connect_provenance(
+                auto, unread=_VITA3K_AUTO_CONNECT_KEY in read.skipped
             ),
             None,
         ),
@@ -10425,18 +10720,113 @@ def _vita3k_user(
     return _Vita3kUser(configured, headline, readings, sentence, reason)
 
 
-def _vita3k_key_provenance(key: str, value: str | None, *, unread: bool, unset: str) -> str:
-    """Where one config.yml key's value came from — the same three states twice.
+def _vita3k_user_id_provenance(
+    configured: str | None, *, unread: bool, valueless: bool
+) -> str:
+    """Where the recorded user id came from — the shared grammar, this key's sentences.
+
+    A key stated as the empty value is neither a value that names a user nor an
+    absent key, and this key's sentence for that state names the value the file
+    holds instead of calling a stated key unset.
+
+    The key stated with no value at all is the state where this key parts from
+    the other: Vita3K reads it as a ``std::string`` (config.h:189) and
+    yaml-cpp's string conversion of a null node is the literal ``null``, so the
+    sentence names the id that conversion hands the emulator and the reading
+    beside it carries that id. The other key's two spellings meet — both throw
+    — so only this one passes a sentence for the third state.
+    """
+    stated_valueless = _VITA3K_VALUELESS_ID_SENTENCE if valueless else None
+    return _vita3k_key_provenance(
+        _VITA3K_USER_ID_KEY,
+        configured,
+        unread=unread,
+        stated_valueless=stated_valueless,
+        stated_empty=(
+            f'config.yml states {_VITA3K_USER_ID_KEY} as the empty value "" — the id the '
+            "emulator starts from is that same empty one (config.h:189)"
+        ),
+        unset="no user is preselected (config.h:189)",
+    )
+
+
+def _vita3k_auto_connect_provenance(auto: str | None, *, unread: bool) -> str:
+    """Where the auto-connect switch came from — the shared grammar, this key's sentences.
+
+    One false, two roads. An absent key is assigned the default its declaration
+    names (config.cpp:45-46); a key stated with nothing in it is never assigned
+    at all and keeps the initializer its member was declared with, because
+    yaml-cpp converts neither spelling of an empty bool: a key with nothing
+    after the colon is a null node, which is no scalar (convert.cpp:42-43), and
+    an empty quoted scalar passes the case test (:28-29) and then matches none
+    of y/yes/true/on or their negatives (:57-72), so ``decode`` fails both
+    times and ``as<bool>()`` throws (impl.h:131-133) — read and run at the
+    commit this build pins, external/yaml-cpp@2f86d137. ``update_members``
+    carries the throw out of the assignments the declaration order writes
+    (config.cpp:41-49), ``parse`` logs it and answers FileNotFound
+    (config.cpp:182-187), and ``init_config`` drops that answer
+    (config.cpp:230): the file is applied as far as that key and no further, so
+    this switch and every key declared after it keep the default they are
+    declared with (config.h:190, state.h:112-113) while pref-path
+    (config.h:108) and user-id (:189), both declared before it, stand.
+    """
+    return _vita3k_key_provenance(
+        _VITA3K_AUTO_CONNECT_KEY,
+        auto,
+        unread=unread,
+        stated_empty=(
+            f"config.yml states {_VITA3K_AUTO_CONNECT_KEY} with nothing in it, which is no "
+            "boolean yaml-cpp converts (convert.cpp:42-43, :57-72 and impl.h:131-133 at "
+            "external/yaml-cpp@2f86d137) — the load throws there and applies no key declared "
+            "after it, so the default false governs all the same (config.cpp:182-187, "
+            "config.h:190)"
+        ),
+        unset="the default false governs (config.h:190)",
+    )
+
+
+def _vita3k_key_provenance(
+    key: str,
+    value: str | None,
+    *,
+    unread: bool,
+    stated_empty: str,
+    unset: str,
+    stated_valueless: str | None = None,
+) -> str:
+    """Where one config.yml key's value came from — one grammar, two keys.
 
     A key is stated as a construct the scalar reader passed over, stated as a
-    value, or not stated at all, and the two keys this answer reads differ only
-    in what governs when nothing is stated. Saying that once keeps the two
-    readings from drifting into two accounts of one grammar.
+    value, stated as an empty value, or not stated at all, and the two keys
+    this answer reads differ only in what the last two mean to the emulator.
+    Saying the grammar once keeps the two readings from drifting into two
+    accounts of one shape.
+
+    A stated empty value is a state of its own because the file states it: the
+    key is written and its value is empty, which is not the file lacking the
+    key. Reading the two as one is the conflation each caller's
+    ``stated_empty`` exists to remove, and it is why a stated value and a
+    stated empty one take two branches below — the first tests the value, the
+    second, which only an empty one reaches, tests that there is a value at
+    all.
+
+    ``stated_valueless`` is how a key stated with nothing after the colon
+    enters that grammar without a branch of its own per key: the caller passes
+    a sentence exactly where its emulator makes something else of that
+    spelling than of an empty value, and the sentence is answered before the
+    value is looked at, because the value the emulator holds there is the
+    library's doing rather than the file's text. Where the two spellings meet
+    — ``user-auto-connect`` throws on both — the caller passes none and both
+    reach ``stated_empty``.
     """
     if unread:
         return f"{key} is stated as a construct atlas does not read — its value is unread, not absent"
+    if stated_valueless is not None:
+        return stated_valueless
     if value:
         return f'config.yml: {key}: "{value}"'
+    if value is not None:
+        return stated_empty
     return f"{key} is unset — {unset}"
 
 
@@ -10459,17 +10849,20 @@ def _vita3k_savefile_placement(
     is a refusal here rather than an invented directory.
 
     Below it the unit is ``ux0/user/<user>/savedata``, one directory per title
-    id (io.cpp:136-143). Which user that is at run time is decided by
-    ``init_home`` from the id config.yml records — see :func:`_vita3k_user`.
-    Every user directory ``get_users_list`` keeps — one whose user.xml loads
-    (user_management.cpp:87-89) — becomes a group of its own with the recorded
-    id stated beside them, the directories it passes over are stated as
-    skipped, and one whose user.xml atlas could not read is stated as
-    unestablished; where the listing completed and the recorded user is among
-    the listed ones the headline names its tree, because a frontend launch
-    reopens exactly that user; everywhere else it stays the first tree
-    listed, or the compiled stand-in where none is and where the listing came
-    back short, and the caveat says what is not settled.
+    id (io.cpp:136-143) — and ``ux0/user/savedata`` for the user keyed by the
+    empty id, which composes no segment of its own. Which user that is at run
+    time is decided by ``init_home`` from the id config.yml records, or from
+    the empty one it starts with where it records none — see
+    :func:`_vita3k_user`. Every user directory ``get_users_list`` keeps — one
+    whose user.xml loads (user_management.cpp:87-89) — becomes a group of its
+    own with the recorded id stated beside them, the directories it passes
+    over are stated as skipped, and one whose user.xml atlas could not read is
+    stated as unestablished; where the listing completed, holds the id a
+    launch would open, and nothing found here can end the walk that filled it,
+    the headline names that user's tree, because a frontend launch reopens
+    exactly that user; everywhere else it stays the first tree listed, or the
+    compiled stand-in where none is and where the listing came back short, and
+    the caveat says what is not settled.
     """
     config_path = _standalone_settings_path(card, homes)
     result = machine.read_text(config_path)
@@ -10528,7 +10921,7 @@ def _vita3k_savefile_placement(
     user_homes = _vita3k_listed_users(machine, user_root, found.users, found.unstatable)
     survey = _vita3k_survey(user_homes)
     user = _vita3k_user(
-        read, listing=listing, homes=user_homes, survey=survey, user_root=user_root
+        read, homes=user_homes, survey=survey, user_root=user_root
     )
     if user_homes:
         # Directories were found and none is a user the emulator lists: the
@@ -10539,9 +10932,23 @@ def _vita3k_savefile_placement(
         # An empty tree with a recorded user is still an empty tree — the
         # headline stays the compiled default — but the emptiness says one
         # thing more: the recorded user's tree is among the ones missing.
-        recorded_aside = (
-            "" if user.configured is None else f", the recorded user {user.configured} included"
-        )
+        if user.configured:
+            # Quoted, the way the not-set-up state quotes the id a directory
+            # answers to: unquoted, an id spelled like a word — "the recorded
+            # user null included" — reads as its own negation.
+            recorded_aside = f', the recorded user "{user.configured}" included'
+        elif user.configured is not None:
+            # A record stating the empty id names no directory that could be
+            # missing — the tree that id composes is the user root itself,
+            # which is here and empty. What the emptiness settles for it is
+            # the other half of init_home's test: gui.users is empty, so the
+            # user manager opens whatever the record says (gui.cpp:689).
+            recorded_aside = (
+                f", and the empty {_VITA3K_USER_ID_KEY} config.yml states is listed by "
+                "nothing here either"
+            )
+        else:
+            recorded_aside = ""
         no_user_sentence = (
             f"no user directory exists below {user_root} "
             f"— nothing has saved here yet{recorded_aside}. The tree named is the one "
@@ -10714,7 +11121,7 @@ def _savestate_names_caveat(
         CAVEAT_FILE_NAMES_UNESTABLISHED,
         f"a state below {directory} is named {card.names} — {why} ({citation}) — so the "
         "tree is stated and its entries refused; back it up whole",
-        {"core": card.token, "dir": directory, "pattern": card.names, "citation": citation},
+        {"token": card.token, "dir": directory, "pattern": card.names, "citation": citation},
     )
 
 
@@ -10968,7 +11375,7 @@ def _melonds_state_files(
         CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
         sentence,
         {
-            "core": card.token,
+            "token": card.token,
             "files": (card.names,),
             "rom_stem": "the loaded file's name without its last extension — for an "
             "archive, the archived file's",
@@ -12019,7 +12426,7 @@ def _mame_root_anchor(
                 f"a relative {key} resolves against the launching process's working "
                 "directory (emu_file over the searchpath, machine.cpp:899-903), which no "
                 "read of this machine can establish",
-                {"core": card.token, "path": substituted},
+                {"token": card.token, "path": substituted},
             ),
         ),
     )
@@ -12412,7 +12819,7 @@ def _mod_enabled(
     option_gates = _option_gates(
         chain.layers, sandbox=query.sandbox, retroarch_config_dir=chain.retroarch_config_dir
     )
-    value, provenance, _, _ = _core_options_value(
+    value, provenance, _, _ = core_options_value(
         machine,
         override_config_dir=chain.gates.override_config_dir,
         global_file=option_gates.global_file,
@@ -13213,7 +13620,9 @@ def _retroarch_firmware_context(
     )
     caveats.extend(root_caveats)
     sources.extend(root_sources)
-    cores, cores_read, core_caveats, core_sources = _firmware_core_declarations(sandbox, parsed)
+    cores, cores_read, core_caveats, core_sources, core_dir = _firmware_core_declarations(
+        sandbox, parsed
+    )
     caveats.extend(core_caveats)
     sources.extend(core_sources)
 
@@ -13221,6 +13630,13 @@ def _retroarch_firmware_context(
         root=root,
         cores=cores,
         hashes=load_hashes(),
+        core_options=_firmware_core_options(
+            sandbox,
+            global_text,
+            cfg_label=cfg_label,
+            retroarch_config_dir=retroarch_config_dir,
+            core_dir=core_dir,
+        ),
         cores_read=cores_read,
         sources=tuple(sources),
         caveats=tuple(caveats),
@@ -13297,9 +13713,55 @@ def _firmware_root(
     return root, caveats, sources
 
 
+def _firmware_core_options(
+    sandbox: _Sandbox,
+    global_text: str | None,
+    *,
+    cfg_label: str,
+    retroarch_config_dir: str,
+    core_dir: str | None,
+) -> CoreOptionsChain:
+    """Where a core option would be read on this installation — resolved once, here.
+
+    The firmware route asks about the options a core composes a firmware name
+    out of, and it must walk the files RetroArch walks. Which files those are
+    is a property of the configuration this context was already read from, so
+    they are resolved at this one seam: reading them again inside the route
+    would let one answer rest on two revisions of the same cfg.
+
+    The chain is the **global cfg alone**, and that is narrower than the save
+    route's on purpose. An override ``.cfg`` is keyed by a core's
+    ``library_name`` and a content path, and a firmware question names
+    neither — nothing has been launched — so the layers that a launch would
+    merge do not exist to read. The same fact bounds the options files
+    themselves: the game and folder ``.opt`` layers are keyed by content, so
+    what governs here is the per-core ``.opt`` (unless ``global_core_options``
+    switched it off) and then the global options file, which is exactly the
+    tail of RetroArch's own priority order.
+    """
+    layers: list[_CfgLayer] = (
+        [(CfgSource(CFG_LAYER_GLOBAL, cfg_label), global_text)] if global_text is not None else []
+    )
+    override_dir, _, override_caveats = _override_directory(
+        layers,
+        sandbox=sandbox,
+        cfg_label=cfg_label,
+        override_config_dir=os.path.join(retroarch_config_dir, "config"),
+        config_file_dir=retroarch_config_dir,
+    )
+    gates = _option_gates(layers, sandbox=sandbox, retroarch_config_dir=retroarch_config_dir)
+    return CoreOptionsChain(
+        global_file=gates.global_file,
+        override_config_dir=override_dir,
+        per_core_options=gates.per_core_options,
+        core_dir=core_dir,
+        caveats=(*override_caveats, *gates.caveats),
+    )
+
+
 def _firmware_core_declarations(
     sandbox: _Sandbox, parsed: Mapping[str, str]
-) -> tuple[tuple[CoreDeclarations, ...], bool, list[Caveat], list[str]]:
+) -> tuple[tuple[CoreDeclarations, ...], bool, list[Caveat], list[str], str | None]:
     """What the installed cores declare they want, and whether that could be read.
 
     Two keys, read independently and free to point anywhere:
@@ -13358,7 +13820,13 @@ def _firmware_core_declarations(
     # installation that ships no cores could never say so — and the case it
     # protected against, a directory that resolves but cannot be listed, is
     # stated above by its own caveat.
-    return cores, info_dir is not None and cores_listed, caveats, sources
+    #
+    # ``core_dir`` rides back out because the binaries in it answer a question
+    # no .info does: a core's ``library_name``, which names the directory its
+    # per-core options file sits in. It is the same directory the enumeration
+    # was limited to, so a route that probes one of these cores probes the
+    # build this answer is about.
+    return cores, info_dir is not None and cores_listed, caveats, sources, core_dir
 
 
 class _FirmwareQueries:
@@ -13648,6 +14116,20 @@ class _CatalogueHost(Protocol):
         """
         ...
 
+    def standalone_firmware_sandbox(self, homes: "_XdgHomes") -> "_Sandbox | None":
+        """How the launch that reads *homes* spells its own configured paths.
+
+        Asked with the homes rather than with the command so that the app the
+        sandbox carries and the trees the answer is otherwise about are read
+        off one resolution — the sandbox and the homes, not the entry as a
+        whole, which its token reaches through a reading of its own: a second
+        reading here could pick a different binary and land the two on
+        different apps.
+        ``None`` means the arrangement's own sandbox governs, which is what a
+        handle whose emulators all run inside one app answers.
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class CatalogueAnswer:
@@ -13822,10 +14304,15 @@ VERDICT_NOT_ACCEPTED = "not-accepted"
 # the command per emulator, so the list can say yes while the entry that
 # actually runs loads nothing (issue #66). This verdict is that split, stated
 # only where the running entry's refusal is ESTABLISHED: a standalone whose
-# recorded loader does not read the format, or a block-extract core handed an
-# archive it does not claim. The remedies differ from not-accepted's, which
-# is why the two never collapse: unpack the container, or select an entry
-# that takes it — ``alternatives`` names the ones established to.
+# recorded loader does not read the format, a block-extract core handed an
+# archive it does not claim, and a row whose command hands RetroArch a core
+# file this host cannot load, which reads nothing at all (#446). The third is
+# established from the command rather than from a loader, and it is the one
+# where nothing about the FORMAT was weighed — its own caveat
+# (``core-file-foreign``) says so, where the other two put their reason in
+# ``sources``. The remedies differ from not-accepted's, which is why the two
+# never collapse: unpack the container, or select an entry that takes it —
+# ``alternatives`` names the ones established to.
 VERDICT_ENTRY_NOT_ACCEPTED = "entry-not-accepted"
 VERDICT_NEEDS_INSTALLATION = "needs-installation"
 VERDICT_UNKNOWN = "unknown"
@@ -13848,7 +14335,11 @@ LAUNCH_VERDICTS = (
 # (task_content.c:1325-1358 @ a79435a) — what is inside is something atlas
 # does not read. And an entry whose reading nobody established — a standalone
 # without a card, a core that could not be probed — is exactly that, never
-# "refuses".
+# "refuses". None of the three is what a row handing RetroArch a core file
+# this host cannot load states: that row refuses with no format weighed at
+# all, and says so under its own code (``core-file-foreign``), which is the
+# entry's fact wherever it is enumerated rather than a reading of this one
+# extension.
 CAVEAT_ENTRY_FORMAT_UNCLAIMED = "entry-format-unclaimed"
 CAVEAT_ARCHIVE_CONTENTS_UNREAD = "archive-contents-unread"
 CAVEAT_ENTRY_FORMAT_UNESTABLISHED = "entry-format-unestablished"
@@ -14646,6 +15137,76 @@ def _per_game_alternative_emulator_caveat(per_game: Mapping[str, str]) -> Caveat
     )
 
 
+def _foreign_core_of(kind: str, command: str) -> str | None:
+    """The core file this launch hands RetroArch, or ``None`` where it is not such an entry.
+
+    The kind and the reading in one answer. The kind is what the routes branch
+    on; the file comes from :func:`atlas.esde.foreign_core_file`, the same
+    reading that chose the kind, so a route never states a file the
+    classification did not see. ``None`` for the other two words, which is
+    exactly the "carry on as before" the callers read it as.
+    """
+    if kind != KIND_RETROARCH_FOREIGN_CORE:
+        return None
+    return foreign_core_file(command)
+
+
+def _foreign_core_caveat(label: str, system: str, core_file: str) -> Caveat:
+    """What a ``retroarch-foreign-core`` entry states about itself, wherever it is enumerated.
+
+    Rides the entry rather than the answer wherever a list of entries is the
+    answer: a system's other rows are unaffected, and the one that cannot run
+    says so beside its own label. The launchability answer is the exception
+    and states it at answer level too, because there the code is also this
+    answer's reason for its verdict. The firmware route words the same fact
+    for its own answer (:func:`atlas.firmware._foreign_core_caveat`) and both
+    carry this code with these three keys, so a client reads one rule on
+    either route.
+
+    Takes the label and the system rather than an entry, because both the
+    catalogue assembly (holding an :class:`~atlas.esde.EmulatorSpec`) and the
+    launchability route (holding an :class:`EmulatorEntry`) word it, and the
+    two shapes share nothing but these strings.
+    """
+    return Caveat(
+        CAVEAT_CORE_FILE_FOREIGN,
+        f"{label} hands RetroArch {core_file}, a core file this host cannot load — its name "
+        "carries another platform's suffix, so this entry launches neither a core nor an "
+        "emulator of its own",
+        {"core_file": core_file, "label": label, "system": system},
+    )
+
+
+# What each entry route reads from a directory, in the words its refusals and
+# its DuckStation directory reads already use — one spelling per route, so a
+# sentence about "save files" cannot drift from the route that reads them.
+_READS_SAVE_FILES = "save files"
+_READS_SAVESTATES = "savestates"
+_READS_TEXTURE_PACKS = "texture packs"
+_READS_MODS = "mods"
+
+
+def _foreign_core_unresolved(spec: EmulatorSpec, core_file: str, reads: str) -> Unresolved:
+    """The refusal every placement route answers a ``retroarch-foreign-core`` entry with.
+
+    One refusal where the standalone ones are four. Those differ because what
+    is missing differs per family — a save card, a savestate card, texture
+    wiring, mod wiring — and here nothing differs: the launch runs RetroArch
+    and RetroArch loads nothing, so no emulator of its own is running to have
+    a tree of any family. *reads* names the family so the sentence says which
+    question was asked; the code and the three data keys are the same on all
+    four.
+    """
+    return Unresolved(
+        UNRESOLVED_CORE_FILE_FOREIGN,
+        f"where {spec.label!r} ({spec.system}) reads {reads} is not a question this machine "
+        f"has: the entry hands RetroArch {core_file}, a core file this host cannot load — its "
+        "name carries another platform's suffix — so no emulator of its own is launched here "
+        "to read any",
+        {"core_file": core_file, "label": spec.label, "system": spec.system},
+    )
+
+
 def _entries_from(
     host: "_CatalogueHost",
     specs: tuple[EmulatorSpec, ...],
@@ -14689,7 +15250,23 @@ def _entries_from(
     entry_caveats: tuple[Caveat, ...] = ()
     if content_path is None and selections.per_game:
         entry_caveats = (_per_game_alternative_emulator_caveat(selections.per_game),)
-    return tuple(EmulatorEntry(host, spec, entry_caveats) for spec in specs)
+    return tuple(EmulatorEntry(host, spec, (*entry_caveats, *_own_caveats(spec))) for spec in specs)
+
+
+def _own_caveats(spec: EmulatorSpec) -> tuple[Caveat, ...]:
+    """What one entry states about itself, beside whatever the assembly states about all of them.
+
+    Empty for the two kinds that launch something: a libretro entry's core and
+    a standalone entry's emulator are both this machine's to read, degradations
+    and all, and the routes that read them carry their own caveats. Only a row
+    naming a core file of another host has a fact that belongs to the row
+    itself and to no route.
+    """
+    core_file = _foreign_core_of(spec.kind, spec.command)
+    caveats: list[Caveat] = []
+    if core_file is not None:
+        caveats.append(_foreign_core_caveat(spec.label, spec.system, core_file))
+    return tuple(caveats)
 
 
 def _firmware_catalogue_entries(
@@ -14718,7 +15295,11 @@ def _firmware_catalogue_entries(
     for entry in entries:
         token = None
         homes = None
-        if entry.kind != KIND_LIBRETRO:
+        # On the standalone word itself, not on "not libretro": the token and
+        # the homes describe an emulator the launch runs, and a row that hands
+        # RetroArch a core file of another host runs none — reading its command
+        # for one would answer with the runner's name.
+        if entry.kind == KIND_STANDALONE:
             token = host.standalone_firmware_token(entry.command)
             homes = host.standalone_firmware_homes(entry.command)
         shaped.append(
@@ -14732,6 +15313,20 @@ def _firmware_catalogue_entries(
                 standalone_data_home=homes.data if homes is not None else None,
                 standalone_config_home=homes.config if homes is not None else None,
                 standalone_flatpak=homes.flatpak if homes is not None else None,
+                # The sandbox is built from the homes this entry states rather
+                # than resolved from the command a second time: the sandbox
+                # and the homes then describe one resolution of the launch,
+                # where a second reading could pick a different binary and
+                # answer about a different app. (The token beside them comes
+                # from a reading of its own.)
+                standalone_sandbox=(
+                    None if homes is None else host.standalone_firmware_sandbox(homes)
+                ),
+                # Off those same homes, and ``None`` where there are none, so
+                # that a launch which is not pinned says so rather than
+                # reading as one that stated nothing (#492).
+                standalone_xdg_pinned=(None if homes is None else homes.xdg_pinned),
+                foreign_core_file=_foreign_core_of(entry.kind, entry.command),
             )
         )
     return tuple(shaped)
@@ -14905,14 +15500,18 @@ class EmulatorEntry:
         return self._spec.label
 
     @property
-    def kind(self) -> str:
-        """Whether this entry launches a libretro core or a standalone emulator."""
+    def kind(self) -> CatalogueKind:
+        """What this entry launches: a libretro core, a standalone emulator, or — naming a
+        core file this host cannot load — nothing this machine can run.
+        """
         return self._spec.kind
 
     @property
     def core_so(self) -> str | None:
-        """The ``.so`` short name of the core this entry loads, and ``None`` for a standalone
-        entry, which loads none.
+        """The ``.so`` short name of the core this entry loads, and ``None`` on both other
+        kinds, which load none — a standalone entry because it runs an emulator of its own, and
+        a ``retroarch-foreign-core`` one because the file its command names is not a core this
+        host can load.
         """
         return self._spec.core_so
 
@@ -15155,19 +15754,50 @@ def _entry_reading(
 ) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
     """One entry's stance on one extension: accepts, refuses, or unestablished.
 
-    The two kinds of entry split along the boundary rule (issue #66). A
-    libretro entry's claims are read live off the installed core, and they
-    are claims: RetroArch checks nothing on a direct load, so a file outside
-    them is attempted with a statement, never refused — except an archive,
-    which runs through RetroArch's own hands (extracted and searched by the
-    claims, or handed raw to a ``block_extract`` core that never claimed
+    The two kinds of entry that launch something split along the boundary rule
+    (issue #66). A libretro entry's claims are read live off the installed
+    core, and they are claims: RetroArch checks nothing on a direct load, so a
+    file outside them is attempted with a statement, never refused — except an
+    archive, which runs through RetroArch's own hands (extracted and searched
+    by the claims, or handed raw to a ``block_extract`` core that never claimed
     it, which is the one libretro refusal this can establish). A standalone
     entry opens the file itself: its recorded loader decides, and an
     emulator without a card is an entry nobody read.
+
+    The third kind reads nothing at all, and that is a refusal rather than an
+    unestablished reading: no loader was asked and no claim was weighed
+    because the launch loads nothing, which is established from the command
+    itself. So the accept-list can say yes while this entry takes no file of
+    any format — the split :data:`VERDICT_ENTRY_NOT_ACCEPTED` exists for — and
+    the reason is stated under the entry's own code rather than under one of
+    the three format words, none of which was read.
     """
     if entry.kind == KIND_LIBRETRO:
         return _libretro_entry_reading(entry, extension=extension, info=core_info_for(entry))
+    foreign = _foreign_core_of(entry.kind, entry.command)
+    if foreign is not None:
+        return _foreign_core_entry_reading(entry, foreign)
     return _standalone_entry_reading(entry, extension=extension)
+
+
+def _foreign_core_entry_reading(
+    entry: EmulatorEntry, core_file: str
+) -> tuple[str, tuple[str, ...], tuple[Caveat, ...]]:
+    """The third branch of :func:`_entry_reading` — nothing loads, so no file is taken.
+
+    Takes no *extension*, and that is the statement: this refusal is the same
+    whatever the file is, where the other two branches answer about the one
+    extension they were asked.
+    """
+    return (
+        _ENTRY_REFUSES,
+        (
+            f"entry {entry.label!r}: its command hands RetroArch {core_file}, a core file this "
+            "host cannot load — its name carries another platform's suffix, so RetroArch loads "
+            "no core and the entry takes no file at all",
+        ),
+        (_foreign_core_caveat(entry.label, entry.system, core_file),),
+    )
 
 
 def _libretro_entry_reading(
@@ -15621,6 +16251,18 @@ class _CatalogueQueries:
         binary reads is the variant's fact, not the arrangement's.
         """
         del command
+        return None
+
+    def standalone_firmware_sandbox(self, homes: "_XdgHomes") -> "_Sandbox | None":
+        """The per-entry override of the context's sandbox — none by default.
+
+        The same arrangement fact as the homes above, and answered the same
+        way: where one app holds every emulator, the sandbox the firmware
+        context carries is that app's and is right for all of them. Only a
+        handle that hands out per-entry homes has a per-entry sandbox to build
+        from them.
+        """
+        del homes
         return None
 
     def _catalogue_absence(self) -> Caveat:
@@ -17142,6 +17784,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         is given, checks the gamelist for a per-game override that would launch
         a different emulator — all from one snapshot of the governing sources.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVE_FILES)
         config, marker_issues = self._read_marker()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
@@ -17198,6 +17843,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         per-game-override caveats the save twin carries, and the
         arrangement's evidence caveats.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVESTATES)
         config, marker_issues = self._read_marker()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
@@ -17281,6 +17929,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         save routes: an entry ES-DE would not launch for this game reads no
         texture packs for it either.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_TEXTURE_PACKS)
         config, marker_issues = self._read_marker()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
@@ -17325,6 +17976,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         The texture entry route's twin, down to the per-game override check: an
         entry ES-DE would not launch for this game reads no mods for it either.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_MODS)
         config, marker_issues = self._read_marker()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
@@ -18502,6 +19156,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         an established launcher leads to the same save card RetroDECK's token
         does — read against this arrangement's own config tree.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVE_FILES)
         if spec.kind != KIND_LIBRETRO:
             return self._standalone_entry_savefile(spec, entry_caveats, content_path=content_path)
         placement = _retroarch_savefile_location(
@@ -18834,6 +19491,20 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return None
         return self._homes_for_token(self._launch_variant(launch), launch.token)
 
+    def standalone_firmware_sandbox(self, homes: _XdgHomes) -> _Sandbox:
+        """The firmware seam's sandbox for one launch — the placement routes' own.
+
+        :meth:`_standalone_sandbox` over the homes the entry already
+        established, which is what makes the firmware answer and the save,
+        savestate, texture and mod answers read one launch the same way: the
+        app id rides on the homes, so the tree a ``/var/config`` value lands
+        in and the deploy an ``/app`` value resolves against are this
+        emulator's own wherever the settings table names its id, and every
+        spelling but ``/app`` stays the host path it names wherever it does
+        not (#350).
+        """
+        return self._standalone_sandbox(homes)
+
     def _standalone_sandbox(self, homes: _XdgHomes) -> _Sandbox:
         """How the launch that reads *homes* spells its own configured paths.
 
@@ -18882,6 +19553,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         goes through: the same variant gate, the savestate card the token
         leads to, and the same refusals where nothing is established (#225).
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVESTATES)
         if spec.kind != KIND_LIBRETRO:
             return self._standalone_entry_savestate(spec, entry_caveats, content_path=content_path)
         placement = _retroarch_savestate_location(
@@ -18967,6 +19641,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         established the refusal names it, rather than answering from a tree
         the binary never reads.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_TEXTURE_PACKS)
         if spec.kind != KIND_LIBRETRO:
             return self._standalone_entry_texture(spec, entry_caveats, content_path=content_path)
         placement = _retroarch_texture_pack_location(
@@ -18985,6 +19662,9 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
     ) -> ModPlacement | Unresolved:
         """The mod entry route — the texture route's twin, gate included."""
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_MODS)
         if spec.kind != KIND_LIBRETRO:
             return self._standalone_entry_mod(spec, entry_caveats, content_path=content_path)
         placement = _retroarch_mod_location(
@@ -19257,16 +19937,31 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
 
         The standalone pair the context carries is the arrangement's, not one
         launch's: this seam is asked once for the whole answer while the
-        firmware route picks its bases per entry, so the sandbox is built from
-        the same arrangement-wide homes the context states beside it and
-        establishes no app id. A sandbox spelling in a standalone emulator's
-        config is therefore read here as the host path it is not — ``/app``
-        refused, ``/var/config`` left standing — where the savefile and
-        savestate answers resolve both against the launch's own app (#317).
-        Those two are where it shows today: they are the routes whose
-        configured-path cards cover emulators the settings table names an id
-        for. The texture and mod answers take the same per-launch sandbox and
-        would follow the moment one of their cards does.
+        firmware route picks its bases per entry, and so is the sandbox built
+        beside it. What a carded entry reads is its own: the homes its launch
+        establishes, and the sandbox built from those very homes
+        (:meth:`standalone_firmware_sandbox`), which is the sandbox the
+        placement routes read for the same launch — ``/app`` resolves against
+        the deploy that runs and ``/var/config`` against the app's own trees
+        wherever the settings table names this emulator's id, and every
+        spelling but ``/app`` stays the host path it names wherever it does
+        not (#350) — and whether those homes are a flatpak's pinned XDG
+        variables, which is the arrangement's own answer only for a launch
+        that establishes no homes (#492): here the pair is the host's and
+        nothing pins it, while the launch that runs an installed flatpak is
+        pinned. The arrangement's pair is what governs an entry that
+        establishes none — the same fallback the bases beside it take.
+
+        The distribution word travels without the sandbox that rides beside it
+        on RetroDECK, and that is the whole of what EmuDeck states about itself
+        here. The sandbox is how a distribution's own bundled tree reads from
+        this host, which is what hashing a shipped copy needs; EmuDeck ships no
+        copies into the firmware root, so there is no tree to reach and
+        ``supplied_by`` goes on answering ``None`` — the copy list has no card
+        under this word. What the word does reach is the download card
+        (:mod:`atlas.distribution_downloads`), whose statement is about a
+        directory under the root this context already resolved and needs
+        nothing outside it.
         """
         sandbox, environment_sources = self._cfg_sandbox()
         standalone_homes = self._standalone_xdg_homes()
@@ -19282,6 +19977,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             standalone_homes=standalone_homes,
             standalone_sandbox=self._standalone_sandbox(standalone_homes),
             extra_sources=environment_sources,
+            distribution=self.kind,
         )
 
     def _read_firmware_context(self) -> FirmwareContext:
@@ -19794,9 +20490,12 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
 
         A derived entry is always a libretro core (the enumeration is the
         cores'), so the placement is exactly what the direct question answers
-        for that ``core_so``; the guard stands for the day a spec arrives
-        from somewhere else.
+        for that ``core_so``; both guards stand for the day a spec arrives
+        from somewhere else, and each refuses in the word that spec would be.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVE_FILES)
         if spec.kind != KIND_LIBRETRO:
             return _standalone_savefile_unresolved(spec)
         return _retroarch_savefile_location(
@@ -19818,9 +20517,12 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
     ) -> SavestatePlacement | Unresolved:
         """The savefile entry route's twin — same sources, the savestate keys.
 
-        The guard stands for the day a spec arrives from somewhere else, as on
+        The guards stand for the day a spec arrives from somewhere else, as on
         the savefile route: a derived entry is always a libretro core.
         """
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_SAVESTATES)
         if spec.kind != KIND_LIBRETRO:
             return _standalone_savestate_unresolved(spec)
         return _retroarch_savestate_location(
@@ -19836,6 +20538,9 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
     ) -> TexturePlacement | Unresolved:
         """The texture entry route — the core question, asked by the entry."""
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_TEXTURE_PACKS)
         if spec.kind != KIND_LIBRETRO:
             return _standalone_texture_unresolved(spec)
         return _retroarch_texture_pack_location(
@@ -19851,6 +20556,9 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
         content_path: str | None = None,
     ) -> ModPlacement | Unresolved:
         """The mod entry route — the core question, asked by the entry."""
+        foreign = _foreign_core_of(spec.kind, spec.command)
+        if foreign is not None:
+            return _foreign_core_unresolved(spec, foreign, _READS_MODS)
         if spec.kind != KIND_LIBRETRO:
             return _standalone_mod_unresolved(spec)
         return _retroarch_mod_location(

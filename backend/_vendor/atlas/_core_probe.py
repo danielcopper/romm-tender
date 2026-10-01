@@ -25,13 +25,14 @@ core that crashes in phase 2, or registers its options only later (e.g. in
 
 Opening the ``.so`` carries a third outcome, and it gets a line of its own:
 where opening it raises ``OSError``,
-``{"unloadable": "<the message the loader gave>"}``, exit status 1 — a file
-that opens but exports no entry point is not this case; it exits with a
-traceback and no line, and reads as unknown like any other empty read. Not an
-empty read — the binary can be sound and this process still unable to open
-it, typically because a library the core declares it needs is not resolvable
-from the running interpreter; a file the loader can make no sense of lands
-here too. The same message goes to stderr for whoever runs this by hand.
+``{"unloadable": "<the message the loader gave>"}``, exit status 1. A file
+that opens but exports no entry point is not this case: it exits with a
+traceback and no line, which the parent reads as ``unusable``, a run that
+ended by itself having named no core. The refusal line is not an empty read:
+the binary can be sound and this process still unable to open it, typically
+because a library the core declares it needs is not resolvable from the
+running interpreter; a file the loader can make no sense of lands here too.
+The same message goes to stderr for whoever runs this by hand.
 
 This is the same read RetroArch performs when it loads a core — a live read of
 the binary on disk, not a lookup.

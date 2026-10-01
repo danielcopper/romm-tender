@@ -12,17 +12,21 @@ is left by hashing it against a table compiled into the binary
 is a question about *content*, and answering it at all means carrying the table
 — which is why ``atlas/data/duckstation_bios.json`` exists, generated from
 upstream's source and pinned to the revision it was read at.
+
+What lives here of that table is which file it is and what its emulator does
+with it; the reading itself is :mod:`atlas.bios_table`, because a fork of this
+emulator boots from a second table of the same shape and a module named for
+this one cannot own that.
 """
 
 from __future__ import annotations
 
-import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
 
 from ._data import packaged_text
+from .bios_table import BiosTable, load_bios_table as _load_bios_table
 from . import emulator_settings, qt_ini
 from .machine import GLOB_COMPLETE, READ_MISSING, READ_OK, Machine
 from .placement import (
@@ -172,7 +176,7 @@ def dataroot_caveat(token: str, below: str) -> Caveat:
         "from the launch environment (XDG_CONFIG_HOME set routes it to the config side, "
         f"qthost.cpp:562-582), which no file records; {below} hangs off the "
         "environment-unset side",
-        {"core": token, "reason": REASON_DATA_ROOT_DECIDED_BY_LAUNCH},
+        {"token": token, "reason": REASON_DATA_ROOT_DECIDED_BY_LAUNCH},
     )
 
 
@@ -329,7 +333,7 @@ def per_game_unread_caveat(
         f"unknown — DuckStation layers such a file over the whole configuration while that "
         f"game runs ({_LAYER}), and the {plural} {spelled} would be read through it "
         f"({read_through}). {governs}",
-        {"core": token, "dir": directory, "key": keys},
+        {"token": token, "dir": directory, "key": keys},
     )
 
 
@@ -389,7 +393,7 @@ def per_game_caveats(
             f"({read_through}), so this answer is the one that holds for every game without "
             f"such a file. {governs}",
             {
-                "core": token,
+                "token": token,
                 "count": str(len(listing.matches)),
                 "dir": directory,
                 "key": keys,
@@ -398,229 +402,18 @@ def per_game_caveats(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class BiosImage:
-    """One row of DuckStation's table: what these bytes are, and how much it wants them.
-
-    ``priority`` is upstream's own de-prioritisation and reads backwards from
-    the word: **lower wins**. Launch-console images sit at 50, PS2 ones at 100
-    and PAL PS2 ones at 150, each with a comment saying why (bios.cpp:42-45).
-    """
-
-    name: str
-    region: str
-    md5: str
-    priority: int
-    fast_boot_patch: str
-
-
-@dataclass(frozen=True, slots=True)
-class BiosCandidate:
-    """One file the search kept: it is of an accepted size, and this is what it is.
-
-    ``image`` is ``None`` for bytes the table does not know — a state
-    DuckStation boots anyway, with a warning, so it belongs among the
-    candidates rather than outside them.
-
-    ``unreadable`` keeps that state apart from the one it used to be collapsed
-    into: bytes atlas could not read are not bytes the table does not know.
-    The first is a read failure and settles nothing; the second is a verdict
-    about content that was actually seen. Both leave ``image`` at ``None``,
-    which is why the flag is here rather than being inferred from it.
-
-    ``size`` is the accepted size this file was kept at — one of
-    :attr:`BiosTable.sizes`, carried from the stat that kept it rather than
-    read a second time, because the table pins no size per row and an identity
-    built from one needs the size class the bytes were seen at.
-    """
-
-    path: str
-    image: BiosImage | None
-    size: int
-    unreadable: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class BiosPick:
-    """The file a launch would boot, and every file that ranks exactly with it."""
-
-    chosen: BiosCandidate
-    tied: tuple[BiosCandidate, ...]
-
-    @property
-    def decided(self) -> bool:
-        """Did the files alone decide it? ``False`` when only directory order would."""
-        return len(self.tied) == 1
-
-
-# The system each size class belongs to, in the vocabulary every atlas answer
-# speaks. The table's ``sizes`` block is keyed by the console whose BIOS is
-# that long — ``BIOS_SIZE``, ``BIOS_SIZE_PS2`` and ``BIOS_SIZE_PS3`` in
-# bios.h, which the generator files under ``ps1``/``ps2``/``ps3`` — and the
-# PlayStation is ``psx`` in ES-DE's names, so the first key is the one that
-# needs translating at all. It sits here because it is the other half of the
-# size rule below: the size decides whether a file is looked up, and the class
-# it was kept at is the only thing this table ever says about which machine the
-# bytes belong to. A class no name here covers stops the load
-# (:func:`load_bios_table`) rather than answering an unstated system.
-SIZE_CLASS_SYSTEMS = {"ps1": "psx", "ps2": "ps2", "ps3": "ps3"}
-
-
-class BiosTable:
-    """The packaged recognition table, read-only, by content.
-
-    ``sizes`` is the pre-filter and is part of the same rule: a file of any
-    other size is skipped before a byte of it is read. Each of them is a size
-    class named after a console (:data:`SIZE_CLASS_SYSTEMS`), which is what
-    :meth:`system_of_size` answers from.
-    """
-
-    def __init__(
-        self,
-        images: tuple[BiosImage, ...],
-        sizes: Mapping[str, int],
-        openbios: Mapping[str, Any],
-        meta: Mapping[str, Any],
-    ) -> None:
-        self._images = images
-        self._by_md5 = {image.md5: image for image in images}
-        self._sizes = tuple(sorted(sizes.values()))
-        self._systems = {size: SIZE_CLASS_SYSTEMS[name] for name, size in sizes.items()}
-        self._openbios = dict(openbios)
-        self._meta = dict(meta)
-
-    @property
-    def meta(self) -> dict[str, Any]:
-        """The table's ``_meta`` block — upstream revision and generation date."""
-        return dict(self._meta)
-
-    @property
-    def images(self) -> tuple[BiosImage, ...]:
-        """Every row, in upstream's order."""
-        return self._images
-
-    @property
-    def sizes(self) -> tuple[int, ...]:
-        """The file sizes the search accepts, ascending."""
-        return self._sizes
-
-    @property
-    def openbios(self) -> dict[str, Any]:
-        """The signature-recognised replacement BIOS: its bytes and their offset."""
-        return dict(self._openbios)
-
-    def accepts_size(self, size: int | None) -> bool:
-        """Would the search keep a file of this size? ``None`` (unknown) is not a yes."""
-        return size is not None and size in self._sizes
-
-    def system_of_size(self, size: int | None) -> str | None:
-        """Which console's BIOS is this long, in atlas's system vocabulary.
-
-        The table pins no size per row — it recognises an image by md5 alone —
-        so the size a file was kept at is the only thing it says about which
-        machine the bytes belong to, and that is what the size classes are
-        (:data:`SIZE_CLASS_SYSTEMS`). ``None`` for a size no class names,
-        which is every size this table's search would have skipped.
-        """
-        return None if size is None else self._systems.get(size)
-
-    def identify(self, md5: str) -> BiosImage | None:
-        """The row these bytes are, or ``None`` — which is not a verdict on the file.
-
-        DuckStation boots an unrecognised image and says so in a warning
-        (``Using an unknown BIOS: {}``), so "not in the table" means unknown,
-        never wrong.
-        """
-        return self._by_md5.get(md5.lower())
-
-    def pick(self, candidates: Sequence[BiosCandidate], region: str) -> BiosPick | None:
-        """Which candidate the console of *region* would boot, and what ties with it.
-
-        DuckStation's own three tests, in its own order (bios.cpp:387-395): a
-        known image is never displaced by an unknown one, a region match is
-        never displaced by a mismatch, and between two known images the lower
-        ``priority`` number holds. What upstream does with what is left is the
-        part atlas cannot copy — it keeps the **last** equally ranked file the
-        directory handed it, so two of them make the answer a property of
-        ``readdir`` order. The seam enumerates sorted, so a tie is reported as
-        a tie rather than resolved into a claim.
-        """
-        if not candidates:
-            return None
-        ranked = sorted(candidates, key=lambda c: self._rank(c, region))
-        best = self._rank(ranked[0], region)
-        tied = tuple(c for c in ranked if self._rank(c, region) == best)
-        return BiosPick(chosen=tied[0], tied=tied)
-
-    def _rank(self, candidate: BiosCandidate, region: str) -> tuple[int, int, int]:
-        image = candidate.image
-        if image is None:
-            return (1, 1, 0)
-        return (0, 0 if self.matches_region(image, region) else 1, image.priority)
-
-    @staticmethod
-    def matches_region(image: BiosImage, region: str) -> bool:
-        """``IsValidBIOSForRegion`` (bios.cpp:228-231): ``any`` on either side matches."""
-        return region == "any" or image.region == "any" or image.region == region
-
-
-def _image(entry: Any, index: int) -> BiosImage:
-    where = f"duckstation_bios: images[{index}]"
-    if not isinstance(entry, dict):
-        raise ValueError(f"{where}: expected an object, got {entry!r}")
-    missing = {"name", "region", "md5", "priority", "fast_boot_patch"} - set(entry)
-    if missing:
-        raise ValueError(f"{where}: missing {sorted(missing)}")
-    return BiosImage(
-        name=str(entry["name"]),
-        region=str(entry["region"]),
-        md5=str(entry["md5"]).lower(),
-        priority=int(entry["priority"]),
-        fast_boot_patch=str(entry["fast_boot_patch"]),
-    )
+# What this emulator's own table is called among the packaged ones, and the two
+# facts its loading turns on: it recognises OpenBIOS by a signature rather than
+# by a hash, so that block is required, and it boots an image no row holds
+# (``Using an unknown BIOS: {}``) rather than refusing it.
+TABLE_FILE = "duckstation_bios.json"
 
 
 def load_bios_table(text: str | None = None) -> BiosTable:
-    """Load the packaged table (or *text* when supplied, for tests)."""
+    """Load DuckStation's packaged table (or *text* when supplied, for tests)."""
     if text is None:
-        text = packaged_text("duckstation_bios.json")
-    raw = json.loads(text)
-    if not isinstance(raw, dict):
-        raise ValueError("duckstation_bios: expected an object at the top level")
-    images = raw.get("images")
-    if not isinstance(images, list) or not images:
-        raise ValueError("duckstation_bios: images must be a non-empty list")
-    sizes = raw.get("sizes")
-    if not isinstance(sizes, dict) or not sizes:
-        raise ValueError("duckstation_bios: sizes must be a non-empty object")
-    # Loudly too, and for the reason the blocks below are loud: a size class
-    # this code has no system for would answer "which machine" with silence
-    # over bytes the table recognised perfectly, which is the one answer a
-    # vendored newer table must not ship quietly.
-    unnamed = sorted(set(sizes) - set(SIZE_CLASS_SYSTEMS))
-    if unnamed:
-        raise ValueError(
-            f"duckstation_bios: sizes states the class(es) {unnamed} and "
-            f"{sorted(SIZE_CLASS_SYSTEMS)} are the ones this atlas names a system for "
-            "— the table and the code shipped out of step"
-        )
-    rows = tuple(_image(entry, index) for index, entry in enumerate(images))
-    # Loudly, like the blocks above: both feed answers (the OpenBIOS offset
-    # speaks in a caveat's sentence, the revision in its data), so a table
-    # without them would ship "offset None" and an empty pin instead of
-    # failing the load.
-    openbios = raw.get("openbios")
-    if not isinstance(openbios, dict) or {"signature", "offset"} - set(openbios):
-        raise ValueError("duckstation_bios: openbios must state signature and offset")
-    meta = raw.get("_meta")
-    if not isinstance(meta, dict) or "revision" not in meta:
-        raise ValueError("duckstation_bios: _meta must state the upstream revision")
-    return BiosTable(
-        images=rows,
-        sizes={name: int(size) for name, size in sizes.items()},
-        openbios=openbios,
-        meta=meta,
-    )
+        text = packaged_text(TABLE_FILE)
+    return _load_bios_table(text, source="duckstation_bios", openbios=True)
 
 
 _TABLE: BiosTable | None = None

@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, TypeAlias, TypeVar
 
+from .machine import CORE_UNANSWERED_STATUSES
 from .retroarch_cfg import CFG_LAYER_KINDS, RetroArchCfg
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
 from .yaml_scalars import REFUSAL_CODES
@@ -380,6 +381,13 @@ def _frozen_value(value: "str | Sequence[str] | Mapping[str, str]") -> "FrozenDa
 # Caveat codes — the stable, machine-readable identifiers clients branch on.
 # Part of the API contract; messages are for humans and may change freely.
 CAVEAT_NO_CORE = "no-core"
+# The core was asked what it calls itself and did not answer, so whatever the
+# answer would have used that name for is not there. ``data["reason"]`` is the
+# machine's own word for how the probe came back
+# (:data:`~atlas.machine.CORE_UNANSWERED_STATUSES`) — a fact the seam observed
+# rather than one this module could infer, which is why the key is absent on
+# the one route where no probe was made at all: a core whose location the
+# configuration never established has nothing to observe about it.
 CAVEAT_CORE_UNQUERYABLE = "core-unqueryable"
 CAVEAT_SORTED_DIR_MISSING = "sorted-dir-missing"
 # No "health" code lives here: an installation's health findings are caveats
@@ -463,7 +471,7 @@ CAVEAT_PER_GAME_OVERRIDES_PRESENT = "per-game-overrides-present"
 # caveat code is the thing a client switches on — the two facts were riding one
 # code told apart only by the shape of ``data``, and both can ride one answer
 # at once. ``per-game-overrides-present`` stays the emulators' statement (a
-# settings file layered over the very answer it rides, with ``core``, ``dir``
+# settings file layered over the very answer it rides, with ``token``, ``dir``
 # and ``key``); this one carries the total ``count`` and ``emulators``, the
 # selected emulator label mapped to how many games select it.
 CAVEAT_PER_GAME_ALTERNATIVE_EMULATOR = "per-game-alternative-emulator"
@@ -624,6 +632,20 @@ REASON_CONFIGURED_USER_NOT_SET_UP = "configured-user-not-set-up"
 REASON_CONFIGURED_USER_HAS_NO_TREE = "configured-user-has-no-tree"
 REASON_NO_USER_PRESELECTED = "no-user-preselected"
 REASON_CONFIGURED_USER_ID_UNREAD = "configured-user-id-unread"
+# The user a launch would open is listed here, and whether the emulator's own
+# listing reaches it is not: that walk can end at an entry it could not stat,
+# and the order it takes is the directory's own, written nowhere — so whether
+# a launch reopens that user or the user manager opens instead is not settled
+# by what was read. It says this of both roads to that user: an id the
+# configuration records, and the empty id an unset or empty record resolves to.
+REASON_CONFIGURED_USER_REACH_UNESTABLISHED = "configured-user-reach-unestablished"
+# The configuration records no user, or one as the empty value, and that is an
+# id the emulator starts from rather than an absence — a directory listed under
+# exactly that id is the user that record preselects, so a launch naming an app
+# on the command line, or one made with the auto-connect switch on, reopens it
+# instead of opening the user manager, and the tree named is the one that id
+# composes.
+REASON_UNSET_USER_ID_IS_LISTED = "unset-user-id-is-listed"
 # Which console a launch is, and where the emulator's own root comes from.
 # ``region-decided-by-disc`` rides ``regions``, the regions found side by side.
 REASON_REGION_DECIDED_BY_DISC = "region-decided-by-disc"
@@ -735,6 +757,8 @@ CORE_MODE_UNESTABLISHED_REASONS = (
     REASON_CONFIGURED_USER_HAS_NO_TREE,
     REASON_NO_USER_PRESELECTED,
     REASON_CONFIGURED_USER_ID_UNREAD,
+    REASON_CONFIGURED_USER_REACH_UNESTABLISHED,
+    REASON_UNSET_USER_ID_IS_LISTED,
     REASON_REGION_DECIDED_BY_DISC,
     REASON_DATA_ROOT_DECIDED_BY_LAUNCH,
     REASON_SLOT_HOLDS_AGP_DEVICE,
@@ -1483,6 +1507,20 @@ UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED = "standalone-variant-unestablished"
 # reads the other. Not to be confused with a core that is *there* and will not
 # load — that one still has a placement, with its generation left unestablished.
 UNRESOLVED_CORE_NOT_INSTALLED = "core-not-installed"
+# The catalogue row launches RetroArch and hands it a core file this host
+# cannot load: the name carries another platform's shared-library suffix —
+# EmuDeck's two ``n3ds`` rows each name a Windows ``*_libretro.dll`` — so
+# nothing here loads and there is no emulator whose trees could be read.
+# ``data`` names the file (``core_file``), the row (``label``) and the system,
+# because the file is the whole finding: a client renders "this entry cannot
+# run here, it names <file>" out of it. One fact, one code on every route, the
+# same sharing the two codes above have: the placement routes answer such an
+# entry with this outcome, the firmware route with the caveat of the same
+# spelling (``atlas.firmware.CAVEAT_CORE_FILE_FOREIGN``). Distinct from
+# ``core-not-installed``, which is a core of this host that the cores directory
+# was read well enough to miss, and from ``standalone-unsupported``, which is
+# an emulator that IS here and whose rules atlas has no source for.
+UNRESOLVED_CORE_FILE_FOREIGN = "core-file-foreign"
 # Nothing establishes where this emulator reads texture packs, so no directory
 # is named. A statement about atlas, never about the emulator: it does NOT say
 # the emulator has no texture-pack feature, and a client rendering it that way
@@ -1551,6 +1589,10 @@ SearchReading = Literal["identified", "unrecognised", "unreadable"]
 ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
     {
         (CAVEAT_CORE_MODE_UNESTABLISHED, "reason"): CORE_MODE_UNESTABLISHED_REASONS,
+        # The seam's own vocabulary, registered rather than restated: the words
+        # a probe answers with are decided in atlas/machine.py, and a second
+        # spelling here would be a place for the two to drift apart.
+        (CAVEAT_CORE_UNQUERYABLE, "reason"): CORE_UNANSWERED_STATUSES,
         (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "files_established_for"): (
             FILES_ESTABLISHED_FOR_TOKENS
         ),

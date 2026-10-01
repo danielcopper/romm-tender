@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "version": "1",
+  "reviewed": "2026-09-20",
+  "spec": "Which directories under the firmware root a DISTRIBUTION's installer fills by downloading something into them. World knowledge under DESIGN.md's boundary rule, and the companion of distribution_supplied.json rather than a second class inside it: that table states whose file is at a destination and states it from the machine, by hashing the copy the distribution ships against the file that is there, while a download leaves nothing on the machine to compare against — EmuDeck's script pins no checksum, no version in the URL, and names none of the archive's members. So nothing here is ever a statement about a FILE. What an entry supports is a statement about the DIRECTORY, made whether or not anything is in it: the installer fills this directory from this URL, so a missing file here is one the installer would fetch rather than one the user must find, and a file present here is of unestablished provenance rather than the user's own dump. 'supplied_by' stays null under such a directory, because an unverifiable provenance on a field whose whole content is a measured equality would dilute it. 'kind' says WHAT the step places: every step read so far fetches an archive and fills a directory with it, which is 'tree', and the card records the kind that was read rather than deriving one. 'destination' is relative to the firmware root and names the directory the step FILLS, never a file in it and not necessarily the path the archive is unpacked at — EmuDeck's PPSSPP step unpacks into the firmware root, and the tree lands under PPSSPP/ only if the archive carries that prefix, which the script never names and this reading has not opened. 'condition' is prose a reader weighs and no resolver branches on, because whether the directory was empty when the installer last ran is not something atlas can read afterwards. 'invoked' is the reachability half and has two words because the reading found two states, neither of them 'it runs': 'retroarch-setup' is a step the RetroArch component's own setup path reaches — EmuDeck's RetroArch_init and RetroArch_update, and deliberately not RetroArch_install, which installs the flatpak and its cores and reaches no download of this kind; 'unestablished' a step written in the script that nothing in the read repository calls — which is neither dead (a frontend outside the reading may invoke it by name) nor live. Only an established step reaches an answer; an unestablished one is recorded so the next reading starts from what the last one measured. The version pin carries more weight here than in the copy list: there every statement rests on a hash read from the live machine and a stale table merely under-reports, while here nothing on the machine confirms the step, so the distribution revision the citations were read at is the whole warrant for the statement — re-read the script at a release rather than growing this table by guesswork. A distribution with no card and a destination no entry covers are one answer: nothing is stated.",
+  "distributions": {
+    "emudeck": {
+      "version": "acc45fc",
+      "entries": [
+        {
+          "kind": "tree",
+          "destination": "PPSSPP",
+          "url": "https://buildbot.libretro.com/assets/system/PPSSPP.zip",
+          "condition": "only where the directory is empty when the step runs",
+          "invoked": "retroarch-setup",
+          "citation": "[V-script] emuDeckRetroArch.sh:22, :269, :281, :333-334 at acc45fc — the URL, the directory below the bios path RetroArch's system_directory is set to (:216), the mkdir, and the guarded fetch that unpacks the zip into that bios path. The step is RetroArch_buildbotDownloader (:259), reached from RetroArch_init (:54, calling it at :73) and RetroArch_update (:194, at :207): a word-boundary grep for the name over the whole tree at that revision returns those three lines and no others. ppsspp_libretro.info declares PPSSPP/ppge_atlas.zim required, so a declared required file lands in a directory this step fills."
+        },
+        {
+          "kind": "tree",
+          "destination": "rtp/2000",
+          "url": "https://dl.degica.com/rpgmakerweb/run-time-packages/rpg2000_rtp_installer.exe",
+          "condition": "whenever the step runs — the script tests nothing before fetching",
+          "invoked": "unestablished",
+          "citation": "[V-script] emuDeckRetroArch.sh:2394, :2398, :2402 at acc45fc, inside RetroArch_dlAdditionalFiles (:2392). A word-boundary grep for that name over the whole tree at that revision returns two lines — the definition and a commented mention at :2390 — and no call, so nothing in this repository runs the step; the desktop frontend is a separate repository and may invoke the function by name, which this reading does not establish. The deployed easyrpg_libretro.info declares no firmware at all, so no requirement resolves into this directory either."
+        },
+        {
+          "kind": "tree",
+          "destination": "rtp/2003",
+          "url": "https://dl.degica.com/rpgmakerweb/run-time-packages/rpg2003_rtp_installer.zip",
+          "condition": "whenever the step runs — the script tests nothing before fetching",
+          "invoked": "unestablished",
+          "citation": "[V-script] emuDeckRetroArch.sh:2395, :2397, :2400-2401 at acc45fc, inside RetroArch_dlAdditionalFiles (:2392), whose callers were measured the way the rtp/2000 entry records: none anywhere in the tree at that revision. The deployed easyrpg_libretro.info declares no firmware at all, so no requirement resolves into this directory either."
+        }
+      ]
+    }
+  }
+}

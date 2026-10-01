@@ -5,7 +5,44 @@
     "swanstation": {
       "locating": {
         "mode": "by-name-then-content",
-        "citation": "src/core/host_interface.cpp:151-181 (GetBIOSImage) is the order: the console region picks one of three settings — BIOS/PathNTSCJ, BIOS/PathNTSCU, BIOS/PathPAL (:157-168) — an empty name goes straight to the directory search (:172-173), and otherwise the name is joined under the BIOS directory and opened (:176-177), with the search as the fallback where that open fails (:178-179). The libretro build spells those settings swanstation_BIOS_Path* (src/libretro/libretro_settings_interface.cpp:11) and defines them with the defaults scph5500.bin / scph5501.bin / scph5502.bin, allowing psxonpsp660.bin and ps1_rom.bin beside them (src/libretro/libretro_core_options.h:96-134). RetroArch answers GET_VARIABLE with a core's own declared default wherever its options file holds no entry for the key, so the frontend always answers with a name: at libretro/RetroArch@a79435a, runloop_environment_cb handles RETRO_ENVIRONMENT_GET_VARIABLE through core_option_manager_get_val (runloop.c:1419-1457, the call at :1442-1445), which returns the value at option->index (core_option_manager.c:1613-1625), and option->index is set to the position of the core's own default_value while the value list is built (core_option_manager.c:897 core_option_manager_parse_option, :1021-1028) before the options file is consulted at all, which moves it only where an entry matches a declared value (:1031-1053, the guard at :1037). So the empty-name branch is [D] not the path a libretro build takes — derived from those non-empty defaults plus that chain, not from a watched launch. The directory is always the frontend's system directory, with no path option (src/libretro/libretro_host_interface.cpp:1059-1065, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY). The named open hashes nothing: src/core/bios.cpp:81-105 (LoadImageFromFile) accepts a size of exactly 0x80000, 0x400000 or 0x3E66F0 (src/core/bios.h:9) and reads the first 512 KiB, so any file of an accepted size under the configured name boots. The search (src/core/host_interface.cpp:183-244) is the content half: a non-recursive listing including hidden files (:188-189), the same three sizes as a gate (:197-200), an md5 over the 512 KiB read (src/core/bios.cpp:72-79), and a lookup in the 27-row table at src/core/bios.cpp:27-70 — the first row whose region is the console's or Auto wins (:214-217 with src/core/bios.cpp:118-125), a known image of another region is a fallback (:220-226, :240-243), and a file no row knows is refused (:237-238). All citations at libretro/swanstation@4d309c05f."
+        "citation": "src/core/host_interface.cpp:151-181 (GetBIOSImage) is the order: the console region picks one of three settings — BIOS/PathNTSCJ, BIOS/PathNTSCU, BIOS/PathPAL (:157-168) — an empty name goes straight to the directory search (:172-173), and otherwise the name is joined under the BIOS directory and opened (:176-177), with the search as the fallback where that open fails (:178-179). The libretro build spells those settings swanstation_BIOS_Path* (src/libretro/libretro_settings_interface.cpp:11) and defines them with the defaults scph5500.bin / scph5501.bin / scph5502.bin, allowing psxonpsp660.bin and ps1_rom.bin beside them (src/libretro/libretro_core_options.h:96-134). RetroArch answers GET_VARIABLE with a core's own declared default wherever its options file holds no entry for the key, so the frontend always answers with a name: at libretro/RetroArch@a79435a, runloop_environment_cb handles RETRO_ENVIRONMENT_GET_VARIABLE through core_option_manager_get_val (runloop.c:1419-1457, the call at :1442-1445), which returns the value at option->index (core_option_manager.c:1613-1625), and option->index is set to the position of the core's own default_value while the value list is built (core_option_manager.c:897 core_option_manager_parse_option, :1021-1028) before the options file is consulted at all, which moves it only where an entry matches a declared value (:1031-1053, the guard at :1037). So the empty-name branch is [D] not the path a libretro build takes — derived from those non-empty defaults plus that chain, not from a watched launch. The directory is always the frontend's system directory, with no path option (src/libretro/libretro_host_interface.cpp:1059-1065, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY). The named open hashes nothing: src/core/bios.cpp:81-105 (LoadImageFromFile) accepts a size of exactly 0x80000, 0x400000 or 0x3E66F0 (src/core/bios.h:9) and reads the first 512 KiB, so any file of an accepted size under the configured name boots. The search (src/core/host_interface.cpp:183-244) is the content half: a non-recursive listing including hidden files (:188-189), the same three sizes as a gate (:197-200), an md5 over the 512 KiB read (src/core/bios.cpp:72-79), and a lookup in the 27-row table at src/core/bios.cpp:27-70 — the first row whose region is the console's or Auto wins (:214-217 with src/core/bios.cpp:118-125), a known image of another region is a fallback (:220-226, :240-243), and a file no row knows is refused (:237-238). Every swanstation citation here is at libretro/swanstation@4d309c05f; the one RetroArch chain names its own revision."
+      },
+      "name_route": {
+        "region_option": {
+          "key": "swanstation_Console_Region",
+          "default": "Auto",
+          "values": {
+            "Auto": null,
+            "NTSC-J": "ntsc-j",
+            "NTSC-U": "ntsc-u",
+            "PAL": "pal"
+          },
+          "citation": "src/libretro/libretro_core_options.h:82-95 declares the option with the four values Auto | NTSC-J | NTSC-U | PAL (:89-92) and the default Auto (:95). Auto is not a fourth region but the absence of a pinned one: src/core/system.cpp:638-654 takes the region off the disc that is being booted, :618-624 off an EXE or PSF, and :659-661 defaults a boot with no content at all to NTSC-U — none of which is written anywhere a configuration can be read from, so an answer under Auto speaks for every region rather than for one. Whatever the region ends up being, the boot reads exactly one of them: src/core/system.cpp:667 hands that single value to GetBIOSImage. All citations at libretro/swanstation@4d309c05f."
+        },
+        "region_keys": [
+          {
+            "region": "ntsc-j",
+            "key": "swanstation_BIOS_PathNTSCJ",
+            "default": "scph5500.bin"
+          },
+          {
+            "region": "ntsc-u",
+            "key": "swanstation_BIOS_PathNTSCU",
+            "default": "scph5501.bin"
+          },
+          {
+            "region": "pal",
+            "key": "swanstation_BIOS_PathPAL",
+            "default": "scph5502.bin"
+          }
+        ],
+        "citation": "src/core/host_interface.cpp:155-169 switches on the console region and reads one of the three BIOS settings: NTSC_J takes PathNTSCJ (:157-159), PAL takes PathPAL (:161-163), and NTSC_U with every other value takes PathNTSCU (:165-168). The libretro build spells a setting swanstation_<section>_<key> (src/libretro/libretro_settings_interface.cpp:11), so those three are swanstation_BIOS_PathNTSCJ / PathNTSCU / PathPAL, and it declares them with the defaults scph5500.bin (src/libretro/libretro_core_options.h:108), scph5501.bin (:121) and scph5502.bin (:134), allowing psxonpsp660.bin and ps1_rom.bin beside each (:103-105, :116-118, :129-131). That each key names a file on every machine is [D], not [V]: src/libretro/libretro_settings_interface.cpp:14-15 falls back to the default its CALLER passed, and for these three that default is the empty string (src/core/host_interface.cpp:158, :162 and :167, against the signature at src/core/host_interface.h:85 and forwarded at src/libretro/libretro_settings_interface.cpp:54-57) — read on its own, that is the empty-name branch at src/core/host_interface.cpp:172-173. What keeps it out of reach is the frontend: RetroArch answers GET_VARIABLE with the core's own declared default wherever its options file holds no entry for the key, through the core_option_manager chain cited in full under locating.citation at libretro/RetroArch@a79435a. So the non-empty name is derived from that chain together with the non-empty defaults the core declares, and from no watched launch. Every swanstation citation here is at libretro/swanstation@4d309c05f; the one RetroArch citation names its own revision."
+      },
+      "content_route": {
+        "table": "swanstation_bios.json",
+        "hash_scope": 524288,
+        "unknown": "refused",
+        "citation": "src/core/bios.cpp:81-105 (LoadImageFromFile) allocates an image of BIOS_SIZE — 0x80000 = 524288 bytes (src/core/bios.h:9) — at :83, accepts a file whose size is exactly BIOS_SIZE, BIOS_SIZE_PS2 or BIOS_SIZE_PS3 (:92-96) and then reads ret.size() bytes into it (:98), so a 4 MiB image is read only as far as its first 512 KiB. src/core/bios.cpp:72-79 (GetHash) hashes image.size() bytes, which is that same 512 KiB, and :107-116 (GetImageInfoForHash) looks the md5 up in the 27-row table at :27-70. What happens to a file no row holds is the search's own answer: src/core/host_interface.cpp:237-238 returns nullopt where the fallback candidate has no table row, and src/core/system.cpp:668-673 turns that into 'Failed to load %s BIOS.' and a shutdown — so on the search route an unrecognised image does not boot. All citations at libretro/swanstation@4d309c05f."
       },
       "build": {
         "revision": "4d309c0",
@@ -20,6 +57,75 @@
         "mode": "by-name",
         "citation": "libretro.cpp:176-335 (firmware_is_present) is the whole route and it opens nothing it was not given a spelling for. Per console region a list of names is filled in — three spellings for Japan (:252-254), nine for North America (:260-268), six for Europe (:274-279) — each joined under retro_base_directory (:290) and tested with filestream_exists (:298); the first that exists wins (:298-302) and a region with no hit reports the firmware missing (:305-318). There is no size gate and no directory listing: nothing but those spellings is ever looked at. The SHA1 beside each list is a warning only — a mismatch logs 'Unsupported firmware may cause emulation glitches.' and still returns true (:322-329) — so it identifies nothing and gates nothing. The two override options are tried ahead of the region list under the same rule (:188-247). retro_base_directory is the frontend's system directory (:3049, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY). All citations at libretro/beetle-psx-libretro@d6383bff."
       },
+      "name_route": {
+        "override_option": {
+          "key": "beetle_psx_hw_override_bios",
+          "default": "disabled",
+          "values": {
+            "disabled": null,
+            "psxonpsp": {
+              "spellings": [
+                "psxonpsp660.bin",
+                "PSXONPSP660.bin"
+              ],
+              "sha1": "96880d1ca92a016ff054be5159bb06fe03cb4e14"
+            },
+            "ps1_rom": {
+              "spellings": [
+                "ps1_rom.bin",
+                "PS1_ROM.bin"
+              ],
+              "sha1": "c40146361eb8cf670b19fdc9759190257803cab7"
+            }
+          },
+          "citation": "libretro_core_options.h:1094-1108 declares the option with exactly three values — \"disabled\", \"psxonpsp\" and \"ps1_rom\" (:1102-1105) — and the default \"disabled\" (:1107); libretro.cpp:3265-3280 reads it into override_bios as 0, 1 and 2, leaving the previous value standing for any other string. The key is spelled by the BEETLE_OPT macro, which is \"beetle_psx_hw_\" plus the option name where HAVE_HW is defined and \"beetle_psx_\" without it (libretro_options.h:27-31); the deployed binary carries beetle_psx_hw_override_bios and no other spelling of it. firmware_is_present tries the selected list ahead of the region's: value 1 fills psxonpsp660.bin / PSXONPSP660.bin with the SHA1 at :195 (:190-196), value 2 ps1_rom.bin / PS1_ROM.bin with the SHA1 at :203 (:198-204), each joined under retro_base_directory (:212) and tested with filestream_exists (:220). A hit returns true before any region list is filled in (:227-244), so the image serves whichever region the disc turns out to be; a miss logs \"Fallback to region specific firmware.\" and falls through to them (:245-246). With override_bios at 0 the whole block is skipped (:188). All citations at libretro/beetle-psx-libretro@d6383bff."
+        },
+        "regions": [
+          {
+            "region": "ntsc-j",
+            "names": {
+              "spellings": [
+                "scph5500.bin",
+                "SCPH5500.bin",
+                "SCPH-5500.bin"
+              ],
+              "sha1": "b05def971d8ec59f346f2d9ac21fb742e3eb6917"
+            }
+          },
+          {
+            "region": "ntsc-u",
+            "names": {
+              "spellings": [
+                "scph5501.bin",
+                "SCPH5501.bin",
+                "SCPH-5501.bin",
+                "scph5503.bin",
+                "SCPH5503.bin",
+                "SCPH-5503.bin",
+                "scph7003.bin",
+                "SCPH7003.bin",
+                "SCPH-7003.bin"
+              ],
+              "sha1": "0555c6fae8906f3f09baf5988f00e55f88e9f30b"
+            }
+          },
+          {
+            "region": "pal",
+            "names": {
+              "spellings": [
+                "scph5502.bin",
+                "SCPH5502.bin",
+                "SCPH-5502.bin",
+                "scph5552.bin",
+                "SCPH5552.bin",
+                "SCPH-5552.bin"
+              ],
+              "sha1": "f6bc2d1f5eb6593de7d089c425ac681d6fffd3f0"
+            }
+          }
+        ],
+        "citation": "firmware_is_present(region) is called once per content load (libretro.cpp:2110, the only call site: firmware_is_present( occurs twice in the file, at the definition and there), so one launch needs one image and never three. Which region that is comes off the disc: region = CalcDiscSCEx() at :1980. What is dead is the OVERRIDE beside it rather than the setting behind it — :1982-1983 replaces the detected region with psx.region_default only where psx.region_autodetect is false, and that one is hard-wired to 1 (mednafen/settings.c:98-99). The same psx.region_default IS read, as the seed CalcDiscSCEx starts from (:1563) and overwrites where a disc states a region, and MDFN_GetSettingI answers 1 for it, REGION_NA (mednafen/settings.c:53-56) — so a disc stating no region is read as North America. No core option names a region either; the only occurrence of the word in libretro_core_options.h is the override option's own description. Every name is joined under retro_base_directory, which is the frontend's system directory (libretro.cpp:3049, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY), and the existence test is an open for reading rather than a stat: filestream_exists succeeds exactly where filestream_open does (libretro-common/streams/file_stream.c:104-121), and the hint it passes (RETRO_VFS_FILE_ACCESS_HINT_NONE) lands in the buffered branch — fopen(path, \"rb\") at libretro-common/vfs/vfs_implementation.c:445 with the mode string set at :382; the unbuffered open(path, O_RDONLY) at :499 is reached only under the frequent-access hint (:372-377, tested at :427). [V-measured] Against glibc both calls succeed on a DIRECTORY: fopen returns a stream, the size seek answers 0, and the first read fails with EISDIR. So a directory at one of these names ends the search there and the core then reads nothing out of it (libretro.cpp:2112-2114, :2139) — measured against that library rather than watched in a launch — while a dead symlink fails the open and the next spelling is tried. All citations at libretro/beetle-psx-libretro@d6383bff. libretro.cpp:250-282 fills bios_name_list per region and nothing else does: REGION_JP takes three spellings (:252-254) with the SHA1 at :256, REGION_NA nine (:260-268) with the SHA1 at :270, REGION_EU six (:274-279) with the SHA1 at :281. Counting rule: the bios_name_list[<n>] = \"<name>\" assignments between :250 and :283, which is 3 + 9 + 6 = 18 names, and an unfiltered strings pass over each deployed binary finds the same 18 whole-line matches of ^(scph|SCPH)[-0-9]+\\.bin$ and no nineteenth. The list is walked in order, each name joined under retro_base_directory (:290) and tested with filestream_exists (:298), and the first that exists ends the walk (:298-302); where none does, the core names bios_name_list[0] as the missing firmware, shows it on screen and returns false (:305-318). The SHA1 is compared after the walk and gates nothing: a file that differs logs \"Unsupported firmware may cause emulation glitches.\" and the core boots it anyway (:322-329), so the digest states which image the names are for and never whether the launch starts. There is no size gate and no directory listing anywhere in the route. All citations at libretro/beetle-psx-libretro@d6383bff."
+      },
       "build": {
         "revision": "d6383bf",
         "citation": "The build RetroDECK deploys at components/retroarch/rd_extras/cores/mednafen_psx_hw_libretro.so answers '0.9.44.1 d6383bf', read both from an unfiltered strings pass over the shipped binary and through the core probe (atlas.machine.CoreInfo.library_version)."
@@ -32,6 +138,75 @@
       "locating": {
         "mode": "by-name",
         "citation": "The same source file as the hardware-renderer build and the same route: libretro.cpp:176-335 (firmware_is_present) tries a per-region list of spellings — three for Japan (:252-254), nine for North America (:260-268), six for Europe (:274-279) — joined under retro_base_directory (:290) and tested with filestream_exists (:298), first hit wins, with no size gate and no directory listing; the SHA1 check warns and still returns true (:322-329), and the two override options are tried first (:188-247). The two builds differ in renderer, not in how firmware is found: one source tree builds both. All citations at libretro/beetle-psx-libretro@d6383bff."
+      },
+      "name_route": {
+        "override_option": {
+          "key": "beetle_psx_override_bios",
+          "default": "disabled",
+          "values": {
+            "disabled": null,
+            "psxonpsp": {
+              "spellings": [
+                "psxonpsp660.bin",
+                "PSXONPSP660.bin"
+              ],
+              "sha1": "96880d1ca92a016ff054be5159bb06fe03cb4e14"
+            },
+            "ps1_rom": {
+              "spellings": [
+                "ps1_rom.bin",
+                "PS1_ROM.bin"
+              ],
+              "sha1": "c40146361eb8cf670b19fdc9759190257803cab7"
+            }
+          },
+          "citation": "libretro_core_options.h:1094-1108 declares the option with exactly three values — \"disabled\", \"psxonpsp\" and \"ps1_rom\" (:1102-1105) — and the default \"disabled\" (:1107); libretro.cpp:3265-3280 reads it into override_bios as 0, 1 and 2, leaving the previous value standing for any other string. The key is spelled by the BEETLE_OPT macro, which is \"beetle_psx_hw_\" plus the option name where HAVE_HW is defined and \"beetle_psx_\" without it (libretro_options.h:27-31); the deployed binary carries beetle_psx_override_bios and no other spelling of it. firmware_is_present tries the selected list ahead of the region's: value 1 fills psxonpsp660.bin / PSXONPSP660.bin with the SHA1 at :195 (:190-196), value 2 ps1_rom.bin / PS1_ROM.bin with the SHA1 at :203 (:198-204), each joined under retro_base_directory (:212) and tested with filestream_exists (:220). A hit returns true before any region list is filled in (:227-244), so the image serves whichever region the disc turns out to be; a miss logs \"Fallback to region specific firmware.\" and falls through to them (:245-246). With override_bios at 0 the whole block is skipped (:188). All citations at libretro/beetle-psx-libretro@d6383bff."
+        },
+        "regions": [
+          {
+            "region": "ntsc-j",
+            "names": {
+              "spellings": [
+                "scph5500.bin",
+                "SCPH5500.bin",
+                "SCPH-5500.bin"
+              ],
+              "sha1": "b05def971d8ec59f346f2d9ac21fb742e3eb6917"
+            }
+          },
+          {
+            "region": "ntsc-u",
+            "names": {
+              "spellings": [
+                "scph5501.bin",
+                "SCPH5501.bin",
+                "SCPH-5501.bin",
+                "scph5503.bin",
+                "SCPH5503.bin",
+                "SCPH-5503.bin",
+                "scph7003.bin",
+                "SCPH7003.bin",
+                "SCPH-7003.bin"
+              ],
+              "sha1": "0555c6fae8906f3f09baf5988f00e55f88e9f30b"
+            }
+          },
+          {
+            "region": "pal",
+            "names": {
+              "spellings": [
+                "scph5502.bin",
+                "SCPH5502.bin",
+                "SCPH-5502.bin",
+                "scph5552.bin",
+                "SCPH5552.bin",
+                "SCPH-5552.bin"
+              ],
+              "sha1": "f6bc2d1f5eb6593de7d089c425ac681d6fffd3f0"
+            }
+          }
+        ],
+        "citation": "firmware_is_present(region) is called once per content load (libretro.cpp:2110, the only call site: firmware_is_present( occurs twice in the file, at the definition and there), so one launch needs one image and never three. Which region that is comes off the disc: region = CalcDiscSCEx() at :1980. What is dead is the OVERRIDE beside it rather than the setting behind it — :1982-1983 replaces the detected region with psx.region_default only where psx.region_autodetect is false, and that one is hard-wired to 1 (mednafen/settings.c:98-99). The same psx.region_default IS read, as the seed CalcDiscSCEx starts from (:1563) and overwrites where a disc states a region, and MDFN_GetSettingI answers 1 for it, REGION_NA (mednafen/settings.c:53-56) — so a disc stating no region is read as North America. No core option names a region either; the only occurrence of the word in libretro_core_options.h is the override option's own description. Every name is joined under retro_base_directory, which is the frontend's system directory (libretro.cpp:3049, RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY), and the existence test is an open for reading rather than a stat: filestream_exists succeeds exactly where filestream_open does (libretro-common/streams/file_stream.c:104-121), and the hint it passes (RETRO_VFS_FILE_ACCESS_HINT_NONE) lands in the buffered branch — fopen(path, \"rb\") at libretro-common/vfs/vfs_implementation.c:445 with the mode string set at :382; the unbuffered open(path, O_RDONLY) at :499 is reached only under the frequent-access hint (:372-377, tested at :427). [V-measured] Against glibc both calls succeed on a DIRECTORY: fopen returns a stream, the size seek answers 0, and the first read fails with EISDIR. So a directory at one of these names ends the search there and the core then reads nothing out of it (libretro.cpp:2112-2114, :2139) — measured against that library rather than watched in a launch — while a dead symlink fails the open and the next spelling is tried. All citations at libretro/beetle-psx-libretro@d6383bff. libretro.cpp:250-282 fills bios_name_list per region and nothing else does: REGION_JP takes three spellings (:252-254) with the SHA1 at :256, REGION_NA nine (:260-268) with the SHA1 at :270, REGION_EU six (:274-279) with the SHA1 at :281. Counting rule: the bios_name_list[<n>] = \"<name>\" assignments between :250 and :283, which is 3 + 9 + 6 = 18 names, and an unfiltered strings pass over each deployed binary finds the same 18 whole-line matches of ^(scph|SCPH)[-0-9]+\\.bin$ and no nineteenth. The list is walked in order, each name joined under retro_base_directory (:290) and tested with filestream_exists (:298), and the first that exists ends the walk (:298-302); where none does, the core names bios_name_list[0] as the missing firmware, shows it on screen and returns false (:305-318). The SHA1 is compared after the walk and gates nothing: a file that differs logs \"Unsupported firmware may cause emulation glitches.\" and the core boots it anyway (:322-329), so the digest states which image the names are for and never whether the launch starts. There is no size gate and no directory listing anywhere in the route. All citations at libretro/beetle-psx-libretro@d6383bff."
       },
       "build": {
         "revision": "d6383bf",
