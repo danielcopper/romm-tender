@@ -525,9 +525,8 @@ a pre-push check, not something to run on every save. The only CI jobs it can't 
 `pr-metadata`, which needs a pull request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
 
 Outside `ci.yml`, every pull request also runs the `decisions` check (`.github/workflows/decisions.yml`), which the gate
-does not run because it reads the pull request and its linked issues on GitHub. It asks that the pull request link an
-issue whose decisions are written down under `## Decisions`, with nothing left under `## To decide`, and that
-`CLAUDE.md` keep its `## Where decisions live` section. The rules, the exemptions and the opt-outs are in the
+does not run because it reads the pull request and its linked issues on GitHub. It checks that the pull request links an
+issue whose decisions are settled; the rules, the exemptions and the opt-outs are in the
 [shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check).
 
 ## Code Quality
