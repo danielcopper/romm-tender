@@ -124,14 +124,16 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # is the condition the relocation exists to end.
     "get_shortcut_relocation",
     # The release check: whether a newer release exists, the card's per-version
-    # Dismiss, the daily-check switch and the reader's own Check now. None of
-    # the four touches RetroDECK state — the reads talk to GitHub and one
-    # kv_config row, the writes are settings keys — and the read is fired at
-    # panel load whatever page the panel is showing.
+    # Dismiss, the daily-check switch, the reader's own Check now and the
+    # acknowledgement of the "is available" toast. None of the five touches
+    # RetroDECK state — the reads talk to GitHub and kv_config, the writes are
+    # settings keys and one kv_config row — and the read is fired at panel load
+    # whatever page the panel is showing.
     "get_update_notice",
     "check_for_update_now",
     "dismiss_update_notice",
     "set_update_check_enabled",
+    "acknowledge_update_available_toast",
     # What the last update did: the read the panel makes at load, its
     # acknowledgement of the announcement's one toast, the announcement card's
     # Dismiss, and the rolled-back card's per-record Dismiss. None touches
