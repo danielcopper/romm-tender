@@ -2,8 +2,9 @@
 
 Contract: the unit whose journal holds a version's own start, how one entry of
 ``journalctl --output=json`` is read, which run of a unit belongs to a failure,
-and what the panel is shown of a run — its tail, each line cut short, and the
-admission token hidden. Running ``journalctl`` stays in the adapter; which
+and what the panel is shown of a run — its tail, each line cut short, the
+admission token hidden, and each of the installer's rows in the last state it
+printed. Running ``journalctl`` stays in the adapter; which
 failure is asked about stays in the service.
 """
 
@@ -27,6 +28,14 @@ SERVICE_UNIT = "romm-tender"
 # is at the end, and cuts every line at this many characters.
 MAX_LINES = 300
 MAX_LINE_CHARS = 500
+
+# A row of the installer as it prints one where it does not redraw it
+# (``print_row`` and ``say_progress`` in ``install.sh``): one of four marks, a
+# space, the row's label padded to twelve columns, a space and the detail. Such a
+# run prints a row again on every step, each line saying all the one before it
+# did.
+_ROW_MARKS = frozenset({"[ok]", "[!!]", "[..]", "[--]"})
+_ROW_LABEL = slice(5, 17)
 
 # How far either side of the installer's record its run is looked for: wider
 # than any one run of the installer, which stops waiting for a new version
@@ -172,8 +181,39 @@ def hide_token(line: str) -> str:
 
 def output_section(entries: Sequence[JournalEntry]) -> OutputSection:
     """What the panel is shown of *entries*: the token hidden, each line cut, the last :data:`MAX_LINES` of them."""
-    lines = [_cut(hide_token(line)) for entry in entries for line in entry.message.splitlines() or [""]]
-    shown = lines[-MAX_LINES:]
+    return _section(_lines(entries))
+
+
+def installer_section(entries: Sequence[JournalEntry]) -> OutputSection:
+    """:func:`output_section` of the installer's run, each of its rows only in the last state it printed.
+
+    A row's line is left out wherever a later line of the same row follows it,
+    so a row's one line stands where its last one stood — a row that never
+    finished in the state it stopped in. Every other line stays, in order, and
+    only the lines that remain count towards :data:`MAX_LINES`.
+    """
+    lines = _lines(entries)
+    labels = [_row_label(line) for line in lines]
+    last = {label: at for at, label in enumerate(labels) if label is not None}
+    kept = [
+        line for at, (line, label) in enumerate(zip(lines, labels, strict=True)) if label is None or last[label] == at
+    ]
+    return _section(kept)
+
+
+def _lines(entries: Sequence[JournalEntry]) -> list[str]:
+    return [line for entry in entries for line in entry.message.splitlines() or [""]]
+
+
+def _row_label(line: str) -> str | None:
+    if line[:4] not in _ROW_MARKS or line[4:5] != " " or line[17:18] not in {"", " "}:
+        return None
+    label = line[_ROW_LABEL].rstrip()
+    return label if label[:1].strip() else None
+
+
+def _section(lines: list[str]) -> OutputSection:
+    shown = [_cut(hide_token(line)) for line in lines[-MAX_LINES:]]
     return OutputSection(lines=tuple(shown), earlier=len(lines) - len(shown))
 
 

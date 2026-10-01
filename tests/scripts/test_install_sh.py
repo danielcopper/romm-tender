@@ -930,6 +930,21 @@ class TestAFreshInstall:
             "[ok] Service      romm-tender.service enabled and started"
         )
 
+    def test_the_panel_shows_each_row_of_a_piped_run_once_in_the_state_it_ended_in(self, machine):
+        """The panel's output window folds a row's lines by this layout (``domain/update_output.py``)."""
+        from domain.update_output import JournalEntry, installer_section
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        marks = ("[ok] ", "[!!] ", "[..] ", "[--] ")
+        printed = [line for line in result.stdout.splitlines() if line.startswith(marks)]
+        shown = installer_section([JournalEntry(at=0, invocation="inst", message=result.stdout)]).lines
+        rows = [line for line in shown if line.startswith(marks)]
+        assert len(printed) > len(rows)
+        assert [line[5:17].rstrip() for line in rows] == ["Checking", "Installing", "Service", "Steam"]
+        assert not [line for line in rows if line.startswith("[..] ")]
+
     def test_a_progress_line_carries_no_trailing_blanks(self, machine):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 

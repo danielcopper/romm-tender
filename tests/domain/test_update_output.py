@@ -18,6 +18,7 @@ from domain.update_output import (
     decode_journal_entry,
     first_run_from,
     hide_token,
+    installer_section,
     journal_runs,
     last_invocation,
     output_section,
@@ -234,3 +235,105 @@ class TestOutputSection:
 
     def test_is_answered_as_lines_and_the_count_left_out(self):
         assert OutputSection(lines=("a",), earlier=3).to_wire() == {"lines": ["a"], "earlier": 3}
+
+
+def _run(*lines: str) -> list[JournalEntry]:
+    return [_entry(at, "inst", line) for at, line in enumerate(lines)]
+
+
+class TestInstallerSection:
+    """The lines are the shape ``install.sh`` prints with no terminal, as the journal keeps them."""
+
+    def test_each_row_is_shown_only_in_the_last_state_it_printed(self):
+        run = _run(
+            "Started [systemd-run] /bin/bash install.sh --from romm-tender-1.0.61.tar.gz --yes.",
+            "TENDER  -  RomM library in Steam",
+            "Install to   ~/.local/lib/romm-tender",
+            "[..] Checking",
+            "[..] Checking     python 3.13",
+            "[..] Checking     python 3.13 - systemd",
+            "[ok] Checking     python 3.13 - systemd",
+            "[..] Installing",
+            "[..] Installing   trying 1.0.61",
+            "[..] Installing   the new version does not start",
+            "[!!] Installing   the new version does not start",
+            "the last lines it printed:",
+            "  deliberately broken test build 1.0.61",
+            "install.sh: the new version does not start",
+            "romm-tender-update.service: Failed with result 'exit-code'.",
+        )
+
+        assert installer_section(run).lines == (
+            "Started [systemd-run] /bin/bash install.sh --from romm-tender-1.0.61.tar.gz --yes.",
+            "TENDER  -  RomM library in Steam",
+            "Install to   ~/.local/lib/romm-tender",
+            "[ok] Checking     python 3.13 - systemd",
+            "[!!] Installing   the new version does not start",
+            "the last lines it printed:",
+            "  deliberately broken test build 1.0.61",
+            "install.sh: the new version does not start",
+            "romm-tender-update.service: Failed with result 'exit-code'.",
+        )
+
+    def test_a_row_that_never_finished_stays_in_the_state_it_stopped_in(self):
+        run = _run(
+            "[ok] Checking     python 3.13",
+            "[..] Service",
+            "[..] Service      waiting for 1.0.61 to answer",
+            "romm-tender-update.service: Main process exited, code=killed, status=9/KILL",
+        )
+
+        assert installer_section(run).lines == (
+            "[ok] Checking     python 3.13",
+            "[..] Service      waiting for 1.0.61 to answer",
+            "romm-tender-update.service: Main process exited, code=killed, status=9/KILL",
+        )
+
+    def test_a_row_printed_again_after_another_row_stands_where_its_last_line_stood(self):
+        run = _run(
+            "[..] Service      stopping 1.0.60",
+            "[ok] Installing   1.0.61",
+            "between the two",
+            "[--] Service      waiting for 1.0.61 to answer",
+        )
+
+        assert installer_section(run).lines == (
+            "[ok] Installing   1.0.61",
+            "between the two",
+            "[--] Service      waiting for 1.0.61 to answer",
+        )
+
+    def test_a_row_s_line_under_it_stays_under_its_last_state(self):
+        run = _run("[..] Steam", "[--] Steam        not running", "    it reads the shortcuts when it starts")
+
+        assert installer_section(run).lines == (
+            "[--] Steam        not running",
+            "    it reads the shortcuts when it starts",
+        )
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "[ok]",
+            "[ok]Checking     python 3.13",
+            "[..]  Checking    indented",
+            "[..] Checkingpython 3.13 - systemd",
+            "[ok] an earlier update",
+            "[xx] Checking     python 3.13",
+            "  [..] Checking     python 3.13",
+        ],
+    )
+    def test_a_line_not_in_the_row_layout_is_never_folded(self, line):
+        assert installer_section(_run(line, line)).lines == (line, line)
+
+    def test_only_the_lines_that_remain_count_towards_the_cap(self):
+        steps = [f"[..] Installing   step {i}" for i in range(MAX_LINES)]
+        tail = [f"line {i}" for i in range(MAX_LINES + 3)]
+
+        section = installer_section(_run(*steps, *tail))
+
+        assert section.lines == tuple(tail[3:])
+        assert section.earlier == 4
+
+    def test_the_token_is_still_hidden(self):
+        assert installer_section(_run(_ADDRESS_LINE)).lines == (hide_token(_ADDRESS_LINE),)
