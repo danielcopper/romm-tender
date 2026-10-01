@@ -509,7 +509,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
 
 class TestConflictRulesAtTheUseCase:
-    """What the save use cases answer under their conflict rules, and the twin a peer calls instead."""
+    """What the save use cases answer under their conflict rules."""
 
     async def test_get_save_status_is_refused_while_a_cleanup_runs(self, tmp_path):
         conflicts = _make_prune_conflicts()
@@ -520,22 +520,6 @@ class TestConflictRulesAtTheUseCase:
 
         assert result["reason"] == "prune_active"
         assert conflicts.conflicting_operations == 0
-
-    async def test_get_save_status_unchecked_answers_while_a_cleanup_runs(self, tmp_path):
-        """The launch gate's read: its caller already passed its own rules, so the twin checks none."""
-        conflicts = _make_prune_conflicts()
-        conflicts.register_run("held-run")
-        svc, _ = make_service(
-            tmp_path, conflict_rules=_make_conflict_rules(prune_conflicts=conflicts, migration_pending=True)
-        )
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-
-        result = await svc.get_save_status_unchecked(42)
-
-        assert result["rom_id"] == 42
-        assert "reason" not in result
 
     async def test_refresh_save_status_refused_while_a_cleanup_runs_starts_no_check(self, tmp_path, monkeypatch):
         conflicts = _make_prune_conflicts()
@@ -1684,47 +1668,6 @@ class TestPerRomLockSerialization:
         # never overlap, even though the rom_ids differ.
         kinds = [kind for _rid, kind, _ts in events]
         assert kinds == ["enter", "exit", "enter", "exit"], events
-
-
-class TestHasTrackedSave:
-    """Pure in-memory predicate consumed by the launch gate."""
-
-    def test_returns_false_when_no_entry(self, tmp_path):
-        """ROM with no entry in state.saves → False."""
-        svc, _ = make_service(tmp_path)
-        assert svc.has_tracked_save(42) is False
-
-    def test_returns_false_for_empty_entry(self, tmp_path):
-        """ROM with an empty RomSaveSyncState (no files, no slots) → False."""
-        svc, _ = make_service(tmp_path)
-        _seed_save_state(svc, 42, RomSaveSyncState())
-        assert svc.has_tracked_save(42) is False
-
-    def test_returns_true_when_files_tracked(self, tmp_path):
-        """ROM with at least one tracked file → True."""
-        svc, _ = make_service(tmp_path)
-        _seed_save_state(
-            svc,
-            42,
-            RomSaveSyncState(files={"pokemon.srm": FileSyncState(tracked_save_id=7, last_sync_hash="abc")}),
-        )
-        assert svc.has_tracked_save(42) is True
-
-    def test_returns_true_when_slots_configured(self, tmp_path):
-        """ROM with at least one slot configured (no files yet) → True."""
-        svc, _ = make_service(tmp_path)
-        _seed_save_state(svc, 42, RomSaveSyncState(slots={"default": {"label": "Default"}}))
-        assert svc.has_tracked_save(42) is True
-
-    def test_accepts_int_rom_id_casting_to_str_key(self, tmp_path):
-        """``rom_id`` is int on the wire; the aggregate is keyed by int rom_id."""
-        svc, _ = make_service(tmp_path)
-        _seed_save_state(
-            svc, 99, RomSaveSyncState(files={"a.srm": FileSyncState(tracked_save_id=1, last_sync_hash="h")})
-        )
-        assert svc.has_tracked_save(99) is True
-        # Wrong rom_id misses cleanly.
-        assert svc.has_tracked_save(100) is False
 
 
 class TestBadPathDeleteSavesPartialFailure:

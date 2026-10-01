@@ -488,20 +488,6 @@ class TestArtworkEndpointDelegation:
 
 class TestLifecycleEndpointDelegation:
     @pytest.mark.asyncio
-    async def test_evaluate_launch_returns_asdict(self, endpoints, services):
-        from dataclasses import dataclass
-
-        @dataclass(frozen=True)
-        class Verdict:
-            allowed: bool
-            reason: str
-
-        services.launch_gate_service.evaluate = AsyncMock(return_value=Verdict(allowed=True, reason="ok"))
-        result = await endpoints.evaluate_launch(12345)
-        services.launch_gate_service.evaluate.assert_awaited_once_with(12345)
-        assert result == {"allowed": True, "reason": "ok"}
-
-    @pytest.mark.asyncio
     async def test_finalize_game_session_returns_asdict(self, endpoints, services):
         from dataclasses import dataclass
 
@@ -513,14 +499,6 @@ class TestLifecycleEndpointDelegation:
         result = await endpoints.finalize_game_session(7)
         services.session_lifecycle_service.finalize.assert_awaited_once_with(7)
         assert result == {"synced": False}
-
-    @pytest.mark.asyncio
-    async def test_evaluate_launch_passes_a_refusal_through(self, endpoints, services):
-        """A refused use case answers the refusal dict in place of a verdict; there is nothing to translate."""
-        refusal = {"success": False, "reason": "prune_active", "message": "held"}
-        services.launch_gate_service.evaluate = AsyncMock(return_value=refusal)
-
-        assert await endpoints.evaluate_launch(12345) == refusal
 
     @pytest.mark.asyncio
     async def test_finalize_game_session_passes_a_refusal_through(self, endpoints, services):
@@ -844,9 +822,3 @@ class TestEndpointErrorPropagation:
         services.artwork_service.fetch_cover_base64 = AsyncMock(side_effect=RuntimeError("art"))
         with pytest.raises(RuntimeError, match="art"):
             await endpoints.fetch_cover_base64(42)
-
-    @pytest.mark.asyncio
-    async def test_evaluate_launch_propagates(self, endpoints, services):
-        services.launch_gate_service.evaluate = AsyncMock(side_effect=RuntimeError("gate"))
-        with pytest.raises(RuntimeError, match="gate"):
-            await endpoints.evaluate_launch(42)

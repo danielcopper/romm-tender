@@ -387,11 +387,6 @@ class Endpoints:
         return self._services.sync_service.get_sync_runs()
 
     @route
-    async def evaluate_launch(self, steam_app_id):
-        verdict = await self._services.launch_gate_service.evaluate(steam_app_id)
-        return verdict if isinstance(verdict, dict) else asdict(verdict)
-
-    @route
     async def check_local_drift(self, rom_id):
         return await self._services.launch_gate_service.check_local_drift(rom_id)
 

@@ -166,7 +166,6 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
 # them hands out for the frontend's Steam write is a claim of its own above.
 READ_ONLY_CLAIMS: frozenset[str] = frozenset(
     {
-        "evaluate_launch",
         "fetch_cover_base64",
         "get_installed_relaunch_options",
         "get_rom_relaunch_options",

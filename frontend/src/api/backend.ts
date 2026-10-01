@@ -39,7 +39,6 @@ import type {
   SaveSetupInfo,
   SlotSavesResponse,
   SwitchSlotResponse,
-  LaunchVerdict,
   SlotDeleteInfo,
   SlotMigrationConflict,
   DeleteSlotResult,
@@ -349,7 +348,6 @@ export const resumeDownload = endpoint<[number], BackendResult | TargetOccupiedR
 export const getDownloadQueue = endpoint<[], { downloads: DownloadItem[] }>("get_download_queue");
 export const clearCompletedDownloads = endpoint<[], { success: boolean; cleared: number }>("clear_completed_downloads");
 export const getInstalledRom = endpoint<[number], InstalledRom | null>("get_installed_rom");
-export const evaluateLaunch = endpoint<[number], LaunchVerdict>("evaluate_launch");
 export const checkLocalDrift = endpoint<[number], { drifted: boolean; rom_id: number }>("check_local_drift");
 export type RelaunchOptionsResult =
   | { success: true; app_id: number; launch_options: string; prune_lease_token: string }

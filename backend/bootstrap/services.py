@@ -598,14 +598,10 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
 
     launch_gate_service = LaunchGateService(
         config=LaunchGateServiceConfig(
-            rom_lookup=sync_service,
-            installed_checker=download_service,
-            save_status_reader=save_sync_service,
             drift_reader=save_sync_service,
             save_file_store=cfg.adapters.save_file_store,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
-            conflict_rules=conflict_rules,
         ),
     )
 

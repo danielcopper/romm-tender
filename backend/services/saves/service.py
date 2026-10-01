@@ -238,16 +238,7 @@ class SaveService:
         async with self._rules.hold("get_save_status", prune=True) as refusal:
             if refusal is not None:
                 return refusal
-            return await self.get_save_status_unchecked(rom_id)
-
-    async def get_save_status_unchecked(self, rom_id: int) -> dict[str, Any]:
-        """:meth:`get_save_status` without its prune rule, for the launch gate.
-
-        The gate reads the status from inside ``evaluate_launch``, whose own
-        prune rule already holds an operation for the whole call; the read is
-        part of that call, not a second one to be checked.
-        """
-        return await self._status.get_save_status(rom_id)
+            return await self._status.get_save_status(rom_id)
 
     async def refresh_save_status(self, rom_id: int) -> dict[str, Any]:
         """Start a background save-status check for a ROM and answer at once.
@@ -270,22 +261,6 @@ class SaveService:
     def check_core_change(self, rom_id: int) -> dict[str, Any]:
         """Check if emulator core changed since last sync for a ROM."""
         return self._status.check_core_change(rom_id)
-
-    def has_tracked_save(self, rom_id: int) -> bool:
-        """Return True when this ROM has at least one tracked save (slot or file).
-
-        Reads the ``rom_save_sync_states`` aggregate through its own narrow read
-        UoW — no network. Used by the launch gate to decide whether a
-        ``get_save_status`` failure should surface as a soft ``warn`` verdict
-        (tracked saves exist — silent allow would risk data loss on an unseen
-        conflict) or stay a silent ``allow`` (no tracked saves — nothing to
-        corrupt).
-        """
-        with self._uow_factory() as uow:
-            save_entry = uow.rom_save_sync_states.get(int(rom_id))
-        if save_entry is None:
-            return False
-        return bool(save_entry.files) or bool(save_entry.slots)
 
     def find_local_save_files(self, rom_id: int) -> list[dict[str, str]]:
         """Enumerate the ROM's local save files (``[{"path", "filename"}]``).
