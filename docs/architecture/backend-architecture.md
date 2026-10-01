@@ -2361,12 +2361,14 @@ the destination, named as the resolver's own display form for that distribution,
 words below sets out, and collapsed on the code within one destination, because the row carries codes where the answer
 carries statements and requirements resolving to one place share them) — so both surfaces can say what a row IS instead
 of describing every one of them as a gap in the library. All of it goes silent with the location, for the same reason. A
-file declaration whose declared location does not end in its own name is the folder the file goes in: with LRPS2's
-`pcsx2_bios` option set, the resolver states the requirement as the FILE that option names and keeps the `.info`'s
-`pcsx2/bios` as `declared`, so `_declared_location` joins the two — the file is placed in the folder under its own name,
-never as the folder. `declared_kind` does not go silent with the location: it is what the emulator OPENS the destination
-at, a property of the declaration rather than of the destination, so it survives an empty one — a folder that is not
-there is still a folder to create, and the platform detail's download filter, `_download_firmware_batch` and
+file requirement whose `declared` is a folder its core declares — the resolver's own `declared_directory_of` answers
+that — goes in that folder under its own name: with LRPS2's `pcsx2_bios` option set, the resolver states the requirement
+as the FILE that option names and keeps the `.info`'s `pcsx2/bios` as `declared`, so `_declared_location` joins the two
+rather than place the file as the folder. No other difference between the two names is a folder: Beetle PSX names the
+spelling it reached in `file_name` (`SCPH-5501.bin`) and its `.info`'s in `declared`, which is where the image belongs.
+`declared_kind` does not go silent with the location: it is what the emulator OPENS the destination at, a property of
+the declaration rather than of the destination, so it survives an empty one — a folder that is not there is still a
+folder to create, and the platform detail's download filter, `_download_firmware_batch` and
 `download_platform_firmware_file` all key off it so such a row is never offered as a fetch. The per-file entry point
 refuses with a `declares_directory` reason rather than passing the row over: it answers one file the user named, so a
 silent success would leave the row unchanged with nothing to explain it.

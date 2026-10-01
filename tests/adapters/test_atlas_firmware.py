@@ -515,6 +515,7 @@ class TestPlacements:
                 core_so="pcsx2_libretro.so",
                 requirements=(
                     _requirement(
+                        core_so="pcsx2_libretro.so",
                         file_name="scph10000.bin",
                         declared="pcsx2/bios",
                         path=f"{_ROOT}/scph10000.bin",
@@ -530,6 +531,36 @@ class TestPlacements:
         assert placement.relative_path == "pcsx2/bios/scph10000.bin"
         assert placement.destination == "pcsx2/bios/scph10000.bin"
         assert placement.declared_kind == DECLARED_FILE
+
+    def test_a_spelling_the_core_reached_belongs_where_its_info_names_the_image(self, adapter, monkeypatch):
+        """Beetle PSX tries several spellings of one image and names the one it reached.
+
+        ``file_name`` is that spelling and ``declared`` the ``.info``'s. The two
+        differ and neither is a folder, so the image belongs at the declared
+        name — joining them would make the declared file a folder.
+        """
+        answer = _answer(
+            _core(
+                core_so="mednafen_psx_libretro.so",
+                requirements=(
+                    FirmwareAlternatives(
+                        options=(
+                            _option(
+                                "SCPH-5501.bin",
+                                ("ntsc-u",),
+                                declared="scph5501.bin",
+                                path=f"{_ROOT}/SCPH-5501.bin",
+                                found=KIND_FILE,
+                                checked="unchecked",
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().placements[0].relative_path == "scph5501.bin"
 
 
 class TestDestinationReadings:

@@ -84,7 +84,7 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
     detect,
 )
-from _vendor.atlas.firmware import core_short_name
+from _vendor.atlas.firmware import core_short_name, declared_directory_of
 
 from adapters.atlas_identity import emulator_identity
 from domain.firmware_wants import (
@@ -401,13 +401,17 @@ def _declared_location(requirement: Any, root: str) -> str | None:
     way: RetroDECK points ``<bios>/pcsx2/bios`` back at ``<bios>``, so LRPS2's
     ``pcsx2/bios`` collapses onto the root and comes back as ``.``.
 
-    A FILE declaration whose declared location does not end in its own name
-    names the folder the file goes in rather than the file: LRPS2 declares the
-    folder ``pcsx2/bios`` and, with its ``pcsx2_bios`` option set, the resolver
-    states the requirement as the file that option names while keeping the
-    folder as ``declared``. The location is that folder joined with the file's
-    name, because joined as it stands it would place the file where the folder
-    is.
+    A FILE requirement whose ``declared`` is a FOLDER its core declares goes in
+    that folder under its own name: LRPS2 declares ``pcsx2/bios`` and, with its
+    ``pcsx2_bios`` option set, the resolver states the requirement as the file
+    that option names while keeping the folder as ``declared``, so the location
+    as it stands would place the file where the folder is. Whether ``declared``
+    is such a folder is the resolver's own table's answer
+    (``declared_directory_of``), the one it reads the folder declaration by.
+    No other mismatch between ``declared`` and ``file_name`` is a folder: Beetle
+    PSX names the spelling it reached in ``file_name`` (``SCPH-5501.bin``) and
+    the one its ``.info`` spells in ``declared`` (``scph5501.bin``), and that
+    second one is where an image belongs.
 
     ``None`` where there is no location below the root to honour, so the caller
     falls back to its own flat layout. Three shapes reach it. A resolved
@@ -427,9 +431,16 @@ def _declared_location(requirement: Any, root: str) -> str | None:
     normalised = os.path.normpath(declared)
     if normalised == os.curdir or normalised == os.pardir or normalised.startswith(os.pardir + os.sep):
         return None
-    if requirement.declared_kind != DECLARED_DIRECTORY and os.path.basename(normalised) != requirement.file_name:
+    if _a_file_in_a_declared_folder(requirement):
         return os.path.join(normalised, requirement.file_name)
     return normalised
+
+
+def _a_file_in_a_declared_folder(requirement: Any) -> bool:
+    """Is *requirement* a file its core opens inside a folder it declares — see :func:`_declared_location`."""
+    if requirement.declared_kind == DECLARED_DIRECTORY or requirement.core_so is None:
+        return False
+    return declared_directory_of(requirement.core_so.removesuffix(".so"), requirement.declared) is not None
 
 
 def _placements(answer: Any) -> tuple[FirmwarePlacement, ...]:
