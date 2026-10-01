@@ -293,16 +293,17 @@ describe("a one-of group", () => {
     expect(statusOf(unread("unmet", []))).toBe("0 / 2 regions");
   });
 
-  it("says a group nothing could check was not checked, never a count that reads as unmet", () => {
-    // A plain file is missing, so the plain files word the line; the group
-    // beside them could not be checked and must not read "0 / 3 regions".
+  it("gives a group nothing could fully check no count even where some regions are covered", () => {
+    // A plain file is missing, so the plain files word the line. The group
+    // beside them has one region covered and two nobody checked: "1 / 3
+    // regions" would read like a partial group, so it gets no count at all.
     const both = summary(
       {
         required_count: 2,
         required_downloaded: 0,
         required_withheld: 1,
         one_of_groups: [
-          { ...group("unknown", [], []), unchecked: ["north", "south", "east"], regions: ["north", "south", "east"] },
+          { ...group("unknown", ["north"], []), unchecked: ["south", "east"], regions: ["north", "south", "east"] },
         ],
       },
       "unknown",
