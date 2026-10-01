@@ -25,6 +25,11 @@ describe("packageOf", () => {
     expect(packageOf("/repo/frontend/src/index.tsx")).toBeNull();
   });
 
+  it("answers null for a path that ends before it names a package", () => {
+    expect(packageOf("/repo/frontend/node_modules/")).toBeNull();
+    expect(packageOf("/repo/frontend/node_modules/@decky")).toBeNull();
+  });
+
   it("answers null for a module a plugin made up, even one naming a package's path", () => {
     expect(packageOf("\0virtual:tender-bundle-kind")).toBeNull();
     expect(packageOf(`\0${STORE}/react-icons@5.6.0/node_modules/react-icons/lib/index.mjs?commonjs-proxy`)).toBeNull();
