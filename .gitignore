@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+# What the build recorded per third-party package — `frontend/rollup.config.js`
+frontend/bundle-packages.json
 
 # Release tarballs — `mise run package`
 build/

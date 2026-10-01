@@ -1,10 +1,14 @@
-import { copyFileSync, mkdirSync } from "node:fs";
+import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import externalGlobals from "rollup-plugin-external-globals";
 import ts from "typescript";
+
+import { packageBytes } from "./scripts/package-budgets.mjs";
 
 // The three globals Steam's own React lives under. They are not Steam's doing —
 // Decky's loader installs them, and so does `src/boot/steamGlobals.ts`, which is
@@ -121,6 +125,33 @@ const stampBundleKind = (kind) => ({
   load: (id) => (id === `\0${BUNDLE_KIND_MODULE}` ? `export const BUNDLE_KIND = ${JSON.stringify(kind)};` : null),
 });
 
+// Beside the package rather than in `dist/`: `scripts/package.sh` ships the
+// whole of `dist/`, and this is a fact about the build, not part of what runs.
+const PACKAGE_RECORD = "bundle-packages.json";
+
+// `rollup -c` evaluates this file once and runs the three builds in turn, so the
+// record holds this run's builds only, and each build rewrites it with all of
+// them so far.
+const packageRecord = {};
+
+/**
+ * Record how many bytes each third-party package puts into this build's bundle,
+ * with the digest of the bundle as written so that `check-package-budgets.mjs`
+ * can refuse a record older than `dist/`.
+ */
+const recordPackageBytes = () => ({
+  name: "record-package-bytes",
+  writeBundle({ file }, bundle) {
+    const name = path.basename(file);
+    const modules = Object.entries(bundle[name].modules).map(([id, { code }]) => [id, Buffer.byteLength(code ?? "")]);
+    packageRecord[name] = {
+      sha256: createHash("sha256").update(readFileSync(file)).digest("hex"),
+      packages: packageBytes(modules),
+    };
+    writeFileSync(PACKAGE_RECORD, `${JSON.stringify(packageRecord, null, 2)}\n`);
+  },
+});
+
 const DIAGNOSTIC_FORMAT = {
   getCanonicalFileName: (fileName) => fileName,
   getCurrentDirectory: ts.sys.getCurrentDirectory,
@@ -208,7 +239,12 @@ const build = ({ input, file, external, bundleKind, extraPlugins = [], sourcemap
   input,
   external,
   context: "window",
-  plugins: [...(bundleKind ? [stampBundleKind(bundleKind)] : []), ...plugins({ sourcemap }), ...extraPlugins],
+  plugins: [
+    ...(bundleKind ? [stampBundleKind(bundleKind)] : []),
+    ...plugins({ sourcemap }),
+    ...extraPlugins,
+    recordPackageBytes(),
+  ],
   output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap },
 });
 
