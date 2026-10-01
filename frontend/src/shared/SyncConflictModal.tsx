@@ -214,8 +214,7 @@ const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, close
 
 /**
  * Show the sync-conflict modal and return a Promise that resolves once the
- * user picks an action (or cancels). Used by CustomPlayButton during pre-launch
- * sync and by sessionManager when post-exit sync surfaces conflicts.
+ * user picks an action (or cancels).
  */
 export function showSyncConflictModal(conflict: SyncConflict): Promise<SyncConflictResolution> {
   return new Promise<SyncConflictResolution>((resolve) => {
@@ -226,9 +225,10 @@ export function showSyncConflictModal(conflict: SyncConflict): Promise<SyncConfl
 /**
  * Walk a list of conflicts sequentially, showing the resolution modal for each.
  * Bails on the first cancel so the caller can decide what to do (e.g. not
- * relaunch). Shared by the Play button's pre-launch sync and the global launch
- * watcher's `conflict` verdict. Returns "resolved" once every conflict was
- * resolved (or the list was empty), "cancel" on the first dismissal.
+ * relaunch). Called by the Play button (pre-launch gate and Resolve) and by the
+ * launch watcher through `LaunchPrompts`. Returns "resolved" once every
+ * conflict was resolved (or the list was empty), "cancel" on the first
+ * dismissal.
  */
 export async function handleConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved"> {
   for (const conflict of conflicts) {
