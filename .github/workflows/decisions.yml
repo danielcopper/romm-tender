@@ -12,7 +12,7 @@ jobs:
   decisions:
     permissions:
       actions: write        # re-run pull request checks after an issue edit
-      contents: read        # read CLAUDE.md
+      contents: read        # read CLAUDE.md, the Planned change copy and the ADRs
       issues: read          # read the linked issues
       pull-requests: read   # read the pull request, its labels and linked issues
     uses: danielcopper/.github/.github/workflows/decisions.yml@76f6e1cd0507613358c6c9289d8079e7a5c12704 # main

@@ -128,8 +128,10 @@ locally with `mise run docs`.
   Game-Mode pass can show it.
 - The PR body repeats the final decisions; it becomes the squash commit body.
 - Nothing needed to understand a change lives outside this repo and its issues.
-- The `decisions` CI check fails a PR whose linked issue has no `## Decisions` or still has open questions under
-  `## To decide`, and a PR that removes this section. Everything else here is for the review.
+- The `decisions` CI check enforces `## To decide` and `## Decisions` in the issue, this section, and the ADR format for
+  new ADRs, among other rules listed in the
+  [shared check's README](https://github.com/danielcopper/.github#the-decisions-check); everything else here is for the
+  review.
 
 ## Traps — non-obvious rules that bite silently
 
