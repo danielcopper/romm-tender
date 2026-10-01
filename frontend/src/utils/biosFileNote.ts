@@ -168,15 +168,14 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *   before reading a byte. It arrives with the verdict already `false`, so the
  *   row is red with or without this note; what the note adds is the reason, and
  *   without it the row says a file that is sitting right there is missing. The
- *   resolver reaches that size gate for a file a per-region BIOS setting NAMES.
- *   SwanStation's three (`swanstation_BIOS_PathNTSCJ` / `PathNTSCU` /
- *   `PathPAL`) always name one — RetroArch answers with the core's own defaults,
- *   `scph5500.bin` / `scph5501.bin` / `scph5502.bin` — so a file of one of those
- *   names and the wrong size reaches it on any RetroDECK; DuckStation's
- *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`) only once a user fills one in, since
- *   RetroDECK leaves them empty. Both are cited, with the upstream line numbers,
+ *   resolver reaches that size gate only for a file a per-region BIOS setting
+ *   NAMES — SwanStation's (`swanstation_BIOS_PathNTSCJ` / `PathNTSCU` /
+ *   `PathPAL`) or DuckStation's (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), cited
  *   in `backend/_vendor/atlas/data/core_firmware.json` and
- *   `backend/_vendor/atlas/data/standalone_firmware.json`.
+ *   `backend/_vendor/atlas/data/standalone_firmware.json`. Whether it reaches a
+ *   ROW is a further question that has not been shown: a row carries the
+ *   reading of the first declaration under its name, and for SwanStation's
+ *   default names that is its `.info` row, not the one the setting names.
  *
  * `verified` and `mismatch` get no note: the first is the ordinary met row and
  * the second is an unmet one whose surfaces already say so. Every other value,

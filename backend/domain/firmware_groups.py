@@ -18,10 +18,12 @@ order of precedence:
 
 The state follows, as one of :data:`GROUP_STATES`. ``met`` only where every
 region is covered — never green over a region nobody checked. ``partial`` where
-something is covered and a region is shown not to be. ``unknown`` where nothing
-shown missing stands beside a covered region that is not the whole story, or
-where an option is there and unread. ``unmet`` where no option is in place, or
-might be — a region stated uncovered stays red whatever else is unchecked.
+something is covered and a region is shown not to be. ``unknown`` where a
+covered region stands beside one nobody checked and none shown missing, and
+wherever nothing is covered and an option is there and unread — even beside
+regions shown missing: the group's headline is then grey, while the rows of the
+missing regions stay red. ``unmet`` where no option is in place or might be — a
+region nobody checked does not lift that.
 
 The game page asks the same question narrowed to the game's own regions
 (:func:`judge_group_for_game`), mapped from RomM's region names by
@@ -53,10 +55,14 @@ REGION_NTSC_J = "ntsc-j"
 REGION_NTSC_U = "ntsc-u"
 REGION_PAL = "pal"
 
-# RomM's region names (the No-Intro / Redump filename tags it parses), folded
-# to lower case. A name not listed — World, Asia, Korea, Brazil, anything
-# unknown — maps to no console region, and the game is then answered by the
-# platform's verdict rather than by a guess about which console it was sold for.
+# RomM's region names, folded to lower case. RomM 5.3.1 normalises a filename's
+# region tag to a canonical name (``backend/handler/filesystem/base_handler.py``,
+# ``REGIONS`` and ``normalize_region``; ``roms_handler.py``'s region parsing), and
+# only an unknown ``Reg-…`` tag stays raw. Every canonical name that is a
+# console's region is mapped; the further European names are for a tag outside
+# that list. A name not listed — World, Asia, Korea, Brazil, anything unknown —
+# maps to no console region, and the game is then answered by the platform's
+# verdict rather than by a guess about which console it was sold for.
 _ROMM_REGIONS: dict[str, str] = {
     "usa": REGION_NTSC_U,
     "canada": REGION_NTSC_U,
@@ -152,7 +158,7 @@ def judge_groups(groups: Iterable[FirmwareGroup], game_regions: tuple[str, ...] 
 def console_regions_of(rom_regions: Iterable[str]) -> tuple[str, ...]:
     """The console regions RomM's region names for one game map onto, without repeats.
 
-    Case-insensitive, because RomM keeps the spelling of the filename it parsed.
+    Case-insensitive, so a name reads the same whatever case it arrives in.
     Empty where no name maps — the game's own region is then unknown, which is
     the caller's cue to answer with the platform's verdict.
     """

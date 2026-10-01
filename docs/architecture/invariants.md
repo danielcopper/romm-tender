@@ -336,10 +336,12 @@ Format: **invariant** — tier — enforced by.
   switching a platform's emulator can move it from a finished answer to a withheld one. `declaration="packaged"` with an
   EMPTY requirement list counts as unread and is the shape most likely to be folded back the wrong way: a card may
   identify its image by content, so it names no file until the bytes are read, and reading the empty list as "wants
-  nothing" puts a green all-clear on a PlayStation launching DuckStation. An entry the resolver states with no identity
-  — the `retroarch-foreign-core` kind, a RetroArch launch of a core file this host cannot load — declares nothing and
-  adds nothing: no placement, no unread name, no verdict and no group
-  (`tests/adapters/test_atlas_firmware.py::TestUnreadEmulators::test_a_retroarch_launch_of_a_foreign_core_adds_nothing`)
+  nothing" puts a green all-clear on a PlayStation launching DuckStation. A `retroarch-foreign-core` entry — a RetroArch
+  launch of a core file this host cannot load, stated with no identity — declares nothing and so adds nothing: no
+  placement, no unread name, no verdict and no group
+  (`tests/adapters/test_atlas_firmware.py::TestUnreadEmulators::test_a_retroarch_launch_of_a_foreign_core_adds_nothing`).
+  It is not the only entry with no identity: any other the resolver could not identify still contributes the files it
+  declares, as wants with no owner
 - **A firmware row the RomM library does not hold (`on_server: False`) counts towards readiness, and never towards a
   download affordance or a progress ratio** — test + prompt-only — `tests/services/test_firmware.py` pins the row's
   shape (`id` absent, `on_server` clear), that it raises `required_count`, and that it stays out of `server_count`;
@@ -909,56 +911,57 @@ Format: **invariant** — tier — enforced by.
   catalogue takes both: SwanStation marks all five of its PlayStation images **optional**, Beetle PSX marks three of its
   own **required**. Which is why no count can be relied on to carry this: it is ONE requirement over the whole list, and
   putting it in `required_count` reports every image the core declares as required —
-  `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on. The twenty in that page's
-  own `0/20 RomM library files` is the library's inventory for the platform, a different set again, and reading the two
-  as one is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the
-  counts and the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" —
-  a truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a
-  console nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over.
-  **The demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** —
-  weigh the two against each other and you have made the misreading that field exists to prevent, because ignorance
-  there is always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes
-  (a DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet,
-  so the counts already report them by name; the second needs a content check to arise, and the inventory is asked
-  **unverified** (the entry below), so it cannot occur here. What the presence half actually resolves to — a row's
-  `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
-  `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a
-  false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the side
-  `PlatformDetail`'s `nothingEstablished` excludes: its rows were answered, so the pane has a file list to point at
-  rather than only a place to put files by hand. Since #1821 that flag decides WORDING alone — the download affordances
-  are built off the fetchable set and read the verdict nowhere, because what the resolver could establish is the
-  emulator's demand and what is fetchable is what the library holds; the two further inputs they do read
-  (`required_by_active`, and the library's own finished ratio) are demand and inventory, not readiness gates. **A fourth
-  frontend reader is the play row's BIOS badge** (`frontend/src/utils/playSection.ts::extractBiosInfo`), where
-  `"absent"` is a second established absence beside the required count. Whether the count sees the same thing is the
-  core author's choice, which is why the badge may not be left to it: a core marking every image optional leaves
-  `required_count` at 0 and the comparison beside it vacuously false, while `"absent"` is the same whatever the core
-  marked. `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the badge claims a
-  file is NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an image whose
-  required folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the withheld ROW
-  rather than the console. They are not two gaps over two different file sets: a `required_by_active` row always carries
-  the launching emulator, so it is always one of the rows the disjunction is read over. It is always one of the unjudged
-  rows that verdict is read over rather than a finding beside it — the decline needs at least one such row, and this is
-  one — and need not be the only one, since another image the core declares can be unjudged too; it is the only half of
-  the pair that can name a file, and naming it points at the file list, where its caveat explains itself. **`"absent"`
-  is tested BEFORE the level's decline**, and the pair never arrives at all today because the backend lands `absent` on
-  `missing`. Since #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads —
-  `PlatformsTab.tsx`'s row tooltip last, since it kept a copy of the order and an older spelling of the states for a cut
-  longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock is a test that
-  reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from, with the
-  ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than naming it
-  (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture` or
-  `frontend/src/shared`), because the naming is what failed: both locks listed two components while three rendered these
-  states, and a surface missing from such a list carries no lock at all and cannot be told from one that never drifted.
-  Deriving the set from who IMPORTS the module would be worse than the list — a surface wording a state for itself is
-  exactly one that does not import it. **What neither lock can catch is a component inventing a NEW wording for one of
-  these states**: only a copied phrase is searchable, so a green run there is evidence about copied sentences and about
-  nothing else. Two limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts`
-  beside its component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose
-  today), and `frontend/src/utils` is out of scope because that is where the phrases legitimately live **Where the
-  launching emulator states a one-of group, this axis is silent** (`classify_system_image(..., groups=...)` answers
-  `not_demanded`): the group IS the console's demand, said region by region, and it is judged as the next entry sets
-  out. A second, coarser reading of the same demand beside it would be one requirement stated twice
+  `0 of N files … requires are in
+  place`, `N` being every image it declares. The page's own `RomM library files` ratio
+  is the library's inventory for the platform, a different set again, and reading the two as one is how the wrong ratio
+  gets written. Each fold fails its own way and all of them silently. Fold it into the counts and the page states a
+  ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" — a truthiness test, a
+  `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a console nobody has looked
+  at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The demand comes from the
+  table and the presence from our rows, and `requirements_met` is not consulted at all** — weigh the two against each
+  other and you have made the misreading that field exists to prevent, because ignorance there is always `None` and a
+  `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a DIFFERENT required file
+  absent, or one present with the wrong bytes) each leave one of our own required rows unmet, so the counts already
+  report them by name; the second needs a content check to arise, and the inventory is asked **unverified** (the entry
+  below), so it cannot occur here. What the presence half actually resolves to — a row's `satisfied` is presence, `null`
+  in two shapes, and both read as not held — is written once, at `classify_system_image`, because an outside reader took
+  that field for the resolver's usability answer and drew a false finding from it. And on the frontend,
+  `system_image: "unsettled"` joins `required_withheld` on the side `PlatformDetail`'s `nothingEstablished` excludes:
+  its rows were answered, so the pane has a file list to point at rather than only a place to put files by hand. Since
+  #1821 that flag decides WORDING alone — the download affordances are built off the fetchable set and read the verdict
+  nowhere, because what the resolver could establish is the emulator's demand and what is fetchable is what the library
+  holds; the two further inputs they do read (`fetch_for_required`, and the library's own finished ratio) are demand and
+  inventory, not readiness gates. **A fourth frontend reader is the play row's BIOS badge**
+  (`frontend/src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the
+  required count. Whether the count sees the same thing is the core author's choice, which is why the badge may not be
+  left to it: a core marking every image optional leaves `required_count` at 0 and the comparison beside it vacuously
+  false, while `"absent"` is the same whatever the core marked. `"unsettled"` deliberately raises no badge, the same
+  reading a withheld required row gets: the badge claims a file is NOT THERE, and nothing established that. **Where BOTH
+  ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and a
+  reachable one — `biosSummary` names the withheld ROW rather than the console. They are not two gaps over two different
+  file sets: a `required_by_active` row always carries the launching emulator, so it is always one of the rows the
+  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
+  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
+  core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
+  file list, where its caveat explains itself. **`"absent"` is tested BEFORE the level's decline**, and the pair never
+  arrives at all today because the backend lands `absent` on `missing`. Since #1863 that order lives ONCE, in
+  `biosSummary`, which is what every wording surface reads — `PlatformsTab.tsx`'s row tooltip last, since it kept a copy
+  of the order and an older spelling of the states for a cut longer and described one platform in two vocabularies a
+  keypress apart. **The module's own drift lock is a test that reads components as SOURCE** (`biosSummary.test.ts`, over
+  the phrase list the module builds its answers from, with the ratio's twin in `biosHeldRatio.test.ts`) — and since
+  #1866 it SWEEPS the set it searches rather than naming it (`frontend/src/test-utils/componentSources.ts`, every
+  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`), because the naming is what failed: both
+  locks listed two components while three rendered these states, and a surface missing from such a list carries no lock
+  at all and cannot be told from one that never drifted. Deriving the set from who IMPORTS the module would be worse
+  than the list — a surface wording a state for itself is exactly one that does not import it. **What neither lock can
+  catch is a component inventing a NEW wording for one of these states**: only a copied phrase is searchable, so a green
+  run there is evidence about copied sentences and about nothing else. Two limits of the sweep, both deliberate: it is
+  `.tsx` only, so a wording helper extracted into a `.ts` beside its component is unsearched
+  (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and `frontend/src/utils` is out
+  of scope because that is where the phrases legitimately live **Where the launching emulator states a one-of group,
+  this axis is silent** (`classify_system_image(..., groups=...)` answers `not_demanded`): the group IS the console's
+  demand, said region by region, and it is judged as the next entry sets out. A second, coarser reading of the same
+  demand beside it would be one requirement stated twice
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` pins the verdict (every state, a region
   nobody checked keeping a covered group off `met`, a stated uncovered region staying missing beside an unchecked one,
@@ -973,19 +976,21 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/utils/biosSummary.test.ts`, `biosGroup.test.ts`, `playSection.test.ts`, `BiosTab.test.tsx` and
   `library/PlatformsTab.test.tsx`. The rule spans the adapter (`adapters/atlas_firmware.py::_wants` and `_groups`), two
   domain modules (`domain/firmware_groups.py` judges, `domain/bios_status.py` counts), the service
-  (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing the ROM's regions) and four frontend modules,
-  and nothing joins them. **Prompt-only**: no consumer reads an option's `need` as its row's `required` — `required`
-  comes off an emulator's plain declarations alone; a group's verdict is never folded into a colour on the wire — the
-  state is one of four words and the frontend picks the colour; `unknown` is never read as `met` or as `unmet`; the play
-  badge leaves a `partial` group out (`required_partial`) as it leaves out what nothing could judge;
-  `Download required`'s count and the download it starts both come from `fetch_for_required`
+  (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing the ROM's regions), six frontend modules
+  (`utils/biosSummary.ts`, `utils/biosGroup.ts`, `utils/playSection.ts`, `utils/biosFetchable.ts`,
+  `bigpicture/BiosTab.tsx`, `bigpicture/library/PlatformDetail.tsx`) and the two type modules they share
+  (`types/firmware.ts`, `api/backend.ts`), and nothing joins them. **Prompt-only**: no consumer reads an option's `need`
+  as its row's `required` — `required` comes off an emulator's plain declarations alone; a group's verdict is never
+  folded into a colour on the wire — the state is one of four words and the frontend picks the colour; `unknown` is
+  never read as `met` or as `unmet`; the play badge leaves a `partial` group out (`required_partial`) as it leaves out
+  what nothing could judge; `Download required`'s count and the download it starts both come from `fetch_for_required`
   (`domain/firmware_groups.py::fetched_as_required`) and never from a second rule; and nothing in the judging knows a
   console, an emulator or a region by name — a group the resolver states for a console nobody has worded must be judged,
   counted and fetched with no code change, its regions printed in the resolver's own spelling where no name exists. The
-  region sets the verdict reads beside the options come from the entry's own caveats: `firmware-scan-incomplete` and
-  `firmware-search-unverified` name unchecked regions, `firmware-path-names-no-file` regions that boot nothing, and the
-  group's own `core-mode-unestablished` names the regions its options DO serve, so reading it as unchecked would keep
-  every group off `met`
+  region sets the verdict reads beside the options come from the entry's own caveats, and which ones — and which one
+  must never be read as unchecked — is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. **Unseen by every
+  test**: a region whose every name the resolver refused arrives with neither an option nor such a caveat, so a group
+  can read `met` over it; emu-atlas#556 asks for it
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a

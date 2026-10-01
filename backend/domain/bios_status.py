@@ -497,7 +497,7 @@ def count_required(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict,
 
 
 def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> int:
-    """How many of the launching emulator's required files nothing could judge.
+    """How many of the launching emulator's requirements nothing could judge.
 
     The third number beside :func:`count_required`'s two, and the one that keeps
     a declined verdict from reading as an absence. A surface that warns about
@@ -545,10 +545,9 @@ def classify_system_image(
     and the absent ones beside it are still one unmet requirement. That is why
     this is a value and not a pair of counts: put into ``required_count`` it would
     read ``0/N required files ready`` over a console that needs one image, with
-    ``N`` every row the emulator declares — five, for the SwanStation this was
-    observed on. The twenty in that page's ``0/20 RomM library files`` is
-    a different set again: the RomM library's inventory for the platform, which
-    this answer neither counts nor is scoped to.
+    ``N`` every row the emulator declares. The library's own ``RomM library
+    files`` ratio is a different set again: the RomM library's inventory for the
+    platform, which this answer neither counts nor is scoped to.
 
     **The demand comes from the table, the presence comes from the rows, and
     nothing here weighs one against the other.** ``requirements_met`` is not

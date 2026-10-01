@@ -2578,8 +2578,10 @@ class TestTheConsolesOwnFirmwareDemand:
 
 # The PlayStation as the pinned resolver states it for two of its cores. Beetle
 # PSX lists one image per region as a one-of group, and the same three files as
-# optional rows of its own ``.info``. SwanStation states a group of one option —
-# the image its search found — serving every region.
+# plain rows of its own ``.info`` — which marks them required, and which the
+# resolver states ``optional`` because the group speaks for those images.
+# SwanStation states a group of one option — the image its search found —
+# serving every region.
 _BEETLE = "mednafen_psx_libretro"
 _BEETLE_OPTIONS = (("scph5500.bin", ("ntsc-j",)), ("scph5501.bin", ("ntsc-u",)), ("scph5502.bin", ("pal",)))
 
@@ -4994,7 +4996,7 @@ class TestDownloadRequiredFirmware:
 
     @pytest.mark.asyncio
     async def test_it_fetches_nothing_of_a_covered_group(self):
-        """SwanStation's found image serves every region; the three named images are spares."""
+        """SwanStation's found image serves every region; the three named images are not fetched."""
         fetched, counted = await self._download_group(launching=_PSX_CORE)
 
         assert fetched == set()

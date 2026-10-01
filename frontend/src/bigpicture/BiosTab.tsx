@@ -71,10 +71,10 @@ type CoreEntry = { required: boolean; one_of?: OneOfMembership | null };
  *
  * `required` is the emulator's own declaration and is never rewritten here. Where
  * the file is an option of one of the emulator's one-of groups, the line names
- * the regions it serves there instead of `optional` (`utils/biosGroup.ts`
- * words it), because the group is the requirement and the file is one way to meet it, for the regions
- * named. A file the emulator requires outright keeps that word: it is needed
- * whatever the disc.
+ * the regions it serves there instead of `optional` (`utils/biosGroup.ts` words
+ * it), because the group is the requirement and the file is one way to meet it,
+ * for the regions named. A file the emulator requires outright keeps that word:
+ * it is needed whatever the disc.
  */
 function coreLineSuffix(core: CoreEntry): string {
   if (core.required) return " (required)";
@@ -258,7 +258,7 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
  *
  * - **required for this launch** (`required_by_active`).
  * - **an option of the launching emulator's one-of group** (`one_of`) — one file
- *   of several, any of which meets the group for the regions it serves.
+ *   of several, each of which meets the group for the regions it serves.
  *   `required_by_active` is false on every such row by construction, because the
  *   group is the requirement and no one option is; dropping these rows leaves
  *   the header stating the group's verdict over a list with none of its files.

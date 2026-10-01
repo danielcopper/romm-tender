@@ -153,9 +153,9 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * are already there is the one thing it must not stop saying.
  *
  * So the four states come out as required + met green `✓`, required + unmet red
- * `✗`, spare + met pale green `✓`, spare + unmet grey `✗`; a need nothing could
- * establish keeps its glyph and goes amber; and only a verdict nothing could
- * establish becomes `?`.
+ * `✗`, not required + met pale green `✓`, not required + unmet grey `✗`; a need
+ * nothing could establish keeps its glyph and goes amber; and only a verdict
+ * nothing could establish becomes `?`.
  *
  * `not_needed` and `optional` share the muted branch on purpose: for the core
  * about to launch, a file it does not require is not a gap either way.
@@ -166,7 +166,7 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * group is the requirement and the file one way to meet it, yet a missing one
  * leaves the regions it serves with nothing to boot. So it is strong like a
  * required row, under its own words, and it is asked between the two above and
- * the required/spare pair below: an unestablished verdict is still `?`, and an
+ * the required/not-required pair below: an unestablished verdict is still `?`, and an
  * unestablished NEED is still amber, both tested first. Which region it serves is
  * the line under the row ({@link oneOfRowLine}).
  *

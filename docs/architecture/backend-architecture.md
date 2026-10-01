@@ -2361,17 +2361,14 @@ the destination, named as the resolver's own display form for that distribution,
 words below sets out, and collapsed on the code within one destination, because the row carries codes where the answer
 carries statements and requirements resolving to one place share them) — so both surfaces can say what a row IS instead
 of describing every one of them as a gap in the library. All of it goes silent with the location, for the same reason. A
-file requirement whose `declared` is a folder its core declares — the resolver's own `declared_directory_of` answers
-that — goes in that folder under its own name: with LRPS2's `pcsx2_bios` option set, the resolver states the requirement
-as the FILE that option names and keeps the `.info`'s `pcsx2/bios` as `declared`, so `_declared_location` joins the two
-rather than place the file as the folder. No other difference between the two names is a folder: Beetle PSX names the
-spelling it reached in `file_name` (`SCPH-5501.bin`) and its `.info`'s in `declared`, which is where the image belongs.
-`declared_kind` does not go silent with the location: it is what the emulator OPENS the destination at, a property of
-the declaration rather than of the destination, so it survives an empty one — a folder that is not there is still a
-folder to create, and the platform detail's download filter, `_download_firmware_batch` and
-`download_platform_firmware_file` all key off it so such a row is never offered as a fetch. The per-file entry point
-refuses with a `declares_directory` reason rather than passing the row over: it answers one file the user named, so a
-silent success would leave the row unchanged with nothing to explain it.
+file requirement whose `declared` is a folder its core declares goes in that folder under its own name — LRPS2's
+configured image; which requirements that is, and why a Beetle PSX spelling is not one, is
+`adapters/atlas_firmware.py::_declared_location`'s. `declared_kind` does not go silent with the location: it is what the
+emulator OPENS the destination at, a property of the declaration rather than of the destination, so it survives an empty
+one — a folder that is not there is still a folder to create, and the platform detail's download filter,
+`_download_firmware_batch` and `download_platform_firmware_file` all key off it so such a row is never offered as a
+fetch. The per-file entry point refuses with a `declares_directory` reason rather than passing the row over: it answers
+one file the user named, so a silent success would leave the row unchanged with nothing to explain it.
 
 **A folder requirement is answered by what is inside it.** LRPS2 declares `pcsx2/bios` — a folder, required, and always
 present because RetroDECK links it onto the BIOS root. Reading presence as the verdict said "All 2 files LRPS2 requires
@@ -2405,14 +2402,13 @@ _is_ the firmware root and so is the resolved destination of anything that colla
 resolver states one for a standalone emulator's SEARCH directory too — DuckStation ranks its images in the BIOS root,
 which is also where LRPS2's `pcsx2/bios` resolves — so keyed by place alone a folder row would word another emulator's
 search as its own verdict's cause. `_speaks_for` drops a statement attributed to a different emulator, reading the
-resolver's own attribution keys (`core_so`, `token`, `core`). `core` carries a libretro core's SHORT name — `pcsx2` for
-`pcsx2_libretro.so` — which is none of the identities the plugin keys on, so a row is matched against its core's short
-name as well, through the resolver's own `core_short_name`; that is how LRPS2's `firmware-configured-image-missing`
-reaches its `pcsx2/bios` row. The row carries that one as `missing_configured_image` — the label of the emulator whose
-reading the row is and the file its `pcsx2_bios` option names — and it is never a verdict: LRPS2 lists the folder
-instead, so the folder's verdict is what the launch rests on. A caveat naming none of the keys is a statement about the
-place with no owner — a listing that failed is the case that matters — and it stays on the row, which is the permissive
-direction: the row keeps a cause it might not own rather than losing one it does.
+resolver's own attribution keys — which they are, and why a row is matched against its core's libretro short name beside
+its identity, is `adapters/atlas_firmware.py::_ATTRIBUTION_KEYS`'s; that is how LRPS2's
+`firmware-configured-image-missing` reaches its `pcsx2/bios` row. The row carries that one as `missing_configured_image`
+— the label of the emulator whose reading the row is and the file its `pcsx2_bios` option names — and it is never a
+verdict: LRPS2 lists the folder instead, so the folder's verdict is what the launch rests on. A caveat naming none of
+the keys is a statement about the place with no owner — a listing that failed is the case that matters — and it stays on
+the row, which is the permissive direction: the row keeps a cause it might not own rather than losing one it does.
 
 **A required row nothing could judge declines the verdict instead of guessing it.** `_requirement_verdict_withheld`
 takes both `compute_bios_level` and `compute_bios_label` to `unknown` while every file row keeps its own answer. The
@@ -2457,16 +2453,17 @@ ask for this" is an answer. Those files stay fetchable like every other, since f
 
 **A one-of group is one requirement, judged region by region.** emu-atlas states a demand a launch meets with exactly
 one of several files as a group of options (`FirmwareAlternatives`), each serving the console regions whose launch opens
-it — Beetle PSX's three region images, or the one image SwanStation's search found, serving every region. The adapter
-carries each group as `FirmwareGroup` on `FirmwareCatalogue.groups`, keyed on the emulator stating it, together with the
-regions that entry names as unchecked (`firmware-scan-incomplete`, `firmware-search-unverified`) or as booting nothing
-(`firmware-path-names-no-file`); the regions in the group's own `core-mode-unestablished` are the ones its options DO
-serve and say nothing about the rest. Every option's file is a placement like any other, and an option's `need` never
-reaches the row's `required` (`adapters/atlas_firmware.py::_wants`) — the group is the requirement, so marking each
-option required would report two missing prerequisites over a launch that needs one. `domain/firmware_groups.py` judges
-a group into `met` / `partial` / `unmet` / `unknown` over its covered, missing and unchecked regions; the launching
-emulator's verdicts ride the payload as `one_of_groups`, each row's membership as `one_of` (and on every declaring
-emulator's `cores` entry), and the counts take each group once — `required_downloaded` only where it is `met`,
+it — Beetle PSX's three region images, or the one image SwanStation's search found, serving every region the search
+answered for. The adapter carries each group as `FirmwareGroup` on `FirmwareCatalogue.groups`, keyed on the emulator
+stating it, together with the regions that entry names as unchecked or as booting nothing — which caveats those are, and
+which one is not, is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. A region whose every name the resolver
+refused arrives with neither an option nor such a caveat, so a group can read `met` over it; emu-atlas#556 asks for it.
+Every option's file is a placement like any other, and an option's `need` never reaches the row's `required`
+(`adapters/atlas_firmware.py::_wants`) — the group is the requirement, so marking each option required would report
+every option but the one in place as a missing prerequisite over a launch that needs one. `domain/firmware_groups.py`
+judges a group into `met` / `partial` / `unmet` / `unknown` over its covered, missing and unchecked regions; the
+launching emulator's verdicts ride the payload as `one_of_groups`, each row's membership as `one_of` (and on every
+declaring emulator's `cores` entry), and the counts take each group once — `required_downloaded` only where it is `met`,
 `required_partial` for a partly covered one, `required_withheld` for an `unknown` one. An `unmet` group lands the level
 on `missing` like an `absent` system image, and a `partial` one keeps it at `partial`. The game page narrows the groups
 to the ROM's own console regions (`console_regions_of` over `Rom.regions`) and keeps the platform's verdict where none
@@ -2484,11 +2481,11 @@ launching emulator states a group, the group IS that demand, said precisely, and
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read
-  `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on, five being what that core
-  declares. The twenty in the page's own `0/20 RomM library files` is a different set again — the RomM library's
-  inventory for the platform, which this axis neither counts nor is scoped to. Every surface words it "at least one" and
-  none states it as a ratio, and none of them points at the file list either — only the images the launching core
-  declares can answer the demand, and the rows beside them cannot.
+  `0 of N files … requires are in place`, `N` being every image the core declares. The page's own `RomM library files`
+  ratio is a different set again — the RomM library's inventory for the platform, which this axis neither counts nor is
+  scoped to. Every surface words it as the console's demand and none states it as a ratio, and none of them points at
+  the file list either — only the images the launching core declares can answer the demand, and the rows beside them
+  cannot.
 - **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
   from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
   upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to

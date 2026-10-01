@@ -260,15 +260,13 @@ locally with `mise run docs`.
   — which emulator that is comes from `emulator`, the identity field that stands on both kinds and on both the catalogue
   answer and the firmware one; `label` is presentation (one `pcsx2_libretro.so` under two of them), a caveat's `token`
   is a third vocabulary again, and a caveat's `core` a fourth — the libretro SHORT name (`pcsx2`), which equals no
-  identity and is matched through the resolver's own `core_short_name`. An entry with `emulator: None` (the
-  `retroarch-foreign-core` kind) declares nothing and adds nothing on the firmware side. **The answer is entry-shaped**,
-  and `answer.requirements` is a flattening that has already discarded `declaration`, `requirements_met`, `caveats`,
-  `unread` and `refused` — so an entry-level question answered from it is answered from evidence that was thrown away
-  before the question was put. Related and separate: `description` is deliberately outside the resolver's contract (it
-  is the packager's prose from a core's `.info`), so it is not a field to render as a row's headline. Nothing mechanical
-  carries any of this; the vocabulary overlaps ours almost exactly (`satisfied`, `required`, `present`, `cores`,
-  `description` all exist on both sides and name different types), which is what makes a wrong reading look like a
-  correct one.
+  identity. **The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded
+  `declaration`, `requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is
+  answered from evidence that was thrown away before the question was put. Related and separate: `description` is
+  deliberately outside the resolver's contract (it is the packager's prose from a core's `.info`), so it is not a field
+  to render as a row's headline. Nothing mechanical carries any of this; the vocabulary overlaps ours almost exactly
+  (`satisfied`, `required`, `present`, `cores`, `description` all exist on both sides and name different types), which
+  is what makes a wrong reading look like a correct one.
 
 ## Current State
 
@@ -500,8 +498,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
   prompt-only: no caller folds the two values back together, and the reading is scoped to the launching emulator —
   `reading_complete_for` refuses `None`, an unread emulator the platform also offers deliberately does not withhold the
-  answer, `declaration="packaged"` with an empty requirement list counts as unread, and an entry with no identity
-  (`retroarch-foreign-core`) adds no placement, no unread name, no verdict and no group
+  answer, `declaration="packaged"` with an empty requirement list counts as unread, and a `retroarch-foreign-core` entry
+  declares nothing and so adds nothing, while any other entry with no identity still contributes its declared files,
+  unowned
 - **A firmware row the RomM library does not hold (`on_server: False`) counts towards readiness, and never towards a
   download affordance or a progress ratio** — test + prompt-only — `tests/services/test_firmware.py` and
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx`; prompt-only: the three axes stay apart — readiness
@@ -695,13 +694,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/domain/test_bios_status.py::TestAOneOfGroupIsOneRequirement`, `tests/services/test_firmware.py`
   (`TestAOneOfGroupIsOneRequirement`, the group cases of `TestOnePlatformOneEmulator` / `TestOneRomOneEmulator` /
   `TestDownloadRequiredFirmware`), and `frontend/src/utils/biosSummary.test.ts` / `biosGroup.test.ts` /
-  `playSection.test.ts`. Prompt-only: `required` comes off an emulator's plain declarations, never an option's `need`;
-  the group counts once and only `met` counts as held; the state travels as one of `met` / `partial` / `unmet` /
-  `unknown` and never as a colour; `unknown` is never read as `met` or `unmet`; the play badge leaves `required_partial`
-  out; `Download required`'s count and its download both come from `fetched_as_required`; the game page judges the ROM's
-  own console regions (`console_regions_of`) and the platform's verdict where none maps; nothing in the judging names a
-  console, an emulator or a region, so a new group needs no code change. The group's own `core-mode-unestablished` names
-  the regions its options DO serve and is never read as unchecked
+  `playSection.test.ts` pin that `required` comes off plain declarations only, that a group counts once and only `met`
+  counts as held, that the badge leaves `required_partial` out, that `Download required`'s count and its download are
+  one set (`fetched_as_required`), that the game page judges the ROM's own console regions (`console_regions_of`), and
+  an invented console judged by the same rules. Prompt-only: each of those at a NEW site — a consumer reading an
+  option's `need` as `required`, a second download rule, a judging that names a console, an emulator or a region; the
+  state never travels as a colour; `unknown` is never read as `met` or `unmet`; which caveats name a group's other
+  regions is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. Unseen by every test: a region whose every name
+  the resolver refused carries neither an option nor such a caveat, so a group can read `met` over it (emu-atlas#556)
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only — `tests/services/test_firmware.py`
   (`TestOnePlatformOneEmulator`,

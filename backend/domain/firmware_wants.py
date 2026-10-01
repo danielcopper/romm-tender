@@ -231,10 +231,12 @@ class FirmwareGroup:
 
     ``unchecked_regions`` are regions the resolver named as resting on a read
     that did not settle anything — a listing that failed, bytes nobody hashed —
-    and ``absent_regions`` are regions it stated nothing boots for. Neither has
-    an option, which is why they are carried beside the options rather than on
-    them: without them a group of one NTSC-U option would read as covering
-    every region it knows about.
+    and ``absent_regions`` are regions it stated nothing boots for. They are
+    statements about regions rather than about any option, which is why they
+    are carried beside the options rather than on them; a region named there
+    may have an option as well, and the verdict's precedence decides
+    (:mod:`domain.firmware_groups`). Without them a group of one NTSC-U option
+    would read as covering every region it knows about.
 
     ``emulator`` is the identity the group belongs to and is never ``None``: a
     group nothing can be scoped to answers for no launch.

@@ -512,12 +512,12 @@ class FirmwareStatusReader:
 
         Adds ``server_count`` / ``local_count`` / ``required_count`` /
         ``required_downloaded`` / ``required_withheld`` / ``required_partial`` /
-        ``system_image`` / ``one_of_groups`` and the ``bios_level`` state (``"unknown"`` / ``"ok"`` / ``"partial"`` /
-        ``"missing"``) so the
-        platform detail reads the decision and the display counts straight off
-        this payload instead of re-deriving the threshold logic in the frontend. The
-        whole payload comes from the same builder the per-game path uses, so the
-        level a platform shows and the level its games show cannot diverge.
+        ``system_image`` / ``one_of_groups`` and the ``bios_level`` state
+        (``"unknown"`` / ``"ok"`` / ``"partial"`` / ``"missing"``) so the platform
+        detail reads the decision and the display counts straight off this payload
+        instead of re-deriving the threshold logic in the frontend. The whole
+        payload comes from the same builder the per-game path uses, so the level a
+        platform shows and the level its games show cannot diverge.
 
         ``required_withheld`` is what tells the page's two unknowns apart, and
         what it decides is WORDING: a platform nothing could speak for has no

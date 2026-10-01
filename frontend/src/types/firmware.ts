@@ -68,25 +68,6 @@ export type FirmwareChecked =
   "verified" | "mismatch" | "unchecked" | "unknown" | "not-comparable" | "unrecognised" | "refused" | "unread";
 
 /**
- * The reading's answer about one row, carried on both row shapes.
- *
- * `satisfied` is the verdict and the axis the REQUIRED counts key off: the
- * requirement is met, is not met, or nothing established which. It is not
- * `downloaded` — for a folder declaration the two come apart completely, since
- * what satisfies the core is a file *inside* the folder and RetroDECK links
- * LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there. The
- * library's held/offered ratio is a third axis and keys off neither.
- *
- * `caveats` are the resolver's own stable codes for what it found, and `images`
- * names what a satisfied folder holds, in the resolver's own words. A surface
- * takes the CAUSE of a verdict from those, because `satisfied` is deliberately
- * the verdict alone and carries none of it.
- *
- * `declaration` is not a verdict but rides with them because it is the same
- * kind of fact — the resolver's own word, carried verbatim, for a row nobody
- * here re-derives. See {@link FirmwareDeclarationState}.
- */
-/**
  * This file as an option of a one-of group — a requirement whose launch needs
  * exactly ONE of the group's files, chosen by the console region of the disc.
  * `regions` are the console regions this file serves, in the resolver's own
@@ -136,6 +117,25 @@ export interface MissingConfiguredImage {
   file_name: string | null;
 }
 
+/**
+ * The reading's answer about one row, carried on both row shapes.
+ *
+ * `satisfied` is the verdict and the axis the REQUIRED counts key off: the
+ * requirement is met, is not met, or nothing established which. It is not
+ * `downloaded` — for a folder declaration the two come apart completely, since
+ * what satisfies the core is a file *inside* the folder and RetroDECK links
+ * LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there. The
+ * library's held/offered ratio is a third axis and keys off neither.
+ *
+ * `caveats` are the resolver's own stable codes for what it found, and `images`
+ * names what a satisfied folder holds, in the resolver's own words. A surface
+ * takes the CAUSE of a verdict from those, because `satisfied` is deliberately
+ * the verdict alone and carries none of it.
+ *
+ * `declaration` is not a verdict but rides with them because it is the same
+ * kind of fact — the resolver's own word, carried verbatim, for a row nobody
+ * here re-derives. See {@link FirmwareDeclarationState}.
+ */
 interface FirmwareVerdict {
   satisfied?: boolean | null;
   declared_kind?: FirmwareDeclaredKind;
@@ -404,9 +404,10 @@ export interface BiosFileStatus extends FirmwareVerdict {
    *  standalone emulator as well as a libretro core: what that emulator's own
    *  declaration says about it (`required`), and — where the file is an option of
    *  one of its one-of groups — the regions it serves there (`one_of`). Two
-   *  statements, so `optional` beside a membership is no contradiction: Beetle
-   *  PSX marks `scph5501.bin` optional and lists it as its group's NTSC-U
-   *  option. */
+   *  statements, so `optional` beside a membership is no contradiction: the
+   *  resolver states Beetle PSX's `scph5501.bin` row `optional` — its `.info`
+   *  marks it required, and the group speaks for the image — and lists it as the
+   *  group's NTSC-U option. */
   cores?: Record<string, { required: boolean; one_of?: OneOfMembership | null }>;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
