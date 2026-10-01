@@ -465,6 +465,3 @@ class LibraryService:
 
     def get_sync_runs(self):
         return self._reporter.get_sync_runs()
-
-    def get_rom_by_steam_app_id(self, app_id):
-        return self._reporter.get_rom_by_steam_app_id(app_id)

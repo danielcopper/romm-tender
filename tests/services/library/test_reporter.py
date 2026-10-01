@@ -456,50 +456,6 @@ class TestRegistryPlatformsReachableCount:
         assert entry["reachable_count"] == 2
 
 
-class TestGetRomBySteamAppId:
-    @pytest.mark.asyncio
-    async def test_finds_rom_by_app_id_installed(self, library):
-        from domain.rom_install import RomInstall
-
-        uow = library.uow
-        _seed_rom(uow, 42, app_id=100001, platform_slug="n64", name="Zelda")
-        _seed_platform_names(uow, {"n64": "Nintendo 64"})
-        with uow:
-            uow.rom_installs.save(
-                RomInstall.mark_installed(
-                    rom_id=42,
-                    file_path="/roms/n64/zelda.z64",
-                    rom_dir=None,
-                    platform_slug="n64",
-                    system="n64",
-                    installed_at="2025-01-01T00:00:00",
-                )
-            )
-        result = library.sync.get_rom_by_steam_app_id(100001)
-        assert result is not None
-        assert result["rom_id"] == 42
-        assert result["name"] == "Zelda"
-        assert result["platform_name"] == "Nintendo 64"
-        assert result["platform_slug"] == "n64"
-        assert result["installed"] is True
-
-    @pytest.mark.asyncio
-    async def test_finds_rom_by_app_id_not_installed(self, library):
-        """A bound ROM with no install record reports ``installed`` False."""
-        uow = library.uow
-        _seed_rom(uow, 42, app_id=100001, platform_slug="n64", name="Zelda")
-        _seed_platform_names(uow, {"n64": "Nintendo 64"})
-
-        result = library.sync.get_rom_by_steam_app_id(100001)
-        assert result is not None
-        assert result["installed"] is False
-
-    @pytest.mark.asyncio
-    async def test_returns_none_for_unknown(self, library):
-        result = library.sync.get_rom_by_steam_app_id(999999)
-        assert result is None
-
-
 class TestFinalizeCoverPath:
     """Tests for _finalize_cover_path() — publishes the cache cover onto the grid."""
 

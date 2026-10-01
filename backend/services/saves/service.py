@@ -23,7 +23,6 @@ from services.saves._config import SaveServiceConfig
 from services.saves._settings import (
     ALLOWED_SETTINGS_KEYS,
     sanitize_setting,
-    save_sync_enabled,
     save_sync_settings_view,
 )
 from services.saves.copies import SaveCopyService, SaveCopyServiceConfig
@@ -497,10 +496,6 @@ class SaveService:
     # ------------------------------------------------------------------
     # Settings (settings.json — read/written directly)
     # ------------------------------------------------------------------
-
-    def is_save_sync_enabled(self) -> bool:
-        """Whether the save-sync feature toggle is on."""
-        return save_sync_enabled(self._settings)
 
     def get_save_sync_settings(self) -> dict[str, Any]:
         """Return current save sync settings as the frontend dict shape."""

@@ -10,8 +10,8 @@ FK-safe). The terminal
 mappings, refreshes the ``platform_slug → display_name`` cache, and
 emits the ``sync_complete`` event. Also owns the registry- and
 run-history-derived query methods (``get_registry_platforms``,
-``get_sync_stats``, ``get_sync_runs``, ``get_rom_by_steam_app_id``)
-and the ``clear_sync_cache`` reset.
+``get_sync_stats``, ``get_sync_runs``) and the ``clear_sync_cache``
+reset.
 Anything that mutates the ``roms`` registry as a side-effect of a
 finished sync run belongs here; anything that decides "what should
 this sync do?" belongs in the orchestrator.
@@ -1045,24 +1045,6 @@ class SyncReporter:
             }
             for run in runs
         ]
-
-    def get_rom_by_steam_app_id(self, app_id):
-        return self._read_rom_by_app_id_io(int(app_id))
-
-    def _read_rom_by_app_id_io(self, app_id: int):
-        with self._uow_factory() as uow:
-            rom = uow.roms.get_by_app_id(app_id)
-            if rom is None:
-                return None
-            display = self._read_platform_name_cache(uow).get(rom.platform_slug, rom.platform_slug)
-            installed = uow.rom_installs.get(rom.rom_id) is not None
-        return {
-            "rom_id": rom.rom_id,
-            "name": rom.name,
-            "platform_name": display,
-            "platform_slug": rom.platform_slug,
-            "installed": installed,
-        }
 
 
 def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:

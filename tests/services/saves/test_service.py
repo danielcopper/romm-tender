@@ -713,7 +713,7 @@ class TestSaveSyncFeatureFlag:
     async def test_default_disabled(self, saves):
         """save_sync_enabled defaults to False when absent from settings.json."""
         saves.settings.pop("save_sync_enabled", None)
-        assert saves.service.is_save_sync_enabled() is False
+        assert saves.service.get_save_sync_settings()["save_sync_enabled"] is False
 
     @pytest.mark.asyncio
     async def test_ensure_device_disabled(self, saves):
@@ -778,14 +778,6 @@ class TestSaveSyncFeatureFlag:
         """get_save_sync_settings returns save_sync_enabled field."""
         result = saves.service.get_save_sync_settings()
         assert "save_sync_enabled" in result
-
-    @pytest.mark.asyncio
-    async def test_is_save_sync_enabled_helper(self, saves):
-        """is_save_sync_enabled reflects the settings value."""
-        saves.settings["save_sync_enabled"] = True
-        assert saves.service.is_save_sync_enabled() is True
-        saves.settings["save_sync_enabled"] = False
-        assert saves.service.is_save_sync_enabled() is False
 
 
 class TestDeleteSaves:
