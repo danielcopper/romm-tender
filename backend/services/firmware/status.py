@@ -752,13 +752,18 @@ def _overview_row(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _group_payload(group: GroupVerdict) -> dict[str, Any]:
-    """One group verdict on the wire — its state and the three region sets, as lists."""
+    """One group verdict on the wire — its state, the region sets as lists, and every option."""
     return {
         "state": group.state,
         "covered": list(group.covered),
         "missing": list(group.missing),
         "unchecked": list(group.unchecked),
         "game_regions": list(group.game_regions),
+        "regions": list(group.regions),
+        "options": [
+            {"file_name": option.file_name, "regions": list(option.regions), "satisfied": option.satisfied}
+            for option in group.options
+        ],
     }
 
 

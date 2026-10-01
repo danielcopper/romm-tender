@@ -2639,6 +2639,12 @@ class TestAOneOfGroupIsOneRequirement:
                 "missing": ["ntsc-j", "pal"],
                 "unchecked": [],
                 "game_regions": [],
+                "regions": ["ntsc-j", "ntsc-u", "pal"],
+                "options": [
+                    {"file_name": "scph5500.bin", "regions": ["ntsc-j"], "satisfied": False},
+                    {"file_name": "scph5501.bin", "regions": ["ntsc-u"], "satisfied": True},
+                    {"file_name": "scph5502.bin", "regions": ["pal"], "satisfied": False},
+                ],
             }
         ]
 

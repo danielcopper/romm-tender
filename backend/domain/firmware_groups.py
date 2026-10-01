@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from domain.firmware_wants import FirmwareGroup, FirmwarePlacement
+    from domain.firmware_wants import FirmwareGroup, FirmwareOption, FirmwarePlacement
 
 GROUP_MET = "met"
 GROUP_PARTIAL = "partial"
@@ -101,7 +101,10 @@ class GroupVerdict:
 
     ``game_regions`` is empty for the platform's verdict and holds the game's
     console regions where the verdict was narrowed to one game; the three
-    region sets are then the game's regions alone.
+    region sets are then the game's regions alone. ``regions`` and ``options``
+    are the group's own whatever the scope — every region it speaks about and
+    every option it lists — because a page lists all of them under the verdict
+    and marks the game's.
     """
 
     state: str
@@ -109,6 +112,8 @@ class GroupVerdict:
     missing: tuple[str, ...]
     unchecked: tuple[str, ...]
     game_regions: tuple[str, ...] = ()
+    regions: tuple[str, ...] = ()
+    options: tuple[FirmwareOption, ...] = ()
 
 
 def judge_group(group: FirmwareGroup) -> GroupVerdict:
@@ -121,7 +126,12 @@ def judge_group(group: FirmwareGroup) -> GroupVerdict:
     )
     unchecked = tuple(region for region in group.regions if region not in covered and region not in missing)
     return GroupVerdict(
-        state=_state(group, covered, missing, unchecked), covered=covered, missing=missing, unchecked=unchecked
+        state=_state(group, covered, missing, unchecked),
+        covered=covered,
+        missing=missing,
+        unchecked=unchecked,
+        regions=group.regions,
+        options=group.options,
     )
 
 
@@ -136,7 +146,15 @@ def judge_group_for_game(group: FirmwareGroup, game_regions: tuple[str, ...]) ->
     platform = judge_group(group)
     covered = tuple(region for region in game_regions if region in platform.covered)
     if covered:
-        return GroupVerdict(state=GROUP_MET, covered=covered, missing=(), unchecked=(), game_regions=game_regions)
+        return GroupVerdict(
+            state=GROUP_MET,
+            covered=covered,
+            missing=(),
+            unchecked=(),
+            game_regions=game_regions,
+            regions=group.regions,
+            options=group.options,
+        )
     missing = tuple(region for region in game_regions if region in platform.missing)
     unchecked = tuple(region for region in game_regions if region not in platform.missing)
     return GroupVerdict(
@@ -145,6 +163,8 @@ def judge_group_for_game(group: FirmwareGroup, game_regions: tuple[str, ...]) ->
         missing=missing,
         unchecked=unchecked,
         game_regions=game_regions,
+        regions=group.regions,
+        options=group.options,
     )
 
 

@@ -149,6 +149,24 @@ class TestJudgeGroup:
         assert group.regions_of("psxonpsp660.bin") == (REGION_NTSC_J, REGION_PAL)
 
 
+class TestTheVerdictCarriesWhatAPageListsUnderIt:
+    """A page lists the group's options under its verdict, so the verdict carries them whole."""
+
+    def test_the_platforms_verdict_carries_every_option_and_every_region(self):
+        group = _beetle(ntsc_u=True, unchecked_regions=("ntsc-k",))
+
+        verdict = judge_group(group)
+        assert verdict.options == group.options
+        assert verdict.regions == (REGION_NTSC_J, REGION_NTSC_U, REGION_PAL, "ntsc-k")
+
+    def test_a_games_verdict_still_carries_every_option(self):
+        group = _beetle(ntsc_u=True)
+
+        verdict = judge_group_for_game(group, (REGION_NTSC_J,))
+        assert verdict.options == group.options
+        assert verdict.regions == group.regions
+
+
 class TestAnyConsoleIsJudgedTheSameWay:
     """An invented system, emulator and region vocabulary — the verdict knows none of them."""
 
