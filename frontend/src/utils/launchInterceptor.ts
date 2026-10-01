@@ -320,8 +320,12 @@ async function runWatcherGate(
     logError(`Watcher gate threw (failing open to allow): ${e}`);
     return { decision: "allow" };
   });
-  while ((await handleWatcherVerdict(verdict, start, romId, admission, prompts)) === "retry") {
-    verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
+  // Each pass starts only after the user answered the previous verdict's prompt with "retry", so
+  // the awaits are sequential by design. S9382 is raised on the two await lines, so their NOSONARs
+  // must stay there; prettier-ignore stops Prettier from moving them into the bodies.
+  // prettier-ignore
+  while ((await handleWatcherVerdict(verdict, start, romId, admission, prompts)) === "retry") { // NOSONAR(typescript:S9382)
+    verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => { // NOSONAR(typescript:S9382)
       logError(`Watcher gate threw (failing open to allow): ${e}`);
       return { decision: "allow" };
     });
