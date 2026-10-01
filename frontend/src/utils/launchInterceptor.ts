@@ -1,12 +1,12 @@
 /**
  * Global launch watcher (ADR-0015 — the "full funnel").
  *
- * Every gaming-mode launch of a RomM-owned shortcut that did NOT originate from
- * our Play button is intercepted here. Because no Steam hook can pause a launch,
- * run async work, and then proceed, the watcher uses the cancel-then-relaunch
- * mechanism: it `CancelGameAction`s the launch IMMEDIATELY (synchronously, which
- * wins the race against the un-pausable launch), runs the shared
- * {@link runLaunchGate} funnel, and on approval relaunches via `RunGame`.
+ * Every start of a RomM-owned shortcut that did NOT come from our Play button
+ * is intercepted here. Because no Steam hook can pause a launch, run async
+ * work, and then proceed, the watcher uses the cancel-then-relaunch mechanism:
+ * it `CancelGameAction`s the launch IMMEDIATELY (synchronously, which wins the
+ * race against the un-pausable launch), runs the shared {@link runLaunchGate}
+ * funnel, and on approval relaunches via `RunGame`.
  *
  * The one-shot skip-set (`markLaunchSkipped` / `consumeLaunchSkip`, owned by
  * `launchGate.ts`) exempts exactly one launch: the watcher's own relaunch and
@@ -17,6 +17,7 @@
 
 import { showToast } from "./toast";
 import { isRomMAppId } from "./rommAppIds";
+import { appIdFromGameId } from "./gameId";
 import {
   refreshMigrationState,
   getInstalledRom,
@@ -327,11 +328,11 @@ async function isRomInstalled(appId: number, romId: number): Promise<boolean> {
 
 export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
   SteamClient.Apps.RegisterForGameActionStart(
-    (gameActionId: number, appIdStr: string, action: string, _launchSource: number) => {
+    (gameActionId: number, gameId: string, action: string, _launchSource: number) => {
       if (action !== "LaunchApp") return;
 
-      const appId = Number.parseInt(appIdStr, 10);
-      if (Number.isNaN(appId) || !isRomMAppId(appId)) return;
+      const appId = appIdFromGameId(gameId);
+      if (appId === null || !isRomMAppId(appId)) return;
 
       // One-shot skip: a gated relaunch (the watcher's own RunGame) or a
       // Play-button launch already ran the funnel — do NOT re-gate it.
