@@ -933,16 +933,16 @@ Format: **invariant** — tier — enforced by.
   states for a cut longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock
   is a test that reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers
   from, with the ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than
-  naming it (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture`),
-  because the naming is what failed: both locks listed two components while three rendered these states, and a surface
-  missing from such a list carries no lock at all and cannot be told from one that never drifted. Deriving the set from
-  who IMPORTS the module would be worse than the list — a surface wording a state for itself is exactly one that does
-  not import it. **What neither lock can catch is a component inventing a NEW wording for one of these states**: only a
-  copied phrase is searchable, so a green run there is evidence about copied sentences and about nothing else. Two
-  limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its
-  component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
-  `frontend/src/utils` is out of scope because that is where the phrases legitimately live **A narrower form of the same
-  answer is read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` →
+  naming it (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture` or
+  `frontend/src/shared`), because the naming is what failed: both locks listed two components while three rendered these
+  states, and a surface missing from such a list carries no lock at all and cannot be told from one that never drifted.
+  Deriving the set from who IMPORTS the module would be worse than the list — a surface wording a state for itself is
+  exactly one that does not import it. **What neither lock can catch is a component inventing a NEW wording for one of
+  these states**: only a copied phrase is searchable, so a green run there is evidence about copied sentences and about
+  nothing else. Two limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts`
+  beside its component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose
+  today), and `frontend/src/utils` is out of scope because that is where the phrases legitimately live **A narrower form
+  of the same answer is read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` →
   `build_file_entry`'s `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by
   `BiosTab.tsx`'s `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that
   the two keys on that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table

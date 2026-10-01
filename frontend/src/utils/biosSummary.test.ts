@@ -221,10 +221,10 @@ describe("no surface words a summary itself", () => {
   });
 
   it("searches the surfaces that render these states, not an empty sweep", () => {
-    // The sweep throws on an empty result, so this pins the other half: that it
-    // really reaches the three components rendering a BIOS state today. A glob
-    // narrowed to one directory would still find files and would silently stop
-    // covering the rest.
+    // The sweep throws when a pattern finds nothing, so this pins the other
+    // half: that it really reaches the three components rendering a BIOS state
+    // today. A `bigpicture/` pattern narrowed to one of its subdirectories would
+    // still find files and would silently stop covering the rest.
     const paths = componentSources().map((entry) => entry.path);
     expect(paths).toEqual(
       expect.arrayContaining([
@@ -233,5 +233,10 @@ describe("no surface words a summary itself", () => {
         "bigpicture/library/PlatformsTab.tsx",
       ]),
     );
+  });
+
+  it("searches shared/ as well as bigpicture/", () => {
+    const paths = componentSources().map((entry) => entry.path);
+    expect(paths.filter((path) => path.startsWith("shared/"))).not.toEqual([]);
   });
 });

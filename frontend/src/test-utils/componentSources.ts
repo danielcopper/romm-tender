@@ -1,5 +1,6 @@
 /**
- * Every Big Picture component's source, as TEXT — what a drift lock searches.
+ * Every component source under `bigpicture/` and `shared/`, as TEXT — what a
+ * drift lock searches.
  *
  * A drift lock holds a wording in one module by failing when a component spells
  * it out for itself. Both of the BIOS locks used to name the components they
@@ -9,20 +10,21 @@
  * from one that never drifted**, so correcting such a list's count leaves the
  * failure exactly where it was and only moves it to the next surface added.
  *
- * So the set is swept rather than listed: every `.tsx` under `bigpicture/` that
- * is not itself a test. A component added tomorrow is searched because it
- * exists, not because someone remembered.
+ * So the set is swept rather than listed: every `.tsx` under `bigpicture/` or
+ * `shared/` that is not itself a test. A component added tomorrow is searched
+ * because it exists, not because someone remembered.
  *
- * **Deriving the set from who IMPORTS the shared module would be wrong**, and
+ * **Deriving the set from who IMPORTS the wording module would be wrong**, and
  * wrong in the one direction that matters: a surface wording a state for itself
  * is precisely a surface that does NOT import the module, so an import-derived
  * sweep would skip every file a lock exists to catch and pass green over all of
  * them.
  *
  * `.tsx` only, which is a real limit rather than a definition: a wording helper
- * extracted into a `.ts` beside its component is not swept. Components are the
- * surfaces, and `src/utils` is where a shared wording legitimately lives, so a
- * blanket `src/**` would fail on the module that owns the phrases.
+ * extracted into a `.ts` beside its component is not swept. The components a
+ * surface renders live under `bigpicture/` and `shared/`, and `src/utils` is
+ * where a common wording legitimately lives, so a blanket `src/**` would fail on
+ * the module that owns the phrases.
  */
 
 import { globSync, readFileSync } from "node:fs";
@@ -44,21 +46,29 @@ export interface ComponentSource {
 // empty set.
 const SRC_DIR = `${process.cwd()}/src/`;
 
+const SWEPT_PATTERNS = ["bigpicture/**/*.tsx", "shared/**/*.tsx"];
+
 /**
  * Every component source a lock should search, sorted so the report is stable.
  *
- * Throws rather than returning nothing when the sweep finds no file: an empty
- * set passes every `not.toContain` there is, which is the same vacuous green the
- * locks' own "searches for something" cases exist to refuse. A moved directory
- * or a broken glob then fails loudly instead of silently retiring both locks.
+ * Throws when any one pattern finds no file, rather than answering with what
+ * the others found: an empty set passes every `not.toContain` there is, which is
+ * the same vacuous green the locks' own "searches for something" cases exist to
+ * refuse, and a pattern that matches nothing retires the locks over its
+ * directory just as silently. A moved directory or a broken glob then fails
+ * loudly, naming the pattern, instead of retiring part of both locks.
  */
 export function componentSources(): ComponentSource[] {
-  const files = globSync("bigpicture/**/*.tsx", { cwd: SRC_DIR })
-    .filter((relative) => !relative.endsWith(".test.tsx"))
+  const files = SWEPT_PATTERNS.flatMap((pattern) => {
+    const found = globSync(pattern, { cwd: SRC_DIR }).filter((relative) => !relative.endsWith(".test.tsx"));
+    if (found.length === 0) {
+      throw new Error(
+        `No component sources found for ${pattern} under ${SRC_DIR} — a drift lock over nothing passes always.`,
+      );
+    }
+    return found;
+  })
     .map((relative) => relative.split(/[\\/]/).join("/"))
     .sort();
-  if (files.length === 0) {
-    throw new Error(`No component sources found under ${SRC_DIR}bigpicture — a drift lock over nothing passes always.`);
-  }
   return files.map((path) => ({ path, source: readFileSync(`${SRC_DIR}${path}`, "utf8") }));
 }
