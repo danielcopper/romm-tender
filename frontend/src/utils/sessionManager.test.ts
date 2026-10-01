@@ -27,13 +27,15 @@ vi.mock("./metadataPatches", () => metadataPatchesMock);
 let toaster: Toaster;
 let initSessionManager: typeof import("./sessionManager").initSessionManager;
 let isSessionActive: typeof import("./sessionManager").isSessionActive;
+let readGameRunning: typeof import("./sessionManager").readGameRunning;
 let planAdoption: typeof import("./sessionManager").planAdoption;
 let ADOPTION_POLL_MAX_MS: number;
 
 async function loadSessionManager(): Promise<void> {
   vi.resetModules();
   ({ toaster } = await import("../api/host"));
-  ({ initSessionManager, isSessionActive, planAdoption, ADOPTION_POLL_MAX_MS } = await import("./sessionManager"));
+  ({ initSessionManager, isSessionActive, readGameRunning, planAdoption, ADOPTION_POLL_MAX_MS } =
+    await import("./sessionManager"));
 }
 
 beforeEach(loadSessionManager);
@@ -405,6 +407,138 @@ describe("sessionManager isSessionActive", () => {
     await stopApp(lifetime, APP_ID);
 
     expect(isSessionActive(ROM_ID)).toBe(false);
+  });
+});
+
+// The one answer to "is this game running".
+describe("sessionManager readGameRunning", () => {
+  // A RomM shortcut the map does not hold: its start opens no session, so only
+  // the store and the observed stop can answer for it.
+  const UNMAPPED_APP_ID = 300;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    localStorage.clear();
+    stubLifecycleSteamClient();
+    stubNothingRunning();
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({
+      [String(APP_ID)]: ROM_ID,
+      [String(OTHER_APP_ID)]: OTHER_ROM_ID,
+    });
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is not running once the game's stop was seen, though the store still lists it", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await startApp(lifetime, APP_ID);
+    await stopApp(lifetime, APP_ID);
+    stubRunningApp(APP_ID);
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(false);
+    expect(reading.decidedBy).toBe("stop");
+  });
+
+  it("is running when the store lists a game whose start was never seen", async () => {
+    await initDrainingAdoptionPoll();
+    stubRunningApp(APP_ID);
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(true);
+    expect(reading.decidedBy).toBe("store");
+  });
+
+  it("lets the store answer again once a new start follows the stop, even one that opens no session", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await stopApp(lifetime, UNMAPPED_APP_ID);
+    stubRunningApp(UNMAPPED_APP_ID);
+    expect(readGameRunning(UNMAPPED_APP_ID, undefined).running).toBe(false);
+
+    await startApp(lifetime, UNMAPPED_APP_ID);
+
+    const reading = readGameRunning(UNMAPPED_APP_ID, undefined);
+    expect(reading.running).toBe(true);
+    expect(reading.decidedBy).toBe("store");
+  });
+
+  it("is running while the session is live, though the store reports nothing", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await startApp(lifetime, APP_ID);
+    stubNothingRunning();
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(true);
+    expect(reading.decidedBy).toBe("session");
+  });
+
+  it("is not running when neither the session nor the store says so", async () => {
+    await initDrainingAdoptionPoll();
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(false);
+    expect(reading.decidedBy).toBe("none");
+  });
+
+  it("keeps another app's stop from overruling the store for this one", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await stopApp(lifetime, UNRELATED_APP_ID);
+    stubRunningApps([
+      { appid: APP_ID, display_name: "Game" },
+      { appid: UNRELATED_APP_ID, display_name: "Other" },
+    ]);
+
+    expect(readGameRunning(APP_ID, ROM_ID).running).toBe(true);
+    expect(readGameRunning(UNRELATED_APP_ID, null).running).toBe(false);
+  });
+
+  it("sees a stop at once, while the lifecycle chain is still held by another game's finalize", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await startApp(lifetime, OTHER_APP_ID);
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(new Promise(() => {}));
+    await stopApp(lifetime, OTHER_APP_ID);
+
+    lifetime({ bRunning: false, unAppID: UNMAPPED_APP_ID });
+    stubRunningApp(UNMAPPED_APP_ID);
+
+    expect(readGameRunning(UNMAPPED_APP_ID, undefined).decidedBy).toBe("stop");
+  });
+
+  it("lets the store answer after a JS-context rebuild, which forgets every stop seen before it", async () => {
+    await initDrainingAdoptionPoll();
+    await stopApp(captureLifetimeCb(), UNMAPPED_APP_ID);
+
+    await loadSessionManager();
+    stubRunningApp(UNMAPPED_APP_ID);
+    await initSessionManager();
+
+    expect(readGameRunning(UNMAPPED_APP_ID, undefined).decidedBy).toBe("store");
+  });
+
+  it("states every signal in its diagnostics, naming the one that decided", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    await startApp(lifetime, APP_ID);
+    await stopApp(lifetime, APP_ID);
+    stubRunningApp(APP_ID);
+
+    expect(readGameRunning(APP_ID, ROM_ID).diagnostics).toBe(
+      `decided by stop: session=none, stopObserved=yes, SteamUIStore.RunningApps=[${APP_ID}]`,
+    );
   });
 });
 

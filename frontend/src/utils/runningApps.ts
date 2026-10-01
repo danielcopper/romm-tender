@@ -114,7 +114,11 @@ export function readRunningApps(): RunningAppsReading {
   }
 }
 
-/** Is a specific `appId` currently running per the store? Never throws. */
+/**
+ * Is a specific `appId` currently running per the store? Never throws. One
+ * signal of `readGameRunning` (`utils/sessionManager`); a caller asking whether
+ * a game is running asks that instead.
+ */
 export function isAppRunning(appId: number): boolean {
   return readRunningApps().apps.some((app) => app.appid === appId);
 }

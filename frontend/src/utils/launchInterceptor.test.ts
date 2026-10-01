@@ -10,6 +10,7 @@ import * as pruneLease from "./pruneLease";
 import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
+import type { GameRunningReading } from "./sessionManager";
 
 vi.mock("../api/backend", () => ({
   refreshMigrationState: vi.fn(),
@@ -50,10 +51,28 @@ vi.mock("./launchGate", async (importActual) => {
   return { ...actual, runLaunchGate: vi.fn() };
 });
 
+const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.hoisted(() => {
+  const reading = (running: boolean, decidedBy: GameRunningReading["decidedBy"]): GameRunningReading => ({
+    running,
+    decidedBy,
+    diagnostics: `decided by ${decidedBy}`,
+  });
+  return {
+    NOT_RUNNING: reading(false, "none"),
+    SESSION_RUNNING: reading(true, "session"),
+    STORE_RUNNING: reading(true, "store"),
+    STOPPED_BUT_LISTED: reading(false, "stop"),
+  };
+});
+
+// The guard asks `readGameRunning` alone; its signals are tested against the
+// real predicate in `sessionManager.test.ts`. `isAppRunning` stays mocked so a
+// test that has the store list the game while the predicate says it stopped
+// catches a guard that reads the store directly.
 vi.mock("./sessionManager", () => ({
   getAppIdRomIdMapSnapshot: vi.fn(() => ({})),
   refreshAppIdMap: vi.fn(),
-  isSessionActive: vi.fn(() => false),
+  readGameRunning: vi.fn(() => NOT_RUNNING),
 }));
 
 vi.mock("./runningApps", () => ({
@@ -155,9 +174,9 @@ describe("launchInterceptor — full funnel watcher", () => {
     // Skip-set empty by default — a marked appId is set per-test.
     vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({ [String(APP_ID)]: 42 });
     vi.mocked(sessionManager.refreshAppIdMap).mockResolvedValue(undefined);
-    // Default: no live session and nothing running, so the already-running guard
-    // is inert and the existing funnel tests run unchanged. Overridden per-test.
-    vi.mocked(sessionManager.isSessionActive).mockReturnValue(false);
+    // Default: nothing running, so the already-running guard is inert and the
+    // existing funnel tests run unchanged. Overridden per-test.
+    vi.mocked(sessionManager.readGameRunning).mockReturnValue(NOT_RUNNING);
     vi.mocked(runningApps.isAppRunning).mockReturnValue(false);
     vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
     // The shared relaunch re-confirm (#1152) runs on every relaunch; default it
@@ -245,16 +264,14 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
   });
 
-  // #1148 round 2: a Play press on an ALREADY-RUNNING game still fires
-  // GameActionStart. Intercepting it cancels the launch and runs the pre-launch
-  // sync MID-SESSION (uploading the save while the emulator holds the file) —
-  // pure damage, since Steam blocks the relaunch as "already running" anyway. The
-  // guard skips the whole funnel when the appId is the live session OR any running
-  // -app source reports it running.
+  // A Play press on an ALREADY-RUNNING game still fires GameActionStart.
+  // Intercepting it cancels the launch and runs the pre-launch sync MID-SESSION
+  // (uploading the save while the emulator holds the file). The guard skips the
+  // whole funnel while `readGameRunning` says the game is running.
   describe("already-running guard", () => {
     it("skips the funnel (no cancel, no gate, no sync) when the appId is the live session", async () => {
       // Our own session state says rom 42, which the launched appId maps to, is live.
-      vi.mocked(sessionManager.isSessionActive).mockReturnValue(true);
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(SESSION_RUNNING);
 
       register();
       const handler = captureHandler();
@@ -263,7 +280,7 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       // The liveness question is asked about the rom the PRESSED app resolves to
       // through the map snapshot — not about whatever rom happens to be live.
-      expect(sessionManager.isSessionActive).toHaveBeenCalledWith(42);
+      expect(sessionManager.readGameRunning).toHaveBeenCalledWith(APP_ID, 42);
       expect(SteamClient.Apps.CancelGameAction).not.toHaveBeenCalled();
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
       expect(backend.preLaunchSync).not.toHaveBeenCalled();
@@ -275,7 +292,7 @@ describe("launchInterceptor — full funnel watcher", () => {
 
     it("skips the funnel when a running-app source reports the appId running", async () => {
       // No live session in our state, but Steam's running-app surfaces show it.
-      vi.mocked(sessionManager.isSessionActive).mockReturnValue(false);
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(STORE_RUNNING);
       vi.mocked(runningApps.isAppRunning).mockReturnValue(true);
 
       register();
@@ -283,7 +300,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
       await flush();
 
-      expect(runningApps.isAppRunning).toHaveBeenCalledWith(APP_ID);
+      expect(sessionManager.readGameRunning).toHaveBeenCalledWith(APP_ID, 42);
       expect(SteamClient.Apps.CancelGameAction).not.toHaveBeenCalled();
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
       expect(backend.preLaunchSync).not.toHaveBeenCalled();
@@ -296,7 +313,7 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("does NOT skip when the pressed rom has no live session — normal funnel runs", async () => {
       // Another game may well be live; what matters is that the PRESSED rom (42)
       // is not → the guard is inert and the normal cancel+gate funnel proceeds.
-      vi.mocked(sessionManager.isSessionActive).mockReturnValue(false);
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(NOT_RUNNING);
       vi.mocked(runningApps.isAppRunning).mockReturnValue(false);
 
       register();
@@ -304,15 +321,30 @@ describe("launchInterceptor — full funnel watcher", () => {
       handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
       await flush();
 
-      expect(sessionManager.isSessionActive).toHaveBeenCalledWith(42);
+      expect(sessionManager.readGameRunning).toHaveBeenCalledWith(APP_ID, 42);
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       expect(launchGate.runLaunchGate).toHaveBeenCalled();
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
       expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("already running"));
     });
 
+    it("cancels and gates when the game's stop was seen, though the store still lists it", async () => {
+      vi.mocked(runningApps.isAppRunning).mockReturnValue(true);
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
+
+      register();
+      const handler = captureHandler();
+      handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
+      expect(launchGate.runLaunchGate).toHaveBeenCalled();
+      expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("already running"));
+      expect(sessionManager.readGameRunning).toHaveBeenCalledWith(APP_ID, 42);
+    });
+
     it("does NOT skip when nothing is running — normal funnel runs", async () => {
-      // Defaults: no live session, isAppRunning false → guard inert, funnel runs.
+      // Defaults: nothing running → guard inert, funnel runs.
       register();
       const handler = captureHandler();
       handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);

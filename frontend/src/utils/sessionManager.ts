@@ -5,7 +5,8 @@
  * Uses SteamClient.GameSessions.RegisterForAppLifetimeNotifications to detect
  * game lifecycle events — the notification's own `unAppID` identifies the app on
  * both edges. The guarded `runningApps` reader (`SteamUIStore.RunningApps`) is
- * used only for LIVENESS at reload-adoption, never to identify a launching app.
+ * used only for LIVENESS — at reload-adoption and in {@link readGameRunning} —
+ * never to identify a launching app.
  */
 
 import { showToast } from "./toast";
@@ -60,18 +61,61 @@ export function getAppIdRomIdMapSnapshot(): Record<string, number> {
 }
 
 /**
- * Does this manager currently track a live session for `romId`? Read
- * synchronously by the launch interceptor, to skip its cancel-then-gate funnel
- * for a Play press on an already-running game (#1148 round 2) — re-syncing
- * mid-session would upload the save while the emulator holds the file open, and
- * Steam blocks the relaunch as "already running" anyway — and by the Play
- * button, to seed and self-heal its Resume overlay.
+ * Does this manager currently track an active session for `romId`? One signal
+ * of {@link readGameRunning}; a caller asking whether a game is running asks
+ * that instead.
  */
 export function isSessionActive(romId: number): boolean {
   for (const session of activeSessions.values()) {
     if (session.romId === romId) return true;
   }
   return false;
+}
+
+// The apps whose lifetime stop has been observed since their last observed
+// start. Written straight off the notification, never on the lifecycle chain:
+// the chain can be held by a finalize's post-exit sync, and a press in that
+// window must already see the stop.
+const stoppedSinceStart = new Set<number>();
+
+/** The signal that answered {@link readGameRunning}. */
+export type GameRunningSignal = "session" | "store" | "stop" | "none";
+
+export interface GameRunningReading {
+  running: boolean;
+  decidedBy: GameRunningSignal;
+  /** What every signal said, for the log line of a caller that acts on the answer. */
+  diagnostics: string;
+}
+
+/**
+ * Is this game running? Read synchronously by every surface that must not treat
+ * a running game as startable: the launch watcher and the Play button's launch,
+ * Resume and Stop paths.
+ *
+ * A live session for `romId` answers yes. Otherwise `SteamUIStore.RunningApps`
+ * answers, unless a lifetime stop for `appId` has been observed since its last
+ * observed start: the store can keep an exited app listed for a while, and a
+ * stop overrules it. The store stays the answer for a start this manager never
+ * saw — before adoption has finished, and between a button's render and its
+ * press.
+ */
+export function readGameRunning(appId: number, romId: number | null | undefined): GameRunningReading {
+  const sessionActive = romId != null && isSessionActive(romId);
+  const stopObserved = stoppedSinceStart.has(appId);
+  const store = readRunningApps();
+  const listed = store.apps.some((app) => app.appid === appId);
+  let decidedBy: GameRunningSignal;
+  if (sessionActive) decidedBy = "session";
+  else if (listed) decidedBy = stopObserved ? "stop" : "store";
+  else decidedBy = "none";
+  return {
+    running: decidedBy === "session" || decidedBy === "store",
+    decidedBy,
+    diagnostics:
+      `decided by ${decidedBy}: session=${sessionActive ? "active" : "none"}, ` +
+      `stopObserved=${stopObserved ? "yes" : "no"}, ${store.diagnostics}`,
+  };
 }
 
 /**
@@ -476,6 +520,8 @@ export async function initSessionManager(): Promise<void> {
 
   // Game lifecycle notifications
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
+    if (update.bRunning) stoppedSinceStart.delete(update.unAppID);
+    else stoppedSinceStart.add(update.unAppID);
     lifecycleChain = lifecycleChain
       .then(async () => {
         if (update.bRunning) {

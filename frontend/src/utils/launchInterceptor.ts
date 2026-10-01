@@ -35,8 +35,7 @@ import {
 } from "../api/backend";
 import { getMigrationState, setMigrationStatus } from "./migrationStore";
 import { reportServerReachable } from "./connectionState";
-import { getAppIdRomIdMapSnapshot, isSessionActive, refreshAppIdMap } from "./sessionManager";
-import { isAppRunning } from "./runningApps";
+import { getAppIdRomIdMapSnapshot, readGameRunning, refreshAppIdMap } from "./sessionManager";
 import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip } from "./launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
@@ -390,15 +389,12 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // relaunch, or a Play-button start) — do NOT gate it again.
       if (consumeLaunchSkip(appId)) return;
 
-      // Already-running guard (#1148 round 2). A Play press on a game that is
-      // ALREADY running still fires GameActionStart. Intercepting it would cancel
-      // the launch, run the pre-launch gate, and upload the save MID-SESSION (while
-      // the emulator holds the file open) — and Steam blocks the relaunch as
-      // "already running" anyway, so the cancel+re-sync is pure damage. Skip the
-      // whole funnel when this appId is our live session OR any Steam running-app
-      // source reports it running; Steam surfaces its own "already running" popup.
+      // Already-running guard. A Play press on a game that is ALREADY running
+      // still fires GameActionStart. Intercepting it would cancel the launch, run
+      // the pre-launch gate, and upload the save MID-SESSION while the emulator
+      // holds the file open. Skip the whole funnel while the game is running.
       const pressedRomId = getAppIdRomIdMapSnapshot()[String(appId)];
-      if ((pressedRomId !== undefined && isSessionActive(pressedRomId)) || isAppRunning(appId)) {
+      if (readGameRunning(appId, pressedRomId).running) {
         logInfo(`Launch interceptor: appId=${appId} already running — skipping pre-launch sync`);
         return;
       }

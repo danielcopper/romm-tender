@@ -63,8 +63,7 @@ import { getMigrationState } from "../utils/migrationStore";
 import { runLaunchGate, markLaunchSkipped } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
-import { isSessionActive } from "../utils/sessionManager";
-import { isAppRunning } from "../utils/runningApps";
+import { readGameRunning } from "../utils/sessionManager";
 import type {
   DownloadProgressEvent,
   DownloadCompleteEvent,
@@ -287,7 +286,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         // Seed the running overlay from the live session/running-app state so a
         // button mounted mid-session (or after a reload-adoption) shows Resume
         // immediately, without waiting for a session event (#1313).
-        setIsRunning(isSessionActive(rid) || isAppRunning(appId));
+        setIsRunning(readGameRunning(appId, rid).running);
 
         if (cached.installed) {
           // Check for conflicts from cached save status
@@ -729,7 +728,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       return;
     }
 
-    // Already-running guard (#1148 round 2) — the sibling of the launch
+    // Already-running guard — the sibling of the launch
     // interceptor's guard, since this button is the other launch path and its
     // enabled state derives from cached install/conflict status, not running
     // state. A Play press on an already-running game must NOT run the pre-launch
@@ -737,7 +736,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // open and manufacture a conflict at exit. Skip the whole gate/sync funnel and
     // just bring the game to front — `dispatchLaunch` skip-marks the appId so the
     // resulting RunGame doesn't re-enter the interceptor and get gated there either.
-    if (isSessionActive(romId) || isAppRunning(appId)) {
+    if (readGameRunning(appId, romId).running) {
       detach(debugLog(`CustomPlayButton: appId=${appId} already running — skipping pre-launch sync`));
       await dispatchLaunch(gameId, admission);
       return;
@@ -843,7 +842,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // event reaching this button). If nothing is actually running, clear the
     // overlay and fall through to the normal launch funnel — self-heal, so a click
     // never strands the user on a dead Resume.
-    if (!(isAppRunning(appId) || (romId !== null && isSessionActive(romId)))) {
+    if (!readGameRunning(appId, romId).running) {
       detach(debugLog(`CustomPlayButton: Resume on appId=${appId} but nothing is running — self-healing to launch`));
       setIsRunning(false);
       await handlePlay();
@@ -919,7 +918,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // Stale-overlay self-heal, mirroring handleResumeGame: if nothing is
     // actually running, the overlay is stale — clear it back to Play without
     // prompting or touching the backend.
-    if (!(isAppRunning(appId) || (romId !== null && isSessionActive(romId)))) {
+    if (!readGameRunning(appId, romId).running) {
       detach(debugLog(`CustomPlayButton: Stop on appId=${appId} but nothing is running — clearing stale overlay`));
       clearRunningOverlay();
       return;
