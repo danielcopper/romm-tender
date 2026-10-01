@@ -89,16 +89,13 @@ export interface GameRunningReading {
 }
 
 /**
- * Is this game running? Read synchronously by every surface that must not treat
- * a running game as startable: the launch watcher and the Play button's launch,
- * Resume and Stop paths.
+ * Is this game running? Answers synchronously, with no await.
  *
- * A live session for `romId` answers yes. Otherwise `SteamUIStore.RunningApps`
- * answers, unless a lifetime stop for `appId` has been observed since its last
- * observed start: the store can keep an exited app listed for a while, and a
- * stop overrules it. The store stays the answer for a start this manager never
- * saw — before adoption has finished, and between a button's render and its
- * press.
+ * An active session for `romId` answers yes. Otherwise
+ * `SteamUIStore.RunningApps` answers, unless a lifetime stop for `appId` has
+ * been observed since its last observed start. Who asks, why a stop overrules
+ * the store, and why the store is still asked:
+ * `docs/architecture/save-file-sync-architecture.md`, "Is the game running".
  */
 export function readGameRunning(appId: number, romId: number | null | undefined): GameRunningReading {
   const sessionActive = romId != null && isSessionActive(romId);

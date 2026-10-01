@@ -410,7 +410,8 @@ describe("sessionManager isSessionActive", () => {
   });
 });
 
-// The one answer to "is this game running".
+// The one answer to "is this game running"; its rules are on
+// save-file-sync-architecture.md, "Is the game running".
 describe("sessionManager readGameRunning", () => {
   // A RomM shortcut the map does not hold: its start opens no session, so only
   // the store and the observed stop can answer for it.
