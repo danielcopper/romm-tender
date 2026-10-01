@@ -407,8 +407,8 @@ latest one if the installer has run again since. After the installer went back t
 **X, when it tried to start**, shows what the new version printed between the installer starting and going back — where
 the reason usually is, since the installer itself only says that the new version did not answer. The installer prints a
 line each time one of its steps — Checking, Installing, Service, Steam — gets further, and the window shows each step
-the installer reached in a single line, its last: how the step ended, or, for a step the installer was cut off in, how
-far it got. Each part shows its last 300 lines and says how many earlier ones it leaves out, and a line longer than 500
+the installer reached once, in its last state: how the step ended, or, for a step the installer was cut off in, how far
+it got. Each part shows its last 300 lines and says how many earlier ones it leaves out, and a line longer than 500
 characters is cut. Tender's own address, which the new version prints with the key that lets the panel in, shows that
 key as `[hidden]`. A step that failed and the installer's own failure lines are amber, a step done green, and a step
 under way grey. Move down through the lines with the D-pad, and press **Close** to go back.
