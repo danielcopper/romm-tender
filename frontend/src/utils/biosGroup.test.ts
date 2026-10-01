@@ -66,34 +66,38 @@ describe("the group's block on the game page", () => {
     ]);
   });
 
-  it("puts the game's region first and the others after it in the group's order", () => {
+  it("keeps the group's order and marks the game's region where it stands", () => {
     const block = groupBlock(beetle(["pal"], ["pal"]), "Beetle PSX");
 
     expect(block.lines.map((line) => line.text)).toEqual([
-      "Europe · scph5502.bin · missing ← this game's region",
       "Japan · scph5500.bin · missing",
       "USA · scph5501.bin · in place",
+      "Europe · scph5502.bin · missing ← this game's region",
     ]);
   });
 
-  it("keeps the other regions in the group's order, never sorted by name", () => {
-    // An invented group whose order is neither alphabetical by file nor by region.
+  it("keeps every line in the group's order, never sorted and never the game's moved", () => {
+    // An invented group in the order mid, east, zeta, alpha, the game's region
+    // second: an A→Z or a Z→A sort, by file or by region, and moving the
+    // game's line first each give a different order.
     const unsorted: OneOfGroupVerdict = {
       state: "partial",
-      covered: ["mid"],
-      missing: ["zeta", "alpha"],
+      covered: ["east"],
+      missing: ["mid", "zeta", "alpha"],
       unchecked: [],
-      game_regions: ["mid"],
-      regions: ["zeta", "mid", "alpha"],
+      game_regions: ["east"],
+      regions: ["mid", "east", "zeta", "alpha"],
       options: [
+        { file_name: "mid.rom", regions: ["mid"], satisfied: false },
+        { file_name: "east.rom", regions: ["east"], satisfied: true },
         { file_name: "zeta.rom", regions: ["zeta"], satisfied: false },
-        { file_name: "mid.rom", regions: ["mid"], satisfied: true },
         { file_name: "alpha.rom", regions: ["alpha"], satisfied: false },
       ],
     };
 
     expect(groupBlock(unsorted, "Arcadia").lines.map((line) => line.text)).toEqual([
-      "MID · mid.rom · in place ← this game's region",
+      "MID · mid.rom · missing",
+      "EAST · east.rom · in place ← this game's region",
       "ZETA · zeta.rom · missing",
       "ALPHA · alpha.rom · missing",
     ]);
@@ -117,8 +121,8 @@ describe("the group's block on the game page", () => {
     expect(groupBlock(invented, "Arcadia")).toEqual({
       heading: "Arcadia · one image per disc region",
       lines: [
-        { text: "SOUTH and EAST · south-east.rom · in place ← this game's region", tone: "here" },
         { text: "NORTH · north.rom · missing", tone: "other" },
+        { text: "SOUTH and EAST · south-east.rom · in place ← this game's region", tone: "here" },
       ],
     });
   });

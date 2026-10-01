@@ -1332,8 +1332,8 @@ it, for the focused platform:
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
   same words. Where the launching emulator states a one-of group, the tab lists it between that sentence and the file
   list — under a subheading "`<emulator>` · one image per disc region" in the section label's class
-  (`romm-panel-section-title`, which upper-cases it), one indented line per option with its regions, file and state, the
-  game's own region first with "← this game's region" and the others in the group's order (`groupBlock` in
+  (`romm-panel-section-title`, which upper-cases it), one indented line per option with its regions, file and state,
+  always in the group's own order, the game's own region marked "← this game's region" where it stands (`groupBlock` in
   `frontend/src/utils/biosGroup.ts`) — and the file list below it stays whole, under a "Files" subheading of the same
   class; without a group neither subheading is drawn. The ratio is a third set again, which is why it rides along on
   both rather than being folded in. **The ratio names that set in its own words**, because the sentence in front of it

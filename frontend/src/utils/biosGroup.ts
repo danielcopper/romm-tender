@@ -115,21 +115,17 @@ export interface GroupBlock {
  * The launching emulator's group as the game page lists it, above the file
  * list: the subheading "Beetle PSX · one image per disc region", then one line
  * per option — its regions, its file, whether it is in place — with "← this
- * game's region" on the option of the game's own region. That option comes
- * first, because it is the one this launch opens; the others follow in the
- * order the group states them. A group of one image serving every region is
- * that line alone under the same subheading.
+ * game's region" on the option of the game's own region. The lines keep the
+ * order the group states them in, the game's included: the mark alone says
+ * which is this game's. A group of one image serving every region is that line
+ * alone under the same subheading.
  *
  * *named* is the emulator's label, or the role where the pick has none.
  */
 export function groupBlock(group: OneOfGroupVerdict, named: string): GroupBlock {
   const forTheGame = (option: { regions: readonly string[] }) =>
     option.regions.some((region) => group.game_regions.includes(region));
-  const options = [
-    ...group.options.filter((option) => forTheGame(option)),
-    ...group.options.filter((option) => !forTheGame(option)),
-  ];
-  const lines = options.map((option): GroupBlockLine => {
+  const lines = group.options.map((option): GroupBlockLine => {
     const state = option.satisfied === true ? IN_PLACE : option.satisfied === false ? MISSING : NOT_CHECKED;
     const regions = servesEveryRegion(option, group) ? EVERY_REGION : regionNames(option.regions);
     const text = `${regions} · ${option.file_name} · ${state}${forTheGame(option) ? ` ${THIS_GAMES_REGION}` : ""}`;

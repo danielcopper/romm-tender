@@ -1231,13 +1231,13 @@ describe("BiosTab", () => {
       for (const line of lines) expect(line.style.paddingLeft).toBe("8px");
     });
 
-    it("lists the game's region first and the other regions after it in the group's order", () => {
+    it("lists the regions in the group's order and marks the game's where it stands", () => {
       const container = renderFor(forTheGame("unmet", [], ["pal"], ["pal"]), "missing");
 
       expect([...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent)).toEqual([
-        "Europe · scph5502.bin · missing ← this game's region",
         "Japan · scph5500.bin · missing",
         "USA · scph5501.bin · in place",
+        "Europe · scph5502.bin · missing ← this game's region",
       ]);
     });
 
@@ -1266,8 +1266,8 @@ describe("BiosTab", () => {
 
       expect(sectionTitles(container)).toContain("Arcadia · one image per disc region");
       expect([...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent)).toEqual([
-        "EAST · east.rom · in place ← this game's region",
         "NORTH · north.rom · missing",
+        "EAST · east.rom · in place ← this game's region",
       ]);
     });
 
