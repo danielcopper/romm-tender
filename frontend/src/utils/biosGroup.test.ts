@@ -76,6 +76,29 @@ describe("the group's block on the game page", () => {
     ]);
   });
 
+  it("keeps the other regions in the group's order, never sorted by name", () => {
+    // An invented group whose order is neither alphabetical by file nor by region.
+    const unsorted: OneOfGroupVerdict = {
+      state: "partial",
+      covered: ["mid"],
+      missing: ["zeta", "alpha"],
+      unchecked: [],
+      game_regions: ["mid"],
+      regions: ["zeta", "mid", "alpha"],
+      options: [
+        { file_name: "zeta.rom", regions: ["zeta"], satisfied: false },
+        { file_name: "mid.rom", regions: ["mid"], satisfied: true },
+        { file_name: "alpha.rom", regions: ["alpha"], satisfied: false },
+      ],
+    };
+
+    expect(groupBlock(unsorted, "Arcadia").lines.map((line) => line.text)).toEqual([
+      "MID · mid.rom · in place ← this game's region",
+      "ZETA · zeta.rom · missing",
+      "ALPHA · alpha.rom · missing",
+    ]);
+  });
+
   it("lays out a group of any console the same way, from the verdict alone", () => {
     // No such console exists: every word comes off the data.
     const invented: OneOfGroupVerdict = {
