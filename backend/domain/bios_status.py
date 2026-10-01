@@ -745,14 +745,24 @@ def compute_bios_label(status: BiosStatus) -> str:
 
 
 def _counted_label(status: BiosStatus) -> str:
-    """The token the file counts alone give — :func:`_counted_level`'s ratios in words."""
+    """The token the plain required files give — never a one-of group.
+
+    Reached only once no group is ``unmet`` or ``unknown``, so each group here
+    covers the game, or is partial over a game whose region is not known; the
+    counts take each once, as held only where it is met, and taking them back
+    out leaves the plain files. Beside a group the ratio is stated even with
+    none of them in place, because an image is: ``"Missing"`` would overstate
+    it. Without a group, nothing in place is ``"Missing"``, as it always was.
+    """
     req_count = status.required_count
     req_done = status.required_downloaded
     if req_count is not None and req_done is not None:
-        if req_done >= req_count:
+        plain_count = req_count - len(status.groups)
+        plain_done = req_done - sum(1 for group in status.groups if group.state == GROUP_MET)
+        if plain_done >= plain_count:
             return "OK"
-        if req_done > 0 or _a_group_is_partial(status):
-            return f"{req_done}/{req_count} required"
+        if plain_done > 0 or status.groups:
+            return f"{plain_done}/{plain_count} required"
         return BIOS_LABEL_MISSING
     if status.all_downloaded:
         return "OK"

@@ -465,7 +465,8 @@ class TestAOneOfGroupIsOneRequirement:
         ("state", "level", "label"),
         [
             (GROUP_MET, BIOS_LEVEL_OK, "OK"),
-            (GROUP_PARTIAL, BIOS_LEVEL_PARTIAL, "0/1 required"),
+            # The token counts plain required files only, and there are none.
+            (GROUP_PARTIAL, BIOS_LEVEL_PARTIAL, "OK"),
             (GROUP_UNMET, BIOS_LEVEL_MISSING, BIOS_LABEL_MISSING),
             (GROUP_UNKNOWN, BIOS_LEVEL_UNKNOWN, BIOS_LABEL_UNKNOWN),
         ],
@@ -501,6 +502,52 @@ class TestAOneOfGroupIsOneRequirement:
         assert classify_system_image(verdict, rows, _CORE, groups=(self._verdict(GROUP_PARTIAL),)) == (
             SYSTEM_IMAGE_NOT_DEMANDED
         )
+
+
+class TestThePlayRowTokenCountsPlainFilesOnly:
+    """The game page's badge token: "Missing" for a group that does not cover the game, else plain files only.
+
+    The verdicts here are the game-scoped ones (``judge_group_for_game``), and the
+    regions are invented: the token reads the group's state and nothing else.
+    """
+
+    @staticmethod
+    def _plain(name: str, *, here: bool) -> BiosFileEntry:
+        return dataclasses.replace(
+            _withheld_folder_row(), file_name=name, declared_path=name, satisfied=here, downloaded=here
+        )
+
+    @staticmethod
+    def _verdict(state: str) -> GroupVerdict:
+        covered = ("north",) if state in {GROUP_MET, GROUP_PARTIAL} else ()
+        missing = ("south",) if state in {GROUP_PARTIAL, GROUP_UNMET} else ()
+        return GroupVerdict(state=state, covered=covered, missing=missing, unchecked=())
+
+    def _label(self, *states: str, plain: tuple[bool, ...] = ()) -> str:
+        files = tuple(self._plain(f"plain{index}.bin", here=here) for index, here in enumerate(plain))
+        groups = tuple(self._verdict(state) for state in states)
+        required, done = count_required(files, groups)
+        return compute_bios_label(_status(files, required_count=required, required_downloaded=done, groups=groups))
+
+    def test_a_group_that_does_not_cover_the_game_is_missing_whatever_the_plain_files_say(self):
+        assert self._label(GROUP_UNMET, plain=(True, False)) == BIOS_LABEL_MISSING
+        assert self._label(GROUP_UNMET, plain=(True,)) == BIOS_LABEL_MISSING
+
+    def test_a_covering_group_leaves_the_count_to_the_plain_files(self):
+        assert self._label(GROUP_MET, plain=(True, False)) == "1/2 required"
+
+    def test_a_covering_group_with_no_plain_file_in_place_still_counts(self):
+        """An image is there, so "Missing" would overstate it."""
+        assert self._label(GROUP_MET, plain=(False,)) == "0/1 required"
+        assert self._label(GROUP_PARTIAL, plain=(False,)) == "0/1 required"
+
+    def test_a_partial_group_with_every_plain_file_in_place_is_ok(self):
+        assert self._label(GROUP_PARTIAL, plain=(True,)) == "OK"
+
+    def test_without_a_group_the_token_is_what_it_was(self):
+        assert self._label(plain=(False, False)) == BIOS_LABEL_MISSING
+        assert self._label(plain=(True, False)) == "1/2 required"
+        assert self._label(plain=(True,)) == "OK"
 
 
 class TestAStaleConfiguredNameChangesNothing:

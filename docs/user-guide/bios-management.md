@@ -116,6 +116,11 @@ required files is not a milder version of the problem, so it does not get a mild
 that will not boot. The badge does not predict whether a game starts — that is between the emulator and the file, and
 the declaration the badge counts is not what decides it.
 
+What the badge says is _Missing_ where the image this game's region needs is not there, whatever else is missing beside
+it. Otherwise it counts the files the core requires, on their own — _1/2 required_ — and never the per-region image:
+with that image in place and none of the required files, _0/1 required_; for a core with no per-region image and none of
+its required files in place, _Missing_.
+
 A BIOS warning only ever disappears on an **answer**. When a check cannot be run at all — most often right after a BIOS
 download or delete, before the state has been read again — the plugin keeps showing the last status it knew rather than
 reporting "no BIOS needed". So a check that could not be completed never quietly clears a missing-BIOS warning and lets

@@ -2468,7 +2468,10 @@ declaring emulator's `cores` entry), and the counts take each group once — `re
 on `missing` like an `absent` system image, and a `partial` one keeps it at `partial`. The game page narrows the groups
 to the ROM's own console regions (`console_regions_of` over `Rom.regions`) and keeps the platform's verdict where none
 maps. The play row's badge subtracts `required_partial` as it subtracts `required_withheld`, so a group partly covered
-for a game whose region is unknown raises nothing. Nothing in the module knows which console it is judging.
+for a game whose region is unknown raises nothing. Its token (`compute_bios_label`) is `Missing` for an `unmet` group
+whatever the plain files say, and otherwise counts the plain required files alone, never a group — stated as a ratio
+beside a group even with none of them in place, because an image is (`_counted_label`). Nothing in the module knows
+which console it is judging.
 
 **The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
 own held/offered ratio — and it is a value rather than a count, for a core that states no one-of group.** A libretro
