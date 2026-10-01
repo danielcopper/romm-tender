@@ -52,6 +52,7 @@ vi.mock("./launchGate", async (importActual) => {
 
 vi.mock("./sessionManager", () => ({
   getAppIdRomIdMapSnapshot: vi.fn(() => ({})),
+  refreshAppIdMap: vi.fn(),
   isSessionActive: vi.fn(() => false),
 }));
 
@@ -153,6 +154,7 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
     // Skip-set empty by default — a marked appId is set per-test.
     vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({ [String(APP_ID)]: 42 });
+    vi.mocked(sessionManager.refreshAppIdMap).mockResolvedValue(undefined);
     // Default: no live session and nothing running, so the already-running guard
     // is inert and the existing funnel tests run unchanged. Overridden per-test.
     vi.mocked(sessionManager.isSessionActive).mockReturnValue(false);
@@ -426,6 +428,67 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(launchGate.runLaunchGate).toHaveBeenCalled();
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+  });
+
+  describe("an appId Tender owns that the map does not hold yet", () => {
+    /** A map that holds nothing until `refreshAppIdMap` puts `after` in it. */
+    const mapFilledByRefresh = (after: Record<string, number>): void => {
+      let map: Record<string, number> = {};
+      vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockImplementation(() => map);
+      vi.mocked(sessionManager.refreshAppIdMap).mockImplementation(async () => {
+        map = after;
+      });
+    };
+
+    it("refreshes the map once and gates the start with the romId it now holds", async () => {
+      mapFilledByRefresh({ [String(APP_ID)]: 42 });
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(sessionManager.refreshAppIdMap).toHaveBeenCalledTimes(1);
+      expect(backend.getInstalledRom).toHaveBeenCalledWith(42);
+      expect(launchGate.runLaunchGate).toHaveBeenCalledWith(APP_ID, 42, expect.anything());
+    });
+
+    it("relaunches without gating when the refreshed map still does not hold it", async () => {
+      mapFilledByRefresh({});
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(sessionManager.refreshAppIdMap).toHaveBeenCalledTimes(1);
+      expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+
+    it("a refresh that never answers is bounded by the first-contact deadline", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({});
+        vi.mocked(sessionManager.refreshAppIdMap).mockReturnValue(new Promise<never>(() => {}));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
+
+        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+        expect(toaster.toast).toHaveBeenCalledWith({
+          title: "Tender",
+          body: "Tender isn't responding — started without syncing saves.",
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a start the map already holds is not refreshed for", async () => {
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(sessionManager.refreshAppIdMap).not.toHaveBeenCalled();
+      expect(launchGate.runLaunchGate).toHaveBeenCalledWith(APP_ID, 42, expect.anything());
     });
   });
 

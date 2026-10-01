@@ -39,7 +39,8 @@ const activeSessions = new Map<number, ActiveSession>();
 // Serialization chain — ensures lifecycle events don't interleave
 let lifecycleChain: Promise<void> = Promise.resolve();
 
-// Cached app ID -> rom ID map (refreshed on init and periodically)
+// Cached app ID -> rom ID map, refreshed on init, when an app starts, and by the
+// launch watcher once for an appId Tender owns that the map does not hold.
 let appIdToRomId: Record<string, number> = {};
 
 function getRomIdForApp(appId: number): number | null {
@@ -50,9 +51,9 @@ function getRomIdForApp(appId: number): number | null {
 /**
  * Snapshot of the cached appId -> romId map (the same shape the backend's
  * `get_app_id_rom_id_map` endpoint returns — string-keyed appIds). The global
- * launch watcher reads this synchronously to resolve a launching app's romId
- * without an await, so its cancel-then-gate path never races the map refresh.
- * Returns the live reference; callers treat it as read-only.
+ * launch watcher reads this synchronously, so its already-running guard decides
+ * before the start is cancelled, with no await in between. Returns the live
+ * reference; callers treat it as read-only.
  */
 export function getAppIdRomIdMapSnapshot(): Record<string, number> {
   return appIdToRomId;
@@ -73,7 +74,11 @@ export function isSessionActive(romId: number): boolean {
   return false;
 }
 
-async function refreshAppIdMap(): Promise<void> {
+/**
+ * Re-read the appId -> romId map from the backend. A failed read is logged and
+ * leaves the map as it was.
+ */
+export async function refreshAppIdMap(): Promise<void> {
   try {
     appIdToRomId = await getAppIdRomIdMap();
   } catch (e) {

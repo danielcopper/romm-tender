@@ -35,7 +35,7 @@ import {
 } from "../api/backend";
 import { getMigrationState, setMigrationStatus } from "./migrationStore";
 import { reportServerReachable } from "./connectionState";
-import { getAppIdRomIdMapSnapshot, isSessionActive } from "./sessionManager";
+import { getAppIdRomIdMapSnapshot, isSessionActive, refreshAppIdMap } from "./sessionManager";
 import { isAppRunning } from "./runningApps";
 import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip } from "./launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
@@ -360,11 +360,17 @@ const NOT_RESPONDING_TOAST_BODY = "Tender isn't responding — started without s
 
 /**
  * The ROM a cancelled start belongs to and whether it is installed, or `null`
- * for an appId the map does not know.
+ * for an appId the map does not know even after one refresh. Why an owned
+ * appId can be missing from the map: `docs/architecture/save-file-sync-architecture.md`,
+ * "Pre-launch sync".
  */
 async function readStartRom(appId: number): Promise<{ romId: number; installed: boolean } | null> {
-  const romId = getAppIdRomIdMapSnapshot()[String(appId)];
-  if (romId == null) return null;
+  let romId = getAppIdRomIdMapSnapshot()[String(appId)];
+  if (romId == null) {
+    await refreshAppIdMap();
+    romId = getAppIdRomIdMapSnapshot()[String(appId)];
+    if (romId == null) return null;
+  }
   return { romId, installed: await isRomInstalled(appId, romId) };
 }
 
