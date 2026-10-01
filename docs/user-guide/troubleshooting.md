@@ -248,9 +248,9 @@ and what each answer means.
 **Symptom**: A game for a system that requires BIOS files (PlayStation, Saturn, Dreamcast, etc.) fails to launch or
 shows a black screen.
 
-**Fix**: Check the game's detail page — if the BIOS indicator is orange, you're missing required BIOS files. Open
-**Library › Platforms** in the QAM, pick the platform, and tap **Download all**. See
-[BIOS Management](bios-management.md) for details.
+**Fix**: Check the game's detail page — if the BIOS indicator is red, you're missing required BIOS files. Open **Library
+› Platforms** in the QAM, pick the platform, and tap **Download all**. See [BIOS Management](bios-management.md) for
+details.
 
 ### ROM not downloaded
 
