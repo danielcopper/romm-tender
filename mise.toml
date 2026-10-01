@@ -125,13 +125,14 @@ run = ["pnpm -C frontend lint", "pnpm -C frontend format:check", "pnpm -C fronte
 [tasks."gate:build"]
 description = "Gate step: the production build, then everything that reads what it produced"
 hide = true
-# The bundle check, the size budget and the packager read what the build produced,
-# and the tarball check reads the packager's. `build/` is emptied first: nothing else
-# ever clears it, so after a version change it would hold two archives and the glob
-# below would match both.
+# The bundle check, the package budgets, the size budget and the packager read what
+# the build produced, and the tarball check reads the packager's. `build/` is emptied
+# first: nothing else ever clears it, so after a version change it would hold two
+# archives and the glob below would match both.
 run = [
     "pnpm -C frontend build",
     "pnpm -C frontend check:bundle",
+    "pnpm -C frontend check:packages",
     "pnpm -C frontend size",
     "rm -rf build && bash scripts/package.sh --source . --out build",
     "python scripts/check_release_tarball.py build/romm-tender-*.tar.gz",

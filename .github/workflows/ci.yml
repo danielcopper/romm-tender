@@ -84,6 +84,9 @@ jobs:
       - name: Check the two panel bundles are the two bundles
         run: pnpm -C frontend check:bundle
 
+      - name: Check every third-party package in the bundles against its budget
+        run: pnpm -C frontend check:packages
+
       # Here rather than in the `lint` job, which is the rest of the
       # `scripts/check_*` family's home: the comparison goes through prettier,
       # so it needs the frontend's node_modules, and `lint` installs Python

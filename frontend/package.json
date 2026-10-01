@@ -5,6 +5,7 @@
     "build:dev": "rm -rf ../dist && rollup -c rollup.dev.config.js",
     "size": "size-limit",
     "check:bundle": "node scripts/check-bundle-shape.mjs",
+    "check:packages": "node scripts/check-package-budgets.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
