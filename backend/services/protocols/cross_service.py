@@ -322,12 +322,14 @@ class RomLaunchPathReader(Protocol):
 
 
 class SaveDriftProbeFn(Protocol):
-    """Local-save drift probe consumed by VersionSwitchService.
+    """Local-save drift probe consumed by VersionSwitchService and PruneService.
 
     The composition root satisfies this with ``LaunchGateService.check_local_drift``.
     Reports whether the ROM's local save files diverge from their persisted sync
-    baseline (a purely-local content-hash read) — the signal that switching away
-    from a downloaded version would strand un-uploaded save changes. Returns the
+    baseline (a purely-local content-hash read) — the signal that a change to the
+    ROM's shortcut would strand un-uploaded save changes: a version switch moving
+    it off a downloaded version, or a removed-game cleanup rebinding it to another
+    version or removing the whole game. Returns the
     ``{"drifted": bool, "rom_id": int}`` shape and never raises (LaunchGate
     collapses any internal error to not-drifted).
     """

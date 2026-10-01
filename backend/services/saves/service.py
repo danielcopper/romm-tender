@@ -53,8 +53,7 @@ class SaveService:
     aggregate. Exposes the use cases the endpoints on ``Endpoints`` call — every
     public method delegates to a sub-service or reads ``settings.json``. A use
     case an endpoint calls checks its conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds; a peer
-    service that calls one calls its ``<verb>_unchecked`` twin instead
+    endpoint's name, and answers the canonical refusal when one holds
     (CONTEXT.md → Conflict rules). Bulk local-save deletion is the only flow
     whose orchestration lives directly on the aggregate root because it spans
     :class:`RomInfoService` (file discovery), the on-disk save files (via the

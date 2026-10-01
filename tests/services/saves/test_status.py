@@ -335,8 +335,7 @@ class TestGetSaveStatusComputeAction:
     def test_get_save_status_suppresses_conflicts_when_save_sync_disabled(self, tmp_path):
         """#1056: with save sync disabled, the conflict signal is empty at the source.
 
-        Every consumer (launch gate, play button, the ``save_status_updated``
-        emit that index.tsx forwards) reads this single ``conflicts`` array, and
+        Every consumer reads this single ``conflicts`` array, and
         the SAVES tab that would resolve a conflict is hidden while disabled.
         Non-vacuous: the identical setup is conflict-producing while enabled, so
         the toggle is the only thing that changes the outcome.
@@ -802,10 +801,10 @@ class TestMultiFileSlotConflictAggregation:
     """get_save_status aggregates conflicts across ALL local component files (#1051 F6).
 
     A multi-file slot (e.g. Saturn ``.bkr``/``.bcr``/``.smpc``, #908) is one
-    game state spread across several files. The launch gate consumes this
-    read-only status path's ``conflicts`` array; if only the FIRST component's
-    conflict were reported, a conflict on the 2nd/3rd component would let the
-    launch through while the mutating ``do_sync_rom_saves`` correctly flags it.
+    game state spread across several files. The Play button's conflict state
+    reads this read-only status path's ``conflicts`` array; if only the FIRST
+    component's conflict were reported, a conflict on the 2nd/3rd component would
+    go unshown there while the mutating ``do_sync_rom_saves`` correctly flags it.
     The status view must collect a row + any conflict for every component.
     """
 
@@ -866,17 +865,16 @@ class TestMultiFileSlotConflictAggregation:
         assert len(result["conflicts"]) >= 1
         conflict_files = {c["filename"] for c in result["conflicts"]}
         assert "rally.bcr" in conflict_files
-        # The aggregate display reflects the conflict — the gate would block.
+        # The aggregate display reflects the conflict.
         assert result["save_sync_display"]["status"] == "conflict"
 
     def test_status_and_sync_paths_agree_on_conflict_set(self, tmp_path):
         """The read-only status path and the mutating sync path report the SAME
         conflicting filenames for a multi-file slot (the F6 invariant directly).
 
-        The launch gate consumes ``get_save_status``'s ``conflicts``; before F6
-        the status path reported only the first component, so for a slot whose
-        non-first component (``.bcr``) is the one in conflict the gate's view
-        disagreed with ``do_sync_rom_saves``. Both must now see ``{rally.bcr}``.
+        The Play button reads ``get_save_status``'s ``conflicts``, so for a slot
+        whose non-first component (``.bcr``) is the one in conflict its view must
+        agree with ``do_sync_rom_saves``: both see ``{rally.bcr}``.
 
         Driving ``do_sync_rom_saves`` over this exact fixture does NOT mutate it:
         ``.bkr`` is ``Skip(synced)`` (no transfer) and ``.bcr`` is ``Conflict``

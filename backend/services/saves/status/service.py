@@ -185,8 +185,8 @@ class StatusService:
           surface each file's status, server attribution, and any conflict.
           A multi-file slot (e.g. Saturn ``.bkr``/``.bcr``/``.smpc``, #908)
           yields one row per component file, so a conflict on any component
-          surfaces in ``conflicts`` — matching ``do_sync_rom_saves`` and
-          keeping the launch gate's view consistent with the sync view.
+          surfaces in ``conflicts``, as it does in ``do_sync_rom_saves``. The
+          status then agrees with what a sync would do.
         - No local file but the slot has server saves: surface the newest
           server save as a single "ready to download" row. The canonical
           local target is ``<rom_name>.<server.file_extension>`` — derived
@@ -260,8 +260,8 @@ class StatusService:
 
             # Surface a row (and any conflict) for every local component file so a
             # multi-file slot's status matches ``do_sync_rom_saves`` — a conflict on
-            # the 2nd/3rd component (e.g. Saturn .bcr/.smpc) must still block the
-            # launch gate, not be dropped by reporting only the first file (#908).
+            # the 2nd/3rd component (e.g. Saturn .bcr/.smpc) must still surface as a
+            # conflict, not be dropped by reporting only the first file (#908).
             chosen_outcomes = local_outcomes
             if not chosen_outcomes and server_only_outcomes:
                 # No local files but the slot has a server-only candidate: surface
@@ -285,13 +285,10 @@ class StatusService:
         playtime_dict = _playtime_to_dict(playtime)
         last_sync_check_at = save_state.last_sync_check_at if save_state else None
 
-        # Save sync disabled → suppress the conflict signal at the source. Every
-        # consumer (launch gate, the play button, the save_status_updated emit
-        # that index.tsx forwards) reads this single ``conflicts`` array, and the
-        # SAVES tab that would resolve a conflict is hidden while disabled — so a
-        # surfaced conflict is one the user has no UI to clear (#1056). The launch
-        # gate already short-circuits before calling here; this closes the same
-        # hole for any other caller.
+        # Save sync disabled → suppress the conflict signal at the source. The
+        # SAVES tab that would resolve a conflict is hidden while disabled, so a
+        # surfaced conflict is one the user has no UI to clear (#1056). Who reads
+        # ``conflicts``: docs/architecture/save-file-sync-architecture.md.
         if not save_sync_enabled(self._settings):
             conflicts = []
 

@@ -47,11 +47,6 @@ class LaunchGateService:
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
         """Report whether the ROM's local save files diverge from their sync baseline.
 
-        Used by the offline launch path: when the server is unreachable we
-        cannot run a real sync, so this purely-local probe warns the user that
-        an out-of-band local change would otherwise be silently overwritten the
-        next time sync succeeds.
-
         Enumerates the ROM's local save files the same way the sync/status path
         does (``find_local_save_files`` → the shared ``RomInfoService``
         discovery), hashes each present file (the zip-aware RomM-parity

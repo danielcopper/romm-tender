@@ -3,8 +3,9 @@
 Contract: four values. Two name this program, one says which release it is,
 and the fourth says which servers it will talk to at all.
 
-- :data:`DISPLAY_NAME` is what a HUMAN reads — a toast's sender, a token label
-  on the user's own RomM server, the headline of a file they open by hand.
+- :data:`DISPLAY_NAME` is what a HUMAN reads — a token label on the user's
+  own RomM server, the client a registered device is listed under there, the
+  headline of a file they open by hand.
   Never a path component, a header value, a storage key or a folder.
 - :data:`PACKAGE_NAME` is what a MACHINE reads about who is calling — the
   outgoing User-Agent, and the name of the recovery root a bundle is written

@@ -726,9 +726,8 @@ complete. Every slice migrated:
 - the **migration** slice — `MigrationService` reads the RetroDECK-home change-detection markers from `kv_config`
   (Bucket 2 per
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md))
-  and relocates installed-ROM file paths through `uow.rom_installs.relocate`; `SyncReporter.get_rom_by_steam_app_id`
-  tests installed-ness via `uow.rom_installs.get`; `StartupHealingService.prune_stale_installed_roms` reads the
-  pending-migration home from `kv_config`.
+  and relocates installed-ROM file paths through `uow.rom_installs.relocate`;
+  `StartupHealingService.prune_stale_installed_roms` reads the pending-migration home from `kv_config`.
 
 With every consumer moved over, the teardown completed: the dead persisters, the `RegistryStoreAdapter` /
 `MetadataCacheStoreAdapter` JSON stores, `domain/save_state.py` (`SaveSyncState`), and the in-memory state dicts

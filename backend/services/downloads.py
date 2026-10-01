@@ -1348,7 +1348,7 @@ class DownloadService:
         """Return the install record for *rom_id* as a frontend-shaped dict, or ``None``.
 
         Reads the ``RomInstall`` aggregate via the Unit of Work and projects it
-        onto the ``InstalledRom`` shape the QAM panel + launch gate consume.
+        onto the ``InstalledRom`` shape the game page and the launch gate consume.
         ``file_name`` is derived from the launch ``file_path`` (the aggregate
         stores the launch file, not the original archive name).
         """
