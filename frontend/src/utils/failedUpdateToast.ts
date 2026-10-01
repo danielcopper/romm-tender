@@ -1,7 +1,7 @@
 /**
  * The toast for an update that failed: its words, and raising it once — and
- * raising any update toast once, which the "is available" toast
- * (`updateAvailableToast.ts`) does through here too.
+ * the raising itself, which the "is available" toast
+ * (`updateAvailableToast.ts`) goes through too.
  *
  * A failed update's toast is raised by:
  *   - updateOutcomeStore.ts, for the installer's record — at panel load where
@@ -42,37 +42,55 @@ export function resetFailedUpdateToastsForTests(): void {
 
 /**
  * Raise *body* once Steam can show it (what that waits for, and for how long
- * at most: `steamReadyForToasts.ts`); *what* names it in the warning logged
- * where Steam was not ready in time.
+ * at most: `steamReadyForToasts.ts`), unless *stillWanted* says no by then;
+ * *what* names it in the warning logged where Steam was not ready in time.
+ * Answers whether it was raised.
  */
-export async function toastWhenSteamIsReady(body: string, what: string): Promise<void> {
+export async function toastWhenSteamIsReady(
+  body: string,
+  what: string,
+  stillWanted: () => boolean = () => true,
+): Promise<boolean> {
   const readiness = await waitUntilSteamCanShowToasts();
+  if (!stillWanted()) return false;
   if (!readiness.inTime) {
     logWarn(
       `Steam was not ready for a toast after ${TOAST_READINESS_DEADLINE_MS / 1000} s (still waiting for ${readiness.unmet.join(", ")}); raising ${what} anyway`,
     );
   }
   showToast(body);
+  return true;
 }
 
 /**
  * Raise the toast *key* names, unless this context raised it already, then
- * *acknowledge* it to the backend; *what* names it as {@link
- * toastWhenSteamIsReady} takes it. An acknowledgement that fails or is refused
- * leaves the toast owed, and the next panel load raises it again — a repeat
- * rather than a loss; a refusal is logged.
+ * *acknowledge* it to the backend; *what* and *stillWanted* are as {@link
+ * toastWhenSteamIsReady} takes them. A toast no longer wanted once Steam can
+ * show it is neither raised nor acknowledged, and *key* is given back, so a
+ * later change that wants it again raises it. An acknowledgement that fails or
+ * is refused leaves the toast owed, and the next panel load raises it again —
+ * a repeat rather than a loss; either is logged here, so a rejection of the
+ * returned promise means the toast itself was not raised.
  */
 export async function raiseUpdateToastOnce(
   key: string,
   body: string,
   what: string,
   acknowledge?: () => Promise<UpdateSettingWrite | void>,
+  stillWanted?: () => boolean,
 ): Promise<void> {
   if (raised.has(key)) return;
   raised.add(key);
-  await toastWhenSteamIsReady(body, what);
-  const answer = await acknowledge?.();
-  if (answer?.success === false) logWarn(`The toast for ${key} was not acknowledged: ${answer.reason}`);
+  if (!(await toastWhenSteamIsReady(body, what, stillWanted))) {
+    raised.delete(key);
+    return;
+  }
+  try {
+    const answer = await acknowledge?.();
+    if (answer?.success === false) logWarn(`The toast for ${key} was not acknowledged: ${answer.reason}`);
+  } catch (e) {
+    logError(`The toast for ${key} was raised, but not acknowledged: ${e}`);
+  }
 }
 
 /** {@link raiseUpdateToastOnce} for the toast of an update that failed. */

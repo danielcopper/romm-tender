@@ -26,6 +26,7 @@ import {
   acknowledgeUpdateAvailableToast,
   getStoppedUpdateAttempt as readStoppedUpdateAttempt,
   getUpdateAttemptToast,
+  getUpdateInstallState,
   getAllPlaytime,
   getAppIdRomIdMap,
   getInstalledRelaunchOptions,
@@ -34,13 +35,18 @@ import {
   releasePruneConflictLease,
   renewPruneConflictLease,
   waitForPruneRelease,
+  type UpdateOutcome,
 } from "./api/backend";
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
-import { getUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
+import {
+  getUpdateInstallAttempt,
+  resetUpdateInstallStoreForTests,
+  setUpdateInstallAttempt,
+} from "./utils/updateInstallStore";
 import { resetFailedUpdateToastsForTests } from "./utils/failedUpdateToast";
 import { getStoppedUpdateAttempt, resetStoppedUpdateStoreForTests } from "./utils/stoppedUpdateStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
@@ -217,6 +223,16 @@ function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
 }
 
+/** The install's read where nothing is offered and no attempt was made. */
+const NOTHING_INSTALLING = {
+  offered: false,
+  version: null,
+  wait_reasons: [],
+  paused_downloads: 0,
+  attempt: null,
+  try_again: false,
+};
+
 beforeEach(() => {
   // The metadata cache is paged at init; default to a single empty page so
   // loadAppIdsAndMetadata terminates and reaches initDone in every test. Cases
@@ -235,6 +251,7 @@ beforeEach(() => {
   });
   vi.mocked(releasePruneConflictLease).mockReset().mockResolvedValue({ success: true, message: "released" });
   vi.mocked(invalidateCachedGameDetail).mockClear();
+  vi.mocked(getUpdateInstallState).mockResolvedValue(NOTHING_INSTALLING);
   // The global afterEach's vi.unstubAllGlobals wipes the Steam ambient globals
   // after the file's first test; several sync_complete paths read SteamClient /
   // appStore, so default them to no-ops here.
@@ -1621,6 +1638,14 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
     installed_program: true,
     toast_owed: true,
   };
+  const NOTHING_MOVED: UpdateOutcome = {
+    announce_version: null,
+    announce_direction: null,
+    toast_owed: false,
+    failure: null,
+    failure_dismissed: false,
+    failure_toast_owed: false,
+  };
   const availableToasts = () =>
     vi.mocked(toaster.toast).mock.calls.filter(([t]) => /is available/.test(String(t.body)));
 
@@ -1632,10 +1657,10 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
     resetUpdateNoticeStoreForTests();
     resetUpdateOutcomeStoreForTests();
     resetStoppedUpdateStoreForTests();
-    setUpdateInstallAttempt(null);
+    resetUpdateInstallStoreForTests();
     vi.mocked(toaster.toast).mockClear();
     vi.mocked(getUpdateNotice).mockReset().mockResolvedValue(OWED);
-    vi.mocked(getUpdateOutcome).mockReset();
+    vi.mocked(getUpdateOutcome).mockReset().mockResolvedValue(NOTHING_MOVED);
     vi.mocked(readStoppedUpdateAttempt).mockReset().mockResolvedValue(null);
     vi.mocked(acknowledgeUpdateAvailableToast).mockReset().mockResolvedValue({ success: true });
   });
@@ -1646,7 +1671,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
     vi.mocked(readStoppedUpdateAttempt).mockReset();
   });
 
-  it("raises it once the three reads answered, and acknowledges it", async () => {
+  it("raises it once the reads answered, and acknowledges it", async () => {
     pluginFactory();
 
     await vi.waitFor(() => expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledWith("1.4.0"));
@@ -1680,6 +1705,33 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
     await flush();
 
     answerOutcome();
+    await flush();
+    await flush();
+
+    expect(availableToasts()).toHaveLength(0);
+    expect(acknowledgeUpdateAvailableToast).not.toHaveBeenCalled();
+  });
+
+  it("raises none, and acknowledges none, where what the last update did could not be read", async () => {
+    vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("socket closed"));
+    pluginFactory();
+    await vi.waitFor(() =>
+      expect(logError).toHaveBeenCalledWith("Failed to read what the last update did: Error: socket closed"),
+    );
+    await flush();
+    await flush();
+
+    expect(availableToasts()).toHaveLength(0);
+    expect(acknowledgeUpdateAvailableToast).not.toHaveBeenCalled();
+  });
+
+  it("raises none while the install's read at load finds an attempt under way", async () => {
+    vi.mocked(getUpdateInstallState).mockResolvedValue({
+      ...NOTHING_INSTALLING,
+      attempt: { version: "1.4.0", step: "downloading", bytes_done: 10, bytes_total: 100, failure: null },
+    });
+    pluginFactory();
+    await vi.waitFor(() => expect(getUpdateInstallAttempt()?.step).toBe("downloading"));
     await flush();
     await flush();
 

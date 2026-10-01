@@ -39,6 +39,7 @@ import {
   getInstalledRelaunchOptions,
   testConnection,
   invalidateCachedGameDetail,
+  getUpdateInstallState,
   logError,
   logInfo,
   waitForPruneRelease,
@@ -52,7 +53,7 @@ import {
 import { foldCollectionName } from "./utils/collectionName";
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
-import { setUpdateInstallAttempt } from "./utils/updateInstallStore";
+import { seedUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
 import { fetchStoppedUpdateAttempt, takePushedStoppedAttempt } from "./utils/stoppedUpdateStore";
@@ -571,8 +572,10 @@ const tender = definePlugin(() => {
   const outcomeRead = (async () => {
     try {
       await fetchUpdateOutcome();
+      return true;
     } catch (e) {
       logError(`Failed to read what the last update did: ${e}`);
+      return false;
     }
   })();
   detach(outcomeRead);
@@ -583,15 +586,31 @@ const tender = definePlugin(() => {
   const stoppedRead = (async () => {
     try {
       await fetchStoppedUpdateAttempt();
+      return true;
     } catch (e) {
       logError(`Failed to read whether the last update attempt stopped: ${e}`);
+      return false;
     }
   })();
   detach(stoppedRead);
 
-  // The toast that a newer release is out, once all three reads above have
+  // An install attempt under way when this JavaScript context replaced the
+  // last one: its next frame may be a while, and until then the store would
+  // not know of it.
+  const installRead = (async () => {
+    try {
+      seedUpdateInstallAttempt((await getUpdateInstallState()).attempt);
+      return true;
+    } catch (e) {
+      logError(`Failed to read whether an update is being installed: ${e}`);
+      return false;
+    }
+  })();
+  detach(installRead);
+
+  // The toast that a newer release is out, once the four reads above have
   // settled, and again as the stores they fill change.
-  watchUpdateAvailableToast([releaseRead, outcomeRead, stoppedRead]);
+  watchUpdateAvailableToast(releaseRead, [outcomeRead, stoppedRead, installRead]);
 
   // An install attempt of this backend's that failed while no panel was loaded
   // to take its frame: its toast is still owed.

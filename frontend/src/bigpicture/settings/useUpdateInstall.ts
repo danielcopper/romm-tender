@@ -10,10 +10,11 @@ import {
 import { detach } from "../../utils/detach";
 import { endStoppedAttempt } from "../../utils/stoppedUpdateStore";
 import {
+  endPress,
   getUpdateInstallAttempt,
   installerSeenAt,
   noteAttempt,
-  setUpdateInstallAttempt,
+  notePress,
   useUpdateInstallAttempt,
 } from "../../utils/updateInstallStore";
 import {
@@ -156,7 +157,7 @@ export function useUpdateInstall(): UpdateInstall {
     if (pressInFlight.current || version === null || underWay || (last?.wait_reasons.length ?? 0) > 0) return;
     pressInFlight.current = true;
     generation.current += 1;
-    setUpdateInstallAttempt(null);
+    notePress();
     if (last !== null) take({ ...last, attempt: null });
     setPressing(true);
     setRefusal(null);
@@ -166,6 +167,7 @@ export function useUpdateInstall(): UpdateInstall {
       // The new attempt ended the stopped one's record, and the card on Main
       // with it, whether or not this section is still on screen.
       if (answer.success) endStoppedAttempt();
+      else endPress();
       if (!mounted.current) return;
       const now = lastReading.current;
       if (answer.success) {
@@ -177,6 +179,7 @@ export function useUpdateInstall(): UpdateInstall {
       }
     } catch (e) {
       logError(`Failed to request the update install: ${e}`);
+      endPress();
       if (mounted.current) setRefusal({ reason: "request_failed", version });
     } finally {
       pressInFlight.current = false;

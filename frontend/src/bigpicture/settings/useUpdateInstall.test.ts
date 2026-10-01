@@ -12,7 +12,11 @@ import {
   resetStoppedUpdateStoreForTests,
   takePushedStoppedAttempt,
 } from "../../utils/stoppedUpdateStore";
-import { setUpdateInstallAttempt } from "../../utils/updateInstallStore";
+import {
+  installUnderWay,
+  resetUpdateInstallStoreForTests,
+  setUpdateInstallAttempt,
+} from "../../utils/updateInstallStore";
 import { INSTALL_REQUEST_FAILED, INSTALLER_OVERDUE_MS } from "../../utils/updateInstallView";
 import { UPDATE_INSTALL_POLL_MS, UPDATE_INSTALL_READ_DEADLINE_MS, useUpdateInstall } from "./useUpdateInstall";
 
@@ -61,7 +65,7 @@ describe("useUpdateInstall", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    setUpdateInstallAttempt(null);
+    resetUpdateInstallStoreForTests();
     resetStoppedUpdateStoreForTests();
     vi.mocked(getUpdateInstallState).mockReset().mockResolvedValue(OFFERED);
     vi.mocked(installUpdate).mockReset().mockResolvedValue({ success: true });
@@ -154,6 +158,43 @@ describe("useUpdateInstall", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(getStoppedUpdateAttempt()).toBeNull();
+  });
+
+  it("counts an install as under way from the press, before the backend answered and before the first frame", async () => {
+    const answer = deferred<{ success: true }>();
+    vi.mocked(installUpdate).mockReturnValue(answer.promise);
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => result.current.install());
+    await flush();
+    expect(installUnderWay()).toBe(true);
+
+    await act(async () => {
+      answer.resolve({ success: true });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(installUnderWay()).toBe(true);
+
+    act(() => setUpdateInstallAttempt(FAILED));
+    expect(installUnderWay()).toBe(false);
+  });
+
+  it.each<[string, () => void]>([
+    [
+      "was refused",
+      () => vi.mocked(installUpdate).mockResolvedValue({ success: false, reason: "not_offered", message: "none" }),
+    ],
+    ["could not be carried", () => vi.mocked(installUpdate).mockRejectedValue(new Error("socket closed"))],
+  ])("counts no install as under way once the press %s", async (_case, answerWith) => {
+    answerWith();
+    const { result } = renderHook(() => useUpdateInstall());
+    await flush();
+
+    act(() => result.current.install());
+    await flush();
+
+    expect(installUnderWay()).toBe(false);
   });
 
   it("leaves a stopped attempt's card up where the press was refused", async () => {

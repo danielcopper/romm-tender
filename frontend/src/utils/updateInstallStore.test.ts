@@ -2,11 +2,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UpdateInstallAttempt } from "../api/backend";
 import {
   attemptSeenAt,
+  endPress,
   getUpdateInstallAttempt,
   installerRestarting,
   installerSeenAt,
+  installUnderWay,
   noteAttempt,
+  notePress,
   onUpdateInstallAttemptChange,
+  resetUpdateInstallStoreForTests,
+  seedUpdateInstallAttempt,
   setUpdateInstallAttempt,
 } from "./updateInstallStore";
 import { INSTALLER_OVERDUE_MS } from "./updateInstallView";
@@ -21,7 +26,7 @@ const DOWNLOADING: UpdateInstallAttempt = {
 
 describe("updateInstallStore", () => {
   afterEach(() => {
-    setUpdateInstallAttempt(null);
+    resetUpdateInstallStoreForTests();
   });
 
   it("holds no attempt until the backend reports one", () => {
@@ -102,6 +107,98 @@ describe("updateInstallStore", () => {
       noteAttempt(DOWNLOADING, 9000);
 
       expect(attemptSeenAt()).toBe(9000);
+    });
+  });
+
+  describe("whether an install is under way", () => {
+    const FAILED: UpdateInstallAttempt = { ...DOWNLOADING, step: "failed", failure: "download_failed" };
+
+    it("is so while a frame shows an attempt that has not failed, and not once it failed", () => {
+      expect(installUnderWay()).toBe(false);
+
+      setUpdateInstallAttempt(DOWNLOADING);
+      expect(installUnderWay()).toBe(true);
+
+      setUpdateInstallAttempt(FAILED);
+      expect(installUnderWay()).toBe(false);
+    });
+
+    it("is so from a press, which drops the frame an earlier attempt left, until the first frame says otherwise", () => {
+      setUpdateInstallAttempt(FAILED);
+      const heard = vi.fn();
+      const stop = onUpdateInstallAttemptChange(heard);
+
+      notePress();
+      expect(getUpdateInstallAttempt()).toBeNull();
+      expect(installUnderWay()).toBe(true);
+      expect(heard).toHaveBeenCalledTimes(1);
+
+      setUpdateInstallAttempt(FAILED);
+      stop();
+      expect(installUnderWay()).toBe(false);
+    });
+
+    it("is no longer so, and says so, once the press did not start an attempt", () => {
+      notePress();
+      const heard = vi.fn();
+      const stop = onUpdateInstallAttemptChange(heard);
+
+      endPress();
+      stop();
+
+      expect(installUnderWay()).toBe(false);
+      expect(heard).toHaveBeenCalledOnce();
+    });
+
+    it("tells nobody where no press stood", () => {
+      const heard = vi.fn();
+      const stop = onUpdateInstallAttemptChange(heard);
+
+      endPress();
+      stop();
+
+      expect(heard).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the install's read at panel load", () => {
+    it("is taken where nothing came first, and tells a subscriber", () => {
+      const heard = vi.fn();
+      const stop = onUpdateInstallAttemptChange(heard);
+
+      seedUpdateInstallAttempt(DOWNLOADING);
+      stop();
+
+      expect(getUpdateInstallAttempt()).toEqual(DOWNLOADING);
+      expect(installUnderWay()).toBe(true);
+      expect(heard).toHaveBeenCalledOnce();
+    });
+
+    it("does not replace a frame that came first", () => {
+      const further: UpdateInstallAttempt = { ...DOWNLOADING, step: "verifying" };
+      setUpdateInstallAttempt(further);
+
+      seedUpdateInstallAttempt(DOWNLOADING);
+
+      expect(getUpdateInstallAttempt()).toEqual(further);
+    });
+
+    it("does not stand in for a press that came first", () => {
+      notePress();
+
+      seedUpdateInstallAttempt(DOWNLOADING);
+
+      expect(getUpdateInstallAttempt()).toBeNull();
+    });
+
+    it.each<[string, UpdateInstallAttempt | null]>([
+      ["no attempt", null],
+      ["an attempt that failed", { ...DOWNLOADING, step: "failed", failure: "download_failed" }],
+    ])("leaves the store as it was for %s", (_case, read) => {
+      seedUpdateInstallAttempt(read);
+
+      expect(getUpdateInstallAttempt()).toBeNull();
+      expect(installUnderWay()).toBe(false);
     });
   });
 });

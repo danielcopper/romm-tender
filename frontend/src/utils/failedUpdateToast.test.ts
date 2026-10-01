@@ -3,6 +3,7 @@ import { toaster } from "../api/host";
 import {
   acknowledgeUpdateAttemptToast,
   getUpdateAttemptToast,
+  logError,
   logWarn,
   type UpdateAttemptToast,
   type UpdateInstallFailure,
@@ -11,6 +12,7 @@ import { PLUGIN_NAME } from "./toast";
 import {
   attemptFailureToast,
   raiseFailureToastOnce,
+  raiseUpdateToastOnce,
   resetFailedUpdateToastsForTests,
   stillOnToast,
   toastOwedAttempt,
@@ -18,6 +20,7 @@ import {
 
 vi.mock("../api/backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/backend")>()),
+  logError: vi.fn(),
   logWarn: vi.fn(),
 }));
 
@@ -40,6 +43,7 @@ describe("failedUpdateToast", () => {
     resetFailedUpdateToastsForTests();
     vi.mocked(toaster.toast).mockClear();
     vi.mocked(logWarn).mockClear();
+    vi.mocked(logError).mockClear();
     vi.mocked(getUpdateAttemptToast).mockReset();
     vi.mocked(acknowledgeUpdateAttemptToast).mockReset();
   });
@@ -150,6 +154,29 @@ describe("failedUpdateToast", () => {
       }));
 
       expect(logWarn).toHaveBeenCalledWith("The toast for record 1 was not acknowledged: invalid_value");
+    });
+
+    it("says a toast raised but not acknowledged was raised, and answers rather than rejecting", async () => {
+      await expect(
+        raiseFailureToastOnce("record 1", "body", () => Promise.reject(new Error("socket closed"))),
+      ).resolves.toBeUndefined();
+
+      expect(toaster.toast).toHaveBeenCalledOnce();
+      expect(logError).toHaveBeenCalledWith(
+        "The toast for record 1 was raised, but not acknowledged: Error: socket closed",
+      );
+    });
+
+    it("is neither raised nor acknowledged where it is no longer wanted once Steam can show it, and can be asked for again", async () => {
+      const acknowledge = vi.fn(async () => undefined);
+
+      await raiseUpdateToastOnce("available 1.1.0", "body", "the release's toast", acknowledge, () => false);
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(acknowledge).not.toHaveBeenCalled();
+
+      await raiseUpdateToastOnce("available 1.1.0", "body", "the release's toast", acknowledge, () => true);
+      expect(toaster.toast).toHaveBeenCalledOnce();
+      expect(acknowledge).toHaveBeenCalledOnce();
     });
 
     it("is raised again for a different failure", async () => {
