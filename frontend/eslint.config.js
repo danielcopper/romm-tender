@@ -33,7 +33,7 @@ export default tseslint.config(
   // Direction rules for `src/`. The backend gets this from
   // `.importlinter`, which is Python-only; without an equivalent here nothing
   // in the frontend toolchain has an opinion about which module may reach
-  // which. The seven rules below make the WRONG seam fail — they cannot certify
+  // which. The eleven rules below make the WRONG seam fail — they cannot certify
   // that a seam is right. A helper imported by exactly one parent, taking a
   // dozen parameters and doing nothing on its own, is neither a cycle nor a
   // direction violation and still passes.
@@ -81,6 +81,12 @@ export default tseslint.config(
                 "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let the surface's entry point supply it.",
             },
             {
+              target: "./src/utils",
+              from: "./src/shared",
+              message:
+                "utils/ is the bottom layer and must not reach up into shared/. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
+            },
+            {
               target: "./src/api",
               from: "./src/bigpicture",
               message: "api/ is the wire layer and has no business reaching into the view.",
@@ -89,18 +95,35 @@ export default tseslint.config(
               target: "./src/api",
               from: "./src/desktop",
               message: "api/ is the wire layer and has no business reaching into the view.",
+            },
+            {
+              target: "./src/api",
+              from: "./src/shared",
+              message: "api/ is the wire layer and has no business reaching into the view.",
+            },
+            {
+              target: "./src/shared",
+              from: "./src/bigpicture",
+              message:
+                "shared/ holds UI that belongs to both surfaces and sits below them, so it must not reach up into either. Code it needs from a surface belongs in shared/ itself or below it, in api/, utils/ or types/.",
+            },
+            {
+              target: "./src/shared",
+              from: "./src/desktop",
+              message:
+                "shared/ holds UI that belongs to both surfaces and sits below them, so it must not reach up into either. Code it needs from a surface belongs in shared/ itself or below it, in api/, utils/ or types/.",
             },
             {
               target: "./src/bigpicture",
               from: "./src/desktop",
               message:
-                "bigpicture/ and desktop/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
+                "bigpicture/ and desktop/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN, never sideways: UI into shared/, the rest into api/, utils/ or types/.",
             },
             {
               target: "./src/desktop",
               from: "./src/bigpicture",
               message:
-                "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
+                "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN, never sideways: UI into shared/, the rest into api/, utils/ or types/.",
             },
           ],
         },
@@ -182,11 +205,7 @@ export default tseslint.config(
   {
     // Vitest globals (describe/it/expect/vi/...) are injected at runtime via
     // vitest.config.ts `globals: true` + tsconfig "types": ["vitest/globals"].
-    files: [
-      "src/**/*.{test,spec}.{ts,tsx}",
-      "src/test-setup.ts",
-      "src/test-utils/**/*.ts",
-    ],
+    files: ["src/**/*.{test,spec}.{ts,tsx}", "src/test-setup.ts", "src/test-utils/**/*.ts"],
     languageOptions: {
       globals: { ...globals.vitest },
     },

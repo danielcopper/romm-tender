@@ -40,6 +40,8 @@ const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs
 const REACHES_BIGPICTURE =
   'import { showStopGameModal } from "../../bigpicture/StopGameModal";\nexport const probe = showStopGameModal;\n';
 const REACHES_DESKTOP = 'import readme from "../../desktop/README.md";\nexport const probe = readme;\n';
+const REACHES_SHARED =
+  'import { showCoreChangeModal } from "../../shared/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n';
 
 function ruleIds(results: ESLint.LintResult[]): string[] {
   return results.flatMap((r) => r.messages.map((m) => m.ruleId ?? "<fatal>"));
@@ -115,6 +117,38 @@ describe("frontend direction rules", () => {
     expect(await rulesReportedFor("desktop/__eslint_fixtures__/reachesSideways.ts", REACHES_BIGPICTURE)).toContain(
       "import-x/no-restricted-paths",
     );
+  });
+
+  it("reports shared/ reaching up into bigpicture/", async () => {
+    expect(await rulesReportedFor("shared/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE)).toContain(
+      "import-x/no-restricted-paths",
+    );
+  });
+
+  it("reports shared/ reaching up into desktop/", async () => {
+    expect(await rulesReportedFor("shared/__eslint_fixtures__/reachesDesktop.ts", REACHES_DESKTOP)).toContain(
+      "import-x/no-restricted-paths",
+    );
+  });
+
+  it("reports utils/ reaching up into shared/", async () => {
+    expect(await rulesReportedFor("utils/__eslint_fixtures__/reachesShared.ts", REACHES_SHARED)).toContain(
+      "import-x/no-restricted-paths",
+    );
+  });
+
+  it("reports api/ reaching into shared/", async () => {
+    expect(await rulesReportedFor("api/__eslint_fixtures__/reachesShared.ts", REACHES_SHARED)).toContain(
+      "import-x/no-restricted-paths",
+    );
+  });
+
+  it("leaves bigpicture/ reaching down into shared/ alone", async () => {
+    expect(await rulesReportedFor("bigpicture/__eslint_fixtures__/reachesDown.ts", REACHES_SHARED)).toEqual([]);
+  });
+
+  it("leaves desktop/ reaching down into shared/ alone", async () => {
+    expect(await rulesReportedFor("desktop/__eslint_fixtures__/reachesDown.ts", REACHES_SHARED)).toEqual([]);
   });
 
   it("reports a dependency cycle between two .ts modules", async () => {
