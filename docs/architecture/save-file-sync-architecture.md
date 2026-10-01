@@ -1603,8 +1603,8 @@ frontend-side. The duplicate start still re-dispatches `romm_session_changed` wi
 missed the first event self-heals. The guard is checked before the rom lookup, so a map that emptied mid-session cannot
 drop a live entry.
 
-Liveness is exposed to the launch surfaces as `isSessionActive(romId)` — a predicate over the map, which is what all
-five call sites were asking anyway.
+The session map is one of the signals behind `readGameRunning(appId, romId)`, the predicate every "is this game running"
+question asks; see [Is the game running](#is-the-game-running).
 
 **Concurrency of the post-exit work is deliberately not per-app.** Lifecycle events run on one serialized chain, and the
 post-exit save syncs behind them serialize further on a **device-wide** gate (`services/saves/sync_engine/_gate.py`, 60s
@@ -1650,7 +1650,7 @@ the re-initialized `sessionManager` recover them:
 
   Writes are a **projection**: the map is the source of truth and the whole row is rewritten after each mutation, before
   any await, never read-modify-written. `setItem` is atomic per key, so a failed write leaves the previous row intact
-  and self-heals at the next mutation. An empty map removes the row, so "no live session" stays the absent state.
+  and self-heals at the next mutation. An empty map removes the row, so "no active session" stays the absent state.
 
   The reader branches on the stored **version first, before any field**, and each version a released build could have
   written gets its own lift into the current shape — a v1 row (one session inline) becomes a one-entry list and is
@@ -1846,31 +1846,66 @@ head, which both mis-attributed a start while another game was running and stall
 
 The store is also not reliable across timing — why, and what was measured, is under
 [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the adoption path
-**polls** the reader instead of reading once, and a failed round logs what the store reported. The same reader backs the
-already-running skip on both launch surfaces — the interceptor and the Play button
-([ADR-0015](../adr/0015-single-launch-gate-cancel-then-relaunch.md)).
+**polls** the reader instead of reading once, and a failed round logs what the store reported. The same reader is the
+fallback signal behind the already-running skip on both launch surfaces — the launch watcher and the Play button
+([ADR-0015](../adr/0015-single-launch-gate-cancel-then-relaunch.md)) — and an observed stop overrules it there, because
+it can also keep an app listed that has already exited: [Is the game running](#is-the-game-running).
+
+### Is the game running
+
+Five places ask whether a game is running, and all of them ask one predicate in the session manager,
+`readGameRunning(appId, romId)`: the launch watcher's already-running guard, and the Play button's launch guard, its
+Resume overlay at mount, Resume and Stop. At the two launch guards a wrong "running" skips the whole launch gate — the
+migration block, the launch target, tracking setup, the core-change confirmation, the offline drift check, the
+pre-launch sync and conflict resolution.
+
+1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
+   the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
+2. **Otherwise `SteamUIStore.RunningApps` answers — unless a lifetime stop for the app has been observed since its last
+   observed start.** An observed stop overrules the store, because the store can keep an exited app listed for a while.
+   Measured in windowed Big Picture: after a game started through Tender's Play button exited, the store still listed it
+   about 6 and 12 s later but no longer about 18 s later; after a game started through a `steam://rungameid` link it was
+   empty about 3 s after the exit. Before this rule, a press of the Play button 12 s after an exit skipped the gate, and
+   Steam itself started the game normally. In the desktop client the store was empty about 5 s after an exit. Which of
+   the store's inputs lags has not been established, and Game Mode has not been measured; the rule does not depend on
+   how long the lag is. A second start of a game that really is running is refused by Steam itself ("already running").
+3. **The store stays the fallback for a start that has no session behind it** — one that happened before this JS context
+   existed (until reload adoption has finished), one whose session is not open yet (between a button's render and its
+   press), and one for an app the session manager cannot map to a rom.
+
+The stop record is per app and in memory only. A stop is recorded the moment Steam reports it, even while the lifecycle
+chain is busy with another game's post-exit sync, and every lifetime start clears it — including a start for an app the
+session manager then cannot map to a rom. A session that is still open because its own stop is queued on that chain
+still answers "running" under rule 1 — only when two games run at once, because when games run one after the other the
+second game's start waits in the same chain, so its session is not open yet. After a JS-context rebuild the record is
+empty, so the store answers unopposed until the next stop is observed.
+
+Each launch guard logs one line per decision, whether it skips the gate or runs it. The launch watcher logs at `info`
+and the Play button at `debug`, so neither line is written at the default `warn` level. The line names the signal that
+decided (`session`, `store`, `stop` or `none`) beside the session state, whether a stop was observed, and the store's
+`diagnostics`.
 
 ### State-aware Resume button (#1313)
 
 When the game is already running, the RomM Play button (`CustomPlayButton`) renders **Resume** — top precedence over its
-install / conflict / download states — and a press brings the live session to the foreground via **Steam's own gamescope
+install / conflict / download states — and a press brings the running game to the foreground via **Steam's own gamescope
 "Resume Game" path**: `SteamUIStore.SetRunningApp(appId)` followed by `SteamUIStore.NavigateToRunningApp()`. This is
 pure UI focus navigation, not a launch: it fires no `GameActionStart` (so the launch interceptor never re-enters) and
 shows no Steam "already running" dialog, which dissolves the mid-session-sync problem at the UX level rather than
 defending against it. (`SteamClient.Apps.RaiseWindowForGame` — the earlier approach — is a **desktop-overlay** call:
 native only acts on it when `SteamUIStore.GetOverlayInstances(appId)` is non-empty, which it never is in gamescope Game
 Mode, so it reports `Success` but silently does nothing. Hence the switch to the store-navigation path.) A click first
-runs a **liveness gate**: if nothing is actually running (`isAppRunning(appId)` / `isSessionActive(romId)` both say no —
-a stale overlay from a session that ended without a stop event reaching the button), it clears the overlay and falls
-through to the normal launch funnel (self-heal). If `NavigateToRunningApp` is absent on an older SteamUI build, the
-foreground falls back to `Navigation.Navigate("/apprunning")` after the `SetRunningApp` selection (same visible effect).
+runs a **liveness gate**: if nothing is actually running (`readGameRunning(appId, romId)` says no — a stale overlay from
+a session that ended without a stop event reaching the button), it clears the overlay and falls through to the normal
+launch funnel (self-heal). If `NavigateToRunningApp` is absent on an older SteamUI build, the foreground falls back to
+`Navigation.Navigate("/apprunning")` after the `SetRunningApp` selection (same visible effect).
 
-Detection is **reactive, not polled**: the overlay is seeded synchronously at mount from `isSessionActive(romId)` /
-`isAppRunning(appId)` (so a page opened mid-session — or after a reload-adoption — shows Resume immediately) and flipped
-live by the `romm_session_changed` DOM event, which `sessionManager` dispatches on game start (`running: true`), game
-stop (`running: false`), and both reload-adoption branches (`running: true`). The already-running guards from #1148 /
-\#1308 (the interceptor and the `handlePlay` guard) stay in place as **backstops** for the render→click race, where the
-session begins between the button rendering Play and the user pressing it.
+Detection is **reactive, not polled**: the overlay is seeded synchronously at mount from `readGameRunning(appId, romId)`
+(so a page opened mid-session — or after a reload-adoption — shows Resume immediately) and flipped live by the
+`romm_session_changed` DOM event, which `sessionManager` dispatches on game start (`running: true`), game stop
+(`running: false`), and both reload-adoption branches (`running: true`). The already-running guards from #1148 / \#1308
+(the interceptor and the `handlePlay` guard) stay in place as **backstops** for the render→click race, where the session
+begins between the button rendering Play and the user pressing it; they ask the same predicate.
 
 #### Stop Game
 
