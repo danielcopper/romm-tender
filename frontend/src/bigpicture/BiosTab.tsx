@@ -40,9 +40,9 @@ import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted, O
 import { biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
-import { groupBlock, oneOfWords, type GroupLineTone } from "../utils/biosGroup";
+import { oneOfWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
-import { biosSummary } from "../utils/biosSummary";
+import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { section } from "./panelSection";
 
 interface BiosTabProps {
@@ -173,12 +173,11 @@ const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
  * list: which image each disc region needs and whether it is there, with the
  * game's own region marked. The file list below stays whole — the block is a
  * reading of some of its rows, not a replacement for them. What it says is
- * `utils/biosGroup.ts`'s; this lays it out.
+ * `utils/biosGroup.ts`'s and `utils/biosSummary.ts`'s; this lays it out.
  */
 function buildGroupBlock(bios: BiosStatus): ReactElement | null {
-  const groups = bios.one_of_groups ?? [];
-  if (groups.length === 0) return null;
-  const named = bios.active_core_label ?? "The launching emulator";
+  const blocks = groupBlocks(bios);
+  if (blocks.length === 0) return null;
   return (
     <div
       key="bios-group"
@@ -186,8 +185,7 @@ function buildGroupBlock(bios: BiosStatus): ReactElement | null {
       className="romm-panel-group"
       style={{ display: "flex", flexDirection: "column", gap: "2px", margin: "8px 0" }}
     >
-      {groups.map((group, index) => {
-        const block = groupBlock(group, named);
+      {blocks.map((block, index) => {
         return (
           <div key={`group-${index}`}>
             {block.intro && <div className="romm-panel-value">{block.intro}</div>}

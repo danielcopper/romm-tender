@@ -67,7 +67,8 @@
  */
 
 import type { BiosLevel, FirmwareWanted, OneOfGroupVerdict, SystemImage } from "../types/firmware";
-import { joined, regionNames, servesEveryRegion } from "./biosGroup";
+import { foundByContent } from "./biosFileNote";
+import { groupBlock, joined, regionNames, servesEveryRegion, type GroupBlock } from "./biosGroup";
 
 /**
  * One state, in the two lengths a surface can have room for. Both are always
@@ -99,6 +100,8 @@ export interface BiosSummaryRow {
   required_by_active?: boolean;
   used_by_active?: boolean;
   downloaded?: boolean;
+  file_name?: string;
+  caveats?: string[];
 }
 
 // The role a sentence names where the pick carries no label. Two spellings of
@@ -143,6 +146,11 @@ const GROUP_GAME_UNMET = "has no BIOS image for this game's region";
 const GROUP_GAME_NEEDS = "to start this game";
 const GROUP_GAME_STARTS = "starts this game with";
 const GROUP_GAME_FOUND = "found in the BIOS folder, it serves every region";
+const GROUP_GAME_SERVES = "which serves every region";
+const GROUP_ONE_MISSING = "it is missing";
+const GROUP_TWO_MISSING = "neither is in place";
+const GROUP_MANY_MISSING = "none of them is in place";
+const GROUP_NO_IMAGE_FOR = "and there is no BIOS image for";
 
 const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
 const STATUS_READINESS_UNKNOWN = "Readiness unknown";
@@ -181,6 +189,15 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   GROUP_GAME_NEEDS,
   GROUP_GAME_STARTS,
   GROUP_GAME_FOUND,
+  GROUP_GAME_SERVES,
+  GROUP_ONE_MISSING,
+  GROUP_TWO_MISSING,
+  GROUP_MANY_MISSING,
+  GROUP_NO_IMAGE_FOR,
+  // The role's two spellings as string literals: a component falling back to
+  // the role itself writes one of these, and the role belongs here.
+  `"${ROLE_LEADING}"`,
+  `"${ROLE_MID}"`,
   STATUS_NEEDS_IMAGE,
   STATUS_READINESS_UNKNOWN,
   STATUS_REQUIREMENT_UNKNOWN,
@@ -232,7 +249,7 @@ export function biosSummary(
   if (group) {
     const plain = plainRequirements(groups, requiredCount, requiredDone, withheld);
     if (group.state === "unmet" || (plain.missing === 0 && plain.withheld === 0)) {
-      return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`);
+      return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`, rows);
     }
     if (plain.missing > 0) return requiredFilesSummary(named, rows, requiredDone, requiredCount, level);
     return declinedSummary(named, plain.withheld, systemImage);
@@ -305,13 +322,21 @@ function groupToWord(groups: readonly OneOfGroupVerdict[]): OneOfGroupVerdict | 
  * alone reads as nothing in place. On the game page the verdict was narrowed to
  * the game's own regions (`game_regions`), and the sentence says so.
  */
-function groupSummary(group: OneOfGroupVerdict, named: string, leading: string, ratio: string): BiosSummary {
+function groupSummary(
+  group: OneOfGroupVerdict,
+  named: string,
+  leading: string,
+  ratio: string,
+  rows: readonly BiosSummaryRow[],
+): BiosSummary {
   const forTheGame = group.game_regions.length > 0;
   switch (group.state) {
     case "met":
       return {
         status: ratio,
-        sentence: forTheGame ? gameCovered(group, named, leading) : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
+        sentence: forTheGame
+          ? gameCovered(group, named, leading, rows)
+          : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
       };
     case "partial":
       return {
@@ -332,40 +357,57 @@ function groupSummary(group: OneOfGroupVerdict, named: string, leading: string, 
 
 /**
  * The game page's sentence for a game whose region is covered. Where the image
- * covering it serves every region the group speaks about — an image the core
- * found in the BIOS folder, SwanStation's — the sentence names that image,
- * because it is the one this game starts with whatever its disc says.
+ * covering it serves every region the group speaks about, the sentence names
+ * that image, because it is the one this game starts with whatever its disc
+ * says — and says it was found in the BIOS folder only where its row says the
+ * reading identified it by its contents (`foundByContent`), which is the folder
+ * search. An image every region's own setting names was opened by name.
  */
-function gameCovered(group: OneOfGroupVerdict, named: string, leading: string): string {
-  const covering = (group.options ?? []).find(
+function gameCovered(
+  group: OneOfGroupVerdict,
+  named: string,
+  leading: string,
+  rows: readonly BiosSummaryRow[],
+): string {
+  const covering = group.options.find(
     (option) => option.satisfied === true && option.regions.some((region) => group.covered.includes(region)),
   );
   if (covering && servesEveryRegion(covering, group)) {
-    return `${leading} ${GROUP_GAME_STARTS} ${covering.file_name} — ${GROUP_GAME_FOUND}`;
+    const row = rows.find((candidate) => candidate.file_name === covering.file_name);
+    const how = row && foundByContent(row) ? ` — ${GROUP_GAME_FOUND}` : `, ${GROUP_GAME_SERVES}`;
+    return `${leading} ${GROUP_GAME_STARTS} ${covering.file_name}${how}`;
   }
   return `${GROUP_IMAGE_HEAD} ${named} ${GROUP_GAME_MET} (${regionNames(group.covered)}) is in place`;
 }
 
 /**
  * The game page's sentence for a game whose region is not covered: the file
- * its region needs, and that it is missing. A game of several regions names
- * the file of each, since any of them would start it. Where no option is
- * listed for the game's region — the resolver stated only that nothing boots
- * for it — there is no file to name, and the sentence names the region alone.
+ * each of its regions needs, and that it is missing. A game of several regions
+ * names the file of each, since any of them would start it, and names only the
+ * regions those files serve. A region the resolver listed no option for — it
+ * stated only that nothing boots for it — has no file to name, so it gets a
+ * clause of its own rather than borrowing another region's file; with no file
+ * at all the sentence names the regions alone.
  */
 function gameUncovered(group: OneOfGroupVerdict, leading: string): string {
-  const files = [
-    ...new Set(
-      (group.options ?? [])
-        .filter((option) => option.regions.some((region) => group.missing.includes(region)))
-        .map((option) => option.file_name),
-    ),
-  ];
-  const regions = regionNames(group.missing);
-  if (files.length === 0) return `${leading} ${GROUP_GAME_UNMET} (${regions})`;
-  const state =
-    files.length === 1 ? "it is missing" : files.length === 2 ? "neither is in place" : "none of them is in place";
-  return `${leading} needs ${joined(files, "or")} ${GROUP_GAME_NEEDS} (${regions}) — ${state}`;
+  const serving = group.options.filter((option) => option.regions.some((region) => group.missing.includes(region)));
+  const files = [...new Set(serving.map((option) => option.file_name))];
+  if (files.length === 0) return `${leading} ${GROUP_GAME_UNMET} (${regionNames(group.missing)})`;
+  const named = group.missing.filter((region) => serving.some((option) => option.regions.includes(region)));
+  const bare = group.missing.filter((region) => !named.includes(region));
+  const state = files.length === 1 ? GROUP_ONE_MISSING : files.length === 2 ? GROUP_TWO_MISSING : GROUP_MANY_MISSING;
+  const rest = bare.length > 0 ? `, ${GROUP_NO_IMAGE_FOR} ${regionNames(bare)}` : "";
+  return `${leading} needs ${joined(files, "or")} ${GROUP_GAME_NEEDS} (${regionNames(named)}) — ${state}${rest}`;
+}
+
+/**
+ * The launching emulator's groups as the game page lists them under its
+ * headline, introduced by the emulator's name — or by its role, where the pick
+ * carries no label, in the same spelling the sentences use.
+ */
+export function groupBlocks(source: BiosSummarySource): GroupBlock[] {
+  const leading = source.active_core_label ?? ROLE_LEADING;
+  return (source.one_of_groups ?? []).map((group) => groupBlock(group, leading));
 }
 
 /**

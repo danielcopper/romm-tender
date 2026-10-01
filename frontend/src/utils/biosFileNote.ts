@@ -301,7 +301,7 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
   // A file the reading identified by its contents was found by a search of the
   // BIOS folder, and the resolver's description of such a file explains that
   // search ("named by no option"). Where the file is is what a reader needs.
-  if (IDENTIFIED_BY_CONTENT.some((code) => (file.caveats ?? []).includes(code))) return FOUND_IN_THE_BIOS_FOLDER;
+  if (foundByContent(file)) return FOUND_IN_THE_BIOS_FOLDER;
   if (file.declaration !== "read") return null;
   const description = file.description.trim();
   if (!description) return null;
@@ -323,6 +323,11 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
   if ((token.split("/").pop() ?? "") !== file.file_name) return description;
   const rest = tail.join(" ").trim();
   return rest || null;
+}
+
+/** Did the reading identify *row*'s file by its contents — the emulator's search of the BIOS folder? */
+export function foundByContent(row: { caveats?: string[] }): boolean {
+  return IDENTIFIED_BY_CONTENT.some((code) => (row.caveats ?? []).includes(code));
 }
 
 /**

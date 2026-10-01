@@ -1210,6 +1210,14 @@ describe("BiosTab", () => {
       const swanstation: BiosStatus = {
         ...forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]),
         active_core_label: "SwanStation",
+        // The folder search identified the image: its row says so.
+        files: [
+          {
+            ...option("scph1001.bin", "ntsc-u", true),
+            one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
+            caveats: ["firmware-image-identified"],
+          },
+        ],
         one_of_groups: [
           {
             state: "met",
@@ -1230,6 +1238,22 @@ describe("BiosTab", () => {
       const lines = [...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent);
       expect(lines).toEqual(["every region · scph1001.bin · in place ← this game"]);
       expect(container.textContent).not.toContain("needs one BIOS image per disc region");
+    });
+
+    it("lists every group the launching emulator states, each under its own intro", () => {
+      const status = forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]);
+      const [beetleGroup] = status.one_of_groups ?? [];
+      const second = {
+        ...beetleGroup!,
+        options: [{ file_name: "extra.rom", regions: ["ntsc-j"], satisfied: true }],
+      };
+      const container = renderFor({ ...status, one_of_groups: [beetleGroup!, second] }, "missing");
+
+      const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
+      expect(block?.textContent?.match(/Beetle PSX needs one BIOS image per disc region:/g)).toHaveLength(2);
+      expect([...(block?.querySelectorAll(".romm-panel-group-line") ?? [])].map((line) => line.textContent)).toContain(
+        "Japan · extra.rom · in place ← this game",
+      );
     });
 
     it("shows no group block where the launching emulator states no group", () => {

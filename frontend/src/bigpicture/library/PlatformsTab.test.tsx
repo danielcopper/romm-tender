@@ -2152,7 +2152,19 @@ describe("Library › Platforms", () => {
             required_partial: 1,
             active_core_label: "Beetle PSX",
             one_of_groups: [
-              { state: "partial", covered: ["ntsc-u"], missing: ["ntsc-j", "pal"], unchecked: [], game_regions: [] },
+              {
+                state: "partial",
+                covered: ["ntsc-u"],
+                missing: ["ntsc-j", "pal"],
+                unchecked: [],
+                game_regions: [],
+                regions: ["ntsc-j", "ntsc-u", "pal"],
+                options: [
+                  { file_name: "scph5500.bin", regions: ["ntsc-j"], satisfied: false },
+                  { file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: true },
+                  { file_name: "scph5502.bin", regions: ["pal"], satisfied: false },
+                ],
+              },
             ],
             server_count: files.length,
             files,
@@ -2209,7 +2221,15 @@ describe("Library › Platforms", () => {
             required_partial: 0,
             active_core_label: "SwanStation",
             one_of_groups: [
-              { state: "met", covered: ["ntsc-j", "ntsc-u", "pal"], missing: [], unchecked: [], game_regions: [] },
+              {
+                state: "met",
+                covered: ["ntsc-j", "ntsc-u", "pal"],
+                missing: [],
+                unchecked: [],
+                game_regions: [],
+                regions: ["ntsc-j", "ntsc-u", "pal"],
+                options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
+              },
             ],
           },
         );

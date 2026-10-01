@@ -27,8 +27,8 @@ const REGION_NAMES: Readonly<Record<string, string>> = {
 };
 
 const EVERY_REGION = "every region";
-const BOOTS_IT_FOR_EVERY_REGION = `boots it for ${EVERY_REGION}`;
 const FOR_EVERY_REGION = `for ${EVERY_REGION}`;
+const BOOTS_IT_FOR_EVERY_REGION = `boots it ${FOR_EVERY_REGION}`;
 const IN_PLACE = "in place";
 const MISSING = "missing";
 const NOT_CHECKED = "not checked";
@@ -60,8 +60,12 @@ export function regionNames(regions: readonly string[]): string {
 
 /** Does *option* serve every region its group speaks about? */
 export function servesEveryRegion(option: { regions: readonly string[] }, group: OneOfGroupVerdict): boolean {
-  const regions = group.regions ?? [];
-  return regions.length > 0 && regions.every((region) => option.regions.includes(region));
+  return group.regions.length > 0 && group.regions.every((region) => option.regions.includes(region));
+}
+
+/** The discs a file is for: "for USA discs", or "for every region". */
+function forDiscs(membership: OneOfMembership): string {
+  return membership.every_region ? FOR_EVERY_REGION : `for ${regionNames(membership.regions)} discs`;
 }
 
 /**
@@ -70,8 +74,7 @@ export function servesEveryRegion(option: { regions: readonly string[] }, group:
  * all. Only this file's own regions, never the group's others.
  */
 export function oneOfWords(membership: OneOfMembership): string {
-  if (membership.every_region) return BOOTS_IT_FOR_EVERY_REGION;
-  return `for ${regionNames(membership.regions)} discs`;
+  return membership.every_region ? BOOTS_IT_FOR_EVERY_REGION : forDiscs(membership);
 }
 
 /**
@@ -81,7 +84,7 @@ export function oneOfWords(membership: OneOfMembership): string {
  * about it, because the row's mark already says nothing settled.
  */
 export function oneOfRowLine(membership: OneOfMembership, inPlace: boolean | null): string {
-  const words = membership.every_region ? FOR_EVERY_REGION : `for ${regionNames(membership.regions)} discs`;
+  const words = forDiscs(membership);
   if (inPlace === null) return words;
   return `${words} · ${inPlace ? `✓ ${IN_PLACE}` : `✗ ${MISSING}`}`;
 }
@@ -114,7 +117,7 @@ export interface GroupBlock {
  * *named* is the emulator's label, or the role where the pick has none.
  */
 export function groupBlock(group: OneOfGroupVerdict, named: string): GroupBlock {
-  const options = group.options ?? [];
+  const options = group.options;
   const lines = options.map((option): GroupBlockLine => {
     const every = servesEveryRegion(option, group);
     const forTheGame = option.regions.some((region) => group.game_regions.includes(region));

@@ -241,6 +241,18 @@ describe("biosFileDescription", () => {
     ).toBe("found in the BIOS folder");
   });
 
+  it("says the same of a file whose bytes the emulator recognised and the packaged table does not list", () => {
+    expect(
+      biosFileDescription({
+        file_name: "scph1001.bin",
+        description: "the image this core boots — found by its directory search, named by no option",
+        declared_kind: "file",
+        declaration: "read",
+        caveats: ["firmware-image-unlisted"],
+      }),
+    ).toBe("found in the BIOS folder");
+  });
+
   // One example per shape the function's own docstring classifies the `.info`
   // corpus into, so the rule is pinned beside the code holding it rather than
   // only through whichever surface happens to render it. The strings are that

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BIOS_SUMMARY_PHRASES, biosSummary, type BiosSummaryRow, type BiosSummarySource } from "./biosSummary";
+import {
+  BIOS_SUMMARY_PHRASES,
+  biosSummary,
+  groupBlocks,
+  type BiosSummaryRow,
+  type BiosSummarySource,
+} from "./biosSummary";
 import { componentSources } from "../test-utils/componentSources";
 import type { BiosLevel, OneOfGroupVerdict } from "../types/firmware";
 
@@ -217,7 +223,15 @@ describe("a one-of group", () => {
     covered: string[],
     missing: string[],
     game_regions: string[] = [],
-  ): OneOfGroupVerdict => ({ state, covered, missing, unchecked: [], game_regions });
+  ): OneOfGroupVerdict => ({
+    state,
+    covered,
+    missing,
+    unchecked: [],
+    game_regions,
+    regions: [...covered, ...missing],
+    options: [],
+  });
 
   it("says the image is in place for every region", () => {
     const met = summary({
@@ -341,16 +355,59 @@ describe("a one-of group", () => {
     );
   });
 
-  it("names the image that starts the game where one found in the folder serves every region", () => {
-    const swanstation: OneOfGroupVerdict = {
-      ...group("met", ["ntsc-u"], [], ["ntsc-u"]),
-      regions: ["ntsc-j", "ntsc-u", "pal"],
-      options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
-    };
-    const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] });
+  const swanstation: OneOfGroupVerdict = {
+    ...group("met", ["ntsc-u"], [], ["ntsc-u"]),
+    regions: ["ntsc-j", "ntsc-u", "pal"],
+    options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
+  };
+
+  it("names the image that starts the game where the folder search found it and it serves every region", () => {
+    const rows: BiosSummaryRow[] = [{ file_name: "scph1001.bin", caveats: ["firmware-image-identified"] }];
+    const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] }, "ok", rows);
     expect(met.sentence).toBe(
       "SwanStation starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
     );
+  });
+
+  it("does not say the image was found in the folder where nothing says a search found it", () => {
+    // Every region's own setting can name one file; then the core opened it by
+    // name and no search was made.
+    const rows: BiosSummaryRow[] = [{ file_name: "scph1001.bin", caveats: [] }];
+    const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] }, "ok", rows);
+    expect(met.sentence).toBe("SwanStation starts this game with scph1001.bin, which serves every region");
+  });
+
+  it("names three files with none of them in place", () => {
+    const three: OneOfGroupVerdict = {
+      ...group("unmet", [], ["ntsc-j", "ntsc-u", "pal"], ["ntsc-j", "ntsc-u", "pal"]),
+      options: [
+        { file_name: "scph5500.bin", regions: ["ntsc-j"], satisfied: false },
+        { file_name: "scph5501.bin", regions: ["ntsc-u"], satisfied: false },
+        { file_name: "scph5502.bin", regions: ["pal"], satisfied: false },
+      ],
+    };
+    expect(summary({ required_count: 1, required_downloaded: 0, one_of_groups: [three] }, "missing").sentence).toBe(
+      "SwanStation needs scph5500.bin, scph5501.bin or scph5502.bin to start this game (Japan, USA and Europe) — none of them is in place",
+    );
+  });
+
+  it("never lets a named file stand for a region that has no image at all", () => {
+    // USA has no option; only Europe's file can be named, and only for Europe.
+    const mixed: OneOfGroupVerdict = {
+      ...group("unmet", [], ["ntsc-u", "pal"], ["ntsc-u", "pal"]),
+      options: [{ file_name: "scph5502.bin", regions: ["pal"], satisfied: false }],
+    };
+    expect(summary({ required_count: 1, required_downloaded: 0, one_of_groups: [mixed] }, "missing").sentence).toBe(
+      "SwanStation needs scph5502.bin to start this game (Europe) — it is missing, and there is no BIOS image for USA",
+    );
+  });
+
+  it("introduces each group's block under the emulator, or under its role where the pick has no name", () => {
+    const named = groupBlocks({ active_core_label: "Beetle PSX", one_of_groups: [swanstation, swanstation] });
+    const unnamed = groupBlocks({ active_core_label: null, one_of_groups: [{ ...swanstation, options: [] }] });
+
+    expect(named).toHaveLength(2);
+    expect(unnamed[0]?.intro).toBe("The launching emulator needs one BIOS image per disc region:");
   });
 
   it("words a group of any console the same way, naming regions it has no name for in their own spelling", () => {
