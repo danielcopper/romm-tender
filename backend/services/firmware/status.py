@@ -39,11 +39,13 @@ from domain.bios_status import (
     compute_bios_label,
     compute_bios_level,
     count_required,
+    count_required_partial,
     count_required_withheld,
     count_wanted,
     format_bios_status,
 )
 from domain.emulator_commands import options_to_payload, resolve_platform_option
+from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_wants import DECLARED_DIRECTORY
 
 if TYPE_CHECKING:
@@ -52,6 +54,7 @@ if TYPE_CHECKING:
 
     from domain.bios_file import BiosFile
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
+    from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import FirmwareCatalogue
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
@@ -165,7 +168,9 @@ class FirmwareStatusReader:
             return launching_emulator
         return self._platform_emulator(platform_slug, options)
 
-    def _bios_aggregates(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
+    def _bios_aggregates(
+        self, files, platform_slug: str, complete: bool, system_image: str, groups: tuple[GroupVerdict, ...]
+    ) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
 
         One derivation for the per-game paths and the overview, so a platform
@@ -196,11 +201,18 @@ class FirmwareStatusReader:
         launching emulator is disjunctive — one of these images, not each of them —
         so it travels as a value and every surface words it rather than printing
         it as a ratio.
+
+        *groups* are the verdicts over the launching emulator's one-of groups.
+        Each is one requirement inside ``required_count``; ``required_partial``
+        is the number of them covered for some regions only, which — like
+        ``required_withheld`` — a surface subtracts before calling anything
+        absent. ``one_of_groups`` carries the verdicts themselves, so a surface
+        words a group off the regions it covers and misses.
         """
         on_server = [f for f in files if f.on_server]
         server_count = len(on_server)
         local_count = sum(1 for f in on_server if f.downloaded)
-        required_count, required_downloaded = count_required(files)
+        required_count, required_downloaded = count_required(files, groups)
         known_count, unknown_count = count_wanted(files)
 
         result = {
@@ -210,10 +222,12 @@ class FirmwareStatusReader:
             "all_downloaded": local_count >= server_count,
             "required_count": required_count,
             "required_downloaded": required_downloaded,
-            "required_withheld": count_required_withheld(files),
+            "required_withheld": count_required_withheld(files, groups),
+            "required_partial": count_required_partial(groups),
             "unknown_count": unknown_count,
             "known_count": known_count,
             "system_image": system_image,
+            "one_of_groups": [_group_payload(group) for group in groups],
         }
         # The bios_level state ("unknown" / "ok" / "partial" / "missing") and the
         # compact bios_label beside it, so every consumer reads the verdict
@@ -232,7 +246,11 @@ class FirmwareStatusReader:
         # turns on there being no row; ``result`` itself stays row-free, because
         # it is the aggregate half of a payload that carries them separately.
         status = format_bios_status(
-            {**result, "files": files}, platform_slug, reading_complete=complete, system_image=system_image
+            {**result, "files": files},
+            platform_slug,
+            reading_complete=complete,
+            system_image=system_image,
+            groups=groups,
         )
         result["bios_level"] = compute_bios_level(status)
         result["bios_label"] = compute_bios_label(status)
@@ -244,6 +262,7 @@ class FirmwareStatusReader:
         platform_slug: str,
         complete: bool,
         system_image: str,
+        groups: tuple[GroupVerdict, ...],
         launching_emulator: LaunchingEmulator | None,
     ) -> dict[str, Any]:
         """The aggregates plus the per-file rows — what the per-game surfaces read.
@@ -258,7 +277,7 @@ class FirmwareStatusReader:
         payload's own filtering already applied it (#923).
         """
         return {
-            **self._bios_aggregates(files, platform_slug, complete, system_image),
+            **self._bios_aggregates(files, platform_slug, complete, system_image, groups),
             "active_core_label": launching_emulator.label if launching_emulator is not None else None,
             "files": [asdict(f) for f in files],
         }
@@ -457,7 +476,7 @@ class FirmwareStatusReader:
             placements,
             complete,
             identity,
-            catalogue.emulators_needing_one_of_their_files(),
+            catalogue.groups,
         )
         plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
         # Alphabetical, and only here: the two halves arrive in their own
@@ -476,17 +495,24 @@ class FirmwareStatusReader:
         plat["has_games"] = slug in synced_slugs
         plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
         self._stamp_deletable(plat, slug, records)
-        system_image = classify_system_image(catalogue.verdict_for(identity), files, identity)
-        self._set_platform_bios_aggregates(plat, slug, files, complete, system_image)
+        groups = judge_groups(catalogue.groups_for(identity))
+        system_image = classify_system_image(catalogue.verdict_for(identity), files, identity, groups=groups)
+        self._set_platform_bios_aggregates(plat, slug, files, complete, system_image, groups)
 
     def _set_platform_bios_aggregates(
-        self, plat: dict[str, Any], slug: str, files, complete: bool, system_image: str
+        self,
+        plat: dict[str, Any],
+        slug: str,
+        files,
+        complete: bool,
+        system_image: str,
+        groups: tuple[GroupVerdict, ...],
     ) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.
 
         Adds ``server_count`` / ``local_count`` / ``required_count`` /
-        ``required_downloaded`` / ``required_withheld`` / ``system_image`` and the
-        ``bios_level`` state (``"unknown"`` / ``"ok"`` / ``"partial"`` /
+        ``required_downloaded`` / ``required_withheld`` / ``required_partial`` /
+        ``system_image`` / ``one_of_groups`` and the ``bios_level`` state (``"unknown"`` / ``"ok"`` / ``"partial"`` /
         ``"missing"``) so the
         platform detail reads the decision and the display counts straight off
         this payload instead of re-deriving the threshold logic in the frontend. The
@@ -512,14 +538,16 @@ class FirmwareStatusReader:
         travels beside the counts rather than in them: the pane words it and the
         list's tooltip words it, and neither may state it as a ratio.
         """
-        payload = self._bios_aggregates(files, slug, complete, system_image)
+        payload = self._bios_aggregates(files, slug, complete, system_image, groups)
         plat["server_count"] = payload["server_count"]
         plat["local_count"] = payload["local_count"]
         plat["required_count"] = payload["required_count"]
         plat["required_downloaded"] = payload["required_downloaded"]
         plat["required_withheld"] = payload["required_withheld"]
+        plat["required_partial"] = payload["required_partial"]
         plat["bios_level"] = payload["bios_level"]
         plat["system_image"] = payload["system_image"]
+        plat["one_of_groups"] = payload["one_of_groups"]
 
     async def get_firmware_status(self) -> dict[str, Any]:
         """Return which platforms the page can speak for — never what it will say.
@@ -607,7 +635,10 @@ class FirmwareStatusReader:
     # ── The per-game check ───────────────────────────────────
 
     async def check_platform_bios(
-        self, platform_slug, launching_emulator: LaunchingEmulator | None = None
+        self,
+        platform_slug,
+        launching_emulator: LaunchingEmulator | None = None,
+        rom_regions: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
 
@@ -624,6 +655,11 @@ class FirmwareStatusReader:
         nothing else does (#923 — what a game launches with reaches the frontend
         through ``get_platform_core_info``). ``None`` means "use the platform's
         own pick" (:meth:`_resolve_launching_emulator`).
+
+        *rom_regions* are the game's own regions as RomM names them. Where any
+        maps onto a console region, the launching emulator's one-of groups are
+        judged for those regions alone; where none does — or for the platform's
+        own check, which passes none — they are judged over every region.
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
@@ -668,16 +704,15 @@ class FirmwareStatusReader:
         ]
         placements = catalogue.by_file_name()
         complete = catalogue.reading_complete_for(identity)
-        files = collect_firmware_status(
-            items, placements, complete, identity, catalogue.emulators_needing_one_of_their_files()
-        )
-        system_image = classify_system_image(catalogue.verdict_for(identity), files, identity)
+        files = collect_firmware_status(items, placements, complete, identity, catalogue.groups)
+        groups = judge_groups(catalogue.groups_for(identity), console_regions_of(rom_regions))
+        system_image = classify_system_image(catalogue.verdict_for(identity), files, identity, groups=groups)
 
         if not files:
             settled = complete and system_image == SYSTEM_IMAGE_NOT_DEMANDED
             return {"needs_bios": False} if settled else {"needs_bios": False, "bios_status_unknown": True}
 
-        return self._bios_payload(files, platform_slug, complete, system_image, pick)
+        return self._bios_payload(files, platform_slug, complete, system_image, groups, pick)
 
 
 def _has_something_to_say(plat: dict[str, Any]) -> bool:
@@ -716,6 +751,17 @@ def _overview_row(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _group_payload(group: GroupVerdict) -> dict[str, Any]:
+    """One group verdict on the wire — its state and the three region sets, as lists."""
+    return {
+        "state": group.state,
+        "covered": list(group.covered),
+        "missing": list(group.missing),
+        "unchecked": list(group.unchecked),
+        "game_regions": list(group.game_regions),
+    }
+
+
 def _wanted_fields(entry) -> dict[str, Any]:
     """The overview projection of one classified file.
 
@@ -728,7 +774,8 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "wanted": entry.wanted,
         "required_by_active": entry.required_by_active,
         "used_by_active": entry.used_by_active,
-        "system_image_candidate": entry.system_image_candidate,
+        "one_of": entry.one_of,
+        "fetch_for_required": entry.fetch_for_required,
         "supplied_by": entry.supplied_by,
         "satisfied": entry.satisfied,
         "declared_kind": entry.declared_kind,
@@ -736,4 +783,5 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "caveats": entry.caveats,
         "images": entry.images,
         "checked": entry.checked,
+        "missing_configured_image": entry.missing_configured_image,
     }

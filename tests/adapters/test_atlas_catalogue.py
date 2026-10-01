@@ -37,7 +37,7 @@ from _vendor.atlas import (
     KIND_LIBRETRO,
     KIND_STANDALONE,
 )
-from _vendor.atlas.esde import EmulatorSpec
+from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
 from _vendor.atlas.placement import Caveat
 
@@ -69,7 +69,7 @@ def _entry(
     label: str,
     command: str,
     declared_index: int | None,
-    kind: str = KIND_STANDALONE,
+    kind: CatalogueKind = KIND_STANDALONE,
     core_so: str | None = None,
     selection: str | None = None,
     system: str = "ps3",

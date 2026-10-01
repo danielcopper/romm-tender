@@ -57,6 +57,10 @@ _ENTRY_KEYS = {
     "required_withheld",
     "bios_level",
     "system_image",
+    # Not in a5777746: the launching emulator's one-of groups, each one
+    # requirement, and how many of them are covered for some regions only.
+    "required_partial",
+    "one_of_groups",
 }
 
 # And every key a row carried: the server's own fields, the destination and its
@@ -76,7 +80,12 @@ _ROW_KEYS = {
     # Not in a5777746: the ready sentence's optional tail counts the launching
     # emulator's own files, and this is the row field that says which they are.
     "used_by_active",
-    "system_image_candidate",
+    # Not in a5777746: the row as an option of the launching emulator's group,
+    # whether "Download required" fetches it, and a stale setting naming a file
+    # in a declared folder.
+    "one_of",
+    "fetch_for_required",
+    "missing_configured_image",
     "supplied_by",
     "satisfied",
     "declared_kind",

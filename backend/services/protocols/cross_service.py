@@ -219,10 +219,17 @@ class BiosChecker(Protocol):
     platform's own pick" — the ``check_platform_bios`` endpoint passes it (by
     leaving it out), and so does the per-game path when nothing could be
     resolved for the ROM.
+
+    ``rom_regions`` are the game's own regions as RomM names them, so a one-of
+    group is judged for the regions this game is sold in rather than for every
+    region the group serves. Empty for a caller with no game in hand.
     """
 
     async def check_platform_bios(
-        self, platform_slug: str, launching_emulator: LaunchingEmulator | None = None
+        self,
+        platform_slug: str,
+        launching_emulator: LaunchingEmulator | None = None,
+        rom_regions: tuple[str, ...] = (),
     ) -> dict[str, Any]: ...
 
 

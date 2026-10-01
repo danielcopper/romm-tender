@@ -422,7 +422,9 @@ class GameDetailService:
         emulator = self._active_core.active_emulator_for_rom(rom_id)
 
         try:
-            bios = await self._bios_checker.check_platform_bios(platform_slug, launching_emulator=emulator)
+            bios = await self._bios_checker.check_platform_bios(
+                platform_slug, launching_emulator=emulator, rom_regions=rom.regions
+            )
             if bios.get("needs_bios"):
                 # The checker's payload IS the wire shape, plus the slug it was
                 # asked about. Re-wrapping it through ``format_bios_status`` here

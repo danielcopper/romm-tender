@@ -23,7 +23,8 @@ used for it:
 
 ``None`` is a real state, not a failure: the resolver could not identify the
 emulator behind a row — EmuDeck's two ``n3ds`` entries are RetroArch launches of
-Windows ``.dll`` cores, which it classifies standalone and cannot name. Such an
+Windows ``.dll`` cores, which it states as their own kind,
+``retroarch-foreign-core``, naming no emulator and declaring nothing. Such an
 entry cannot be scoped to, so nothing may be ruled out for it; every caller
 treats it as "could not be established" and never as "nothing needed".
 """

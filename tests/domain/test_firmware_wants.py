@@ -15,6 +15,8 @@ from domain.firmware_wants import (
     WANTED_UNKNOWN,
     CoreFirmwareVerdict,
     FirmwareCatalogue,
+    FirmwareGroup,
+    FirmwareOption,
     FirmwarePlacement,
     FirmwareWant,
     classify_wanted,
@@ -172,99 +174,41 @@ class TestCoresNeedingASystemImage:
             assert (emulator in named) is verdict.system_needs_an_image
 
 
-class TestCoresNeedingOneOfTheirFiles:
-    """Which cores state a DISJUNCTION, and over how many files.
+class TestOneOfGroups:
+    """A one-of group is the catalogue's own statement, asked for per emulator."""
 
-    The narrower half of :meth:`emulators_needing_a_system_image`: a core is here
-    only where its console needs an image AND the core marks nothing required,
-    because that is the only shape in which "one of these" is the whole of what
-    the core says. The corpus is the deployed PlayStation as it was measured on
-    the reference device — SwanStation declares five images and marks all five
-    optional, Beetle PSX declares the same five and marks three of them
-    required, PCSX ReARMed declares them and carries its own substitute.
-    """
+    _GROUP = FirmwareGroup(
+        emulator="mednafen_psx_libretro",
+        options=(
+            FirmwareOption("scph5500.bin", ("ntsc-j",), False),
+            FirmwareOption("psxonpsp660.bin", ("ntsc-u",), True),
+            FirmwareOption("psxonpsp660.bin", ("pal",), True),
+        ),
+        unchecked_regions=("ntsc-k",),
+        absent_regions=("pal-m",),
+    )
 
-    _IMAGES = ("ps1_rom.bin", "psxonpsp660.bin", "scph5500.bin", "scph5501.bin", "scph5502.bin")
+    def _with_group(self) -> FirmwareCatalogue:
+        return FirmwareCatalogue(placements=(), unread_emulators=frozenset(), resolved=True, groups=(self._GROUP,))
 
-    @classmethod
-    def _psx(cls, *, beetle_required: bool = True) -> FirmwareCatalogue:
-        """Three cores over five images, each want stated per file.
+    def test_an_emulators_groups_are_its_own(self):
+        catalogue = self._with_group()
 
-        Per file because that is how the resolver answers, and because "marks
-        nothing required" is a statement about a core's WHOLE declaration: a
-        catalogue that stated one want per core could not tell the two apart.
-        """
-        placements = tuple(
-            _placement(
-                name,
-                FirmwareWant(emulator="swanstation_libretro", required=False),
-                FirmwareWant(emulator="mednafen_psx_libretro", required=beetle_required and name.startswith("scph")),
-                FirmwareWant(emulator="pcsx_rearmed_libretro", required=False),
-            )
-            for name in cls._IMAGES
-        )
-        return FirmwareCatalogue(
-            placements=placements,
-            unread_emulators=frozenset(),
-            resolved=True,
-            emulator_verdicts={
-                "swanstation_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT),
-                "mednafen_psx_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT),
-                "pcsx_rearmed_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE),
-            },
-        )
+        assert catalogue.groups_for("mednafen_psx_libretro") == (self._GROUP,)
+        assert catalogue.groups_for("swanstation_libretro") == ()
 
-    def test_a_core_that_marks_nothing_required_carries_its_whole_declaration(self):
-        """Five, because SwanStation declares five — not because a platform lists five."""
-        assert self._psx().emulators_needing_one_of_their_files()["swanstation_libretro"] == 5
+    def test_a_caller_with_no_emulator_to_name_owns_no_group(self):
+        assert self._with_group().groups_for(None) == ()
 
-    def test_a_core_that_does_mark_something_required_is_left_out(self):
-        """The Beetle PSX shape, and the reason the two answers differ.
+    def test_the_group_speaks_about_every_region_it_names_once(self):
+        assert self._GROUP.regions == ("ntsc-j", "ntsc-u", "pal", "ntsc-k", "pal-m")
 
-        Its console needs an image too, so the wider answer names it — and its
-        three required rows already carry that demand as their own requirement.
-        Naming it here as well would put one requirement on the page twice, in
-        two vocabularies.
-        """
-        catalogue = self._psx()
+    def test_a_file_under_several_options_serves_all_their_regions(self):
+        assert self._GROUP.regions_of("psxonpsp660.bin") == ("ntsc-u", "pal")
+        assert self._GROUP.regions_of("scph5501.bin") == ()
 
-        assert "mednafen_psx_libretro" in catalogue.emulators_needing_a_system_image()
-        assert "mednafen_psx_libretro" not in catalogue.emulators_needing_one_of_their_files()
-
-    def test_one_required_file_anywhere_silences_the_core_on_every_file(self):
-        """It is the core's whole declaration that decides, not the file in hand.
-
-        Beetle PSX marks ``scph5500.bin`` required and ``ps1_rom.bin`` optional.
-        Read per file it would state a disjunction over the second, which is the
-        annotation that put "the console will not start without one" under a
-        core that hard-requires three other images.
-        """
-        assert "mednafen_psx_libretro" not in self._psx(beetle_required=True).emulators_needing_one_of_their_files()
-        assert self._psx(beetle_required=False).emulators_needing_one_of_their_files()["mednafen_psx_libretro"] == 5
-
-    def test_a_core_carrying_its_own_substitute_is_left_out(self):
-        """PCSX ReARMed marks nothing required either — its console makes the difference."""
-        assert "pcsx_rearmed_libretro" not in self._psx().emulators_needing_one_of_their_files()
-
-    def test_a_core_the_table_says_nothing_about_is_left_out(self):
-        """An absent entry is an unasked question, never a demand."""
-        catalogue = _catalogue(_placement("gba_bios.bin", FirmwareWant(emulator="gpsp_libretro", required=False)))
-
-        assert catalogue.emulators_needing_one_of_their_files() == {}
-
-    def test_a_reading_that_did_not_happen_names_nobody(self):
-        assert _catalogue(resolved=False).emulators_needing_one_of_their_files() == {}
-
-    def test_an_emulator_with_no_core_of_its_own_is_not_counted(self):
-        """A standalone emulator names no ``.so``, so there is no key to answer under."""
-        catalogue = FirmwareCatalogue(
-            placements=(_placement("scph5501.bin", FirmwareWant(emulator=None, required=False)),),
-            unread_emulators=frozenset(),
-            resolved=True,
-            emulator_verdicts={"swanstation_libretro": CoreFirmwareVerdict(SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT)},
-        )
-
-        assert catalogue.emulators_needing_one_of_their_files() == {}
+    def test_a_reading_with_no_group_states_none(self):
+        assert _catalogue().groups_for("mednafen_psx_libretro") == ()
 
 
 class TestByFileName:

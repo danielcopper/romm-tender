@@ -2576,138 +2576,138 @@ class TestTheConsolesOwnFirmwareDemand:
         assert platform["required_count"] == 0
 
 
-# The four PlayStation cores as the pinned resolver answers for them on the
-# reference device. Two of them mark files required and two mark nothing
-# required; three of the four declare for a console that will not start without
-# an image. Only one core is in both halves at once, and that is the shape the
-# disjunction is about.
-_PSX_HW_CORE = "mednafen_psx_hw_libretro"
-_PSX_REQUIRING_CORE = "mednafen_psx_libretro"
-_PSX_DECLARED_IMAGES = ("ps1_rom.bin", "psxonpsp660.bin", "scph5500.bin", "scph5501.bin", "scph5502.bin")
-_PSX_HARD_REQUIRED = ("scph5500.bin", "scph5501.bin", "scph5502.bin")
+# The PlayStation as the pinned resolver states it for two of its cores. Beetle
+# PSX lists one image per region as a one-of group, and the same three files as
+# optional rows of its own ``.info``. SwanStation states a group of one option —
+# the image its search found — serving every region.
+_BEETLE = "mednafen_psx_libretro"
+_BEETLE_OPTIONS = (("scph5500.bin", ("ntsc-j",)), ("scph5501.bin", ("ntsc-u",)), ("scph5502.bin", ("pal",)))
 
 
-def _psx_four_core_service(active_core_so: str) -> FirmwareService:
-    """One PlayStation, four cores, and the launching one decides what a row is.
+def _one_of_service(*, launching: str = _BEETLE, present: tuple[str, ...] = ()) -> FirmwareService:
+    """A PlayStation whose launching emulator states a one-of group over its images.
 
-    Measured from the pinned resolver: Beetle PSX and Beetle PSX HW both declare
-    all five images and mark the three ``scph`` dumps required; SwanStation
-    declares the same five and marks every one of them optional; PCSX ReARMed
-    declares them and carries its own substitute. Three of the four are for a
-    console that will not start without an image, and only SwanStation states
-    that as a disjunction, because it is the only one whose declaration says
-    nothing else.
+    *present* names the option files that are in place, which is both their
+    rows' reading and their options' verdicts — one reading, two halves.
+    Under ``_PSX_CORE`` the group is SwanStation's: one found image serving
+    every region, in place.
     """
     romm_api = MagicMock()
     romm_api.list_firmware.return_value = [
-        {
-            "id": index,
-            "file_name": name,
-            "file_path": f"bios/psx/{name}",
-            "file_size_bytes": 100,
-            "md5_hash": "",
-        }
-        for index, name in enumerate(_PSX_DECLARED_IMAGES, start=1)
+        {"id": index, "file_name": name, "file_path": f"bios/psx/{name}", "file_size_bytes": 100, "md5_hash": ""}
+        for index, (name, _) in enumerate(_BEETLE_OPTIONS, start=1)
     ]
     resolver = FakeFirmwareResolver()
-    for name in _PSX_DECLARED_IMAGES:
-        hard = name in _PSX_HARD_REQUIRED
-        resolver.declare(
-            name,
-            required_by=[_id(_PSX_REQUIRING_CORE), _id(_PSX_HW_CORE)] if hard else [],
-            optional_for=[_id(_PSX_CORE), _id(_PSX_ALTERNATIVE_CORE)]
-            + ([] if hard else [_id(_PSX_REQUIRING_CORE), _id(_PSX_HW_CORE)]),
-        )
-    for core_so in (_PSX_CORE, _PSX_REQUIRING_CORE, _PSX_HW_CORE):
+    for name, _ in _BEETLE_OPTIONS:
+        resolver.declare(name, optional_for=[_id(_BEETLE), _id(_PSX_CORE)], present=name in present)
+    resolver.declare("scph1001.bin", optional_for=[_id(_PSX_CORE)], present=True)
+    resolver.state_group(_id(_BEETLE), *((name, regions, name in present) for name, regions in _BEETLE_OPTIONS))
+    resolver.state_group(_id(_PSX_CORE), ("scph1001.bin", ("ntsc-j", "ntsc-u", "pal"), True))
+    for core_so in (_BEETLE, _PSX_CORE):
         resolver.record_system(_id(core_so), system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
-    resolver.record_system(
-        _id(_PSX_ALTERNATIVE_CORE), system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE, requirements_met=True
-    )
     fw = _make_firmware_service(
         romm_api=romm_api,
         firmware_resolver=resolver,
         core_info=FakeCoreInfoProvider(
-            active_core=(active_core_so, active_core_so),
-            options=[libretro_option(core_so, core_so) for core_so in (active_core_so,)],
+            active_core=(launching, launching), options=[libretro_option(launching, launching)]
         ),
     )
     _inline_executor(fw)
     return fw
 
 
-class TestWhichRowsCanAnswerTheConsole:
-    """Which rows are marked as ways to satisfy the console's own demand.
+def _rows(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {f["file_name"]: f for f in payload["files"]}
 
-    The device pass this comes from: with SwanStation launching, no row was
-    ``required_by_active`` — the core marks all five images optional — so every
-    row in the PlayStation table drew the muted "missing, not required" mark
-    under a red headline saying the console needs at least one. The mark now has
-    a state for it, and it is set only where "one of these" is the whole of what
-    the core says.
-    """
+
+class TestAOneOfGroupIsOneRequirement:
+    """A group counts once, its options are rows that borrow nothing from it, and its state decides the level."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("core_so", "marked"),
-        [
-            (_PSX_CORE, True),
-            (_PSX_REQUIRING_CORE, False),
-            (_PSX_HW_CORE, False),
-            (_PSX_ALTERNATIVE_CORE, False),
-        ],
-    )
-    async def test_only_a_core_that_states_the_disjunction_marks_its_rows(self, core_so: str, marked: bool):
-        page = await _psx_four_core_service(core_so).check_platform_bios("psx")
+    async def test_one_regions_image_is_a_partial_requirement(self):
+        page = await _one_of_service(present=("scph5501.bin",)).check_platform_bios("psx")
 
-        assert {f["file_name"]: f["system_image_candidate"] for f in page["files"]} == dict.fromkeys(
-            _PSX_DECLARED_IMAGES, marked
-        )
-
-    @pytest.mark.asyncio
-    async def test_a_core_that_does_require_files_states_the_demand_on_those_rows_instead(self):
-        """Beetle PSX, and why the flag is silent for it rather than missing.
-
-        Its console needs an image too. What it says about that is three
-        required rows, which every count and every surface already carries — so
-        a second mark beside them would state one requirement twice.
-        """
-        page = await _psx_four_core_service(_PSX_REQUIRING_CORE).check_platform_bios("psx")
-
-        assert {f["file_name"] for f in page["files"] if f["required_by_active"]} == set(_PSX_HARD_REQUIRED)
-        assert not any(f["system_image_candidate"] for f in page["files"])
+        assert (page["required_count"], page["required_downloaded"], page["required_partial"]) == (1, 0, 1)
+        assert (page["bios_level"], page["bios_label"]) == ("partial", "0/1 required")
+        assert page["system_image"] == "not_demanded"
+        assert page["one_of_groups"] == [
+            {
+                "state": "partial",
+                "covered": ["ntsc-u"],
+                "missing": ["ntsc-j", "pal"],
+                "unchecked": [],
+                "game_regions": [],
+            }
+        ]
 
     @pytest.mark.asyncio
-    async def test_a_row_carries_each_cores_own_answer_side_by_side(self):
-        """``ps1_rom.bin``: optional to all four, and a disjunction for one of them.
+    async def test_every_option_is_its_own_row_and_none_is_required(self):
+        page = await _one_of_service(present=("scph5501.bin",)).check_platform_bios("psx")
 
-        The row the misworded annotation landed on. Beetle PSX marks this file
-        optional while hard-requiring three others, so its entry says exactly
-        that and nothing about the console — which is what stopped the line
-        reading "the console will not start without one" under a core that
-        demands three named files.
-        """
-        page = await _psx_four_core_service(_PSX_CORE).check_platform_bios("psx")
-
-        cores = next(f for f in page["files"] if f["file_name"] == "ps1_rom.bin")["cores"]
-        assert cores[_id(_PSX_CORE)] == {"required": False, "needs_one_of": len(_PSX_DECLARED_IMAGES)}
-        assert cores[_id(_PSX_REQUIRING_CORE)] == {"required": False, "needs_one_of": None}
-        assert cores[_id(_PSX_HW_CORE)] == {"required": False, "needs_one_of": None}
-        assert cores[_id(_PSX_ALTERNATIVE_CORE)] == {"required": False, "needs_one_of": None}
+        rows = _rows(page)
+        assert {name: rows[name]["one_of"] for name, _ in _BEETLE_OPTIONS} == {
+            name: {"regions": list(regions), "every_region": False} for name, regions in _BEETLE_OPTIONS
+        }
+        assert not any(row["required_by_active"] for row in rows.values())
 
     @pytest.mark.asyncio
-    async def test_the_overview_stamps_the_same_marks_the_game_page_reads(self):
-        """One builder, so the platform table and the game page cannot disagree."""
-        fw = _psx_four_core_service(_PSX_CORE)
+    async def test_every_regions_image_meets_it(self):
+        page = await _one_of_service(present=tuple(name for name, _ in _BEETLE_OPTIONS)).check_platform_bios("psx")
+
+        assert (page["required_count"], page["required_downloaded"], page["bios_level"]) == (1, 1, "ok")
+
+    @pytest.mark.asyncio
+    async def test_nothing_in_place_is_missing(self):
+        page = await _one_of_service().check_platform_bios("psx")
+
+        assert (page["bios_level"], page["bios_label"]) == ("missing", "Missing")
+        assert page["one_of_groups"][0]["state"] == "unmet"
+
+    @pytest.mark.asyncio
+    async def test_an_image_serving_every_region_meets_it_and_says_so_on_its_row(self):
+        page = await _one_of_service(launching=_PSX_CORE).check_platform_bios("psx")
+
+        assert (page["required_count"], page["required_downloaded"], page["bios_level"]) == (1, 1, "ok")
+        assert _rows(page)["scph1001.bin"]["one_of"] == {"regions": ["ntsc-j", "ntsc-u", "pal"], "every_region": True}
+        assert _rows(page)["scph5501.bin"]["one_of"] is None
+
+    @pytest.mark.asyncio
+    async def test_the_per_emulator_lines_carry_each_emulators_own_membership(self):
+        page = await _one_of_service(launching=_PSX_CORE).check_platform_bios("psx")
+
+        cores = _rows(page)["scph5501.bin"]["cores"]
+        assert cores[_id(_BEETLE)] == {"required": False, "one_of": {"regions": ["ntsc-u"], "every_region": False}}
+        assert cores[_id(_PSX_CORE)] == {"required": False, "one_of": None}
+
+    @pytest.mark.asyncio
+    async def test_the_overview_stamps_the_same_answer_the_game_page_reads(self):
+        fw = _one_of_service(present=("scph5501.bin",))
 
         overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
 
         platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
-        assert {f["file_name"]: f["system_image_candidate"] for f in platform["files"]} == {
-            f["file_name"]: f["system_image_candidate"] for f in page["files"]
-        }
-        assert all(f["system_image_candidate"] for f in platform["files"])
-        assert platform["system_image"] == "absent"
+        assert _emulator_dependent(platform) == _emulator_dependent(page)
+        assert platform["one_of_groups"][0]["state"] == "partial"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("rom_regions", "state", "level"),
+        [
+            (("USA",), "met", "ok"),
+            (("Japan",), "unmet", "missing"),
+            (("Japan", "USA"), "met", "ok"),
+            (("World",), "partial", "partial"),
+            ((), "partial", "partial"),
+        ],
+    )
+    async def test_a_game_is_judged_by_its_own_regions(self, rom_regions, state, level):
+        """Only a region that maps narrows the answer; World and no region leave the platform's."""
+        page = await _one_of_service(present=("scph5501.bin",)).check_platform_bios(
+            "psx", None, rom_regions=rom_regions
+        )
+
+        assert (page["one_of_groups"][0]["state"], page["bios_level"]) == (state, level)
 
 
 _PSX_DEFAULT_LABEL = "SwanStation"
@@ -2741,7 +2741,7 @@ class _DeclaredDefaultCoreInfo(FakeCoreInfoProvider):
 
 
 def _psx_platform_service(
-    *, platform_core: str | None = None, options: list[EmulatorOption] | None = None
+    *, platform_core: str | None = None, options: list[EmulatorOption] | None = None, grouped: bool = False
 ) -> FirmwareService:
     """A PlayStation ES-DE lists three emulators for, one of them standalone.
 
@@ -2755,6 +2755,9 @@ def _psx_platform_service(
 
     *options* replaces the emulator list for a test about a pin that no longer
     bakes; every other caller takes ES-DE's three.
+
+    *grouped* has SwanStation state a one-of group over the three images with
+    only the NTSC-U one in place — the answer a group moves with the pick.
 
     The listing is filed under ``bios/psx/`` so the overview's entry is keyed by
     the same slug the game page asks about. A RomM firmware directory named
@@ -2775,6 +2778,11 @@ def _psx_platform_service(
     resolver = FakeFirmwareResolver()
     for name in _PSX_IMAGES:
         resolver.declare(name, optional_for=[_id(_PSX_CORE), _id(_PSX_ALTERNATIVE_CORE)])
+    if grouped:
+        resolver.state_group(
+            _id(_PSX_CORE),
+            *((name, regions, name == "scph5501.bin") for name, regions in _BEETLE_OPTIONS),
+        )
     resolver.record_system(_id(_PSX_CORE), system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
     resolver.record_system(
         _id(_PSX_ALTERNATIVE_CORE), system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE, requirements_met=True
@@ -2798,7 +2806,10 @@ def _emulator_dependent(payload: dict[str, Any]) -> dict[str, Any]:
         "system_image": payload["system_image"],
         "bios_level": payload["bios_level"],
         "required_count": payload["required_count"],
+        "required_partial": payload["required_partial"],
+        "one_of_groups": payload["one_of_groups"],
         "required_by_active": {f["file_name"]: f["required_by_active"] for f in payload["files"]},
+        "one_of": {f["file_name"]: f["one_of"] for f in payload["files"]},
     }
 
 
@@ -2953,9 +2964,9 @@ class TestOnePlatformOneEmulator:
     """
 
     @staticmethod
-    async def _both(platform_core: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def _both(platform_core: str | None, *, grouped: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
         """The overview's entry for the platform, and the game page's answer for it."""
-        fw = _psx_platform_service(platform_core=platform_core)
+        fw = _psx_platform_service(platform_core=platform_core, grouped=grouped)
         overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
         return next(p for p in overview["platforms"] if p["platform_slug"] == "psx"), page
@@ -3020,21 +3031,37 @@ class TestOnePlatformOneEmulator:
         assert platform["active_core"] == _id(_PSX_CORE)
         assert _emulator_dependent(platform) == _emulator_dependent(page)
 
+    @pytest.mark.parametrize("platform_core", _PLATFORM_PICKS)
     @pytest.mark.asyncio
-    async def test_the_per_core_lines_carry_the_declaration_and_the_consoles_demand(self):
-        """Each core's entry on a row says its own word AND what its console needs.
+    async def test_the_pane_and_the_game_page_agree_about_a_group(self, platform_core):
+        platform, page = await self._both(platform_core, grouped=True)
 
-        The pair is the informative case and the reason it cannot be folded:
-        both cores mark every image ``optional`` — a libretro ``.info`` has
-        nothing else to say — and only one of the two consoles will not start
-        without one. The count is that core's whole declaration, which is what a
-        surface says "one of its N BIOS files" with.
+        assert _emulator_dependent(platform) == _emulator_dependent(page)
+
+    @pytest.mark.asyncio
+    async def test_the_group_moves_with_the_pick_on_both_surfaces(self):
+        """The non-vacuity check for the agreement above: the group is the default's, and only its."""
+        default_platform, default_page = await self._both(None, grouped=True)
+        picked_platform, picked_page = await self._both(_PSX_ALTERNATIVE_LABEL, grouped=True)
+
+        for payload in (default_platform, default_page):
+            assert [group["state"] for group in payload["one_of_groups"]] == ["partial"]
+            assert payload["bios_level"] == "partial"
+        for payload in (picked_platform, picked_page):
+            assert payload["one_of_groups"] == []
+
+    @pytest.mark.asyncio
+    async def test_the_per_core_lines_carry_the_declaration_and_the_group_membership(self):
+        """Each emulator's entry on a row says its own word AND where the file stands in its group.
+
+        Both mark every image ``optional``; only SwanStation lists them as a
+        group, so only its line names the region the file serves.
         """
-        _, page = await self._both(None)
+        _, page = await self._both(None, grouped=True)
 
-        cores = next(f for f in page["files"] if f["file_name"] == _PSX_IMAGES[0])["cores"]
-        assert cores[_id(_PSX_CORE)] == {"required": False, "needs_one_of": len(_PSX_IMAGES)}
-        assert cores[_id(_PSX_ALTERNATIVE_CORE)] == {"required": False, "needs_one_of": None}
+        cores = next(f for f in page["files"] if f["file_name"] == "scph5500.bin")["cores"]
+        assert cores[_id(_PSX_CORE)] == {"required": False, "one_of": {"regions": ["ntsc-j"], "every_region": False}}
+        assert cores[_id(_PSX_ALTERNATIVE_CORE)] == {"required": False, "one_of": None}
 
 
 class TestTheAnswerNamesTheEmulatorItJudgedBy:
@@ -3114,7 +3141,7 @@ class TestTheAnswerNamesTheEmulatorItJudgedBy:
         """
         parameters = list(inspect.signature(FirmwareStatusReader.check_platform_bios).parameters)
 
-        assert parameters == ["self", "platform_slug", "launching_emulator"]
+        assert parameters == ["self", "platform_slug", "launching_emulator", "rom_regions"]
 
 
 _PSX_ROM_ID = 501
@@ -3136,7 +3163,7 @@ _ROM_PICKS = [
 
 
 def _rom_scoped_surfaces(
-    *, game_pick: str | None, platform_pick: str | None
+    *, game_pick: str | None, platform_pick: str | None, grouped: bool = False, regions: tuple[str, ...] = ()
 ) -> tuple[CoreService, GameDetailService, FirmwareService]:
     """The game page's two halves over one PlayStation, one ROM, one resolution.
 
@@ -3154,6 +3181,7 @@ def _rom_scoped_surfaces(
     logger = logging.getLogger("test")
     fw = _psx_platform_service(
         platform_core=platform_pick,
+        grouped=grouped,
         options=[
             libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
             libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
@@ -3171,6 +3199,7 @@ def _rom_scoped_surfaces(
             shortcut_app_id=1,
             last_synced_at="2026-01-01T00:00:00+00:00",
             emulator_override=game_pick,
+            regions=regions,
         )
     )
     uow_factory = FakeUnitOfWorkFactory(uow)
@@ -3236,9 +3265,13 @@ class TestOneRomOneEmulator:
     """
 
     @staticmethod
-    async def _both(game_pick: str | None, platform_pick: str | None) -> tuple[dict[str, Any], dict[str, Any], Any]:
+    async def _both(
+        game_pick: str | None, platform_pick: str | None, *, grouped: bool = False, regions: tuple[str, ...] = ()
+    ) -> tuple[dict[str, Any], dict[str, Any], Any]:
         """The picker payload, the BIOS half's answer, and the firmware service behind them."""
-        cores, detail, fw = _rom_scoped_surfaces(game_pick=game_pick, platform_pick=platform_pick)
+        cores, detail, fw = _rom_scoped_surfaces(
+            game_pick=game_pick, platform_pick=platform_pick, grouped=grouped, regions=regions
+        )
         picker = await cores.get_platform_core_info(_PSX_ROM_ID)
         bios = (await detail.get_bios_status(_PSX_ROM_ID))["bios_status"]
         return picker, bios, fw
@@ -3252,6 +3285,27 @@ class TestOneRomOneEmulator:
         # which the rule above says are one resolution, handed over as one value.
         named = await fw.check_platform_bios("psx", _pick(picker["active_core"], picker["active_core_label"]))
         assert _emulator_dependent(bios) == _emulator_dependent(named)
+
+    @pytest.mark.parametrize(("game_pick", "platform_pick"), _ROM_PICKS)
+    @pytest.mark.asyncio
+    async def test_the_bios_half_judges_the_named_emulators_group_for_the_roms_regions(self, game_pick, platform_pick):
+        picker, bios, fw = await self._both(game_pick, platform_pick, grouped=True, regions=("Japan",))
+
+        named = await fw.check_platform_bios(
+            "psx", _pick(picker["active_core"], picker["active_core_label"]), rom_regions=("Japan",)
+        )
+        assert _emulator_dependent(bios) == _emulator_dependent(named)
+
+    @pytest.mark.asyncio
+    async def test_the_roms_own_region_decides_its_group(self):
+        """The non-vacuity check for the agreement above: the game's region moves the answer."""
+        _, japanese, _ = await self._both(None, None, grouped=True, regions=("Japan",))
+        _, american, _ = await self._both(None, None, grouped=True, regions=("USA",))
+        _, worldwide, _ = await self._both(None, None, grouped=True, regions=("World",))
+
+        assert [(g["state"], g["game_regions"]) for g in japanese["one_of_groups"]] == [("unmet", ["ntsc-j"])]
+        assert [(g["state"], g["game_regions"]) for g in american["one_of_groups"]] == [("met", ["ntsc-u"])]
+        assert [(g["state"], g["game_regions"]) for g in worldwide["one_of_groups"]] == [("partial", [])]
 
     @pytest.mark.parametrize(("game_pick", "platform_pick"), _ROM_PICKS)
     @pytest.mark.asyncio
@@ -4913,6 +4967,45 @@ class TestDownloadRequiredFirmware:
         assert await self._download_under("gpSP") == ([1], 1)
         assert await self._download_under("mGBA") == ([], 0)
 
+    @staticmethod
+    async def _download_group(**service) -> tuple[set[int], set[int]]:
+        """What "Download required" fetches for a grouped PlayStation, and the rows the page counts for it."""
+        fw = _one_of_service(**service)
+        fetched: set[int] = set()
+
+        async def fake_download_firmware(fw_id, _placements):
+            fetched.add(fw_id)
+            return {"success": True}
+
+        overview = await _overview(fw)
+        with patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware):
+            await fw.download_required_firmware("psx")
+        platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
+        counted = {f["id"] for f in platform["files"] if f["fetch_for_required"] and f["on_server"]}
+        return fetched, counted
+
+    @pytest.mark.asyncio
+    async def test_it_fetches_the_options_of_the_regions_not_yet_covered(self):
+        """NTSC-U is in place, so the Japanese and European images are what the group still lacks."""
+        fetched, counted = await self._download_group(present=("scph5501.bin",))
+
+        assert fetched == {1, 3}
+        assert counted == {1, 3}
+
+    @pytest.mark.asyncio
+    async def test_it_fetches_nothing_of_a_covered_group(self):
+        """SwanStation's found image serves every region; the three named images are spares."""
+        fetched, counted = await self._download_group(launching=_PSX_CORE)
+
+        assert fetched == set()
+        assert counted == set()
+
+    @pytest.mark.asyncio
+    async def test_with_nothing_in_place_every_option_is_fetched(self):
+        fetched, counted = await self._download_group()
+
+        assert fetched == counted == {1, 2, 3}
+
     @pytest.mark.asyncio
     async def test_resolves_system_for_active_core_keeps_raw_slug_for_filter(self):
         """Active-core read gets the NORMALIZED system; the firmware filter stays raw.
@@ -5209,8 +5302,8 @@ class TestPerCoreFiltering:
         # Each core's entry states both halves: its own declaration, and whether
         # its console is one that will not start without an image (#1858).
         assert gb_file["cores"] == {
-            _id("gambatte_libretro"): {"required": False, "needs_one_of": None},
-            _id("mgba_libretro"): {"required": False, "needs_one_of": None},
+            _id("gambatte_libretro"): {"required": False, "one_of": None},
+            _id("mgba_libretro"): {"required": False, "one_of": None},
         }
 
         assert result["required_count"] == 1

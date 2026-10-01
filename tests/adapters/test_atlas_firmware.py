@@ -15,15 +15,21 @@ too — a fixture that could not come off a real machine fails to construct.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
 from _vendor.atlas import (
+    CAVEAT_CORE_FILE_FOREIGN,
+    CAVEAT_CORE_MODE_UNESTABLISHED,
+    CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
     CAVEAT_FIRMWARE_IDENTITY_NOT_COMPARABLE,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
+    CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
     CAVEAT_FIRMWARE_PATH_OBSTRUCTED,
+    CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
 )
 from _vendor.atlas.firmware import (
@@ -55,6 +61,8 @@ from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
     SYSTEM_FIRMWARE_STATES,
+    FirmwareWant,
+    MissingConfiguredImage,
 )
 
 if TYPE_CHECKING:
@@ -495,6 +503,34 @@ class TestPlacements:
 
         assert adapter().placements[0].relative_path is None
 
+    def test_a_file_an_option_names_inside_a_folder_goes_in_that_folder_under_its_own_name(self, adapter, monkeypatch):
+        """LRPS2 with ``pcsx2_bios`` set: the declaration stays the folder, the file is the setting's.
+
+        The resolver keeps ``declared`` as the ``.info``'s folder path and states
+        the requirement as the FILE the option names. Placed at the declaration,
+        a download of that file would be written where the folder is.
+        """
+        answer = _answer(
+            _core(
+                core_so="pcsx2_libretro.so",
+                requirements=(
+                    _requirement(
+                        file_name="scph10000.bin",
+                        declared="pcsx2/bios",
+                        path=f"{_ROOT}/scph10000.bin",
+                        found=KIND_FILE,
+                        checked="verified",
+                    ),
+                ),
+            )
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        placement = adapter().placements[0]
+        assert placement.relative_path == "pcsx2/bios/scph10000.bin"
+        assert placement.destination == "pcsx2/bios/scph10000.bin"
+        assert placement.declared_kind == DECLARED_FILE
+
 
 class TestDestinationReadings:
     """What the resolver read AT the destination, carried instead of re-derived."""
@@ -612,6 +648,164 @@ class TestDestinationReadings:
         assert catalogue.unread_emulators == frozenset()
 
 
+def _option(
+    file_name: str, regions: tuple[str, ...], *, core_so: str | None = "mednafen_psx_libretro.so", **kwargs
+) -> FirmwareRequirement:
+    """One option of a one-of group — a requirement naming the regions whose launch it serves."""
+    return _requirement(core_so=core_so, file_name=file_name, regions=regions, **kwargs)
+
+
+def _region_caveat(code: str, regions: tuple[str, ...], core_so: str = "mednafen_psx_libretro.so") -> Caveat:
+    """A statement an entry makes beside its group, naming regions under ``regions``."""
+    return Caveat(code=code, message="about some regions", data={"core_so": core_so, "regions": list(regions)})
+
+
+class TestOneOfGroups:
+    """A one-of group is carried as a group, and its options are rows that borrow nothing from it.
+
+    The group is the requirement — one file of these, the region decides which —
+    so it is stated beside the placements. Each option is still a file the
+    emulator declared, so it is a row; what it must never do is make that row a
+    prerequisite of every launch.
+    """
+
+    def _catalogue(self, adapter, monkeypatch, *cores):
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(*cores))))
+        return adapter()
+
+    def _beetle(self, *, caveats: tuple[Caveat, ...] = (), present: tuple[str, ...] = ()) -> CoreFirmware:
+        """Beetle PSX's shape under 0.21: the three images as optional rows AND as the group's options.
+
+        *present* names the regions whose image is in place and verified.
+        """
+        names = (("scph5500.bin", "ntsc-j"), ("scph5501.bin", "ntsc-u"), ("scph5502.bin", "pal"))
+        rows = tuple(
+            _requirement(core_so="mednafen_psx_libretro.so", file_name=name, need="optional") for name, _ in names
+        )
+        group = FirmwareAlternatives(
+            options=tuple(
+                _option(name, (region,), found=KIND_FILE, checked="verified")
+                if region in present
+                else _option(name, (region,))
+                for name, region in names
+            )
+        )
+        return _core(core_so="mednafen_psx_libretro.so", requirements=(*rows, group), caveats=caveats)
+
+    def test_the_group_reaches_the_catalogue_with_each_options_regions_and_verdict(self, adapter, monkeypatch):
+        catalogue = self._catalogue(adapter, monkeypatch, self._beetle(present=("ntsc-u",)))
+
+        (group,) = catalogue.groups
+        assert group.emulator == "mednafen_psx_libretro.so"
+        assert [(o.file_name, o.regions, o.satisfied) for o in group.options] == [
+            ("scph5500.bin", ("ntsc-j",), False),
+            ("scph5501.bin", ("ntsc-u",), True),
+            ("scph5502.bin", ("pal",), False),
+        ]
+        assert catalogue.groups_for("mednafen_psx_libretro.so") == (group,)
+
+    def test_a_file_that_is_a_row_and_an_option_is_one_row_and_stays_optional(self, adapter, monkeypatch):
+        """The option's ``required`` speaks for the group, never for the row it shares a name with."""
+        catalogue = self._catalogue(adapter, monkeypatch, self._beetle())
+
+        assert [p.file_name for p in catalogue.placements] == ["scph5500.bin", "scph5501.bin", "scph5502.bin"]
+        assert all(p.wants == (FirmwareWant("mednafen_psx_libretro.so", required=False),) for p in catalogue.placements)
+
+    def test_an_option_with_no_row_of_its_own_borrows_no_requirement(self, adapter, monkeypatch):
+        """SwanStation's search find: the image is only ever an option, and still not each launch's prerequisite."""
+        found = FirmwareAlternatives(
+            options=(
+                _option(
+                    "scph1001.bin",
+                    ("ntsc-j", "ntsc-u", "pal"),
+                    core_so="swanstation_libretro.so",
+                    found=KIND_FILE,
+                    checked="verified",
+                ),
+            )
+        )
+        catalogue = self._catalogue(
+            adapter, monkeypatch, _core(core_so="swanstation_libretro.so", requirements=(found,))
+        )
+
+        (placement,) = catalogue.placements
+        assert placement.file_name == "scph1001.bin"
+        assert placement.required_by_any is False
+        assert catalogue.groups[0].regions_of("scph1001.bin") == ("ntsc-j", "ntsc-u", "pal")
+
+    def test_a_plain_required_row_keeps_its_requirement_beside_an_option_of_the_same_file(self, adapter, monkeypatch):
+        """Whichever of the two comes first, the plain declaration is what the row's need is read off."""
+        group = FirmwareAlternatives(options=(_option("scph1001.bin", ("ntsc-u",), core_so="duck_libretro.so"),))
+        plain = _requirement(core_so="duck_libretro.so", file_name="scph1001.bin", need="required")
+        catalogue = self._catalogue(
+            adapter, monkeypatch, _core(core_so="duck_libretro.so", requirements=(group, plain))
+        )
+
+        assert catalogue.placements[0].wants == (FirmwareWant("duck_libretro.so", required=True),)
+
+    def test_one_file_under_two_options_serves_both_options_regions(self, adapter, monkeypatch):
+        """``psxonpsp660.bin`` stands for two regions through two keys — one row, its regions merged."""
+        group = FirmwareAlternatives(
+            options=(
+                _option("psxonpsp660.bin", ("ntsc-j",)),
+                _option("scph5501.bin", ("ntsc-u",)),
+                _option("psxonpsp660.bin", ("pal",)),
+            )
+        )
+        catalogue = self._catalogue(
+            adapter, monkeypatch, _core(core_so="mednafen_psx_libretro.so", requirements=(group,))
+        )
+
+        assert [p.file_name for p in catalogue.placements] == ["psxonpsp660.bin", "scph5501.bin"]
+        assert catalogue.groups[0].regions_of("psxonpsp660.bin") == ("ntsc-j", "pal")
+
+    def test_the_regions_an_entry_names_beside_its_group_reach_the_group(self, adapter, monkeypatch):
+        """Regions with no option: unchecked where a read settled nothing, absent where nothing boots."""
+        catalogue = self._catalogue(
+            adapter,
+            monkeypatch,
+            self._beetle(
+                caveats=(
+                    _region_caveat(CAVEAT_FIRMWARE_SCAN_INCOMPLETE, ("ntsc-k",)),
+                    _region_caveat(CAVEAT_FIRMWARE_SEARCH_UNVERIFIED, ("ntsc-c",)),
+                    _region_caveat(CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE, ("pal-m",)),
+                )
+            ),
+        )
+
+        (group,) = catalogue.groups
+        assert group.unchecked_regions == ("ntsc-k", "ntsc-c")
+        assert group.absent_regions == ("pal-m",)
+
+    def test_the_regions_the_groups_own_options_serve_are_not_read_as_unchecked(self, adapter, monkeypatch):
+        """``core-mode-unestablished`` names the regions the group DOES carry an option for."""
+        caveat = _region_caveat(CAVEAT_CORE_MODE_UNESTABLISHED, ("ntsc-j", "ntsc-u", "pal"))
+        catalogue = self._catalogue(adapter, monkeypatch, self._beetle(caveats=(caveat,)))
+
+        assert catalogue.groups[0].unchecked_regions == ()
+        assert catalogue.groups[0].absent_regions == ()
+
+    def test_another_emulators_region_statement_stays_off_the_group(self, adapter, monkeypatch):
+        caveat = _region_caveat(CAVEAT_FIRMWARE_SCAN_INCOMPLETE, ("ntsc-k",), core_so="swanstation_libretro.so")
+        catalogue = self._catalogue(adapter, monkeypatch, self._beetle(caveats=(caveat,)))
+
+        assert catalogue.groups[0].unchecked_regions == ()
+
+    def test_an_entry_with_no_identity_states_no_group(self, adapter, monkeypatch):
+        group = FirmwareAlternatives(options=(_option("scph5501.bin", ("ntsc-u",), core_so=None),))
+        catalogue = self._catalogue(adapter, monkeypatch, _core(core_so=None, emulator=None, requirements=(group,)))
+
+        assert catalogue.groups == ()
+        assert [p.file_name for p in catalogue.placements] == ["scph5501.bin"]
+
+    def test_one_emulator_under_two_rows_states_its_group_once(self, adapter, monkeypatch):
+        catalogue = self._catalogue(
+            adapter, monkeypatch, self._beetle(), replace(self._beetle(), label="Beetle PSX (again)")
+        )
+
+        assert len(catalogue.groups) == 1
+
+
 class TestUnreadEmulators:
     def test_an_unreadable_core_is_named(self, adapter, monkeypatch):
         answer = _answer(
@@ -715,6 +909,36 @@ class TestUnreadEmulators:
         monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
+
+    def test_a_retroarch_launch_of_a_foreign_core_adds_nothing(self, adapter, monkeypatch):
+        """EmuDeck's ``n3ds`` rows hand RetroArch a Windows core: no identity, nothing declared.
+
+        The entry sits beside a read core of the same system, and the catalogue
+        is exactly what that core alone would have made of it — no placement,
+        no unread name, no verdict, no group.
+        """
+        foreign = _core(
+            core_so=None,
+            emulator=None,
+            declaration="absent",
+            caveats=(
+                Caveat(
+                    code=CAVEAT_CORE_FILE_FOREIGN,
+                    message="a core file this host cannot load",
+                    data={"core_file": "citra_libretro.dll", "label": "Citra", "system": "n3ds"},
+                ),
+            ),
+        )
+        read = _core(core_so="mgba_libretro.so", requirements=(_requirement(),))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(read))))
+        alone = adapter()
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(read, foreign))))
+
+        catalogue = adapter()
+        assert catalogue.placements == alone.placements
+        assert catalogue.unread_emulators == frozenset()
+        assert catalogue.emulator_verdicts == alone.emulator_verdicts
+        assert catalogue.groups == ()
 
     def test_a_read_core_is_never_named(self, adapter, monkeypatch):
         answer = _answer(_core(core_so="mgba_libretro.so", requirements=(_requirement(),)))
@@ -1083,6 +1307,69 @@ class TestFolderVerdicts:
         )
 
         assert placement.caveats == ("firmware-scan-incomplete",)
+
+    def test_a_statement_naming_the_cores_short_name_reaches_its_row(self, adapter, monkeypatch):
+        """The resolver names a core by its libretro short name under ``core`` — ``pcsx2``.
+
+        That is no identity this plugin keys on, and matched against the
+        identity alone the statement fell off the very folder row it is about.
+        """
+        placement = self._placement(
+            adapter,
+            monkeypatch,
+            self._folder(found=KIND_DIRECTORY, checked="unknown", contents_satisfied=True),
+            Caveat(
+                code=CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+                message="the configured name is stale",
+                data={"core": "pcsx2", "key": "pcsx2_bios", "name": "scph10000.bin", "dir": f"{_ROOT}/pcsx2/bios"},
+            ),
+        )
+
+        assert placement.caveats == (CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,)
+
+    def test_a_stale_configured_name_rides_with_the_emulators_label_and_leaves_the_verdict_alone(
+        self, adapter, monkeypatch
+    ):
+        """The core lists the folder instead, so the folder verdict stands exactly as the resolver gave it."""
+        answer = _answer(
+            _core(
+                core_so="pcsx2_libretro.so",
+                label="LRPS2",
+                requirements=(self._folder(found=KIND_DIRECTORY, checked="unknown", contents_satisfied=True),),
+            ),
+            caveats=(
+                Caveat(
+                    code=CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+                    message="the configured name is stale",
+                    data={"core": "pcsx2", "key": "pcsx2_bios", "name": "scph10000.bin", "dir": f"{_ROOT}/pcsx2/bios"},
+                ),
+            ),
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        placement = adapter().placements[0]
+        assert placement.missing_configured_image == MissingConfiguredImage("LRPS2", "scph10000.bin")
+        assert placement.folder is not None
+        assert placement.folder.satisfied is True
+
+    def test_a_row_with_no_stale_setting_names_none(self, adapter, monkeypatch):
+        placement = self._placement(adapter, monkeypatch, self._folder(found=KIND_DIRECTORY, checked="unknown"))
+
+        assert placement.missing_configured_image is None
+
+    def test_another_cores_short_name_keeps_its_statement_off_the_row(self, adapter, monkeypatch):
+        placement = self._placement(
+            adapter,
+            monkeypatch,
+            self._folder(found=KIND_DIRECTORY, checked="unknown", contents_satisfied=True),
+            Caveat(
+                code=CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+                message="the configured name is stale",
+                data={"core": "play", "key": "x", "name": "y.bin", "dir": f"{_ROOT}/pcsx2/bios"},
+            ),
+        )
+
+        assert placement.caveats == ()
 
 
 def _not_comparable(file_name: str) -> Caveat:

@@ -15,21 +15,28 @@ which is why an entry carries ``required_by_active`` beside its ``wanted`` and
 why the counts key off the first. A file three other emulators demand is not a
 missing prerequisite for this launch.
 
-A third axis joins them and is a THIRD axis rather than a third count, because
-it is not counted at all: the **system image** (:func:`classify_system_image`).
-Where the console does not start without one of the images the launching emulator
-declares, what is missing is one file out of many rather than each of many —
-folding it into ``required_count`` would report every one of them as required
-where the truth is "one of these". It carries its own value and its own
-sentence, and it can only ever make the verdict less green.
+Where the launching emulator states a **one-of group**
+(:mod:`domain.firmware_groups`), the group is ONE requirement and is counted as
+one: it raises ``required_count`` by one, and ``required_downloaded`` only where
+every region it speaks about is covered. Its options are rows like any other and
+never required rows — a launch needs one of them, chosen by the disc's region.
+
+A third axis joins them for an emulator that states no group, and it is a THIRD
+axis rather than a third count, because it is not counted at all: the **system
+image** (:func:`classify_system_image`). Where the console does not start without
+one of the images the launching emulator declares, what is missing is one file
+out of many rather than each of many — folding it into ``required_count`` would
+report every one of them as required where the truth is "one of these". It
+carries its own value and its own sentence, and it can only ever make the
+verdict less green.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from domain.firmware_groups import GROUP_MET, GROUP_PARTIAL, GROUP_UNKNOWN, GROUP_UNMET, fetched_as_required
 from domain.firmware_wants import (
     DECLARED_FILE,
     VERDICT_WITHHOLDING_CAVEATS,
@@ -42,7 +49,8 @@ from domain.firmware_wants import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from domain.firmware_wants import CoreFirmwareVerdict, FirmwarePlacement
+    from domain.firmware_groups import GroupVerdict
+    from domain.firmware_wants import CoreFirmwareVerdict, FirmwareGroup, FirmwarePlacement
 
 BIOS_LEVEL_UNKNOWN = "unknown"
 BIOS_LEVEL_OK = "ok"
@@ -149,20 +157,22 @@ class BiosFileEntry:
     description: str
     wanted: str
     required_by_active: bool
-    # {emulator identity: {"required": bool, "needs_one_of": int | None}} — per
-    # emulator, what its own declaration says about this file and, where it
-    # states a disjunction, how many files the demand is spread over. Two
-    # speakers, two keys, never folded into one. The key is the emulator's
-    # identity, so a standalone emulator is a speaker here like any other; the
-    # field keeps the name the wire has always carried.
+    # {emulator identity: {"required": bool, "one_of": {...} | None}} — per
+    # emulator, what its own declaration says about this file and, where the
+    # file is an option of one of its one-of groups, the regions it serves there
+    # (:func:`_group_membership`). Two statements, never folded into one: an
+    # option's own need speaks for the group and never makes the file required.
+    # The key is the emulator's identity, so a standalone emulator is a speaker
+    # here like any other; the field keeps the name the wire has always carried.
     cores: dict[str, dict[str, Any]]
     used_by_active: bool
     on_server: bool = True
-    # Is this row one of the images that would answer the launching emulator's
-    # console on its own? Set only where that emulator states a DISJUNCTION — see
-    # :func:`_active_core_answer`, which explains why it is silent for one that
-    # does state required files.
-    system_image_candidate: bool = False
+    # The launching emulator's ``one_of`` entry, read off ``cores`` — this row as
+    # an option of that emulator's group, or ``None`` where it is none.
+    one_of: dict[str, Any] | None = None
+    # Does "Download required" fetch this row? :func:`domain.firmware_groups.fetched_as_required`,
+    # the rule the download applies too.
+    fetch_for_required: bool = False
     supplied_by: str | None = None
     satisfied: bool | None = None
     declared_kind: str = DECLARED_FILE
@@ -170,6 +180,10 @@ class BiosFileEntry:
     caveats: tuple[str, ...] = ()
     images: tuple[str, ...] = ()
     checked: str | None = None
+    # {"emulator_label": str | None, "file_name": str | None} where the
+    # emulator's own setting names a file in this folder that is not there —
+    # ``FirmwarePlacement.missing_configured_image``. Never a verdict.
+    missing_configured_image: dict[str, str | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -204,6 +218,9 @@ class BiosStatus:
     # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
     # caller that does not supply it keeps the verdict it always got.
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED
+    # The verdicts over the launching emulator's one-of groups, each ONE
+    # requirement already inside ``required_count``.
+    groups: tuple[GroupVerdict, ...] = ()
 
 
 def format_bios_status(
@@ -212,6 +229,7 @@ def format_bios_status(
     *,
     reading_complete: bool = True,
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED,
+    groups: tuple[GroupVerdict, ...] = (),
 ) -> BiosStatus:
     """Assemble the :class:`BiosStatus` the level decision reads, from one raw check result."""
     raw_files = bios.get("files", [])
@@ -228,7 +246,8 @@ def format_bios_status(
                 cores=f.get("cores", {}),
                 used_by_active=f.get("used_by_active", True),
                 on_server=f.get("on_server", True),
-                system_image_candidate=f.get("system_image_candidate", False),
+                one_of=f.get("one_of"),
+                fetch_for_required=f.get("fetch_for_required", False),
                 supplied_by=f.get("supplied_by"),
                 satisfied=f.get("satisfied"),
                 declared_kind=f.get("declared_kind", DECLARED_FILE),
@@ -236,6 +255,7 @@ def format_bios_status(
                 caveats=tuple(f.get("caveats", ())),
                 images=tuple(f.get("images", ())),
                 checked=f.get("checked"),
+                missing_configured_image=f.get("missing_configured_image"),
             )
             for f in raw_files
         )
@@ -254,13 +274,8 @@ def format_bios_status(
         unknown_count=bios.get("unknown_count", 0),
         reading_complete=reading_complete,
         system_image=system_image,
+        groups=groups,
     )
-
-
-# The answer for a caller that has not asked which cores state a disjunctive
-# demand: nothing is claimed for any core. Read-only, so the shared default
-# cannot be written through.
-_NO_DISJUNCTIVE_CORES: Mapping[str, int] = MappingProxyType({})
 
 
 def build_file_entry(
@@ -272,7 +287,7 @@ def build_file_entry(
     launching_emulator: str | None,
     *,
     on_server: bool = True,
-    cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
+    groups: tuple[FirmwareGroup, ...] = (),
 ) -> BiosFileEntry:
     """Build a single file status entry from the machine's answer about it.
 
@@ -282,26 +297,21 @@ def build_file_entry(
     says about the row is :func:`_active_core_answer`'s, and
     ``launching_emulator`` is passed straight through to it.
 
-    ``cores_needing_one_of`` is
-    :meth:`~domain.firmware_wants.FirmwareCatalogue.emulators_needing_one_of_their_files`
-    — the emulators whose console needs an image and that mark nothing required,
-    each with the number of files it declares. It rides on each emulator's own
-    entry in ``cores`` because the two statements there belong to different
-    speakers: ``required`` is what that emulator's own declaration says about this
-    file, ``needs_one_of`` is what the packaged table says about its console,
-    counted over its whole declaration. An emulator can say ``optional`` about
-    every one of five files while the console cannot start without one of them,
-    and that pair is exactly what a surface listing it has to be able to show.
-    Nothing is folded: the declaration is carried unaltered.
+    ``groups`` are every one-of group of the answer, and each declaring
+    emulator's entry in ``cores`` reads its own (:func:`_group_membership`).
     """
     folder = placement.folder if placement is not None else None
     wants = placement.wants if placement is not None else ()
     cores = {
-        want.emulator: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.emulator)}
+        want.emulator: {
+            "required": want.required,
+            "one_of": _group_membership(file_name, _groups_of(groups, want.emulator)),
+        }
         for want in wants
         if want.emulator is not None
     }
     active = _active_core_answer(cores, placement, launching_emulator)
+    stale = placement.missing_configured_image if placement is not None else None
     return BiosFileEntry(
         file_name=file_name,
         downloaded=downloaded,
@@ -313,7 +323,8 @@ def build_file_entry(
         cores=cores,
         used_by_active=active.used_by_active,
         on_server=on_server,
-        system_image_candidate=active.system_image_candidate,
+        one_of=active.one_of,
+        fetch_for_required=fetched_as_required(placement, launching_emulator, _groups_of(groups, launching_emulator)),
         supplied_by=placement.supplied_by if placement is not None else None,
         satisfied=_row_verdict(placement, downloaded),
         declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
@@ -321,7 +332,33 @@ def build_file_entry(
         caveats=placement.caveats if placement is not None else (),
         images=folder.images if folder is not None else (),
         checked=placement.checked if placement is not None else None,
+        missing_configured_image=(
+            {"emulator_label": stale.emulator_label, "file_name": stale.file_name} if stale is not None else None
+        ),
     )
+
+
+def _groups_of(groups: tuple[FirmwareGroup, ...], emulator: str | None) -> tuple[FirmwareGroup, ...]:
+    """The groups *emulator* states — none for an emulator with no identity."""
+    if emulator is None:
+        return ()
+    return tuple(group for group in groups if group.emulator == emulator)
+
+
+def _group_membership(file_name: str, groups: tuple[FirmwareGroup, ...]) -> dict[str, Any] | None:
+    """This file as an option of *groups*: the regions it serves, and whether that is all of them.
+
+    ``every_region`` is what lets a surface say "every region" rather than list
+    them: true where the file serves every region each group naming it speaks
+    about — SwanStation's search find, which the core boots whatever the disc.
+    ``None`` where no group names the file.
+    """
+    naming = [group for group in groups if group.regions_of(file_name)]
+    if not naming:
+        return None
+    regions = tuple(dict.fromkeys(region for group in naming for region in group.regions_of(file_name)))
+    every = all(set(group.regions_of(file_name)) >= set(group.regions) for group in naming)
+    return {"regions": list(regions), "every_region": every}
 
 
 @dataclass(frozen=True)
@@ -335,7 +372,7 @@ class _ActiveCoreAnswer:
 
     used_by_active: bool
     required_by_active: bool
-    system_image_candidate: bool
+    one_of: dict[str, Any] | None
 
 
 def _active_core_answer(
@@ -348,23 +385,10 @@ def _active_core_answer(
     ``launching_emulator`` is that emulator's identity, or ``None`` when it could
     not be resolved or identified; then every declaring emulator stands in for
     it, which is the same permissive default the platform has always fallen back
-    to.
+    to — and no group is that emulator's, so ``one_of`` stays silent.
 
-    ``system_image_candidate`` reads the launching emulator's own ``needs_one_of``
-    off its entry in ``cores``, so the row and the per-emulator entries cannot
-    disagree about which of them state a disjunction: this row is one of the
-    images that would answer the launching emulator's console on its own.
-
-    **It is deliberately narrower than the set**
-    :func:`classify_system_image` **reads**, and the asymmetry is the point. That
-    function weighs every image the launching emulator declares; this flag marks
-    those rows only where it marks NOTHING required. Where an emulator does state
-    required files — Beetle PSX declares three of the same PlayStation images
-    ``required`` — those rows already carry the console's demand as plain
-    ``required_by_active``, and marking them again would say one thing twice in
-    two vocabularies. The flag is the DISPLAY axis for the disjunction, not a
-    second readiness rule, so widening it to every image-demanding emulator would
-    add no answer and would put two marks on one requirement.
+    ``one_of`` reads the launching emulator's own entry in ``cores``, so the row
+    and the per-emulator entries cannot disagree about which group it stands in.
     """
     active_entry = cores.get(launching_emulator) if launching_emulator is not None else None
     if launching_emulator is None:
@@ -376,7 +400,7 @@ def _active_core_answer(
     return _ActiveCoreAnswer(
         used_by_active=used_by_active,
         required_by_active=required_by_active,
-        system_image_candidate=active_entry is not None and active_entry["needs_one_of"] is not None,
+        one_of=active_entry["one_of"] if active_entry is not None else None,
     )
 
 
@@ -416,14 +440,14 @@ def collect_firmware_status(
     placements: Mapping[str, FirmwarePlacement],
     complete: bool,
     launching_emulator: str | None,
-    cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
+    groups: tuple[FirmwareGroup, ...] = (),
 ) -> tuple[BiosFileEntry, ...]:
     """Build BiosFileEntry objects for a list of pre-resolved firmware items.
 
     Each item must have keys: file_name, downloaded, dest; ``on_server``
     defaults to ``True`` for the items that came off the RomM listing.
-    ``cores_needing_one_of`` spans the whole answer and is read per row, so one
-    emulator's console answers the same way on every file it declares.
+    ``groups`` spans the whole answer and is read per row, so one emulator's
+    group answers the same way on every file it lists.
     """
     return tuple(
         build_file_entry(
@@ -434,14 +458,18 @@ def collect_firmware_status(
             complete,
             launching_emulator,
             on_server=item.get("on_server", True),
-            cores_needing_one_of=cores_needing_one_of,
+            groups=groups,
         )
         for item in items
     )
 
 
-def count_required(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
+def count_required(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> tuple[int, int]:
     """``(required, of those downloaded)`` for the emulator the game will launch with.
+
+    Each of its one-of *groups* is ONE requirement here, met only where every
+    region it speaks about is covered: a group partly covered is not met, and
+    :func:`count_required_partial` is what says it is partly there.
 
     The badge's two numbers, derived in one place so the platform detail and
     the game-detail page can never disagree about which files count. A file the
@@ -464,27 +492,47 @@ def count_required(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
     than picking one of the two.
     """
     required = [f for f in files if f.required_by_active]
-    return len(required), sum(1 for f in required if f.satisfied)
+    met = sum(1 for group in groups if group.state == GROUP_MET)
+    return len(required) + len(groups), sum(1 for f in required if f.satisfied) + met
 
 
-def count_required_withheld(files: tuple[BiosFileEntry, ...]) -> int:
+def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> int:
     """How many of the launching emulator's required files nothing could judge.
 
     The third number beside :func:`count_required`'s two, and the one that keeps
     a declined verdict from reading as an absence. A surface that warns about
     missing files subtracts it: what is left of ``required - withheld`` against
     ``required_downloaded`` is the requirement whose absence really was
-    established.
+    established. A group whose state is ``unknown`` is one such requirement.
     """
-    return sum(1 for f in files if f.required_by_active and f.satisfied is None)
+    withheld_groups = sum(1 for group in groups if group.state == GROUP_UNKNOWN)
+    return sum(1 for f in files if f.required_by_active and f.satisfied is None) + withheld_groups
+
+
+def count_required_partial(groups: tuple[GroupVerdict, ...]) -> int:
+    """How many of the launching emulator's groups are covered for some regions and not others.
+
+    The fourth number beside the required counts: such a group is in
+    ``required_count`` and not in ``required_downloaded``, and it is not absent
+    either — a surface warning about a missing requirement subtracts it, as it
+    subtracts :func:`count_required_withheld`.
+    """
+    return sum(1 for group in groups if group.state == GROUP_PARTIAL)
 
 
 def classify_system_image(
     verdict: CoreFirmwareVerdict | None,
     files: tuple[BiosFileEntry, ...],
     launching_emulator: str | None,
+    *,
+    groups: tuple[GroupVerdict, ...] = (),
 ) -> str:
     """Does the launching emulator have the image its CONSOLE cannot start without?
+
+    Only for an emulator that states no one-of *groups*: where it states one,
+    the group IS that demand, said precisely — which file serves which region —
+    and this coarser reading of the same demand stays silent rather than being
+    a second answer beside it.
 
     One of :data:`SYSTEM_IMAGE_VALUES`. The question only arises for an emulator
     the resolver's packaged table puts in that state; every other recording — one
@@ -541,15 +589,8 @@ def classify_system_image(
     serving several systems, and upstream states that none in its vector corpus
     or on its reference machine reaches this state while declaring for more than
     one.
-
-    That set is WIDER than the rows ``BiosFileEntry.system_image_candidate``
-    marks, and the difference is deliberate rather than a gap to close: the flag
-    is silent for an emulator that states required files, whose rows already carry
-    the same demand as ``required_by_active``, while this answer is the console's
-    and weighs every image the emulator declares whatever it called them. The
-    reason lives in full at :func:`_active_core_answer`.
     """
-    if verdict is None or launching_emulator is None or not verdict.system_needs_an_image:
+    if groups or verdict is None or launching_emulator is None or not verdict.system_needs_an_image:
         return SYSTEM_IMAGE_NOT_DEMANDED
     images = [f for f in files if launching_emulator in f.cores]
     if any(f.satisfied for f in images):
@@ -602,18 +643,27 @@ def _requirement_verdict_withheld(status: BiosStatus) -> bool:
     requirement shown to be unmet, so the level goes to ``'missing'`` or
     ``'partial'`` and the play row raises its badge. A folder the resolver
     listed and found no image in is exactly that answer.
+
+    A one-of group whose state is ``unknown`` is this shape too: an option is
+    there and unread, or a region nothing checked stands beside the covered ones.
     """
+    if any(group.state == GROUP_UNKNOWN for group in status.groups):
+        return True
     return any(f.required_by_active and f.satisfied is None for f in status.files)
 
 
 def _counted_level(status: BiosStatus) -> str:
-    """The level the file counts alone give — the rule that predates every decline."""
+    """The level the counts give — the rule that predates every decline.
+
+    A one-of group covered for some regions is counted as not met and still
+    makes the level ``'partial'``: something the requirement asks for is there.
+    """
     req_count = status.required_count
     req_done = status.required_downloaded
     if req_count is not None and req_done is not None:
         if req_done >= req_count:
             return BIOS_LEVEL_OK
-        if req_done > 0:
+        if req_done > 0 or _a_group_is_partial(status):
             return BIOS_LEVEL_PARTIAL
         return BIOS_LEVEL_MISSING
     if status.all_downloaded:
@@ -621,6 +671,16 @@ def _counted_level(status: BiosStatus) -> str:
     if (status.local_count or 0) > 0:
         return BIOS_LEVEL_PARTIAL
     return BIOS_LEVEL_MISSING
+
+
+def _a_group_is_partial(status: BiosStatus) -> bool:
+    """Is one of the launching emulator's groups covered for some regions and not others?"""
+    return any(group.state == GROUP_PARTIAL for group in status.groups)
+
+
+def _a_group_is_unmet(status: BiosStatus) -> bool:
+    """Has one of the launching emulator's groups no option in place at all?"""
+    return any(group.state == GROUP_UNMET for group in status.groups)
 
 
 def compute_bios_level(status: BiosStatus) -> str:
@@ -653,8 +713,13 @@ def compute_bios_level(status: BiosStatus) -> str:
     image can turn a green claim grey and nothing else: where the counts already
     read ``'partial'`` or ``'missing'``, something is known to be absent, and a
     doubt about one further file does not unsay it.
+
+    A **one-of group** with nothing in place lands on ``'missing'`` the same way
+    and for the same reason — the console does not start — and an ``unknown``
+    group declines like a withheld required row. A partly covered group counts
+    as not met and keeps the level at ``'partial'`` (:func:`_counted_level`).
     """
-    if status.system_image == SYSTEM_IMAGE_ABSENT:
+    if status.system_image == SYSTEM_IMAGE_ABSENT or _a_group_is_unmet(status):
         return BIOS_LEVEL_MISSING
     if _nothing_established(status) or _requirement_verdict_withheld(status):
         return BIOS_LEVEL_UNKNOWN
@@ -675,7 +740,7 @@ def compute_bios_label(status: BiosStatus) -> str:
         return BIOS_LABEL_UNKNOWN
     # A console that needs one of these images and holds none: the ratio would
     # count the wrong set, and the disjunction has no ratio to state.
-    if status.system_image == SYSTEM_IMAGE_ABSENT:
+    if status.system_image == SYSTEM_IMAGE_ABSENT or _a_group_is_unmet(status):
         return BIOS_LABEL_MISSING
     return _counted_label(status)
 
@@ -687,7 +752,7 @@ def _counted_label(status: BiosStatus) -> str:
     if req_count is not None and req_done is not None:
         if req_done >= req_count:
             return "OK"
-        if req_done > 0:
+        if req_done > 0 or _a_group_is_partial(status):
             return f"{req_done}/{req_count} required"
         return BIOS_LABEL_MISSING
     if status.all_downloaded:

@@ -153,6 +153,7 @@ def _seed_rom(
     platform_slug="snes",
     fs_name="",
     ra_id=None,
+    regions=(),
 ):
     """Seed one ``Rom`` row into the shared UoW (the synced-shortcut registry).
 
@@ -169,6 +170,7 @@ def _seed_rom(
         shortcut_app_id=app_id,
         last_synced_at="2025-01-01T00:00:00",
         ra_id=ra_id,
+        regions=regions,
     )
     with game_detail.uow:
         game_detail.uow.roms.save(rom)
@@ -787,7 +789,7 @@ class TestGetBiosStatusFound:
 
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None):
+        async def capture_check(slug, launching_emulator=None, rom_regions=()):
             captured["slug"] = slug
             captured["launching_emulator"] = launching_emulator
             return {"needs_bios": False}
@@ -799,6 +801,21 @@ class TestGetBiosStatusFound:
         assert captured["launching_emulator"].emulator == "gpsp_libretro.so"
         assert captured["launching_emulator"].label == "gpSP"
         assert active_core_resolver.emulator_calls == [42]
+
+    @pytest.mark.asyncio
+    async def test_passes_the_roms_own_regions_to_bios_check(self, game_detail, active_core_resolver):
+        """A one-of group is judged for the regions this game is sold in, as RomM names them."""
+        _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="psx", regions=("Japan", "Asia"))
+        captured = {}
+
+        async def capture_check(slug, launching_emulator=None, rom_regions=()):
+            captured["rom_regions"] = rom_regions
+            return {"needs_bios": False}
+
+        game_detail.service._bios_checker.check_platform_bios = capture_check
+
+        await game_detail.service.get_bios_status(42)
+        assert captured["rom_regions"] == ("Japan", "Asia")
 
     @pytest.mark.asyncio
     async def test_bios_check_differs_by_per_game_override(self, game_detail, active_core_resolver):
@@ -813,7 +830,7 @@ class TestGetBiosStatusFound:
         active_core_resolver.per_rom[42] = ("gpsp_libretro", "gpSP")
         # rom 43 falls through to the default (None, None) → system default.
 
-        async def fake_check(slug, launching_emulator=None):
+        async def fake_check(slug, launching_emulator=None, rom_regions=()):
             if launching_emulator is not None and launching_emulator.emulator == "gpsp_libretro.so":
                 return {
                     "needs_bios": True,

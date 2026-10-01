@@ -38,16 +38,18 @@ needed" — the same rule :data:`WANTED_UNKNOWN` carries one level down.
 A second axis runs beside that one and is not a property of any file: what is
 recorded about the **system** an emulator declares for. A libretro ``.info`` can
 mark a slot required or optional and nothing else — no way to say "one of
-these", and no way to say the console does not start without one. An author who
-knows a PlayStation needs a BIOS image therefore has two lossy moves, and the
-deployed catalogue takes both: SwanStation marks all five of its images
-optional, which reads per file as a finished answer that nothing is missing,
-while Beetle PSX marks three of its own required, which reads as three separate
-prerequisites where the console asks for one. Neither states the console's
-demand, so no reading of the declaration can be relied on to carry it. The
-resolver answers that half from a packaged table
-(:class:`CoreFirmwareVerdict`), and its ``None`` means nobody has looked at the
-system, never that the system needs nothing.
+these", and no way to say the console does not start without one. The resolver
+answers that half from a packaged table (:class:`CoreFirmwareVerdict`), and its
+``None`` means nobody has looked at the system, never that the system needs
+nothing.
+
+Where the resolver knows how the emulator picks its image, it states the "one of
+these" itself, as a **one-of group** (:class:`FirmwareGroup`): the files a launch
+needs exactly one of, each serving the console regions whose launch opens it.
+That is a requirement of its own and not a property of any file in it, so it
+rides beside the placements rather than on them — the files are rows like any
+other, and a group's option never makes its row required
+(:mod:`domain.firmware_groups` judges the group).
 """
 
 from __future__ import annotations
@@ -126,6 +128,21 @@ class FolderVerdict:
 
 
 @dataclass(frozen=True)
+class MissingConfiguredImage:
+    """An emulator's own setting names a file in its folder declaration, and nothing is at it.
+
+    The emulator lists the folder instead, so the folder's verdict is what its
+    launch rests on and this changes nothing about it: it is the setting that is
+    stale, never the requirement. ``emulator_label`` is the label of the entry
+    the row's reading came from and ``file_name`` the name the setting holds —
+    either ``None`` where the answer did not state it.
+    """
+
+    emulator_label: str | None
+    file_name: str | None
+
+
+@dataclass(frozen=True)
 class CoreFirmwareVerdict:
     """What the resolver says about one core BEYOND the files it declares.
 
@@ -184,6 +201,63 @@ class FirmwareWant:
 
     emulator: str | None
     required: bool
+
+
+@dataclass(frozen=True)
+class FirmwareOption:
+    """One file a one-of group accepts, and the console regions whose launch opens it.
+
+    ``regions`` are the resolver's own region words (``ntsc-u``, ``pal``) and
+    are never empty. ``satisfied`` is the resolver's three-valued verdict over
+    the file: it is in place and the emulator takes it, it is not, or nothing
+    established which — a file that is there and could not be read is the
+    third, never the first.
+    """
+
+    file_name: str
+    regions: tuple[str, ...]
+    satisfied: bool | None
+
+
+@dataclass(frozen=True)
+class FirmwareGroup:
+    """One emulator's one-of requirement: a launch needs exactly one of these options.
+
+    Which option a launch needs is decided by the console region of the disc in
+    it, a run-time fact no file states — so the group is judged over regions
+    (:func:`domain.firmware_groups.judge_group`), and it is ONE requirement
+    however many options it lists. The options' region sets are disjoint; one
+    file may still stand under several options, each serving its own regions.
+
+    ``unchecked_regions`` are regions the resolver named as resting on a read
+    that did not settle anything — a listing that failed, bytes nobody hashed —
+    and ``absent_regions`` are regions it stated nothing boots for. Neither has
+    an option, which is why they are carried beside the options rather than on
+    them: without them a group of one NTSC-U option would read as covering
+    every region it knows about.
+
+    ``emulator`` is the identity the group belongs to and is never ``None``: a
+    group nothing can be scoped to answers for no launch.
+    """
+
+    emulator: str
+    options: tuple[FirmwareOption, ...]
+    unchecked_regions: tuple[str, ...] = ()
+    absent_regions: tuple[str, ...] = ()
+
+    @property
+    def regions(self) -> tuple[str, ...]:
+        """Every region the group speaks about, options first, in the order stated."""
+        stated = (region for option in self.options for region in option.regions)
+        return tuple(dict.fromkeys((*stated, *self.unchecked_regions, *self.absent_regions)))
+
+    def regions_of(self, file_name: str) -> tuple[str, ...]:
+        """The regions *file_name* serves in this group, merged over every option naming it."""
+        return tuple(
+            dict.fromkeys(
+                region for option in self.options if option.file_name == file_name for region in option.regions
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -251,6 +325,11 @@ class FirmwarePlacement:
     requirement is met; this says what was done to establish it, which is what a
     surface needs to word a withheld answer honestly.
 
+    ``missing_configured_image`` is set where the emulator the reading came
+    from is configured to open a file in this folder that is not there
+    (:class:`MissingConfiguredImage`). It goes silent with the destination half,
+    and it is never a verdict either.
+
     ``wants`` is never empty: a placement exists because at least one emulator
     declared the file, and a placement without an owning emulator is exactly the
     orphaned entry this model removes.
@@ -267,6 +346,7 @@ class FirmwarePlacement:
     folder: FolderVerdict | None = None
     supplied_by: str | None = None
     checked: str | None = None
+    missing_configured_image: MissingConfiguredImage | None = None
 
     @property
     def required_by_any(self) -> bool:
@@ -316,6 +396,10 @@ class FirmwareCatalogue:
     particular game will launch with. Empty for a reading that did not happen,
     and an emulator it holds no entry for is one nothing was recorded about
     (:meth:`verdict_for`).
+
+    ``groups`` are the one-of requirements the answer states, per emulator
+    (:meth:`groups_for`). Every option's file is a placement as well; a group
+    is the requirement over them, which no placement can carry.
     """
 
     placements: tuple[FirmwarePlacement, ...]
@@ -323,6 +407,7 @@ class FirmwareCatalogue:
     resolved: bool
     caveats: tuple[str, ...] = ()
     emulator_verdicts: Mapping[str, CoreFirmwareVerdict] = field(default_factory=dict)
+    groups: tuple[FirmwareGroup, ...] = ()
 
     def verdict_for(self, emulator: str | None) -> CoreFirmwareVerdict | None:
         """What was recorded about *emulator*, or ``None`` where nothing was.
@@ -336,52 +421,23 @@ class FirmwareCatalogue:
         """The emulators whose CONSOLE the table says will not start without an image.
 
         The per-emulator half of :meth:`verdict_for`, read over every emulator at
-        once — the widest form of the answer, and the set
-        :meth:`emulators_needing_one_of_their_files` narrows to the emulators that
-        state the demand as a disjunction. Every other recording is left out,
-        including the absent entry: an emulator the table says nothing about is an
-        unasked question, and this set answers only where something was recorded.
+        once. Every other recording is left out, including the absent entry: an
+        emulator the table says nothing about is an unasked question, and this
+        set answers only where something was recorded.
         """
         return frozenset(
             emulator for emulator, verdict in self.emulator_verdicts.items() if verdict.system_needs_an_image
         )
 
-    def emulators_needing_one_of_their_files(self) -> dict[str, int]:
-        """Emulator → how many files it declares, for those that state a DISJUNCTION.
+    def groups_for(self, emulator: str | None) -> tuple[FirmwareGroup, ...]:
+        """The one-of groups *emulator* states, in the order the answer gave them.
 
-        The narrower half of :meth:`emulators_needing_a_system_image`, and the one
-        a surface can word on a row. An emulator is here only where its console
-        needs an image **and** it marks nothing required anywhere in the
-        catalogue, because that is the only shape in which "one of these" is the
-        whole of what it says. Where an emulator does mark files required, the
-        console's demand already reaches every surface as those rows' own
-        requirement, and a second statement of it beside them would say the same
-        thing twice in weaker words. The deployed catalogue has both shapes over
-        one PlayStation: SwanStation marks all five of its images optional, Beetle
-        PSX marks three of its own required.
-
-        The count is the emulator's whole declaration in this answer rather than a
-        platform's row set — it is the number a surface says "one of its N BIOS
-        files" with, and a platform whose list happens to carry four of the five
-        would otherwise word the demand as a number the emulator never stated. An
-        emulator with no entry here is silent, which is also every one the packaged
-        table records nothing about.
+        Empty for an emulator that states none and for a caller with no identity
+        to name — an unidentified emulator owns no group.
         """
-        demanding = self.emulators_needing_a_system_image()
-        declared: dict[str, int] = {}
-        requires_something: set[str] = set()
-        for placement in self.placements:
-            for want in placement.wants:
-                if want.emulator is None:
-                    continue
-                declared[want.emulator] = declared.get(want.emulator, 0) + 1
-                if want.required:
-                    requires_something.add(want.emulator)
-        return {
-            emulator: count
-            for emulator, count in declared.items()
-            if emulator in demanding and emulator not in requires_something
-        }
+        if emulator is None:
+            return ()
+        return tuple(group for group in self.groups if group.emulator == emulator)
 
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name — the shape every lookup wants.

@@ -11,9 +11,12 @@ from domain.firmware_wants import (
     DECLARED_FILE,
     CoreFirmwareVerdict,
     FirmwareCatalogue,
+    FirmwareGroup,
+    FirmwareOption,
     FirmwarePlacement,
     FirmwareWant,
     FolderVerdict,
+    MissingConfiguredImage,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +55,10 @@ class FakeFirmwareResolver:
     :meth:`record_system` states the second axis — what the packaged table says
     about the console one emulator declares for. It is per emulator rather than
     per file because the same images read differently under two of them.
+
+    :meth:`state_group` states a one-of group. It declares nothing on its own: a
+    real reading lists every option's file as a placement too, and a test that
+    wants the rows declares them beside it.
     """
 
     def __init__(
@@ -71,7 +78,25 @@ class FakeFirmwareResolver:
         self.bios_root = bios_root
         self.present_probe = present_probe
         self.emulator_verdicts: dict[str, CoreFirmwareVerdict] = {}
+        self.groups: list[FirmwareGroup] = []
         self.calls: list[str] = []
+
+    def state_group(
+        self,
+        emulator: str,
+        *options: tuple[str, tuple[str, ...], bool | None],
+        unchecked_regions: tuple[str, ...] = (),
+        absent_regions: tuple[str, ...] = (),
+    ) -> FirmwareGroup:
+        """State that *emulator* needs one of *options* — ``(file name, regions, satisfied)`` each."""
+        group = FirmwareGroup(
+            emulator=emulator,
+            options=tuple(FirmwareOption(name, regions, satisfied) for name, regions, satisfied in options),
+            unchecked_regions=unchecked_regions,
+            absent_regions=absent_regions,
+        )
+        self.groups.append(group)
+        return group
 
     def record_system(
         self,
@@ -103,6 +128,7 @@ class FakeFirmwareResolver:
         caveats: tuple[str, ...] = (),
         supplied_by: str | None = None,
         checked: str | None = None,
+        missing_configured_image: MissingConfiguredImage | None = None,
     ) -> FirmwarePlacement:
         """State that some emulators ask for *file_name*, and return the placement.
 
@@ -140,6 +166,7 @@ class FakeFirmwareResolver:
             folder=folder,
             supplied_by=supplied_by,
             checked=checked,
+            missing_configured_image=missing_configured_image,
         )
         self.placements.append(placement)
         return placement
@@ -165,4 +192,5 @@ class FakeFirmwareResolver:
             resolved=self.resolved,
             caveats=self.caveats,
             emulator_verdicts=dict(self.emulator_verdicts),
+            groups=tuple(self.groups),
         )

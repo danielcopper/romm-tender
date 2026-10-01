@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from domain import firmware_paths
 from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_platform_option
+from domain.firmware_groups import fetched_as_required
 from domain.rom_files import TMP_EXT
 from lib.errors import error_response
 from lib.path_safety import PathTraversalError
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator, Mapping
 
-    from domain.firmware_wants import FirmwarePlacement
+    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.protocols import (
@@ -336,9 +337,12 @@ class FirmwareDownloader:
 
         The emulator is the platform's own pick — the per-platform override when
         it still resolves, else the es_systems default — which is the same pick
-        the status surfaces judge by, so the button fetches the set the pane above
-        it called required. A pick the resolver could not identify falls back to
-        "any emulator requires it" (:func:`_required_by`).
+        the status surfaces judge by. What is fetched is
+        :func:`~domain.firmware_groups.fetched_as_required`'s answer, the same
+        rule each row's ``fetch_for_required`` carries to the button's count: the
+        files the emulator requires, and the options of its one-of groups that
+        serve a region nothing in place covers yet. A pick the resolver could not
+        identify falls back to "any emulator requires it".
         """
         rows, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
@@ -346,8 +350,12 @@ class FirmwareDownloader:
 
         system = self._resolve_system(platform_slug)
         identity = self._platform_emulator_identity(system, platform_slug)
-        placements = await self._platform_placements(system)
-        platform_firmware = [fw for fw in rows if _required_by(placements.get(fw.get("file_name", "")), identity)]
+        catalogue = await self._platform_catalogue(system)
+        placements = catalogue.by_file_name()
+        groups = catalogue.groups_for(identity)
+        platform_firmware = [
+            fw for fw in rows if fetched_as_required(placements.get(fw.get("file_name", "")), identity, groups)
+        ]
 
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
@@ -376,7 +384,11 @@ class FirmwareDownloader:
         return emulator.emulator if emulator is not None else None
 
     async def _platform_placements(self, system: str) -> Mapping[str, FirmwarePlacement]:
-        """Where *system*'s firmware files go, read off that platform's own demand.
+        """Where *system*'s firmware files go, read off that platform's own demand."""
+        return (await self._platform_catalogue(system)).by_file_name()
+
+    async def _platform_catalogue(self, system: str) -> FirmwareCatalogue:
+        """*system*'s own demand — where its files go, and the groups its emulators state.
 
         The platform-scoped reading rather than the whole machine's, for the same
         reason the status surfaces take it: a standalone emulator's declarations
@@ -386,19 +398,4 @@ class FirmwareDownloader:
         content-identified card is the one declarer of would land in the flat
         fallback instead of where it will be opened from.
         """
-        catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
-        return catalogue.by_file_name()
-
-
-def _required_by(placement: FirmwarePlacement | None, emulator: str | None) -> bool:
-    """Will *emulator* refuse to run without the file *placement* describes?
-
-    ``None`` for the emulator — the platform's pick could not be resolved or
-    identified — falls back to "any emulator requires it", the same permissive
-    default the status surfaces use when they cannot name the launching one.
-    """
-    if placement is None:
-        return False
-    if emulator is None:
-        return placement.required_by_any
-    return any(want.emulator == emulator and want.required for want in placement.wants)
+        return await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
