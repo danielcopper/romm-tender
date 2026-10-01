@@ -173,6 +173,7 @@ class UpdateCheckService:
             found = check.release.version if check.release is not None else None
             if reached and found is not None and is_newer_version(found, self._current_version):
                 await self._loop.run_in_executor(None, self._record_toasted_io, found)
+                # This answer tells it, whether or not the record above was kept.
                 toasted = found
         return {**self._notice(check, toasted), "reached": reached}
 
@@ -339,12 +340,27 @@ class UpdateCheckService:
             uow.kv_config.set(LAST_CHECK_KEY, encode_update_check(check))
 
     def _read_toasted_io(self) -> str | None:
-        with self._uow_factory() as uow:
-            return uow.kv_config.get(TOASTED_KEY)
+        """The version told about; one that cannot be read is none.
+
+        So the toast is owed once more — a repeat rather than a loss.
+        """
+        try:
+            with self._uow_factory() as uow:
+                return uow.kv_config.get(TOASTED_KEY)
+        except Exception as e:
+            self._logger.warning(f"update: which release was told about could not be read: {e!r}")
+            return None
 
     def _record_toasted_io(self, version: str) -> None:
-        with self._uow_factory() as uow:
-            uow.kv_config.set(TOASTED_KEY, version)
+        """Record *version* as told about; a write that fails is a warning.
+
+        A later start may then owe its toast once more — a repeat rather than a loss.
+        """
+        try:
+            with self._uow_factory() as uow:
+                uow.kv_config.set(TOASTED_KEY, version)
+        except Exception as e:
+            self._logger.warning(f"update: that {version} was told about could not be recorded: {e!r}")
 
     def _acknowledge_toast_io(self, version: str) -> bool:
         """Record *version* as told if it is the stored release, in the one unit of work that read it."""

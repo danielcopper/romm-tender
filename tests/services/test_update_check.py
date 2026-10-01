@@ -6,11 +6,13 @@ import asyncio
 import contextlib
 import json
 import logging
+import sqlite3
 import threading
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from fakes.fake_event_sink import FakeEventSink
+from fakes.fake_kv_config_repository import FakeKvConfigRepository
 from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
@@ -927,6 +929,26 @@ def _toasted(uow_factory: FakeUnitOfWorkFactory) -> str | None:
         return uow.kv_config.get(TOASTED_KEY)
 
 
+class _ToldKeyLocked(FakeKvConfigRepository):
+    """A kv store whose told-version key can be neither read nor written; every other key works."""
+
+    def get(self, key: str) -> str | None:
+        if key == TOASTED_KEY:
+            raise sqlite3.OperationalError("database is locked")
+        return super().get(key)
+
+    def set(self, key: str, value: str) -> None:
+        if key == TOASTED_KEY:
+            raise sqlite3.OperationalError("database is locked")
+        super().set(key, value)
+
+
+def _told_key_locked() -> FakeUnitOfWorkFactory:
+    uow_factory = FakeUnitOfWorkFactory()
+    uow_factory.uow.kv_config = _ToldKeyLocked()
+    return uow_factory
+
+
 class TestTheAvailableToast:
     """Owed once per version, across restarts, only where the card shows and the switch is on."""
 
@@ -1058,3 +1080,24 @@ class TestTheAvailableToast:
         [(name, notice)] = events.events
         assert name == "update_notice"
         assert notice["toast_owed"] is True
+
+    async def test_a_told_version_that_cannot_be_read_leaves_the_toast_owed_and_is_a_warning(self, caplog):
+        service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=_told_key_locked())
+
+        with caplog.at_level(logging.WARNING, logger="test_update_check"):
+            notice = await service.get_update_notice()
+
+        assert notice["available"] is True
+        assert notice["toast_owed"] is True
+        assert "which release was told about could not be read" in caplog.text
+
+    async def test_a_check_now_whose_told_record_cannot_be_written_still_answers_and_is_a_warning(self, caplog):
+        service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=_told_key_locked())
+
+        with caplog.at_level(logging.WARNING, logger="test_update_check"):
+            found = await service.check_for_update_now()
+
+        assert found["reached"] is True
+        assert found["available"] is True
+        assert found["toast_owed"] is False
+        assert "that 0.34.0 was told about could not be recorded" in caplog.text
