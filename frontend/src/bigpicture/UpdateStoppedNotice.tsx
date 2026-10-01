@@ -1,6 +1,6 @@
 import { FC } from "react";
 import { dismissStoppedUpdateCard, useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
-import { INSTALLER_STOPPED_SENTENCE } from "../utils/updateInstallView";
+import { INSTALL_FAILURE_SENTENCES } from "../utils/updateInstallView";
 import { updateDidNotGoThrough } from "../utils/updateOutcomeStore";
 import { logError } from "../api/backend";
 import { AMBER, AMBER_WASH } from "./layout/pane";
@@ -30,7 +30,7 @@ export const UpdateStoppedNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenU
       color={AMBER}
       wash={AMBER_WASH}
       title={updateDidNotGoThrough(attempt.attemptedVersion, attempt.fromVersion)}
-      detail={INSTALLER_STOPPED_SENTENCE}
+      detail={INSTALL_FAILURE_SENTENCES.installer_stopped}
       onOpenUpdates={onOpenUpdates}
       onDismiss={handleDismiss}
     />

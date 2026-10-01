@@ -751,10 +751,11 @@ pre-install check left (`kind` `check`) takes the same notice with its own line 
 start, so nothing was changed.** and where the reason is — the installer's output, in its journal
 (`journalctl --user -u romm-tender-update`) or the terminal it was run in, since that version never ran as the service
 and wrote nothing to `backend.log` (`UPDATE_CHECK_FAILURE_REASON`, chosen by `updateFailureReason`); the failure block
-under Updates names no place at all, since the button under it shows the installer's output (§ Settings). A record of a
-kind this version does not know — a later installer's, `kind` `unknown` on the wire — takes the notice with no cause
-named, only where the installer's output is (`UPDATE_UNKNOWN_FAILURE_REASON`). The notice stands while the installer's
-record does — which the backend reports only while the running version is the one the record names as still running
+under Updates, whose title already says nothing was changed, names the same place without that clause
+(`UPDATE_CHECK_FAILURE_NOTE`), and the button under it shows that output (§ Settings). A record of a kind this version
+does not know — a later installer's, `kind` `unknown` on the wire — takes the notice with no cause named, only where the
+installer's output is (`UPDATE_UNKNOWN_FAILURE_REASON`). The notice stands while the installer's record does — which the
+backend reports only while the running version is the one the record names as still running
 ([UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)) — and its Dismiss is **per record**:
 it records the record's `rolled_back_at` (`update_failure_dismissed_at`), so the next record the installer writes raises
 it again, and the record going away — the next update whose new version answers removes it — takes it down too. Its home
@@ -1827,14 +1828,14 @@ that held it at Checking... asks again when the seven minutes are up.
 
 **A failure is the same block in amber**, drawn in the frame Main's update cards use (`cardFrame`,
 `bigpicture/UpdateCard.tsx`): a title, the step line with the step it stopped at marked failed — where the failure has
-one, as the table below says — and the reason; **Try again** is the button above it. A failed attempt of this backend's
-is titled **Update to X failed — nothing was changed.**, and one cancelled for a game — `game_started`, or
-`running_apps_unknown` where Tender could not check whether one runs — **Update to X was cancelled — nothing was
-changed.**; an installer that stopped where this panel did not see it start says **— you are still on Y.** as its card
-on Main does, since what it left behind is not known here. Its reason is its line in `INSTALL_FAILURE_NOTES`, which
-leaves out what the title says and names no journal; Main's card for a stopped installer takes the same line with the
-installer's journal named (`INSTALLER_STOPPED_SENTENCE`), since no button stands beside it there. The step it is marked
-at (`failedStep`, `utils/updateInstallView.ts`):
+one, as the table below says — and the reason, with where to read more for the installer's own failures; **Try again**
+is the button above it. A failed attempt of this backend's is titled **Update to X failed — nothing was changed.**, and
+one cancelled for a game — `game_started`, or `running_apps_unknown` where Tender could not check whether one runs —
+**Update to X was cancelled — nothing was changed.**; an installer that stopped where this panel did not see it start
+says **— you are still on Y.** as its card on Main does, since what it left behind is not known here. Its reason is its
+sentence in `INSTALL_FAILURE_SENTENCES`, which leaves out what the title says and, for the installer's own failures,
+names its journal; Main's card for a stopped installer takes the same sentence, and the toast the reason without the
+journal (`INSTALL_FAILURE_REASONS`). The step it is marked at (`failedStep`, `utils/updateInstallView.ts`):
 
 | Failure                                                         | Marked at                                                                                                                         |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -1855,39 +1856,39 @@ record at its own start, which refuses its socket
 Where no failed attempt of this backend's is shown, the installer's record takes the block: **Update to X failed —
 Tender went back to Y.** at Install for a rollback, **Update to X failed — nothing was changed.** at Check the new
 version for a refusal by the check, and the card's sentence with no step line for a kind this version does not know; the
-reason is **The new version did not answer.** for a rollback (`UPDATE_ROLLBACK_NOTE`), **The new version did not
-start.** for a refusal (`UPDATE_CHECK_FAILURE_NOTE`), and none for the kind this version does not know — each names no
-place to read more, since the button under the block shows it. An attempt takes the block over a record, so a refusal by
-the check this backend saw while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows
-only while its version is the one offered, or until the first read answers, so the block does not leave under focus, and
-leaves once a read offers another version, or none; a record standing then takes the block. Check now reads whatever the
-switch says, and its own line under its button says only what the rows above do not: **GitHub gave no usable answer. Try
-again later.** and **The check failed.** — a release found is the Available row's to name, and so is none newer.
+reason is the record's own line (`updateFailureReason`), except a refusal's, which leaves out what its title says
+(`UPDATE_CHECK_FAILURE_NOTE`). An attempt takes the block over a record, so a refusal by the check this backend saw
+while it ran — a failed attempt and a record at once — is stated once. A failed attempt shows only while its version is
+the one offered, or until the first read answers, so the block does not leave under focus, and leaves once a read offers
+another version, or none; a record standing then takes the block. Check now reads whatever the switch says, and its own
+line under its button says only what the rows above do not: **GitHub gave no usable answer. Try again later.** and **The
+check failed.** — a release found is the Available row's to name, and so is none newer.
 
-**Show what the installer said** is a row of its own directly under a failed block, a `ButtonItem`, where the installer
-ran: an attempt that failed as `installer_stopped` or `new_version_does_not_start` (`INSTALLER_RAN`,
-`utils/updateInstallView.ts`) — a stopped attempt an earlier start found among them — and a record of every kind. It is
-not a control inside the block's field, which would change that stop; it comes and goes with the block, so it leaves
-when a read offers another version or none, and when **Try again** starts a new attempt, whose block has no button while
-it runs. A press opens a modal at once (`bigpicture/settings/UpdateOutputModal.tsx`), through the `showModal` and
-`ModalRoot` the panel already imports, so the start-up check has no new name to classify; it says **Reading what the
-installer said…** until the backend answers for that failure (`get_update_output`, with the record's `rolled_back_at`,
-or `null` for this backend's attempt), and a press while that answer is on its way opens nothing. The modal renders in
-Big Picture's document rather than the QAM view's; it reads no DOM global, so the two realms do not meet in it. Where it
-shows output it is titled **What the installer said — HH:MM**, the local time the installer's run began, and holds **The
-installer** and, after a rollback, **X, when it tried to start** — which run each is, and what the backend cuts and
-hides, is [UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and
-wrap, and the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines
-are cut into stops of at most twelve lines and under 1200 characters (`outputStops`) — a line of 500 characters wraps to
-several rows, and a stop taller than the dialog would hide its own end — each a `Focusable` declaring
-`focusableIfEmpty`, so a controller walks several hundred lines one stop at a time and every line is reachable. A part
-that leaves lines out says how many above them. Everywhere else the title carries no time, and one stop says why there
-is nothing instead of an empty box: **This output is no longer in the system journal — it keeps only the last hours of
-logs.** (`missing` `rotated`), **This update was run in a terminal, so its output is there, not in the journal.**
-(`terminal`), **The installer left nothing in the journal for this update.** (`empty`), **This failed update is no
-longer on record.** (`not_found`), and **Tender could not read what the installer said.** where the journal or the call
-failed, and for a `missing` value this panel has no sentence for. **Close** ends it. Main's cards keep their journal
-sentence and **Open Updates**; the button is Settings' alone.
+**Show what the installer said** is a row of its own directly under a failed block, a `ButtonItem` — the block's line
+still says where to read the reason by hand — where the installer ran: an attempt that failed as `installer_stopped` or
+`new_version_does_not_start` (`INSTALLER_RAN`, `utils/updateInstallView.ts`) — a stopped attempt an earlier start found
+among them — and a record of every kind. It is not a control inside the block's field, which would change that stop; it
+comes and goes with the block, so it leaves when a read offers another version or none, and when **Try again** starts a
+new attempt, whose block has no button while it runs. A press opens a modal at once
+(`bigpicture/settings/UpdateOutputModal.tsx`), through the `showModal` and `ModalRoot` the panel already imports, so the
+start-up check has no new name to classify; it says **Reading what the installer said…** until the backend answers for
+that failure (`get_update_output`, with the record's `rolled_back_at`, or `null` for this backend's attempt), and a
+press while that answer is on its way opens nothing. The modal renders in Big Picture's document rather than the QAM
+view's; it reads no DOM global, so the two realms do not meet in it. Where it shows output it is titled **What the
+installer said — HH:MM**, the local time the installer's run began, and holds **The installer** and, after a rollback,
+**X, when it tried to start** — which run each is, and what the backend cuts and hides, is
+[UpdateOutputService notes](backend-architecture.md#updateoutputservice-notes). Its lines are monospace and wrap, and
+the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines are cut
+into stops of at most twelve lines and under 1200 characters (`outputStops`) — a line of 500 characters wraps to several
+rows, and a stop taller than the dialog would hide its own end — each a `Focusable` declaring `focusableIfEmpty`, so a
+controller walks several hundred lines one stop at a time and every line is reachable. A part that leaves lines out says
+how many above them. Everywhere else the title carries no time, and one stop says why there is nothing instead of an
+empty box: **This output is no longer in the system journal — it keeps only the last hours of logs.** (`missing`
+`rotated`), **This update was run in a terminal, so its output is there, not in the journal.** (`terminal`), **The
+installer left nothing in the journal for this update.** (`empty`), **This failed update is no longer on record.**
+(`not_found`), and **Tender could not read what the installer said.** where the journal or the call failed, and for a
+`missing` value this panel has no sentence for. **Close** ends it. Main's cards keep their journal sentence and **Open
+Updates**; the button is Settings' alone.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

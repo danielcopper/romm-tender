@@ -91,11 +91,10 @@ export function refusalStands(
 export const RELOAD_LIMIT: number = 2;
 
 /**
- * The line under a failed attempt's title in Settings › Updates, which leaves
- * out what the title says. Where the installer ran, the button under the block
- * shows what it said, so no line names its journal.
+ * What a failed attempt ended in, leaving out what its title says and where to
+ * read more: the reason its toast gives.
  */
-export const INSTALL_FAILURE_NOTES: Record<UpdateInstallFailure, string> = {
+export const INSTALL_FAILURE_REASONS: Record<UpdateInstallFailure, string> = {
   download_failed: "The download failed.",
   checksum_mismatch: "The download did not match its checksum.",
   installer_not_started: "The installer could not be started.",
@@ -105,14 +104,21 @@ export const INSTALL_FAILURE_NOTES: Record<UpdateInstallFailure, string> = {
   new_version_does_not_start: "The new version does not start.",
 };
 
+/**
+ * The line under a failed attempt's title, which leaves out what the title
+ * says; where the installer ran, it names the installer's journal.
+ */
+export const INSTALL_FAILURE_SENTENCES: Record<UpdateInstallFailure, string> = {
+  ...INSTALL_FAILURE_REASONS,
+  installer_stopped: `${INSTALL_FAILURE_REASONS.installer_stopped} ${INSTALLER_JOURNAL}`,
+  new_version_does_not_start: `${INSTALL_FAILURE_REASONS.new_version_does_not_start} The installer's output says why: ${INSTALLER_UNIT_JOURNAL}`,
+};
+
 /** The failures an attempt ends in once its installer has run — the ones whose output the button shows. */
 export const INSTALLER_RAN: ReadonlySet<UpdateInstallFailure> = new Set([
   "installer_stopped",
   "new_version_does_not_start",
 ]);
-
-/** The line for an installer that stopped where no button stands beside it, as on Main's card: it names its journal. */
-export const INSTALLER_STOPPED_SENTENCE = `${INSTALL_FAILURE_NOTES.installer_stopped} ${INSTALLER_JOURNAL}`;
 
 type PlainWaitReason = Exclude<UpdateWaitReason, { apps: string[] } | { frees_at: number }>["reason"];
 

@@ -322,8 +322,8 @@ Tender does not bring it back, and one whose notice you already dismissed on the
 - Below the versions and the button, one block for what is happening: an install under way, or an update that did not go
   through. While the installer's note of a rolled-back update, or of one its pre-install check refused, is there and you
   are still on the version it names, the block says so — **Update to X failed — Tender went back to Y.** or **Update to
-  X failed — nothing was changed.** — with the step it failed at, whether or not you dismissed the notice on the main
-  panel. Where the installer ran, **Show what the installer said** stands under the block; see
+  X failed — nothing was changed.** — with the step it failed at and where the reason is, whether or not you dismissed
+  the notice on the main panel. Where the installer ran, **Show what the installer said** stands under the block; see
   [What the installer said](#what-the-installer-said).
 - **Check for updates daily** — on by default. Switch it off and Tender no longer asks GitHub by itself; what the last
   check found stays in **Available** and can still be installed.

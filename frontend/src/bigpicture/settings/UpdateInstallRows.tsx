@@ -5,7 +5,7 @@ import type { UpdateInstallAttempt, UpdateInstallFailure } from "../../api/backe
 import { attemptSeenAt, installerSeenAt } from "../../utils/updateInstallStore";
 import {
   GAME_STARTS_CANCEL,
-  INSTALL_FAILURE_NOTES,
+  INSTALL_FAILURE_SENTENCES,
   INSTALL_STATE_UNREAD,
   INSTALLER_RAN,
   NOT_BACK_LINE,
@@ -22,8 +22,8 @@ import {
 } from "../../utils/updateInstallView";
 import {
   UPDATE_CHECK_FAILURE_NOTE,
-  UPDATE_ROLLBACK_NOTE,
   updateDidNotGoThrough,
+  updateFailureReason,
   updateFailureSentence,
   type RolledBackUpdate,
 } from "../../utils/updateOutcomeStore";
@@ -148,7 +148,7 @@ function attemptFailure(attempt: UpdateInstallAttempt, earlier: string): Block {
     caption: attemptTitle(attempt, earlier, installerSeen),
     at: kind && failedStep(kind, installerSeen),
     failed: true,
-    note: kind && INSTALL_FAILURE_NOTES[kind],
+    note: kind && INSTALL_FAILURE_SENTENCES[kind],
     ...(kind && INSTALLER_RAN.has(kind) ? { output: { rolledBackAt: null, version: attempt.version } } : {}),
   };
 }
@@ -162,7 +162,7 @@ function recordFailure(record: RolledBackUpdate): Block {
       caption: failedTo(attemptedVersion, `Tender went back to ${record.restoredVersion}`),
       at: "install",
       failed: true,
-      note: UPDATE_ROLLBACK_NOTE,
+      note: updateFailureReason(record),
       ...output,
     };
   }
@@ -175,7 +175,13 @@ function recordFailure(record: RolledBackUpdate): Block {
       ...output,
     };
   }
-  return { caption: updateFailureSentence(record), at: null, failed: true, note: null, ...output };
+  return {
+    caption: updateFailureSentence(record),
+    at: null,
+    failed: true,
+    note: updateFailureReason(record),
+    ...output,
+  };
 }
 
 /**

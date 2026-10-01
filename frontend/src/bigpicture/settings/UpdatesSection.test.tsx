@@ -12,7 +12,8 @@ import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 import { SHOW_OUTPUT } from "./UpdateInstallRows";
 import {
   UPDATE_CHECK_FAILURE_NOTE,
-  UPDATE_ROLLBACK_NOTE,
+  UPDATE_FAILURE_REASON,
+  UPDATE_UNKNOWN_FAILURE_REASON,
   resetUpdateOutcomeStoreForTests,
   setUpdateOutcomeState,
   type UpdateOutcomeState,
@@ -87,6 +88,15 @@ function pressDespiteDisabled(element: HTMLElement): void {
 
 const statuses = (utils: { getByTestId: (id: string) => HTMLElement }) =>
   ["download", "verify", "check", "install"].map((id) => utils.getByTestId(`updates-step-${id}`).dataset.status);
+
+/** The failure block's line stands, and the button that shows the installer's output comes after it. */
+function expectButtonUnderNote(utils: {
+  getByTestId: (id: string) => HTMLElement;
+  getByText: (text: string) => HTMLElement;
+}) {
+  const note = utils.getByTestId("updates-note");
+  expect(note.compareDocumentPosition(utils.getByText(SHOW_OUTPUT)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+}
 
 const renderSection = (
   over: Partial<UpdateNoticeState> = {},
@@ -198,16 +208,15 @@ describe("UpdatesSection", () => {
     const withRecord = (kind: "rollback" | "check" | "unknown") =>
       renderSection({}, { outcome: { ...ROLLED_BACK, failure: { ...ROLLED_BACK.failure!, kind } } });
 
-    it("states a rolled-back update as gone back, failed at Install, with the button that shows why", () => {
+    it("states a rolled-back update as gone back, failed at Install, with where its reason is and the button under it", () => {
       const utils = withRecord("rollback");
 
       expect(utils.getByTestId("updates-caption").textContent).toBe(
         "Update to 0.34.0 failed — Tender went back to 0.33.0.",
       );
       expect(statuses(utils)).toEqual(["done", "done", "done", "failed"]);
-      expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_ROLLBACK_NOTE);
-      expect(UPDATE_ROLLBACK_NOTE).toBe("The new version did not answer.");
-      expect(utils.getByText(SHOW_OUTPUT)).toBeTruthy();
+      expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_FAILURE_REASON);
+      expectButtonUnderNote(utils);
     });
 
     it("states an update the pre-install check refused as nothing changed, failed at the check, saying so once", () => {
@@ -216,8 +225,10 @@ describe("UpdatesSection", () => {
       expect(utils.getByTestId("updates-caption").textContent).toBe("Update to 0.34.0 failed — nothing was changed.");
       expect(statuses(utils)).toEqual(["done", "done", "failed", "pending"]);
       expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_CHECK_FAILURE_NOTE);
-      expect(UPDATE_CHECK_FAILURE_NOTE).toBe("The new version did not start.");
-      expect(utils.getByText(SHOW_OUTPUT)).toBeTruthy();
+      expect(UPDATE_CHECK_FAILURE_NOTE).toBe(
+        "The new version did not start. The installer's output says why: journalctl --user -u romm-tender-update, or the terminal it was run in.",
+      );
+      expectButtonUnderNote(utils);
     });
 
     it("states a record of a kind this version does not know with no cause and no step", () => {
@@ -227,8 +238,8 @@ describe("UpdatesSection", () => {
         "Update to 0.34.0 failed — you are still on 0.33.0.",
       );
       expect(utils.queryByTestId("updates-step-install")).toBeNull();
-      expect(utils.queryByTestId("updates-note")).toBeNull();
-      expect(utils.getByText(SHOW_OUTPUT)).toBeTruthy();
+      expect(utils.getByTestId("updates-note").textContent).toBe(UPDATE_UNKNOWN_FAILURE_REASON);
+      expectButtonUnderNote(utils);
     });
 
     it("words it in the warning colour its card on Main uses", () => {
@@ -260,7 +271,9 @@ describe("UpdatesSection", () => {
       const utils = withRecord("check");
 
       expect(utils.getAllByTestId("updates-caption")).toHaveLength(1);
-      expect(utils.getByTestId("updates-note").textContent).toBe("The new version does not start.");
+      expect(utils.getByTestId("updates-note").textContent).toBe(
+        "The new version does not start. The installer's output says why: journalctl --user -u romm-tender-update",
+      );
       expect(utils.getAllByText(SHOW_OUTPUT)).toHaveLength(1);
     });
   });
@@ -693,13 +706,14 @@ describe("UpdatesSection", () => {
           const button = utils.getByText(SHOW_OUTPUT);
 
           expect(block?.contains(button)).toBe(false);
-          expect(text(utils, "updates-note")).not.toContain("journalctl");
+          expect(text(utils, "updates-note")).toContain("journalctl --user -u romm-tender-update");
+          expectButtonUnderNote(utils);
         },
       );
 
-      it("words an installer that stopped without its journal, since the button shows it", () => {
+      it("keeps the installer's journal in the line of an installer that stopped, with the button under it", () => {
         expect(text(withInstall(failedWith("installer_stopped")), "updates-note")).toBe(
-          "The installer stopped without updating.",
+          "The installer stopped without updating. Details: journalctl --user -u romm-tender-update",
         );
       });
 

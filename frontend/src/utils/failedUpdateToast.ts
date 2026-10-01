@@ -28,7 +28,7 @@ import {
 } from "../api/backend";
 import { TOAST_READINESS_DEADLINE_MS, waitUntilSteamCanShowToasts } from "./steamReadyForToasts";
 import { showToast } from "./toast";
-import { INSTALL_FAILURE_NOTES } from "./updateInstallView";
+import { INSTALL_FAILURE_REASONS } from "./updateInstallView";
 
 /** What a toast raised in this JavaScript context was for, so a push and a read of the same failure raise one. */
 const raised = new Set<string>();
@@ -82,10 +82,10 @@ export function stillOnToast(attempted: string, stillOn: string): string {
  */
 export function attemptFailureToast({ failure, version }: UpdateAttemptToast): string {
   if (failure === "game_started" || failure === "running_apps_unknown") {
-    const reason = failure === "game_started" ? "A game was started." : INSTALL_FAILURE_NOTES[failure];
+    const reason = failure === "game_started" ? "A game was started." : INSTALL_FAILURE_REASONS[failure];
     return `Update to ${version} was cancelled. ${reason} Nothing was changed.`;
   }
-  return `Update to ${version} failed. ${(INSTALL_FAILURE_NOTES as Partial<Record<string, string>>)[failure] ?? ""}`.trimEnd();
+  return `Update to ${version} failed. ${(INSTALL_FAILURE_REASONS as Partial<Record<string, string>>)[failure] ?? ""}`.trimEnd();
 }
 
 /**
