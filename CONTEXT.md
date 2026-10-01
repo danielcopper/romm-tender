@@ -610,23 +610,60 @@ Where each of the three is worded is `frontend/src/utils/biosFileNote.ts`, the o
 note from. The mark in the platform pane's `On disk` cell stays the verdict alone and says only that nothing was settled
 either way.
 
+### One-of group (firmware): met / partial / unmet / unknown
+
+A firmware requirement a launch meets with exactly **one** of several files, chosen by the **console region** of the
+disc being booted — Beetle PSX opens `scph5500.bin` for an NTSC-J disc, `scph5501.bin` for NTSC-U and `scph5502.bin` for
+PAL. The resolver states it as a group of **options**, each naming the console regions whose launch opens it, the
+regions disjoint across the options; one file may stand under two options and then serves both their regions. Where the
+core finds its image by searching the BIOS folder, the image the search found is one option serving every region —
+SwanStation's.
+
+The group is **one requirement**, however many options it lists. It counts once in **required by the launching
+emulator**'s count, and only as held where it is **met**. Its options are rows like any other, and an option never makes
+its row required — an option is needed only where its region is the launch's, which no per-file answer can say. A file
+that is a plain declaration and an option is one row.
+
+Judged region by region, each region the group speaks about is **covered** (an option serving it is in place),
+**missing** (its option is shown not to be, or the resolver stated nothing boots for it) or **unchecked** (an option
+serving it is there and could not be read, or the resolver named it as resting on a read that settled nothing). The
+state follows:
+
+- **met** — every region is covered. Never over an unchecked one.
+- **partial** — some region is covered and some is missing. Counted as not met; the **BIOS level** is `partial`.
+- **unmet** — no option is in place. The **BIOS level** is `missing`, as for an **absent** system image.
+- **unknown** — an option is there and unread, or an unchecked region stands beside the covered ones. A declined
+  verdict, like a withheld required row; never folded into a colour of its own.
+
+On the game page the group is judged for the game's own console regions alone, mapped from RomM's region names (USA and
+Canada are NTSC-U, Japan NTSC-J, Europe, the European countries and Australia PAL): covered where any of them is,
+missing where they are shown to be, unknown otherwise. A game whose regions map onto none — World, Asia, Korea, Brazil,
+none recorded — takes the platform's verdict.
+
+Scoped to the **launching emulator**, like **required by the launching emulator**: the group is that emulator's, and a
+platform's other emulators' groups are carried only as their own lines on a row. Nothing in the vocabulary is
+PlayStation's — every group the resolver states for any console is judged the same way. _Avoid_: candidate, spare — the
+words of the file-by-file reading this replaced.
+
+### Console region (firmware)
+
+The region a console boots a disc as — `ntsc-j`, `ntsc-u`, `pal` in the resolver's spelling, worded Japan (NTSC-J),
+North America (NTSC-U) and Europe (PAL). It is the selector a **one-of group** is judged over. Not RomM's region, which
+is a release's name tag (`USA`, `Germany`, `World`) and maps onto at most one console region each; RomM's that map onto
+none leave the game's console region unknown.
+
 ### System image (firmware): held / absent / unsettled / not demanded
 
-Whether the core a game launches with has the firmware image its **console** cannot start without — a requirement no
-libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else: no way to say
-"one of these", and no way to say the console will not boot without one. An author who knows it will not has two lossy
-moves and the deployed catalogue takes both — SwanStation marks all five of its PlayStation images optional, Beetle PSX
-marks three of its own required — so the file counts alone read a green "this core requires none of the files it names"
-under the one core and three separate prerequisites under the other, over a system on which no game starts either way.
-The console's own answer is world knowledge rather than a reading of the machine — the resolver keeps a source-cited
-table of it, per system.
+Whether the core a game launches with has the firmware image its **console** cannot start without — the coarse reading
+of that demand, for a core that states no **one-of group**. Where the core states one, the group IS the demand, said
+region by region, and this answers **not demanded**. A `.info` marks each file **needed** or **optional** and nothing
+else: no way to say "one of these", and no way to say the console will not boot without one. The console's own answer is
+world knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
 
 It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
 declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
-Folded into **required by the launching emulator** it would report every image the core declares as required —
-`0 / 5 required files ready` under SwanStation, which declares five; carried as its own axis it is worded "at least one"
-and never as a ratio, nor as a pointer at the file list, most of whose rows cannot answer it. The twenty in the same
-page's `(0/20 RomM library files)` is a different set again: the **library inventory** below.
+Folded into **required by the launching emulator** it would report every image the core declares as required; carried as
+its own axis it is worded "at least one" and never as a ratio. The **library inventory** below is a different set again.
 
 - **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
 - **absent** — the console needs one and every row the launching emulator declares was established to be absent. The
@@ -636,34 +673,13 @@ page's `(0/20 RomM library files)` is a different set again: the **library inven
 - **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
   grey and nothing else: where the counts already read `partial` or `missing`, something is known to be absent and a
   doubt about one further file does not unsay it.
-- **not demanded** — the axis makes no claim, and the file rows speak for themselves. Four recordings reach it: the core
-  carries its own substitute (PCSX ReARMed's HLE BIOS), the console was established to start with nothing present, the
-  question is recorded as open, or **nothing is recorded about the console at all**. The last is an unasked question and
-  may never be read as "this console needs no firmware" — the same rule that keeps **unknown** apart from **not needed**
-  one axis over.
+- **not demanded** — the axis makes no claim, and the file rows speak for themselves. Five recordings reach it: the core
+  states a **one-of group**, the core carries its own substitute (PCSX ReARMed's HLE BIOS), the console was established
+  to start with nothing present, the question is recorded as open, or **nothing is recorded about the console at all**.
+  The last is an unasked question and may never be read as "this console needs no firmware" — the same rule that keeps
+  **unknown** apart from **not needed** one axis over.
 
-The same table answers **per core**, and a file row carries that answer on each core's own entry beside that core's
-`required` flag: what the core's `.info` says about this file, and — where that core states the demand as a
-**disjunction** — how many files it is spread over. Two speakers, so a core marking the file _optional_ while its
-console will not start without one of the five images it declares is the informative pair rather than a contradiction —
-and neither half is ever rewritten into the other.
-
-A core states the demand as a disjunction only where it marks **nothing** required: that is the one shape in which "one
-of these" is the whole of what the core says. A core whose console needs an image and that does mark files required —
-Beetle PSX marks three of the same five — says what it has to say through those rows being **required by the launching
-emulator**, so its entries carry no count and its rows are not marked. The **system image candidate** flag is the same
-answer read for the launching emulator onto the row: this row is one of the images that would start the console on its
-own.
-
-That candidate set is deliberately **narrower** than the set the **system image** value is read over, which is every
-image the launching emulator declares whatever it called it. The two answer different questions — one is the console's
-verdict, the other is which rows a surface may mark as ways to reach it — so widening the flag to every image-demanding
-core would put a second mark on a requirement already stated, and narrowing the verdict to the marked rows would stop
-answering for the cores that state required files.
-
-Scoped to the **launching emulator** — the scope **required by the launching emulator** shares and **wanted** does not:
-one unchanged PlayStation reads `absent` under SwanStation, whose five declared images the console needs one of, and
-`not demanded` under PCSX ReARMed, which carries its own substitute.
+Scoped to the **launching emulator** — the scope **required by the launching emulator** shares and **wanted** does not.
 
 ### Declaration register (firmware): read / packaged
 
