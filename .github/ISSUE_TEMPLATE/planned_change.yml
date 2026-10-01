@@ -22,7 +22,7 @@ body:
     id: to_decide
     attributes:
       label: To decide
-      description: Open questions. They are settled before implementation; the section is then renamed Decisions.
+      description: 'Open questions, one checkbox each: `- [ ] …`. Once a question is answered under Decisions, check it off and point to the decision (`- [x] … → D1`).'
     validations:
       required: false
 
