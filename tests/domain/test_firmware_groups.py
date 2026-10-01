@@ -159,6 +159,14 @@ class TestTheVerdictCarriesWhatAPageListsUnderIt:
         assert verdict.options == group.options
         assert verdict.regions == (REGION_NTSC_J, REGION_NTSC_U, REGION_PAL, "ntsc-k")
 
+    def test_a_covered_games_verdict_still_carries_every_option(self):
+        group = _beetle(ntsc_u=True)
+
+        verdict = judge_group_for_game(group, (REGION_NTSC_U,))
+        assert verdict.state == GROUP_MET
+        assert verdict.options == group.options
+        assert verdict.regions == group.regions
+
     def test_a_games_verdict_still_carries_every_option(self):
         group = _beetle(ntsc_u=True)
 
