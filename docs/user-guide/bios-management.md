@@ -32,7 +32,7 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
   stock RetroDECK — reads "The one file DuckStation requires is in place". A line saying the required files are in place
   can end in "(2 optional missing)": files that same emulator lists as optional and that are not in place. Another
   emulator's optional files are not counted there.
-- **Orange** — some required files present: "1 of 2 files mGBA requires are in place", or "Beetle PSX has a BIOS image
+- **Amber** — some required files present: "1 of 2 files mGBA requires are in place", or "Beetle PSX has a BIOS image
   for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start" where the console needs one
   image per region and only some regions have theirs
 - **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
@@ -230,7 +230,7 @@ there is a folder, so there is no file to fetch into it. On a stock RetroDECK th
 which RetroDECK links onto the BIOS folder itself. (The Library page's platform detail words that row _Missing_, because
 it spells absence out where this tab leaves it to the dot.)
 
-<!-- Screenshot: Game detail page showing orange BIOS status with "2 of 5 files mGBA requires are in place" -->
+<!-- Screenshot: Game detail page showing amber BIOS status with "2 of 5 files mGBA requires are in place" -->
 
 ![BIOS file list overlay showing individual required files with checkmarks and "Missing" labels](../assets/screenshot-bios.jpg)
 
@@ -517,16 +517,17 @@ That group is **one requirement**, however many images it lists, and the page co
 
 - **Green — "The BIOS image SwanStation needs is in place for every region"**, _1 / 1 required_. Every region the core
   names has an image.
-- **Orange — "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will
+- **Amber — "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will
   not start"**, _0 / 1 required · North America only_. Some regions have their image and some are shown not to. It
-  counts as not met, because a Japanese disc will not start, and it is orange rather than red, because a North American
+  counts as not met, because a Japanese disc will not start, and it is amber rather than red, because a North American
   one will.
 - **Red — "Beetle PSX cannot start this system without a BIOS image"**. No image of the group is there.
 - **Grey — "Whether the BIOS image Beetle PSX needs is in place could not be checked"**. An image is there and could not
   be read, or a region could not be checked at all — a folder that would not list, say — beside regions that do have
-  their image. The page never shows green over a region nobody checked. Where an image is there and could not be read,
-  the line is grey even when other regions are shown to have nothing; the rows of those regions stay red. Where no image
-  is there at all, the line is red whatever else could not be checked.
+  their image. The page never shows green over a region nobody checked. Where an image is there and could not be read
+  and no region has its image, the line is grey even when other regions are shown to have nothing; the rows of those
+  regions stay red. Where a region does have its image, one shown to have nothing makes the line amber whatever else
+  could not be read. Where no image is there at all, the line is red whatever else could not be checked.
 
 Each image of the group is its own row, and says which region it serves: on the Library page's platform table _one of
 these · Japan (NTSC-J) · ✗ missing_ under the row, with a red ✗ or a green ✓ in its On disk column; on the game page

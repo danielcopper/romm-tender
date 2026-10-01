@@ -697,7 +697,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `playSection.test.ts` pin that `required` comes off plain declarations only, that a group counts once and only `met`
   counts as held, that the badge leaves `required_partial` out, that `Download required`'s count and its download are
   one set (`fetched_as_required`), that the game page judges the ROM's own console regions (`console_regions_of`), and
-  an invented console judged by the same rules. Prompt-only: each of those at a NEW site — a consumer reading an
+  that an invented console is judged by the same rules. Prompt-only: each of those at a NEW site — a consumer reading an
   option's `need` as `required`, a second download rule, a judging that names a console, an emulator or a region; the
   state never travels as a colour; `unknown` is never read as `met` or `unmet`; which caveats name a group's other
   regions is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. Unseen by every test: a region whose every name

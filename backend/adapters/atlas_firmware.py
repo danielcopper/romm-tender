@@ -348,10 +348,10 @@ def _groups(answer: Any) -> tuple[FirmwareGroup, ...]:
 
     An entry the resolver could not identify contributes none — a group nothing
     can be scoped to answers for no launch. Of two rows of one identity that
-    state groups, the first stands and the second is skipped, the rule
-    :func:`_wants` applies for the same reason; a row stating no group takes no
-    part in that, so it never hides a later row's group. The regions an entry
-    names beside its group come off that entry's own caveats
+    state groups, the first stands and the second is skipped — one row's groups
+    per identity, as :func:`_wants` keeps one want per identity; a row stating
+    no group takes no part in that, so it never hides a later row's group. The
+    regions an entry names beside its group come off that entry's own caveats
     (:data:`_UNCHECKED_REGION_CODES`, :data:`_ABSENT_REGION_CODES`).
     """
     groups: list[FirmwareGroup] = []

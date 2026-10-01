@@ -633,9 +633,11 @@ state follows:
 - **partial** — some region is covered and some is missing. Counted as not met; the **BIOS level** is `partial`.
 - **unmet** — no option is in place or might be. The **BIOS level** is `missing`, as for an **absent** system image; an
   unchecked region does not lift it.
-- **unknown** — an option is there and unread, or an unchecked region stands beside covered ones and none is missing. A
-  declined verdict, like a withheld required row; never folded into a colour of its own. An unread option makes it
-  unknown even beside regions shown missing: the headline is grey, and the rows of those regions stay red.
+- **unknown** — an option is there and unread and no region is covered, or an unchecked region stands beside covered
+  ones and none is missing. A declined verdict, like a withheld required row; never folded into a colour of its own.
+  Where nothing is covered, an unread option makes it unknown even beside regions shown missing: the headline is grey,
+  and the rows of those regions stay red. With a region covered, one shown missing makes it **partial** whatever else is
+  unread.
 
 On the game page the group is judged for the game's own console regions alone, mapped from RomM's region names (the
 mapping is the user guide's,
