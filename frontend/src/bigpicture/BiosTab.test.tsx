@@ -1250,7 +1250,7 @@ describe("BiosTab", () => {
       const container = renderFor({ ...status, one_of_groups: [beetleGroup!, second] }, "missing");
 
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
-      expect(block?.textContent?.match(/Beetle PSX needs one BIOS image per disc region:/g)).toHaveLength(2);
+      expect(block?.textContent.match(/Beetle PSX needs one BIOS image per disc region:/g)).toHaveLength(2);
       expect([...(block?.querySelectorAll(".romm-panel-group-line") ?? [])].map((line) => line.textContent)).toContain(
         "Japan · extra.rom · in place ← this game",
       );
