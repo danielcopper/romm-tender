@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
-import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption } from "../types";
+import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
 
 const coreInfo: CoreInfo = {
   active_core: "snes9x_libretro.so",
@@ -724,14 +724,12 @@ describe("BiosTab", () => {
   });
 
   describe("a core's line", () => {
-    // Two speakers, and the line prints whichever of them has something to say.
-    // What a core marks the file is its own `.info` and is never rewritten;
-    // what its CONSOLE needs comes from the packaged table beside it. A libretro
-    // declaration has only "needed" and "optional" to reach for, so an author
-    // who knows the console will not start without one of these images writes
-    // "optional" and the row read as a flat contradiction of the headline above
-    // it.
-    const psxRow = (cores: Record<string, { required: boolean; needs_one_of?: number | null }>) => ({
+    // Two statements, and the line prints whichever of them has something to
+    // say. What a core marks the file is its own declaration and is never
+    // rewritten; where the file is an option of the core's one-of group, the
+    // line names the regions it serves there instead of "optional".
+    type CoreEntry = { required: boolean; one_of?: { regions: string[]; every_region: boolean } | null };
+    const psxRow = (cores: Record<string, CoreEntry>) => ({
       needs_bios: true,
       server_count: 1,
       local_count: 0,
@@ -756,10 +754,7 @@ describe("BiosTab", () => {
       ],
     });
 
-    const lineFor = (
-      cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
-      label: string,
-    ): string | undefined => {
+    const lineFor = (cores: Record<string, CoreEntry>, label: string): string | undefined => {
       const { container } = render(
         <BiosTab biosStatus={psxRow(cores)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
       );
@@ -771,13 +766,21 @@ describe("BiosTab", () => {
         .find((text) => text.startsWith(label));
     };
 
-    it("states the whole requirement where the core marks each of its files optional", () => {
-      // The count is what makes this line the only one that can: the headline
-      // above says "at least one" without a number, and each row below
-      // describes one file.
-      expect(lineFor({ "swanstation_libretro.so": { required: false, needs_one_of: 5 } }, "swanstation")).toBe(
-        "swanstation (needs one of its 5 BIOS files)",
-      );
+    it("names the region a file serves as an option of the core's group", () => {
+      const cores = {
+        "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-j"], every_region: false } },
+      };
+      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (one of these · Japan (NTSC-J))");
+    });
+
+    it("says every region for the image that serves them all", () => {
+      const cores = {
+        "swanstation_libretro.so": {
+          required: false,
+          one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
+        },
+      };
+      expect(lineFor(cores, "swanstation")).toBe("swanstation (one of these · every region)");
     });
 
     it("keeps the core's own word — the declaration is never rewritten", () => {
@@ -785,7 +788,7 @@ describe("BiosTab", () => {
       // adds nothing a reader would act on differently, so the line is
       // unchanged. Reading the pair as licence to print "required" over an
       // "optional" declaration is the misreading this shape exists to prevent.
-      expect(lineFor({ "beetle_psx_libretro.so": { required: true, needs_one_of: null } }, "beetle_psx")).toBe(
+      expect(lineFor({ "beetle_psx_libretro.so": { required: true, one_of: null } }, "beetle_psx")).toBe(
         "beetle_psx (required)",
       );
     });
@@ -808,10 +811,10 @@ describe("BiosTab", () => {
       // One row, two emulators, two different consoles' answers: the pane lists
       // both lines and neither may take the other's.
       const cores = {
-        "swanstation_libretro.so": { required: false, needs_one_of: 5 },
-        "pcsx_rearmed_libretro.so": { required: false, needs_one_of: null },
+        "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-u"], every_region: false } },
+        "pcsx_rearmed_libretro.so": { required: false, one_of: null },
       };
-      expect(lineFor(cores, "swanstation")).toBe("swanstation (needs one of its 5 BIOS files)");
+      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (one of these · North America (NTSC-U))");
       expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
     });
   });
@@ -823,7 +826,7 @@ describe("BiosTab", () => {
     // for every standalone emulator and omits the core file's extension for a
     // libretro one, so a page matching on it named no standalone emulator at all
     // and printed `dolphin_libretro.so` where the label said Dolphin.
-    type CoreEntry = { required: boolean; needs_one_of?: number | null };
+    type CoreEntry = { required: boolean; one_of?: { regions: string[]; every_region: boolean } | null };
 
     const statusFor = (cores: Record<string, CoreEntry>): BiosStatus => ({
       needs_bios: true,
@@ -995,12 +998,14 @@ describe("BiosTab", () => {
 
     it.each([
       ["the launching emulator requires it", { required_by_active: true }],
-      // The same requirement in the only other spelling an emulator has for it:
-      // a libretro declaration cannot say "one of these", so SwanStation marks
-      // all five PlayStation images optional and the demand arrives here. Drop
-      // this answer and the header states the console's own demand
-      // (`system_image: "absent"`) over a list with no image in it.
-      ["the console's own image rests on it", { system_image_candidate: true }],
+      // The same requirement in its other shape: one option of the launching
+      // emulator's one-of group, which no emulator marks required. Drop this
+      // answer and the header states the group's verdict over a list with none
+      // of its files in it.
+      [
+        "it is an option of the launching emulator's group",
+        { one_of: { regions: ["ntsc-u"] as string[], every_region: false } },
+      ],
       ["it is there", { satisfied: true, downloaded: true }],
       // The condition the platform page's download buttons are built from.
       ["the platform page can fetch it", { on_server: true }],
@@ -1096,6 +1101,140 @@ describe("BiosTab", () => {
       // above is over two different lists rather than two identical ones.
       expect(withLeftOut.hasNote).toBe(true);
       expect(withoutThem.hasNote).toBe(false);
+    });
+  });
+
+  describe("a one-of group on the game page", () => {
+    // Beetle PSX's three region images: one requirement, judged for the game's
+    // own regions wherever RomM names one that maps.
+    const beetle: CoreInfo = {
+      active_core: "mednafen_psx_libretro.so",
+      active_core_label: "Beetle PSX",
+      platform_core_label: null,
+      has_game_override: false,
+      emulator_data_available: true,
+      emulators: [libretroEmu("mednafen_psx_libretro", "Beetle PSX", true)],
+    };
+    const option = (file_name: string, region: string, here: boolean): BiosFileStatus => ({
+      file_name,
+      downloaded: here,
+      local_path: "",
+      declared_path: file_name,
+      description: "",
+      wanted: "optional",
+      required_by_active: false,
+      cores: { "mednafen_psx_libretro.so": { required: false, one_of: { regions: [region], every_region: false } } },
+      one_of: { regions: [region], every_region: false },
+      on_server: true,
+      declared_kind: "file",
+      satisfied: here,
+    });
+    const files = [
+      option("scph5500.bin", "ntsc-j", false),
+      option("scph5501.bin", "ntsc-u", true),
+      option("scph5502.bin", "pal", false),
+    ];
+    const forTheGame = (state: "met" | "unmet", covered: string[], missing: string[], game: string[]): BiosStatus => ({
+      needs_bios: true,
+      server_count: 3,
+      local_count: 1,
+      all_downloaded: false,
+      required_count: 1,
+      required_downloaded: state === "met" ? 1 : 0,
+      required_withheld: 0,
+      required_partial: 0,
+      one_of_groups: [{ state, covered, missing, unchecked: [], game_regions: game }],
+      active_core_label: "Beetle PSX",
+      files,
+    });
+    const renderFor = (status: BiosStatus, level: "ok" | "missing") =>
+      render(<BiosTab biosStatus={status} biosLevel={level} coreInfo={beetle} isActive={true} />).container;
+    const dotOf = (container: HTMLElement, name: string): string | undefined =>
+      [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")]
+        .find((row) => row.textContent.startsWith(name))
+        ?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor;
+
+    it("says the game's own region is covered", () => {
+      const container = renderFor(forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), "ok");
+
+      expect(container.textContent).toContain(
+        "The BIOS image Beetle PSX needs for this game's region (North America) is in place",
+      );
+    });
+
+    it("says the game's own region has no image", () => {
+      const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
+
+      expect(container.textContent).toContain("Beetle PSX has no BIOS image for this game's region (Japan)");
+    });
+
+    it("draws the missing image of the game's region red and another region's grey", () => {
+      const japanese = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
+      const american = renderFor(forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), "ok");
+
+      expect(dotOf(japanese, "scph5500.bin")).toBe("#d94126");
+      expect(dotOf(japanese, "scph5502.bin")).toBe("#8f98a0");
+      expect(dotOf(american, "scph5500.bin")).toBe("#8f98a0");
+      expect(dotOf(american, "scph5501.bin")).toBe("#5ba32b");
+    });
+  });
+
+  describe("a stale configured image name", () => {
+    // LRPS2 set to open a file its folder does not hold lists the folder
+    // instead: a neutral line, and the row reads exactly as its verdict says.
+    const folder = (stale: MissingConfiguredImage | null): BiosStatus => ({
+      needs_bios: true,
+      server_count: 0,
+      local_count: 0,
+      all_downloaded: true,
+      required_count: 1,
+      required_downloaded: 1,
+      required_withheld: 0,
+      files: [
+        {
+          file_name: "bios",
+          downloaded: true,
+          local_path: "",
+          declared_path: "pcsx2/bios",
+          description: "",
+          wanted: "needed",
+          required_by_active: true,
+          cores: { "pcsx2_libretro.so": { required: true } },
+          on_server: false,
+          declared_kind: "directory",
+          satisfied: true,
+          images: ["USA     v02.00(14/06/2004)  Console"],
+          caveats: stale ? ["firmware-configured-image-missing"] : [],
+          missing_configured_image: stale,
+        },
+      ],
+    });
+    const lrps2: CoreInfo = { ...coreInfo, active_core: "pcsx2_libretro.so", active_core_label: "LRPS2" };
+
+    it("names the setting under the folder and leaves its dot and sentence alone", () => {
+      const withLine = render(
+        <BiosTab
+          biosStatus={folder({ emulator_label: "LRPS2", file_name: "scph10000.bin" })}
+          biosLevel="ok"
+          coreInfo={lrps2}
+          isActive={true}
+        />,
+      ).container;
+      const without = render(
+        <BiosTab biosStatus={folder(null)} biosLevel="ok" coreInfo={lrps2} isActive={true} />,
+      ).container;
+
+      expect(withLine.textContent).toContain(
+        "LRPS2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
+      );
+      expect(without.textContent).not.toContain("LRPS2's settings");
+      const dot = (container: HTMLElement) =>
+        container.querySelector<HTMLElement>(".romm-panel-file-row .romm-status-dot")?.style.backgroundColor;
+      expect(dot(withLine)).toBe(dot(without));
+      expect(dot(withLine)).toBe("#5ba32b");
+      expect(withLine.querySelector(".romm-panel-value")?.textContent).toBe(
+        without.querySelector(".romm-panel-value")?.textContent,
+      );
     });
   });
 });

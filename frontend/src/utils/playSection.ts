@@ -126,15 +126,21 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
   // row answered `false` stays in and DOES raise the badge — a declared folder
   // the resolver listed and found no BIOS image in is exactly the state the
   // badge is for.
-  const requiredJudged = requiredCount - (answer.bios_status.required_withheld ?? 0);
+  //
+  // A one-of group covered for some regions only is taken out the same way. The
+  // backend has already narrowed it to this game's own regions wherever RomM
+  // names one that maps, so a group still partial here is one whose region for
+  // THIS game is not known — and the badge does not say a game will not start
+  // on a guess. A group with nothing in place, or one whose region for this game
+  // is not covered, is `unmet`, stays in the count, and raises it.
+  const requiredJudged =
+    requiredCount - (answer.bios_status.required_withheld ?? 0) - (answer.bios_status.required_partial ?? 0);
   // The console's own demand, taken as the backend stated it — a second
   // established absence beside the count rather than a second reading of the
   // same one. Whether the count sees it at all is the core author's choice: a
   // libretro declaration marks each file required or optional and can say
-  // nothing about the console, so over one PlayStation SwanStation marks all
-  // five of its images optional (`required_count` 0, the comparison below
-  // vacuously false) while Beetle PSX marks three of its own required. This axis
-  // answers the same either way.
+  // nothing about the console. It is stated only for a core with no one-of
+  // group; where there is one, the group is in the count above.
   const systemImageAbsent = answer.bios_status.system_image === "absent";
   return {
     biosNeeded: true,

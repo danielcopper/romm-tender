@@ -43,3 +43,14 @@ export interface FetchableRow {
 export function isFetchable(file: FetchableRow): boolean {
   return file.on_server === true && !file.downloaded && file.declared_kind !== "directory";
 }
+
+/**
+ * Does "Download required" fetch this row? The backend's one rule, carried on
+ * the row (`fetch_for_required`) so the count on the button and the download it
+ * starts cannot disagree. A payload from before the field existed answers with
+ * `required_by_active`, which is what the rule was before a one-of group joined
+ * it.
+ */
+export function fetchedAsRequired(file: { fetch_for_required?: boolean; required_by_active?: boolean }): boolean {
+  return file.fetch_for_required ?? file.required_by_active === true;
+}

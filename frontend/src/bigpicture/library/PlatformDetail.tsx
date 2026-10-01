@@ -16,10 +16,11 @@
 import type { FC, ReactNode } from "react";
 import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
 import { FaMicrochip } from "react-icons/fa";
-import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../types";
+import type { FirmwarePlatformExt, SystemCoreInfo } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
-import { isFetchable } from "../../utils/biosFetchable";
+import { fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
+import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
@@ -73,12 +74,12 @@ const LIBRARY_MARK = { glyph: "⊘", color: VIOLET, title: "not in your RomM lib
  * string serving both.
  *
  * They are the mark's IDENTITY, which is what the legend filters and keys on.
- * Glyph plus colour cannot be: since the console's own demand became a state of
- * its own, red `✗` is two different sentences (a required file that is absent, a
- * console with none of its images) and so are green `✓`, muted `✗` and amber
- * `✗`. Keyed on the pair, the legend would have shown one of each and given the
- * second one React's duplicate key; keyed on the sentence, it shows exactly the
- * ones the table is in.
+ * Glyph plus colour cannot be: since a one-of group's options became a state of
+ * their own, red `✗` is two different sentences (a required file that is absent,
+ * an option of a group whose region it serves has nothing in place) and so is
+ * green `✓`. Keyed on the pair, the legend would have shown one of each and given
+ * the second one React's duplicate key; keyed on the sentence, it shows exactly
+ * the ones the table is in.
  */
 const MARK_REQUIRED_MISSING = "required, missing";
 const MARK_REQUIRED_HERE = "required, here";
@@ -95,10 +96,8 @@ const MARK_MISSING = "missing, not required";
 const MARK_UNCHECKED = "nothing could establish this either way";
 const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
 const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
-const MARK_STARTS_THE_SYSTEM = "this starts the system";
-const MARK_ONE_OF_THESE_MISSING = "one of these — any one starts the system";
-const MARK_ONE_OF_THESE_SPARE = "not needed — one of these is already in place";
-const MARK_ONE_OF_THESE_UNSETTLED = "one of these — whether one is in place could not be checked";
+const MARK_ONE_OF_THESE_HERE = "one of these, here";
+const MARK_ONE_OF_THESE_MISSING = "one of these, missing";
 
 /**
  * The core picker's button in the header line — the game page's icon button, at
@@ -161,30 +160,33 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * `not_needed` and `optional` share the muted branch on purpose: for the core
  * about to launch, a file it does not require is not a gap either way.
  *
- * **A `system_image_candidate` row is the one need the two channels above cannot
- * carry**, and it is the fifth state rather than a shade of the fourth. Its mark
- * is {@link systemImageCandidateMark}'s, and it is asked between the two above
- * and the required/spare pair below: only the muted answer is replaced — an
- * unestablished verdict is still `?`, and an unestablished NEED is still amber,
- * both tested first.
+ * **An option of the launching emulator's one-of group (`one_of`) is the one need
+ * the two channels above cannot carry**, and it is the fifth state rather than a
+ * shade of the fourth: the emulator marks no such file required, because the
+ * group is the requirement and the file one way to meet it, yet a missing one
+ * leaves the regions it serves with nothing to boot. So it is strong like a required row, under
+ * its own words, and it is asked between the two above and the required/spare
+ * pair below: an unestablished verdict is still `?`, and an unestablished NEED is
+ * still amber, both tested first. Which region it serves is the line under the
+ * row ({@link oneOfRowLine}).
  *
  * The `Contents` cell reads the same `satisfied`, so the two columns are two
  * renderings of one field and cannot contradict each other.
  */
-function diskMark(file: FirmwareRow, systemImage: SystemImage): { glyph: string; color: string; title: string } {
+function diskMark(file: FirmwareRow): { glyph: string; color: string; title: string } {
   const verdict = rowVerdict(file);
   if (verdict === null) return { glyph: "?", color: AMBER, title: MARK_UNCHECKED };
 
   const needUnknown = file.wanted === "unknown";
   const required = file.required_by_active;
-  const candidate = file.system_image_candidate === true;
+  const option = Boolean(file.one_of) && !required;
   if (verdict) {
     if (needUnknown) return { glyph: "✓", color: AMBER, title: MARK_HERE_NEED_UNKNOWN };
-    if (candidate) return systemImageCandidateMark(verdict, systemImage);
+    if (option) return { glyph: "✓", color: GREEN, title: MARK_ONE_OF_THESE_HERE };
     return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
   }
   if (needUnknown) return { glyph: "✗", color: AMBER, title: MARK_MISSING_NEED_UNKNOWN };
-  if (candidate) return systemImageCandidateMark(verdict, systemImage);
+  if (option) return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
   return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
 }
 
@@ -200,33 +202,6 @@ function rowVerdict(file: FirmwareRow): boolean | null {
   const declaredFolder = file.declared_kind === "directory";
   const fallback = declaredFolder ? null : file.downloaded;
   return file.satisfied !== undefined ? file.satisfied : fallback;
-}
-
-/**
- * The `On disk` mark for a row that could start the console on its own.
- *
- * Its core marks every such file optional — that is all a libretro `.info` can
- * say about one of five images any of which starts the console — so
- * `required_by_active` is false for all of them and {@link diskMark}'s muted
- * branch would draw five grey "missing, not required" marks under a red headline
- * saying the console needs one.
- *
- * What is true of such a row depends on the PLATFORM's `system_image`, not on
- * the row: with none of them in place each is a way to fix it (red), with one in
- * place the rest are genuinely spare (muted), and where nothing could be
- * established the row inherits that doubt (amber). A verdict of true needs none
- * of that: such a row IS the console's held image — the candidates are a subset
- * of the rows `classify_system_image` reads, so the platform is `held` and this
- * row is why.
- */
-function systemImageCandidateMark(
-  verdict: boolean,
-  systemImage: SystemImage,
-): { glyph: string; color: string; title: string } {
-  if (verdict) return { glyph: "✓", color: GREEN, title: MARK_STARTS_THE_SYSTEM };
-  if (systemImage === "absent") return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
-  if (systemImage === "held") return { glyph: "✗", color: MUTED, title: MARK_ONE_OF_THESE_SPARE };
-  return { glyph: "✗", color: AMBER, title: MARK_ONE_OF_THESE_UNSETTLED };
 }
 
 /**
@@ -343,27 +318,25 @@ function declaredFolder(file: FirmwareRow): string | null {
  * a platform whose library holds every file shows no line for it — and gets one
  * line rather than one per pairing, since it means the same beside every
  * verdict. The order is the order a reader cares about: what is wrong first,
- * then the second channel — and each of the console's own four states sits
- * beside the ordinary mark it shares a colour with, since a reader meeting two
- * red `✗` lines is being told what separates them.
+ * then the second channel — and each of a group option's two states sits beside
+ * the ordinary mark it shares a colour with, since a reader meeting two red `✗`
+ * lines is being told what separates them.
  *
  * The entries carry the same strings the rows' tooltips do, and match on them:
  * see the `MARK_*` block for why the glyph and colour cannot be the identity.
  */
-const BiosLegend: FC<{ files: FirmwareRow[]; systemImage: SystemImage }> = ({ files, systemImage }) => {
-  const marks = files.map((file) => diskMark(file, systemImage));
+const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
+  const marks = files.map((file) => diskMark(file));
   const shown = [
     { glyph: "✗", color: RED, text: MARK_REQUIRED_MISSING },
     { glyph: "✗", color: RED, text: MARK_ONE_OF_THESE_MISSING },
     { glyph: "✓", color: GREEN, text: MARK_REQUIRED_HERE },
-    { glyph: "✓", color: GREEN, text: MARK_STARTS_THE_SYSTEM },
+    { glyph: "✓", color: GREEN, text: MARK_ONE_OF_THESE_HERE },
     { glyph: "✗", color: AMBER, text: MARK_MISSING_NEED_UNKNOWN },
-    { glyph: "✗", color: AMBER, text: MARK_ONE_OF_THESE_UNSETTLED },
     { glyph: "✓", color: AMBER, text: MARK_HERE_NEED_UNKNOWN },
     { glyph: "?", color: AMBER, text: MARK_UNCHECKED },
     { glyph: "✓", color: PALE_GREEN, text: MARK_HERE },
     { glyph: "✗", color: MUTED, text: MARK_MISSING },
-    { glyph: "✗", color: MUTED, text: MARK_ONE_OF_THESE_SPARE },
   ].filter((entry) => marks.some((mark) => mark.title === entry.text));
   if (files.some((file) => libraryMark(file) !== null)) {
     shown.push({ glyph: LIBRARY_MARK.glyph, color: LIBRARY_MARK.color, text: LIBRARY_MARK.title });
@@ -389,20 +362,20 @@ const BiosLegend: FC<{ files: FirmwareRow[]; systemImage: SystemImage }> = ({ fi
   );
 };
 
-const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: ReactNode }> = ({
-  file,
-  systemImage,
-  action,
-}) => {
+const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, action }) => {
   const { note, lines, fromLibrary } = biosFileNote(file);
-  const mark = diskMark(file, systemImage);
+  const mark = diskMark(file);
   const library = libraryMark(file);
   const description = biosFileDescription(file);
   const folder = declaredFolder(file);
   // The library note is the one sentence the cell's second mark now carries, and
   // on a platform whose library holds little it was the same words under nearly
   // every row. Everything else moves under the row rather than into the cell.
-  const rowLines = fromLibrary ? [] : [...(note ? [note] : []), ...lines];
+  // An option of the group says which region it serves, under the row — the
+  // mark beside the name has room for a glyph, and the region is the reason the
+  // file matters.
+  const groupLine = file.one_of && !file.required_by_active ? [oneOfRowLine(file.one_of, rowVerdict(file))] : [];
+  const rowLines = [...groupLine, ...(fromLibrary ? [] : [...(note ? [note] : []), ...lines])];
   return (
     // The row is a focus stop only while it has nothing to press: an action cell
     // holds a button that is already a stop, and a second one on the wrapper
@@ -775,8 +748,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // platform along at all.
   //
   // The two further inputs below are of those same two kinds, and neither is a
-  // readiness gate either: `required_by_active` is the launching emulator's own
-  // declaration, and `allDone` is the library's own finished ratio.
+  // readiness gate either: `fetch_for_required` is the launching emulator's own
+  // demand — its required files, and the options of the regions its one-of
+  // group does not cover yet, the one rule the download itself applies — and
+  // `allDone` is the library's own finished ratio.
   //
   // Reading readiness here is what took the buttons off PS2, GameCube and PSP
   // the moment a BIOS answer was scoped to the emulator that actually launches:
@@ -788,8 +763,8 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // declared folder is out — is `isFetchable`, shared with the game page's BIOS
   // tab so the two surfaces cannot disagree about what can be downloaded.
   const fetchableMissing = files.filter(isFetchable);
-  const requiredMissing = fetchableMissing.filter((f) => f.required_by_active).length;
-  const hasOptionalMissing = fetchableMissing.some((f) => !f.required_by_active);
+  const requiredMissing = fetchableMissing.filter(fetchedAsRequired).length;
+  const hasOptionalMissing = fetchableMissing.some((f) => !fetchedAsRequired(f));
   const showRequired = requiredMissing > 0 && !state.serverOffline;
   const showAll = !allDone && (hasOptionalMissing || requiredMissing > 0) && !state.serverOffline;
   const fetchable = new Set(fetchableMissing.map((f) => f.file_name));
@@ -827,14 +802,9 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
       {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
       {files.length > 0 && <BiosTableHeader />}
       {files.map((file) => (
-        <BiosFileRow
-          key={file.file_name}
-          file={file}
-          systemImage={systemImage}
-          action={rowAction(row, state, file, fetchable)}
-        />
+        <BiosFileRow key={file.file_name} file={file} action={rowAction(row, state, file, fetchable)} />
       ))}
-      {files.length > 0 && <BiosLegend files={files} systemImage={systemImage} />}
+      {files.length > 0 && <BiosLegend files={files} />}
       {unanswered > 0 && (
         <Muted>
           {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at

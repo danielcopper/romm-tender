@@ -186,6 +186,39 @@ describe("extractBiosInfo", () => {
       ).toBe(false);
     });
 
+    it("is clear for a one-of group covered for some regions where this game's region is not known", () => {
+      // The backend narrows the group to the game's own regions wherever RomM
+      // names one that maps; a group still partial here is one whose region for
+      // THIS game nobody knows, and the badge does not claim a game will not
+      // start on a guess.
+      const answer = {
+        bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_partial: 1 },
+        bios_level: "partial" as const,
+        bios_label: "0/1 required",
+      };
+      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
+    });
+
+    it("is set for a one-of group with nothing for this game's region", () => {
+      // What the backend answers for a game whose region the group does not
+      // cover, and for a group with nothing in place: `unmet`, in the count.
+      const answer = {
+        bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_partial: 0 },
+        bios_level: "missing" as const,
+        bios_label: "Missing",
+      };
+      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
+    });
+
+    it("is set for a missing required file beside a partly covered group", () => {
+      const answer = {
+        bios_status: { ...requirement, required_count: 2, required_downloaded: 0, required_partial: 1 },
+        bios_level: "partial" as const,
+        bios_label: "0/2 required",
+      };
+      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
+    });
+
     it("is clear when the only required file left is one nothing could judge", () => {
       // A required row whose verdict nothing established — a declared folder
       // the resolver could not read, say. The badge says a required file is NOT

@@ -42,7 +42,15 @@ import type { BiosFileStatus } from "../types";
  *  satisfy it, so neither has to be converted into the other's. */
 export type BiosNoteRow = Pick<
   BiosFileStatus,
-  "downloaded" | "on_server" | "supplied_by" | "satisfied" | "declared_kind" | "caveats" | "images" | "checked"
+  | "downloaded"
+  | "on_server"
+  | "supplied_by"
+  | "satisfied"
+  | "declared_kind"
+  | "caveats"
+  | "images"
+  | "checked"
+  | "missing_configured_image"
 >;
 
 /** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
@@ -61,8 +69,9 @@ export type BiosDescriptionRow = Pick<BiosFileStatus, "file_name" | "description
 export interface BiosFileWords {
   /** The em-dash note after the row's name, or `""` where there is none. */
   note: string;
-  /** One line each, rendered under the row. Empty for every row but a folder
-   *  whose read identified images, where the list IS the content. */
+  /** One line each, rendered under the row: the images a folder's read
+   *  identified, where the list IS the content, and the neutral line saying an
+   *  emulator's setting names a file the folder does not hold. */
   lines: string[];
   /**
    * The note is the library one — "not in your RomM library" and its missing
@@ -158,13 +167,16 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  * - **`refused`** — the emulator will not open the file at all, on its size,
  *   before reading a byte. It arrives with the verdict already `false`, so the
  *   row is red with or without this note; what the note adds is the reason, and
- *   without it the row says a file that is sitting right there is missing. **It
- *   is not reachable on an unmodified RetroDECK**: the resolver reaches that
- *   size gate only for a file one of DuckStation's per-region BIOS keys NAMES
- *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), and RetroDECK sets `SearchDirectory`
- *   alone and leaves all three empty — cited, with the upstream line numbers, on
- *   the DuckStation card in `backend/_vendor/atlas/data/standalone_firmware.json`.
- *   A user who fills one of those keys in reaches it.
+ *   without it the row says a file that is sitting right there is missing. The
+ *   resolver reaches that size gate for a file a per-region BIOS setting NAMES.
+ *   SwanStation's three (`swanstation_BIOS_PathNTSCJ` / `PathNTSCU` /
+ *   `PathPAL`) always name one — RetroArch answers with the core's own defaults,
+ *   `scph5500.bin` / `scph5501.bin` / `scph5502.bin` — so a file of one of those
+ *   names and the wrong size reaches it on any RetroDECK; DuckStation's
+ *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`) only once a user fills one in, since
+ *   RetroDECK leaves them empty. Both are cited, with the upstream line numbers,
+ *   in `backend/_vendor/atlas/data/core_firmware.json` and
+ *   `backend/_vendor/atlas/data/standalone_firmware.json`.
  *
  * `verified` and `mismatch` get no note: the first is the ordinary met row and
  * the second is an unmet one whose surfaces already say so. Every other value,
@@ -304,6 +316,30 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
  * (the platform detail marks it in its On-disk cell; the tab's dot carries it).
  */
 export function biosFileNote(row: BiosNoteRow): BiosFileWords {
+  const words = rowWords(row);
+  const stale = row.missing_configured_image;
+  return stale ? { ...words, lines: [...words.lines, configuredImageLine(stale)] } : words;
+}
+
+/**
+ * The neutral line under a folder whose emulator is set to open a file in it
+ * that is not there — "LRPS2's settings name scph10000.bin, which is not here —
+ * it uses another BIOS from this folder instead."
+ *
+ * It changes nothing about the row: the emulator lists the folder instead, so
+ * the folder's verdict is what the launch rests on, and the dot and the counts
+ * read that verdict alone. The emulator's name and the file's come from the
+ * answer; a half it did not state is left out of the sentence rather than
+ * guessed.
+ */
+function configuredImageLine(stale: NonNullable<BiosNoteRow["missing_configured_image"]>): string {
+  const whose = stale.emulator_label ? `${stale.emulator_label}'s settings` : "The emulator's settings";
+  const named = stale.file_name ? `name ${stale.file_name}, which is not here` : "name a BIOS file that is not here";
+  return `ℹ ${whose} ${named} — it uses another BIOS from this folder instead.`;
+}
+
+/** Everything the row says before the configured-image line — see {@link biosFileNote}. */
+function rowWords(row: BiosNoteRow): BiosFileWords {
   if (row.supplied_by) return { note: `provided by ${row.supplied_by}`, lines: [], fromLibrary: false };
   const verdict = verdictNote(row);
   if (verdict.note || verdict.lines.length > 0) return verdict;

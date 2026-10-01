@@ -194,6 +194,38 @@ describe("biosFileNote", () => {
   });
 });
 
+describe("a stale configured image name", () => {
+  // LRPS2 set to open a file its folder does not hold lists the folder instead.
+  // A neutral line, after whatever else the row says, and nothing about the
+  // verdict moves with it.
+  const stale = (emulator_label: string | null, file_name: string | null) => ({
+    ...folder(true, ["firmware-configured-image-missing"], ["USA v02.00(14/06/2004)"]),
+    missing_configured_image: { emulator_label, file_name },
+  });
+
+  it("names the emulator and the file its settings name", () => {
+    expect(biosFileNote(stale("LRPS2", "scph10000.bin")).lines).toEqual([
+      "USA v02.00(14/06/2004)",
+      "ℹ LRPS2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
+    ]);
+  });
+
+  it("leaves out what the answer did not state rather than guessing it", () => {
+    const { lines } = biosFileNote(stale(null, null));
+    expect(lines[lines.length - 1]).toBe(
+      "ℹ The emulator's settings name a BIOS file that is not here — it uses another BIOS from this folder instead.",
+    );
+  });
+
+  it("changes nothing else the row says", () => {
+    const without = biosFileNote(folder(true, [], ["USA v02.00(14/06/2004)"]));
+    const withLine = biosFileNote(stale("LRPS2", "scph10000.bin"));
+    expect(withLine.note).toBe(without.note);
+    expect(withLine.fromLibrary).toBe(without.fromLibrary);
+    expect(withLine.lines.slice(0, -1)).toEqual(without.lines);
+  });
+});
+
 describe("biosFileDescription", () => {
   // One example per shape the function's own docstring classifies the `.info`
   // corpus into, so the rule is pinned beside the code holding it rather than

@@ -28,7 +28,7 @@ import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShor
 import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
-import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, SystemImage } from "../../types";
+import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
 // below renders that tab beside the pane to compare what the two say.
@@ -2123,34 +2123,37 @@ describe("Library › Platforms", () => {
       expect((legend as HTMLElement | null)?.style.flexDirection).toBe("column");
     });
 
-    describe("the console's own demand on a row", () => {
-      // The device pass: with SwanStation launching, no PlayStation row was
-      // `required_by_active` — the core marks all five images optional — so
-      // every row drew the muted "missing, not required" mark under a red
-      // headline saying the console needs at least one. The reader read the
-      // grey marks, correctly, as "not required".
-      const candidate = (overrides: Record<string, unknown> = {}) =>
+    describe("a one-of group's options on a row", () => {
+      // Beetle PSX's three region images: no emulator marks one of them
+      // required, because the group is the requirement — and a muted "missing,
+      // not required" under a red headline is what the reader read, correctly,
+      // as "not required".
+      const option = (file_name: string, region: string, overrides: Record<string, unknown> = {}) =>
         firmwareFile({
+          file_name,
           wanted: "optional",
           required_by_active: false,
-          system_image_candidate: true,
+          one_of: { regions: [region], every_region: false },
           downloaded: false,
           satisfied: false,
           ...overrides,
         });
 
       const renderPlatform = async (
-        systemImage: SystemImage,
         files: ReturnType<typeof firmwareFile>[],
         overrides: Partial<FirmwarePlatformExt> = {},
       ) => {
         mockFirmware([
           firmwarePlatform({
-            bios_level: systemImage === "absent" ? "missing" : "ok",
-            required_count: 0,
+            bios_level: "partial",
+            required_count: 1,
             required_downloaded: 0,
             required_withheld: 0,
-            system_image: systemImage,
+            required_partial: 1,
+            active_core_label: "Beetle PSX",
+            one_of_groups: [
+              { state: "partial", covered: ["ntsc-u"], missing: ["ntsc-j", "pal"], unchecked: [], game_regions: [] },
+            ],
             server_count: files.length,
             files,
             ...overrides,
@@ -2161,58 +2164,77 @@ describe("Library › Platforms", () => {
         return container;
       };
 
-      it("offers every image as a way to start the system when none is in place", async () => {
-        const container = await renderPlatform("absent", [
-          candidate({ file_name: "scph5500.bin" }),
-          candidate({ file_name: "scph5501.bin" }),
-        ]);
+      const beetleRows = () => [
+        option("scph5500.bin", "ntsc-j"),
+        option("scph5501.bin", "ntsc-u", { downloaded: true, satisfied: true }),
+        option("scph5502.bin", "pal"),
+      ];
+
+      it("marks each option by whether it is in place, strong like a required row", async () => {
+        const container = await renderPlatform(beetleRows());
 
         expect(diskMarks(container)).toEqual([
           { glyph: "✗", color: RED },
+          { glyph: "✓", color: GREEN },
           { glyph: "✗", color: RED },
         ]);
         expect(diskMarkTitles(container)).toEqual([
-          "one of these — any one starts the system",
-          "one of these — any one starts the system",
+          "one of these, missing",
+          "one of these, here",
+          "one of these, missing",
         ]);
-        // The muted answer these replaced is the defect, so its words must be
-        // gone from the table rather than merely outnumbered.
         expect(container.textContent).not.toContain("missing, not required");
       });
 
-      it("names the one that is there and calls the rest spare", async () => {
-        const container = await renderPlatform("held", [
-          candidate({ file_name: "scph5500.bin", downloaded: true, satisfied: true }),
-          candidate({ file_name: "scph5501.bin" }),
-        ]);
+      it("says under each option which region it serves", async () => {
+        const container = await renderPlatform(beetleRows());
 
-        expect(diskMarks(container)).toEqual([
-          { glyph: "✓", color: GREEN },
-          { glyph: "✗", color: GREY },
-        ]);
-        expect(diskMarkTitles(container)).toEqual([
-          "this starts the system",
-          "not needed — one of these is already in place",
-        ]);
+        expect(container.textContent).toContain("one of these · Japan (NTSC-J) · ✗ missing");
+        expect(container.textContent).toContain("one of these · North America (NTSC-U) · ✓ in place");
+        expect(container.textContent).toContain("one of these · Europe (PAL) · ✗ missing");
       });
 
-      it("carries the console's own doubt onto the rows that would answer it", async () => {
-        const container = await renderPlatform("unsettled", [candidate({ file_name: "scph5500.bin" })], {
-          bios_level: "unknown",
-        });
+      it("says every region for the image that serves them all", async () => {
+        const container = await renderPlatform(
+          [
+            option("scph1001.bin", "ntsc-u", {
+              one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
+              downloaded: true,
+              satisfied: true,
+            }),
+          ],
+          {
+            bios_level: "ok",
+            required_downloaded: 1,
+            required_partial: 0,
+            active_core_label: "SwanStation",
+            one_of_groups: [
+              { state: "met", covered: ["ntsc-j", "ntsc-u", "pal"], missing: [], unchecked: [], game_regions: [] },
+            ],
+          },
+        );
 
-        expect(diskMarks(container)).toEqual([{ glyph: "✗", color: AMBER }]);
-        expect(diskMarkTitles(container)).toEqual(["one of these — whether one is in place could not be checked"]);
+        expect(container.textContent).toContain("one of these · every region · ✓ in place");
+        expect(container.textContent).toContain("The BIOS image SwanStation needs is in place for every region");
+        expect(container.textContent).toContain("1 / 1 required");
+      });
+
+      it("states a partly covered group with the regions it covers and the ones it does not", async () => {
+        const container = await renderPlatform(beetleRows());
+
+        expect(container.textContent).toContain("0 / 1 required · North America only");
+        expect(container.textContent).toContain(
+          "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start",
+        );
       });
 
       it("keeps an unestablished verdict and an unestablished need ahead of it", async () => {
         // The order in `diskMark` is load-bearing: a row nothing could judge is
-        // `?` whatever the console needs, and a row no installed emulator could
-        // be asked about keeps the amber need mark. Neither is a state the
-        // console's own answer may overwrite.
-        const container = await renderPlatform("absent", [
-          candidate({ file_name: "unjudged.bin", satisfied: null }),
-          candidate({ file_name: "unasked.bin", wanted: "unknown" }),
+        // `?` whatever the group says, and a row no installed emulator could be
+        // asked about keeps the amber need mark.
+        const container = await renderPlatform([
+          option("unjudged.bin", "ntsc-j", { satisfied: null }),
+          option("unasked.bin", "pal", { wanted: "unknown" }),
         ]);
 
         expect(diskMarks(container)).toEqual([
@@ -2228,28 +2250,46 @@ describe("Library › Platforms", () => {
       it("gives the legend a line of its own beside the mark it shares a colour with", async () => {
         // Two red ✗ on one table, and they mean different things. Keyed on
         // glyph + colour the legend showed one of them and gave the other
-        // React's duplicate key; the sentence is the identity now, and the
-        // suite fails on a duplicate key by way of test-setup's console guard.
+        // React's duplicate key; the sentence is the identity, and the suite
+        // fails on a duplicate key by way of test-setup's console guard.
         const container = await renderPlatform(
-          "absent",
-          [candidate({ file_name: "scph5500.bin" }), firmwareFile({ file_name: "required.bin" })],
-          { required_count: 1, bios_level: "missing" },
+          [option("scph5500.bin", "ntsc-j"), firmwareFile({ file_name: "required.bin" })],
+          { required_count: 2, bios_level: "missing" },
         );
 
         const lines = [...container.querySelectorAll('[data-testid="bios-legend"] > span')].map((el) => el.textContent);
-        expect(lines).toEqual(["✗ required, missing", "✗ one of these — any one starts the system"]);
+        expect(lines).toEqual(["✗ required, missing", "✗ one of these, missing"]);
       });
 
       it("leaves the line out of the legend on a platform with no such row", async () => {
-        const container = await renderPlatform("not_demanded", [firmwareFile({ file_name: "required.bin" })], {
+        const container = await renderPlatform([firmwareFile({ file_name: "required.bin" })], {
           required_count: 1,
+          required_partial: 0,
           bios_level: "missing",
+          one_of_groups: [],
         });
 
         const legend = container.querySelector('[data-testid="bios-legend"]');
         expect(legend?.textContent).toContain("required, missing");
-        expect(legend?.textContent).not.toContain("starts the system");
         expect(legend?.textContent).not.toContain("one of these");
+      });
+
+      it("counts on Download required exactly the rows the download fetches", async () => {
+        // The backend's one rule, carried on each row: the options of the
+        // regions nothing covers yet, and nothing an emulator merely accepts.
+        const container = await renderPlatform([
+          option("scph5500.bin", "ntsc-j", { fetch_for_required: true }),
+          option("scph5501.bin", "ntsc-u", { downloaded: true, satisfied: true, fetch_for_required: false }),
+          option("scph5502.bin", "pal", { fetch_for_required: true }),
+          firmwareFile({
+            file_name: "ps1_rom.bin",
+            wanted: "optional",
+            required_by_active: false,
+            fetch_for_required: false,
+          }),
+        ]);
+
+        expect(buttonByText(container, "Download required (2)")).toBeTruthy();
       });
     });
 

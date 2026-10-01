@@ -1,10 +1,10 @@
 /**
  * The one place a BIOS state is put into words.
  *
- * Seven states, and before this module each surface worded them for itself: the
- * game page's BIOS tab, the platform pane, and the platform list's tooltip all
- * held their own spelling of the same seven, some naming the launching emulator
- * and some not. Nothing joined them, so the drift was invisible to every test —
+ * Seven states and a one-of group's, and before this module each surface worded
+ * the seven for itself: the game page's BIOS tab, the platform pane, and the
+ * platform list's tooltip all held their own spelling of them, some naming the
+ * launching emulator and some not. Nothing joined them, so the drift was invisible to every test —
  * each surface's own expectations passed while the three said different things
  * about one platform, which is what a reader moving between them saw.
  *
@@ -39,8 +39,12 @@
  * inventing one.
  *
  * **The order of the conditions is load-bearing and is the order the three
- * surfaces already read in.** The console's own demand (`system_image`) is
- * tested FIRST, ahead of the level's decline: it is the one requirement no count
+ * surfaces already read in.** A one-of group the launching emulator states is
+ * worded before anything else ({@link groupSummary}): it IS the console's demand,
+ * said region by region, and where an emulator states one the backend answers
+ * `system_image` with the neutral value, so the two never stand together. The
+ * console's own demand (`system_image`) is tested next, ahead of the level's
+ * decline: it is the one requirement no count
  * can state — the console asks for ONE of the images the emulator declares, and
  * a libretro `.info` can mark a file required or optional and say nothing else —
  * so a count-derived sentence would stand over a system that will not boot.
@@ -51,12 +55,13 @@
  * What this module does NOT hold is the library's own ratio —
  * `(d/t RomM library files)`, which counts a third set and is written next door
  * (`utils/biosHeldRatio.ts`, where why the two are stated side by side rather
- * than folded together lives). Two of the three surfaces append it to every one
- * of the seven sentences — the game page and the platform pane — and the list's
- * row tooltip has never carried it.
+ * than folded together lives). Two of the three surfaces append it to every
+ * sentence here — the game page and the platform pane — and the list's row
+ * tooltip has never carried it.
  */
 
-import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";
+import type { BiosLevel, FirmwareWanted, OneOfGroupVerdict, SystemImage } from "../types/firmware";
+import { regionsFull, regionsShort } from "./biosGroup";
 
 /**
  * One state, in the two lengths a surface can have room for. Both are always
@@ -77,6 +82,7 @@ export interface BiosSummarySource {
   required_downloaded?: number;
   required_withheld?: number;
   system_image?: SystemImage;
+  one_of_groups?: OneOfGroupVerdict[];
   active_core_label?: string | null;
 }
 
@@ -96,7 +102,7 @@ export interface BiosSummaryRow {
 const ROLE_MID = "the launching emulator";
 const ROLE_LEADING = "The launching emulator";
 
-// The fixed halves of the seven sentences. They are constants rather than
+// The fixed halves of the sentences. They are constants rather than
 // inline literals so `BIOS_SUMMARY_PHRASES` can be built from the same strings
 // the sentences are — a drift lock that repeated the list would be checking a
 // second copy of it.
@@ -118,6 +124,16 @@ const REQUIRES_IS_IN_PLACE = "requires is in place";
 const REQUIRES_IS_NOT_IN_PLACE = "requires is not in place";
 const MARKS_NONE_REQUIRED = "marks none of its BIOS files as required";
 const OPTIONAL_MISSING_TAIL = "optional missing";
+// The one-of group's own sentences. The runs below are the halves no other
+// sentence shares; "The BIOS image" opens two of them and is too common a run
+// to search for on its own.
+const GROUP_IMAGE_HEAD = "The BIOS image";
+const GROUP_MET_TAIL = "needs is in place for every region";
+const GROUP_PARTIAL_HEAD = "has a BIOS image for";
+const GROUP_PARTIAL_TAIL = "discs will not start";
+const GROUP_UNCHECKED_TAIL = "needs is in place could not be checked";
+const GROUP_GAME_MET = "needs for this game's region";
+const GROUP_GAME_UNMET = "has no BIOS image for this game's region";
 
 const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
 const STATUS_READINESS_UNKNOWN = "Readiness unknown";
@@ -147,6 +163,12 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   REQUIRES_IS_NOT_IN_PLACE,
   MARKS_NONE_REQUIRED,
   OPTIONAL_MISSING_TAIL,
+  GROUP_MET_TAIL,
+  GROUP_PARTIAL_HEAD,
+  GROUP_PARTIAL_TAIL,
+  GROUP_UNCHECKED_TAIL,
+  GROUP_GAME_MET,
+  GROUP_GAME_UNMET,
   STATUS_NEEDS_IMAGE,
   STATUS_READINESS_UNKNOWN,
   STATUS_REQUIREMENT_UNKNOWN,
@@ -154,14 +176,16 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
 ];
 
 /**
- * The seven states, in the order the surfaces read them.
+ * The seven states and a one-of group's, in the order the surfaces read them.
  *
- * **What is decided here is the order of the four rungs**: the console's own
- * demand, then the level's decline, then the emulator's required files, then
- * the finished answer. Two of those rungs hold more than one state and are
- * worded next door — {@link declinedSummary} holds states 2-4, which are a
- * precedence of their own, and {@link requiredFilesSummary} holds states 5-6,
- * which are one comparison read two ways. So the seven are two orders and not
+ * **What is decided here is the order of the five rungs**: a one-of group the
+ * launching emulator states, the console's own demand, then the level's
+ * decline, then the emulator's required files, then the finished answer. The
+ * group's own states are worded next door ({@link groupSummary}), and two of the
+ * other rungs hold more than one state and are worded next door too —
+ * {@link declinedSummary} holds states 2-4, which are a precedence of their own,
+ * and {@link requiredFilesSummary} holds states 5-6, which are one comparison
+ * read two ways. So the seven are two orders and not
  * one: the console's demand standing ahead of the decline and the withheld row
  * standing ahead of the unsettled console are different statements, resting on
  * different reasons, and a body holding all seven tests in a row says they are
@@ -188,6 +212,11 @@ export function biosSummary(
   const requiredCount = source.required_count ?? requiredRows.length;
   const requiredDone = source.required_downloaded ?? requiredRows.filter((row) => row.downloaded).length;
 
+  // 0. A one-of group the launching emulator states: the console's demand, said
+  //    region by region. See the header.
+  const group = groupToWord(source.one_of_groups ?? []);
+  if (group) return groupSummary(group, named, leading, `${requiredDone} / ${requiredCount} required`);
+
   // 1. The console's own demand, ahead of everything: see the header.
   if (systemImage === "absent") {
     return { status: STATUS_NEEDS_IMAGE, sentence: `${leading} ${CANNOT_START}` };
@@ -208,6 +237,61 @@ export function biosSummary(
   //    axis above and one the catalogue answers `not_demanded` for a console
   //    nobody has looked at as readily as for one shown to start with nothing.
   return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
+}
+
+// The order a group is picked to be worded in, where an emulator states more
+// than one: the one the level rests on first — nothing in place is `missing`,
+// an unchecked one declines, a partial one is amber.
+const GROUP_PRECEDENCE: readonly OneOfGroupVerdict["state"][] = ["unmet", "unknown", "partial", "met"];
+
+function groupToWord(groups: readonly OneOfGroupVerdict[]): OneOfGroupVerdict | null {
+  for (const state of GROUP_PRECEDENCE) {
+    const found = groups.find((group) => group.state === state);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * State 0: a one-of group, one requirement however many files it lists.
+ *
+ * Every word comes from the verdict — the emulator's name and the regions — so a
+ * group on any console reads the same way. The ratio is the payload's own, in
+ * which the group counts once and a partly covered group counts as not met;
+ * beside it the status names the regions that ARE covered, because "0 / 1"
+ * alone reads as nothing in place. On the game page the verdict was narrowed to
+ * the game's own regions (`game_regions`), and the sentence says so.
+ */
+function groupSummary(group: OneOfGroupVerdict, named: string, leading: string, ratio: string): BiosSummary {
+  const forTheGame = group.game_regions.length > 0;
+  switch (group.state) {
+    case "met":
+      return {
+        status: ratio,
+        sentence: forTheGame
+          ? `${GROUP_IMAGE_HEAD} ${named} ${GROUP_GAME_MET} (${regionsShort(group.covered)}) is in place`
+          : `${GROUP_IMAGE_HEAD} ${named} ${GROUP_MET_TAIL}`,
+      };
+    case "partial":
+      return {
+        status: `${ratio} · ${regionsShort(group.covered)} only`,
+        sentence:
+          `${leading} ${GROUP_PARTIAL_HEAD} ${regionsFull(group.covered)} only — ` +
+          `${regionsFull(group.missing)} ${GROUP_PARTIAL_TAIL}`,
+      };
+    case "unmet":
+      return {
+        status: ratio,
+        sentence: forTheGame
+          ? `${leading} ${GROUP_GAME_UNMET} (${regionsShort(group.missing)})`
+          : `${leading} ${CANNOT_START}`,
+      };
+    case "unknown":
+      return {
+        status: STATUS_READINESS_UNKNOWN,
+        sentence: `${IMAGE_UNSETTLED_HEAD} ${named} ${GROUP_UNCHECKED_TAIL}`,
+      };
+  }
 }
 
 /**

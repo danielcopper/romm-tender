@@ -86,6 +86,56 @@ export type FirmwareChecked =
  * kind of fact — the resolver's own word, carried verbatim, for a row nobody
  * here re-derives. See {@link FirmwareDeclarationState}.
  */
+/**
+ * This file as an option of a one-of group — a requirement whose launch needs
+ * exactly ONE of the group's files, chosen by the console region of the disc.
+ * `regions` are the console regions this file serves, in the resolver's own
+ * words (`ntsc-u`, `pal`); `every_region` is true where it serves every region
+ * the group speaks about, which a surface words as "every region" rather than
+ * listing them. Being an option never makes a file required: the group is the
+ * requirement, judged once (`OneOfGroupVerdict`).
+ */
+export interface OneOfMembership {
+  regions: string[];
+  every_region: boolean;
+}
+
+/**
+ * The four answers about a one-of group, decided by the backend and never
+ * re-derived here. `met`: what is in place serves every region the group speaks
+ * about. `partial`: some regions are served and some are shown not to be.
+ * `unmet`: nothing is in place. `unknown`: an option is there and could not be
+ * read, or a region nobody could check stands beside the covered ones — never
+ * folded into a colour of its own here.
+ */
+export type OneOfGroupState = "met" | "partial" | "unmet" | "unknown";
+
+/**
+ * The backend's verdict over one of the launching emulator's one-of groups.
+ * Each region it speaks about is in exactly one of the three lists.
+ * `game_regions` is empty for the platform's verdict, and names the game's own
+ * console regions where the verdict was narrowed to one game — the three lists
+ * then hold the game's regions only.
+ */
+export interface OneOfGroupVerdict {
+  state: OneOfGroupState;
+  covered: string[];
+  missing: string[];
+  unchecked: string[];
+  game_regions: string[];
+}
+
+/**
+ * A setting of the emulator names a file inside its folder declaration, and the
+ * file is not there — so the emulator lists the folder instead. Not a verdict:
+ * the row's own verdict stands as it is. Either half is `null` where the
+ * resolver did not state it.
+ */
+export interface MissingConfiguredImage {
+  emulator_label: string | null;
+  file_name: string | null;
+}
+
 interface FirmwareVerdict {
   satisfied?: boolean | null;
   declared_kind?: FirmwareDeclaredKind;
@@ -97,6 +147,17 @@ interface FirmwareVerdict {
   checked?: FirmwareChecked | null;
   caveats?: string[];
   images?: string[];
+  /** The launching emulator's group this row is an option of — see
+   *  {@link OneOfMembership}. Absent or `null` claims nothing. */
+  one_of?: OneOfMembership | null;
+  /** Does "Download required" fetch this row? The backend's one rule for both
+   *  the button's count and the download itself: a file the launching emulator
+   *  requires, or an option of a region its group does not cover yet. Absent on
+   *  a payload from before the field existed, which reads as
+   *  `required_by_active`. */
+  fetch_for_required?: boolean;
+  /** See {@link MissingConfiguredImage}. Absent or `null` claims nothing. */
+  missing_configured_image?: MissingConfiguredImage | null;
 }
 
 interface FirmwareFile extends FirmwareVerdict {
@@ -128,13 +189,6 @@ interface FirmwareFile extends FirmwareVerdict {
    *  row when the launching emulator could not be identified, so it is read
    *  beside `wanted`, never alone. */
   used_by_active?: boolean;
-  /** Whether this row is one of the images that would answer the platform's
-   *  launching core CONSOLE on its own — see {@link SystemImage}. Set only where
-   *  that core marks nothing required, which is the only shape in which "one of
-   *  these" is the whole of what the core says; a core that does state required
-   *  files carries the same demand on those rows as `required_by_active`.
-   *  Absent claims nothing. */
-  system_image_candidate?: boolean;
   on_server: boolean;
   supplied_by?: string | null;
   /** How many of the plugin's own downloads a delete on THIS row would remove:
@@ -286,10 +340,16 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
    *  from a platform nothing could speak for: here the rows have answers and
    *  only the one-line verdict declines, so the downloads stay. */
   required_withheld?: number;
+  /** How many of `required_count` are one-of groups covered for some regions
+   *  only — counted as not met, and not absent either. */
+  required_partial?: number;
   /** The console's own firmware demand on the launching core — see
    *  {@link SystemImage}. Absent on a payload from before the field existed,
    *  which reads as the neutral answer. */
   system_image?: SystemImage;
+  /** The verdicts over the launching emulator's one-of groups — see
+   *  {@link OneOfGroupVerdict}. Each is ONE requirement inside `required_count`. */
+  one_of_groups?: OneOfGroupVerdict[];
   server_count?: number;
   local_count?: number;
   known_count?: number;
@@ -342,19 +402,12 @@ export interface BiosFileStatus extends FirmwareVerdict {
   /** Per emulator that declares the file, keyed on its IDENTITY
    *  ({@link EmulatorOption.emulator}) — the one spelling that names a
    *  standalone emulator as well as a libretro core: what that emulator's own
-   *  `.info` says about it (`required`), and — where its CONSOLE needs an image
-   *  and it marks nothing required — how many files that one demand is spread
-   *  over (`needs_one_of`). Two speakers, so the pair `optional` + `needs_one_of` is
-   *  not a contradiction: it is a core saying "any one of my five will do", and
-   *  it is the case a surface has to be able to word. `needs_one_of` is null or
-   *  absent for every other core, including one whose console demands an image
-   *  and that marks files required — there the demand reaches the reader as
-   *  those rows' own `required`. */
-  cores?: Record<string, { required: boolean; needs_one_of?: number | null }>;
-  /** Whether this row is one of the images that would answer the launching
-   *  core's CONSOLE on its own — the row-level read of the same `needs_one_of`
-   *  answer. Absent claims nothing. */
-  system_image_candidate?: boolean;
+   *  declaration says about it (`required`), and — where the file is an option of
+   *  one of its one-of groups — the regions it serves there (`one_of`). Two
+   *  statements, so `optional` beside a membership is no contradiction: Beetle
+   *  PSX marks `scph5501.bin` optional and lists it as its group's NTSC-U
+   *  option. */
+  cores?: Record<string, { required: boolean; one_of?: OneOfMembership | null }>;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
    *  It still counts as missing — it just cannot be fetched from the plugin. */
@@ -409,10 +462,20 @@ export interface BiosStatus {
    *  answers. A row answered `false` is NOT here: that is a requirement shown to
    *  be unmet, and it reads red like any other. */
   required_withheld?: number;
+  /** How many of `required_count` are one-of groups covered for some regions
+   *  only. Such a group is not met and not absent, so a surface warning about a
+   *  missing requirement subtracts it, as it subtracts `required_withheld`. */
+  required_partial?: number;
   /** The console's own firmware demand on the launching core — see
    *  {@link SystemImage}. It is deliberately NOT in `required_count`: that count
-   *  is files each individually required, and this one is "one of these". */
+   *  is files each individually required, and this one is "one of these". Only
+   *  for a core that states no one-of group: where it states one, the group is
+   *  that demand and this stays `"not_demanded"`. */
   system_image?: SystemImage;
+  /** The verdicts over the launching emulator's one-of groups — see
+   *  {@link OneOfGroupVerdict}. On the game page each is narrowed to the game's
+   *  own regions wherever RomM's region names for it map onto a console region. */
+  one_of_groups?: OneOfGroupVerdict[];
   /** The NAME of the emulator every answer here was scoped to — the label half
    *  of the one pick the backend filtered these counts by, taken off that same
    *  resolution rather than resolved again, so a sentence over them cannot name

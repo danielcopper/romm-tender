@@ -19,6 +19,7 @@ import type {
   FirmwareDownloadResult,
   BiosLevel,
   SystemImage,
+  OneOfGroupVerdict,
   BiosStatus,
   BiosFileStatus,
   CoreInfo,
@@ -164,12 +165,16 @@ export interface BiosAnswer {
     required_count?: number;
     required_downloaded?: number;
     required_withheld?: number;
+    /** The one-of groups among `required_count` that are covered for some
+     *  regions only — not met and not absent, so the badge leaves them out. */
+    required_partial?: number;
     /** The console's own firmware demand on the launching core — see
      *  {@link SystemImage}. Read by the play row's badge, which cannot rely on
      *  the counts for it: whether any of the images is marked required is the
      *  core author's choice, and over one PlayStation the deployed catalogue
      *  goes both ways. */
     system_image?: SystemImage;
+    one_of_groups?: OneOfGroupVerdict[];
     cached_at?: number;
     files?: BiosFileStatus[];
   } | null;

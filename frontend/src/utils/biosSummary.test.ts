@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOS_SUMMARY_PHRASES, biosSummary, type BiosSummaryRow, type BiosSummarySource } from "./biosSummary";
 import { componentSources } from "../test-utils/componentSources";
-import type { BiosLevel } from "../types/firmware";
+import type { BiosLevel, OneOfGroupVerdict } from "../types/firmware";
 
 const EMULATOR = "SwanStation";
 
@@ -209,6 +209,132 @@ describe("reading the payload", () => {
  * evidence about copied sentences and about nothing else. Reviewing a new BIOS
  * surface still means reading it.
  */
+describe("a one-of group", () => {
+  // One requirement, worded off the verdict alone — the emulator's name and the
+  // regions. Approved wording; the region names are `utils/biosGroup.ts`'s.
+  const group = (
+    state: OneOfGroupVerdict["state"],
+    covered: string[],
+    missing: string[],
+    game_regions: string[] = [],
+  ): OneOfGroupVerdict => ({ state, covered, missing, unchecked: [], game_regions });
+
+  it("says the image is in place for every region", () => {
+    const met = summary({
+      required_count: 1,
+      required_downloaded: 1,
+      one_of_groups: [group("met", ["ntsc-j", "ntsc-u", "pal"], [])],
+    });
+    expect(met).toEqual({
+      status: "1 / 1 required",
+      sentence: "The BIOS image SwanStation needs is in place for every region",
+    });
+  });
+
+  it("names the regions a partly covered group serves and the ones whose discs will not start", () => {
+    const partial = biosSummary(
+      {
+        active_core_label: "Beetle PSX",
+        required_count: 1,
+        required_downloaded: 0,
+        required_partial: 1,
+        one_of_groups: [group("partial", ["ntsc-u"], ["ntsc-j", "pal"])],
+      } as BiosSummarySource,
+      [],
+      "partial",
+    );
+    expect(partial).toEqual({
+      status: "0 / 1 required · North America only",
+      sentence:
+        "Beetle PSX has a BIOS image for North America (NTSC-U) only — Japan (NTSC-J) and Europe (PAL) discs will not start",
+    });
+  });
+
+  it("says the emulator cannot start the system where nothing is in place", () => {
+    const unmet = biosSummary(
+      {
+        active_core_label: "Beetle PSX",
+        required_count: 1,
+        required_downloaded: 0,
+        one_of_groups: [group("unmet", [], ["ntsc-j", "ntsc-u", "pal"])],
+      },
+      [],
+      "missing",
+    );
+    expect(unmet.sentence).toBe("Beetle PSX cannot start this system without a BIOS image");
+  });
+
+  it("says whether it is in place could not be checked, never a colour of its own", () => {
+    const unknown = biosSummary(
+      {
+        active_core_label: "Beetle PSX",
+        required_count: 1,
+        required_withheld: 1,
+        one_of_groups: [{ ...group("unknown", [], []), unchecked: ["ntsc-u"] }],
+      },
+      [],
+      "unknown",
+    );
+    expect(unknown).toEqual({
+      status: "Readiness unknown",
+      sentence: "Whether the BIOS image Beetle PSX needs is in place could not be checked",
+    });
+  });
+
+  it("words the game page's verdict for the game's own region", () => {
+    const covered = biosSummary(
+      {
+        active_core_label: "Beetle PSX",
+        required_count: 1,
+        required_downloaded: 1,
+        one_of_groups: [group("met", ["ntsc-u"], [], ["ntsc-u"])],
+      },
+      [],
+      "ok",
+    );
+    const uncovered = biosSummary(
+      {
+        active_core_label: "Beetle PSX",
+        required_count: 1,
+        required_downloaded: 0,
+        one_of_groups: [group("unmet", [], ["ntsc-j"], ["ntsc-j"])],
+      },
+      [],
+      "missing",
+    );
+    expect(covered.sentence).toBe("The BIOS image Beetle PSX needs for this game's region (North America) is in place");
+    expect(uncovered.sentence).toBe("Beetle PSX has no BIOS image for this game's region (Japan)");
+  });
+
+  it("words a group of any console the same way, naming regions it has no name for in their own spelling", () => {
+    const invented = biosSummary(
+      {
+        active_core_label: "Arcadia",
+        required_count: 1,
+        required_downloaded: 0,
+        one_of_groups: [group("partial", ["north"], ["south", "east"])],
+      },
+      [],
+      "partial",
+    );
+    expect(invented).toEqual({
+      status: "0 / 1 required · NORTH only",
+      sentence: "Arcadia has a BIOS image for NORTH only — SOUTH and EAST discs will not start",
+    });
+  });
+
+  it("speaks for the group ahead of the console's coarser reading", () => {
+    // The backend never sends the two together; the order is a guard.
+    const both = summary({
+      system_image: "absent",
+      required_count: 1,
+      required_downloaded: 1,
+      one_of_groups: [group("met", ["ntsc-u"], [])],
+    });
+    expect(both.sentence).toBe("The BIOS image SwanStation needs is in place for every region");
+  });
+});
+
 describe("no surface words a summary itself", () => {
   it.each(componentSources())("$path carries no summary phrase of its own", ({ source }) => {
     const found = BIOS_SUMMARY_PHRASES.filter((phrase) => source.includes(phrase));

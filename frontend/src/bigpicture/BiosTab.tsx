@@ -36,10 +36,11 @@
  */
 
 import { FC, type ReactElement } from "react";
-import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted } from "../types";
+import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted, OneOfMembership } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
+import { oneOfWords } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary } from "../utils/biosSummary";
 import { section } from "./panelSection";
@@ -62,31 +63,22 @@ interface BiosTabProps {
   isActive: boolean;
 }
 
+/** One emulator's entry on a row — see `BiosFileStatus.cores`. */
+type CoreEntry = { required: boolean; one_of?: OneOfMembership | null };
+
 /**
- * What one core's line says about this file — its own word, or its console's.
+ * What one emulator's line says about this file — its own word, or its group's.
  *
- * `required` / `optional` is the core's `.info` and nothing else, and it is
- * never rewritten here. A libretro declaration can mark a file needed or
- * optional and can say nothing more, so an author who knows the console will not
- * start without one of the images the core lists has only those two words to
- * reach for, and the deployed catalogue goes both ways over one PlayStation:
- * SwanStation marks all five of its images optional, Beetle PSX marks three of
- * its own required.
- *
- * `needs_one_of` is the backend's answer to exactly that first shape — a console
- * that needs an image under a core that marks nothing required — and it carries
- * the count, so the line states the whole requirement in the core's own terms:
- * "needs one of its 5 BIOS files". It is the ONE line that can, because the
- * headline above says "at least one" without a number and the file rows each
- * describe one file. A core that already marks the file required is untouched:
- * its console's demand reaches the reader as that word, and annotating it as
- * well would be one requirement written twice — which is what the annotation
- * this replaced did to Beetle PSX under `ps1_rom.bin`, a file it marks optional
- * while hard-requiring three others.
+ * `required` is the emulator's own declaration and is never rewritten here. Where
+ * the file is an option of one of the emulator's one-of groups, the line names
+ * the regions it serves there instead of `optional` (`utils/biosGroup.ts`
+ * words it), because the group is the requirement and the file is one way to meet it, for the regions
+ * named. A file the emulator requires outright keeps that word: it is needed
+ * whatever the disc.
  */
-function coreLineSuffix(core: { required: boolean; needs_one_of?: number | null }): string {
+function coreLineSuffix(core: CoreEntry): string {
   if (core.required) return " (required)";
-  if (core.needs_one_of != null) return ` (needs one of its ${core.needs_one_of} BIOS files)`;
+  if (core.one_of) return ` (${oneOfWords(core.one_of)})`;
   return " (optional)";
 }
 
@@ -105,7 +97,7 @@ function fallbackEmulatorLabel(emulator: string): string {
 
 /** Render the per-emulator lines under a BIOS file — one row per emulator that uses it. */
 function buildBiosCoreLines(
-  cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
+  cores: Record<string, CoreEntry>,
   emulatorLabels: Map<string, string>,
   activeEmulator: string | null | undefined,
 ): ReactElement[] {
@@ -184,14 +176,22 @@ function rowVerdict(file: BiosFileStatus): boolean | null {
   return file.satisfied === undefined ? file.downloaded : file.satisfied;
 }
 
-/** The dot beside one file row: what it means for THIS launch, then for others. */
-function fileDotColor(file: BiosFileStatus): string {
+/**
+ * The dot beside one file row: what it means for THIS launch, then for others.
+ *
+ * A missing option of the launching emulator's group is red where a region it
+ * serves is one the group's verdict names as missing — on the game page that is
+ * the verdict for this game's own regions, so the image of another region stays
+ * grey there.
+ */
+function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<string>): string {
   const verdict = rowVerdict(file);
   // Amber is the colour this surface already gives a row it cannot call
   // settled, and a null verdict is exactly that.
   if (verdict === null) return "#d4a72c";
   if (verdict) return "#5ba32b";
   if (file.required_by_active) return "#d94126";
+  if (file.one_of?.regions.some((region) => missingRegions.has(region))) return "#d94126";
   // Missing and not required here, but demanded by some other installed core:
   // amber, because switching cores would make it a blocker.
   const requiredElsewhere = Object.values(file.cores ?? {}).some((c) => c.required);
@@ -253,19 +253,15 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
  * emulates Naomi and AtomisWave — not required, not present, not in the library
  * — and they pushed the two rows that mattered off the top.
  *
- * Five answers keep a row, and the first two are one requirement in its two
- * spellings:
+ * Five answers keep a row, and the first two are this launch's requirement in
+ * its two shapes:
  *
  * - **required for this launch** (`required_by_active`).
- * - **the console's own image** (`system_image_candidate`) — the same demand
- *   written the only other way an emulator has for it. A libretro declaration
- *   cannot say "one of these", so an emulator whose console will not start
- *   without an image and that marks every one of them optional carries the
- *   demand here instead, and `required_by_active` is false on every such row by
- *   construction. Dropping it leaves the header stating the console's own demand
- *   — `system_image: "absent"`, the first state `utils/biosSummary.ts` tests for
- *   — over a list with no image in it: SwanStation's five, on a library holding
- *   none of them.
+ * - **an option of the launching emulator's one-of group** (`one_of`) — one file
+ *   of several, any of which meets the group for the regions it serves.
+ *   `required_by_active` is false on every such row by construction, because the
+ *   group is the requirement and no one option is; dropping these rows leaves
+ *   the header stating the group's verdict over a list with none of its files.
  * - **present** — the verdict is met, so the row is the evidence for it.
  * - **fetchable** — `isFetchable`, the same predicate the platform page's
  *   download buttons are built from: a row this page treats as actionable and
@@ -273,28 +269,13 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
  * - **withheld** — nothing could judge the row (`satisfied === null`). An
  *   ignorance is something to say, never something to summarise away.
  *
- * **The candidate answer is only as narrow as the set the disjunction is counted
- * over, and that set is an emulator's WHOLE declaration**
- * (`FirmwareCatalogue.emulators_needing_one_of_their_files`). For a core serving
- * several systems it is too wide: were a demand ever recorded for the Dreamcast,
- * all eight of Flycast's files would become candidates at once — the six Naomi
- * and AtomisWave arcade BIOSes among them, and no Dreamcast disc starts from one
- * of those. It is unreachable today, and NOT because Flycast marks anything
- * required: on the reference machine it marks all eight optional, `dc_boot.bin`
- * included. What keeps it out is the first of that method's two gates — the
- * catalogue records the Dreamcast's `system_firmware` as `open`, which is the
- * resolver's word for nobody having established WHICH image rather than for a
- * console that runs without one, so `system_needs_an_image` is false, Flycast is
- * not in `demanding`, and no row of its gets `needs_one_of`. The arcade rows are
- * left out by the plain rule below instead.
- *
  * What is left over is declared, not required for this launch, demonstrably
  * absent, and fetchable from nowhere — nothing a reader of THIS page could do
  * anything with. It is counted on one line instead, which names where the rows
  * are.
  */
 function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
-  if (file.required_by_active || file.system_image_candidate) return true;
+  if (file.required_by_active || file.one_of) return true;
   // Present and withheld in one test: `false` is the only verdict that leaves a
   // row with nothing to say here.
   if (rowVerdict(file) !== false) return true;
@@ -329,6 +310,7 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
   }
 
   const files = bios.files ?? [];
+  const missingRegions = new Set((bios.one_of_groups ?? []).flatMap((group) => group.missing));
   const wantedFiles = files.filter((f) => f.wanted === "needed" || f.wanted === "optional");
   const shownFiles = wantedFiles.filter(rowBelongsOnThisPage);
   const countOf = (wanted: FirmwareWanted) => files.filter((f) => f.wanted === wanted).length;
@@ -363,7 +345,7 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
 
     return (
       <div key={f.file_name} className="romm-panel-file-row">
-        <span key="dot" className="romm-status-dot" style={{ backgroundColor: fileDotColor(f) }} />
+        <span key="dot" className="romm-status-dot" style={{ backgroundColor: fileDotColor(f, missingRegions) }} />
         <span key="name" className="romm-panel-file-name">
           {f.declared_path || f.file_name}
           {/* Muted like the emulator lines below rather than like the name
