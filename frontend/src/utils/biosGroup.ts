@@ -32,8 +32,8 @@ const BOOTS_IT_FOR_EVERY_REGION = `boots it ${FOR_EVERY_REGION}`;
 const IN_PLACE = "in place";
 const MISSING = "missing";
 const NOT_CHECKED = "not checked";
-const THIS_GAME = "← this game";
-const NEEDS_ONE_IMAGE_PER_REGION = "needs one BIOS image per disc region:";
+const THIS_GAMES_REGION = "← this game's region";
+const ONE_IMAGE_PER_DISC_REGION = "one image per disc region";
 
 /**
  * Every fixed phrase this module words that is particular to it — what its
@@ -41,7 +41,11 @@ const NEEDS_ONE_IMAGE_PER_REGION = "needs one BIOS image per disc region:";
  * words are. The region names and "in place" / "missing" are ordinary words
  * other prose uses, so they are not searched.
  */
-export const BIOS_GROUP_PHRASES: readonly string[] = [BOOTS_IT_FOR_EVERY_REGION, THIS_GAME, NEEDS_ONE_IMAGE_PER_REGION];
+export const BIOS_GROUP_PHRASES: readonly string[] = [
+  BOOTS_IT_FOR_EVERY_REGION,
+  THIS_GAMES_REGION,
+  ONE_IMAGE_PER_DISC_REGION,
+];
 
 function nameOf(region: string): string {
   return REGION_NAMES[region] ?? region.toUpperCase();
@@ -101,33 +105,37 @@ export interface GroupBlockLine {
   tone: GroupLineTone;
 }
 
-/** The block the game page lists under its headline: an intro line, or none, and one line per option. */
+/** The block the game page lists under its headline: a subheading, then one line per option. */
 export interface GroupBlock {
-  intro: string | null;
+  heading: string;
   lines: GroupBlockLine[];
 }
 
 /**
  * The launching emulator's group as the game page lists it, above the file
- * list: "Beetle PSX needs one BIOS image per disc region:", then one line per
- * option — its regions, its file, whether it is in place — with "← this game"
- * on the option of the game's own region. A group of one image serving every
- * region is that line alone: there is no per-region choice to introduce.
+ * list: the subheading "Beetle PSX · one image per disc region", then one line
+ * per option — its regions, its file, whether it is in place — with "← this
+ * game's region" on the option of the game's own region. That option comes
+ * first, because it is the one this launch opens; the others follow in the
+ * order the group states them. A group of one image serving every region is
+ * that line alone under the same subheading.
  *
  * *named* is the emulator's label, or the role where the pick has none.
  */
 export function groupBlock(group: OneOfGroupVerdict, named: string): GroupBlock {
-  const options = group.options;
+  const forTheGame = (option: { regions: readonly string[] }) =>
+    option.regions.some((region) => group.game_regions.includes(region));
+  const options = [
+    ...group.options.filter((option) => forTheGame(option)),
+    ...group.options.filter((option) => !forTheGame(option)),
+  ];
   const lines = options.map((option): GroupBlockLine => {
-    const every = servesEveryRegion(option, group);
-    const forTheGame = option.regions.some((region) => group.game_regions.includes(region));
     const state = option.satisfied === true ? IN_PLACE : option.satisfied === false ? MISSING : NOT_CHECKED;
-    const regions = every ? EVERY_REGION : regionNames(option.regions);
-    const text = `${regions} · ${option.file_name} · ${state}${forTheGame ? ` ${THIS_GAME}` : ""}`;
+    const regions = servesEveryRegion(option, group) ? EVERY_REGION : regionNames(option.regions);
+    const text = `${regions} · ${option.file_name} · ${state}${forTheGame(option) ? ` ${THIS_GAMES_REGION}` : ""}`;
     return { text, tone: toneOf(option, group) };
   });
-  const single = options.length === 1 && options.every((option) => servesEveryRegion(option, group));
-  return { intro: single ? null : `${named} ${NEEDS_ONE_IMAGE_PER_REGION}`, lines };
+  return { heading: `${named} · ${ONE_IMAGE_PER_DISC_REGION}`, lines };
 }
 
 function toneOf(

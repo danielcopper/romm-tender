@@ -168,11 +168,16 @@ const GROUP_TONE_COLOR: Readonly<Record<GroupLineTone, string>> = {
   unchecked: "#d4a72c",
 };
 
+// A subheading under the BIOS column: the section label's own class, which
+// upper-cases it, with room above to set it off from what precedes it.
+const SUBHEADING_STYLE = { marginTop: "12px", marginBottom: "4px" };
+
 /**
  * The launching emulator's one-of groups, between the headline and the file
  * list: which image each disc region needs and whether it is there, with the
- * game's own region marked. The file list below stays whole — the block is a
- * reading of some of its rows, not a replacement for them. What it says is
+ * game's own region marked. Each group stands under a subheading of its own,
+ * its lines indented beneath it. The file list below stays whole — the block is
+ * a reading of some of its rows, not a replacement for them. What it says is
  * `utils/biosGroup.ts`'s and `utils/biosSummary.ts`'s; this lays it out.
  */
 function buildGroupBlock(bios: BiosStatus): ReactElement | null {
@@ -183,14 +188,16 @@ function buildGroupBlock(bios: BiosStatus): ReactElement | null {
       key="bios-group"
       data-testid="bios-group"
       className="romm-panel-group"
-      style={{ display: "flex", flexDirection: "column", gap: "2px", margin: "8px 0" }}
+      style={{ display: "flex", flexDirection: "column", gap: "2px" }}
     >
       {blocks.map((block, index) => {
         return (
           <div key={`group-${index}`}>
-            {block.intro && <div className="romm-panel-value">{block.intro}</div>}
+            <div className="romm-panel-section-title" style={SUBHEADING_STYLE}>
+              {block.heading}
+            </div>
             {block.lines.map((line) => (
-              <div key={line.text} className="romm-panel-group-line romm-panel-file-row">
+              <div key={line.text} className="romm-panel-group-line romm-panel-file-row" style={{ paddingLeft: "8px" }}>
                 <span className="romm-status-dot" style={{ backgroundColor: GROUP_TONE_COLOR[line.tone] }} />
                 <span className="romm-panel-file-name">{line.text}</span>
               </div>
@@ -458,6 +465,16 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
 
   const fileElements = buildBiosFileList(biosStatus, coreInfo);
   if (fileElements.length > 0) {
+    // The list gets a subheading only where a group block stands above it:
+    // there it separates two readings of the same files, and without one the
+    // list follows the headline directly, as it always has.
+    if (groupBlockElement) {
+      biosColumn.push(
+        <div key="bios-files-title" className="romm-panel-section-title" style={SUBHEADING_STYLE}>
+          Files
+        </div>,
+      );
+    }
     biosColumn.push(
       <div key="bios-file-list" className="romm-panel-file-list">
         {fileElements}

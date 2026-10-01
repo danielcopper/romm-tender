@@ -402,7 +402,7 @@ function gameUncovered(group: OneOfGroupVerdict, leading: string): string {
 
 /**
  * The launching emulator's groups as the game page lists them under its
- * headline, introduced by the emulator's name — or by its role, where the pick
+ * headline, each headed by the emulator's name — or by its role, where the pick
  * carries no label, in the same spelling the sentences use.
  */
 export function groupBlocks(source: BiosSummarySource): GroupBlock[] {

@@ -547,13 +547,16 @@ starts every disc from, the page names it instead — _SwanStation starts this g
 folder, it serves every region_ where the core's own search of the BIOS folder found it, and _SwanStation starts this
 game with scph1001.bin, which serves every region_ where its settings named it.
 
-Under that line the game page lists the group itself, above the file list, one line per option — an image that serves
-several regions is one line naming them all: _Beetle PSX needs one BIOS image per disc region:_, then _Japan ·
-scph5500.bin · missing ← this game_, _USA · scph5501.bin · in place_, _Europe · scph5502.bin · missing_ — each with a
-dot, red for this game's region where it is missing and grey for another region's. An image that serves every region is
-that one line alone: _every region · scph1001.bin · in place_. The file list below stays complete. A game whose region
-does not map — World, Asia, Korea, Brazil, or none recorded — gets the platform's answer, and no badge for a group that
-is only partly covered: the image that is there may be the one it needs.
+Under that line the game page lists the group itself, under a subheading of its own — **BEETLE PSX · ONE IMAGE PER DISC
+REGION**, named after whichever emulator the game launches with — one indented line per option, the one for this game's
+region first and the others after it; an image that serves several regions is one line naming them all: _Japan ·
+scph5500.bin · missing ← this game's region_, _USA · scph5501.bin · in place_, _Europe · scph5502.bin · missing_ — each
+with a dot, red for this game's region where it is missing and grey for another region's. An image that serves every
+region is that one line alone under the same subheading: _every region · scph1001.bin · in place ← this game's region_.
+The file list follows under a subheading of its own, **FILES**, and stays complete; a game whose emulator states no such
+group shows the file list straight under the line, without either subheading. A game whose region does not map — World,
+Asia, Korea, Brazil, or none recorded — gets the platform's answer, and no badge for a group that is only partly
+covered: the image that is there may be the one it needs.
 
 **Download required** fetches the images of the regions that have none yet, where your RomM library holds them, and
 nothing more once every region has its image. The number on the button counts exactly those.

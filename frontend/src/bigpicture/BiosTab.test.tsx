@@ -1163,6 +1163,8 @@ describe("BiosTab", () => {
     });
     const renderFor = (status: BiosStatus, level: "ok" | "missing") =>
       render(<BiosTab biosStatus={status} biosLevel={level} coreInfo={beetle} isActive={true} />).container;
+    const sectionTitles = (container: HTMLElement): string[] =>
+      [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].map((title) => title.textContent);
     const dotOf = (container: HTMLElement, name: string): string | undefined =>
       [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")]
         .find((row) => row.textContent.startsWith(name))
@@ -1188,10 +1190,9 @@ describe("BiosTab", () => {
       const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
 
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
-      expect(block?.textContent).toContain("Beetle PSX needs one BIOS image per disc region:");
       const lines = [...(block?.querySelectorAll<HTMLElement>(".romm-panel-group-line") ?? [])];
       expect(lines.map((line) => line.textContent)).toEqual([
-        "Japan · scph5500.bin · missing ← this game",
+        "Japan · scph5500.bin · missing ← this game's region",
         "USA · scph5501.bin · in place",
         "Europe · scph5502.bin · missing",
       ]);
@@ -1204,6 +1205,70 @@ describe("BiosTab", () => {
       const list = container.querySelector(".romm-panel-file-list");
       expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row").length).toBe(3);
+    });
+
+    it("heads the group and the file list each with a subheading in the section label's style", () => {
+      const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
+
+      // Written in sentence case; the class upper-cases it, as it does "BIOS".
+      expect(sectionTitles(container)).toEqual(["BIOS", "Beetle PSX · one image per disc region", "Files", "Emulator"]);
+      const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
+      const files = [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].find(
+        (title) => title.textContent === "Files",
+      );
+      const list = container.querySelector(".romm-panel-file-list");
+      expect(block?.compareDocumentPosition(files as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(files?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      // The intro sentence the subheading replaced is gone.
+      expect(container.textContent).not.toContain("needs one BIOS image per disc region");
+    });
+
+    it("indents the group's lines under their subheading", () => {
+      const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
+
+      const lines = [...container.querySelectorAll<HTMLElement>(".romm-panel-group-line")];
+      expect(lines.length).toBe(3);
+      for (const line of lines) expect(line.style.paddingLeft).toBe("8px");
+    });
+
+    it("lists the game's region first and the other regions after it in the group's order", () => {
+      const container = renderFor(forTheGame("unmet", [], ["pal"], ["pal"]), "missing");
+
+      expect([...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent)).toEqual([
+        "Europe · scph5502.bin · missing ← this game's region",
+        "Japan · scph5500.bin · missing",
+        "USA · scph5501.bin · in place",
+      ]);
+    });
+
+    it("lays out a group of any system from the payload alone", () => {
+      // An invented system: its label, regions and files come off the data.
+      const invented: BiosStatus = {
+        ...forTheGame("met", ["east"], [], ["east"]),
+        active_core_label: "Arcadia",
+        files: [],
+        one_of_groups: [
+          {
+            state: "met",
+            covered: ["east"],
+            missing: [],
+            unchecked: [],
+            game_regions: ["east"],
+            regions: ["north", "east"],
+            options: [
+              { file_name: "north.rom", regions: ["north"], satisfied: false },
+              { file_name: "east.rom", regions: ["east"], satisfied: true },
+            ],
+          },
+        ],
+      };
+      const container = renderFor(invented, "ok");
+
+      expect(sectionTitles(container)).toContain("Arcadia · one image per disc region");
+      expect([...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent)).toEqual([
+        "EAST · east.rom · in place ← this game's region",
+        "NORTH · north.rom · missing",
+      ]);
     });
 
     it("says which image starts the game where one found in the folder serves every region", () => {
@@ -1236,11 +1301,11 @@ describe("BiosTab", () => {
         "SwanStation starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
       );
       const lines = [...container.querySelectorAll(".romm-panel-group-line")].map((line) => line.textContent);
-      expect(lines).toEqual(["every region · scph1001.bin · in place ← this game"]);
-      expect(container.textContent).not.toContain("needs one BIOS image per disc region");
+      expect(lines).toEqual(["every region · scph1001.bin · in place ← this game's region"]);
+      expect(sectionTitles(container)).toContain("SwanStation · one image per disc region");
     });
 
-    it("lists every group the launching emulator states, each under its own intro", () => {
+    it("lists every group the launching emulator states, each under its own subheading", () => {
       const status = forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]);
       const [beetleGroup] = status.one_of_groups ?? [];
       // A second group of its own, unmet for the game's region like the first.
@@ -1255,16 +1320,19 @@ describe("BiosTab", () => {
       const container = renderFor({ ...status, one_of_groups: [beetleGroup!, second] }, "missing");
 
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
-      expect(block?.textContent.match(/Beetle PSX needs one BIOS image per disc region:/g)).toHaveLength(2);
+      expect(
+        sectionTitles(container).filter((title) => title === "Beetle PSX · one image per disc region"),
+      ).toHaveLength(2);
       expect([...(block?.querySelectorAll(".romm-panel-group-line") ?? [])].map((line) => line.textContent)).toContain(
-        "Japan · extra.rom · missing ← this game",
+        "Japan · extra.rom · missing ← this game's region",
       );
     });
 
-    it("shows no group block where the launching emulator states no group", () => {
+    it("shows no group block and no subheadings where the launching emulator states no group", () => {
       const container = renderFor({ ...forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), one_of_groups: [] }, "ok");
 
       expect(container.querySelector('[data-testid="bios-group"]')).toBeNull();
+      expect(sectionTitles(container)).toEqual(["BIOS", "Emulator"]);
     });
 
     it("draws the missing image of the game's region red and another region's grey", () => {

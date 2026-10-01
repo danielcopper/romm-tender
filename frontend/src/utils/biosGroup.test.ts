@@ -55,15 +55,49 @@ const beetle = (game: string[], missing: string[]): OneOfGroupVerdict => ({
 });
 
 describe("the group's block on the game page", () => {
-  it("lists one line per option under the emulator, marking the game's region", () => {
+  it("lists one line per option under the emulator's heading, marking the game's region", () => {
     const block = groupBlock(beetle(["ntsc-j"], ["ntsc-j"]), "Beetle PSX");
 
-    expect(block.intro).toBe("Beetle PSX needs one BIOS image per disc region:");
+    expect(block.heading).toBe("Beetle PSX · one image per disc region");
     expect(block.lines).toEqual([
-      { text: "Japan · scph5500.bin · missing ← this game", tone: "missing" },
+      { text: "Japan · scph5500.bin · missing ← this game's region", tone: "missing" },
       { text: "USA · scph5501.bin · in place", tone: "here" },
       { text: "Europe · scph5502.bin · missing", tone: "other" },
     ]);
+  });
+
+  it("puts the game's region first and the others after it in the group's order", () => {
+    const block = groupBlock(beetle(["pal"], ["pal"]), "Beetle PSX");
+
+    expect(block.lines.map((line) => line.text)).toEqual([
+      "Europe · scph5502.bin · missing ← this game's region",
+      "Japan · scph5500.bin · missing",
+      "USA · scph5501.bin · in place",
+    ]);
+  });
+
+  it("lays out a group of any console the same way, from the verdict alone", () => {
+    // No such console exists: every word comes off the data.
+    const invented: OneOfGroupVerdict = {
+      state: "met",
+      covered: ["east"],
+      missing: [],
+      unchecked: [],
+      game_regions: ["east"],
+      regions: ["north", "south", "east"],
+      options: [
+        { file_name: "north.rom", regions: ["north"], satisfied: false },
+        { file_name: "south-east.rom", regions: ["south", "east"], satisfied: true },
+      ],
+    };
+
+    expect(groupBlock(invented, "Arcadia")).toEqual({
+      heading: "Arcadia · one image per disc region",
+      lines: [
+        { text: "SOUTH and EAST · south-east.rom · in place ← this game's region", tone: "here" },
+        { text: "NORTH · north.rom · missing", tone: "other" },
+      ],
+    });
   });
 
   it("marks every region missing where the verdict is the platform's", () => {
@@ -73,7 +107,7 @@ describe("the group's block on the game page", () => {
     expect(block.lines.some((line) => line.text.includes("this game"))).toBe(false);
   });
 
-  it("is a single line for one image that serves every region", () => {
+  it("is a single line under its heading for one image that serves every region", () => {
     const found: OneOfGroupVerdict = {
       state: "met",
       covered: ["ntsc-u"],
@@ -85,8 +119,8 @@ describe("the group's block on the game page", () => {
     };
 
     expect(groupBlock(found, "SwanStation")).toEqual({
-      intro: null,
-      lines: [{ text: "every region · scph1001.bin · in place ← this game", tone: "here" }],
+      heading: "SwanStation · one image per disc region",
+      lines: [{ text: "every region · scph1001.bin · in place ← this game's region", tone: "here" }],
     });
   });
 
@@ -99,7 +133,7 @@ describe("the group's block on the game page", () => {
     };
 
     expect(groupBlock(unread, "Beetle PSX").lines[0]).toEqual({
-      text: "USA · scph5501.bin · not checked ← this game",
+      text: "USA · scph5501.bin · not checked ← this game's region",
       tone: "unchecked",
     });
   });

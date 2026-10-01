@@ -402,12 +402,12 @@ describe("a one-of group", () => {
     );
   });
 
-  it("introduces each group's block under the emulator, or under its role where the pick has no name", () => {
+  it("heads each group's block with the emulator, or with its role where the pick has no name", () => {
     const named = groupBlocks({ active_core_label: "Beetle PSX", one_of_groups: [swanstation, swanstation] });
     const unnamed = groupBlocks({ active_core_label: null, one_of_groups: [{ ...swanstation, options: [] }] });
 
     expect(named).toHaveLength(2);
-    expect(unnamed[0]?.intro).toBe("The launching emulator needs one BIOS image per disc region:");
+    expect(unnamed[0]?.heading).toBe("The launching emulator · one image per disc region");
   });
 
   it("words a group of any console the same way, naming regions it has no name for in their own spelling", () => {

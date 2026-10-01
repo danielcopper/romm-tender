@@ -1326,24 +1326,27 @@ it, for the focused platform:
 
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
   same words. Where the launching emulator states a one-of group, the tab lists it between that sentence and the file
-  list — "`<emulator>` needs one BIOS image per disc region:", then one line per option with its regions, file and state
-  and "← this game" on the game's own region (`groupBlock` in `frontend/src/utils/biosGroup.ts`) — and the file list
-  below it stays whole. The ratio is a third set again, which is why it rides along on both rather than being folded in.
-  **The ratio names that set in its own words**, because the sentence in front of it counts another one and the numbers
-  cannot say which is which: `The one file DuckStation requires is in place (1/20 RomM library files)` states three
-  correct numbers over three sets, and the words are the only thing that tells them apart. The pair is the library's
-  inventory for the platform — what it holds, and how many of those the plugin found at their destination (CONTEXT.md →
-  Library inventory) — and the tail names no axis of its own deliberately: the ratio form carries that, and each
-  candidate word for the numerator was worse than none. Two of them are already on the screen under this sentence and
-  stand for something else there — `present` is the row marks and `on disk` the column beside them, both the row's own
-  verdict rather than this pair — and the third, `downloaded`, would read as a claim about who put the file there, which
-  is more than `local_count` counts: `on_server` rows whose file is at its destination, the field itself answering
-  presence and nothing more. Neither surface prints the ratio where the library holds nothing for the platform:
-  `(0/0 RomM library files)` counts a set that does not exist. What stops a surface writing one of these sentences back
-  into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase
-  the module builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts`
-  over the region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** —
-  every non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
+  list — under a subheading "`<emulator>` · one image per disc region" in the section label's class
+  (`romm-panel-section-title`, which upper-cases it), one indented line per option with its regions, file and state, the
+  game's own region first with "← this game's region" and the others in the group's order (`groupBlock` in
+  `frontend/src/utils/biosGroup.ts`) — and the file list below it stays whole, under a "Files" subheading of the same
+  class; without a group neither subheading is drawn. The ratio is a third set again, which is why it rides along on
+  both rather than being folded in. **The ratio names that set in its own words**, because the sentence in front of it
+  counts another one and the numbers cannot say which is which:
+  `The one file DuckStation requires is in place (1/20 RomM library files)` states three correct numbers over three
+  sets, and the words are the only thing that tells them apart. The pair is the library's inventory for the platform —
+  what it holds, and how many of those the plugin found at their destination (CONTEXT.md → Library inventory) — and the
+  tail names no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was
+  worse than none. Two of them are already on the screen under this sentence and stand for something else there —
+  `present` is the row marks and `on disk` the column beside them, both the row's own verdict rather than this pair —
+  and the third, `downloaded`, would read as a claim about who put the file there, which is more than `local_count`
+  counts: `on_server` rows whose file is at its destination, the field itself answering presence and nothing more.
+  Neither surface prints the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a
+  set that does not exist. What stops a surface writing one of these sentences back into itself is
+  `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
+  builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
+  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
+  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
   `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
   surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
   set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that
