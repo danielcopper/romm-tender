@@ -117,8 +117,10 @@ locally with `mise run docs`.
 
 ## Where decisions live
 
-- Work starts from an issue. Open questions go under `## To decide`; once answered, that section becomes `## Decisions`.
-  No implementation starts while `## To decide` exists.
+- Work starts from an issue. Open questions go under `## To decide`, one checkbox each; an answered question is checked
+  off and points to its entry under `## Decisions` (`- [x] … → D1`). A pull request merges only once every question is
+  checked.
+- New decisions are appended. A decision that changes later is struck through, and the new one follows with its date.
 - An epic's decisions live in the epic's body. A sub-issue says "See epic #N" instead of copying them.
 - A decision that is hard to reverse, surprising without context, and a real trade-off also becomes an ADR in
   `docs/adr/`; the issue links it.
