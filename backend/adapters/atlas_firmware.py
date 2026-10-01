@@ -65,9 +65,9 @@ only where the caveat is not attributed to another emulator
 (:func:`_speaks_for`). The attribution keys are the resolver's own
 (``core_so``, ``token``, ``core``), and ``core`` carries a libretro core's
 short name (``pcsx2``) rather than an identity; a caveat that names none of
-them is a statement about the place with no owner, and stays. What a row may hear at all is
-decided by what it declares, and only a folder row hears a listing
-(:func:`_speaking_for`).
+them is a statement about the place with no owner, and stays. What a row may
+hear at all is decided by what it declares, and only a folder row hears a
+listing (:func:`_speaking_for`).
 """
 
 from __future__ import annotations
