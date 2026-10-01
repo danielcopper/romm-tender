@@ -350,6 +350,42 @@ describe("a one-of group", () => {
     expect(both.sentence).toBe("One file SwanStation requires could not be checked");
   });
 
+  it("words a missing plain file beside an unknown group as the missing file it is", () => {
+    // The withheld count here is the group alone; the plain file was checked
+    // and is absent, so "could not be checked" would be untrue of it.
+    const both = summary(
+      {
+        required_count: 2,
+        required_downloaded: 0,
+        required_withheld: 1,
+        one_of_groups: [{ ...group("unknown", [], []), unchecked: ["ntsc-u"] }],
+      },
+      "unknown",
+    );
+    expect(both).toEqual({ status: "0 / 2 required", sentence: "0 of 2 files SwanStation requires are in place" });
+  });
+
+  it("counts only the plain files nothing could judge beside an unknown group", () => {
+    const both = summary(
+      {
+        required_count: 2,
+        required_downloaded: 0,
+        required_withheld: 2,
+        one_of_groups: [{ ...group("unknown", [], []), unchecked: ["ntsc-u"] }],
+      },
+      "unknown",
+    );
+    expect(both.sentence).toBe("One file SwanStation requires could not be checked");
+  });
+
+  it("keeps an unmet group's sentence beside a missing plain file", () => {
+    const both = summary(
+      { required_count: 2, required_downloaded: 0, one_of_groups: [group("unmet", [], ["ntsc-u"])] },
+      "missing",
+    );
+    expect(both.sentence).toBe("SwanStation cannot start this system without a BIOS image");
+  });
+
   it("speaks for the group ahead of the console's coarser reading", () => {
     // The backend never sends the two together; the order is a guard.
     const both = summary({
