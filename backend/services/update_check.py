@@ -2,8 +2,9 @@
 
 Owns the question and everything the answer needs a decision about: the
 once-a-day throttle, the user's switch, which release they have already waved
-away, and the stored answer itself — the install reads the last seen release
-through here rather than from the row. The answer is one-sided — it either has
+away, which one they have already been told about, and the stored answer
+itself — the install reads the last seen release through here rather than from
+the row. The answer is one-sided — it either has
 something to say or stays silent, and a check that reached nothing is silence
 rather than a failure. The release read itself is a seam; what a release is
 called and how the stored answer is spelled live in
@@ -57,6 +58,13 @@ ENABLED_KEY = "update_check_enabled"
 # What the checks have seen, as one JSON object in kv_config: observed state from
 # an external source, kept only as a last-seen marker.
 LAST_CHECK_KEY = "update_check_last_seen"
+
+# The version the user has been told about — by the panel's toast, or by a Check
+# now that found it — in kv_config: observed state, like the last-seen marker. It
+# holds a version rather than a flag, so the next release owes its own toast, and
+# it lives in the database rather than in memory because the toast is owed once
+# per version across every restart.
+TOASTED_KEY = "update_available_toasted_version"
 
 
 @dataclass(frozen=True)
@@ -112,12 +120,15 @@ class UpdateCheckService:
         """Report the last available release a check saw, and whether the card should say so.
 
         Returns ``{"available", "newer", "latest_version", "current_version",
-        "enabled", "installed_program"}``. ``latest_version`` is the last
-        available release a check saw — the release GitHub called latest, with
-        its tarball and checksum file attached — ``None`` where none was
-        established. ``newer`` says it is strictly newer than the running
-        version. ``available`` is the card: newer, and not the dismissed
-        version. ``enabled`` is the switch.
+        "enabled", "installed_program", "toast_owed"}``. ``latest_version`` is
+        the last available release a check saw — the release GitHub called
+        latest, with its tarball and checksum file attached — ``None`` where
+        none was established. ``newer`` says it is strictly newer than the
+        running version. ``available`` is the card: newer, and not the
+        dismissed version. ``enabled`` is the switch. ``toast_owed`` says the
+        panel owes a toast for ``latest_version``: available, the switch on,
+        and that version not yet told — by an acknowledged toast or by a Check
+        now that found it.
 
         Reads GitHub at most once a day: inside that window the answer comes
         from the stored marker, so a reload shows the card again without a
@@ -133,7 +144,8 @@ class UpdateCheckService:
             # Asked under the lock: the switch may have gone off while this waited.
             if self.is_check_enabled() and self._is_due(check):
                 check, _ = await self._check_now(check)
-        return self._notice(check)
+        toasted = await self._loop.run_in_executor(None, self._read_toasted_io)
+        return self._notice(check, toasted)
 
     async def check_for_update_now(self) -> dict[str, Any]:
         """Read the release now — past the throttle, past a dismissal, and whatever the switch says.
@@ -146,7 +158,9 @@ class UpdateCheckService:
 
         The dismissal is forgotten because the button's second job is bringing
         a waved-away card back. The switch governs only the reads this program
-        makes by itself; a press is the user asking.
+        makes by itself; a press is the user asking. A newer release a read that
+        answered shows is recorded as told: the user has just read it, so no
+        toast follows for it.
         """
         # The dismissal this press is undoing is the one standing when it was
         # made; a Dismiss pressed while it waited for the lock is newer intent.
@@ -155,7 +169,12 @@ class UpdateCheckService:
             self._forget_dismissal(dismissed_at_press)
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
-        return {**self._notice(check), "reached": reached}
+            toasted = await self._loop.run_in_executor(None, self._read_toasted_io)
+            found = check.release.version if check.release is not None else None
+            if reached and found is not None and is_newer_version(found, self._current_version):
+                await self._loop.run_in_executor(None, self._record_toasted_io, found)
+                toasted = found
+        return {**self._notice(check, toasted), "reached": reached}
 
     async def run_due_checks(self) -> None:
         """Ask for the notice whenever a check may be due, for as long as this runs; tell the panel when it changes.
@@ -199,6 +218,22 @@ class UpdateCheckService:
             return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
         self._settings[DISMISSED_KEY] = version
         self._settings_persister.save_settings()
+        return {"success": True}
+
+    async def acknowledge_update_available_toast(self, version: object) -> dict[str, Any]:
+        """Record that the panel raised the toast for *version*, for every later start.
+
+        Per version, so the next release owes its own. Idempotent. Returns
+        ``{"success": True}``, or the canonical failure shape: ``invalid_value``
+        for a version that is not a non-empty string, and ``version_changed``
+        where *version* is not the release the last check stored — a toast
+        acknowledged after a newer release replaced it must not take the newer
+        one's toast with it.
+        """
+        if not isinstance(version, str) or not version:
+            return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+        if not await self._loop.run_in_executor(None, self._acknowledge_toast_io, version):
+            return {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
         return {"success": True}
 
     def set_update_check_enabled(self, enabled: object) -> dict[str, Any]:
@@ -247,17 +282,20 @@ class UpdateCheckService:
         await self._loop.run_in_executor(None, self._record_check_io, stamped)
         return stamped, latest is not None
 
-    def _notice(self, check: UpdateCheck | None) -> dict[str, Any]:
+    def _notice(self, check: UpdateCheck | None, toasted: str | None) -> dict[str, Any]:
         release = check.release if check is not None else None
         latest = release.version if release is not None else None
         newer = is_newer_version(latest, self._current_version)
+        available = newer and latest != self._dismissed()
+        enabled = self.is_check_enabled()
         return {
-            "available": newer and latest != self._dismissed(),
+            "available": available,
             "newer": newer,
             "latest_version": latest,
             "current_version": self._current_version,
-            "enabled": self.is_check_enabled(),
+            "enabled": enabled,
             "installed_program": self._installed_program,
+            "toast_owed": available and enabled and latest != toasted,
         }
 
     def _dismissed(self) -> str | None:
@@ -299,3 +337,20 @@ class UpdateCheckService:
     def _record_check_io(self, check: UpdateCheck) -> None:
         with self._uow_factory() as uow:
             uow.kv_config.set(LAST_CHECK_KEY, encode_update_check(check))
+
+    def _read_toasted_io(self) -> str | None:
+        with self._uow_factory() as uow:
+            return uow.kv_config.get(TOASTED_KEY)
+
+    def _record_toasted_io(self, version: str) -> None:
+        with self._uow_factory() as uow:
+            uow.kv_config.set(TOASTED_KEY, version)
+
+    def _acknowledge_toast_io(self, version: str) -> bool:
+        """Record *version* as told if it is the stored release, in the one unit of work that read it."""
+        with self._uow_factory() as uow:
+            check = decode_update_check(uow.kv_config.get(LAST_CHECK_KEY))
+            if check is None or check.release is None or check.release.version != version:
+                return False
+            uow.kv_config.set(TOASTED_KEY, version)
+            return True

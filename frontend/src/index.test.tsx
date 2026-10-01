@@ -1376,6 +1376,7 @@ describe("index.tsx — the release check at panel load", () => {
       current_version: "0.33.0",
       enabled: true,
       installed_program: true,
+      toast_owed: false,
     });
     pluginFactory();
     await flush();
@@ -1420,6 +1421,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
         current_version: "0.33.0",
         enabled: true,
         installed_program: true,
+        toast_owed: false,
       }),
     );
 

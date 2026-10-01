@@ -22,6 +22,7 @@ from services.update_check import (
     DISMISSED_KEY,
     ENABLED_KEY,
     LAST_CHECK_KEY,
+    TOASTED_KEY,
     UpdateCheckService,
     UpdateCheckServiceConfig,
 )
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 _A_DAY = 24 * 60 * 60
-_NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program"}
+_NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program", "toast_owed"}
 
 
 _HEX = "ab34" * 16
@@ -105,6 +106,7 @@ class TestWhetherAnUpdateIsAvailable:
             "current_version": "0.33.0",
             "enabled": True,
             "installed_program": True,
+            "toast_owed": True,
         }
 
     async def test_the_running_release_is_not_an_update(self):
@@ -422,6 +424,7 @@ class TestTheSwitch:
             "current_version": "0.33.0",
             "enabled": False,
             "installed_program": True,
+            "toast_owed": False,
         }
         assert _nothing_stored(uow_factory)
 
@@ -917,3 +920,141 @@ class TestTheRunningCheck:
         warned = [r for r in caplog.records if r.name == "test_update_check" and r.levelno == logging.WARNING]
         assert any("database is locked" in r.getMessage() for r in warned)
         assert len(sleeper.calls) == 3
+
+
+def _toasted(uow_factory: FakeUnitOfWorkFactory) -> str | None:
+    with uow_factory() as uow:
+        return uow.kv_config.get(TOASTED_KEY)
+
+
+class TestTheAvailableToast:
+    """Owed once per version, across restarts, only where the card shows and the switch is on."""
+
+    async def test_a_new_available_version_owes_its_toast(self):
+        notice = await _make(latest=_release("0.34.0"))[0].get_update_notice()
+
+        assert notice["toast_owed"] is True
+
+    async def test_an_acknowledged_version_owes_none_after_a_restart(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+
+        assert await service.acknowledge_update_available_toast("0.34.0") == {"success": True}
+
+        restarted, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
+        assert (await restarted.get_update_notice())["toast_owed"] is False
+        assert _toasted(uow_factory) == "0.34.0"
+
+    async def test_with_the_switch_off_none_is_owed_though_the_card_shows(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        await _make(latest=_release("0.34.0"), uow_factory=uow_factory)[0].get_update_notice()
+        switched_off, _, _, _ = _make(settings={ENABLED_KEY: False}, uow_factory=uow_factory)
+
+        notice = await switched_off.get_update_notice()
+
+        assert notice["available"] is True
+        assert notice["toast_owed"] is False
+
+    async def test_a_dismissed_version_owes_none(self):
+        service, _, _, _ = _make(latest=_release("0.34.0"), settings={DISMISSED_KEY: "0.34.0"})
+
+        assert (await service.get_update_notice())["toast_owed"] is False
+
+    async def test_no_newer_release_owes_none(self):
+        assert (await _make(latest=_release("0.33.0"))[0].get_update_notice())["toast_owed"] is False
+
+    async def test_a_version_check_now_found_counts_as_told(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
+
+        found = await service.check_for_update_now()
+
+        assert found["available"] is True
+        assert found["toast_owed"] is False
+        assert (await service.get_update_notice())["toast_owed"] is False
+        assert _toasted(uow_factory) == "0.34.0"
+
+    async def test_check_now_counts_it_as_told_with_the_switch_off_too(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, settings, _ = _make(
+            latest=_release("0.34.0"), settings={ENABLED_KEY: False}, uow_factory=uow_factory
+        )
+
+        await service.check_for_update_now()
+        settings[ENABLED_KEY] = True
+
+        assert (await service.get_update_notice())["toast_owed"] is False
+
+    async def test_a_check_now_that_reached_nothing_tells_nothing(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, releases, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+        releases.answer = None
+
+        unreached = await service.check_for_update_now()
+
+        assert unreached["reached"] is False
+        assert unreached["toast_owed"] is True
+        assert _toasted(uow_factory) is None
+
+    async def test_a_check_now_that_found_nothing_newer_tells_nothing(self):
+        uow_factory = FakeUnitOfWorkFactory()
+
+        await _make(latest=_release("0.33.0"), uow_factory=uow_factory)[0].check_for_update_now()
+
+        assert _toasted(uow_factory) is None
+
+    async def test_a_newer_version_owes_its_own_toast(self):
+        clock = FakeClock()
+        uow_factory = FakeUnitOfWorkFactory()
+        service, releases, _, _ = _make(latest=_release("0.34.0"), clock=clock, uow_factory=uow_factory)
+        await service.get_update_notice()
+        await service.acknowledge_update_available_toast("0.34.0")
+
+        clock.advance(_A_DAY)
+        releases.answer = _release("0.35.0")
+
+        assert (await service.get_update_notice())["toast_owed"] is True
+
+    async def test_a_version_that_is_not_the_stored_release_is_refused_and_records_nothing(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, _, _ = _make(latest=_release("0.35.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+
+        answer = await service.acknowledge_update_available_toast("0.34.0")
+
+        assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+        assert _toasted(uow_factory) is None
+        assert (await service.get_update_notice())["toast_owed"] is True
+
+    async def test_an_acknowledgement_before_any_check_is_refused(self):
+        service, _, _, _ = _make()
+
+        answer = await service.acknowledge_update_available_toast("0.34.0")
+
+        assert answer["reason"] == "version_changed"
+
+    @pytest.mark.parametrize("unusable", [None, "", 3, ["0.34.0"], True])
+    async def test_a_version_that_is_not_one_is_refused(self, unusable):
+        uow_factory = FakeUnitOfWorkFactory()
+        service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
+        await service.get_update_notice()
+
+        assert await service.acknowledge_update_available_toast(unusable) == {
+            "success": False,
+            "reason": "invalid_value",
+            "message": "Invalid version",
+        }
+        assert _toasted(uow_factory) is None
+
+    async def test_the_pushed_notice_says_whether_the_toast_is_owed(self):
+        events = FakeEventSink()
+        sleeper = _Rounds(1)
+        service, _, _, _ = _make(latest=_release("0.35.0"), sleeper=sleeper, events=events)
+
+        await _run_rounds(service, sleeper)
+
+        [(name, notice)] = events.events
+        assert name == "update_notice"
+        assert notice["toast_owed"] is True

@@ -1186,6 +1186,11 @@ export interface UpdateNotice {
   enabled: boolean;
   /** This process is the installed program an update could replace — false for a run from a checkout. */
   installed_program: boolean;
+  /**
+   * The panel owes the "is available" toast for `latest_version`: the card is up, the switch is on, and that version
+   * was neither acknowledged nor found by Check now.
+   */
+  toast_owed: boolean;
 }
 
 export const getUpdateNotice = endpoint<[], UpdateNotice>("get_update_notice");
@@ -1204,6 +1209,11 @@ export type UpdateSettingWrite = { success: true } | EndpointFailure;
 
 /** Wave the card away for one release version; the next release raises it again. */
 export const dismissUpdateNotice = endpoint<[string], UpdateSettingWrite>("dismiss_update_notice");
+
+/** Record that the "is available" toast for one release version was raised; the next release owes its own. */
+export const acknowledgeUpdateAvailableToast = endpoint<[string], UpdateSettingWrite>(
+  "acknowledge_update_available_toast",
+);
 
 /** Switch the daily release check on or off — the reads the program makes by itself. On by default. */
 export const setUpdateCheckEnabled = endpoint<[boolean], UpdateSettingWrite>("set_update_check_enabled");

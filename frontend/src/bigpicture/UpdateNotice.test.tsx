@@ -24,6 +24,7 @@ const AVAILABLE: UpdateNoticeState = {
   currentVersion: "0.33.0",
   enabled: true,
   installedProgram: true,
+  toastOwed: false,
 };
 
 const ROLLED_BACK: UpdateOutcomeState = {
@@ -61,6 +62,7 @@ describe("UpdateNotice", () => {
         current_version: "0.33.0",
         enabled: true,
         installed_program: true,
+        toast_owed: false,
       }),
     );
 

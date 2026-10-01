@@ -1895,6 +1895,7 @@ describe("SettingsPage", () => {
         current_version: "0.33.0",
         enabled: true,
         installed_program: true,
+        toast_owed: false,
         reached: true,
         ...over,
       });
@@ -1907,6 +1908,7 @@ describe("SettingsPage", () => {
         currentVersion: "0.33.0",
         enabled: true,
         installedProgram: false,
+        toastOwed: false,
       });
       renderPage();
       await flushAsync();
@@ -1928,6 +1930,7 @@ describe("SettingsPage", () => {
           current_version: "0.33.0",
           enabled: true,
           installed_program: true,
+          toast_owed: false,
         }),
       );
 
@@ -1986,6 +1989,7 @@ describe("SettingsPage", () => {
           current_version: "0.33.0",
           enabled: true,
           installed_program: true,
+          toast_owed: false,
           reached: true,
         });
       });

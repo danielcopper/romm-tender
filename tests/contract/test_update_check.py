@@ -16,7 +16,7 @@ from typing import Any
 from domain.update_release import LatestRelease, ReleaseTarball
 
 _A_DAY = 24 * 60 * 60
-_NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program"}
+_NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program", "toast_owed"}
 
 
 def _release(version: str) -> LatestRelease:
@@ -195,3 +195,49 @@ async def test_an_asked_for_check_reads_whatever_the_switch_says(harness):
 
     assert harness.releases.calls == 1
     assert (notice["enabled"], notice["reached"], notice["available"]) == (False, True, True)
+
+
+async def test_an_acknowledged_toast_is_owed_no_more_and_the_record_outlives_the_call(harness):
+    harness.releases.answer = _release("99.0.0")
+    assert (await harness.endpoints.get_update_notice())["toast_owed"] is True
+
+    assert await harness.endpoints.acknowledge_update_available_toast("99.0.0") == {"success": True}
+
+    assert (await harness.endpoints.get_update_notice())["toast_owed"] is False
+    with harness.uow_factory() as uow:
+        assert uow.kv_config.get("update_available_toasted_version") == "99.0.0"
+
+
+async def test_a_release_check_now_found_owes_no_toast(harness):
+    harness.releases.answer = _release("99.0.0")
+
+    found = await harness.endpoints.check_for_update_now()
+
+    assert (found["available"], found["toast_owed"]) == (True, False)
+    assert (await harness.endpoints.get_update_notice())["toast_owed"] is False
+
+
+async def test_with_the_switch_off_no_toast_is_owed(harness):
+    harness.releases.answer = _release("99.0.0")
+    await harness.endpoints.get_update_notice()
+    harness.endpoints.set_update_check_enabled(False)
+
+    notice = await harness.endpoints.get_update_notice()
+
+    assert (notice["available"], notice["toast_owed"]) == (True, False)
+
+
+async def test_a_toast_acknowledged_for_another_release_is_refused_in_the_canonical_shape(harness):
+    harness.releases.answer = _release("99.0.0")
+    await harness.endpoints.get_update_notice()
+
+    answer = await harness.endpoints.acknowledge_update_available_toast("98.0.0")
+
+    assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+    assert (await harness.endpoints.get_update_notice())["toast_owed"] is True
+
+
+async def test_a_toast_acknowledged_with_no_version_is_refused_in_the_canonical_shape(harness):
+    answer = await harness.endpoints.acknowledge_update_available_toast(None)
+
+    assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid version"}

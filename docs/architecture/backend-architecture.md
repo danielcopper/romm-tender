@@ -1724,6 +1724,14 @@ release the checks found stays standing, and a check that reached nothing at all
 - **Check now** (`check_for_update_now`) skips the throttle and forgets the dismissal whatever the switch says — a press
   is the user asking — and adds `reached` to the answer, so the Settings section can tell "nothing newer" from "nothing
   found out".
+- **The "is available" toast is owed once per version** (`toast_owed` on the notice, the pushed one included): while the
+  card is up, the switch is on, and the version is not the one stored as told under `update_available_toasted_version`
+  in `kv_config` — observed state, kept across restarts because the toast is owed once per version rather than once per
+  process. Two things record a version as told: the panel's acknowledgement once it raised the toast
+  (`acknowledge_update_available_toast`), which is refused with `version_changed` for any version but the stored release
+  so a late acknowledgement cannot take a newer release's toast with it, and a Check now whose read answered with a
+  newer release, which the user has just read in Settings. What else holds the toast back is the panel's
+  ([QAM panel, Notices and homes](qam-panel.md#notices-and-homes)).
 - **While the backend runs, it checks by itself** (`run_due_checks`, started with the background tasks and cancelled in
   `Application.shutdown`). It wakes once an hour on the injected `Sleeper` and asks for the notice exactly as the panel
   load does, so the stamp still decides whether GitHub is asked and a check that reached nothing stays silent. A notice

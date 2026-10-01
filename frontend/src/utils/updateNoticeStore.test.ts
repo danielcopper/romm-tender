@@ -26,6 +26,7 @@ const NOTICE: UpdateNotice = {
   current_version: "0.33.0",
   enabled: true,
   installed_program: true,
+  toast_owed: false,
 };
 
 const now = (over: Partial<UpdateCheckNow> = {}): UpdateCheckNow => ({ ...NOTICE, reached: true, ...over });
@@ -56,6 +57,7 @@ describe("updateNoticeStore", () => {
       currentVersion: "",
       enabled: true,
       installedProgram: false,
+      toastOwed: false,
     });
   });
 
@@ -73,6 +75,7 @@ describe("updateNoticeStore", () => {
       currentVersion: "0.33.0",
       enabled: true,
       installedProgram: true,
+      toastOwed: false,
     });
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -275,6 +278,7 @@ describe("updateNoticeStore", () => {
         currentVersion: "0.33.0",
         enabled: true,
         installedProgram: true,
+        toastOwed: false,
       });
     });
 

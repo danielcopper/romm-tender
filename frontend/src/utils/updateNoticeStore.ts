@@ -42,6 +42,8 @@ export interface UpdateNoticeState {
   enabled: boolean;
   /** This process can be updated in place — false for a run from a checkout. */
   installedProgram: boolean;
+  /** The backend owes the "is available" toast for `latestVersion`. */
+  toastOwed: boolean;
 }
 
 const INITIAL: UpdateNoticeState = {
@@ -51,6 +53,7 @@ const INITIAL: UpdateNoticeState = {
   currentVersion: "",
   enabled: true,
   installedProgram: false,
+  toastOwed: false,
 };
 
 let _state: UpdateNoticeState = INITIAL;
@@ -114,6 +117,7 @@ function stateFromNotice(notice: UpdateNotice): UpdateNoticeState {
     currentVersion: notice.current_version,
     enabled: notice.enabled,
     installedProgram: notice.installed_program,
+    toastOwed: notice.toast_owed,
   };
 }
 
