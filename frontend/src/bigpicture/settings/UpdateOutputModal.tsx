@@ -73,6 +73,16 @@ export function outputStops(lines: string[]): string[] {
   return stops;
 }
 
+/** Each of *texts* beside where it starts once they are joined by newlines — a key no two of them share. */
+function atOffsets(texts: string[]): { at: number; text: string }[] {
+  let at = 0;
+  return texts.map((text) => {
+    const entry = { at, text };
+    at += text.length + 1;
+    return entry;
+  });
+}
+
 /**
  * The colour of one line, read off how the installer starts it: a step that
  * failed (`[!!]`) and the installer's own failure lines (`install.sh: `) in
@@ -90,9 +100,9 @@ export function outputLineColour(line: string): string | undefined {
 /** One stop's text, each of its lines in its colour. */
 const StopLines: FC<{ text: string }> = ({ text }) => (
   <>
-    {text.split("\n").map((line, i) => (
-      <Fragment key={i}>
-        {i > 0 && "\n"}
+    {atOffsets(text.split("\n")).map(({ at, text: line }) => (
+      <Fragment key={at}>
+        {at > 0 && "\n"}
         <span style={{ color: outputLineColour(line) }}>{line}</span>
       </Fragment>
     ))}
@@ -107,8 +117,8 @@ const Part: FC<{ heading: string; section: UpdateOutputSection }> = ({ heading, 
         {earlier === 1 ? "1 earlier line is" : `${earlier} earlier lines are`} not shown.
       </div>
     )}
-    {outputStops(lines).map((text, i) => (
-      <Focusable key={i} {...TEXT_STOP} style={MONO}>
+    {atOffsets(outputStops(lines)).map(({ at, text }) => (
+      <Focusable key={at} {...TEXT_STOP} style={MONO}>
         <StopLines text={text} />
       </Focusable>
     ))}
