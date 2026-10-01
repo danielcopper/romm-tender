@@ -126,7 +126,8 @@ locally with `mise run docs`.
   Game-Mode pass can show it.
 - The PR body repeats the final decisions; it becomes the squash commit body.
 - Nothing needed to understand a change lives outside this repo and its issues.
-- The `decisions` CI check enforces these headings and fails a PR that removes this section.
+- The `decisions` CI check fails a PR whose linked issue has no `## Decisions` or still has open questions under
+  `## To decide`, and a PR that removes this section. Everything else here is for the review.
 
 ## Traps — non-obvious rules that bite silently
 
