@@ -1952,10 +1952,13 @@ through `JournalEntriesFn` (`adapters/journal.py`, `journalctl --user --output=j
   (`failed_installer_started_at`). Anything else is `not_found`, logged at INFO with what was asked, and an argument of
   another type `invalid_value`, logged as a WARNING — a panel asks only about a failure it shows.
 - **Which run — never merely the latest.** A run is one `_SYSTEMD_INVOCATION_ID` (the unit's own lines) or
-  `USER_INVOCATION_ID` (the user manager's lines about it); a line with neither belongs to no run and is dropped. For an
-  attempt, the run is the first run of `romm-tender-update` that began at or after the attempt's installer was started.
-  For a record, it is the run going on at the record's stamp — begun no later than that second and still printing at it,
-  since the installer writes the record partway through — looked for an hour either side.
+  `USER_INVOCATION_ID` (the user manager's lines about it); a line with neither belongs to no run and is dropped. A line
+  a short-lived process of the installer's wrote often carries neither — why is the comment in `install.sh`'s
+  `say_what_the_check_said` — so the installer prints every line meant to be read from its own shell
+  (`TestTheInstallerSaysItsOwnLines`, `tests/scripts/test_install_sh.py`). For an attempt, the run is the first run of
+  `romm-tender-update` that began at or after the attempt's installer was started. For a record, it is the run going on
+  at the record's stamp — begun no later than that second and still printing at it, since the installer writes the
+  record partway through — looked for an hour either side.
 - **After a rollback, a second part.** The installer's own output says only that the new version did not answer. The
   failed version's reason is in the `romm-tender` unit's journal between the installer's run beginning and the record's
   stamp, which the installer writes before it starts the version it went back to. The run already going when the

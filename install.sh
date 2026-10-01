@@ -2095,7 +2095,14 @@ say_what_the_check_said() {
         echo "the pre-install check said: $raised" >&2
     fi
     echo "the last lines it printed:" >&2
-    tail -n 20 "$log" 2> /dev/null | sed 's/^/  /' >&2 || true
+    # Printed by this shell rather than by a `sed` over the tail: journald often
+    # reads a process that has already exited as belonging to no unit, so the
+    # lines it wrote carry neither the unit nor its invocation, and the panel,
+    # which finds the installer's run by those two, never sees them.
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        printf '  %s\n' "$line" >&2
+    done < <(tail -n 20 "$log" 2> /dev/null || true)
 }
 
 # Stops the unit and backs the data up, before the tree is swapped. Either one

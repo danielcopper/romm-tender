@@ -316,7 +316,8 @@ esac
 # file in each root it was given — where a real build writes — and answers as
 # backend/check.py does: 1 for a version named in STUB_UNSTARTABLE_VERSIONS and 2
 # for one named in STUB_UNCOPYABLE_VERSIONS, saying why on stderr the way the
-# check's logger does. STUB_CHECK_PINS_THE_TREE leaves a directory in the staged
+# check's logger does, and then STUB_CHECK_TAIL as it stands, with no newline
+# added. STUB_CHECK_PINS_THE_TREE leaves a directory in the staged
 # tree that cannot be emptied, so removing the tree fails.
 _PYTHON_STUB = """#!/usr/bin/env bash
 if [ "$1" = "-B" ] && [ "${2##*/}" = "check.py" ]; then
@@ -345,6 +346,7 @@ if [ "$1" = "-B" ] && [ "${2##*/}" = "check.py" ]; then
         *" $version "*)
             printf '[t][ERROR]: check: %s could not be built\\n' "$version" >&2
             printf 'Traceback (most recent call last):\\nImportError: %s cannot be imported\\n' "$version" >&2
+            printf '%s' "${STUB_CHECK_TAIL:-}" >&2
             exit 1
             ;;
     esac
@@ -1979,7 +1981,7 @@ class TestTheNewVersionIsCheckedFirst:
     the case where a root the installer forgot would be a live one.
     """
 
-    def _refused_update(self, machine) -> tuple[dict[Path, bytes], subprocess.CompletedProcess[str]]:
+    def _refused_update(self, machine, **extra: str) -> tuple[dict[Path, bytes], subprocess.CompletedProcess[str]]:
         """1.2.3 installed, 1.3.0 installed over it, then 1.4.0 refused by the pre-install check."""
         _installed(machine)
         assert (
@@ -1996,6 +1998,7 @@ class TestTheNewVersionIsCheckedFirst:
             "--yes",
             STUB_BACKEND="up",
             STUB_UNSTARTABLE_VERSIONS="1.4.0",
+            **extra,
         )
         return before, result
 
@@ -2038,6 +2041,24 @@ class TestTheNewVersionIsCheckedFirst:
             "  ImportError: 1.4.0 cannot be imported",
         ]
         assert lines[said + 6 :] == ["install.sh: the new version does not start", "  nothing was changed"]
+
+    def test_the_lines_it_printed_are_said_as_they_were_written(self, machine):
+        """Each indented by two: blanks, tabs, backslashes, ``%`` and a last line with no newline kept as they are."""
+        tail = (
+            "  indented\twith a tab\n\na back\\slash and \\n\n100% done %s\n-n leads with a dash\nno newline at the end"
+        )
+
+        _before, result = self._refused_update(machine, STUB_CHECK_TAIL=tail)
+
+        lines = result.stderr.splitlines()
+        assert lines[lines.index("the last lines it printed:") + 1 :] == [
+            "  [t][ERROR]: check: 1.4.0 could not be built",
+            "  Traceback (most recent call last):",
+            "  ImportError: 1.4.0 cannot be imported",
+            *(f"  {line}" for line in tail.split("\n")),
+            "install.sh: the new version does not start",
+            "  nothing was changed",
+        ]
 
     def test_it_records_the_refusal_as_the_check_s(self, machine):
         _before, _result = self._refused_update(machine)
@@ -2333,6 +2354,98 @@ class TestTheNewVersionIsCheckedFirst:
         assert "this version has no pre-install check; it is installed without one" in result.stderr.splitlines()
         assert "this version has no pre-install check" in (line.strip() for line in result.stdout.splitlines())
         assert _tree_version(machine.code) == version
+
+
+# Stands in for a text tool and runs the real one, noting each run in
+# STUB_TOOL_RUNS and, in STUB_DIRECT_WRITES, a run whose stdout is the
+# installer's own stdout or stderr. The installer is the furthest ancestor still
+# running install.sh: a subshell carries its parent's command line, and its
+# stdout may be a substitution's pipe rather than the installer's.
+_TEXT_TOOL_GUARD = """#!/usr/bin/env bash
+printf '%s\\n' "${0##*/}" >> "$STUB_TOOL_RUNS"
+top="" pid=$PPID
+while [ "$pid" -gt 1 ] && mapfile -d '' -t argv < "/proc/$pid/cmdline" 2> /dev/null; do
+    [[ " ${argv[*]} " == *"/install.sh "* ]] || break
+    top=$pid
+    read -r _ _ _ pid _ < "/proc/$pid/stat"
+done
+if [ -n "$top" ] && { [ /proc/$$/fd/1 -ef "/proc/$top/fd/1" ] || [ /proc/$$/fd/1 -ef "/proc/$top/fd/2" ]; }; then
+    printf '%s\\n' "${0##*/} $*" >> "$STUB_DIRECT_WRITES"
+fi
+PATH="${PATH#"${0%/*}:"}"
+exec "${0##*/}" "$@"
+"""
+
+_TEXT_TOOLS = ("awk", "cat", "cut", "grep", "head", "sed", "sort", "tail", "tee", "tr", "uniq", "wc")
+
+
+class TestTheInstallerSaysItsOwnLines:
+    """No text tool writes straight into the installer's output; the installer's own shell prints every line.
+
+    A panel install's output is read back from the journal by the unit and the
+    invocation each line carries, and journald often cannot tell which unit a
+    process that has already exited belonged to — so a line a short-lived
+    ``sed`` wrote is in the journal and missing from the panel. Checked over
+    the four runs whose output a reader may have to read: a first install, an
+    update that starts, one that is rolled back, and one the pre-install check
+    refuses. What it does not see: a tool outside :data:`_TEXT_TOOLS`, a tool
+    reached by an absolute path, and an error message a tool writes on stderr.
+    """
+
+    def _guarded(self, machine: Install) -> dict[str, str]:
+        for tool in _TEXT_TOOLS:
+            _write_executable(machine.stubs / tool, _TEXT_TOOL_GUARD)
+        return {
+            "STUB_TOOL_RUNS": str(machine.tmp_path / "tool-runs.log"),
+            "STUB_DIRECT_WRITES": str(machine.tmp_path / "direct-writes.log"),
+        }
+
+    def _said(self, logs: dict[str, str], name: str) -> list[str]:
+        path = Path(logs[name])
+        return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+    @pytest.mark.parametrize(
+        ("installed", "extra", "returncode"),
+        [
+            (False, {}, 0),
+            (True, {}, 0),
+            (True, {"STUB_BROKEN_VERSIONS": _NEW}, 1),
+            (True, {"STUB_UNSTARTABLE_VERSIONS": _NEW}, 1),
+        ],
+        ids=["a first install", "an update that starts", "an update rolled back", "an update the check refuses"],
+    )
+    def test_no_text_tool_writes_into_the_installer_s_output(self, machine, installed, extra, returncode):
+        if installed:
+            _installed(machine)
+        version = _NEW if installed else _VERSION
+        tarball = str(_build_tarball(machine.tmp_path, version))
+        logs = self._guarded(machine)
+
+        result = machine.run("--from", tarball, "--yes", STUB_BACKEND="up", **logs, **extra)
+
+        assert result.returncode == returncode, result.stderr
+        assert self._said(logs, "STUB_TOOL_RUNS"), "no guarded tool ran, so the run proves nothing"
+        assert self._said(logs, "STUB_DIRECT_WRITES") == []
+
+    def test_the_guard_notes_a_tool_writing_into_the_output_and_nothing_else(self, machine, tmp_path):
+        """A substitution's pipe and ``/dev/null`` are not the installer's output; ``>&2`` is."""
+        script = tmp_path / "elsewhere" / "install.sh"
+        script.parent.mkdir()
+        script.write_text(
+            'echo to-stderr | sed "s/^/  /" >&2\n'
+            "echo to-null | sed p > /dev/null\n"
+            'answer="$(echo to-a-substitution | sed p)"\n'
+            "( echo from-a-subshell | tr a-z A-Z )\n",
+            encoding="utf-8",
+        )
+        logs = self._guarded(machine)
+
+        result = subprocess.run(
+            ["bash", str(script)], capture_output=True, text=True, check=False, env=machine.env(**logs)
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert self._said(logs, "STUB_DIRECT_WRITES") == ["sed s/^/  /", "tr a-z A-Z"]
 
 
 class TestRollingBackByHand:
