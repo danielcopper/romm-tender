@@ -124,8 +124,7 @@ const stampBundleKind = (kind) => ({
   load: (id) => (id === `\0${BUNDLE_KIND_MODULE}` ? `export const BUNDLE_KIND = ${JSON.stringify(kind)};` : null),
 });
 
-// In `frontend/` rather than in `dist/`: `scripts/package.sh` ships the whole
-// of `dist/`, and this is a fact about the build, not part of what runs.
+// Not in `dist/`: docs/architecture/frontend-bundles.md, "Third-party package budgets".
 const PACKAGE_RECORD = "bundle-packages.json";
 
 // `rollup -c` evaluates this file once and runs the three builds in turn, so the
