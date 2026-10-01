@@ -310,9 +310,9 @@ If the new version did not start after an update, and the installer went back to
 main panel says **Update to X failed — you are still on Y.**, and under it where the reason is.
 [Troubleshooting](troubleshooting.md#an-update-was-rolled-back) says what to look at there. **Open Updates** takes you
 to **Settings › Updates**, and **Dismiss** puts the notice away for that failed update only; another one brings it back.
-It also goes away by itself once a later update goes through. While it is there, the main panel does not also call X
-available — you have just seen it fail — although a release newer than X brings back an **is available** notice for that
-release.
+It also goes away by itself once a later update goes through. While it is there, and after you dismiss it until a later
+update goes through, the main panel does not also call X available — you have just seen it fail — although a release
+newer than X brings back an **is available** notice for that release.
 
 A failed update also says so in a message that goes by itself, once Steam has finished starting, so you hear of it
 without opening the panel. After the installer went back to the version you had or refused the new version, and after an
