@@ -76,21 +76,23 @@ class UpdateOutputService:
 
         Returns ``{"success": True, "ran_at", "installer", "new_version",
         "missing"}``. ``installer`` is ``{"lines", "earlier"}`` — the last
-        lines of that run with the admission token hidden, and how many before
-        them are left out — and ``ran_at`` when the run began, in epoch
-        seconds. After a rollback ``new_version`` is the same shape over this
-        program's own journal from the installer's start to the record's stamp,
-        the lines of the run the installer found already going left out; it is
-        ``None`` for any other failure or where no such line is left. Where the
-        journal holds no such run, ``installer`` and ``ran_at`` are ``None`` and
-        ``missing`` says why: ``"rotated"`` where the journal no longer reaches
-        back that far, and where it does, ``"terminal"`` for a record — the
-        installer was run by hand — and ``"empty"`` for an attempt, whose
-        installer this program started as a unit. The canonical failure shape
-        answers ``not_found`` where no such failure stands, ``invalid_value``
-        for an argument of another type, and ``journal_unreadable`` where the
-        journal could not be read; the first two are logged, since a panel
-        asks only about a failure it shows.
+        lines of that run with the admission token hidden and each of its rows
+        only in the last state it printed, and how many of the lines that
+        folding kept are left out before them — and ``ran_at`` when the run
+        began, in epoch seconds. After a rollback ``new_version`` is the same
+        shape, unfolded, over this program's own journal from the installer's
+        start to the record's stamp, the lines of the run the installer found
+        already going left out; it is ``None`` for any other failure or where
+        no such line is left. Where the journal holds no such run,
+        ``installer`` and ``ran_at`` are ``None`` and ``missing`` says why:
+        ``"rotated"`` where the journal no longer reaches back that far, and
+        where it does, ``"terminal"`` for a record — the installer was run by
+        hand — and ``"empty"`` for an attempt, whose installer this program
+        started as a unit. The canonical failure shape answers ``not_found``
+        where no such failure stands, ``invalid_value`` for an argument of
+        another type, and ``journal_unreadable`` where the journal could not be
+        read; the first two are logged, since a panel asks only about a failure
+        it shows.
         """
         if rolled_back_at is not None and not isinstance(rolled_back_at, str):
             self._logger.warning(f"update: the installer's output was asked for with {rolled_back_at!r}")

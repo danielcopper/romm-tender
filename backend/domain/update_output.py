@@ -29,11 +29,8 @@ SERVICE_UNIT = "romm-tender"
 MAX_LINES = 300
 MAX_LINE_CHARS = 500
 
-# A row of the installer as it prints one where it does not redraw it
-# (``print_row`` and ``say_progress`` in ``install.sh``): one of four marks, a
-# space, the row's label padded to twelve columns, a space and the detail. Such a
-# run prints a row again on every step, each line saying all the one before it
-# did.
+# A row of the installer as it prints one where it does not redraw it, laid out
+# by ``print_row`` and ``say_progress`` in ``install.sh``.
 _ROW_MARKS = frozenset({"[ok]", "[!!]", "[..]", "[--]"})
 _ROW_LABEL = slice(5, 17)
 
@@ -188,8 +185,8 @@ def installer_section(entries: Sequence[JournalEntry]) -> OutputSection:
     """:func:`output_section` of the installer's run, each of its rows only in the last state it printed.
 
     A row's line is left out wherever a later line of the same row follows it,
-    so a row's one line stands where its last one stood — a row that never
-    finished in the state it stopped in. Every other line stays, in order, and
+    so each row stands once, where its last line stood — a row that never
+    finished, in the state it stopped in. Every other line stays, in order, and
     only the lines that remain count towards :data:`MAX_LINES`.
     """
     lines = _lines(entries)

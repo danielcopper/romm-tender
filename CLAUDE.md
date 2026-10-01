@@ -393,15 +393,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   assembled from pieces or handed in from elsewhere, a write through a helper, and a subprocess. Prompt-only: only
   `UpdateInstallService` calls the adapter's `write` and `remove`
 - **No journal line reaches the panel with an admission token in it: every line read back from the journal is shown
-  through `domain/update_output.py::output_section`, which replaces the value of every admission-token spelling it knows
-  with `[hidden]`** — test + prompt-only — `tests/domain/test_update_output.py::TestHideToken` pins the three spellings
-  (a query's `token=…`, the same percent-encoded after `%3F` or `%26`, a JSON or Python mapping's `"token": "…"`) over a
-  line in the start-up address line's shape; one service case
-  (`TestAfterARollback::test_answers_the_installer_s_run_and_what_the_failed_version_printed`) and one contract case
-  (`test_after_a_rollback_both_runs_are_answered_with_the_token_hidden`, the only one end to end) assert `[hidden]` in
-  the failed version's part. Unseen by it: a token printed in any other shape — under another name, encoded twice, split
-  across lines, or holding a character outside `secrets.token_urlsafe`'s alphabet. Prompt-only: a new reader of journal
-  text answers through `output_section` or `hide_token`, never with the raw `JournalEntry.message`
+  through `domain/update_output.py`'s `output_section` or `installer_section`, which replace the value of every
+  admission-token spelling they know with `[hidden]`** — test + prompt-only —
+  `tests/domain/test_update_output.py::TestHideToken` pins the three spellings (a query's `token=…`, the same
+  percent-encoded after `%3F` or `%26`, a JSON or Python mapping's `"token": "…"`) over a line in the start-up address
+  line's shape, and `TestInstallerSection::test_the_token_is_still_hidden` that the installer's part hides it too; one
+  service case (`TestAfterARollback::test_answers_the_installer_s_run_and_what_the_failed_version_printed`) and one
+  contract case (`test_after_a_rollback_both_runs_are_answered_with_the_token_hidden`, the only one end to end) assert
+  `[hidden]` in the failed version's part. Unseen by it: a token printed in any other shape — under another name,
+  encoded twice, split across lines, or holding a character outside `secrets.token_urlsafe`'s alphabet. Prompt-only: a
+  new reader of journal text answers through `output_section`, `installer_section` or `hide_token`, never with the raw
+  `JournalEntry.message`
 - **The pre-install check (`backend/check.py`) never builds under a live root: its code root is the tree being checked,
   every other root and the runtime directory are absent or empty when it starts, neither copy lands where it is copied
   from, and the live database is read without a file created or removed beside it, and with no write to one but a

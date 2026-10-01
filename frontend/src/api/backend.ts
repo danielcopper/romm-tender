@@ -1376,7 +1376,11 @@ export const getUpdateAttemptToast = endpoint<[], UpdateAttemptToast | null>("ge
 /** Tell the backend the toast for the attempt it numbered was raised, so no later panel load raises it again. */
 export const acknowledgeUpdateAttemptToast = endpoint<[number], UpdateSettingWrite>("acknowledge_update_attempt_toast");
 
-/** The last lines of one run the journal holds, the admission token hidden, and how many before them are left out. */
+/**
+ * The last lines of one run the journal holds, the admission token hidden, and how many before them are left out. In
+ * the installer's part each row stands only in the last state it printed, and `earlier` counts only the lines that
+ * folding kept.
+ */
 export interface UpdateOutputSection {
   lines: string[];
   earlier: number;

@@ -1978,7 +1978,8 @@ it as every backend line does. What is shown of a run is `domain/update_output.p
   `[..] Checking`, then `[..] Checking     python 3.13`, and so on to `[ok] Checking …` — so the installer's part
   (`installer_section`) keeps only the last line of each row, where that line stood: a finished row's `[ok]`, `[!!]` or
   `[--]`, and the `[..]` of a row that never finished, which is where the installer stopped. A row line is one of those
-  four marks, a space and the label padded to twelve columns, as `print_row` and `say_progress` print it, and the row is
+  four marks, a space, the label padded to twelve columns, a space and the detail — or, while a row has no detail yet,
+  the bare label with its padding dropped (`[..] Checking`) — as `print_row` and `say_progress` print it, and the row is
   its label; every other line stays, in order. The folding comes before the 300-line cut, so `earlier` counts only lines
   the folding kept. The new version's part is not folded.
 
