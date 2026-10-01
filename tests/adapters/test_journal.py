@@ -119,19 +119,22 @@ class TestRead:
 
     def test_a_journalctl_that_failed_raises_with_what_it_said(self, journalctl):
         journalctl("echo 'Failed to open journal' >&2; exit 1")
+        adapter = _adapter()
 
         with pytest.raises(OSError, match="status 1: Failed to open journal"):
-            _adapter()("romm-tender-update")
+            adapter("romm-tender-update")
 
     def test_a_missing_journalctl_raises(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+        adapter = _adapter()
 
         with pytest.raises(OSError):
-            _adapter()("romm-tender-update")
+            adapter("romm-tender-update")
 
     def test_a_journalctl_that_gives_no_answer_in_time_raises_a_timeout(self, journalctl, monkeypatch):
         monkeypatch.setattr("adapters.journal._TIMEOUT_SECONDS", 0.2)
         journalctl("exec /bin/sleep 5")
+        adapter = _adapter()
 
         with pytest.raises(TimeoutError):
-            _adapter()("romm-tender-update")
+            adapter("romm-tender-update")
