@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { budgetProblems } from "./package-budgets.mjs";
+import { budgetProblems, recordLines } from "./package-budgets.mjs";
 
 const FRONTEND = new URL("../", import.meta.url);
 const DIST = new URL("../../dist/", import.meta.url);
@@ -42,13 +42,7 @@ const record = readJson("bundle-packages.json");
 const bundles = new Set([...Object.keys(budgets), ...Object.keys(record ?? {})]);
 const digests = Object.fromEntries([...bundles].map((bundle) => [bundle, digestOf(bundle)]));
 
-for (const [bundle, entry] of Object.entries(record ?? {})) {
-  const packages = Object.entries(entry.packages).map(([name, bytes]) => {
-    const budget = budgets[bundle]?.[name];
-    return `${name} ${bytes} B (${budget === undefined ? "no budget" : `budget ${budget} B`})`;
-  });
-  console.log(`${bundle}: ${packages.length > 0 ? packages.join(", ") : "no third-party package"}`);
-}
+for (const line of recordLines({ budgets, record, digests })) console.log(line);
 
 const problems = budgetProblems({ budgets, record, digests });
 if (problems.length > 0) {

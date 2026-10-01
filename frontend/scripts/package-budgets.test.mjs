@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { budgetProblems, packageBytes, packageOf } from "./package-budgets.mjs";
+import { budgetProblems, chunkPackageBytes, packageBytes, packageOf, recordLines } from "./package-budgets.mjs";
 
 const STORE = "/repo/frontend/node_modules/.pnpm";
 
@@ -51,6 +51,27 @@ describe("packageBytes", () => {
 
   it("leaves out a package whose every module rendered to nothing", () => {
     expect(packageBytes([[`${STORE}/react-icons@5.6.0/node_modules/react-icons/fa/index.mjs`, 0]])).toEqual({});
+  });
+});
+
+describe("chunkPackageBytes", () => {
+  it("counts a module's rendered code in UTF-8 bytes, not in characters", () => {
+    expect(
+      chunkPackageBytes({
+        [`${STORE}/react-icons@5.6.0/node_modules/react-icons/fa/index.mjs`]: { code: "a→é", renderedLength: 3 },
+        "/repo/frontend/src/index.tsx": { code: "own code", renderedLength: 8 },
+      }),
+    ).toEqual({ "react-icons": 6 });
+  });
+
+  it("counts a module Rollup rendered to nothing as no bytes", () => {
+    expect(
+      chunkPackageBytes({
+        [`${STORE}/@decky+ui@4.12.0/node_modules/@decky/ui/dist/a.js`]: { code: null, renderedLength: 0 },
+        [`${STORE}/@decky+ui@4.12.0/node_modules/@decky/ui/dist/b.js`]: { code: "xy", renderedLength: 2 },
+        [`${STORE}/react-icons@5.6.0/node_modules/react-icons/fa/index.mjs`]: { code: null, renderedLength: 0 },
+      }),
+    ).toEqual({ "@decky/ui": 2 });
   });
 });
 
@@ -127,5 +148,35 @@ describe("budgetProblems", () => {
         digests: { ...DIGESTS, "other.js": "x" },
       }),
     ).toEqual([expect.stringMatching(/^other\.js is recorded but has no entry in package-budgets\.json/)]);
+  });
+});
+
+describe("recordLines", () => {
+  it("names each package's bytes beside its budget, or that it has none", () => {
+    expect(
+      recordLines({ budgets: BUDGETS, record: recordOf({ "@decky/ui": 90, lodash: 4 }), digests: DIGESTS }),
+    ).toEqual(["index.js: @decky/ui 90 B (budget 100 B), lodash 4 B (no budget)"]);
+  });
+
+  it("says so for a bundle that carries no third-party package", () => {
+    expect(recordLines({ budgets: BUDGETS, record: recordOf({}), digests: DIGESTS })).toEqual([
+      "index.js: no third-party package",
+    ]);
+  });
+
+  it("prints nothing for a bundle whose record is older than dist/", () => {
+    expect(recordLines({ budgets: BUDGETS, record: recordOf({ "@decky/ui": 90 }, "old"), digests: DIGESTS })).toEqual(
+      [],
+    );
+  });
+
+  it("prints nothing for a recorded bundle that dist/ does not hold", () => {
+    expect(
+      recordLines({ budgets: BUDGETS, record: recordOf({ "@decky/ui": 90 }), digests: { "index.js": null } }),
+    ).toEqual([]);
+  });
+
+  it("prints nothing when there is no record", () => {
+    expect(recordLines({ budgets: BUDGETS, record: null, digests: DIGESTS })).toEqual([]);
   });
 });

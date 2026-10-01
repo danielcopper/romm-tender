@@ -4,6 +4,8 @@
  * `docs/architecture/frontend-bundles.md`, "Third-party package budgets".
  */
 
+import { Buffer } from "node:buffer";
+
 const NODE_MODULES = "/node_modules/";
 
 /**
@@ -40,6 +42,34 @@ export function packageBytes(modules) {
     bytes.set(name, (bytes.get(name) ?? 0) + moduleBytes);
   }
   return Object.fromEntries([...bytes].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/**
+ * Bytes per package over one chunk's `modules` as Rollup hands them to
+ * `writeBundle`, each module counted by the UTF-8 bytes of its rendered `code`.
+ *
+ * Not `renderedLength`: Rollup 4.63.1 takes it from `magic-string`'s `length()`,
+ * a count of UTF-16 code units, which undercounts every non-ASCII character.
+ */
+export function chunkPackageBytes(modules) {
+  return packageBytes(Object.entries(modules).map(([id, { code }]) => [id, Buffer.byteLength(code ?? "")]));
+}
+
+/**
+ * One line per bundle naming each package's bytes beside its budget, for the
+ * bundles whose record describes what `dist/` holds now — a stale record's
+ * figures are not printed as if they were the build's.
+ */
+export function recordLines({ budgets, record, digests }) {
+  return Object.entries(record ?? {})
+    .filter(([bundle, entry]) => digests[bundle] === entry.sha256)
+    .map(([bundle, entry]) => {
+      const packages = Object.entries(entry.packages).map(([name, bytes]) => {
+        const budget = budgets[bundle]?.[name];
+        return `${name} ${bytes} B (${budget === undefined ? "no budget" : `budget ${budget} B`})`;
+      });
+      return `${bundle}: ${packages.length > 0 ? packages.join(", ") : "no third-party package"}`;
+    });
 }
 
 /**
