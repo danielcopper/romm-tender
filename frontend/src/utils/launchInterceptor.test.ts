@@ -6,7 +6,8 @@ import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
 import * as runningApps from "./runningApps";
 import * as steamShortcuts from "./steamShortcuts";
-import { registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
+import * as pruneLease from "./pruneLease";
+import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
 
@@ -202,7 +203,17 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       expect(launchGate.runLaunchGate).toHaveBeenCalledWith(APP_ID, 42, expect.anything());
+      // Reported by the appId, relaunched by the shortcut's game ID from Steam's app store.
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+
+    it("relaunches a start reported by the appId itself by that appId when Steam's app store has no overview", async () => {
+      vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(null);
+      register();
+      captureHandler()(77, String(APP_ID), "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(runGameMock()).toHaveBeenCalledWith(String(APP_ID), "", -1, 100);
     });
 
     it.each([
@@ -329,6 +340,92 @@ describe("launchInterceptor — full funnel watcher", () => {
       // Synchronously — no await yet — the cancel must already be in.
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       resolveGate({ decision: "allow" });
+    });
+  });
+
+  describe("first backend contact", () => {
+    const NOT_RESPONDING = { title: "Tender", body: "Tender isn't responding — started without syncing saves." };
+
+    it("a backend that never answers gets the start going with the event's game ID at the deadline, not before", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+
+        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS - 1);
+        expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(toaster.toast).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(runGameMock()).toHaveBeenCalledTimes(1);
+        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+        expect(toaster.toast).toHaveBeenCalledWith(NOT_RESPONDING);
+        expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+        expect(backend.logError).toHaveBeenCalledWith(
+          expect.stringContaining(`no backend answer for appId=${APP_ID} within ${FIRST_CONTACT_DEADLINE_MS}ms`),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("an answer arriving after the deadline starts nothing more", async () => {
+      vi.useFakeTimers();
+      try {
+        let answer!: (rom: Awaited<ReturnType<typeof backend.getInstalledRom>>) => void;
+        vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
+        expect(runGameMock()).toHaveBeenCalledTimes(1);
+
+        answer({
+          rom_id: 42,
+          file_name: "g.rom",
+          file_path: "/p/g.rom",
+          system: "snes",
+          platform_slug: "snes",
+          installed_at: "2026-01-01T00:00:00Z",
+          launchable: true,
+        });
+        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
+
+        expect(runGameMock()).toHaveBeenCalledTimes(1);
+        expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+        expect(toaster.toast).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a start whose admission went stale before the deadline stays cancelled", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        // A new plugin generation makes every admission captured before it stale.
+        pruneLease.mountPruneLeasePlugin();
+        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
+
+        expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("no backend answer"));
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(toaster.toast).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a relaunch uses the event's game ID even when Steam's app store has no overview for it", async () => {
+      vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(null);
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(launchGate.runLaunchGate).toHaveBeenCalled();
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
   });
 

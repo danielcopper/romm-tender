@@ -45,6 +45,7 @@ import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, type PruneLea
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
+import { TimeoutError, withTimeout } from "./withTimeout";
 
 /**
  * The four decisions the funnel has to put to the user, as questions rather than
@@ -65,6 +66,16 @@ export interface LaunchPrompts {
   askOfflineDrift(): Promise<"start_anyway" | "retry" | "cancel">;
   /** Pre-launch sync failed — launch on the local save regardless? */
   confirmFallbackLaunch(message?: string): Promise<boolean>;
+}
+
+/**
+ * A start the watcher cancelled: the appId it resolved, and the game ID Steam
+ * reported it by, which a relaunch hands back to `RunGame` (see
+ * {@link relaunchGameId}).
+ */
+interface CancelledStart {
+  appId: number;
+  gameId: string;
 }
 
 /** Migration block copy — surfaced as a toast (no relaunch). */
@@ -201,12 +212,23 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
 
 /** Relaunch a previously-cancelled launch. Marks the appId as skipped FIRST so
  *  this RunGame doesn't re-enter the watcher and re-gate. Used directly only for
- *  the no-romId paths (unknown appId, error fallback) where there is nothing to
- *  re-confirm; the gated path goes through {@link relaunch}. */
-function bareRelaunch(appId: number): void {
-  markLaunchSkipped(appId);
-  const gameId = appStore.GetAppOverviewByAppID(appId)?.GetGameID?.() ?? String(appId);
-  SteamClient.Apps.RunGame(gameId, "", -1, 100);
+ *  the paths with nothing to re-confirm (unknown appId, no backend answer, error
+ *  fallback); the gated path goes through {@link relaunch}. */
+function bareRelaunch(start: CancelledStart): void {
+  markLaunchSkipped(start.appId);
+  SteamClient.Apps.RunGame(relaunchGameId(start), "", -1, 100);
+}
+
+/**
+ * The id a relaunch starts the game by. A start reported by its 64-bit game ID
+ * is started by that ID. A start reported by a value that fits in 32 bits — the
+ * appId itself, a form Steam has not been seen using for a shortcut — is
+ * started by the shortcut's game ID from Steam's app store where it has an
+ * overview, and by the reported value otherwise.
+ */
+function relaunchGameId(start: CancelledStart): string {
+  if (BigInt(start.gameId) > 0xffffffffn) return start.gameId;
+  return appStore.GetAppOverviewByAppID(start.appId)?.GetGameID?.() ?? start.gameId;
 }
 
 /** Relaunch a previously-cancelled, now-approved launch. Heals any mid-session
@@ -215,8 +237,8 @@ function bareRelaunch(appId: number): void {
  *  skipped immediately before this RunGame so it doesn't re-enter the watcher
  *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
  *  so it only adds a bounded (≤3s) wait to the cancel→relaunch window. */
-async function relaunch(appId: number, romId: number, admission: PruneLeaseAdmission): Promise<void> {
-  const reconfirm = await reconfirmLaunchOptions(romId, appId, "Watcher", admission);
+async function relaunch(start: CancelledStart, romId: number, admission: PruneLeaseAdmission): Promise<void> {
+  const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher", admission);
   if (reconfirm.status === "cancelled") return;
   if (reconfirm.status === "timeout") {
     // The watcher has no game-page UI to fall back to, so the refusal would
@@ -225,7 +247,7 @@ async function relaunch(appId: number, romId: number, admission: PruneLeaseAdmis
     showToast("Launch cancelled — try again");
     return;
   }
-  bareRelaunch(appId);
+  bareRelaunch(start);
 }
 
 /**
@@ -239,14 +261,14 @@ async function relaunch(appId: number, romId: number, admission: PruneLeaseAdmis
  */
 async function handleWatcherVerdict(
   verdict: GateVerdict,
-  appId: number,
+  start: CancelledStart,
   romId: number,
   admission: PruneLeaseAdmission,
   prompts: LaunchPrompts,
 ): Promise<"done" | "retry"> {
   switch (verdict.decision) {
     case "allow":
-      await relaunch(appId, romId, admission);
+      await relaunch(start, romId, admission);
       return "done";
     case "abort":
       // The user saw setup/core UI and declined — already cancelled, nothing to do.
@@ -263,18 +285,18 @@ async function handleWatcherVerdict(
       if (resolution === "cancel") return "done";
       // Conflicts resolved — notify sibling components to refresh, then relaunch.
       globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-      await relaunch(appId, romId, admission);
+      await relaunch(start, romId, admission);
       return "done";
     }
     case "offline_drift": {
       const choice = await prompts.askOfflineDrift();
-      if (choice === "start_anyway") await relaunch(appId, romId, admission);
+      if (choice === "start_anyway") await relaunch(start, romId, admission);
       if (choice === "retry") return "retry";
       return "done";
     }
     case "sync_failed": {
       const proceed = await prompts.confirmFallbackLaunch(verdict.message);
-      if (proceed) await relaunch(appId, romId, admission);
+      if (proceed) await relaunch(start, romId, admission);
       return "done";
     }
   }
@@ -289,17 +311,17 @@ async function handleWatcherVerdict(
  * open to `allow` so a gate bug never traps the user's already-cancelled launch.
  */
 async function runWatcherGate(
-  appId: number,
+  start: CancelledStart,
   romId: number,
   admission: PruneLeaseAdmission,
   prompts: LaunchPrompts,
 ): Promise<void> {
-  let verdict = await runLaunchGate(appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
+  let verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
     logError(`Watcher gate threw (failing open to allow): ${e}`);
     return { decision: "allow" };
   });
-  while ((await handleWatcherVerdict(verdict, appId, romId, admission, prompts)) === "retry") {
-    verdict = await runLaunchGate(appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
+  while ((await handleWatcherVerdict(verdict, start, romId, admission, prompts)) === "retry") {
+    verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
       logError(`Watcher gate threw (failing open to allow): ${e}`);
       return { decision: "allow" };
     });
@@ -325,6 +347,25 @@ async function isRomInstalled(appId: number, romId: number): Promise<boolean> {
     });
     return cached?.installed === true;
   }
+}
+
+/**
+ * How long a cancelled start waits for the watcher's first backend answer
+ * before it goes ahead without the pre-launch sync. Why the wait is bounded:
+ * `docs/architecture/save-file-sync-architecture.md`, "Pre-launch sync".
+ */
+export const FIRST_CONTACT_DEADLINE_MS = 5000;
+
+const NOT_RESPONDING_TOAST_BODY = "Tender isn't responding — started without syncing saves.";
+
+/**
+ * The ROM a cancelled start belongs to and whether it is installed, or `null`
+ * for an appId the map does not know.
+ */
+async function readStartRom(appId: number): Promise<{ romId: number; installed: boolean } | null> {
+  const romId = getAppIdRomIdMapSnapshot()[String(appId)];
+  if (romId == null) return null;
+  return { romId, installed: await isRomInstalled(appId, romId) };
 }
 
 export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
@@ -357,6 +398,7 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // relaunch only on approval.
       SteamClient.Apps.CancelGameAction(gameActionId);
       const admission = capturePruneLeaseAdmission();
+      const start: CancelledStart = { appId, gameId };
 
       detach(
         (async () => {
@@ -369,24 +411,39 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
               })
               .catch((e) => logError(`Pre-launch migration refresh failed: ${e}`));
 
-            // Resolve romId synchronously from the session map snapshot. An
-            // unknown appId is not ours to gate — relaunch and bail.
-            const romId = getAppIdRomIdMapSnapshot()[String(appId)];
-            if (romId == null) {
+            // Losing this race abandons the read rather than cancelling it, and
+            // the start is not waited on again: an answer arriving after the
+            // deadline changes nothing.
+            let rom: Awaited<ReturnType<typeof readStartRom>>;
+            try {
+              rom = await withTimeout(readStartRom(appId), FIRST_CONTACT_DEADLINE_MS);
+            } catch (e) {
+              if (!(e instanceof TimeoutError)) throw e;
+              logError(
+                `Launch interceptor: no backend answer for appId=${appId} within ${FIRST_CONTACT_DEADLINE_MS}ms — starting without the pre-launch sync`,
+              );
               if (!isPruneLeaseAdmissionCurrent(admission)) return;
-              bareRelaunch(appId);
+              showToast(NOT_RESPONDING_TOAST_BODY);
+              bareRelaunch(start);
+              return;
+            }
+
+            // An appId the map does not know is not ours to gate — relaunch and bail.
+            if (rom === null) {
+              if (!isPruneLeaseAdmissionCurrent(admission)) return;
+              bareRelaunch(start);
               return;
             }
 
             // The funnel assumes an installed ROM. Not installed → hard block
             // (no relaunch): the ROM is gone.
-            if (!(await isRomInstalled(appId, romId))) {
+            if (!rom.installed) {
               if (!isPruneLeaseAdmissionCurrent(admission)) return;
               showToast("ROM not downloaded. Download it from its game page first.");
               return;
             }
 
-            await runWatcherGate(appId, romId, admission, prompts);
+            await runWatcherGate(start, rom.romId, admission, prompts);
           } catch (e) {
             // An unexpected error must not trap a current launch. A stale launch
             // belongs to a torn-down generation and must remain cancelled.
@@ -395,7 +452,7 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
             // cancelled state, not healing drift.
             logError(`Launch interceptor error: ${e}`);
             if (!isPruneLeaseAdmissionCurrent(admission)) return;
-            bareRelaunch(appId);
+            bareRelaunch(start);
           }
         })(),
       );
