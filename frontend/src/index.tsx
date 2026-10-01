@@ -25,10 +25,10 @@ import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
 import { registerMetadataPatches, applyAllPlaytime, applyAllMetadata } from "./utils/metadataPatches";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
-import { showCoreChangeModal } from "./bigpicture/CoreChangeModal";
-import { handleConflicts } from "./bigpicture/SyncConflictModal";
-import { showOfflineDriftModal } from "./bigpicture/OfflineDriftModal";
-import { showFallbackLaunchModal } from "./bigpicture/FallbackLaunchModal";
+import { showCoreChangeModal } from "./shared/CoreChangeModal";
+import { handleConflicts } from "./shared/SyncConflictModal";
+import { showOfflineDriftModal } from "./shared/OfflineDriftModal";
+import { showFallbackLaunchModal } from "./shared/FallbackLaunchModal";
 import { hasAnySaveConflict } from "./utils/saveStatus";
 import {
   getAppIdRomIdMap,

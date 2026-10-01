@@ -85,13 +85,13 @@ vi.mock("../utils/runningApps", () => ({
 
 // Shared launch-gate modals — spy so the Play button's verdict switch is
 // observable without rendering each modal (mirrors the watcher's test shape).
-vi.mock("../bigpicture/OfflineDriftModal", () => ({
+vi.mock("../shared/OfflineDriftModal", () => ({
   showOfflineDriftModal: vi.fn(),
 }));
-vi.mock("../bigpicture/FallbackLaunchModal", () => ({
+vi.mock("../shared/FallbackLaunchModal", () => ({
   showFallbackLaunchModal: vi.fn(),
 }));
-vi.mock("../bigpicture/SyncConflictModal", () => ({
+vi.mock("../shared/SyncConflictModal", () => ({
   handleConflicts: vi.fn(),
 }));
 // Stop-Game confirm — spy so the confirm-then-call ordering is observable
@@ -128,9 +128,9 @@ import { markLaunchSkipped, consumeLaunchSkip } from "../utils/launchGate";
 import { getMigrationState } from "../utils/migrationStore";
 import { isSessionActive } from "../utils/sessionManager";
 import { isAppRunning } from "../utils/runningApps";
-import { showOfflineDriftModal } from "../bigpicture/OfflineDriftModal";
-import { showFallbackLaunchModal } from "../bigpicture/FallbackLaunchModal";
-import { handleConflicts } from "../bigpicture/SyncConflictModal";
+import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
+import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
+import { handleConflicts } from "../shared/SyncConflictModal";
 import { showStopGameModal } from "../bigpicture/StopGameModal";
 import { showAdoptExistingModal } from "../bigpicture/AdoptExistingModal";
 import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";

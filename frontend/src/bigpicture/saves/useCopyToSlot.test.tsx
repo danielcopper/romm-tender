@@ -5,7 +5,7 @@ import { toaster } from "../../api/host";
 import type { ReactElement } from "react";
 import { useCopyToSlot } from "./useCopyToSlot";
 import * as backend from "../../api/backend";
-import { showSyncConflictModal } from "../SyncConflictModal";
+import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import type { CopySaveToSlotStatus, SaveSlotSummary, SyncConflict } from "../../types";
 
 // Control the endpoint + the conflict modal directly; everything else (showModal,
@@ -14,7 +14,7 @@ vi.mock("../../api/backend", () => ({
   copySaveToSlot: vi.fn(),
   debugLog: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../SyncConflictModal", () => ({
+vi.mock("../../shared/SyncConflictModal", () => ({
   showSyncConflictModal: vi.fn().mockResolvedValue("resolved"),
 }));
 

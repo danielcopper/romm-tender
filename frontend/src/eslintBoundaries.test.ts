@@ -38,7 +38,7 @@ const SRC = path.join(process.cwd(), "src");
 const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
 
 const REACHES_BIGPICTURE =
-  'import { showCoreChangeModal } from "../../bigpicture/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n';
+  'import { showStopGameModal } from "../../bigpicture/StopGameModal";\nexport const probe = showStopGameModal;\n';
 const REACHES_DESKTOP = 'import readme from "../../desktop/README.md";\nexport const probe = readme;\n';
 
 function ruleIds(results: ESLint.LintResult[]): string[] {

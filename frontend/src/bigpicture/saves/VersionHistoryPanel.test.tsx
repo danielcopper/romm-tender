@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import * as backend from "../../api/backend";
 import { toaster } from "../../api/host";
-import { showSyncConflictModal } from "../SyncConflictModal";
+import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import type { SaveVersionEntry, RollbackStatus } from "../../types";
 
 // Override the global DialogButton stub so it forwards `disabled` and we can
@@ -22,7 +22,7 @@ vi.mock("@decky/ui", () => ({
   }) => createElement("button", { onClick, disabled }, children as never),
 }));
 
-vi.mock("../SyncConflictModal", () => ({
+vi.mock("../../shared/SyncConflictModal", () => ({
   showSyncConflictModal: vi.fn(),
 }));
 

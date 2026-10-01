@@ -12,7 +12,7 @@ import { showModal } from "@decky/ui";
 import { showToast } from "../../utils/toast";
 import { copySaveToSlot, debugLog } from "../../api/backend";
 import type { CopySaveToSlotStatus, SaveSlotSummary } from "../../types";
-import { showSyncConflictModal } from "../SyncConflictModal";
+import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { detach } from "../../utils/detach";
 import { displaySlot } from "./helpers";
 import { CopyToSlotModal } from "./CopyToSlotModal";

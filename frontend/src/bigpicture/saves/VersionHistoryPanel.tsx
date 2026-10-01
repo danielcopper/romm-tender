@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import { showToast } from "../../utils/toast";
 import { debugLog, savesListFileVersions, savesRollbackToVersion } from "../../api/backend";
 import type { SaveVersionEntry, RollbackStatus, ListFileVersionsResult } from "../../types";
-import { showSyncConflictModal } from "../SyncConflictModal";
+import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
 import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, unsupportedRestoreMessage } from "./helpers";
