@@ -16,6 +16,7 @@ the same vocabulary, drawn for a controller on one side and for a keyboard and m
 
 ## What this surface may import
 
+- `../shared/` — UI that belongs to both surfaces
 - `../api/` — the wire to the backend (endpoints and events)
 - `../utils/` — shared logic and the module stores
 - `../types/` — the shared wire and domain types
@@ -23,7 +24,8 @@ the same vocabulary, drawn for a controller on one side and for a keyboard and m
 ## What it may not
 
 - Nothing here may import from `../bigpicture/`, and nothing there may import from here.
+- Nothing in `../shared/` may import from here.
 
-Anything that turns out to belong to both surfaces moves **down** into `api/`, `utils/` or `types/` — never sideways.
-Enforced by `import-x/no-restricted-paths` in `eslint.config.js`, whose zones are held to reporting by
-`../eslintBoundaries.test.ts`.
+Anything that turns out to belong to both surfaces moves **down** — UI into `shared/`, the rest into `api/`, `utils/` or
+`types/` — never sideways. Enforced by `import-x/no-restricted-paths` in `eslint.config.js`, whose zones are held to
+reporting by `../eslintBoundaries.test.ts`.

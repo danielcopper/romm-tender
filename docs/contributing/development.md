@@ -493,8 +493,9 @@ gets right are pinned one by one in its test file.
 The frontend has no size gate — deliberately, because a threshold only works when something else forbids the cheap way
 of getting under it, and `frontend/src/` has no equivalent of `service-independence`. What it has instead is direction
 rules, in `frontend/eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may
-not import either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`), the two surfaces may not import each
-other, and no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most,
+not import either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`) or `frontend/src/shared/`, the UI that
+belongs to both surfaces; `frontend/src/shared/` may not import either surface; the two surfaces may not import each
+other; and no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most,
 because a cycle is the signature of a split whose two halves still call each other — the wrong seam, detectable without
 judgment. What none of them catch is a helper imported by exactly one parent that takes a dozen parameters and does
 nothing on its own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not
@@ -503,7 +504,7 @@ certify that a seam is right.
 By default the plugin reads the imports of JavaScript files only, so until the config names `.ts`/`.tsx` for it,
 `no-cycle` finds no cycle among the frontend's modules; the comment at `import-x/extensions` in that file says which
 settings do that. Because the failure mode is silence rather than noise, `frontend/src/eslintBoundaries.test.ts` lints
-known-bad fixtures through the real config and fails if any of the seven rules stops reporting. A green
+known-bad fixtures through the real config and fails if any of the eleven rules stops reporting. A green
 `pnpm -C frontend lint` on its own does not distinguish a working rule from an inert one.
 
 See [Backend Architecture](../architecture/backend-architecture.md) for details.
@@ -626,12 +627,14 @@ backend/
 frontend/src/                        # Frontend TypeScript
   index.tsx                          # The panel's entry module: event listeners, QAM router, the Quick Access entry's install
   qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary
+  boot/                              # Start-up: Steam's React globals, the check of what the panel takes from Steam, the failure page
   bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)
     layout/                          # Wide-page frame primitives: WidePage, ScrollRegion, Columns, ListDetail, pane
     library/ settings/ sync/         # Component groups for the Library, Settings and Sync pages
     saves/                           # Slot and save-file components, shared across the game-detail panel's tabs
     patches/                         # The game-detail route patch
   desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
+  shared/                            # UI that belongs to both surfaces — the launch prompts; imports neither surface
   api/backend.ts                     # endpoint() wrappers (typed)
   types/                             # TypeScript interfaces and Steam API declarations
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches

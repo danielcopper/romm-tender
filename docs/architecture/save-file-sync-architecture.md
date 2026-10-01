@@ -1015,8 +1015,8 @@ good server copy being overwritten (#1062).
 
 ### The modal
 
-`SyncConflictModal` (`frontend/src/bigpicture/SyncConflictModal.tsx`) shows the local-save row and the picked
-server-save row side by side, each with size and timestamp. Three actions:
+`SyncConflictModal` (`frontend/src/shared/SyncConflictModal.tsx`) shows the local-save row and the picked server-save
+row side by side, each with size and timestamp. Three actions:
 
 - **Keep Local** → `resolveSyncConflict(rom_id, filename, "keep_local")` → backend POSTs local content as a new server
   version with `overwrite=true` (the old server save is retained, not overwritten in place).
@@ -1029,10 +1029,22 @@ On a successful resolution the modal closes and surfaces a branch-specific confi
 the local save was uploaded to the server, **Use Server** confirms the server save is now in use and the prior local
 save was backed up to `.romm-backup`. Failure and stale branches stay inline in the modal instead (no toast).
 
-The modal is shown by `CustomPlayButton` during pre-launch sync, and by `VersionHistoryPanel.handleRestore` (in
-`SavesTab`) when a version-restore pre-flight returns `conflict_blocked`. Both call `showSyncConflictModal(conflict)`
-which returns a Promise resolving to `"keep_local" | "use_server" | "cancel"`. After post-exit sync, `sessionManager`
-only fires a toast — the conflict re-surfaces in the modal at the next pre-launch.
+`showSyncConflictModal(conflict)` shows it for one conflict and returns a Promise resolving to
+`"keep_local" | "use_server" | "cancel"`; `handleConflicts(conflicts)` shows it for each conflict in turn and stops at
+the first cancel. Four callers reach it:
+
+- `CustomPlayButton`, through `handleConflicts` — on the launch gate's `conflict` verdict, and when the user resolves
+  the conflict the button is already showing.
+- The launch watcher (`frontend/src/utils/launchInterceptor.ts`), through `handleConflicts` — on a `conflict` verdict
+  for a start it caught. It does not import the modal: `index.tsx` hands it `handleConflicts` as
+  `LaunchPrompts.resolveConflicts`.
+- `VersionHistoryPanel.handleRestore` (in `SavesTab`), through `showSyncConflictModal` for the first conflict — when a
+  version-restore pre-flight returns `conflict_blocked`.
+- `useCopyToSlot` (the Saves tab's "Copy to slot…"), through `showSyncConflictModal` for the first conflict — when a
+  copy returns `conflict_blocked`.
+
+After post-exit sync, `sessionManager` only fires a toast — the conflict re-surfaces in the modal at the next
+pre-launch.
 
 ### resolve_sync_conflict endpoint
 
@@ -1413,9 +1425,9 @@ The Play button's path:
 2. `CustomPlayButton` calls `preLaunchSync(romId)` on the backend (15s timeout).
 3. Backend fetches server saves, runs `do_sync_rom_saves` which iterates files and dispatches every
    `compute_sync_action` outcome.
-4. If a `Conflict` was returned for any file, the result includes a `conflicts` list. `CustomPlayButton` shows
-   `SyncConflictModal` for the first conflict, awaits the user's choice, then either re-runs sync (Keep Local / Use
-   Server) or falls through (Cancel).
+4. If a `Conflict` was returned for any file, the result includes a `conflicts` list. `CustomPlayButton` puts each
+   conflict through `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings
+   and launches; on the first Cancel the button switches to `conflict` and nothing launches.
 5. Game launches — but a sync failure or timeout no longer launches unconditionally. `runPreLaunchSync` surfaces a "Save
    Sync Unavailable" fallback-launch confirm; the launch proceeds only if the user confirms it, and is aborted (the
    button returns to "play") if they decline (#1050). The benign `savefiles_in_content_dir` skip still proceeds

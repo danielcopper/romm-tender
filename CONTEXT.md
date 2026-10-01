@@ -1001,9 +1001,10 @@ still union.
 One of the two UIs the plugin draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad
 surface — the QAM panel and the patch into Steam's game-detail route (`frontend/src/bigpicture/`) — and **desktop** is
 the keyboard-and-mouse client (`frontend/src/desktop/`, which holds a README and nothing else so far). They are **peers,
-not layers**: the two share data and logic and almost nothing visual, so neither may import from the other, and anything
-that turns out to belong to both moves _down_ into `api/`, `utils/` or `types/` rather than sideways —
-`import-x/no-restricted-paths` in `frontend/eslint.config.js` enforces both directions.
+not layers**: the two share data and logic and almost nothing visual, so neither may import from the other. Anything
+that turns out to belong to both moves _down_ rather than sideways: UI into `shared/` (see **Shared (UI layer)**), the
+rest into `api/`, `utils/` or `types/`. `import-x/no-restricted-paths` in `frontend/eslint.config.js` refuses a sideways
+import in either direction.
 
 The word predates the directories and the older use is still current: `docs/architecture/qam-panel.md` and
 `frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that
@@ -1012,6 +1013,15 @@ store**). Every one of them lives inside `bigpicture/`, so in the sense above th
 the scope tells the readings apart: a surface of the plugin is a directory, a surface of a game page is a component
 subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
 surfaces and everything below them).
+
+### Shared (UI layer)
+
+UI that belongs to both surfaces, in `frontend/src/shared/` — today the launch prompts (sync conflict, offline drift,
+core change, fallback launch), which appear over Big Picture and over Steam's desktop client alike. It sits **below**
+the surfaces: the surfaces and `index.tsx` import it; it imports `api/`, `utils/` and `types/`; `utils/` and `api/` may
+not import it. Not to be confused with the **shared** save state, where one card or file holds many games' progress (see
+**Save state**), or with the shared state a module store holds for everything subscribed to it (see **Game-detail
+store**).
 
 ### Quick Access entry / entry marker / tab glyph
 

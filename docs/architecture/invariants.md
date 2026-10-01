@@ -626,14 +626,15 @@ Format: **invariant** — tier — enforced by.
 - **Service-independence contract list stays complete** — check — `scripts/check_service_independence_contract.py`
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
-  (`frontend/src/bigpicture/`, `frontend/src/desktop/`); the two surfaces never import each other; and no
-  `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
-  (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two
-  share data and logic and almost nothing visual, so anything that turns out to belong to both moves DOWN into `api/`,
-  `utils/` or `types/`, never sideways. These rules go inert rather than loud when misconfigured: until the config names
-  `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
+  (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
+  surface; the two surfaces never import each other; and no `frontend/src/` module takes part in an import cycle** —
+  check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer
+  rule, not a layer rule: the two share data and logic and almost nothing visual, so anything that turns out to belong
+  to both moves DOWN, never sideways — UI into `shared/`, which both surfaces may import and which imports neither, and
+  the rest into `api/`, `utils/` or `types/`. These rules go inert rather than loud when misconfigured: until the config
+  names `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
   `import-x/extensions` in `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints
-  known-bad fixtures through the real config and fails if any of the seven stops reporting — a green `pnpm lint` alone
+  known-bad fixtures through the real config and fails if any of the eleven stops reporting — a green `pnpm lint` alone
   proves nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
   `utils/cachedGameDetailStore.ts` back-reference is not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`

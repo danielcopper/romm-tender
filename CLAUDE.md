@@ -571,10 +571,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Service-independence contract list stays complete** — check — `scripts/check_service_independence_contract.py`
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
-  (`frontend/src/bigpicture/`, `frontend/src/desktop/`); the two surfaces never import each other; and no
-  `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
-  (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept live by `frontend/src/eslintBoundaries.test.ts`; code both
-  surfaces need moves DOWN into `api/`, `utils/` or `types/`, never sideways; type-only imports are not edges
+  (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
+  surface; the two surfaces never import each other; and no `frontend/src/` module takes part in an import cycle** —
+  check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept live by
+  `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI into `shared/`, the rest into `api/`,
+  `utils/` or `types/` — never sideways; type-only imports are not edges
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is
