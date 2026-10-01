@@ -1944,8 +1944,8 @@ swaps the tree and rolls back what does not answer
 
 The service answers `get_update_output`: what the installer printed for one failed update, read back from the journal
 through `JournalEntriesFn` (`adapters/journal.py`, `journalctl --user --output=json --all`, run off the loop; without
-`--all` the JSON output answers a field over 4096 bytes as `null`). It writes into no journal. What is shown of a run is
-`domain/update_output.py`'s.
+`--all` the JSON output answers a field over 4096 bytes as `null`). It only reads the journal; its own log lines reach
+it as every backend line does. What is shown of a run is `domain/update_output.py`'s.
 
 - **Which failure.** The argument is the installer's record's `rolled_back_at`, answered only while that record stands,
   or `None` for this process's latest attempt, answered only while it failed after its installer ran

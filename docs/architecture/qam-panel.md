@@ -801,9 +801,9 @@ You are still on Y. Settings › Updates shows why.** for the installer's record
 found stopped, and for an attempt of this backend's the attempt's own reason — **Update to X failed. The download
 failed.** or **Update to X failed. The installer stopped without updating.**, or **Update to X was cancelled. A game was
 started. Nothing was changed.** for the two aborts titled cancelled (`utils/failedUpdateToast.ts`). Every one of them is
-owed by the backend until the panel acknowledges it, and raised only then: the record per `rolled_back_at` and the
-stopped attempt per `started_at`, both kept in `kv_config` because they stand across starts (`failure_toast_owed` on
-`get_update_outcome`, `toast_owed` on the stopped attempt;
+owed by the backend until the panel acknowledges it, and raised only while it is owed: the record per `rolled_back_at`
+and the stopped attempt per `started_at`, both kept in `kv_config` because they stand across starts
+(`failure_toast_owed` on `get_update_outcome`, `toast_owed` on the stopped attempt;
 [UpdateOutcomeService notes](backend-architecture.md#updateoutcomeservice-notes)), and an attempt of this backend's per
 press, in memory, since the attempt lives in this process only (`get_update_attempt_toast`;
 [UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). The panel asks for an attempt's toast
@@ -1881,16 +1881,16 @@ installer said — HH:MM**, the local time the installer's run began, and holds 
 in the colour its start gives it (`outputLineColour`) — a step that failed (`[!!]`) and the installer's own failure
 lines (`install.sh:`) amber, a step done (`[ok]`) green, a step under way (`[..]`) muted, anything else the text colour
 — and the dialog scrolls as one, as the cleanup modal does; since a region scrolls only by moving focus, the lines are
-cut into stops of at most twelve lines and under 1200 characters (`outputStops`) — a line of 500 characters wraps to
-several rows, and a stop taller than the dialog would hide its own end — each a `Focusable` declaring
-`focusableIfEmpty`, so a controller walks several hundred lines one stop at a time and every line is reachable. A part
-that leaves lines out says how many above them. Everywhere else the title carries no time, and one stop says why there
-is nothing instead of an empty box: **This output is no longer in the system journal — it keeps only the last hours of
-logs.** (`missing` `rotated`), **This update was run in a terminal, so its output is there, not in the journal.**
-(`terminal`), **The installer left nothing in the journal for this update.** (`empty`), **This failed update is no
-longer on record.** (`not_found`), and **Tender could not read what the installer said.** where the journal or the call
-failed, and for a `missing` value this panel has no sentence for. **Close** ends it. Main's cards keep their journal
-sentence and **Open Updates**; the button is Settings' alone.
+cut into stops of at most twelve lines and 1200 characters (`outputStops`) — a line of 500 characters wraps to several
+rows, and a stop taller than the dialog would hide its own end — each a `Focusable` declaring `focusableIfEmpty`, so a
+controller walks several hundred lines one stop at a time and every line is reachable. A part that leaves lines out says
+how many above them. Everywhere else the title carries no time, and one stop says why there is nothing instead of an
+empty box: **This output is no longer in the system journal — it keeps only the last hours of logs.** (`missing`
+`rotated`), **This update was run in a terminal, so its output is there, not in the journal.** (`terminal`), **The
+installer left nothing in the journal for this update.** (`empty`), **This failed update is no longer on record.**
+(`not_found`), and **Tender could not read what the installer said.** where the journal or the call failed, and for a
+`missing` value this panel has no sentence for. **Close** ends it. Main's cards keep their journal sentence and **Open
+Updates**; the button is Settings' alone.
 
 Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
 because nothing on the page has to be seen while one is typed ([Text input](#text-input)).

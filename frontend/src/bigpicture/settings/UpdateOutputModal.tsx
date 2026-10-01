@@ -31,7 +31,11 @@ export const OUTPUT_READING = "Reading what the installer said…";
 /** What the window says where the failure it was opened for no longer stands. */
 export const OUTPUT_GONE = "This failed update is no longer on record.";
 
-/** What the window says where the journal could not be read, or the answer did not arrive. */
+/**
+ * What the window says where no output can be shown and no other line says
+ * why: the journal could not be read, the answer did not arrive or was another
+ * failure than `not_found`, or it named a `missing` this panel has no line for.
+ */
 export const OUTPUT_UNREAD = "Tender could not read what the installer said.";
 
 /**

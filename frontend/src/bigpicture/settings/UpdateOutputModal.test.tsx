@@ -211,10 +211,17 @@ describe("outputStops", () => {
     expect(outputStops(lines)).toEqual([lines.slice(0, 12).join("\n"), "12"]);
   });
 
-  it("starts a new stop before its text would reach 1200 characters, so no stop is taller than the dialog", () => {
+  it("starts a new stop before its text would pass 1200 characters, so no stop is taller than the dialog", () => {
     const long = "A".repeat(500);
 
     expect(outputStops([long, long, long, "x"])).toEqual([`${long}\n${long}`, `${long}\nx`]);
+  });
+
+  it("keeps a stop of exactly 1200 characters whole, and starts a new one at 1201", () => {
+    const first = "A".repeat(600);
+
+    expect(outputStops([first, "B".repeat(599)])).toEqual([`${first}\n${"B".repeat(599)}`]);
+    expect(outputStops([first, "B".repeat(600)])).toEqual([first, "B".repeat(600)]);
   });
 
   it("keeps a line too long for any stop whole, in a stop of its own", () => {

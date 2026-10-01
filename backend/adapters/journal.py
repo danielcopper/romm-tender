@@ -1,7 +1,7 @@
 """This user's systemd journal, read through ``journalctl --user``.
 
-Owns the one command that reads it, and reads only: this adapter writes no
-journal entry of its own.
+Owns the one command that reads it, and only reads: the one line this adapter
+logs goes through the debug sink it is handed, as every backend line does.
 """
 
 from __future__ import annotations
