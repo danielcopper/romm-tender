@@ -137,6 +137,48 @@ describe("updateNoticeStore", () => {
 
       expect(getUpdateNoticeState()).toMatchObject({ latestVersion: "0.35.0", seen: false });
     });
+
+    it("takes nothing from a Check now in flight, whose answer is still taken and reported", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      const slow = deferred<UpdateCheckNow>();
+      vi.mocked(checkForUpdateNow).mockReturnValueOnce(slow.promise);
+
+      const pressed = runUpdateCheckNow();
+      await markReleaseSeen("0.34.0");
+      slow.resolve(now({ latest_version: "0.35.0" }));
+
+      expect(await pressed).toBe("found");
+      expect(getUpdateNoticeState().latestVersion).toBe("0.35.0");
+    });
+
+    it("does not undo a Dismiss in flight", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      const persist = deferred<UpdateSettingWrite>();
+      vi.mocked(dismissUpdateNotice).mockReturnValueOnce(persist.promise);
+
+      const dismissing = dismissUpdateForVersion("0.34.0");
+      await markReleaseSeen("0.34.0");
+      persist.resolve({ success: true });
+      await dismissing;
+
+      expect(getUpdateNoticeState()).toMatchObject({ available: false, seen: true });
+    });
+
+    it("does not undo a switch press in flight", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      const persist = deferred<UpdateSettingWrite>();
+      vi.mocked(setUpdateCheckEnabled).mockReturnValueOnce(persist.promise);
+
+      const switching = setUpdateCheckSwitch(false);
+      await markReleaseSeen("0.34.0");
+      persist.resolve({ success: true });
+      await switching;
+
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: false, seen: true });
+    });
   });
 
   it("an unsubscribed listener hears nothing more", async () => {

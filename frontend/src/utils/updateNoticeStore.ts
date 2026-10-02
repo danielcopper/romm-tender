@@ -70,7 +70,8 @@ let _listeners: Array<() => void> = [];
 
 /**
  * Ordering fence: every write that crosses an `await` takes the number before
- * the `await` and writes nothing if the number has moved by the time it lands.
+ * the `await` and writes nothing if the number has moved by the time it lands —
+ * all but {@link markReleaseSeen}, which says why.
  *
  * A read can sit on a GitHub request for up to its timeout, and its answer
  * carries `enabled`, which belongs to the user: without the fence, switching the
@@ -201,17 +202,20 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
 
 /**
  * Record that the user has seen *version* in Settings › Updates, then reflect
- * it here — only once the backend answered that it persisted it, and only where
- * no later read or press overtook it, so a newer release that landed meanwhile
- * is not marked seen in its place. A seen release owes no toast either, as the
+ * it here — only once the backend answered that it persisted it, and only while
+ * the store still names *version*, so a newer release that landed meanwhile is
+ * not marked seen in its place. A seen release owes no toast either, as the
  * backend's next answer will say too. A refused or failed write rejects and
  * leaves the dots standing.
+ *
+ * It does not move {@link _seq}: it is started by a timer rather than a press,
+ * and moving the fence would make a Check now, a Dismiss or a switch press
+ * still in flight write nothing.
  */
 export async function markReleaseSeen(version: string): Promise<void> {
-  const seq = ++_seq;
   const write = await markUpdateAvailableSeen(version);
   requireAccepted(write);
-  if (seq !== _seq) return;
+  if (_state.latestVersion !== version) return;
   setUpdateNoticeState({ ..._state, seen: true, toastOwed: false });
 }
 
