@@ -71,6 +71,8 @@ TOASTED_KEY = "update_available_toasted_version"
 # owes no toast either — the panel has said what the toast would.
 SEEN_KEY = "update_available_seen_version"
 
+_INVALID_VERSION_MESSAGE = "Invalid version"
+
 
 @dataclass(frozen=True)
 class UpdateCheckServiceConfig:
@@ -225,7 +227,7 @@ class UpdateCheckService:
         canonical failure shape for a version that is not a non-empty string.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
         self._settings[DISMISSED_KEY] = version
         self._settings_persister.save_settings()
         return {"success": True}
@@ -241,7 +243,7 @@ class UpdateCheckService:
         one's toast with it.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, TOASTED_KEY, version):
             return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
         return {"success": True}
@@ -257,7 +259,7 @@ class UpdateCheckService:
         seen.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, SEEN_KEY, version):
             return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
         return {"success": True}
