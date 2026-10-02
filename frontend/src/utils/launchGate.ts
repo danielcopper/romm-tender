@@ -19,12 +19,16 @@ import type { SyncConflict } from "../types";
 import { logError } from "../api/backend";
 import { TimeoutError } from "./withTimeout";
 
-/** The limit on a launch-check call that stays on this machine. */
+/**
+ * The limit on a launch-check call that does not read or sync the server's
+ * saves: the reads on this machine, and the reachability probe, whose own
+ * heartbeat gives up after about 3 s.
+ */
 export const LOCAL_CALL_LIMIT_MS = 5000;
 
 /**
- * The limit on a launch-check call that reaches RomM: the save-setup read and
- * the pre-launch sync.
+ * The limit on a launch-check call that reads or syncs the server's saves: the
+ * save-setup read and the pre-launch sync.
  */
 export const SERVER_CALL_LIMIT_MS = 15000;
 

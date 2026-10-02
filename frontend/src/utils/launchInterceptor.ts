@@ -91,8 +91,9 @@ const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu 
  * game page open, so — unlike the Play button — this MUST NOT route the user
  * to the saves tab. Instead it silently auto-adopts the default/recommended
  * slot (via `confirmSlotChoice`) and proceeds. A direct launch is never blocked
- * on setup — it always proceeds (the gate op below maps this to "proceed"); any
- * failure (server unreachable, needs-user-choice, a thrown error) is swallowed.
+ * on a setup ANSWER — every answer proceeds (the gate op below maps this to
+ * "proceed"); any failure (server unreachable, needs-user-choice, a thrown
+ * error) is swallowed.
  * A call that gets no answer within its limit is not a failure: its
  * `TimeoutError` reaches the gate.
  */

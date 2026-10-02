@@ -1,8 +1,9 @@
 /**
  * Custom Play button that replaces the native Steam Play button on RomM game
- * detail pages. Handles 3 primary states:
+ * detail pages. Primary states (the full set is `PlayButtonState`):
  * - Download: ROM not installed, click to download
  * - Play: ROM installed, launches the game (with pre-launch save sync)
+ * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
  *
  * Includes a dropdown menu button (arrow) to the right of the Play button
@@ -149,7 +150,7 @@ interface CustomPlayButtonProps {
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
 // prettier-ignore
-export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
+export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
   const leaseOwner = `custom-play-button:${appId}`;
   const [state, setState] = useState<PlayButtonState>("loading");
   const [romId, setRomId] = useState<number | null>(null);
@@ -590,10 +591,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
 
   // Online pre-launch sync, mapped onto the gate's PreLaunchSyncOutcome (the
   // gate routes it to conflict / sync_failed / allow). Keeps the
-  // `setState("syncing")` transition, the benign `savefiles_in_content_dir`
-  // skip, and the success toast — all the side-effects the verdict mapping
-  // can't carry stay here; conflict resolution and the fallback confirm move to
-  // the verdict switch in `handlePlay`.
+  // `setState("syncing")` transition, the benign skips
+  // (`BENIGN_SYNC_SKIP_REASONS`) and the success toast — the side-effects the
+  // verdict can't carry; conflict resolution and the fallback confirm are
+  // `actOnVerdict`'s.
   //
   // Like the watcher, this MUST NOT fail open: a throw returns
   // `{ success: false }` (→ sync_failed → fallback confirm) rather than
