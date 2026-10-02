@@ -1406,8 +1406,22 @@ backend that is away, and one uninstalled while Steam keeps running never comes 
 contact — the map refresh below, when one is needed, and the installed check — races `FIRST_CONTACT_DEADLINE_MS` (5 s).
 Past it the watcher fails open: if the start's prune-lease admission is still current, it starts the game again without
 the pre-launch sync, shows "Tender isn't responding — started without syncing saves." and logs it. An answer that
-arrives after the deadline is abandoned and starts nothing more. The later steps — the dialogs, the pre-launch sync's
-own 15 s race and the rest of the gate — are not bounded by it.
+arrives after the deadline is abandoned and starts nothing more. The later steps are not bounded by this deadline but by
+limits of their own, which both funnels share (below).
+
+Neither funnel waits for the backend without end. Every backend call the gate makes has a limit: `LOCAL_CALL_LIMIT_MS`
+(5 s) for the calls that stay on this machine — `get_installed_rom`, `is_save_tracking_configured`,
+`confirm_slot_choice`, `check_core_change`, `probe_reachability` and `check_local_drift` — and `SERVER_CALL_LIMIT_MS`
+(15 s) for the two that reach RomM, `get_save_setup_info` and `pre_launch_sync`. Both live in
+`frontend/src/utils/launchGate.ts`. A limit is a ceiling, not a delay. A step's own fallback answers a call that
+**failed** — a launch-target read that throws lets the launch through, a probe that throws counts as offline — but never
+one that got **no answer**: that ends the check in the "Save Sync Unavailable" dialog, reading "Couldn't check your
+saves in time — launch with local saves?". The limit can expire on a slow RomM while Tender itself is fine, which is why
+the dialog does not blame either. "Launch Anyway" starts the game on the local save without re-confirming the launch
+options, because that re-confirm asks the same backend and its own timeout stops a start; "Cancel" leaves the game
+unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that arrives after the dialog
+appeared starts nothing more. A wait on the user's answer in a dialog is never bounded. One wait is not bounded yet:
+once an action is picked in the conflict dialog, the dialog waits for `resolve_sync_conflict` with its Cancel disabled.
 
 The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
 while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the
@@ -1421,19 +1435,29 @@ is stated at the skip set in `frontend/src/utils/launchGate.ts`.
 
 The Play button's path:
 
-1. User clicks Play on the game detail page.
-2. `CustomPlayButton` calls `preLaunchSync(romId)` on the backend (15s timeout).
-3. Backend fetches server saves, runs `do_sync_rom_saves` which iterates files and dispatches every
-   `compute_sync_action` outcome.
-4. If a `Conflict` was returned for any file, the result includes a `conflicts` list. `CustomPlayButton` puts each
-   conflict through `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings
-   and launches; on the first Cancel the button switches to `conflict` and nothing launches.
-5. Game launches — but a sync failure or timeout no longer launches unconditionally. `runPreLaunchSync` surfaces a "Save
-   Sync Unavailable" fallback-launch confirm; the launch proceeds only if the user confirms it, and is aborted (the
-   button returns to "play") if they decline (#1050). The benign `savefiles_in_content_dir` skip still proceeds
-   silently.
-6. Toast notification shown on sync result — the per-direction completion toast above (uploaded / downloaded / both), or
-   the classified failure/offline message.
+1. User presses Play on the game detail page. The button switches at once to a disabled "Checking saves..." throbber, so
+   a second press starts no second check; every outcome below leaves that state.
+2. Launch target: `get_installed_rom`. A download with nothing the system can boot is blocked with a toast.
+3. Save tracking: `is_save_tracking_configured`. When it is not set up, `get_save_setup_info` decides between an
+   automatic slot pick (`confirm_slot_choice`) and a toast with a switch to the Saves tab, which ends the press.
+4. Core change: `check_core_change`. A changed core asks the user in the core-change dialog; Cancel ends the press.
+5. Reachability: `probe_reachability` decides between steps 6 and 7.
+6. Online: `pre_launch_sync`, with the button on "Syncing saves...". The backend fetches server saves and runs
+   `do_sync_rom_saves`, which iterates files and dispatches every `compute_sync_action` outcome. If a `Conflict` was
+   returned for any file, the result includes a `conflicts` list, and `CustomPlayButton` puts each conflict through
+   `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on
+   the first Cancel the button switches to `conflict` and nothing launches. A sync that fails never launches
+   unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the button to Play. The benign
+   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently. A toast reports the result — the
+   per-direction completion toast above (uploaded / downloaded / both), or the classified failure/offline message.
+7. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
+   Cancel; Retry runs the check again from step 2.
+8. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
+   launch and the button returns to Play. A start chosen in the dialog after a check that got no answer skips this step.
+9. `SteamClient.Apps.RunGame`, with the button on "Launching...".
+
+Every backend call in steps 2–7 has the limit stated above, and one that expires ends in the "Save Sync Unavailable"
+dialog.
 
 ### Post-exit sync
 

@@ -279,6 +279,21 @@ yet; start it from RPCS3 in the meantime.
 
 To find the files, open the game's detail page — the **ROM File** section shows the filename the download produced.
 
+### Play asks whether to launch with local saves
+
+**Symptom**: You press **Play** on a game's detail page, the button reads **Checking saves...** (or **Syncing
+saves...**), and a few seconds later a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time — launch
+with local saves?".
+
+**What happened**: Before a game starts, Tender checks its saves, and every step of that check has a time limit — about
+five seconds for what Tender answers itself, about fifteen for what it has to ask RomM. A step that got no answer in
+time ends in this dialog, so a press never waits without end. Either Tender's backend is not answering, or RomM is slow.
+
+**Fix**: **Launch Anyway** starts the game on the save already on the device; the next sync with RomM detects any
+difference between that save and the server's. **Cancel** returns the button to **Play**. If the dialog appears on every
+press, Tender's backend is probably not running or not answering — start it again with
+`systemctl --user restart romm-tender`, or restart Steam.
+
 ### Controller doesn't work in RetroArch menus
 
 **Symptom**: The game plays fine, but the RetroArch Quick Menu (L3+R3) can't be navigated with the controller — only
@@ -383,6 +398,10 @@ nothing to sync.
 - Whether the message "Tender isn't responding — started without syncing saves." appeared. It comes only with a start
   through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
   so the game started without the sync before it.
+- Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. When the check before the start got no
+  answer in time, the dialog reads "Couldn't check your saves in time — launch with local saves?", and Launch Anyway
+  starts the game on the save already on the device — see
+  [Play asks whether to launch with local saves](#play-asks-whether-to-launch-with-local-saves).
 - Whether save sync covers the game at all —
   [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 
