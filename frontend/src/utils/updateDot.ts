@@ -13,6 +13,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { logError } from "../api/backend";
+import { useQuickAccessVisible } from "./quickAccessVisible";
 import { useStoppedUpdateAttempt, type StoppedUpdateAttempt } from "./stoppedUpdateStore";
 import { availableCardVersion, updateDotVersion } from "./updateAvailableView";
 import { markReleaseSeen, useUpdateNoticeState, type UpdateNoticeState } from "./updateNoticeStore";
@@ -95,14 +96,20 @@ export function useUpdateDot(): UpdateDotPhase {
 }
 
 /**
- * Record the release the dots mark as seen once *shown* — Settings › Updates
- * being the section on screen — has held for {@link SEEN_AFTER_MS} without a
- * break. Going elsewhere before then cancels it, so moving through the list
- * past Updates does not count, and coming back starts the wait over. A record
- * the backend refused leaves the dots standing until Updates is shown again.
+ * Record the release the dots mark as seen once Settings › Updates has been on
+ * screen for {@link SEEN_AFTER_MS} without a break — *onUpdates*, the section
+ * shown, with the Quick Access menu open. Going elsewhere or closing the menu
+ * before then cancels it, so moving through the list past Updates does not
+ * count, and coming back starts the wait over. A record the backend refused
+ * leaves the dots standing until Updates is shown again.
+ *
+ * Whether Tender's tab is the menu's active one is not asked: that answer is
+ * worked out inside `useWideQamPanel`'s effect and is not reachable from here.
  */
-export function useSeenAfterDwell(shown: boolean): void {
+export function useSeenAfterDwell(onUpdates: boolean): void {
   const { dot } = useDotAnswer();
+  const qamVisible = useQuickAccessVisible();
+  const shown = onUpdates && qamVisible;
   useEffect(() => {
     if (!shown || dot === null) return;
     const timer = setTimeout(() => {

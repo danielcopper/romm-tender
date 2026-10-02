@@ -791,10 +791,12 @@ It is asked again whenever the notice, the outcome, a stopped attempt or the ins
 JavaScript context raise one toast between them.
 
 The dots show while the card would, the switch off included, until the release is **seen**: Settings › Updates on screen
-for a second without a break (`SEEN_AFTER_MS`, `useSeenAfterDwell` in `utils/updateDot.ts`) — reached from the list, or
-opened on it by the card's **Open Updates** — records the card's release through `mark_update_available_seen`. Moving
-through the list past Updates does not count: focus selects, so Updates is on screen while focus passes it, and leaving
-it before the second is up cancels the wait; coming back starts it over. Seen is per version and kept across restarts
+for a second without a break (`SEEN_AFTER_MS`, `useSeenAfterDwell` in `utils/updateDot.ts`), with the Quick Access menu
+open — reached from the list, or opened on it by the card's **Open Updates** — records the card's release through
+`mark_update_available_seen`. Moving through the list past Updates does not count: focus selects, so Updates is on
+screen while focus passes it, and leaving it or closing the menu before the second is up cancels the wait; coming back,
+or opening the menu again on Updates, starts it over. Whether Tender's tab is the menu's active one is not asked, so
+Updates left up behind another tab of the open menu still counts. Seen is per version and kept across restarts
 ([UpdateCheckService notes](backend-architecture.md#updatecheckservice-notes)), so a newer release brings the dots back.
 It takes every dot for that version, and the toast with them, and leaves the card, which goes only by Dismiss or the
 install — and a Dismiss takes the dots too, since they follow the card. A dot that goes because its release was seen

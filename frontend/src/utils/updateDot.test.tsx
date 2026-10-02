@@ -1,10 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { useSyncExternalStore } from "react";
 import { markUpdateAvailableSeen } from "../api/backend";
 import { DOT_FADE_MS, SEEN_AFTER_MS, useSeenAfterDwell, useUpdateDot } from "./updateDot";
 import { resetUpdateNoticeStoreForTests, setUpdateNoticeState, type UpdateNoticeState } from "./updateNoticeStore";
 import { resetUpdateOutcomeStoreForTests, setUpdateOutcomeState, type UpdateOutcomeState } from "./updateOutcomeStore";
 import { resetStoppedUpdateStoreForTests } from "./stoppedUpdateStore";
+
+// The Quick Access menu's own visibility, backed by a store the tests flip:
+// test-setup.ts's `() => true` cannot close the menu.
+let qamVisible = true;
+const visibilityListeners = new Set<() => void>();
+const subscribeVisibility = (onChange: () => void) => {
+  visibilityListeners.add(onChange);
+  return () => {
+    visibilityListeners.delete(onChange);
+  };
+};
+const setQamVisible = (visible: boolean) =>
+  act(() => {
+    qamVisible = visible;
+    visibilityListeners.forEach((fn) => fn());
+  });
+
+vi.mock("./quickAccessVisible", () => ({
+  useQuickAccessVisible: () => useSyncExternalStore(subscribeVisibility, () => qamVisible),
+}));
 
 const AVAILABLE: UpdateNoticeState = {
   available: true,
@@ -129,6 +150,7 @@ describe("useSeenAfterDwell", () => {
     resetUpdateOutcomeStoreForTests();
     resetStoppedUpdateStoreForTests();
     vi.mocked(markUpdateAvailableSeen).mockReset().mockResolvedValue({ success: true });
+    qamVisible = true;
   });
 
   afterEach(() => {
@@ -199,6 +221,43 @@ describe("useSeenAfterDwell", () => {
     pass(SEEN_AFTER_MS * 2);
 
     expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+  });
+
+  it("records nothing when the menu is closed a moment before the second is up", () => {
+    setUpdateNoticeState(AVAILABLE);
+    dwell(true);
+
+    pass(SEEN_AFTER_MS - 1);
+    setQamVisible(false);
+    pass(SEEN_AFTER_MS * 5);
+
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+  });
+
+  it("records nothing for a newer release that arrives while the menu is closed on Updates", () => {
+    setUpdateNoticeState({ ...AVAILABLE, seen: true });
+    dwell(true);
+    setQamVisible(false);
+
+    act(() => setUpdateNoticeState({ ...AVAILABLE, latestVersion: "1.2.0" }));
+    pass(SEEN_AFTER_MS * 5);
+
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+  });
+
+  it("starts the wait over when the menu is opened again on Updates", async () => {
+    setUpdateNoticeState(AVAILABLE);
+    dwell(true);
+
+    pass(SEEN_AFTER_MS - 100);
+    setQamVisible(false);
+    setQamVisible(true);
+    pass(SEEN_AFTER_MS - 1);
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+
+    pass(1);
+    await settle();
+    expect(markUpdateAvailableSeen).toHaveBeenCalledExactlyOnceWith("1.1.0");
   });
 
   it("records nothing while Updates is not the section on screen", () => {
