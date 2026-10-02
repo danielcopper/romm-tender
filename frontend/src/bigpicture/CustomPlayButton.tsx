@@ -664,7 +664,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     admission: PruneLeaseAdmission,
     { skipReconfirm = false }: { skipReconfirm?: boolean } = {},
   ) => {
-    if (!isPruneLeaseAdmissionCurrent(admission)) return;
+    if (!isPruneLeaseAdmissionCurrent(admission)) {
+      // A start this panel no longer answers for; the press it came from must
+      // not leave the button on a state that waits for it.
+      setState("play");
+      return;
+    }
     setState("launching");
     // Heal any mid-session launch_options drift on this shortcut before launch
     // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay

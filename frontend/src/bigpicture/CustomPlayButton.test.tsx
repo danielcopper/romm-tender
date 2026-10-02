@@ -153,6 +153,7 @@ import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
 import { showCoreChangeModal } from "../shared/CoreChangeModal";
 import { HostTransportError } from "../api/hostSocket";
+import { mountPruneLeasePlugin } from "../utils/pruneLease";
 import { showStopGameModal } from "../bigpicture/StopGameModal";
 import { showAdoptExistingModal } from "../bigpicture/AdoptExistingModal";
 import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";
@@ -2939,6 +2940,25 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
 
     expect(getByText("Checking saves...")).toBeInTheDocument();
     expect(queryByText("Play")).not.toBeInTheDocument();
+  });
+
+  it("a start whose admission went stale during the check puts the button back on Play", async () => {
+    vi.mocked(backend.releaseOrphanedPruneLeases).mockResolvedValue({ success: true, released: 0 });
+    let answer!: (rom: null) => void;
+    vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+
+    const { getByText, queryByText } = await pressPlay();
+    expect(getByText("Checking saves...")).toBeInTheDocument();
+    // A new plugin generation makes every admission captured before it stale.
+    mountPruneLeasePlugin();
+    await act(async () => {
+      answer(null);
+    });
+    await advance(0);
+
+    expect(getByText("Play")).toBeInTheDocument();
+    expect(queryByText("Checking saves...")).not.toBeInTheDocument();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
   });
 
   it("the check's state changes to Syncing saves... when the pre-launch sync starts", async () => {
