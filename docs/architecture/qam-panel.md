@@ -139,11 +139,11 @@ stylesheet could reach, or an inline `animation` or `transition` — with the up
 invisible to every other check here. It can see nothing else: a rAF loop, or a stylesheet elsewhere that targets the
 glyph's elements by tag, id or attribute, would pass it.
 
-**The update dot** is the one thing on the glyph that reads state: a filled circle in the top-right corner, clear of the
-arc, in the "is available" card's blue (`UPDATE_AVAILABLE_COLOR`), drawn while that card would show on Main — the same
-answer, `availableCardVersion` in `utils/updateAvailableView.ts`, so the two cannot disagree (§ Notices and homes). It
-does not move either. The strip has no error boundary (§ The boundary), so a store state the answer cannot be worked out
-from draws no dot rather than throwing; with every store as it starts — the start-up failure page's case — there is
+**The update dot** is the one thing on the glyph that reads state: a filled circle in the top-right corner, over the
+arc's end, in the "is available" card's blue (`UPDATE_AVAILABLE_COLOR`), drawn while that card would show on Main — the
+same answer, `availableCardVersion` in `utils/updateAvailableView.ts`, so the two cannot disagree (§ Notices and homes).
+It does not move either. The strip has no error boundary (§ The boundary), so a store state the answer cannot be worked
+out from draws no dot rather than throwing; with every store as it starts — the start-up failure page's case — there is
 none. Its size and place on the strip are a device question; nothing in the suite can see them.
 
 Two things about the glyph are unmeasured, and neither is guessed at:

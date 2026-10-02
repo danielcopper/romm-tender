@@ -59,11 +59,12 @@ const BODY_ID = "tender-tab-icon-body";
 const GLYPH_SIZE = "1.633em";
 
 /**
- * The dot, in the 200-unit square: in the top-right corner, clear of the arc
- * and its arrowhead. How large it reads on the strip, and whether it sits where
- * it should there, is a device question nothing here can answer.
+ * The dot, in the 200-unit square: in the top-right corner, over the arc's end
+ * and reaching past the square's edge, which the glyph's `overflow: visible`
+ * lets show. A dot clear of the arc fits only up to a radius of about 23, which
+ * read too small on the device's strip.
  */
-const DOT = { cx: 176, cy: 24, r: 22 } as const;
+const DOT = { cx: 180, cy: 20, r: 32 } as const;
 
 /**
  * Whether the dot shows. The strip has no error boundary — a throw here takes
@@ -116,7 +117,7 @@ export const TabIcon: FC<TabIconProps> = ({ size = GLYPH_SIZE }) => {
       // Decorative: the strip entry carries the accessible name in its title,
       // so the glyph must not announce itself a second time.
       aria-hidden="true"
-      style={{ display: "block" }}
+      style={{ display: "block", overflow: "visible" }}
       data-testid="tender-tab-icon"
     >
       <g>
