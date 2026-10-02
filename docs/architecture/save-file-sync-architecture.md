@@ -1413,8 +1413,9 @@ Neither funnel waits for the backend without end. Every backend call the gate ma
 (5 s) for the calls that stay on this machine — `get_installed_rom`, `is_save_tracking_configured`,
 `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for `probe_reachability`, whose single
 heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s) for the two that read or sync the
-server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in `frontend/src/utils/launchGate.ts`. A limit is
-a ceiling, not a delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the
+server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in `frontend/src/utils/launchGate.ts`; the
+session manager bounds its own backend calls with them too (see [Post-exit sync](#post-exit-sync)). A limit is a
+ceiling, not a delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the
 launch through, a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the
 "Save Sync Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can
 expire on a slow RomM while Tender itself is fine, which is why the dialog does not blame either. "Launch Anyway" starts
@@ -1486,6 +1487,17 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    both) on a successful transfer, rendered frontend-side by `sessionManager` from the `uploaded` / `downloaded` counts
    on the `SessionFinalizeSyncResult` payload via `saveSyncToastBody` (#1481). Offline / failure keeps its backend-owned
    body on `SessionFinalizeSyncResult.failure_toast`.
+
+The session manager handles Steam's start and stop notifications one after another on a single chain, so a backend call
+there that never answers would hold every later notification — including the stop that takes Tender's Play button off
+"Launching..." and the Resume overlay off a game that has exited. Each backend call a notification makes is bounded,
+with the launch check's two values (`frontend/src/utils/launchGate.ts`). The map refresh before a start and
+`recordSessionStart` wait at most 5 s (`LOCAL_CALL_LIMIT_MS`); on expiry the map already held stays and the expiry is
+logged, as for a failed call. `finalizeGameSession` holds the chain at most 15 s (`SERVER_CALL_LIMIT_MS`). Its answer
+comes only after the post-exit sync, which can take longer than that with a working backend, so an answer that arrives
+later is still applied — the playtime shown in Steam, the toasts, the `romm_data_changed` refresh and the migration
+state — outside the chain; it touches no session state. Without a backend nothing arrives. A call past its limit is not
+cancelled. The reload adoption at start-up, which also runs on the chain, is not bounded this way.
 
 ### Manual sync all
 
