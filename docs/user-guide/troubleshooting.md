@@ -293,8 +293,8 @@ RomM is slow.
 **Fix**: **Launch Anyway** starts the game on the save already on the device; the next sync with RomM detects any
 difference between that save and the server's. **Cancel** starts nothing, and on the detail page the button returns to
 **Play**. If the dialog appears on every start, Tender's backend is not running or not answering, or RomM is too slow to
-answer in time. Start the backend with `systemctl --user restart romm-tender`; if the panel still does not answer,
-restart Steam.
+answer in time. If it is the backend, start it with `systemctl --user restart romm-tender`; if the panel still does not
+answer, restart Steam.
 
 ### Controller doesn't work in RetroArch menus
 
@@ -401,7 +401,8 @@ nothing to sync.
   through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
   so the game started without the sync before it.
 - Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. It asks when the sync before the start
-  failed or got no answer in time, and Launch Anyway starts the game on the save already on the device — see
+  failed, or when a step of the check before it got no answer in time, and Launch Anyway starts the game on the save
+  already on the device — see
   [Play asks whether to launch with local saves](#play-asks-whether-to-launch-with-local-saves).
 - Whether save sync covers the game at all —
   [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).

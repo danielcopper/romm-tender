@@ -559,7 +559,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     }));
     if (trackingResult.configured) return "proceed";
 
-    // Network/backend failure — defer to launch rather than blocking the user.
+    // A failed read defers to launch rather than blocking the user.
     const setupInfo = await boundedOr(getSaveSetupInfo(rid), SERVER_CALL_LIMIT_MS, () => null);
     if (setupInfo === null) return "proceed";
 
