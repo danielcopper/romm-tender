@@ -13,6 +13,8 @@
  */
 
 import { getInstalledRom, logError } from "../api/backend";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
+import { rethrowTimeout, withTimeout } from "./withTimeout";
 
 /**
  * Toast copy both launch paths surface on a `no_launch_target` block. Says what
@@ -27,10 +29,13 @@ export const NO_LAUNCH_TARGET_TOAST_BODY =
  * Fails **open**: a transport hiccup or a missing install record resolves to
  * `true`. Blocking is reserved for a verdict the backend actually returned —
  * a launch trapped behind a failed probe is worse than one that starts nothing,
- * because the ROM whose install record is unreadable is usually fine.
+ * because the ROM whose install record is unreadable is usually fine. A read
+ * that gets no answer within {@link LOCAL_CALL_LIMIT_MS} is not a failure: its
+ * `TimeoutError` rejects this call, for the launch gate to answer.
  */
 export async function romHasLaunchTarget(romId: number, context: string): Promise<boolean> {
-  const installed = await getInstalledRom(romId).catch((e) => {
+  const installed = await withTimeout(getInstalledRom(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+    rethrowTimeout(e);
     logError(`${context} launch-target check threw (allowing launch): ${e}`);
     return null;
   });

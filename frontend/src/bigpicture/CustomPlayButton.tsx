@@ -60,7 +60,7 @@ import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { showStopGameModal } from "./StopGameModal";
 import { getMigrationState } from "../utils/migrationStore";
-import { runLaunchGate, markLaunchSkipped } from "../utils/launchGate";
+import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
 import { readGameRunning } from "../utils/sessionManager";
@@ -88,6 +88,7 @@ import {
 } from "../utils/pruneLease";
 import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
 import { saveSyncToastBody } from "../utils/saveSyncToast";
+import { rethrowTimeout, withTimeout } from "../utils/withTimeout";
 
 type PlayButtonState =
   | "loading"
@@ -551,22 +552,26 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // cannot silently flip "abort" → "proceed" — the abort-propagation bug pattern
   // #619 was opened to prevent.
   const ensureTrackingConfigured = async (rid: number): Promise<"proceed" | "abort"> => {
-    const trackingResult = await isSaveTrackingConfigured(rid).catch(() => ({ configured: true }));
+    const trackingResult = await withTimeout(isSaveTrackingConfigured(rid), LOCAL_CALL_LIMIT_MS).catch(
+      (e: unknown) => {
+        rethrowTimeout(e);
+        return { configured: true };
+      },
+    );
     if (trackingResult.configured) return "proceed";
 
     let setupInfo;
-    /* istanbul ignore next -- network-IO + defer-to-launch fallback; behavior tested at service layer */
     try {
-      setupInfo = await getSaveSetupInfo(rid);
-    } catch {
+      setupInfo = await withTimeout(getSaveSetupInfo(rid), SERVER_CALL_LIMIT_MS);
+    } catch (e) {
+      rethrowTimeout(e);
       // Network/backend failure — defer to launch rather than blocking the user.
       return "proceed";
     }
 
-    /* istanbul ignore next -- delegates to applyLaunchGateSetupOutcome; logic covered in frontend/src/utils/saveSetup.test.ts */
     return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
       rid,
-      confirmSlotChoice,
+      confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
       toast: (body) => showToast(body),
       dispatchSavesTab: () =>
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } })),
@@ -576,10 +581,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // Detects emulator core change since last launch; if changed, surfaces the
   // core-change confirm modal. Returns true to proceed, false to bail.
   const confirmCoreChangeIfNeeded = async (rid: number): Promise<boolean> => {
-    const coreCheck = await checkCoreChange(rid).catch(
-      (): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => ({
-        changed: false,
-      }),
+    const coreCheck = await withTimeout(checkCoreChange(rid), LOCAL_CALL_LIMIT_MS).catch(
+      (e: unknown): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
+        rethrowTimeout(e);
+        return { changed: false };
+      },
     );
     if (!coreCheck.changed) return true;
     return showCoreChangeModal(
@@ -589,25 +595,23 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   // Online pre-launch sync, mapped onto the gate's PreLaunchSyncOutcome (the
-  // gate routes it to conflict / sync_failed / allow). Keeps the Play button's
-  // existing 15s timeout, the `setState("syncing")` transition, the benign
-  // `savefiles_in_content_dir` skip, and the success toast — all the
-  // side-effects the verdict mapping can't carry stay here; conflict resolution
-  // and the fallback confirm move to the verdict switch in `handlePlay`.
+  // gate routes it to conflict / sync_failed / allow). Keeps the
+  // `setState("syncing")` transition, the benign `savefiles_in_content_dir`
+  // skip, and the success toast — all the side-effects the verdict mapping
+  // can't carry stay here; conflict resolution and the fallback confirm move to
+  // the verdict switch in `handlePlay`.
   //
-  // Like the watcher, this MUST NOT fail open: a throw or timeout returns
+  // Like the watcher, this MUST NOT fail open: a throw returns
   // `{ success: false }` (→ sync_failed → fallback confirm) rather than
   // propagating to the gate's blanket catch and silently launching on stale
-  // saves (#1050).
+  // saves (#1050). An expired limit is let through: the gate answers it.
   const runPreLaunchSync = async (rid: number): Promise<PreLaunchSyncOutcome> => {
     setState("syncing");
     let result: Awaited<ReturnType<typeof preLaunchSync>>;
     try {
-      result = await Promise.race([
-        preLaunchSync(rid),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000)),
-      ]);
+      result = await withTimeout(preLaunchSync(rid), SERVER_CALL_LIMIT_MS);
     } catch (e) {
+      rethrowTimeout(e);
       detach(debugLog(`CustomPlayButton: pre-launch sync failed: ${e}`));
       return { success: false, message: "" };
     }
@@ -659,13 +663,22 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // shared skip-set immediately before RunGame so this RunGame does NOT re-enter
   // the global watcher and gate a start this button has already handled — run
   // the funnel for, or found to need none (the double-gate fix C1).
-  const dispatchLaunch = async (gameId: string, admission: PruneLeaseAdmission) => {
+  //
+  // `reconfirm: false` is for a start after a check that got no answer in time:
+  // the re-confirm asks the same backend, and its timeout would stop the start
+  // the user just chose. The watcher's first-contact fallback starts the same
+  // way, without it.
+  const dispatchLaunch = async (
+    gameId: string,
+    admission: PruneLeaseAdmission,
+    { reconfirm = true }: { reconfirm?: boolean } = {},
+  ) => {
     if (!isPruneLeaseAdmissionCurrent(admission)) return;
     setState("launching");
     // Heal any mid-session launch_options drift on this shortcut before launch
     // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay
     // best-effort; timeout or the button's unmount cancels this launch.
-    if (romId) {
+    if (romId && reconfirm) {
       const reconfirm = await reconfirmLaunchOptions(romId, appId, "CustomPlayButton", admission);
       if (reconfirm.status === "cancelled") return;
       if (reconfirm.status === "timeout") {
@@ -693,10 +706,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // not a server verdict, so it does NOT flip the store — but the launch still
       // treats it as offline (fail-safe).
       try {
-        const { online } = await probeReachability();
+        const { online } = await withTimeout(probeReachability(), LOCAL_CALL_LIMIT_MS);
         reportServerReachable(online);
         return online;
       } catch (e) {
+        rethrowTimeout(e);
         logError(`CustomPlayButton: reachability probe failed (treating as offline): ${e}`);
         return false;
       }
@@ -704,7 +718,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     preLaunchSync: () => runPreLaunchSync(rid),
     checkLocalDrift: async () =>
       (
-        await checkLocalDrift(rid).catch((e) => {
+        await withTimeout(checkLocalDrift(rid), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+          rethrowTimeout(e);
           logError(`CustomPlayButton: local-drift check failed (treating as not-drifted): ${e}`);
           return { drifted: false, rom_id: rid };
         })
@@ -823,7 +838,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       case "sync_failed": {
         const proceed = await showFallbackLaunchModal(verdict.message);
         if (proceed) {
-          await dispatchLaunch(gameId, admission);
+          await dispatchLaunch(gameId, admission, { reconfirm: !verdict.noAnswer });
           return "done";
         }
         setState("play");

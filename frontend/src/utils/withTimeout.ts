@@ -32,3 +32,12 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+
+/**
+ * Rethrow `e` when it is an expired {@link withTimeout} deadline. For a catch
+ * whose fallback answers a call that FAILED: a call that got no answer at all
+ * is a different verdict, and the fallback must not answer it.
+ */
+export function rethrowTimeout(e: unknown): void {
+  if (e instanceof TimeoutError) throw e;
+}

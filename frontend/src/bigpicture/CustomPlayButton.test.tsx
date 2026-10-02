@@ -111,6 +111,9 @@ vi.mock("../shared/FallbackLaunchModal", () => ({
 vi.mock("../shared/SyncConflictModal", () => ({
   handleConflicts: vi.fn(),
 }));
+vi.mock("../shared/CoreChangeModal", () => ({
+  showCoreChangeModal: vi.fn(),
+}));
 // Stop-Game confirm — spy so the confirm-then-call ordering is observable
 // without rendering the modal (same shape as the launch-gate modals above).
 vi.mock("../bigpicture/StopGameModal", () => ({
@@ -148,6 +151,8 @@ import { isAppRunning } from "../utils/runningApps";
 import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
+import { showCoreChangeModal } from "../shared/CoreChangeModal";
+import { HostTransportError } from "../api/hostSocket";
 import { showStopGameModal } from "../bigpicture/StopGameModal";
 import { showAdoptExistingModal } from "../bigpicture/AdoptExistingModal";
 import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";
@@ -2664,6 +2669,325 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
     expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("late-unmount-lease");
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
     expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A launch check that gets no answer. Every backend call the check makes has a
+// limit; one that expires ends in the fallback dialog, never in a start the user
+// did not choose and never in a wait without end. A dialog's own wait for the
+// user is never bounded.
+//
+// RTL's findBy* deadlocks under fake timers, so each test settles the page on
+// Play under real timers and switches to fake ones right before the press.
+// ---------------------------------------------------------------------------
+describe("CustomPlayButton — a launch check that gets no answer", () => {
+  const NO_ANSWER = "Couldn't check your saves in time";
+  const never = <T,>(): Promise<T> => new Promise<T>(() => {});
+  const AUTO_CONFIRM_SETUP: Awaited<ReturnType<typeof backend.getSaveSetupInfo>> = {
+    has_local_saves: false,
+    local_files: [],
+    server_slots: [],
+    default_slot: "slot1",
+    slot_confirmed: false,
+    active_slot: null,
+    recommended_action: "auto_confirm_default",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consumeLaunchSkip(100);
+    vi.mocked(getMigrationState).mockReturnValue({ pending: false });
+    vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
+    vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
+    vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+    vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: false, rom_id: 42 });
+    vi.mocked(backend.getRomRelaunchOptions).mockResolvedValue({
+      success: true,
+      app_id: 100,
+      launch_options: "flatpak run x",
+      prune_lease_token: "launch-lease",
+    });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(false);
+
+    vi.stubGlobal("SteamClient", { Apps: { RunGame: vi.fn() } });
+    vi.stubGlobal("appStore", {
+      GetAppOverviewByAppID: vi.fn(() => ({ GetGameID: () => "gid-1" })),
+      allApps: [],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Render, settle on Play under real timers, then fake them and press Play. */
+  async function pressPlay(): Promise<ReturnType<typeof render>> {
+    mockCachedDetail();
+    const utils = render(<CustomPlayButton appId={100} />);
+    const playBtn = await utils.findByText("Play");
+    vi.useFakeTimers();
+    await act(async () => {
+      playBtn.click();
+      for (let index = 0; index < 12; index++) await Promise.resolve();
+    });
+    return utils;
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  function backendNeverAnswers(): void {
+    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
+    vi.mocked(backend.getSaveSetupInfo).mockReturnValue(never());
+    vi.mocked(backend.confirmSlotChoice).mockReturnValue(never());
+    vi.mocked(backend.checkCoreChange).mockReturnValue(never());
+    vi.mocked(backend.probeReachability).mockReturnValue(never());
+    vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+    vi.mocked(backend.checkLocalDrift).mockReturnValue(never());
+    vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(never());
+  }
+
+  it("a backend that never answers gets the fallback dialog at 5 s; Launch Anyway starts the game", async () => {
+    backendNeverAnswers();
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
+
+    await pressPlay();
+    await advance(4999);
+    expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+
+    await advance(1);
+    expect(showFallbackLaunchModal).toHaveBeenCalledWith(NO_ANSWER);
+    // The re-confirm would ask the same silent backend and its timeout would
+    // stop the start the user just chose, so this start goes without it.
+    expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+    expect(markLaunchSkipped).toHaveBeenCalledWith(100);
+  });
+
+  it("a backend that never answers: Cancel on the dialog returns to Play and starts nothing", async () => {
+    backendNeverAnswers();
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(false);
+
+    const { getByText } = await pressPlay();
+    await advance(5000);
+
+    expect(showFallbackLaunchModal).toHaveBeenCalledWith(NO_ANSWER);
+    expect(getByText("Play")).toBeInTheDocument();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      wait: "get_installed_rom",
+      limit: 5000,
+      arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
+    },
+    {
+      wait: "is_save_tracking_configured",
+      limit: 5000,
+      arrange: () => vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never()),
+    },
+    {
+      wait: "get_save_setup_info",
+      limit: 15000,
+      arrange: () => {
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+        vi.mocked(backend.getSaveSetupInfo).mockReturnValue(never());
+      },
+    },
+    {
+      wait: "confirm_slot_choice",
+      limit: 5000,
+      arrange: () => {
+        vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+        vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(AUTO_CONFIRM_SETUP);
+        vi.mocked(backend.confirmSlotChoice).mockReturnValue(never());
+      },
+    },
+    {
+      wait: "check_core_change",
+      limit: 5000,
+      arrange: () => vi.mocked(backend.checkCoreChange).mockReturnValue(never()),
+    },
+    {
+      wait: "probe_reachability",
+      limit: 5000,
+      arrange: () => vi.mocked(backend.probeReachability).mockReturnValue(never()),
+    },
+    {
+      wait: "check_local_drift",
+      limit: 5000,
+      arrange: () => {
+        vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
+        vi.mocked(backend.checkLocalDrift).mockReturnValue(never());
+      },
+    },
+    {
+      wait: "pre_launch_sync",
+      limit: 15000,
+      arrange: () => vi.mocked(backend.preLaunchSync).mockReturnValue(never()),
+    },
+  ])("$wait without an answer ends in the fallback dialog at $limit ms", async ({ limit, arrange }) => {
+    arrange();
+
+    const { getByText } = await pressPlay();
+    await advance(limit - 1);
+    expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+
+    await advance(1);
+    expect(showFallbackLaunchModal).toHaveBeenCalledWith(NO_ANSWER);
+    expect(getByText("Play")).toBeInTheDocument();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+
+  it("a call the dropped connection rejects moves the wait to the next step, which then ends at its limit", async () => {
+    // A call already on the wire when the socket closes is rejected; the
+    // launch-target read fails open and the check moves on — to a call that
+    // waits in the outbox for a connection that never comes back.
+    vi.mocked(backend.getInstalledRom).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
+    vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never());
+
+    await pressPlay();
+    expect(backend.isSaveTrackingConfigured).toHaveBeenCalledWith(42);
+    await advance(4999);
+    expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+
+    await advance(1);
+    expect(showFallbackLaunchModal).toHaveBeenCalledWith(NO_ANSWER);
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+
+  it("an answer that arrives after the dialog appeared starts nothing more", async () => {
+    let answer!: (result: { changed: boolean }) => void;
+    vi.mocked(backend.checkCoreChange).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let closeDialog!: (proceed: boolean) => void;
+    vi.mocked(showFallbackLaunchModal).mockReturnValue(new Promise((resolve) => (closeDialog = resolve)));
+
+    const { getByText } = await pressPlay();
+    await advance(5000);
+    expect(showFallbackLaunchModal).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answer({ changed: false });
+    });
+    await advance(20000);
+
+    expect(backend.probeReachability).not.toHaveBeenCalled();
+    expect(backend.preLaunchSync).not.toHaveBeenCalled();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+
+    await act(async () => {
+      closeDialog(false);
+    });
+    expect(getByText("Play")).toBeInTheDocument();
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+
+  it("a sync that failed WITH an answer still re-confirms the launch options before Launch Anyway starts", async () => {
+    vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: false, message: "Device not registered", synced: 0 });
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
+
+    await pressPlay();
+    await advance(0);
+
+    expect(showFallbackLaunchModal).toHaveBeenCalledWith("Device not registered");
+    expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+    expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+  });
+
+  describe("a dialog left open past every limit still acts on its answer", () => {
+    /** A dialog that answers only when the test says so. */
+    function heldOpen<T>(): { promise: Promise<T>; answer: (value: T) => void } {
+      let answer!: (value: T) => void;
+      const promise = new Promise<T>((resolve) => (answer = resolve));
+      return { promise, answer };
+    }
+
+    async function launchAfterAnswering(answer: () => void): Promise<void> {
+      await advance(20000);
+      expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+      await act(async () => {
+        answer();
+      });
+      await advance(0);
+      expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    }
+
+    it("the core-change dialog", async () => {
+      vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: true, old_label: "Old", new_label: "New" });
+      const dialog = heldOpen<boolean>();
+      vi.mocked(showCoreChangeModal).mockReturnValue(dialog.promise);
+
+      await pressPlay();
+      expect(showCoreChangeModal).toHaveBeenCalledWith("Old", "New");
+      await launchAfterAnswering(() => dialog.answer(true));
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+    });
+
+    it("the offline-drift dialog", async () => {
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: false });
+      vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+      const dialog = heldOpen<"start_anyway" | "retry" | "cancel">();
+      vi.mocked(showOfflineDriftModal).mockReturnValue(dialog.promise);
+
+      await pressPlay();
+      expect(showOfflineDriftModal).toHaveBeenCalled();
+      await launchAfterAnswering(() => dialog.answer("start_anyway"));
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+    });
+
+    it("the conflict dialog", async () => {
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({
+        success: false,
+        message: "conflict",
+        synced: 0,
+        conflicts: [
+          {
+            type: "sync_conflict",
+            rom_id: 42,
+            filename: "save.srm",
+            server_save_id: 7,
+            server_updated_at: "2026-01-01T00:00:00Z",
+            server_size: 1024,
+            local_path: "/local/save.srm",
+            local_hash: "abc",
+            local_mtime: "2026-01-01T00:00:00Z",
+            local_size: 1024,
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      });
+      const dialog = heldOpen<"cancel" | "resolved">();
+      vi.mocked(handleConflicts).mockReturnValue(dialog.promise);
+
+      await pressPlay();
+      expect(handleConflicts).toHaveBeenCalled();
+      await launchAfterAnswering(() => dialog.answer("resolved"));
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+    });
+
+    it("the fallback dialog", async () => {
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({
+        success: false,
+        message: "Device not registered",
+        synced: 0,
+      });
+      const dialog = heldOpen<boolean>();
+      vi.mocked(showFallbackLaunchModal).mockReturnValue(dialog.promise);
+
+      await pressPlay();
+      expect(showFallbackLaunchModal).toHaveBeenCalledTimes(1);
+      await launchAfterAnswering(() => dialog.answer(true));
+      expect(showFallbackLaunchModal).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

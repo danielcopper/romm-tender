@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { withTimeout, TimeoutError } from "./withTimeout";
+import { withTimeout, TimeoutError, rethrowTimeout } from "./withTimeout";
 
 describe("withTimeout", () => {
   afterEach(() => {
@@ -44,5 +44,16 @@ describe("withTimeout", () => {
     expect(clearSpy).toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     clearSpy.mockRestore();
+  });
+});
+
+describe("rethrowTimeout", () => {
+  it("rethrows an expired deadline", () => {
+    const expired = new TimeoutError(5000);
+    expect(() => rethrowTimeout(expired)).toThrow(expired);
+  });
+
+  it("lets any other failure through to the caller's fallback", () => {
+    expect(() => rethrowTimeout(new Error("connection_lost"))).not.toThrow();
   });
 });

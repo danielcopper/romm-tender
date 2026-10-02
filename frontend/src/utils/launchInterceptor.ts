@@ -36,7 +36,13 @@ import {
 import { getMigrationState, setMigrationStatus } from "./migrationStore";
 import { reportServerReachable } from "./connectionState";
 import { getAppIdRomIdMapSnapshot, readGameRunning, refreshAppIdMap } from "./sessionManager";
-import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip } from "./launchGate";
+import {
+  runLaunchGate,
+  markLaunchSkipped,
+  consumeLaunchSkip,
+  LOCAL_CALL_LIMIT_MS,
+  SERVER_CALL_LIMIT_MS,
+} from "./launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
@@ -44,7 +50,7 @@ import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, type PruneLea
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
-import { TimeoutError, withTimeout } from "./withTimeout";
+import { TimeoutError, rethrowTimeout, withTimeout } from "./withTimeout";
 
 /**
  * The four decisions the funnel has to put to the user, as questions rather than
@@ -63,7 +69,7 @@ export interface LaunchPrompts {
   resolveConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved">;
   /** Server unreachable and the local save has drifted — start anyway, re-probe, or give up? */
   askOfflineDrift(): Promise<"start_anyway" | "retry" | "cancel">;
-  /** Pre-launch sync failed — launch on the local save regardless? */
+  /** Pre-launch sync failed, or the check got no answer in time — launch on the local save regardless? */
   confirmFallbackLaunch(message?: string): Promise<boolean>;
 }
 
@@ -87,9 +93,12 @@ const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu 
  * slot (via `confirmSlotChoice`) and proceeds. A direct launch is never blocked
  * on setup — it always proceeds (the gate op below maps this to "proceed"); any
  * failure (server unreachable, needs-user-choice, a thrown error) is swallowed.
+ * A call that gets no answer within its limit is not a failure: its
+ * `TimeoutError` reaches the gate.
  */
 async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
-  const trackingResult = await isSaveTrackingConfigured(romId).catch((e) => {
+  const trackingResult = await withTimeout(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+    rethrowTimeout(e);
     logError(`Watcher tracking check failed (assuming configured): ${e}`);
     return { configured: true };
   });
@@ -97,8 +106,9 @@ async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
 
   let setupInfo;
   try {
-    setupInfo = await getSaveSetupInfo(romId);
+    setupInfo = await withTimeout(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS);
   } catch (e) {
+    rethrowTimeout(e);
     // Network/backend failure — never block a direct launch on setup.
     logError(`Watcher save-setup fetch failed (proceeding unconfigured): ${e}`);
     return;
@@ -112,10 +122,13 @@ async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
   // page's saves tab configures it).
   await applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
     rid: romId,
-    confirmSlotChoice,
+    confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
     toast: () => undefined,
     dispatchSavesTab: () => undefined,
-  }).catch((e) => logError(`Watcher auto-adopt slot failed (proceeding): ${e}`));
+  }).catch((e: unknown) => {
+    rethrowTimeout(e);
+    logError(`Watcher auto-adopt slot failed (proceeding): ${e}`);
+  });
 }
 
 /**
@@ -124,8 +137,11 @@ async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
  * proceed, `false` when the user cancelled.
  */
 async function checkCoreChangeWatcher(romId: number, prompts: LaunchPrompts): Promise<boolean> {
-  const coreCheck = await checkCoreChange(romId).catch(
-    (e): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
+  const coreCheck = await withTimeout(checkCoreChange(romId), LOCAL_CALL_LIMIT_MS).catch(
+    (
+      e: unknown,
+    ): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
+      rethrowTimeout(e);
       logError(`Watcher core-change check failed (assuming unchanged): ${e}`);
       return { changed: false };
     },
@@ -137,9 +153,6 @@ async function checkCoreChangeWatcher(romId: number, prompts: LaunchPrompts): Pr
   );
 }
 
-/** Pre-launch sync hard timeout — mirrors the Play button's `runPreLaunchSync`. */
-const PRE_LAUNCH_SYNC_TIMEOUT_MS = 15000;
-
 /**
  * Online pre-launch sync, mapped onto the gate's {@link PreLaunchSyncOutcome}.
  * A benign skip is treated as a successful proceed (no conflict, no failure) —
@@ -149,21 +162,18 @@ const PRE_LAUNCH_SYNC_TIMEOUT_MS = 15000;
  * did not run and nothing is wrong, which is a different thing from sync
  * failing.
  *
- * Critically, this MUST NOT fail open: a throw or a hang in `preLaunchSync`
- * would otherwise propagate to the gate's blanket catch → `allow` → a silent
- * relaunch on stale saves. So the call is wrapped in a 15s timeout race AND a
- * try/catch, and on throw/timeout it returns `{ success: false, ... }` — which
+ * Critically, this MUST NOT fail open: a throw in `preLaunchSync` would
+ * otherwise propagate to the gate's blanket catch → `allow` → a silent
+ * relaunch on stale saves. So a throw returns `{ success: false, ... }` — which
  * the gate maps to `sync_failed`, surfacing the fallback confirm instead of
- * silently launching.
+ * silently launching. An expired limit is let through: the gate answers it.
  */
 async function preLaunchSyncWatcher(romId: number): Promise<PreLaunchSyncOutcome> {
   let result: Awaited<ReturnType<typeof preLaunchSync>>;
   try {
-    result = await Promise.race([
-      preLaunchSync(romId),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), PRE_LAUNCH_SYNC_TIMEOUT_MS)),
-    ]);
+    result = await withTimeout(preLaunchSync(romId), SERVER_CALL_LIMIT_MS);
   } catch (e) {
+    rethrowTimeout(e);
     logError(`Watcher pre-launch sync failed (surfacing fallback confirm): ${e}`);
     return { success: false, message: "Couldn't sync saves with RomM server." };
   }
@@ -190,10 +200,11 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
       // error, not a server verdict, so it leaves the store untouched but the
       // launch still treats it as offline (fail-safe).
       try {
-        const { online } = await probeReachability();
+        const { online } = await withTimeout(probeReachability(), LOCAL_CALL_LIMIT_MS);
         reportServerReachable(online);
         return online;
       } catch (e) {
+        rethrowTimeout(e);
         logError(`Watcher reachability probe failed (treating as offline): ${e}`);
         return false;
       }
@@ -201,7 +212,8 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
     preLaunchSync: () => preLaunchSyncWatcher(romId),
     checkLocalDrift: async () =>
       (
-        await checkLocalDrift(romId).catch((e) => {
+        await withTimeout(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+          rethrowTimeout(e);
           logError(`Watcher local-drift check failed (treating as not-drifted): ${e}`);
           return { drifted: false };
         })
@@ -295,7 +307,14 @@ async function handleWatcherVerdict(
     }
     case "sync_failed": {
       const proceed = await prompts.confirmFallbackLaunch(verdict.message);
-      if (proceed) await relaunch(start, romId, admission);
+      if (!proceed) return "done";
+      // After a check that got no answer in time the re-confirm asks the same
+      // backend, and its timeout would cancel the start the user just chose.
+      if (verdict.noAnswer) {
+        if (isPruneLeaseAdmissionCurrent(admission)) bareRelaunch(start);
+      } else {
+        await relaunch(start, romId, admission);
+      }
       return "done";
     }
   }

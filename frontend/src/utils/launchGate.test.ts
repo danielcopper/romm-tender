@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { runLaunchGate, markLaunchSkipped, consumeLaunchSkip, LAUNCH_SKIP_WINDOW_MS } from "./launchGate";
+import {
+  runLaunchGate,
+  markLaunchSkipped,
+  consumeLaunchSkip,
+  LAUNCH_SKIP_WINDOW_MS,
+  NO_ANSWER_MESSAGE,
+} from "./launchGate";
 import type { LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
+import { TimeoutError } from "./withTimeout";
 import type { SyncConflict } from "../types";
 
 function conflict(overrides: Partial<SyncConflict> = {}): SyncConflict {
@@ -151,6 +158,38 @@ describe("runLaunchGate — verdict branches", () => {
       },
     });
     await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "allow" });
+  });
+});
+
+describe("runLaunchGate — a step that gets no answer in time", () => {
+  const noAnswer = async (): Promise<never> => {
+    throw new TimeoutError(5000);
+  };
+
+  it.each([
+    ["the launch-target read", { hasLaunchTarget: noAnswer }],
+    ["the tracking setup", { ensureTrackingConfigured: noAnswer }],
+    ["the core-change check", { checkCoreChange: noAnswer }],
+    ["the reachability probe", { checkReachability: noAnswer }],
+    ["the pre-launch sync", { preLaunchSync: noAnswer }],
+    ["the local-drift check", { checkReachability: vi.fn(async () => false), checkLocalDrift: noAnswer }],
+  ] satisfies [string, Partial<LaunchGateOps>][])(
+    "%s → the no-answer sync_failed, never allow",
+    async (_step, overrides) => {
+      await expect(runLaunchGate(100, 42, makeOps(overrides))).resolves.toEqual({
+        decision: "sync_failed",
+        message: NO_ANSWER_MESSAGE,
+        noAnswer: true,
+      });
+    },
+  );
+
+  it("runs no later step once a step got no answer", async () => {
+    const ops = makeOps({ checkCoreChange: noAnswer });
+    await runLaunchGate(100, 42, ops);
+    expect(ops.checkReachability).not.toHaveBeenCalled();
+    expect(ops.preLaunchSync).not.toHaveBeenCalled();
+    expect(ops.checkLocalDrift).not.toHaveBeenCalled();
   });
 });
 
