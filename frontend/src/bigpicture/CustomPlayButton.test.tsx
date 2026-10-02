@@ -2941,6 +2941,7 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
         new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
       );
     });
+    vi.mocked(readGameRunning).mockClear();
     await act(async () => {
       getByText("Resume").click();
       for (let index = 0; index < 12; index++) await Promise.resolve();
