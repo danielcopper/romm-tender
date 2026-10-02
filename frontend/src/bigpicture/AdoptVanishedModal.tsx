@@ -8,17 +8,19 @@
  * over, so the button does not promise that they agree — it promises that
  * pressing ends in an answer, and this is the answer when nothing more specific
  * is known.
- *
- * It claims no cause, because none is known: what the page found is either gone
- * or no longer matches. Both readings are true of the ordinary case where the
- * file was deleted between opening the page and pressing.
  */
 
 import { FC } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
+import {
+  CANCEL_LABEL,
+  VANISHED_DOWNLOAD_NOTE,
+  VANISHED_INTRO,
+  VANISHED_TITLE,
+  vanishedDownloadLabel,
+} from "../utils/adoptWording";
+import type { VanishedChoice } from "../utils/adoptFlow";
 import type { CandidateVanishedResult } from "../types";
-
-export type VanishedChoice = "download" | "cancel";
 
 interface AdoptVanishedModalProps {
   vanished: CandidateVanishedResult;
@@ -37,19 +39,14 @@ export const AdoptVanishedModal: FC<AdoptVanishedModalProps> = ({ vanished, clos
   return (
     <ModalRoot closeModal={closeModal}>
       <div style={{ padding: "16px", minWidth: "420px" }}>
-        <div style={{ fontSize: "16px", fontWeight: "bold", color: "#fff", marginBottom: "4px" }}>
-          The Copy on This Device Cannot Be Found
-        </div>
-        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>
-          This game&apos;s page found a copy on this device, and looking again now turns up nothing that matches.
-          Nothing has been changed on your device.
-        </div>
+        <div style={{ fontSize: "16px", fontWeight: "bold", color: "#fff", marginBottom: "4px" }}>{VANISHED_TITLE}</div>
+        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>{VANISHED_INTRO}</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <DialogButton onClick={() => choose("download")}>Download {vanished.incoming.name}</DialogButton>
-          <div style={LABEL_STYLE}>Or cancel and look in the folder yourself first.</div>
+          <DialogButton onClick={() => choose("download")}>{vanishedDownloadLabel(vanished)}</DialogButton>
+          <div style={LABEL_STYLE}>{VANISHED_DOWNLOAD_NOTE}</div>
           <DialogButton onClick={() => choose("cancel")} style={{ opacity: 0.5 }}>
-            Cancel
+            {CANCEL_LABEL}
           </DialogButton>
         </div>
       </div>

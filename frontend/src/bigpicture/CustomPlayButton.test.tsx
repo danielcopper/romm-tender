@@ -118,10 +118,7 @@ vi.mock("../bigpicture/StopGameModal", () => ({
 }));
 // Adopt/replace/cancel dialog — spied so the button's routing off a
 // `target_occupied` refusal is observable without rendering the modal.
-// `comparisonForCandidate` stays real: it is the projection the button hands to
-// the dialog, so a spy would hide a candidate whose numbers never arrived.
-vi.mock("../bigpicture/AdoptExistingModal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../bigpicture/AdoptExistingModal")>()),
+vi.mock("../bigpicture/AdoptExistingModal", () => ({
   showAdoptExistingModal: vi.fn(),
 }));
 // The candidate list and the collision decision — spied for the same reason.

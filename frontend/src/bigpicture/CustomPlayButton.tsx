@@ -18,13 +18,7 @@ import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInje
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
-  startDownload,
-  adoptExistingRom,
   isTargetOccupied,
-  isCandidatesFound,
-  isUnusableNamesake,
-  isCandidateVanished,
-  isRenameCollisions,
   cancelDownload,
   pauseDownload,
   resumeDownload,
@@ -49,7 +43,9 @@ import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "../utils/saveSetup";
 import { handleButtonDownloadFailure } from "../utils/downloadFailure";
-import { comparisonForCandidate, showAdoptExistingModal } from "./AdoptExistingModal";
+import { runDownloadWithAdoption } from "../utils/adoptFlow";
+import { RESUME_TARGET_OCCUPIED_TOAST } from "../utils/adoptWording";
+import { showAdoptExistingModal } from "./AdoptExistingModal";
 import { showAdoptCandidateModal } from "./AdoptCandidateModal";
 import { showAdoptCollisionModal } from "./AdoptCollisionModal";
 import { showAdoptUnusableModal } from "./AdoptUnusableModal";
@@ -68,11 +64,6 @@ import type {
   DownloadProgressEvent,
   DownloadCompleteEvent,
   DownloadFailedEvent,
-  TargetOccupiedResult,
-  CandidatesFoundResult,
-  UnusableNamesakeResult,
-  CandidateVanishedResult,
-  CollisionChoice,
   UninstallProgressEvent,
 } from "../types";
 import { BENIGN_SYNC_SKIP_REASONS } from "../types";
@@ -1068,188 +1059,28 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     }
   };
 
-  const handleDownload = async (
-    replaceExisting = false,
-    discardPath?: string,
-    collisionChoice: CollisionChoice | null = null,
-  ) => {
+  const handleDownload = async () => {
     if (!romId || actionPending) return;
-    setActionPending(true);
-    try {
-      // Only a FIRST press reports what the page found. Every re-entry carries
-      // `replace`, which is the user's answer to a refusal the page's report
-      // already produced — reporting it again would ask the backstop to fire on
-      // an answer it just received.
-      const result = await startDownload(
-        romId,
-        replaceExisting,
-        discardPath ?? null,
-        collisionChoice,
-        !replaceExisting && candidatePresent,
-      );
-      if (isRenameCollisions(result)) {
-        // Carrying the discarded candidate's saves would land on names that are
-        // taken. Nothing has been removed or moved; the one answer covers the
-        // whole set, exactly as it does on the adopt exit.
-        setActionPending(false);
-        const answer = await showAdoptCollisionModal(result.collisions);
-        if (answer !== "cancel") await handleDownload(replaceExisting, discardPath, answer);
-        return;
-      }
-      if (isTargetOccupied(result)) {
-        // Nothing was written and no transfer started — the backend refused so
-        // the user can choose (#260). Back to idle before the dialog opens,
-        // because Cancel returns to this button with nothing else to re-enable
-        // it; adopt and replace each re-claim the flag on their own path.
-        setTargetOccupied(true);
-        setActionPending(false);
-        await resolveOccupiedTarget(romId, result);
-        return;
-      }
-      if (isCandidatesFound(result)) {
-        // Same refusal contract, different subject: the target path was free and
-        // the game is on disk under another name. Recorded, because the backend
-        // just proved it — without this a cancelled dialog leaves the button
-        // reading "Download" for content it has confirmed is there.
-        setCandidatePresent(true);
-        setActionPending(false);
-        await resolveCandidates(romId, result);
-        return;
-      }
-      if (isUnusableNamesake(result)) {
-        // A namesake nothing can adopt — the other shape, or a link. Neither
-        // flag moves: no content occupies this ROM's own path, and nothing here
-        // is a candidate — what the page said stands, and the honest answer to
-        // "is this game here" is the dialog the user is about to get.
-        setActionPending(false);
-        await resolveUnusable(result);
-        return;
-      }
-      if (isCandidateVanished(result)) {
-        // The backstop fired: this page said a copy was here and the search can
-        // name nothing. The flag goes, because the one thing now known is that
-        // what the page found is not there to be used.
-        setCandidatePresent(false);
-        setActionPending(false);
-        await resolveVanished(result);
-        return;
-      }
-      if (!result.success) {
-        showToast(result.message || "Download failed");
-        setActionPending(false);
-      }
-    } catch {
-      showToast("Download failed — is RomM server running?");
-      setActionPending(false);
-    }
-  };
-
-  // Run the adopt/replace/cancel dialog and carry out the chosen exit. Replace
-  // re-enters `handleDownload`; its guard reads the `actionPending` captured by
-  // the render still executing here — false — not the live value, so the second
-  // call is admitted regardless of what the caller set on the way in.
-  const resolveOccupiedTarget = async (rid: number, occupied: TargetOccupiedResult) => {
-    const choice = await showAdoptExistingModal(rid, occupied);
-    if (choice === "replace") {
-      await handleDownload(true);
-      return;
-    }
-    if (choice === "adopt") {
-      await handleAdopt(rid);
-    }
-  };
-
-  // Offer what the search found. One candidate needs no list — there is nothing
-  // to choose between — so it goes straight to the comparison. Both download
-  // exits re-enter `handleDownload` with `replace`, which is what tells the
-  // backend to skip the search rather than refuse a second time.
-  //
-  // They differ in what they hand back. Choosing a candidate and then Download
-  // Instead names it, because the confirmation the user just answered says that
-  // file is deleted. "None of These" names nothing: the user declined every
-  // candidate rather than picking one, so none of them may be removed.
-  const resolveCandidates = async (rid: number, found: CandidatesFoundResult) => {
-    let candidate = found.candidates[0];
-    if (candidate === undefined) return;
-    if (found.candidates.length > 1) {
-      const picked = await showAdoptCandidateModal(found);
-      if (picked.kind === "cancel") return;
-      if (picked.kind === "download") {
-        await handleDownload(true);
-        return;
-      }
-      candidate = picked.candidate;
-    }
-    const choice = await showAdoptExistingModal(rid, comparisonForCandidate(candidate, found.incoming), candidate.path);
-    if (choice === "replace") {
-      await handleDownload(true, candidate.path);
-      return;
-    }
-    if (choice === "adopt") {
-      await handleAdopt(rid, candidate.path);
-    }
-  };
-
-  // Offer the only two honest exits for a namesake that cannot become this
-  // install: fetch the server's copy alongside it, or stop. `replace` is what
-  // carries the answer — it is what tells the backend the search has been
-  // answered — and no candidate path goes with it, because nothing on disk is
-  // being taken over or removed.
-  const resolveUnusable = async (unusable: UnusableNamesakeResult) => {
-    if ((await showAdoptUnusableModal(unusable)) === "download") await handleDownload(true);
-  };
-
-  // The backstop's two exits. Nothing is named, because nothing was found:
-  // `replace` here only says the search has been answered.
-  const resolveVanished = async (vanished: CandidateVanishedResult) => {
-    if ((await showAdoptVanishedModal(vanished)) === "download") await handleDownload(true);
-  };
-
-  // Record what is on disk as the install, then write the launch command onto
-  // the shortcut exactly as the download-complete listener does — an adopted
-  // install is an install (ADR-0028), so it must be as launchable as a
-  // downloaded one the moment the dialog closes.
-  const handleAdopt = async (rid: number, candidatePath?: string, collisionChoice: CollisionChoice | null = null) => {
-    setActionPending(true);
-    const admission = capturePruneLeaseAdmission(leaseOwner);
-    try {
-      const result = await adoptExistingRom(rid, candidatePath ?? null, collisionChoice);
-      if (isRenameCollisions(result)) {
-        // Nothing has moved. The one answer covers the whole set, and a dismissed
-        // dialog leaves the game exactly as it was.
-        const answer = await showAdoptCollisionModal(result.collisions);
-        if (answer !== "cancel") await handleAdopt(rid, candidatePath, answer);
-        return;
-      }
-      if (!result.success) {
-        showToast(result.message || "Couldn't use the existing files");
-        return;
-      }
-      const adoptedAppId = result.app_id;
-      if (adoptedAppId != null && result.launch_options !== undefined) {
-        const launchOptions = result.launch_options;
-        await withPruneLease(
-          result.prune_lease_token,
-          "ROM adopt",
-          async (signal) => {
-            if (signal.aborted) return;
-            await setLaunchOptionsConfirmed(adoptedAppId, launchOptions).catch(() => false);
-          },
-          leaseOwner,
-          admission,
-        );
-      }
-      setTargetOccupied(false);
-      setCandidatePresent(false);
-      setState("play");
-      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: rid } }));
-      showToast(`${romName || "ROM"} is ready to play`);
-    } catch (e) {
-      detach(debugLog(`CustomPlayButton: adopt failed: ${e}`));
-      showToast("Couldn't use the existing files — is RomM server running?");
-    } finally {
-      setActionPending(false);
-    }
+    await runDownloadWithAdoption({
+      romId,
+      romName,
+      pageSawCandidate: candidatePresent,
+      leaseOwner,
+      logContext: "CustomPlayButton",
+      dialogs: {
+        showExisting: showAdoptExistingModal,
+        showCandidates: showAdoptCandidateModal,
+        showCollisions: showAdoptCollisionModal,
+        showUnusable: showAdoptUnusableModal,
+        showVanished: showAdoptVanishedModal,
+      },
+      hooks: {
+        setBusy: setActionPending,
+        setTargetOccupied,
+        setCandidatePresent,
+        onAdopted: () => setState("play"),
+      },
+    });
   };
 
   // Cancel an in-flight download. Fire-and-forget: the backend emits a
@@ -1283,7 +1114,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           if (result.success) return;
           showToast(
             isTargetOccupied(result)
-              ? "Something else is at this game's location now — cancel the download and start again"
+              ? RESUME_TARGET_OCCUPIED_TOAST
               : result.message || "Couldn't resume the download",
           );
         })

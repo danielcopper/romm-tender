@@ -11,11 +11,16 @@
 
 import { FC } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
-import { formatBytes } from "../utils/formatters";
-import type { AdoptionCandidate, CandidatesFoundResult } from "../types";
-
-export type CandidateChoice =
-  { kind: "candidate"; candidate: AdoptionCandidate } | { kind: "download" } | { kind: "cancel" };
+import {
+  CANCEL_LABEL,
+  CANDIDATES_INTRO,
+  CANDIDATES_TITLE,
+  candidateDetail,
+  candidatesTruncatedNote,
+  noneOfTheseLabel,
+} from "../utils/adoptWording";
+import type { CandidateChoice } from "../utils/adoptFlow";
+import type { CandidatesFoundResult } from "../types";
 
 interface AdoptCandidateModalProps {
   found: CandidatesFoundResult;
@@ -35,39 +40,29 @@ export const AdoptCandidateModal: FC<AdoptCandidateModalProps> = ({ found, close
     <ModalRoot closeModal={closeModal}>
       <div style={{ padding: "16px", minWidth: "420px" }}>
         <div style={{ fontSize: "16px", fontWeight: "bold", color: "#fff", marginBottom: "4px" }}>
-          This Game May Already Be on Your Device
+          {CANDIDATES_TITLE}
         </div>
-        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>
-          These files sit in the same folder and carry this game&apos;s name. Tender did not put them there, so nothing
-          is touched until you pick one.
-        </div>
+        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", marginBottom: "12px" }}>{CANDIDATES_INTRO}</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
           {found.candidates.map((candidate) => (
             <DialogButton key={candidate.path} onClick={() => choose({ kind: "candidate", candidate })}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                 <div style={{ fontSize: "13px", color: "#fff" }}>{candidate.name}</div>
-                <div style={LABEL_STYLE}>
-                  {candidate.detail}
-                  {candidate.is_dir ? " — folder" : ` — ${formatBytes(candidate.size_bytes)}`}
-                </div>
+                <div style={LABEL_STYLE}>{candidateDetail(candidate)}</div>
               </div>
             </DialogButton>
           ))}
         </div>
 
         {found.truncated && (
-          <div style={{ ...LABEL_STYLE, marginBottom: "12px" }}>
-            Only the {found.candidates.length} strongest matches are shown — there are more in this folder.
-          </div>
+          <div style={{ ...LABEL_STYLE, marginBottom: "12px" }}>{candidatesTruncatedNote(found)}</div>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <DialogButton onClick={() => choose({ kind: "download" })}>
-            None of These — Download {found.incoming.name}
-          </DialogButton>
+          <DialogButton onClick={() => choose({ kind: "download" })}>{noneOfTheseLabel(found)}</DialogButton>
           <DialogButton onClick={() => choose({ kind: "cancel" })} style={{ opacity: 0.5 }}>
-            Cancel
+            {CANCEL_LABEL}
           </DialogButton>
         </div>
       </div>
