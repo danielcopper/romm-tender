@@ -1590,3 +1590,110 @@ describe("sessionManager stop scoping (#1621)", () => {
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
   });
 });
+
+// A backend that does not answer must not hold the serialized lifecycle chain:
+// a start and a stop still flip Tender's button to Resume and back to Play.
+describe("sessionManager with a backend that does not answer", () => {
+  const never = <T>(): Promise<T> => new Promise<T>(() => {});
+  let sessionEvents: { running: boolean; appId: number; romId: number }[];
+  let sessionListener: (e: WindowEventMap["romm_session_changed"]) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    localStorage.clear();
+    stubLifecycleSteamClient();
+    stubNothingRunning();
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({
+      [String(APP_ID)]: ROM_ID,
+      [String(OTHER_APP_ID)]: OTHER_ROM_ID,
+    });
+    vi.mocked(backend.recordSessionStart).mockResolvedValue({ success: true });
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE });
+    sessionEvents = [];
+    sessionListener = (e) => sessionEvents.push(e.detail);
+    globalThis.addEventListener("romm_session_changed", sessionListener);
+  });
+
+  afterEach(() => {
+    globalThis.removeEventListener("romm_session_changed", sessionListener);
+    vi.useRealTimers();
+  });
+
+  it("a start whose map refresh never answers opens the session at the refresh's 5 s limit, and its stop closes it", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.getAppIdRomIdMap).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+
+    lifetime({ bRunning: true, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sessionEvents).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toEqual([{ running: true, appId: APP_ID, romId: ROM_ID }]);
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Failed to refresh app ID map"));
+
+    await stopGame(lifetime);
+    expect(sessionEvents).toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+  });
+
+  it("a stop queued behind a session-start record that never answers is handled at the record's 5 s limit", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.recordSessionStart).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+
+    await startGame(lifetime);
+    expect(sessionEvents).toEqual([{ running: true, appId: APP_ID, romId: ROM_ID }]);
+    lifetime({ bRunning: false, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sessionEvents).not.toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Failed to record session start"));
+  });
+
+  it("the notification after a finalize that never answers is handled at the finalize's 15 s limit", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+    await startGame(lifetime);
+    await stopGame(lifetime);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(sessionEvents).not.toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+  });
+
+  it("a finalize answered after its limit is still applied, once the chain has moved on", async () => {
+    await initDrainingAdoptionPoll();
+    let answer!: (result: Awaited<ReturnType<typeof backend.finalizeGameSession>>) => void;
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const refreshes: unknown[] = [];
+    const onDataChanged = (e: Event) => refreshes.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", onDataChanged);
+    try {
+      const lifetime = captureLifetimeCb();
+      await startGame(lifetime);
+      await stopGame(lifetime);
+      lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(sessionEvents).toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+
+      answer({ ...IDLE_FINALIZE, total_seconds: 600, sync: { ...IDLE_FINALIZE.sync, uploaded: 2 } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(updatePlaytimeDisplay).toHaveBeenCalledWith(APP_ID, 600);
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Saves uploaded to RomM" }),
+      );
+      expect(refreshes).toContainEqual({ type: "save_sync", rom_id: ROM_ID });
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", onDataChanged);
+    }
+  });
+});

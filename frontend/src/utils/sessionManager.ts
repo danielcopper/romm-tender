@@ -17,6 +17,8 @@ import { updatePlaytimeDisplay } from "./metadataPatches";
 import { detach } from "./detach";
 import { readRunningApps, type RunningAppsReading } from "./runningApps";
 import { delay } from "./pacedOps";
+import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
+import { withTimeout } from "./withTimeout";
 
 // Active session tracking — ONE ENTRY PER RUNNING APP (#1624). Two RomM games at
 // once each hold their own entry, so a second start no longer displaces the
@@ -260,7 +262,7 @@ async function handleGameStart(appId: number): Promise<void> {
 
   // Record session start for playtime tracking
   try {
-    await recordSessionStart(romId);
+    await withTimeout(recordSessionStart(romId), LOCAL_CALL_LIMIT_MS);
   } catch (e) {
     logError(`Failed to record session start: ${e}`);
   }
@@ -301,48 +303,56 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   activeSessions.delete(appId);
   persistSessions();
 
-  try {
-    const result = await finalizeGameSession(romId);
+  // The answer comes after the post-exit sync, which can outlast the limit
+  // with a working backend. The chain waits for it only that long; a later
+  // answer is still applied when it arrives, and touches no session state.
+  const applied = finalizeGameSession(romId)
+    .then((result) => applyFinalizeResult(appId, romId, result))
+    .catch((e: unknown) => logError(`Failed to finalize game session: ${e}`));
+  await withTimeout(applied, SERVER_CALL_LIMIT_MS).catch((e: unknown) =>
+    logError(`Finalize for romId=${romId} has not answered (${e}) — moving on; its answer is applied when it arrives`),
+  );
+}
 
-    // Playtime display update — appStore mutation must stay frontend.
-    if (result.total_seconds != null) {
-      updatePlaytimeDisplay(appId, result.total_seconds);
-    }
+function applyFinalizeResult(
+  appId: number,
+  romId: number,
+  result: Awaited<ReturnType<typeof finalizeGameSession>>,
+): void {
+  // Playtime display update — appStore mutation must stay frontend.
+  if (result.total_seconds != null) {
+    updatePlaytimeDisplay(appId, result.total_seconds);
+  }
 
-    // Post-exit save-sync toast. The directional success toast is rendered
-    // frontend-side from the transfer counts via the shared helper (the single
-    // source of that copy, #1481); the offline/failure body stays backend-owned
-    // (failure_toast). The two are mutually exclusive — a successful run carries
-    // failure_toast=null — so only one fires.
-    const directionalBody = result.sync.success
-      ? saveSyncToastBody(result.sync.uploaded, result.sync.downloaded)
-      : null;
-    if (directionalBody) {
-      showToast(directionalBody);
-    } else if (result.sync.failure_toast) {
-      showToast(result.sync.failure_toast);
-    }
+  // Post-exit save-sync toast. The directional success toast is rendered
+  // frontend-side from the transfer counts via the shared helper (the single
+  // source of that copy, #1481); the offline/failure body stays backend-owned
+  // (failure_toast). The two are mutually exclusive — a successful run carries
+  // failure_toast=null — so only one fires.
+  const directionalBody = result.sync.success ? saveSyncToastBody(result.sync.uploaded, result.sync.downloaded) : null;
+  if (directionalBody) {
+    showToast(directionalBody);
+  } else if (result.sync.failure_toast) {
+    showToast(result.sync.failure_toast);
+  }
 
-    // Save-sync event dispatch — fires unconditionally so open surfaces refresh
-    // to the honest post-sync state. A failed post-exit sync must refresh too
-    // (#1334): the panel would otherwise keep showing a stale green "synced" for
-    // a file that is now pending upload.
-    globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+  // Save-sync event dispatch — fires unconditionally so open surfaces refresh
+  // to the honest post-sync state. A failed post-exit sync must refresh too
+  // (#1334): the panel would otherwise keep showing a stale green "synced" for
+  // a file that is now pending upload.
+  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
 
-    // Additive conflicts toast — backend renders the count string.
-    if (result.sync.conflicts_toast) {
-      showToast(result.sync.conflicts_toast);
-    }
+  // Additive conflicts toast — backend renders the count string.
+  if (result.sync.conflicts_toast) {
+    showToast(result.sync.conflicts_toast);
+  }
 
-    // Migration store update — backend ran refresh_state, frontend just
-    // feeds the typed payload into the store. When backend refresh failed
-    // (``migration == null``) leave the store untouched: a failed refresh
-    // must not clear a stale "pending" badge it could not re-check.
-    if (result.migration) {
-      setMigrationStatus(result.migration.retrodeck);
-    }
-  } catch (e) {
-    logError(`Failed to finalize game session: ${e}`);
+  // Migration store update — backend ran refresh_state, frontend just
+  // feeds the typed payload into the store. When backend refresh failed
+  // (``migration == null``) leave the store untouched: a failed refresh
+  // must not clear a stale "pending" badge it could not re-check.
+  if (result.migration) {
+    setMigrationStatus(result.migration.retrodeck);
   }
 }
 
@@ -532,8 +542,11 @@ export async function initSessionManager(): Promise<void> {
           // start waited for it too); both are gone.
           const appId = update.unAppID;
           if (appId) {
-            // Refresh map in case a sync happened since init
-            await refreshAppIdMap();
+            // Refresh map in case a sync happened since init. A read that does
+            // not answer in time leaves the map it holds, as a failed one does.
+            await withTimeout(refreshAppIdMap(), LOCAL_CALL_LIMIT_MS).catch((e: unknown) =>
+              logError(`Failed to refresh app ID map: ${e}`),
+            );
             await handleGameStart(appId);
           }
         } else {
