@@ -2928,6 +2928,28 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
   });
 
+  it("a press on a stale Resume during the check starts no second check", async () => {
+    // The one route into the handler the disabled throbber does not close: a
+    // session start puts Resume over the check, and a press on it, with nothing
+    // actually running, falls through to the press handler of that same render.
+    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+
+    const { getByText } = await pressPlay();
+    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
+      );
+    });
+    await act(async () => {
+      getByText("Resume").click();
+      for (let index = 0; index < 12; index++) await Promise.resolve();
+    });
+
+    expect(readGameRunning).toHaveBeenCalled();
+    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+  });
+
   it("a save-status announcement during the check does not put Play back under it", async () => {
     vi.mocked(backend.getInstalledRom).mockReturnValue(never());
 

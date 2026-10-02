@@ -530,6 +530,29 @@ describe("launchInterceptor — full funnel watcher", () => {
         vi.useRealTimers();
       }
     });
+
+    it("an answer that arrives after the dialog appeared starts nothing more", async () => {
+      vi.useFakeTimers();
+      try {
+        let answer!: (probe: { online: boolean }) => void;
+        vi.mocked(backend.probeReachability).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        prompts.confirmFallbackLaunch.mockReturnValue(new Promise<boolean>(() => {}));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+
+        answer({ online: true });
+        await vi.advanceTimersByTimeAsync(20000);
+
+        expect(backend.preLaunchSync).not.toHaveBeenCalled();
+        expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("an appId Tender owns that the map does not hold yet", () => {
