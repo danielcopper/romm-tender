@@ -4,6 +4,7 @@ import {
   installUpdate,
   logError,
   type UpdateInstallAttempt,
+  type UpdateInstallRefusal,
   type UpdateInstallState,
   type UpdateWaitReason,
 } from "../../api/backend";
@@ -151,6 +152,17 @@ export function useUpdateInstall(): UpdateInstall {
   const seenAt = installerSeenAt();
   const overdue = restarting && seenAt !== null && lookedAt >= seenAt + INSTALLER_OVERDUE_MS;
 
+  const takeAnswer = (answer: { success: true } | UpdateInstallRefusal, pressedVersion: string) => {
+    const now = lastReading.current;
+    if (answer.success) {
+      if (now !== null) take({ ...now, attempt: started(pressedVersion), wait_reasons: [] });
+    } else if (answer.reason === "update_waiting") {
+      if (now !== null) take({ ...now, wait_reasons: answer.wait_reasons });
+    } else {
+      setRefusal({ reason: answer.reason, version: pressedVersion });
+    }
+  };
+
   const install = async () => {
     // A disabled control still reports a press on the device.
     const last = lastReading.current;
@@ -168,15 +180,7 @@ export function useUpdateInstall(): UpdateInstall {
       // with it, whether or not this section is still on screen.
       if (answer.success) endStoppedAttempt();
       else endPress();
-      if (!mounted.current) return;
-      const now = lastReading.current;
-      if (answer.success) {
-        if (now !== null) take({ ...now, attempt: started(version), wait_reasons: [] });
-      } else if (answer.reason === "update_waiting") {
-        if (now !== null) take({ ...now, wait_reasons: answer.wait_reasons });
-      } else {
-        setRefusal({ reason: answer.reason, version });
-      }
+      if (mounted.current) takeAnswer(answer, version);
     } catch (e) {
       logError(`Failed to request the update install: ${e}`);
       endPress();
