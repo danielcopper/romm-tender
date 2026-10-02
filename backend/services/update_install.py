@@ -1,4 +1,4 @@
-"""UpdateInstallService — installing the last seen release from the panel, and what a press waits for.
+"""UpdateInstallService — installing the release the last check stored from the panel, and what a press waits for.
 
 Owns one attempt at a time, from the press until the installer stops this
 process or the attempt fails: whether a press may start one, the download and
@@ -137,7 +137,7 @@ class UpdateInstallServiceConfig:
 
 
 class UpdateInstallService:
-    """Installs the last seen release when nothing a restart would cut short is under way."""
+    """Installs the release the last check stored when nothing a restart would cut short is under way."""
 
     def __init__(self, *, config: UpdateInstallServiceConfig) -> None:
         self._releases = config.releases

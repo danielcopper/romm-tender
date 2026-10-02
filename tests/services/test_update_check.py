@@ -1058,7 +1058,11 @@ class TestTheAvailableToast:
 
         answer = await service.acknowledge_update_available_toast("0.34.0")
 
-        assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+        assert answer == {
+            "success": False,
+            "reason": "version_changed",
+            "message": "Not the release the last check stored",
+        }
         assert _toasted(uow_factory) is None
         assert (await service.get_update_notice())["toast_owed"] is True
 
@@ -1191,7 +1195,11 @@ class TestTheSeenRelease:
 
         answer = await service.mark_update_available_seen("0.34.0")
 
-        assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+        assert answer == {
+            "success": False,
+            "reason": "version_changed",
+            "message": "Not the release the last check stored",
+        }
         assert _seen(uow_factory) is None
         assert (await service.get_update_notice())["seen"] is False
 

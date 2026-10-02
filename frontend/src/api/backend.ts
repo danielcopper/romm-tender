@@ -1328,7 +1328,7 @@ export interface UpdateInstallAttempt {
 }
 
 /**
- * Whether Install is offered for the last seen release, and what it waits for.
+ * Whether Install is offered for the release the last check stored, and what it waits for.
  *
  * `offered` holds only on the installed program, with the check on and a stored
  * release newer than the running one, which `version` names. `wait_reasons` is

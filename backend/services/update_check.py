@@ -3,8 +3,8 @@
 Owns the question and everything the answer needs a decision about: the
 once-a-day throttle, the user's switch, which release they have already waved
 away, which one they have already been told about or seen, and the stored answer
-itself — the install reads the last seen release through here rather than from
-the row. The answer is one-sided — it either has
+itself — the install reads the release the last check stored through here
+rather than from the row. The answer is one-sided — it either has
 something to say or stays silent, and a check that reached nothing is silence
 rather than a failure. The release read itself is a seam; what a release is
 called and how the stored answer is spelled live in
@@ -243,7 +243,7 @@ class UpdateCheckService:
         if not isinstance(version, str) or not version:
             return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, TOASTED_KEY, version):
-            return {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+            return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
         return {"success": True}
 
     async def mark_update_available_seen(self, version: object) -> dict[str, Any]:
@@ -259,7 +259,7 @@ class UpdateCheckService:
         if not isinstance(version, str) or not version:
             return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, SEEN_KEY, version):
-            return {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+            return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
         return {"success": True}
 
     def set_update_check_enabled(self, enabled: object) -> dict[str, Any]:

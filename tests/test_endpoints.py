@@ -146,7 +146,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "acknowledge_update_toast",
     "dismiss_update_announcement",
     "dismiss_update_failure",
-    # Installing the last seen release from the panel. The read touches no
+    # Installing the release the last check stored from the panel. The read touches no
     # RetroDECK state — it reads the stored release, the installer's record,
     # the reload limit's record, this process's memory and Steam's running
     # apps. The press does not name the migration rule because it asks the

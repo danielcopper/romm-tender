@@ -116,10 +116,10 @@ describe("updateNoticeStore", () => {
       vi.mocked(markUpdateAvailableSeen).mockResolvedValue({
         success: false,
         reason: "version_changed",
-        message: "Not the last seen release",
+        message: "Not the release the last check stored",
       });
 
-      await expect(markReleaseSeen("0.34.0")).rejects.toThrow("version_changed: Not the last seen release");
+      await expect(markReleaseSeen("0.34.0")).rejects.toThrow("version_changed: Not the release the last check stored");
 
       expect(getUpdateNoticeState().seen).toBe(false);
     });

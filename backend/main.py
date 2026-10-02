@@ -864,7 +864,7 @@ class Endpoints:
 
     @route
     async def get_update_install_state(self):
-        """Report whether the panel may offer to install the last seen release, and what a press waits for.
+        """Report whether the panel may offer to install the release the last check stored, and what a press waits for.
 
         Returns ``{"offered", "version", "wait_reasons", "paused_downloads",
         "attempt", "try_again"}``. ``offered`` holds only on the installed

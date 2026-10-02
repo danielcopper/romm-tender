@@ -246,7 +246,7 @@ async def test_a_toast_acknowledged_for_another_release_is_refused_in_the_canoni
 
     answer = await harness.endpoints.acknowledge_update_available_toast("98.0.0")
 
-    assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+    assert answer == {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
     assert (await harness.endpoints.get_update_notice())["toast_owed"] is True
 
 
@@ -274,7 +274,7 @@ async def test_seeing_another_release_is_refused_in_the_canonical_shape(harness)
 
     answer = await harness.endpoints.mark_update_available_seen("98.0.0")
 
-    assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+    assert answer == {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
     assert (await harness.endpoints.get_update_notice())["seen"] is False
 
 

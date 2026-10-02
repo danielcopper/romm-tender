@@ -1,4 +1,4 @@
-"""Contract tests for installing the last seen release from the panel, over the real wiring.
+"""Contract tests for installing the release the last check stored from the panel, over the real wiring.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateInstallState``
 takes nothing and ``installUpdate`` the version string it was offered. The real

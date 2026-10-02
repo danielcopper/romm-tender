@@ -1,4 +1,4 @@
-"""Tests for UpdateInstallService — installing the last seen release, and what a press waits for."""
+"""Tests for UpdateInstallService — installing the release the last check stored, and what a press waits for."""
 
 from __future__ import annotations
 
