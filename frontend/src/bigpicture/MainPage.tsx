@@ -37,6 +37,7 @@ import { UpdateNotice } from "./UpdateNotice";
 import { UpdateFailureNotice } from "./UpdateFailureNotice";
 import { UpdateStoppedNotice } from "./UpdateStoppedNotice";
 import { UpdateAnnouncementNotice } from "./UpdateAnnouncementNotice";
+import { WithUpdateDot } from "./UpdateDot";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
@@ -843,7 +844,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("settings")}>
-            Settings
+            <WithUpdateDot>Settings</WithUpdateDot>
           </ButtonItem>
         </PanelSectionRow>
         <PanelSectionRow>

@@ -68,6 +68,7 @@ import { RegisteredDevicesSection } from "./settings/RegisteredDevicesSection";
 import { ControllerSection } from "./settings/ControllerSection";
 import { AdvancedSection } from "./settings/AdvancedSection";
 import { UpdatesSection } from "./settings/UpdatesSection";
+import { WithUpdateDot } from "./UpdateDot";
 import { LibrarySection, AUTO_REGION, DEFAULT_REGION_LABEL } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
@@ -674,10 +675,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const items: ListDetailItem[] = SETTINGS_SECTIONS.map((id) => ({
     id,
     render: (selected: boolean) => (
-      // The marker bar and the label, and nothing else: these rows carry no
-      // control, which is what `selectOnActivate` below is for — the activate
-      // handler it adds to the wrapper is what makes the row a focus stop at
-      // all.
+      // The marker bar and the label — Updates' with the update dot beside it —
+      // and nothing else: these rows carry no control, which is what
+      // `selectOnActivate` below is for — the activate handler it adds to the
+      // wrapper is what makes the row a focus stop at all.
       <div
         data-testid={`settings-section-${id}`}
         style={{
@@ -685,7 +686,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           paddingLeft: `${ROW_MARKER_GAP}px`,
         }}
       >
-        <Field label={SECTION_LABELS[id]} bottomSeparator="none" />
+        <Field
+          label={id === "updates" ? <WithUpdateDot>{SECTION_LABELS[id]}</WithUpdateDot> : SECTION_LABELS[id]}
+          bottomSeparator="none"
+        />
       </div>
     ),
   }));

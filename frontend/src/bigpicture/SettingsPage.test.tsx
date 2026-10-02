@@ -16,7 +16,7 @@ import type { RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
 import { pendingEdits } from "./settings/TextInputModal";
-import { SEEN_AFTER_MS } from "../utils/updateDot";
+import { DOT_FADE_MS, SEEN_AFTER_MS } from "../utils/updateDot";
 import {
   resetUpdateNoticeStoreForTests,
   setUpdateNoticeState,
@@ -2115,6 +2115,45 @@ describe("SettingsPage", () => {
       pass(SEEN_AFTER_MS * 5);
 
       expect(backend.markUpdateAvailableSeen).not.toHaveBeenCalled();
+    });
+
+    const rowDots = (getByTestId: (id: string) => HTMLElement, section: SettingsSection) =>
+      getByTestId(`settings-section-${section}`).querySelectorAll('[data-testid="update-dot"]');
+
+    it("the Updates row carries the dot until then, and no other row does", async () => {
+      const { getByTestId } = renderPage();
+      await flushAsync();
+
+      expect(rowDots(getByTestId, "updates")).toHaveLength(1);
+      expect(getByTestId("settings-section-updates").textContent).toBe("Updates");
+      for (const section of ["connections", "save-sync", "controller", "steam-library", "advanced"] as const) {
+        expect(rowDots(getByTestId, section)).toHaveLength(0);
+      }
+    });
+
+    it("the Updates row carries no dot for a release already seen", async () => {
+      setUpdateNoticeState({ ...CARD, seen: true });
+      const { getByTestId } = renderPage();
+      await flushAsync();
+
+      expect(rowDots(getByTestId, "updates")).toHaveLength(0);
+    });
+
+    it("the Updates row's dot fades out once it is recorded, then is gone", async () => {
+      openOn = "updates";
+      const { getByTestId } = renderPage();
+      await flushAsync();
+      const atRest = rowDots(getByTestId, "updates")[0];
+      expect(atRest?.getAttribute("style")).not.toMatch(/transition/);
+
+      pass(SEEN_AFTER_MS);
+      await flushAsync();
+
+      const [fading] = rowDots(getByTestId, "updates");
+      expect(fading).toBe(atRest);
+      expect(fading?.getAttribute("style")).toMatch(/transition: transform 450ms ease-out, opacity 450ms ease-out/);
+      pass(DOT_FADE_MS);
+      expect(rowDots(getByTestId, "updates")).toHaveLength(0);
     });
 
     it("not on any other section", async () => {

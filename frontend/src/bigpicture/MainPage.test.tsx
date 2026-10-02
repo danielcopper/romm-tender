@@ -2544,6 +2544,41 @@ describe("MainPage", () => {
       expect(onNavigate).toHaveBeenCalledWith(page);
     });
 
+    describe("the update dot beside Settings", () => {
+      const CARD = {
+        available: true,
+        newer: true,
+        latestVersion: "0.34.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: true,
+        toastOwed: false,
+        seen: false,
+      } as const;
+      const dotsBeside = (container: HTMLElement, label: string) =>
+        buttonByExactText(container, label)?.querySelectorAll('[data-testid="update-dot"]').length;
+
+      it("shows while the card would and its release was not seen, on Settings alone", async () => {
+        setUpdateNoticeState(CARD);
+        const { container } = render(<MainPage onNavigate={vi.fn()} />);
+        await flushAsync();
+
+        expect(dotsBeside(container, "Settings")).toBe(1);
+        expect(container.querySelectorAll('[data-testid="update-dot"]')).toHaveLength(1);
+      });
+
+      it.each([
+        ["no card", { available: false }],
+        ["a seen release", { seen: true }],
+      ] as const)("does not show for %s", async (_, change) => {
+        setUpdateNoticeState({ ...CARD, ...change });
+        const { container } = render(<MainPage onNavigate={vi.fn()} />);
+        await flushAsync();
+
+        expect(dotsBeside(container, "Settings")).toBe(0);
+      });
+    });
+
     it("the Last sync row states and does nothing — the menu is the way to the page", async () => {
       // The status rows say what is; the menu navigates. They stay focusable so
       // a reader can walk the block and Steam can scroll it into view, but a
