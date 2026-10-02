@@ -665,21 +665,21 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // the global watcher and gate a start this button has already handled — run
   // the funnel for, or found to need none (the double-gate fix C1).
   //
-  // `reconfirm: false` is for a start after a check that got no answer in time:
+  // `skipReconfirm` is for a start after a check that got no answer in time:
   // the re-confirm asks the same backend, and its timeout would stop the start
   // the user just chose. The watcher's first-contact fallback starts the same
   // way, without it.
   const dispatchLaunch = async (
     gameId: string,
     admission: PruneLeaseAdmission,
-    { reconfirm = true }: { reconfirm?: boolean } = {},
+    { skipReconfirm = false }: { skipReconfirm?: boolean } = {},
   ) => {
     if (!isPruneLeaseAdmissionCurrent(admission)) return;
     setState("launching");
     // Heal any mid-session launch_options drift on this shortcut before launch
     // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay
     // best-effort; timeout or the button's unmount cancels this launch.
-    if (romId && reconfirm) {
+    if (romId && !skipReconfirm) {
       const reconfirm = await reconfirmLaunchOptions(romId, appId, "CustomPlayButton", admission);
       if (reconfirm.status === "cancelled") return;
       if (reconfirm.status === "timeout") {
@@ -839,7 +839,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       case "sync_failed": {
         const proceed = await showFallbackLaunchModal(verdict.message);
         if (proceed) {
-          await dispatchLaunch(gameId, admission, { reconfirm: !verdict.noAnswer });
+          await dispatchLaunch(gameId, admission, { skipReconfirm: verdict.noAnswer === true });
           return "done";
         }
         setState("play");
