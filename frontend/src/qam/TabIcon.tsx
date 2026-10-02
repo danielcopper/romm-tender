@@ -17,9 +17,9 @@
  * **Nothing about it moves at rest, and that is a measurement rather than a
  * taste**. It shipped with a turning ring and a folding body, and the fold alone
  * cost roughly 29% of one core for as long as the menu was open — measured on
- * the device over CDP. An animation added back here costs that again:
- * `docs/architecture/qam-panel.md`, "The glyph", holds the reading in full, and
- * the one motion left — the dot's fade when its release is seen.
+ * the device over CDP. An animation that runs while the menu is open costs
+ * that again: `docs/architecture/qam-panel.md` holds the reading in full, and
+ * the one motion allowed, the dot's fade.
  *
  * **Two things about this are UNMEASURED**, and neither is guessed at here.
  * Whether `size` below lands at the 28 px it is aiming for: its `1.633em` is

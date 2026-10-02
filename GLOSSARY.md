@@ -1152,10 +1152,10 @@ only an available release that is strictly newer than the running version and no
 **installed program** is the process the installed service runs, the one an update can replace; a run from a checkout
 checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
 process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
-whether the notice shows. A release is **seen** once Settings › Updates has been on screen with it; seen is per version,
-and it takes the dots that mark the way to the release and its toast, never the notice. _Avoid_: "new version" for a
-release that is merely published; **seen** for the release the last check stored — the kv key `update_check_last_seen`
-predates the word and says nothing about the user.
+whether the notice shows. A release is **seen** once the user has had Settings › Updates open on it; seen is per
+version, and it takes the dots that mark the way to the release and its toast, never the notice. _Avoid_: "new version"
+for a release that is merely published; **seen** for what a check found — that is the stored release
+(`update_check_last_seen` predates the term).
 
 ### Install attempt / wait reason
 
