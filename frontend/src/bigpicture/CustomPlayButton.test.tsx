@@ -2773,6 +2773,32 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     expect(markLaunchSkipped).toHaveBeenCalledWith(100);
   });
 
+  it("after a no-answer Launch Anyway start, the button shows Resume while the game runs and Play once it exits", async () => {
+    backendNeverAnswers();
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(true);
+
+    const { getByText, queryByText } = await pressPlay();
+    await advance(5000);
+    expect(SteamClient.Apps.RunGame).toHaveBeenCalledTimes(1);
+    expect(getByText("Launching...")).toBeInTheDocument();
+
+    // The session manager's start and stop for this game, as it dispatches them.
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
+      );
+    });
+    expect(getByText("Resume")).toBeInTheDocument();
+
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_session_changed", { detail: { running: false, appId: 100, romId: 42 } }),
+      );
+    });
+    expect(getByText("Play")).toBeInTheDocument();
+    expect(queryByText("Launching...")).not.toBeInTheDocument();
+  });
+
   it("a backend that never answers: Cancel on the dialog returns to Play and starts nothing", async () => {
     backendNeverAnswers();
     vi.mocked(showFallbackLaunchModal).mockResolvedValue(false);
