@@ -76,7 +76,7 @@ currently **blocked** on a version-aware RomM API gateway #143) and multi-emulat
   it is not forgotten; it lands additively when #140 unblocks. Until then a multi-file install keeps "one launch file +
   its folder," which is sufficient for the current single-launch-target behavior (multi-disc via `.m3u`, base game for
   Switch) — it does **not** yet model per-file categories or multi-destination placement.
-- Vocabulary (`file_path` = launch target, `rom_dir` = dedicated folder) is recorded in `CONTEXT.md`.
+- Vocabulary (`file_path` = launch target, `rom_dir` = dedicated folder) is recorded in `GLOSSARY.md`.
 - A separate latent bug — the ES-DE per-game core override writes the gamelist `<path>` as a bare basename, which is
   already wrong for folder-backed ROMs — is tracked as its own follow-up and is **not** fixed here.
 

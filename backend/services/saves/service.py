@@ -54,7 +54,7 @@ class SaveService:
     public method delegates to a sub-service or reads ``settings.json``. A use
     case an endpoint calls checks its conflict rules at its entry, under that
     endpoint's name, and answers the canonical refusal when one holds
-    (CONTEXT.md → Conflict rules). Bulk local-save deletion is the only flow
+    (GLOSSARY.md → Conflict rules). Bulk local-save deletion is the only flow
     whose orchestration lives directly on the aggregate root because it spans
     :class:`RomInfoService` (file discovery), the on-disk save files (via the
     injected ``SaveFileStore``), and the ``rom_save_sync_states`` repository

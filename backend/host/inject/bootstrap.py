@@ -12,7 +12,7 @@ fetched at the moment of failure, because a fetch is one of the things that can
 have failed. What is left is nodes built by hand in the expression that is
 already running. ``frontend/src/boot/StartupFailurePanel.tsx`` is its near
 relative and answers a DIFFERENT question, which is why it is not called a
-fallback page here (CONTEXT.md → Load-failure card): that one is a React
+fallback page here (GLOSSARY.md → Load-failure card): that one is a React
 component rendered inside a panel that DID mount, when a search into Steam's own
 interface came back empty.
 

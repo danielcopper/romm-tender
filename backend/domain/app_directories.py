@@ -65,7 +65,7 @@ class AppDirectories:
     """User intent — ``settings.json`` and nothing else."""
 
     data_dir: str
-    """What cannot be fetched again. CONTEXT.md names what is in it."""
+    """What cannot be fetched again. GLOSSARY.md names what is in it."""
 
     cache_dir: str
     """Covers and artwork: everything re-derivable from the server."""

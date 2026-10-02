@@ -150,9 +150,9 @@ for its lifetime is named below. The achievement refresh a game session's finali
 because it only reads — the ROM's RetroAchievements id and RomM's achievement data — and writes nothing but an in-memory
 cache.
 
-Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
+Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in GLOSSARY.md → Prune
 conflicts). The composition root builds it before any service and hands it on. The prune service registers its run
-there. The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules) hold that use case's operation
+there. The conflict rules a use case checks at its entry (GLOSSARY.md → Conflict rules) hold that use case's operation
 there, retain one for detached work it starts — a background save-status check, a download, the outbox flush a play
 session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the

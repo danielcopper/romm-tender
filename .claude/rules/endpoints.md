@@ -26,7 +26,7 @@ Two adjacent rules that bite when adding or changing an endpoint:
 
 - **An endpoint is a public method on `Endpoints` marked `@route`**, placed topmost — `def` or `async def` alike. An
   endpoint whose body never awaits is a `def`; nothing mechanical checks that. Its conflict rules are not the
-  endpoint's: the use case it calls checks them (CONTEXT.md → Conflict rules), which is why a use case that checks any
+  endpoint's: the use case it calls checks them (GLOSSARY.md → Conflict rules), which is why a use case that checks any
   is `async`. `host.dispatch.route_names` resolves the set off the loaded class, `scripts/check_endpoint_parity.py`
   derives the same set from the source (and fails on a `@route` below another decorator or on an underscored name), and
   `tests/host/test_dispatch.py` asserts the two are equal. A method without `@route` is not reachable at all, and one

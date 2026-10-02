@@ -10,7 +10,7 @@
  * The pair is the RomM library's inventory for the platform: `server_count` is
  * what the library holds, and `local_count` how many of those the plugin found
  * at their destination. The rest of the tree calls that axis the **held/offered
- * ratio** (`domain/bios_status.py`, `types/firmware.ts`, CONTEXT.md → Library
+ * ratio** (`domain/bios_status.py`, `types/firmware.ts`, GLOSSARY.md → Library
  * inventory) — the same two numbers under the name the code gives them, which is
  * the name to search for when this wording does not appear.
  *

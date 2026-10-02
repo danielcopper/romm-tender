@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 LAST_RUN_KEY = "last_run_version"
 
 # The ``rolled_back_at`` of the record whose card the user waved away. User
-# intent, so settings.json rather than kv_config (CONTEXT.md, Persistence
+# intent, so settings.json rather than kv_config (GLOSSARY.md, Persistence
 # boundary), and no default entry: absent already means nothing dismissed. It
 # holds the record's stamp rather than a flag, so the next rollback raises the
 # card again on its own.

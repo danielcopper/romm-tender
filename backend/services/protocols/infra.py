@@ -335,7 +335,7 @@ class ConflictRules(Protocol):
     start first, then checks the named rules, and holds the reservation for the
     block. ``renew_lease`` extends a live lease by token,
     and ``release_orphaned_leases`` drops every lease and answers how many.
-    CONTEXT.md → Conflict rules, Prune conflicts.
+    GLOSSARY.md → Conflict rules, Prune conflicts.
     """
 
     def hold(

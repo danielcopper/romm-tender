@@ -143,7 +143,7 @@ export interface PlatformRow {
    *  This is the count of SHORTCUTS, so it is what the Remove group says and acts
    *  on. The header line states `reachableCount` instead. */
   shortcutCount: number | null;
-  /** How many of the platform's ROMs are reachable from Steam (CONTEXT.md →
+  /** How many of the platform's ROMs are reachable from Steam (GLOSSARY.md →
    *  Reachable), less the versions RomM no longer serves
    *  (`RegistryPlatform.reachable_count`). This is what the header line states;
    *  `null` (the same read failure as `shortcutCount`) drops that half of the

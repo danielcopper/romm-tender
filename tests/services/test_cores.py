@@ -822,7 +822,7 @@ class TestSetGameCoreTransactionBoundary:
     ``config.json`` once and memoises it for the life of the process, so it is
     the first call that can land on the file. A UoW takes SQLite's ``BEGIN
     IMMEDIATE`` write lock, so either read held inside one stalls every other
-    writer for its duration (CONTEXT.md → Unit of Work, #1779).
+    writer for its duration (GLOSSARY.md → Unit of Work, #1779).
     ``FakeUnitOfWork`` shares no connection, so what a test can see is the
     ordering.
     """

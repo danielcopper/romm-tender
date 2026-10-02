@@ -39,7 +39,7 @@ a download" becomes simply "no row."
 
 Secondary factors:
 
-- **One Repository per aggregate** (the CONTEXT.md rule) maps 1:1 onto one table per aggregate — no multiple
+- **One Repository per aggregate** (the GLOSSARY.md rule) maps 1:1 onto one table per aggregate — no multiple
   repositories writing column slices of a shared row, and no implicit "the `roms` row must exist before any secondary
   write" ordering baked into the persistence layer.
 - **Legibility / AI-navigability** — "where is `RomMetadata` persisted?" answers itself (`rom_metadata`). The mega-table

@@ -165,13 +165,13 @@ Format: **invariant** — tier — enforced by.
   is the read whose mix-up a user would see rather than the next start only, since
   `launcher_in_bin_dir(directories.bin_dir)` is carried on as `ShortcutLauncher.path` and baked into every shortcut's
   `exe`. `bin_dir` is one of the two fields not named after this program (the other is `code_dir`, wherever the program
-  was installed; CONTEXT.md's "The program's directories" is the home of that split) — it is the directory every program
-  a user installs for themselves puts a binary in, which is why nothing under it may be treated as ours to remove.
-  Nothing mechanical tells the seven apart: they are seven `str` fields on one frozen struct, so a read of the wrong one
-  is a rename away and fails silently in whichever direction it happened to point. **One raw read of `TENDER_CODE_DIR`
-  is deliberate and is not a directory read**: `domain/update_release.py::resolve_update_source`, called once by
-  `main.run()` beside `resolve_directories`, asks whether the variable was SET and whether it names the directory this
-  process's code sits in — which decides whether this is the installed program an update may replace.
+  was installed; GLOSSARY.md's "The program's directories" is the home of that split) — it is the directory every
+  program a user installs for themselves puts a binary in, which is why nothing under it may be treated as ours to
+  remove. Nothing mechanical tells the seven apart: they are seven `str` fields on one frozen struct, so a read of the
+  wrong one is a rename away and fails silently in whichever direction it happened to point. **One raw read of
+  `TENDER_CODE_DIR` is deliberate and is not a directory read**: `domain/update_release.py::resolve_update_source`,
+  called once by `main.run()` beside `resolve_directories`, asks whether the variable was SET and whether it names the
+  directory this process's code sits in — which decides whether this is the installed program an update may replace.
   `AppDirectories.code_dir` cannot answer that, because the ladder has already folded "set" and "fell back to where the
   code sits" into one value; the function derives no directory
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
@@ -542,7 +542,7 @@ Format: **invariant** — tier — enforced by.
   one shared matcher; the file-I/O rule below is a different hazard with its own seam list and its own failure message,
   and neither entry is evidence about the other)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
-  server I/O (CONTEXT.md → Unit of Work, ADR-0006)** — check — `scripts/check_uow_seam_nesting.py`, second seam family
+  server I/O (GLOSSARY.md → Unit of Work, ADR-0006)** — check — `scripts/check_uow_seam_nesting.py`, second seam family
   (`IO_SEAM_METHODS`). The list is **the seams this checker can see and has been told about, never an inventory of the
   I/O seams that exist**: `DiscResolver.enumerate_discs` / `.resolve_for_install` (a recursive walk of the ROM's install
   directory), the three `CoreInfoProvider` reads — `get_active_core`, `get_default_emulator`, `get_emulator_options` —
@@ -865,8 +865,8 @@ Format: **invariant** — tier — enforced by.
   the weaker source — `os.path.exists` on a path the plugin assembled, which can render a satisfied requirement as
   missing. `services/firmware/status.py` holds that store itself, for `_stamp_deletable`'s records-still-on-disk probe,
   so the wrong probe is one line away from every row builder that should be asking `FirmwareDemand`. Related and
-  separate: presence is not the row's verdict (CONTEXT.md → Row verdict), and a withheld verdict is not an absence — its
-  cause is read off the row's caveat codes and, for a declared FILE, off its `checked` (CONTEXT.md → Byte reading),
+  separate: presence is not the row's verdict (GLOSSARY.md → Row verdict), and a withheld verdict is not an absence —
+  its cause is read off the row's caveat codes and, for a declared FILE, off its `checked` (GLOSSARY.md → Byte reading),
   never off the verdict itself. Three of that vocabulary's eight values sit behind one withheld verdict and are three
   different statements: a file the emulator READ and does not recognise was checked, so wording it "could not be
   checked" is untrue; `refused` is not withheld at all, arriving with the verdict already `false`. Nothing checks that a
@@ -1195,7 +1195,7 @@ Format: **invariant** — tier — enforced by.
   caches an answer** — only the installation handle is memoised — because the user changes a core's options in the
   emulator's own quick menu between a launch and the next sync; a display cache added without invalidating it on every
   sync entry is the one change that makes this rule fail silently and expensively. Detail:
-  `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save scope
+  `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

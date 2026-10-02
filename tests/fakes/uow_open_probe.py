@@ -1,6 +1,6 @@
 """Records whether a Unit of Work was open when a seam ran.
 
-CONTEXT.md's Unit of Work entry keeps a transaction to database reads and
+GLOSSARY.md's Unit of Work entry keeps a transaction to database reads and
 writes: the real ``SqliteUnitOfWork`` opens with ``BEGIN IMMEDIATE``, SQLite's
 global write lock, so a seam doing file or server I/O inside one blocks every
 other connection in the plugin until ``busy_timeout`` gives up. A test driving

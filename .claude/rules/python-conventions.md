@@ -28,8 +28,8 @@ A sibling set that mixes suffixes reflects a shape difference, not an inconsiste
 The two twin idioms coexist by access level; converging them is open work, so match the idiom already used in the file
 you are editing rather than introducing the other one.
 
-`<verb>_unchecked` is not a synchronous twin: it is the method without its conflict rules (CONTEXT.md → Conflict rules),
-and is never spelled `do_<verb>`.
+`<verb>_unchecked` is not a synchronous twin: it is the method without its conflict rules (GLOSSARY.md → Conflict
+rules), and is never spelled `do_<verb>`.
 
 ## Docstrings — intent over behavior
 

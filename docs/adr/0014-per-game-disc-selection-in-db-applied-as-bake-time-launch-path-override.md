@@ -125,7 +125,7 @@ the discs (§2), reading `roms.selected_disc`, and resolving (`domain/disc_selec
 
 The resolved path is what each bake site folds into `build_launch_options`. **`RomInstall.file_path` is never
 rewritten** — save-path resolution, core resolution, and the displayed filename all derive from `file_path`
-([ADR-0008](0008-rom-install-launch-file-and-rom-dir.md), `CONTEXT.md`), and the disc override must not perturb any of
+([ADR-0008](0008-rom-install-launch-file-and-rom-dir.md), `GLOSSARY.md`), and the disc override must not perturb any of
 them. It changes only the path argument in the baked launch command.
 
 ### 5. One read seam, three bake sites — composes with the core override

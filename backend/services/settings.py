@@ -112,7 +112,7 @@ class SettingsService:
 
     The server-URL, custom-header and Steam Input writes check their endpoint's
     conflict rules at their entry, under that endpoint's name, and answer the
-    canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    canonical refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     LOG_LEVELS: ClassVar[dict[str, int]] = {"debug": 0, "info": 1, "warn": 2, "error": 3}

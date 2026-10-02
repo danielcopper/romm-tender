@@ -63,7 +63,7 @@ class TestResidentGroupKeys:
 
 
 class TestReachableRomIds:
-    """Which ROMs the sync's collection filing resolves to a shortcut — CONTEXT.md → Reachable."""
+    """Which ROMs the sync's collection filing resolves to a shortcut — GLOSSARY.md → Reachable."""
 
     def test_a_bound_row_is_reachable(self, library):
         _seed_rom_row(library, 1, app_id=100, platform_slug="n64", sibling_group_key=None)

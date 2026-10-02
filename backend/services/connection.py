@@ -133,7 +133,7 @@ class ConnectionService:
 
     The connection test, the three sign-ins and the sign-out each check their
     endpoint's conflict rules at their entry, under that endpoint's name, and
-    answer the canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    answer the canonical refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: ConnectionServiceConfig) -> None:

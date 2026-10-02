@@ -48,9 +48,9 @@ and stamps its completion when none are. What it can still find is a shortcut wr
   remove all non-Steam shortcuts and sync again. That costs the artwork Steam holds for them and any per-shortcut
   setting the user made in Steam itself; the library, the installs, the saves and the settings are untouched, because
   none of them is keyed on a shortcut.
-- **The data root holds nothing executable.** What is in it is CONTEXT.md's "The program's directories" entry; the point
-  here is only that none of it is a program. A backup of that root is data, and restoring it puts nothing on the machine
-  that can run.
+- **The data root holds nothing executable.** What is in it is GLOSSARY.md's "The program's directories" entry; the
+  point here is only that none of it is a program. A backup of that root is data, and restoring it puts nothing on the
+  machine that can run.
 - **The uninstaller leaves the launcher.** Every shortcut names it, and removing the sync tool is no reason to stop a
   user's games from starting. The cost is one file left behind, named after this program so it can be found.
 - **A `TENDER_BIN_DIR` whose last component is not `bin` breaks ownership silently.** The suffix is two components, so a

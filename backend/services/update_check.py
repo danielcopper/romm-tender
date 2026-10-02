@@ -45,7 +45,7 @@ _CHECK_INTERVAL_SECONDS = 24 * 60 * 60
 _DUE_POLL_SECONDS = 60 * 60
 
 # The version whose card the user waved away. User intent, so settings.json
-# rather than kv_config (CONTEXT.md, Persistence boundary), and no default entry:
+# rather than kv_config (GLOSSARY.md, Persistence boundary), and no default entry:
 # absent already means nothing dismissed. It holds a VERSION rather than a flag,
 # so the next release raises the card again on its own.
 DISMISSED_KEY = "update_notice_dismissed_version"

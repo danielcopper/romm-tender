@@ -57,7 +57,7 @@ all **deleted**.
 An **aggregate** is a cluster of domain objects treated as a single unit for data consistency, with one root entity that
 owns all invariants and is the only external entry point. The full definition — root, identity, transaction boundary,
 by-id references, mutation-via-methods — lives in the
-[`Aggregate` glossary entry in `CONTEXT.md`](https://github.com/danielcopper/romm-tender/blob/main/CONTEXT.md). This
+[`Aggregate` glossary entry in `GLOSSARY.md`](https://github.com/danielcopper/romm-tender/blob/main/GLOSSARY.md). This
 page uses that vocabulary; it does not re-derive the Cosmic Python theory.
 
 Aggregate boundaries are **invariant boundaries, not storage boundaries** — one aggregate may be backed by several
@@ -253,7 +253,7 @@ install is either fully present or absent, metadata is cached or not — and sep
 row" rather than a wide row of NULLs the schema cannot keep internally consistent. The rejected mega-table alternative
 is recorded in
 [ADR-0002](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0002-per-rom-table-per-aggregate-split.md).
-One Repository per aggregate (the [CONTEXT.md](https://github.com/danielcopper/romm-tender/blob/main/CONTEXT.md) rule)
+One Repository per aggregate (the [GLOSSARY.md](https://github.com/danielcopper/romm-tender/blob/main/GLOSSARY.md) rule)
 maps 1:1 onto these tables.
 
 | Table                       | Backs                            | Key                                | Row present when                         |
@@ -273,7 +273,7 @@ maps 1:1 onto these tables.
 | `collection_sync_state`     | `CollectionSyncState`            | `(collection_id, collection_kind)` | a standard/smart collection fully synced |
 | `kv_config`                 | misc singleton scalars           | `key`                              | per key                                  |
 
-`SyncRun` carries its own invariants, so per CONTEXT.md it gets a typed table rather than untyped `kv_config` rows. The
+`SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
 `platform_slug → display_name` cache), `retrodeck_home_path` (+ its pending-migration `_previous`, and — when the home
 is changed _again_ before the migration runs — a `_hops` JSON array of the additional pending homes, oldest→newest, so
@@ -740,7 +740,7 @@ triggers for revisiting that scope are recorded in `.claude/rules/adapters-domai
 
 - [Backend Architecture](backend-architecture.md) — the four-layer split, the `XxxServiceConfig` pattern, and the
   boundary-enforcement layers that aggregates build on.
-- [`CONTEXT.md`](https://github.com/danielcopper/romm-tender/blob/main/CONTEXT.md) — the `Aggregate`, `kv_config`, and
+- [`GLOSSARY.md`](https://github.com/danielcopper/romm-tender/blob/main/GLOSSARY.md) — the `Aggregate`, `kv_config`, and
   `Rom`/`ROM`/`RomM` glossary entries.
 - [ADR-0001](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0001-adopt-platform-aggregate.md) — the
   decision to adopt `Platform` as a full aggregate (**superseded by ADR-0003**).

@@ -1,7 +1,7 @@
 """The prune conflicts: what may run beside a removed-game cleanup, and what holds it off.
 
 ``PruneConflicts`` records the four kinds of claim that conflict with a cleanup —
-operation, lease, reservation and run claim, defined in CONTEXT.md → Prune
+operation, lease, reservation and run claim, defined in GLOSSARY.md → Prune
 conflicts. An operation is refused while a reservation or a run claim is held;
 a reservation is refused while an operation or a lease is held. A run claim
 does not refuse a reservation, because the prune service refuses a second

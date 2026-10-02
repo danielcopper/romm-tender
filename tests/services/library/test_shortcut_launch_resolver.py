@@ -76,7 +76,7 @@ class TestInstallPathReadsCloseTheUnitOfWorkFirst:
     ``resolve_for_install`` lists the install directory, once per installed ROM.
     A UoW takes SQLite's ``BEGIN IMMEDIATE`` write lock, so a listing held
     inside one blocks every other writer in the backend for the whole scan
-    (CONTEXT.md → Unit of Work, #1779). ``FakeUnitOfWork`` shares no connection,
+    (GLOSSARY.md → Unit of Work, #1779). ``FakeUnitOfWork`` shares no connection,
     so what a test can see is the ordering: the rows are snapshotted inside the
     transaction and every resolve runs after it closes.
     """

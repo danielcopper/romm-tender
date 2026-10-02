@@ -58,7 +58,7 @@ export interface CollectionSyncSetting {
    */
   is_own: boolean | null;
   /**
-   * How many of the collection's members are in Steam (CONTEXT.md →
+   * How many of the collection's members are in Steam (GLOSSARY.md →
    * Reachable). Absent is unknown, never zero.
    */
   in_steam_count?: number;
@@ -274,7 +274,7 @@ export interface RegistryPlatform {
    *  group acts on, and never what the header line states. */
   count: number;
   /**
-   * How many of the platform's ROMs are reachable from Steam (CONTEXT.md →
+   * How many of the platform's ROMs are reachable from Steam (GLOSSARY.md →
    * Reachable), less the versions the fetch its completion stamp records did not
    * return, left out because RomM no longer serves them. It need not equal
    * `count` in either direction: a pane can read fewer here than it has shortcuts

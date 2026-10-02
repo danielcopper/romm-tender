@@ -26,7 +26,7 @@ the deadlock, not a check that would stop you — nothing will.
 The ``disc_resolver`` seam is held to the same boundary from the other side:
 both install-path readers snapshot their ``(install, selected_disc)`` pairs
 inside the read UoW and close it before resolving a single one, because
-``resolve_for_install`` lists the install directory. CONTEXT.md's Unit of Work
+``resolve_for_install`` lists the install directory. GLOSSARY.md's Unit of Work
 entry keeps a transaction to database reads and writes — ``BEGIN IMMEDIATE``
 takes the write lock even for a read, so a directory walk per installed ROM
 held inside one stalls every other writer for as long as the walk takes. The

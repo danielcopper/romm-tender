@@ -124,7 +124,7 @@ class PlaytimeService:
 
     :meth:`record_session_start` and :meth:`reconcile_playtime` check their
     conflict rules at their entry, under their endpoint's name, and answer the
-    canonical refusal when one holds (CONTEXT.md → Conflict rules).
+    canonical refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: PlaytimeServiceConfig) -> None:

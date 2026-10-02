@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 # The completion stamp. A derived marker about work THIS install finished — not
 # a user intent — so it lives in ``kv_config`` beside the other cross-run
-# markers rather than in ``settings.json`` (CONTEXT.md, persistence boundary).
+# markers rather than in ``settings.json`` (GLOSSARY.md, persistence boundary).
 KV_RELOCATION_DONE = "shortcut_launcher_relocated"
 
 

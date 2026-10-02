@@ -126,7 +126,7 @@ class ArtworkService:
 
     A use case an endpoint calls checks its conflict rules at its entry, under
     that endpoint's name, and answers the canonical refusal when one holds
-    (CONTEXT.md → Conflict rules). The library sync's own cover work reaches
+    (GLOSSARY.md → Conflict rules). The library sync's own cover work reaches
     this service through ``ArtworkManager`` and checks no rule.
     """
 

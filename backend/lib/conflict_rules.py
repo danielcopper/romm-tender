@@ -1,4 +1,4 @@
-"""The conflict rules a use case checks at its entry (CONTEXT.md → Conflict rules), and the refusals they answer with.
+"""The conflict rules a use case checks at its entry (GLOSSARY.md → Conflict rules), and the refusals they answer with.
 
 A use case names the endpoint it serves as the label, so the prune conflicts
 name the holder in their log lines. The rule-coverage tests

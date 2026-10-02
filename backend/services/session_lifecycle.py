@@ -217,7 +217,7 @@ class SessionLifecycleService:
 
         Checks the ``finalize_game_session`` endpoint's conflict rules at its
         entry and answers the canonical refusal dict when one holds, in place of
-        a verdict (CONTEXT.md → Conflict rules).
+        a verdict (GLOSSARY.md → Conflict rules).
 
         Parameters
         ----------

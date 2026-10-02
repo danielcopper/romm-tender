@@ -145,7 +145,7 @@ class VersionSwitchService:
     The write checks its endpoint's conflict rules at its entry, under that
     endpoint's name, and answers the canonical refusal when one holds; the
     removed-game cleanup, which switches from inside its own run, calls
-    ``switch_version_unchecked`` instead (CONTEXT.md → Conflict rules).
+    ``switch_version_unchecked`` instead (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: VersionSwitchServiceConfig) -> None:

@@ -238,7 +238,7 @@ listed, and the reason the import gave.
 **It is not a React component and it fetches nothing.** Its own subject is that Steam's React globals may be missing,
 and a second file fetched at the moment of failure could fail for the reason the first one did. It is plain nodes built
 by hand in the expression that is already running. `frontend/src/boot/StartupFailurePanel.tsx` is its near relative and
-answers a different question — see CONTEXT.md → Load-failure card for why the two are not called the same thing.
+answers a different question — see GLOSSARY.md → Load-failure card for why the two are not called the same thing.
 
 **It never takes the machine over.** Whether Steam's controller focus can reach a node appended to its document from
 outside its own React tree is not established here, so the card is built so that the answer does not matter: it is drawn

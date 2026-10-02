@@ -1,7 +1,7 @@
 """PruneLeaseService — the frontend's hold on the leases it was handed.
 
 A lease holds off a removed-game cleanup across Steam writes the frontend makes
-after a call or an event has answered (CONTEXT.md → Prune conflicts). The
+after a call or an event has answered (GLOSSARY.md → Prune conflicts). The
 frontend renews the leases it holds, releases each once its writes are done,
 and on mount disowns every lease an earlier frontend context left behind.
 

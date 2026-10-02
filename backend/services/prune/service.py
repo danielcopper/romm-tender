@@ -187,7 +187,7 @@ class PruneService:
         """Create or page an ephemeral local-only candidate preview.
 
         Checks its endpoint's conflict rules at its entry and answers the
-        canonical refusal when one holds (CONTEXT.md → Conflict rules).
+        canonical refusal when one holds (GLOSSARY.md → Conflict rules).
         """
         async with self._rules.hold("get_prune_preview", update=True, migration=True, sync=True) as refusal:
             if refusal is not None:
@@ -266,7 +266,7 @@ class PruneService:
 
         The whole start runs under the cleanup's exclusive reservation, taken
         before the update, migration and sync rules are asked, and answers their
-        canonical refusal when one holds (CONTEXT.md → Conflict rules, Prune
+        canonical refusal when one holds (GLOSSARY.md → Conflict rules, Prune
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.
         """

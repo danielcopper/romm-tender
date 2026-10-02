@@ -411,4 +411,4 @@ left the silent merge — and the uninstall that deletes the user's unrelated fi
   from `rom_dir` presence
 - [ADR-0027](0027-claim-discipline-follows-the-recovery-bundle.md) — the claim discipline a removal applies to the files
   an adopted row points at
-- [CONTEXT.md](../../CONTEXT.md) — **Adopt**, **Adopted install**, **Adoption candidate**
+- [GLOSSARY.md](../../GLOSSARY.md) — **Adopt**, **Adopted install**, **Adoption candidate**

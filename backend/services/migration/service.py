@@ -89,7 +89,7 @@ class MigrationService:
 
     The migration checks its endpoint's conflict rules at its entry, under that
     endpoint's name, and answers the canonical refusal when one holds
-    (CONTEXT.md → Conflict rules).
+    (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: MigrationServiceConfig) -> None:

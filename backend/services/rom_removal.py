@@ -68,7 +68,7 @@ class RomRemovalService:
     A use case an endpoint calls checks its conflict rules at its entry, under
     that endpoint's name, and answers the canonical refusal when one holds; a
     peer service that calls one calls its ``<verb>_unchecked`` twin instead
-    (CONTEXT.md → Conflict rules).
+    (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(

@@ -309,7 +309,7 @@ class TestTransactionBoundary:
     ROM's active core through a seam that opens its own UoW. A UoW takes
     SQLite's non-reentrant ``BEGIN IMMEDIATE`` write lock, so file I/O held
     inside one stalls every other writer in the plugin and a nested open
-    self-deadlocks (CONTEXT.md → Unit of Work, #1779). ``FakeUnitOfWork``
+    self-deadlocks (GLOSSARY.md → Unit of Work, #1779). ``FakeUnitOfWork``
     shares no connection, so what a test can see is the ordering.
     """
 

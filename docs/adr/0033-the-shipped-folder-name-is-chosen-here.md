@@ -57,7 +57,7 @@ fails the release build loudly instead of shipping a folder that moves everyone'
 
 **4. The name is a home of the identifier, and never derived from another one.** It answers its own question — what
 folder does a release unpack into — and must stay free to disagree with where the user's data lives
-([CONTEXT.md → Display name vs identifier](../../CONTEXT.md)). Deriving either from the other reintroduces exactly the
+([GLOSSARY.md → Display name vs identifier](../../GLOSSARY.md)). Deriving either from the other reintroduces exactly the
 coupling this ADR removes, in whichever direction the derivation points.
 
 ## Consequences
@@ -99,5 +99,5 @@ is that the name happens to be right today.
 - [ADR-0031](0031-user-data-lives-outside-the-plugin-directory.md) — the user's data leaves the plugin's directories.
 - [ADR-0032](0032-shortcuts-are-rewritten-in-place.md) — the launcher leaves the plugin folder and shortcuts are
   repointed.
-- [CONTEXT.md → Display name vs identifier](../../CONTEXT.md) — which of the plugin's two names a new string takes, and
-  the homes each has.
+- [GLOSSARY.md → Display name vs identifier](../../GLOSSARY.md) — which of the plugin's two names a new string takes,
+  and the homes each has.

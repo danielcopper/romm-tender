@@ -8,7 +8,7 @@
  * ungrouped: six rows that each name a thing are their own order.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Data
- * Management, and CONTEXT.md → Inventory row (Data Management).
+ * Management, and GLOSSARY.md → Inventory row (Data Management).
  */
 
 export type DataRowId = "shortcuts" | "rom-files" | "grid-images" | "non-steam" | "removed-games" | "recovery-bundles";

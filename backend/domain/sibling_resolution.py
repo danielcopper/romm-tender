@@ -246,7 +246,7 @@ def group_rows(rows: Iterable[Rom]) -> list[list[Rom]]:
 
 
 def reachable_rom_ids(rows: Iterable[Rom]) -> set[int]:
-    """Every ``rom_id`` among *rows* a Steam shortcut reaches (CONTEXT.md → Reachable).
+    """Every ``rom_id`` among *rows* a Steam shortcut reaches (GLOSSARY.md → Reachable).
 
     A sibling group is one game and gets one shortcut (ADR-0021 §2), so every
     row of a group holding a binding is reached through it — the game's page

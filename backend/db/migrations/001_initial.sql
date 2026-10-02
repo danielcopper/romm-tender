@@ -38,7 +38,7 @@
 --   all-or-nothing groups (an install is all-present or absent) that loose
 --   nullable columns in a mega-table could not. Read perf is a non-issue at
 --   single-user scale (the deciding factor was integrity, not speed). One
---   Repository per aggregate (CONTEXT.md) maps 1:1 onto these tables. Rationale
+--   Repository per aggregate (GLOSSARY.md) maps 1:1 onto these tables. Rationale
 --   and the rejected mega-table alternative: docs/adr/0002.
 --
 -- Foreign keys: per-ROM child tables CASCADE to roms; the platform_slug carried
@@ -272,7 +272,7 @@ CREATE TABLE sync_runs (
 
 -- -----------------------------------------------------------------------------
 -- kv_config — small singleton scalars that do not justify their own aggregate
--- (CONTEXT.md). One row per key; value is a scalar or JSON-encoded blob the app
+-- (GLOSSARY.md). One row per key; value is a scalar or JSON-encoded blob the app
 -- interprets per key. Anything with its own lifecycle or invariants does NOT
 -- belong here (it gets an aggregate table) — kv_config is for the truly
 -- miscellaneous.

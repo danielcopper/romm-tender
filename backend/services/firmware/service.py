@@ -73,7 +73,7 @@ class FirmwareService:
 
     Each download and delete an endpoint calls checks that endpoint's conflict
     rules here, under its name, and answers the canonical refusal when one
-    holds (CONTEXT.md → Conflict rules); the sub-services check none.
+    holds (GLOSSARY.md → Conflict rules); the sub-services check none.
     """
 
     def __init__(

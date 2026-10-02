@@ -120,7 +120,7 @@ class LibraryService:
     façade itself owns the box and exposes the use cases the endpoints call;
     every implementation method lives on one of the sub-services. A use case an
     endpoint calls checks its conflict rules at its entry, under that endpoint's
-    name, and answers the canonical refusal when one holds (CONTEXT.md →
+    name, and answers the canonical refusal when one holds (GLOSSARY.md →
     Conflict rules).
     """
 

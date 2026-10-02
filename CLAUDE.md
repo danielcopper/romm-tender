@@ -32,8 +32,8 @@ Each page below is the current-truth owner of its area, and most carry their own
 in the area. **Do not cite ADRs from this file** — an ADR is frozen history (and may be `Proposed` or superseded, which
 is invisible at the citation site), so reach it through the page that owns the topic.
 
-- Domain vocabulary — the canonical meaning of project terms — [CONTEXT.md](CONTEXT.md). A glossary, not a spec: use its
-  wording in code, issues, and PRs, and add a term there the moment it resolves in discussion.
+- Domain vocabulary — the canonical meaning of project terms — [GLOSSARY.md](GLOSSARY.md). A glossary, not a spec: use
+  its wording in code, issues, and PRs, and add a term there the moment it resolves in discussion.
 - Steam shortcuts — appIds, artwork, launch-option writes, removal churn —
   [steam-non-steam-shortcuts.md](docs/architecture/steam-non-steam-shortcuts.md)
 - QAM panel — pages and their widths, the wide-page frame, list-and-detail navigation, notices and their homes —

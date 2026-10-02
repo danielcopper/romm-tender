@@ -41,7 +41,7 @@ def config_root(user_home: str) -> str:
 
 
 def data_root(user_home: str) -> str:
-    """The root holding what cannot be fetched again — CONTEXT.md names what that is.
+    """The root holding what cannot be fetched again — GLOSSARY.md names what that is.
 
     Two things are NOT here, and both were once. Covers and artwork are
     re-derivable from the server and live under the cache root

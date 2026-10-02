@@ -6,12 +6,12 @@ every other page from there. Steam renders the QAM 348 px wide; a page of this p
 Steam's own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages
 exist, which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is
 a Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
-**Game-detail store** (CONTEXT.md).
+**Game-detail store** (GLOSSARY.md).
 
 The structure below is the target decided in [#1809](https://github.com/danielcopper/romm-tender/issues/1809) and
 rebuilt one page at a time under [#1808](https://github.com/danielcopper/romm-tender/issues/1808). Where today's panel
 differs, the difference is stated; the PR that lands a page updates its row in the page table. The vocabulary — **QAM
-page**, **Main**, **wide page**, **list and detail**, **notice**, **home** — is defined in CONTEXT.md and used here
+page**, **Main**, **wide page**, **list and detail**, **notice**, **home** — is defined in GLOSSARY.md and used here
 without restating it. The width mechanism's decision record is
 [ADR-0029](../adr/0029-wide-qam-pages-drive-steams-friends-expansion.md).
 
@@ -1188,7 +1188,7 @@ Two things the line does not claim. The halves count **different populations** �
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
 outstanding as of the last sync" rather than a fresh server-side proof. And **a version RomM no longer serves is
 reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as an identity anchor and only the
-removed-game cleanup removes one — and its group's shortcut still reaches it (CONTEXT.md → Reachable), but the right
+removed-game cleanup removes one — and its group's shortcut still reaches it (GLOSSARY.md → Reachable), but the right
 half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less those
 the fetch its completion stamp records did not return, which `domain/fetch_generation.py::prune_candidate_ids` already
 answers for the cleanup's own discovery: every row not carrying the fetch generation the platform's completion stamp
@@ -1340,7 +1340,7 @@ it, for the focused platform:
   counts another one and the numbers cannot say which is which:
   `The one file DuckStation requires is in place (1/20 RomM library files)` states three correct numbers over three
   sets, and the words are the only thing that tells them apart. The pair is the library's inventory for the platform —
-  what it holds, and how many of those the plugin found at their destination (CONTEXT.md → Library inventory) — and the
+  what it holds, and how many of those the plugin found at their destination (GLOSSARY.md → Library inventory) — and the
   tail names no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was
   worse than none. Two of them are already on the screen under this sentence and stand for something else there —
   `present` is the row marks and `on disk` the column beside them, both the row's own verdict rather than this pair —
@@ -1621,13 +1621,13 @@ chosen from is [collections-layouts.html](../assets/collections-layouts.html). F
 - **Other users' collections**, a row with its switch in it, as Favorites has, and the list column's refusal line under
   it. Its count is how many of the collections RomM lists are other users', the number alone — its pane says whether
   they are shown — with a dash where the read failed, and nothing while the read is out or while Tender cannot yet tell
-  whose a collection is. It is the owner scope (CONTEXT.md → Collection owner-scope): on is `all`, off is `own`. It is a
-  switch in the list column rather than a segmented control beside the search because it is a sync setting that applies
-  to two of the kinds, and a control shaped like a filter would say otherwise. Its pane has no table: what turning it
-  off does (other users' collections are hidden here and left out of the sync, even ones switched on, and turning it
-  back on brings those choices back), that Tender can tell whose a collection is only once it knows the user's RomM
-  account and until then nothing is hidden, and how many of the collections RomM lists are other users' and whether they
-  are shown or hidden.
+  whose a collection is. It is the owner scope (GLOSSARY.md → Collection owner-scope): on is `all`, off is `own`. It is
+  a switch in the list column rather than a segmented control beside the search because it is a sync setting that
+  applies to two of the kinds, and a control shaped like a filter would say otherwise. Its pane has no table: what
+  turning it off does (other users' collections are hidden here and left out of the sync, even ones switched on, and
+  turning it back on brings those choices back), that Tender can tell whose a collection is only once it knows the
+  user's RomM account and until then nothing is hidden, and how many of the collections RomM lists are other users' and
+  whether they are shown or hidden.
 
 Collections, Smart collections and Autogenerated follow RomM's own headings — "Collections", "Smart Collections" and
 "Autogenerated collections"; Favorites, Franchises and IGDB collections are this page's.
@@ -1694,7 +1694,7 @@ The Favorites pane has no table. While the read is out it shows the spinner, and
 pane does; once it has answered, the sentence and the game count where the row stands for a collection, and otherwise
 only why the row is greyed — the sentence is about turning one on, and a greyed row has none.
 
-**In Steam counts how many of a collection's ROMs are already in Steam** (CONTEXT.md → Reachable). It costs no RomM
+**In Steam counts how many of a collection's ROMs are already in Steam** (GLOSSARY.md → Reachable). It costs no RomM
 request of its own. RomM's collection listings carry each collection's member ROM ids, on all three kinds, and the count
 is those ids looked up against the rows Tender keeps — the test the sync uses when it files a collection member into a
 Steam collection, so a member it counts is one turning the collection on files under a shortcut Tender already made. It
@@ -1726,7 +1726,7 @@ collection, the Collections write leaves that one out, since it is not in the ta
 more than one favorites collection is a candidate, those are ordinary rows of the Collections table and the write
 includes them.
 
-**The kinds' names reach the Steam names the `by_label` naming mode builds** (CONTEXT.md → Collection naming mode), the
+**The kinds' names reach the Steam names the `by_label` naming mode builds** (GLOSSARY.md → Collection naming mode), the
 description of the Steam Library setting that turns that mode on, and the user guide: `(Smart)`, `(Franchise)` and
 `(IGDB Collection)`, with `(Autogenerated)` as the fallback for a virtual collection of no known type; a standard
 collection, favorites included, carries none. The rule, why it is shaped so, and the places the labels are spelled are

@@ -21,7 +21,7 @@ read-only UoW is a writer**. The database runs in WAL, so readers are
 unaffected; any other *writer* that arrives waits on the lock for up to
 ``busy_timeout=5000`` and fails with ``SQLITE_BUSY`` only if it is still held
 then. A directory walk or a config parse held inside a UoW therefore stalls
-those writers for as long as the I/O takes. CONTEXT.md's Unit of Work entry and
+those writers for as long as the I/O takes. GLOSSARY.md's Unit of Work entry and
 ADR-0006 state the rule — a transaction wraps database reads and writes, never
 file or server I/O — and until #1779 nothing detected a breach: six call sites
 had drifted across it, because nothing at a call site reveals that an injected
@@ -474,7 +474,7 @@ def main(argv: list[str]) -> int:
                 "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SystemResolver) "
                 "must not be called while a UoW is open — a Unit of Work wraps database "
                 "reads and writes only, never file or server I/O (CLAUDE.md → Invariant "
-                "register, CONTEXT.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "
+                "register, GLOSSARY.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "
                 "close it, then do the I/O outside."
             )
         return 1
