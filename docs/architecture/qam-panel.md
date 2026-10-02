@@ -803,7 +803,7 @@ newer release brings the dots back. It takes every dot for that version, and the
 which goes only by Dismiss or the install — and a Dismiss takes the dots too, since they follow the card. A dot that
 goes because its release was seen plays the one fade [The glyph](#the-glyph) describes, each dot on screen at that
 moment playing its own; every other way a dot goes, it simply goes. The two in the panel are drawn by
-`bigpicture/UpdateDot.tsx`: 9 px across, about 8 px past the end of the word and raised like a superscript, positioned
+`bigpicture/UpdateDot.tsx`: 9 px across, about 8 px past the end of the word and centred on its height, positioned
 absolutely so they take no room of their own and the label does not move when a dot comes or goes. How they look there
 is a device question.
 

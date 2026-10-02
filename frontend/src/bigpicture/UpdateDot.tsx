@@ -11,13 +11,13 @@ import { DOT_FADE_STYLE, useUpdateDot } from "../utils/updateDot";
 const DOT_SIZE_PX = 9;
 
 /**
- * Its centre near the top of the lowercase letters, and out of the flow, so the
- * label never moves when the dot comes or goes.
+ * Centred on the label's height, and out of the flow, so the label never moves
+ * when the dot comes or goes.
  */
 const DOT: CSSProperties = {
   position: "absolute",
   left: "100%",
-  top: "0.3em",
+  top: "50%",
   marginLeft: "8px",
   marginTop: `${-DOT_SIZE_PX / 2}px`,
   width: `${DOT_SIZE_PX}px`,
