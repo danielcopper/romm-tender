@@ -60,6 +60,7 @@ describe("UpdateStoppedNotice", () => {
       enabled: true,
       installedProgram: true,
       toastOwed: false,
+      seen: false,
     });
     await stopAt("1.1.0");
 
@@ -77,6 +78,7 @@ describe("UpdateStoppedNotice", () => {
       enabled: true,
       installedProgram: true,
       toastOwed: false,
+      seen: false,
     });
     await stopAt("1.1.0");
 

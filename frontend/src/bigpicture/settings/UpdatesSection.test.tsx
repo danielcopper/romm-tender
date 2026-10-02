@@ -59,6 +59,7 @@ const STATE: UpdateNoticeState = {
   enabled: true,
   installedProgram: true,
   toastOwed: false,
+  seen: false,
 };
 
 const NO_OUTCOME: UpdateOutcomeState = { announcement: null, failure: null, failureDismissed: false };

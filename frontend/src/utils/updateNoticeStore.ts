@@ -4,14 +4,16 @@
  * Updated by:
  *   - panel load in index.tsx (fetchUpdateNotice), detached
  *   - the card's Dismiss (dismissUpdateForVersion), after the backend persisted it
+ *   - Settings › Updates shown long enough to count as seen (markReleaseSeen),
+ *     after the backend persisted it
  *   - the Settings switch (setUpdateCheckSwitch), after the backend persisted it
  *   - Settings' Check now (runUpdateCheckNow), with the answer it asked for
  *   - the backend's own check while it runs (takePushedUpdateNotice), from `update_notice`
  *
  * Read by:
  *   - utils/updateAvailableView.ts, whether the card on Main shows — for the
- *     card itself, the dot on Tender's Quick Access glyph and the "is
- *     available" toast
+ *     card itself, the "is available" toast and the three dots, which `seen`
+ *     takes away
  *   - utils/updateAvailableToast.ts, which raises that toast where `toastOwed`
  *   - bigpicture/settings/UpdatesSection.tsx through SettingsPage, the card's home
  *
@@ -28,6 +30,7 @@ import {
   checkForUpdateNow,
   dismissUpdateNotice,
   getUpdateNotice,
+  markUpdateAvailableSeen,
   setUpdateCheckEnabled,
   type UpdateNotice,
   type UpdateSettingWrite,
@@ -47,6 +50,8 @@ export interface UpdateNoticeState {
   installedProgram: boolean;
   /** The backend owes the "is available" toast for `latestVersion`. */
   toastOwed: boolean;
+  /** The user has seen `latestVersion` in Settings › Updates. */
+  seen: boolean;
 }
 
 const INITIAL: UpdateNoticeState = {
@@ -57,6 +62,7 @@ const INITIAL: UpdateNoticeState = {
   enabled: true,
   installedProgram: false,
   toastOwed: false,
+  seen: false,
 };
 
 let _state: UpdateNoticeState = INITIAL;
@@ -121,6 +127,7 @@ function stateFromNotice(notice: UpdateNotice): UpdateNoticeState {
     enabled: notice.enabled,
     installedProgram: notice.installed_program,
     toastOwed: notice.toast_owed,
+    seen: notice.seen,
   };
 }
 
@@ -190,6 +197,22 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
   requireAccepted(write);
   if (seq !== _seq) return;
   setUpdateNoticeState({ ..._state, available: false });
+}
+
+/**
+ * Record that the user has seen *version* in Settings › Updates, then reflect
+ * it here — only once the backend answered that it persisted it, and only where
+ * no later read or press overtook it, so a newer release that landed meanwhile
+ * is not marked seen in its place. A seen release owes no toast either, as the
+ * backend's next answer will say too. A refused or failed write rejects and
+ * leaves the dots standing.
+ */
+export async function markReleaseSeen(version: string): Promise<void> {
+  const seq = ++_seq;
+  const write = await markUpdateAvailableSeen(version);
+  requireAccepted(write);
+  if (seq !== _seq) return;
+  setUpdateNoticeState({ ..._state, seen: true, toastOwed: false });
 }
 
 /**

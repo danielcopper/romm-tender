@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availableCardVersion } from "./updateAvailableView";
+import { availableCardVersion, updateDotVersion } from "./updateAvailableView";
 import type { UpdateNoticeState } from "./updateNoticeStore";
 import type { UpdateOutcomeState } from "./updateOutcomeStore";
 
@@ -11,6 +11,7 @@ const AVAILABLE: UpdateNoticeState = {
   enabled: true,
   installedProgram: true,
   toastOwed: true,
+  seen: false,
 };
 
 const NO_OUTCOME: UpdateOutcomeState = { announcement: null, failure: null, failureDismissed: false };
@@ -60,5 +61,22 @@ describe("availableCardVersion", () => {
     expect(availableCardVersion(AVAILABLE, NO_OUTCOME, { attemptedVersion: "1.0.5", fromVersion: "1.0.0" })).toBe(
       "1.1.0",
     );
+  });
+});
+
+describe("updateDotVersion", () => {
+  it("names the card's release until it was seen", () => {
+    expect(updateDotVersion(AVAILABLE, NO_OUTCOME, null)).toBe("1.1.0");
+    expect(updateDotVersion({ ...AVAILABLE, seen: true }, NO_OUTCOME, null)).toBeNull();
+  });
+
+  it("leaves the card standing once the release was seen", () => {
+    expect(availableCardVersion({ ...AVAILABLE, seen: true }, NO_OUTCOME, null)).toBe("1.1.0");
+  });
+
+  it("shows nothing where the card shows nothing, seen or not", () => {
+    expect(updateDotVersion({ ...AVAILABLE, available: false }, NO_OUTCOME, null)).toBeNull();
+    expect(updateDotVersion(AVAILABLE, failedTo("1.1.0", true), null)).toBeNull();
+    expect(updateDotVersion(AVAILABLE, NO_OUTCOME, { attemptedVersion: "1.1.0", fromVersion: "1.0.0" })).toBeNull();
   });
 });

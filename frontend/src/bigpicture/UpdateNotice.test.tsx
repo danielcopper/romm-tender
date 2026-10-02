@@ -25,6 +25,7 @@ const AVAILABLE: UpdateNoticeState = {
   enabled: true,
   installedProgram: true,
   toastOwed: false,
+  seen: false,
 };
 
 const ROLLED_BACK: UpdateOutcomeState = {
@@ -63,6 +64,7 @@ describe("UpdateNotice", () => {
         enabled: true,
         installed_program: true,
         toast_owed: false,
+        seen: false,
       }),
     );
 

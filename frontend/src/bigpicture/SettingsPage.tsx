@@ -55,6 +55,7 @@ import {
   type UpdateCheckOutcome,
 } from "../utils/updateNoticeStore";
 import { useUpdateOutcomeState } from "../utils/updateOutcomeStore";
+import { useSeenAfterDwell } from "../utils/updateDot";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
@@ -157,6 +158,9 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const updateOutcome = useUpdateOutcomeState();
   const [checkingForUpdate, setCheckingForUpdate] = useState(false);
   const [updateCheckResult, setUpdateCheckResult] = useState("");
+  // However Updates came to be on screen — from the list, or opened on it by
+  // the card's Open Updates — a second of it counts as seeing the release.
+  useSeenAfterDwell(selectedSection === "updates");
 
   // Library state (preferred sibling-group region, ADR-0021)
   const [preferredRegion, setPreferredRegion] = useState(AUTO_REGION);

@@ -1396,6 +1396,7 @@ describe("index.tsx — the release check at panel load", () => {
       enabled: true,
       installed_program: true,
       toast_owed: false,
+      seen: false,
     });
     pluginFactory();
     await flush();
@@ -1637,6 +1638,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
     enabled: true,
     installed_program: true,
     toast_owed: true,
+    seen: false,
   };
   const NOTHING_MOVED: UpdateOutcome = {
     announce_version: null,

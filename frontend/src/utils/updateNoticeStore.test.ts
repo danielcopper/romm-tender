@@ -3,6 +3,7 @@ import {
   checkForUpdateNow,
   dismissUpdateNotice,
   getUpdateNotice,
+  markUpdateAvailableSeen,
   setUpdateCheckEnabled,
   type UpdateCheckNow,
   type UpdateNotice,
@@ -12,6 +13,7 @@ import {
   dismissUpdateForVersion,
   fetchUpdateNotice,
   getUpdateNoticeState,
+  markReleaseSeen,
   onUpdateNoticeChange,
   resetUpdateNoticeStoreForTests,
   runUpdateCheckNow,
@@ -27,6 +29,7 @@ const NOTICE: UpdateNotice = {
   enabled: true,
   installed_program: true,
   toast_owed: false,
+  seen: false,
 };
 
 const now = (over: Partial<UpdateCheckNow> = {}): UpdateCheckNow => ({ ...NOTICE, reached: true, ...over });
@@ -47,6 +50,7 @@ describe("updateNoticeStore", () => {
     vi.mocked(checkForUpdateNow).mockReset();
     vi.mocked(dismissUpdateNotice).mockReset().mockResolvedValue({ success: true });
     vi.mocked(setUpdateCheckEnabled).mockReset().mockResolvedValue({ success: true });
+    vi.mocked(markUpdateAvailableSeen).mockReset().mockResolvedValue({ success: true });
   });
 
   it("starts with no card, the check on, and no version known", () => {
@@ -58,6 +62,7 @@ describe("updateNoticeStore", () => {
       enabled: true,
       installedProgram: false,
       toastOwed: false,
+      seen: false,
     });
   });
 
@@ -76,8 +81,62 @@ describe("updateNoticeStore", () => {
       enabled: true,
       installedProgram: true,
       toastOwed: false,
+      seen: false,
     });
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries whether the release was seen", async () => {
+    vi.mocked(getUpdateNotice).mockResolvedValue({ ...NOTICE, seen: true });
+
+    await fetchUpdateNotice();
+
+    expect(getUpdateNoticeState().seen).toBe(true);
+  });
+
+  describe("seen", () => {
+    it("is recorded for the release, and reflected only after the backend accepted it", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue({ ...NOTICE, toast_owed: true });
+      await fetchUpdateNotice();
+      const persist = deferred<UpdateSettingWrite>();
+      vi.mocked(markUpdateAvailableSeen).mockReturnValue(persist.promise);
+
+      const pending = markReleaseSeen("0.34.0");
+      expect(getUpdateNoticeState().seen).toBe(false);
+      persist.resolve({ success: true });
+      await pending;
+
+      expect(markUpdateAvailableSeen).toHaveBeenCalledExactlyOnceWith("0.34.0");
+      expect(getUpdateNoticeState()).toMatchObject({ seen: true, toastOwed: false, available: true });
+    });
+
+    it("leaves the release unseen and rejects when the backend refuses it", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      vi.mocked(markUpdateAvailableSeen).mockResolvedValue({
+        success: false,
+        reason: "version_changed",
+        message: "Not the last seen release",
+      });
+
+      await expect(markReleaseSeen("0.34.0")).rejects.toThrow("version_changed: Not the last seen release");
+
+      expect(getUpdateNoticeState().seen).toBe(false);
+    });
+
+    it("marks nothing here once the store names a newer release", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      const persist = deferred<UpdateSettingWrite>();
+      vi.mocked(markUpdateAvailableSeen).mockReturnValue(persist.promise);
+
+      const pending = markReleaseSeen("0.34.0");
+      takePushedUpdateNotice({ ...NOTICE, latest_version: "0.35.0" });
+      persist.resolve({ success: true });
+      await pending;
+
+      expect(getUpdateNoticeState()).toMatchObject({ latestVersion: "0.35.0", seen: false });
+    });
   });
 
   it("an unsubscribed listener hears nothing more", async () => {
@@ -279,6 +338,7 @@ describe("updateNoticeStore", () => {
         enabled: true,
         installedProgram: true,
         toastOwed: false,
+        seen: false,
       });
     });
 

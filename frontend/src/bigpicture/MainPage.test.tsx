@@ -2589,6 +2589,7 @@ describe("MainPage", () => {
         enabled: true,
         installedProgram: true,
         toastOwed: false,
+        seen: false,
       });
       const onNavigate = vi.fn();
       const { container, getByTestId } = render(<MainPage onNavigate={onNavigate} />);
@@ -2607,6 +2608,7 @@ describe("MainPage", () => {
         enabled: true,
         installedProgram: true,
         toastOwed: false,
+        seen: false,
       });
       setUpdateOutcomeState({
         announcement: null,
@@ -2640,6 +2642,7 @@ describe("MainPage", () => {
         enabled: true,
         installedProgram: true,
         toastOwed: false,
+        seen: false,
       });
       setUpdateOutcomeState({
         announcement: { version: "0.33.0", direction: "back" },

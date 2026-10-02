@@ -9,15 +9,18 @@
  * is the default edge length, {@link GLYPH_SIZE}.
  *
  * It carries one piece of state: a dot, drawn while the "is available" card on
- * Main would show (`utils/updateAvailableView.ts`). The stores are read through
- * `useSyncExternalStore`, which subscribes on mount and lets go on unmount, so
- * the glyph binds nothing that outlives the Quick Access view it renders in.
+ * Main would show and its release was not yet seen (`utils/updateDot.ts`). The
+ * stores are read through `useSyncExternalStore`, which subscribes on mount and
+ * lets go on unmount, so the glyph binds nothing that outlives the Quick Access
+ * view it renders in.
  *
- * **It does not animate, nor does the dot, and that is a measurement rather than
- * a taste**. It shipped with a turning ring and a folding body, and the fold
- * alone cost roughly 29% of one core for as long as the menu was open —
- * measured on the device over CDP. An animation added back here costs that
- * again: `docs/architecture/qam-panel.md` holds the reading in full.
+ * **Nothing about it moves at rest, and that is a measurement rather than a
+ * taste**. It shipped with a turning ring and a folding body, and the fold alone
+ * cost roughly 29% of one core for as long as the menu was open — measured on
+ * the device over CDP. An animation added back here costs that again:
+ * `docs/architecture/qam-panel.md` holds the reading in full. The one motion is
+ * the dot's fade when its release was seen: one CSS transition of transform and
+ * opacity, about half a second, after which the dot is gone.
  *
  * **Two things about this are UNMEASURED**, and neither is guessed at here.
  * Whether `size` below lands at the 28 px it is aiming for: its `1.633em` is
@@ -30,10 +33,8 @@
 
 import type { FC } from "react";
 import { TAB_ICON_ARC, TAB_ICON_BARS, TAB_ICON_CENTRE, TAB_ICON_VIEW_BOX } from "./tabIconArt";
-import { useStoppedUpdateAttempt } from "../utils/stoppedUpdateStore";
-import { UPDATE_AVAILABLE_COLOR, availableCardVersion } from "../utils/updateAvailableView";
-import { useUpdateNoticeState } from "../utils/updateNoticeStore";
-import { useUpdateOutcomeState } from "../utils/updateOutcomeStore";
+import { UPDATE_AVAILABLE_COLOR } from "../utils/updateAvailableView";
+import { DOT_FADE_STYLE, useUpdateDot } from "../utils/updateDot";
 
 /**
  * Where the glyph's halves are defined, for the `<use>` that draws each one a
@@ -67,20 +68,11 @@ const GLYPH_SIZE = "1.633em";
 const DOT = { cx: 180, cy: 20, r: 32 } as const;
 
 /**
- * Whether the dot shows. The strip has no error boundary — a throw here takes
- * Steam's whole Quick Access menu down — so a store state the answer cannot be
- * worked out from draws no dot rather than throwing.
+ * The fade, about the dot's own centre: an SVG element's transform is
+ * otherwise taken about the view box's origin, and the dot would grow away
+ * from where it sat.
  */
-function useUpdateDot(): boolean {
-  const notice = useUpdateNoticeState();
-  const outcome = useUpdateOutcomeState();
-  const stopped = useStoppedUpdateAttempt();
-  try {
-    return availableCardVersion(notice, outcome, stopped) !== null;
-  } catch {
-    return false;
-  }
-}
+const DOT_FADE = { ...DOT_FADE_STYLE, transformBox: "fill-box", transformOrigin: "center" } as const;
 
 export interface TabIconProps {
   /** Edge length. See {@link GLYPH_SIZE} for what the default is and why. */
@@ -137,8 +129,15 @@ export const TabIcon: FC<TabIconProps> = ({ size = GLYPH_SIZE }) => {
         </g>
         <use href={`#${BODY_ID}`} transform={turn} />
       </g>
-      {dot && (
-        <circle cx={DOT.cx} cy={DOT.cy} r={DOT.r} fill={UPDATE_AVAILABLE_COLOR} data-testid="tender-update-dot" />
+      {dot !== "none" && (
+        <circle
+          cx={DOT.cx}
+          cy={DOT.cy}
+          r={DOT.r}
+          fill={UPDATE_AVAILABLE_COLOR}
+          style={dot === "fading" ? DOT_FADE : undefined}
+          data-testid="tender-update-dot"
+        />
       )}
     </svg>
   );

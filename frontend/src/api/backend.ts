@@ -1191,6 +1191,8 @@ export interface UpdateNotice {
    * was neither acknowledged, found by Check now, nor seen.
    */
   toast_owed: boolean;
+  /** The user has seen `latest_version` in Settings › Updates — its dots are gone for good. */
+  seen: boolean;
 }
 
 export const getUpdateNotice = endpoint<[], UpdateNotice>("get_update_notice");

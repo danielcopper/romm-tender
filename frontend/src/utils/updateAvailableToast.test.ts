@@ -3,6 +3,7 @@ import { toaster } from "../api/host";
 import {
   acknowledgeUpdateAvailableToast,
   getUpdateNotice,
+  markUpdateAvailableSeen,
   type UpdateInstallAttempt,
   type UpdateNotice,
 } from "../api/backend";
@@ -12,6 +13,7 @@ import { updateAvailableToast, watchUpdateAvailableToast } from "./updateAvailab
 import {
   fetchUpdateNotice,
   getUpdateNoticeState,
+  markReleaseSeen,
   resetUpdateNoticeStoreForTests,
   setUpdateNoticeState,
   takePushedUpdateNotice,
@@ -41,6 +43,7 @@ const OWED: UpdateNotice = {
   enabled: true,
   installed_program: true,
   toast_owed: true,
+  seen: false,
 };
 
 const BODY = "Tender 1.1.0 is available. Settings › Updates to install it.";
@@ -430,6 +433,19 @@ describe("the toast that a newer release is out", () => {
       await wait();
 
       setUpdateNoticeState({ ...getUpdateNoticeState(), available: false });
+      await steamUp();
+
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(acknowledgeUpdateAvailableToast).not.toHaveBeenCalled();
+    });
+
+    it("is neither raised nor acknowledged where the release was seen in Settings › Updates meanwhile", async () => {
+      vi.mocked(markUpdateAvailableSeen).mockResolvedValue({ success: true });
+      takePushedUpdateNotice(OWED);
+      watchAnswered();
+      await wait();
+
+      await markReleaseSeen("1.1.0");
       await steamUp();
 
       expect(toaster.toast).not.toHaveBeenCalled();

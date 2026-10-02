@@ -3,7 +3,8 @@
  *
  * It follows the "is available" card (`updateAvailableView.ts`) and the
  * backend's `toastOwed`, which holds it to once per version across starts, to
- * the daily check's switch, and off a release Check now found. Beyond those it
+ * the daily check's switch, and off a release Check now found or the user has
+ * already seen in Settings › Updates. Beyond those it
  * waits — for the reads made at panel load, while an install attempt is under
  * way or pressed for, and while Steam's notification lookups are missing — and
  * is asked again whenever a store it reads changes, so a pushed `update_notice`
