@@ -281,18 +281,20 @@ To find the files, open the game's detail page — the **ROM File** section show
 
 ### Play asks whether to launch with local saves
 
-**Symptom**: You press **Play** on a game's detail page, the button reads **Checking saves...** (or **Syncing
-saves...**), and a few seconds later a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time — launch
-with local saves?".
+**Symptom**: You start a game — with **Play** on its detail page, where the button reads **Checking saves...** or
+**Syncing saves...**, or with Steam's own Play or a link — and after a wait a **Save Sync Unavailable** dialog asks
+"Couldn't check your saves in time — launch with local saves?".
 
 **What happened**: Before a game starts, Tender checks its saves, and every step of that check has a time limit — about
-five seconds for what Tender answers itself, about fifteen for what it has to ask RomM. A step that got no answer in
-time ends in this dialog, so a press never waits without end. Either Tender's backend is not answering, or RomM is slow.
+fifteen seconds for the steps that fetch or sync saves with RomM, about five for every other step. A step that got no
+answer in time ends in this dialog, so a start never waits without end. Either Tender's backend is not answering, or
+RomM is slow.
 
 **Fix**: **Launch Anyway** starts the game on the save already on the device; the next sync with RomM detects any
-difference between that save and the server's. **Cancel** returns the button to **Play**. If the dialog appears on every
-press, Tender's backend is probably not running or not answering — start it again with
-`systemctl --user restart romm-tender`, or restart Steam.
+difference between that save and the server's. **Cancel** starts nothing, and on the detail page the button returns to
+**Play**. If the dialog appears on every start, Tender's backend is not running or not answering, or RomM is too slow to
+answer in time. Start the backend with `systemctl --user restart romm-tender`; if the panel still does not answer,
+restart Steam.
 
 ### Controller doesn't work in RetroArch menus
 
@@ -398,9 +400,8 @@ nothing to sync.
 - Whether the message "Tender isn't responding — started without syncing saves." appeared. It comes only with a start
   through Steam's own Play or a `steam://rungameid` link: Tender did not answer within about five seconds of the start,
   so the game started without the sync before it.
-- Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. When the check before the start got no
-  answer in time, the dialog reads "Couldn't check your saves in time — launch with local saves?", and Launch Anyway
-  starts the game on the save already on the device — see
+- Whether you chose **Launch Anyway** in the **Save Sync Unavailable** dialog. It asks when the sync before the start
+  failed or got no answer in time, and Launch Anyway starts the game on the save already on the device — see
   [Play asks whether to launch with local saves](#play-asks-whether-to-launch-with-local-saves).
 - Whether save sync covers the game at all —
   [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).

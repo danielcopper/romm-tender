@@ -182,13 +182,13 @@ not part of this ADR's decision.
 ## Amendment — a launch check that gets no answer ends in the fallback dialog
 
 The rule that the gate never traps the user's game covered a step that throws, but not one that never answers: an
-endpoint call has no timeout, so against a backend that is stopped, restarting or frozen the Play button's check waited
-without end, and so did every step of the watcher's after its first backend contact.
-[#2173](https://github.com/danielcopper/romm-tender/issues/2173) extends the rule to a wait:
+endpoint call has no timeout, so against a backend that is stopped, restarting or frozen every step of the check but the
+pre-launch sync (already raced at 15 s) waited without end — on the Play button from the press, on the watcher after its
+first backend contact. [#2173](https://github.com/danielcopper/romm-tender/issues/2173) extends the rule to a wait:
 
-- Every backend call the gate makes that is not a dialog has a limit — 5 s for the calls that stay on the device, 15 s
-  for the two that reach RomM (the save-setup read and the pre-launch sync). A dialog's wait for the user's answer is
-  never bounded.
+- Every backend call the gate makes has a limit — 15 s for the two that read or sync the server's saves (the save-setup
+  read and the pre-launch sync), 5 s for every other one, the reachability probe included. A dialog's wait for the
+  user's answer is never bounded.
 - A limit that expires ends the check in the existing "Save Sync Unavailable" dialog with a neutral message, on both
   funnels. It does not fail open to a start: the limit can expire on a slow RomM while Tender is fine, and the Play
   button has cancelled nothing, so the user decides. "Launch Anyway" starts on the local save, which the next sync with

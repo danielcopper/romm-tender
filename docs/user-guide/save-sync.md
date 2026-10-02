@@ -11,9 +11,10 @@ plugin checks if the server has a newer save and downloads it. When you stop pla
 > **Important:** Save sync runs before and after a RomM game you start with **Tender's Play button** on the game detail
 > page, with Steam's own Play, or through a `steam://rungameid` link. If Tender does not answer within about five
 > seconds of a start with Steam's own Play or a link, the game starts without the sync before it, and a message says so.
-> When any other step of the check before a start gets no answer in time — and with Tender's Play button, that is every
-> step — you are asked instead: **Save Sync Unavailable**, "Couldn't check your saves in time — launch with local
-> saves?". **Launch Anyway** starts the game on the save already on the device, and **Cancel** starts nothing.
+> If Tender answers that first time but a later step of the check before the start gets no answer in time — or, with
+> Tender's Play button, any step does — a **Save Sync Unavailable** dialog asks "Couldn't check your saves in time —
+> launch with local saves?". **Launch Anyway** starts the game on the save already on the device, and **Cancel** starts
+> nothing.
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 
