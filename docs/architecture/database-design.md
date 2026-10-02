@@ -283,13 +283,14 @@ ROMs has finished over a detected emulator installation with no ROM failing), `s
 once a reading of Steam's shortcut file found no shortcut of ours naming a launcher outside the launcher's home),
 `playtime_scope_notice` (present while RomM refuses the token the playtime read needs, cleared by a later read that
 succeeds or a fresh sign-in), `update_check_last_seen` (what the release checks last established), `last_run_version`
-(the version the previous start ran as), and the three marks of an update toast already raised —
-`update_available_toasted_version` (the release told about), `update_failure_toasted_at` (the installer's record of a
-failed update) and `update_stopped_toasted_at` (an installer found stopped) — the truly miscellaneous singleton scalars.
-The `platform_names` cache is a single JSON blob the library sync refreshes every run so two reads need no RomM: the
-game-detail platform name, and a platform removal's answer, whose name the frontend finds that platform's Steam
-collection by. The schema version is **not** a `kv_config` key — it is tracked in `PRAGMA user_version` by the
-[migration runner](#the-migration-framework) ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
+(the version the previous start ran as), `update_available_seen_version` (the release the user has seen in Settings ›
+Updates), and the three marks of an update toast already raised — `update_available_toasted_version` (the release told
+about), `update_failure_toasted_at` (the installer's record of a failed update) and `update_stopped_toasted_at` (an
+installer found stopped) — the truly miscellaneous singleton scalars. The `platform_names` cache is a single JSON blob
+the library sync refreshes every run so two reads need no RomM: the game-detail platform name, and a platform removal's
+answer, whose name the frontend finds that platform's Steam collection by. The schema version is **not** a `kv_config`
+key — it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
+([#781](https://github.com/danielcopper/romm-tender/issues/781)).
 
 `SyncRun` is a **history** table, not a single "last run" row: a 1-row table would let a newly-started run
 (`status='running'`, no stats yet) erase the last completed run's displayable stats. "Last successful sync" is the

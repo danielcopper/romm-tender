@@ -297,8 +297,13 @@ refused the new version, that holds even once you dismissed the failure's notice
 until the install has ended it waits; if the update did not go through, it comes then, unless one of the above holds it
 back.
 
-While the notice is on the main panel, a small blue dot sits on Tender's icon in the Quick Access menu — with the daily
-check switched off too. It goes when you dismiss the notice, and once the update is installed.
+While the notice is on the main panel, small blue dots show you the way to the release — on Tender's icon in the Quick
+Access menu, beside **Settings** on the main panel, and beside **Updates** in the Settings list — with the daily check
+switched off too. Once **Settings › Updates** has been open for about a second, whether you went there from the list or
+with **Open Updates**, the release counts as seen: the dots grow and fade out, and they stay away for that release, also
+after a restart. Moving through the Settings list past **Updates** does not count. Seeing it there also means no message
+comes for it. The notice on the main panel stays until you dismiss it or install the update; dismissing it takes the
+dots away too, and so does installing the update. A newer release brings them back.
 
 After an update, once Steam has finished starting, it says **Tender updated to X** in a message that goes by itself;
 after installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or

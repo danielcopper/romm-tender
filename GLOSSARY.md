@@ -322,10 +322,11 @@ Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): t
 (platform_slug → display_name cache), `save_directories_recorded`, the marker that the one-time pass recording the
 installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
 with no ROM failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
-`update_available_toasted_version`, the release the user has been told about, `last_run_version`, the version the
-previous start ran as (see _Rolled-back update_ below), and `update_failure_toasted_at` and `update_stopped_toasted_at`,
-the failed update and the stopped attempt whose toasts were raised (see _Failed-update toast_ below). The schema version
-is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+`update_available_toasted_version`, the release the user has been told about, `update_available_seen_version`, the
+release the user has seen in Settings › Updates, `last_run_version`, the version the previous start ran as (see
+_Rolled-back update_ below), and `update_failure_toasted_at` and `update_stopped_toasted_at`, the failed update and the
+stopped attempt whose toasts were raised (see _Failed-update toast_ below). The schema version is **not** a `kv_config`
+key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -1150,7 +1151,9 @@ only an available release that is strictly newer than the running version and no
 **installed program** is the process the installed service runs, the one an update can replace; a run from a checkout
 checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
 process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
-whether the notice shows. _Avoid_: "new version" for a release that is merely published.
+whether the notice shows. A release is **seen** once Settings › Updates has been on screen with it for about a second;
+seen is per version, and it takes the dots that mark the way to the release and its toast, never the notice. _Avoid_:
+"new version" for a release that is merely published.
 
 ### Install attempt / wait reason
 
