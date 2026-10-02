@@ -2903,6 +2903,59 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     expect(SteamClient.Apps.RunGame).toHaveBeenCalledWith("gid-1", "", -1, 100);
   });
 
+  it("a press shows Checking saves... at once, before the backend has answered anything", async () => {
+    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+
+    const { getByText, queryByText } = await pressPlay();
+
+    expect(getByText("Checking saves...").closest("button")).toBeDisabled();
+    expect(queryByText("Play")).not.toBeInTheDocument();
+  });
+
+  it("a second press during the check starts nothing", async () => {
+    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+
+    const { container } = await pressPlay();
+    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+    // Whatever the button shows now is pressed again: the disabled throbber
+    // and the press guard in the handler each stop a second check on their own.
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button.romm-btn-play")!.click();
+      for (let index = 0; index < 12; index++) await Promise.resolve();
+    });
+
+    expect(backend.getInstalledRom).toHaveBeenCalledTimes(1);
+  });
+
+  it("a save-status announcement during the check does not put Play back under it", async () => {
+    vi.mocked(backend.getInstalledRom).mockReturnValue(never());
+
+    const { getByText, queryByText } = await pressPlay();
+    act(() => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: 42, has_conflict: false } }),
+      );
+    });
+
+    expect(getByText("Checking saves...")).toBeInTheDocument();
+    expect(queryByText("Play")).not.toBeInTheDocument();
+  });
+
+  it("the check's state changes to Syncing saves... when the pre-launch sync starts", async () => {
+    let answer!: (online: { online: boolean }) => void;
+    vi.mocked(backend.probeReachability).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    vi.mocked(backend.preLaunchSync).mockReturnValue(never());
+
+    const { getByText, queryByText } = await pressPlay();
+    expect(getByText("Checking saves...")).toBeInTheDocument();
+
+    await act(async () => {
+      answer({ online: true });
+    });
+    expect(getByText("Syncing saves...")).toBeInTheDocument();
+    expect(queryByText("Checking saves...")).not.toBeInTheDocument();
+  });
+
   describe("a dialog left open past every limit still acts on its answer", () => {
     /** A dialog that answers only when the test says so. */
     function heldOpen<T>(): { promise: Promise<T>; answer: (value: T) => void } {
@@ -4998,6 +5051,21 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("renders Checking saves... as the same throbber button, online and offline", async () => {
+    vi.mocked(backend.getInstalledRom).mockReturnValueOnce(new Promise<never>(() => {}));
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+
+    await act(async () => {
+      playBtn.click();
+    });
+    expect(container.innerHTML).toBe(throbberMarkup("Checking saves...", false));
+    expect(buttonStyle()).toEqual(THROBBER_BUTTON_STYLE);
+    act(() => setRommConnectionState("offline"));
+    expect(container.innerHTML).toBe(throbberMarkup("Checking saves...", true));
   });
 
   it("renders Syncing saves... and then Launching... as the same throbber button, online and offline", async () => {

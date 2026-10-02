@@ -95,6 +95,7 @@ type PlayButtonState =
   | "not_romm"
   | "download"
   | "conflict"
+  | "checking"
   | "syncing"
   | "play"
   | "launching"
@@ -483,7 +484,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         // The download flash holds the button for its own 1100ms and applies
         // `announced` from `lastAnnouncedState` when it ends.
         if (prev === "dl_complete") return prev;
-        if (prev === "syncing" || prev === "launching" || prev === "download") return prev;
+        if (prev === "checking" || prev === "syncing" || prev === "launching" || prev === "download") return prev;
         return announced;
       });
     };
@@ -731,7 +732,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // verdict switch is the Play button's page-aware reaction (in-place button
   // states), mirroring the watcher's imperative-modal reaction.
   const handlePlay = async () => {
-    if (state === "syncing" || state === "launching") return; // debounce
+    if (state === "checking" || state === "syncing" || state === "launching") return; // debounce
     const overview = appStore.GetAppOverviewByAppID(appId);
     const gameId = overview?.GetGameID?.() ?? String(appId);
     const admission = capturePruneLeaseAdmission(leaseOwner);
@@ -761,15 +762,17 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     }
     detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
-    // `runPreLaunchSync` flips the button to "syncing"; an unexpected throw from
-    // the gate or a verdict's modal helper (framework-level) would otherwise
-    // leave the button frozen there. The watcher never traps the user's game;
+    // The press shows "checking" until the verdict is acted on, and
+    // `runPreLaunchSync` flips it to "syncing"; an unexpected throw from the gate
+    // or a verdict's modal helper (framework-level) would otherwise leave the
+    // button frozen there. The watcher never traps the user's game;
     // the Play-button equivalent is to reset the button to "play".
     //
     // Retry loop: the offline-drift modal can ask to re-probe. Each retry is a
     // fresh user action, so the loop is bounded by the user choosing "Retry"
     // again; the only thing that re-runs is the gate (which re-probes via the
     // fast reachability check), and `actOnVerdict` signals back "retry".
+    setState("checking");
     try {
       let verdict = await runLaunchGate(appId, romId, makePlayButtonOps(romId));
       while ((await actOnVerdict(verdict, gameId, romId, admission)) === "retry") {
@@ -826,10 +829,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           return "done";
         }
         if (choice === "retry") {
-          // Re-run the gate (re-probes via the fast reachability check). The
-          // button stays interactive while the modal is open; flip to "syncing"
-          // so the user sees the gate working again instead of a dead "play".
-          setState("syncing");
+          // Re-run the gate (re-probes via the fast reachability check); the
+          // button is still on the "checking" the press set.
           return "retry";
         }
         setState("play");
@@ -1812,6 +1813,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
 
   if (state === "launching") {
     return renderThrobberButton("Launching...");
+  }
+
+  if (state === "checking") {
+    return renderThrobberButton("Checking saves...");
   }
 
   if (state === "syncing") {
