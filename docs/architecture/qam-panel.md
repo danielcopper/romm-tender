@@ -792,18 +792,20 @@ JavaScript context raise one toast between them.
 
 The dots show while the card would, the switch off included, until the release is **seen**: Settings › Updates on screen
 for a second without a break (`SEEN_AFTER_MS`, `useSeenAfterDwell` in `utils/updateDot.ts`), with the Quick Access menu
-open — reached from the list, or opened on it by the card's **Open Updates** — records the card's release through
-`mark_update_available_seen`. Moving through the list past Updates does not count: focus selects, so Updates is on
-screen while focus passes it, and leaving it or closing the menu before the second is up cancels the wait; coming back,
-or opening the menu again on Updates, starts it over. Whether Tender's tab is the menu's active one is not asked, so
-Updates left up behind another tab of the open menu still counts. Seen is per version and kept across restarts
-([UpdateCheckService notes](backend-architecture.md#updatecheckservice-notes)), so a newer release brings the dots back.
-It takes every dot for that version, and the toast with them, and leaves the card, which goes only by Dismiss or the
-install — and a Dismiss takes the dots too, since they follow the card. A dot that goes because its release was seen
-plays the one fade [The glyph](#the-glyph) describes, each dot on screen at that moment playing its own; every other way
-a dot goes, it simply goes. The two in the panel are drawn by `bigpicture/UpdateDot.tsx`: 9 px across, about 8 px past
-the end of the word and raised like a superscript, positioned absolutely so they take no room of their own and the label
-does not move when a dot comes or goes. How they look there is a device question.
+open on Tender's tab — reached from the list, or opened on it by the card's **Open Updates** — records the card's
+release through `mark_update_available_seen`. Moving through the list past Updates does not count: focus selects, so
+Updates is on screen while focus passes it, and leaving it, closing the menu or choosing another of its tabs before the
+second is up cancels the wait; coming back to Updates, to the menu or to Tender's tab starts it over. Which tab is the
+active one is the answer `useWideQamPanel` already works out from inside the page's tree; it publishes it to
+`utils/owningQamTab.ts` for the Settings page above it, and nothing is bound to the menu's window to get it. Seen is per
+version and kept across restarts ([UpdateCheckService notes](backend-architecture.md#updatecheckservice-notes)), so a
+newer release brings the dots back. It takes every dot for that version, and the toast with them, and leaves the card,
+which goes only by Dismiss or the install — and a Dismiss takes the dots too, since they follow the card. A dot that
+goes because its release was seen plays the one fade [The glyph](#the-glyph) describes, each dot on screen at that
+moment playing its own; every other way a dot goes, it simply goes. The two in the panel are drawn by
+`bigpicture/UpdateDot.tsx`: 9 px across, about 8 px past the end of the word and raised like a superscript, positioned
+absolutely so they take no room of their own and the label does not move when a dot comes or goes. How they look there
+is a device question.
 
 The rolled-back notice says **Update to X failed — you are still on Y.** over a line naming where the reason is. For a
 rollback that is Tender's log, `backend.log`, which both versions write to, so what the new version logged before it was

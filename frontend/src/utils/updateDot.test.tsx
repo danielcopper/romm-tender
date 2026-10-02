@@ -6,6 +6,7 @@ import { DOT_FADE_MS, SEEN_AFTER_MS, useSeenAfterDwell, useUpdateDot } from "./u
 import { resetUpdateNoticeStoreForTests, setUpdateNoticeState, type UpdateNoticeState } from "./updateNoticeStore";
 import { resetUpdateOutcomeStoreForTests, setUpdateOutcomeState, type UpdateOutcomeState } from "./updateOutcomeStore";
 import { resetStoppedUpdateStoreForTests } from "./stoppedUpdateStore";
+import { setOwningQamTabActive } from "./owningQamTab";
 
 // The Quick Access menu's own visibility, backed by a store the tests flip:
 // test-setup.ts's `() => true` cannot close the menu.
@@ -151,6 +152,7 @@ describe("useSeenAfterDwell", () => {
     resetStoppedUpdateStoreForTests();
     vi.mocked(markUpdateAvailableSeen).mockReset().mockResolvedValue({ success: true });
     qamVisible = true;
+    setOwningQamTabActive(true);
   });
 
   afterEach(() => {
@@ -252,6 +254,42 @@ describe("useSeenAfterDwell", () => {
     pass(SEEN_AFTER_MS - 100);
     setQamVisible(false);
     setQamVisible(true);
+    pass(SEEN_AFTER_MS - 1);
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+
+    pass(1);
+    await settle();
+    expect(markUpdateAvailableSeen).toHaveBeenCalledExactlyOnceWith("1.1.0");
+  });
+
+  it("records nothing while another tab of the menu is the active one", () => {
+    setUpdateNoticeState(AVAILABLE);
+    act(() => setOwningQamTabActive(false));
+    dwell(true);
+
+    pass(SEEN_AFTER_MS * 5);
+
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+  });
+
+  it("records nothing when another tab is chosen a moment before the second is up", () => {
+    setUpdateNoticeState(AVAILABLE);
+    dwell(true);
+
+    pass(SEEN_AFTER_MS - 1);
+    act(() => setOwningQamTabActive(false));
+    pass(SEEN_AFTER_MS * 5);
+
+    expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
+  });
+
+  it("starts the wait over when Tender's tab is chosen again on Updates", async () => {
+    setUpdateNoticeState(AVAILABLE);
+    dwell(true);
+
+    pass(SEEN_AFTER_MS - 100);
+    act(() => setOwningQamTabActive(false));
+    act(() => setOwningQamTabActive(true));
     pass(SEEN_AFTER_MS - 1);
     expect(markUpdateAvailableSeen).not.toHaveBeenCalled();
 

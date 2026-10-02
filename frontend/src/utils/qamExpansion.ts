@@ -22,6 +22,7 @@
 
 import { useEffect, type RefObject } from "react";
 import { quickAccessMenuClasses } from "./deckyUiInternals";
+import { setOwningQamTabActive } from "./owningQamTab";
 import { useQuickAccessVisible } from "./quickAccessVisible";
 
 /** Marker class on a wide page's root, matched by the injected `:has()` rule. */
@@ -158,7 +159,8 @@ function expandWidePanel(root: HTMLElement): void {
  * Hold the panel wide for as long as the page owning `rootRef` is mounted, the
  * tab this page sits in is the active QAM tab, and the QAM is not known to be
  * closed. Losing any of the three posts the hide message and drops the
- * stylesheet; regaining it re-expands.
+ * stylesheet; regaining it re-expands. Whether the tab is the active one is
+ * published to `owningQamTab.ts` as well, for a reader above the page.
  *
  * **Which tab that is, is never asked.** The question is answered by walking up
  * from the page's own root to the panel around it and reading Steam's
@@ -187,7 +189,12 @@ export function useWideQamPanel(rootRef: RefObject<HTMLElement | null>): void {
     // leaked expansion the QAM-close and unmount paths still clear.
     const owningTabActive = () => !activeTabClass || !panelParent || panelParent.classList.contains(activeTabClass);
 
-    const syncPanelWidth = () => (owningTabActive() ? expandWidePanel(root) : collapseWidePanel());
+    const syncPanelWidth = () => {
+      const active = owningTabActive();
+      setOwningQamTabActive(active);
+      if (active) expandWidePanel(root);
+      else collapseWidePanel();
+    };
     syncPanelWidth();
 
     // Switching QAM tabs changes the parent's class and unmounts nothing, so the
@@ -206,6 +213,7 @@ export function useWideQamPanel(rootRef: RefObject<HTMLElement | null>): void {
     return () => {
       observer?.disconnect();
       collapseWidePanel();
+      setOwningQamTabActive(true);
     };
   }, [qamVisible, rootRef]);
 }

@@ -244,6 +244,39 @@ describe("useWideQamPanel", () => {
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(1);
   });
 
+  it("publishes whether the page's tab is the active one, as a tab switch changes it", async () => {
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const tab = await import("./owningQamTab");
+    const { host, panelParent } = mountQamDom();
+    renderWidePage(mod, host);
+
+    expect(tab.getOwningQamTabActive()).toBe(true);
+
+    await act(async () => {
+      panelParent.classList.remove(ACTIVE_TAB_CLASS);
+    });
+    expect(tab.getOwningQamTabActive()).toBe(false);
+
+    await act(async () => {
+      panelParent.classList.add(ACTIVE_TAB_CLASS);
+    });
+    expect(tab.getOwningQamTabActive()).toBe(true);
+  });
+
+  it("publishes an inactive tab from the first pass, and the default once the page is gone", async () => {
+    const mod = await loadQamExpansion(PROBE_CLASSES);
+    const tab = await import("./owningQamTab");
+    const { host, panelParent } = mountQamDom();
+    panelParent.classList.remove(ACTIVE_TAB_CLASS);
+    const { unmount } = renderWidePage(mod, host);
+
+    expect(tab.getOwningQamTabActive()).toBe(false);
+
+    unmount();
+
+    expect(tab.getOwningQamTabActive()).toBe(true);
+  });
+
   it("clears when the QAM closes", async () => {
     const mod = await loadQamExpansion(PROBE_CLASSES);
     const { host } = mountQamDom();
