@@ -1064,8 +1064,9 @@ the same name.
 The **tab glyph** is what the strip draws: the mark reduced to one tone with no disc, the sync ring levelled and
 thickened for the size the strip draws it at, and the body as the button bars, solid and with nothing marking the four
 button positions — at the size the glyph asks for a bar is too narrow to hold a second shape. It is generated from the
-mark's own drawing routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and it is **static** — it reads no
-state and has none, because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
+mark's own drawing routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and nothing about it moves at rest —
+the one state it reads is the update dot (→ Available release), whose only motion is one fade when its release is seen —
+because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
 `docs/architecture/qam-panel.md`, The glyph).
 
 _Avoid_: **tab** on its own for the entry, which is also Steam's word for the L1/R1 views inside a wide page (→ QAM
@@ -1151,9 +1152,10 @@ only an available release that is strictly newer than the running version and no
 **installed program** is the process the installed service runs, the one an update can replace; a run from a checkout
 checks and shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which
 process is the installed program; `services/update_check.py` keeps the last available release a check saw and decides
-whether the notice shows. A release is **seen** once Settings › Updates has been on screen with it for about a second;
-seen is per version, and it takes the dots that mark the way to the release and its toast, never the notice. _Avoid_:
-"new version" for a release that is merely published.
+whether the notice shows. A release is **seen** once Settings › Updates has been on screen with it; seen is per version,
+and it takes the dots that mark the way to the release and its toast, never the notice. _Avoid_: "new version" for a
+release that is merely published; **seen** for the release the last check stored — the kv key `update_check_last_seen`
+predates the word and says nothing about the user.
 
 ### Install attempt / wait reason
 
