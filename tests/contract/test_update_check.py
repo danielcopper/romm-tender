@@ -1,22 +1,35 @@
 """Contract tests for the update-check endpoints over the real wiring.
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``getUpdateNotice``
-and ``checkForUpdateNow`` take nothing, ``dismissUpdateNotice`` a version string,
-``setUpdateCheckEnabled`` a boolean. The real ``bootstrap()`` and SQLite are what
+and ``checkForUpdateNow`` take nothing, ``dismissUpdateNotice``,
+``acknowledgeUpdateAvailableToast`` and ``markUpdateAvailableSeen`` a version
+string, ``setUpdateCheckEnabled`` a boolean. The real ``bootstrap()`` and SQLite are what
 make it worth having: the answer really does outlive the call in the database,
 and the two user-intent keys really do reach ``settings.json``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import Any
 
+import pytest
+
 from domain.update_release import LatestRelease, ReleaseTarball
 
 _A_DAY = 24 * 60 * 60
-_NOTICE_KEYS = {"available", "newer", "latest_version", "current_version", "enabled", "installed_program", "toast_owed"}
+_NOTICE_KEYS = {
+    "available",
+    "newer",
+    "latest_version",
+    "current_version",
+    "enabled",
+    "installed_program",
+    "toast_owed",
+    "seen",
+}
 
 
 def _release(version: str) -> LatestRelease:
@@ -241,3 +254,59 @@ async def test_a_toast_acknowledged_with_no_version_is_refused_in_the_canonical_
     answer = await harness.endpoints.acknowledge_update_available_toast(None)
 
     assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+
+
+async def test_a_seen_release_is_seen_owes_no_toast_and_the_record_outlives_the_call(harness):
+    harness.releases.answer = _release("99.0.0")
+    assert (await harness.endpoints.get_update_notice())["seen"] is False
+
+    assert await harness.endpoints.mark_update_available_seen("99.0.0") == {"success": True}
+
+    notice = await harness.endpoints.get_update_notice()
+    assert (notice["available"], notice["seen"], notice["toast_owed"]) == (True, True, False)
+    with harness.uow_factory() as uow:
+        assert uow.kv_config.get("update_available_seen_version") == "99.0.0"
+
+
+async def test_seeing_another_release_is_refused_in_the_canonical_shape(harness):
+    harness.releases.answer = _release("99.0.0")
+    await harness.endpoints.get_update_notice()
+
+    answer = await harness.endpoints.mark_update_available_seen("98.0.0")
+
+    assert answer == {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+    assert (await harness.endpoints.get_update_notice())["seen"] is False
+
+
+async def test_seeing_no_version_is_refused_in_the_canonical_shape(harness):
+    answer = await harness.endpoints.mark_update_available_seen(None)
+
+    assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+
+
+class _OneRound:
+    """A sleeper that lets the running check through once, then ends it."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def sleep(self, seconds: float) -> None:
+        self.calls += 1
+        if self.calls > 1:
+            raise asyncio.CancelledError
+
+
+async def test_the_pushed_notice_says_the_release_was_seen(harness):
+    harness.releases.answer = _release("99.0.0")
+    await harness.endpoints.get_update_notice()
+    await harness.endpoints.mark_update_available_seen("99.0.0")
+    service = harness.app.services.update_check_service
+    service._sleeper = _OneRound()
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.run_due_checks()
+
+    [(name, notice)] = [call.args for call in harness.emit.await_args_list if call.args[0] == "update_notice"]
+    assert name == "update_notice"
+    assert set(notice) == _NOTICE_KEYS
+    assert (notice["seen"], notice["toast_owed"]) == (True, False)

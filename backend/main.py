@@ -721,7 +721,7 @@ class Endpoints:
         """Report the last available release a check saw, and whether the card should say so.
 
         Returns ``{"available", "newer", "latest_version", "current_version",
-        "enabled", "installed_program", "toast_owed"}``. ``available`` is the
+        "enabled", "installed_program", "toast_owed", "seen"}``. ``available`` is the
         card itself: a newer release with its tarball and checksum file attached
         exists, and the user has not dismissed that exact version — whatever the
         check's switch says. ``newer`` is the first of those alone, for the
@@ -731,8 +731,9 @@ class Endpoints:
         checkout. ``toast_owed`` says the panel owes the "is available" toast
         for ``latest_version``: the card is up, the switch is on, and that
         version was neither acknowledged by
-        :meth:`acknowledge_update_available_toast` nor found by
-        :meth:`check_for_update_now`.
+        :meth:`acknowledge_update_available_toast`, found by
+        :meth:`check_for_update_now`, nor seen. ``seen`` says
+        :meth:`mark_update_available_seen` recorded ``latest_version`` as seen.
 
         GitHub is asked at most once a day and the answer is kept, so a reload
         inside that window shows the card without a request; with the check
@@ -775,6 +776,18 @@ class Endpoints:
         is not the release the last check stored.
         """
         return await self._services.update_check_service.acknowledge_update_available_toast(version)
+
+    @route
+    async def mark_update_available_seen(self, version):
+        """Record that the user has seen one release version in Settings → Updates, for every later start.
+
+        A seen release carries no dots and owes no toast; the card on Main stays.
+        Per version, so the next release is unseen again. Returns ``{"success":
+        True}``, or the canonical failure shape — ``invalid_value`` for a
+        version that is not a non-empty string, ``version_changed`` for one that
+        is not the release the last check stored.
+        """
+        return await self._services.update_check_service.mark_update_available_seen(version)
 
     @route
     def set_update_check_enabled(self, enabled):

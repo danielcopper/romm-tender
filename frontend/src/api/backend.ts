@@ -1188,7 +1188,7 @@ export interface UpdateNotice {
   installed_program: boolean;
   /**
    * The panel owes the "is available" toast for `latest_version`: the card is up, the switch is on, and that version
-   * was neither acknowledged nor found by Check now.
+   * was neither acknowledged, found by Check now, nor seen.
    */
   toast_owed: boolean;
 }
@@ -1214,6 +1214,9 @@ export const dismissUpdateNotice = endpoint<[string], UpdateSettingWrite>("dismi
 export const acknowledgeUpdateAvailableToast = endpoint<[string], UpdateSettingWrite>(
   "acknowledge_update_available_toast",
 );
+
+/** Record that the user has seen one release version in Settings › Updates; the next release is unseen again. */
+export const markUpdateAvailableSeen = endpoint<[string], UpdateSettingWrite>("mark_update_available_seen");
 
 /** Switch the daily release check on or off — the reads the program makes by itself. On by default. */
 export const setUpdateCheckEnabled = endpoint<[boolean], UpdateSettingWrite>("set_update_check_enabled");

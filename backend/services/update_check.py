@@ -2,7 +2,7 @@
 
 Owns the question and everything the answer needs a decision about: the
 once-a-day throttle, the user's switch, which release they have already waved
-away, which one they have already been told about, and the stored answer
+away, which one they have already been told about or seen, and the stored answer
 itself — the install reads the last seen release through here rather than from
 the row. The answer is one-sided — it either has
 something to say or stays silent, and a check that reached nothing is silence
@@ -66,6 +66,11 @@ LAST_CHECK_KEY = "update_check_last_seen"
 # per version across every restart.
 TOASTED_KEY = "update_available_toasted_version"
 
+# The version whose release the user has seen in Settings → Updates, in
+# kv_config: observed state, like the told version beside it. A seen release
+# owes no toast either — the panel has said what the toast would.
+SEEN_KEY = "update_available_seen_version"
+
 
 @dataclass(frozen=True)
 class UpdateCheckServiceConfig:
@@ -120,15 +125,17 @@ class UpdateCheckService:
         """Report the last available release a check saw, and whether the card should say so.
 
         Returns ``{"available", "newer", "latest_version", "current_version",
-        "enabled", "installed_program", "toast_owed"}``. ``latest_version`` is
+        "enabled", "installed_program", "toast_owed", "seen"}``. ``latest_version`` is
         the last available release a check saw — the release GitHub called
         latest, with its tarball and checksum file attached — ``None`` where
         none was established. ``newer`` says it is strictly newer than the
         running version. ``available`` is the card: newer, and not the
         dismissed version. ``enabled`` is the switch. ``toast_owed`` says the
         panel owes a toast for ``latest_version``: available, the switch on,
-        and that version not yet told — by an acknowledged toast or by a Check
-        now that found it.
+        and that version neither told — by an acknowledged toast or by a Check
+        now that found it — nor seen. ``seen`` says the user has seen
+        ``latest_version`` in Settings → Updates, recorded by
+        :meth:`mark_update_available_seen`.
 
         Reads GitHub at most once a day: inside that window the answer comes
         from the stored marker, so a reload shows the card again without a
@@ -144,8 +151,9 @@ class UpdateCheckService:
             # Asked under the lock: the switch may have gone off while this waited.
             if self.is_check_enabled() and self._is_due(check):
                 check, _ = await self._check_now(check)
-        toasted = await self._loop.run_in_executor(None, self._read_toasted_io)
-        return self._notice(check, toasted)
+        toasted = await self._loop.run_in_executor(None, self._read_mark_io, TOASTED_KEY, "told about")
+        seen = await self._loop.run_in_executor(None, self._read_mark_io, SEEN_KEY, "seen")
+        return self._notice(check, toasted, seen)
 
     async def check_for_update_now(self) -> dict[str, Any]:
         """Read the release now — past the throttle, past a dismissal, and whatever the switch says.
@@ -169,13 +177,14 @@ class UpdateCheckService:
             self._forget_dismissal(dismissed_at_press)
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
-            toasted = await self._loop.run_in_executor(None, self._read_toasted_io)
+            toasted = await self._loop.run_in_executor(None, self._read_mark_io, TOASTED_KEY, "told about")
+            seen = await self._loop.run_in_executor(None, self._read_mark_io, SEEN_KEY, "seen")
             found = check.release.version if check.release is not None else None
             if reached and found is not None and is_newer_version(found, self._current_version):
                 await self._loop.run_in_executor(None, self._record_toasted_io, found)
                 # This answer tells it, whether or not the record above was kept.
                 toasted = found
-        return {**self._notice(check, toasted), "reached": reached}
+        return {**self._notice(check, toasted, seen), "reached": reached}
 
     async def run_due_checks(self) -> None:
         """Ask for the notice whenever a check may be due, for as long as this runs; tell the panel when it changes.
@@ -233,7 +242,23 @@ class UpdateCheckService:
         """
         if not isinstance(version, str) or not version:
             return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
-        if not await self._loop.run_in_executor(None, self._acknowledge_toast_io, version):
+        if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, TOASTED_KEY, version):
+            return {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
+        return {"success": True}
+
+    async def mark_update_available_seen(self, version: object) -> dict[str, Any]:
+        """Record that the user has seen *version* in Settings → Updates, for every later start.
+
+        Per version, so the next release is unseen again. Idempotent. Returns
+        ``{"success": True}``, or the canonical failure shape: ``invalid_value``
+        for a version that is not a non-empty string, and ``version_changed``
+        where *version* is not the release the last check stored — a release
+        seen just before a newer one replaced it must not mark the newer one
+        seen.
+        """
+        if not isinstance(version, str) or not version:
+            return {"success": False, "reason": "invalid_value", "message": "Invalid version"}
+        if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, SEEN_KEY, version):
             return {"success": False, "reason": "version_changed", "message": "Not the last seen release"}
         return {"success": True}
 
@@ -283,12 +308,13 @@ class UpdateCheckService:
         await self._loop.run_in_executor(None, self._record_check_io, stamped)
         return stamped, latest is not None
 
-    def _notice(self, check: UpdateCheck | None, toasted: str | None) -> dict[str, Any]:
+    def _notice(self, check: UpdateCheck | None, toasted: str | None, seen: str | None) -> dict[str, Any]:
         release = check.release if check is not None else None
         latest = release.version if release is not None else None
         newer = is_newer_version(latest, self._current_version)
         available = newer and latest != self._dismissed()
         enabled = self.is_check_enabled()
+        is_seen = latest is not None and latest == seen
         return {
             "available": available,
             "newer": newer,
@@ -296,7 +322,8 @@ class UpdateCheckService:
             "current_version": self._current_version,
             "enabled": enabled,
             "installed_program": self._installed_program,
-            "toast_owed": available and enabled and latest != toasted,
+            "toast_owed": available and enabled and latest != toasted and not is_seen,
+            "seen": is_seen,
         }
 
     def _dismissed(self) -> str | None:
@@ -339,16 +366,16 @@ class UpdateCheckService:
         with self._uow_factory() as uow:
             uow.kv_config.set(LAST_CHECK_KEY, encode_update_check(check))
 
-    def _read_toasted_io(self) -> str | None:
-        """The version told about; one that cannot be read is none.
+    def _read_mark_io(self, key: str, what: str) -> str | None:
+        """The version stored under *key* — the one told about, or seen; one that cannot be read is none.
 
-        So the toast is owed once more — a repeat rather than a loss.
+        So the toast is owed, or the dots show, once more — a repeat rather than a loss.
         """
         try:
             with self._uow_factory() as uow:
-                return uow.kv_config.get(TOASTED_KEY)
+                return uow.kv_config.get(key)
         except Exception as e:
-            self._logger.warning(f"update: which release was told about could not be read: {e!r}")
+            self._logger.warning(f"update: which release was {what} could not be read: {e!r}")
             return None
 
     def _record_toasted_io(self, version: str) -> None:
@@ -362,11 +389,11 @@ class UpdateCheckService:
         except Exception as e:
             self._logger.warning(f"update: that {version} was told about could not be recorded: {e!r}")
 
-    def _acknowledge_toast_io(self, version: str) -> bool:
-        """Record *version* as told if it is the stored release, in the one unit of work that read it."""
+    def _record_for_stored_release_io(self, key: str, version: str) -> bool:
+        """Store *version* under *key* if it is the stored release, in the one unit of work that read it."""
         with self._uow_factory() as uow:
             check = decode_update_check(uow.kv_config.get(LAST_CHECK_KEY))
             if check is None or check.release is None or check.release.version != version:
                 return False
-            uow.kv_config.set(TOASTED_KEY, version)
+            uow.kv_config.set(key, version)
             return True
