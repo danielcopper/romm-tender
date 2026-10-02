@@ -91,7 +91,7 @@ PACKAGE_NAME = "romm-tender"
 # written here out of band is one release-please will overwrite without
 # noticing, and until it does, every consumer listed in the module docstring
 # claims a release that was never cut.
-VERSION = "0.33.0"  # x-release-please-version
+VERSION = "1.0.0"  # x-release-please-version
 
 # A plain assignment, never an annotated one: ``scripts/check_romm_min_version.py``
 # reads it off this module's syntax tree, and an annotated assignment is a
