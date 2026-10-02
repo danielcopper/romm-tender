@@ -11,9 +11,8 @@ import { DOT_FADE_STYLE, useUpdateDot } from "../utils/updateDot";
 const DOT_SIZE_PX = 9;
 
 /**
- * About 8 px past the word's end and raised like a superscript, its centre near
- * the top of the lowercase letters. Positioned absolutely, so it takes no room
- * and the label stays where it is when the dot comes or goes.
+ * Its centre near the top of the lowercase letters, and out of the flow, so the
+ * label never moves when the dot comes or goes.
  */
 const DOT: CSSProperties = {
   position: "absolute",

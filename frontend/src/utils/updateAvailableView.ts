@@ -46,7 +46,7 @@ export function useAvailableCardVersion(): string | null {
 /**
  * The release the dots mark the way to, or `null` where none shows: the card's
  * release ({@link availableCardVersion}), until it was seen in Settings ›
- * Updates. Seen takes the dots and nothing else — the card stays.
+ * Updates. Seen takes the dots and leaves the card.
  */
 export function updateDotVersion(
   notice: UpdateNoticeState,

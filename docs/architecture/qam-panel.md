@@ -146,12 +146,12 @@ its release was not yet seen — `updateDotVersion` over the card's own answer, 
 `utils/updateAvailableView.ts`, through `useUpdateDot` in `utils/updateDot.ts`, which every dot draws through, so none
 of them can disagree with the card (§ Notices and homes). At rest it does not move either. When its release is seen it
 plays its one **fade**: it grows to 2.2 times its size about its own centre and fades out over 450 ms, ease-out, then is
-taken out. That is one CSS transition of `transform` and `opacity`, so nothing lays the strip out again, and it is set
-on the dot only for the fade, so a dot at rest carries none. The fade is inline style on the element the glyph renders
-and its end a timer of the plugin's own window, so nothing is taken from, or bound to, the menu's window. The strip has
-no error boundary (§ The boundary), so a store state the answer cannot be worked out from draws no dot rather than
-throwing; with every store as it starts — the start-up failure page's case — there is none. Its size and place on the
-strip, and how the fade looks there, are device questions; nothing in the suite can see them.
+taken out. That is one CSS transition of `transform` and `opacity`, set on the dot only for the fade, so a dot at rest
+carries none. The fade is inline style on the element the glyph renders and its end a timer of the plugin's own window,
+so nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The boundary), so a store
+state the answer cannot be worked out from draws no dot rather than throwing; with every store as it starts — the
+start-up failure page's case — there is none. Its size and place on the strip, and how the fade looks there, are device
+questions; nothing in the suite can see them.
 
 Two things about the glyph are unmeasured, and neither is guessed at:
 

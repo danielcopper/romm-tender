@@ -26,9 +26,9 @@ export const SEEN_AFTER_MS = 1000;
 export const DOT_FADE_MS = 450;
 
 /**
- * Where a fading dot ends: grown and gone. Transform and opacity alone, so the
- * fade lays nothing out again, and the transition lives here and nowhere else,
- * so a dot at rest carries none.
+ * Where a fading dot ends: grown and gone, by transform and opacity alone. The
+ * transition is set here, on the dot only for the fade, so a dot at rest
+ * carries none.
  */
 export const DOT_FADE_STYLE: CSSProperties = {
   transform: "scale(2.2)",
