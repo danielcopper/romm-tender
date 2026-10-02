@@ -301,9 +301,10 @@ While the notice is on the main panel, small blue dots show you the way to the r
 Access menu, beside **Settings** on the main panel, and beside **Updates** in the Settings list — with the daily check
 switched off too. Once **Settings › Updates** has been open for about a second, whether you went there from the list or
 with **Open Updates**, the release counts as seen: the dots grow and fade out, and they stay away for that release, also
-after a restart. Moving through the Settings list past **Updates** does not count. Seeing it there also means no message
-comes for it. The notice on the main panel stays until you dismiss it or install the update; dismissing it takes the
-dots away too, and so does installing the update. A newer release brings them back.
+after a restart. Moving through the Settings list past **Updates** does not count, and neither does closing the menu
+within that second. Seeing it there also means no message comes for it. The notice on the main panel stays until you
+dismiss it or install the update; dismissing it takes the dots away too, and so does installing the update. A newer
+release brings them back.
 
 After an update, once Steam has finished starting, it says **Tender updated to X** in a message that goes by itself;
 after installing an earlier version, it says **Tender is back on X** instead. It says it once: reopening the panel, or
