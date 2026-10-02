@@ -14,7 +14,7 @@
 
 import { getInstalledRom, logError } from "../api/backend";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
-import { rethrowTimeout, withTimeout } from "./withTimeout";
+import { boundedOr } from "./withTimeout";
 
 /**
  * Toast copy both launch paths surface on a `no_launch_target` block. Says what
@@ -34,8 +34,7 @@ export const NO_LAUNCH_TARGET_TOAST_BODY =
  * `TimeoutError` rejects this call, for the launch gate to answer.
  */
 export async function romHasLaunchTarget(romId: number, context: string): Promise<boolean> {
-  const installed = await withTimeout(getInstalledRom(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
-    rethrowTimeout(e);
+  const installed = await boundedOr(getInstalledRom(romId), LOCAL_CALL_LIMIT_MS, (e) => {
     logError(`${context} launch-target check threw (allowing launch): ${e}`);
     return null;
   });

@@ -88,7 +88,7 @@ import {
 } from "../utils/pruneLease";
 import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
 import { saveSyncToastBody } from "../utils/saveSyncToast";
-import { rethrowTimeout, withTimeout } from "../utils/withTimeout";
+import { boundedOr, withTimeout } from "../utils/withTimeout";
 
 type PlayButtonState =
   | "loading"
@@ -553,22 +553,14 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // cannot silently flip "abort" → "proceed" — the abort-propagation bug pattern
   // #619 was opened to prevent.
   const ensureTrackingConfigured = async (rid: number): Promise<"proceed" | "abort"> => {
-    const trackingResult = await withTimeout(isSaveTrackingConfigured(rid), LOCAL_CALL_LIMIT_MS).catch(
-      (e: unknown) => {
-        rethrowTimeout(e);
-        return { configured: true };
-      },
-    );
+    const trackingResult = await boundedOr(isSaveTrackingConfigured(rid), LOCAL_CALL_LIMIT_MS, () => ({
+      configured: true,
+    }));
     if (trackingResult.configured) return "proceed";
 
-    let setupInfo;
-    try {
-      setupInfo = await withTimeout(getSaveSetupInfo(rid), SERVER_CALL_LIMIT_MS);
-    } catch (e) {
-      rethrowTimeout(e);
-      // Network/backend failure — defer to launch rather than blocking the user.
-      return "proceed";
-    }
+    // Network/backend failure — defer to launch rather than blocking the user.
+    const setupInfo = await boundedOr(getSaveSetupInfo(rid), SERVER_CALL_LIMIT_MS, () => null);
+    if (setupInfo === null) return "proceed";
 
     return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
       rid,
@@ -582,11 +574,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // Detects emulator core change since last launch; if changed, surfaces the
   // core-change confirm modal. Returns true to proceed, false to bail.
   const confirmCoreChangeIfNeeded = async (rid: number): Promise<boolean> => {
-    const coreCheck = await withTimeout(checkCoreChange(rid), LOCAL_CALL_LIMIT_MS).catch(
-      (e: unknown): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
-        rethrowTimeout(e);
-        return { changed: false };
-      },
+    const coreCheck = await boundedOr(
+      checkCoreChange(rid),
+      LOCAL_CALL_LIMIT_MS,
+      (): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => ({
+        changed: false,
+      }),
     );
     if (!coreCheck.changed) return true;
     return showCoreChangeModal(
@@ -608,14 +601,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // saves (#1050). An expired limit is let through: the gate answers it.
   const runPreLaunchSync = async (rid: number): Promise<PreLaunchSyncOutcome> => {
     setState("syncing");
-    let result: Awaited<ReturnType<typeof preLaunchSync>>;
-    try {
-      result = await withTimeout(preLaunchSync(rid), SERVER_CALL_LIMIT_MS);
-    } catch (e) {
-      rethrowTimeout(e);
+    const result = await boundedOr(preLaunchSync(rid), SERVER_CALL_LIMIT_MS, (e) => {
       detach(debugLog(`CustomPlayButton: pre-launch sync failed: ${e}`));
-      return { success: false, message: "" };
-    }
+      return null;
+    });
+    if (result === null) return { success: false, message: "" };
 
     detach(
       debugLog(
@@ -706,21 +696,18 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // store so the badge/Download re-derive (#1345). A throw is a bridge error,
       // not a server verdict, so it does NOT flip the store — but the launch still
       // treats it as offline (fail-safe).
-      try {
-        const { online } = await withTimeout(probeReachability(), LOCAL_CALL_LIMIT_MS);
-        reportServerReachable(online);
-        return online;
-      } catch (e) {
-        rethrowTimeout(e);
+      const probe = await boundedOr(probeReachability(), LOCAL_CALL_LIMIT_MS, (e) => {
         logError(`CustomPlayButton: reachability probe failed (treating as offline): ${e}`);
-        return false;
-      }
+        return null;
+      });
+      if (probe === null) return false;
+      reportServerReachable(probe.online);
+      return probe.online;
     },
     preLaunchSync: () => runPreLaunchSync(rid),
     checkLocalDrift: async () =>
       (
-        await withTimeout(checkLocalDrift(rid), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
-          rethrowTimeout(e);
+        await boundedOr(checkLocalDrift(rid), LOCAL_CALL_LIMIT_MS, (e) => {
           logError(`CustomPlayButton: local-drift check failed (treating as not-drifted): ${e}`);
           return { drifted: false, rom_id: rid };
         })

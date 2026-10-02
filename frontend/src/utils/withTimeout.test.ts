@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { withTimeout, TimeoutError, rethrowTimeout } from "./withTimeout";
+import { withTimeout, TimeoutError, rethrowTimeout, boundedOr } from "./withTimeout";
 
 describe("withTimeout", () => {
   afterEach(() => {
@@ -55,5 +55,36 @@ describe("rethrowTimeout", () => {
 
   it("lets any other failure through to the caller's fallback", () => {
     expect(() => rethrowTimeout(new Error("connection_lost"))).not.toThrow();
+  });
+});
+
+describe("boundedOr", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves with the call's answer when it answers in time", async () => {
+    const onFailure = vi.fn(() => "fallback");
+    await expect(boundedOr(Promise.resolve("answer"), 1000, onFailure)).resolves.toBe("answer");
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it("answers a call that failed with the fallback", async () => {
+    const failure = new Error("connection_lost");
+    const onFailure = vi.fn(() => "fallback");
+    await expect(boundedOr(Promise.reject(failure), 1000, onFailure)).resolves.toBe("fallback");
+    expect(onFailure).toHaveBeenCalledWith(failure);
+  });
+
+  it("rejects with the expired deadline, and never asks the fallback, when the call does not answer", async () => {
+    vi.useFakeTimers();
+    const onFailure = vi.fn(() => "fallback");
+    const bounded = boundedOr(new Promise<string>(() => {}), 5000, onFailure);
+    const settled = expect(bounded).rejects.toBeInstanceOf(TimeoutError);
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await settled;
+    expect(onFailure).not.toHaveBeenCalled();
   });
 });

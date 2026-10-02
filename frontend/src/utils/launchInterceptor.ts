@@ -50,7 +50,7 @@ import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, type PruneLea
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
-import { TimeoutError, rethrowTimeout, withTimeout } from "./withTimeout";
+import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
 /**
  * The four decisions the funnel has to put to the user, as questions rather than
@@ -97,22 +97,18 @@ const MIGRATION_TOAST_BODY = "Pending RetroDECK migration. Open the Tender menu 
  * `TimeoutError` reaches the gate.
  */
 async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
-  const trackingResult = await withTimeout(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
-    rethrowTimeout(e);
+  const trackingResult = await boundedOr(isSaveTrackingConfigured(romId), LOCAL_CALL_LIMIT_MS, (e) => {
     logError(`Watcher tracking check failed (assuming configured): ${e}`);
     return { configured: true };
   });
   if (trackingResult.configured) return;
 
-  let setupInfo;
-  try {
-    setupInfo = await withTimeout(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS);
-  } catch (e) {
-    rethrowTimeout(e);
+  const setupInfo = await boundedOr(getSaveSetupInfo(romId), SERVER_CALL_LIMIT_MS, (e) => {
     // Network/backend failure — never block a direct launch on setup.
     logError(`Watcher save-setup fetch failed (proceeding unconfigured): ${e}`);
-    return;
-  }
+    return null;
+  });
+  if (setupInfo === null) return;
 
   // Reuse the shared outcome handler with a no-op saves-tab dispatch and a
   // swallowed toast: the auto_confirm branch fires `confirmSlotChoice`; every
@@ -137,11 +133,10 @@ async function ensureTrackingConfiguredWatcher(romId: number): Promise<void> {
  * proceed, `false` when the user cancelled.
  */
 async function checkCoreChangeWatcher(romId: number, prompts: LaunchPrompts): Promise<boolean> {
-  const coreCheck = await withTimeout(checkCoreChange(romId), LOCAL_CALL_LIMIT_MS).catch(
-    (
-      e: unknown,
-    ): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
-      rethrowTimeout(e);
+  const coreCheck = await boundedOr(
+    checkCoreChange(romId),
+    LOCAL_CALL_LIMIT_MS,
+    (e): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
       logError(`Watcher core-change check failed (assuming unchanged): ${e}`);
       return { changed: false };
     },
@@ -169,14 +164,11 @@ async function checkCoreChangeWatcher(romId: number, prompts: LaunchPrompts): Pr
  * silently launching. An expired limit is let through: the gate answers it.
  */
 async function preLaunchSyncWatcher(romId: number): Promise<PreLaunchSyncOutcome> {
-  let result: Awaited<ReturnType<typeof preLaunchSync>>;
-  try {
-    result = await withTimeout(preLaunchSync(romId), SERVER_CALL_LIMIT_MS);
-  } catch (e) {
-    rethrowTimeout(e);
+  const result = await boundedOr(preLaunchSync(romId), SERVER_CALL_LIMIT_MS, (e) => {
     logError(`Watcher pre-launch sync failed (surfacing fallback confirm): ${e}`);
-    return { success: false, message: "Couldn't sync saves with RomM server." };
-  }
+    return null;
+  });
+  if (result === null) return { success: false, message: "Couldn't sync saves with RomM server." };
   if (result.reason !== undefined && BENIGN_SYNC_SKIP_REASONS.includes(result.reason)) {
     return { success: true, message: result.message };
   }
@@ -199,21 +191,18 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
       // A resolved probe feeds the shared store (#1345); a throw is a bridge
       // error, not a server verdict, so it leaves the store untouched but the
       // launch still treats it as offline (fail-safe).
-      try {
-        const { online } = await withTimeout(probeReachability(), LOCAL_CALL_LIMIT_MS);
-        reportServerReachable(online);
-        return online;
-      } catch (e) {
-        rethrowTimeout(e);
+      const probe = await boundedOr(probeReachability(), LOCAL_CALL_LIMIT_MS, (e) => {
         logError(`Watcher reachability probe failed (treating as offline): ${e}`);
-        return false;
-      }
+        return null;
+      });
+      if (probe === null) return false;
+      reportServerReachable(probe.online);
+      return probe.online;
     },
     preLaunchSync: () => preLaunchSyncWatcher(romId),
     checkLocalDrift: async () =>
       (
-        await withTimeout(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
-          rethrowTimeout(e);
+        await boundedOr(checkLocalDrift(romId), LOCAL_CALL_LIMIT_MS, (e) => {
           logError(`Watcher local-drift check failed (treating as not-drifted): ${e}`);
           return { drifted: false };
         })

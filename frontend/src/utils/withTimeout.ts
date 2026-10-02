@@ -41,3 +41,15 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export function rethrowTimeout(e: unknown): void {
   if (e instanceof TimeoutError) throw e;
 }
+
+/**
+ * Race `call` against `ms` ({@link withTimeout}) and answer a call that FAILED
+ * with `onFailure`. An expired deadline is rethrown rather than answered
+ * ({@link rethrowTimeout}), so no fallback can turn "no answer" into a verdict.
+ */
+export function boundedOr<T, F>(call: Promise<T>, ms: number, onFailure: (e: unknown) => F): Promise<T | F> {
+  return withTimeout(call, ms).catch((e: unknown) => {
+    rethrowTimeout(e);
+    return onFailure(e);
+  });
+}
