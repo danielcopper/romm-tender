@@ -64,7 +64,7 @@ import { getMigrationState } from "../utils/migrationStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
-import { readGameRunning } from "../utils/sessionManager";
+import { noteAppRom, readGameRunning } from "../utils/sessionManager";
 import type {
   DownloadProgressEvent,
   DownloadCompleteEvent,
@@ -683,6 +683,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         return;
       }
     }
+    if (romId) noteAppRom(appId, romId);
     markLaunchSkipped(appId);
     SteamClient.Apps.RunGame(gameId, "", -1, 100);
   };

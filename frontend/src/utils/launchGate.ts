@@ -22,15 +22,13 @@ import { TimeoutError } from "./withTimeout";
 /**
  * The limit on a launch-check call that does not read or sync the server's
  * saves: the reads on this machine, and the reachability probe, whose own
- * heartbeat gives up after about 3 s. The session manager bounds its map
- * refresh and session-start record by it too.
+ * heartbeat gives up after about 3 s.
  */
 export const LOCAL_CALL_LIMIT_MS = 5000;
 
 /**
  * The limit on a launch-check call that reads or syncs the server's saves: the
- * save-setup read and the pre-launch sync. The session manager's wait for
- * finalizing a session, which runs the post-exit sync, is bounded by it too.
+ * save-setup read and the pre-launch sync.
  */
 export const SERVER_CALL_LIMIT_MS = 15000;
 

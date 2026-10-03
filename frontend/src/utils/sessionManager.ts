@@ -10,7 +10,15 @@
  */
 
 import { showToast } from "./toast";
-import { recordSessionStart, getAppIdRomIdMap, finalizeGameSession, logInfo, logError, debugLog } from "../api/backend";
+import {
+  recordSessionStart,
+  getAppIdRomIdMap,
+  finalizeGameSession,
+  logInfo,
+  logWarn,
+  logError,
+  debugLog,
+} from "../api/backend";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { setMigrationStatus } from "./migrationStore";
 import { updatePlaytimeDisplay } from "./metadataPatches";
@@ -49,6 +57,28 @@ let appIdToRomId: Record<string, number> = {};
 function getRomIdForApp(appId: number): number | null {
   const romId = appIdToRomId[String(appId)];
   return romId ?? null;
+}
+
+// The ROM Tender's button named for an app right before it started it — what
+// the start falls back on when the map lacks the app. Why, and for how long:
+// `docs/architecture/save-file-sync-architecture.md`, "App ID to ROM ID mapping".
+const NOTED_START_WINDOW_MS = 60_000;
+const notedStarts = new Map<number, { romId: number; notedAtMs: number }>();
+
+/** Name the ROM `appId` belongs to, for the start Tender's button is about to make. */
+export function noteAppRom(appId: number, romId: number): void {
+  notedStarts.set(appId, { romId, notedAtMs: Date.now() });
+}
+
+/**
+ * One-shot, and only within the window: a note for a start that never
+ * happened must not name a later one.
+ */
+function takeNotedRom(appId: number): number | null {
+  const noted = notedStarts.get(appId);
+  notedStarts.delete(appId);
+  if (!noted || Date.now() - noted.notedAtMs > NOTED_START_WINDOW_MS) return null;
+  return noted.romId;
 }
 
 /**
@@ -240,7 +270,7 @@ function dispatchSessionChanged(running: boolean, appId: number, romId: number):
  * It is keyed on the appId and checked BEFORE the romId lookup: a map that
  * emptied mid-session must not be able to drop a live entry.
  */
-async function handleGameStart(appId: number): Promise<void> {
+async function handleGameStart(appId: number, notedRomId: number | null): Promise<void> {
   const open = activeSessions.get(appId);
   if (open) {
     detach(debugLog(`Session start ignored: appId=${appId} already has an open session (romId=${open.romId})`));
@@ -250,7 +280,7 @@ async function handleGameStart(appId: number): Promise<void> {
     return;
   }
 
-  const romId = getRomIdForApp(appId);
+  const romId = getRomIdForApp(appId) ?? notedRomId;
   if (!romId) return; // Not a RomM shortcut
 
   logInfo(`Session start: romId=${romId}, appId=${appId}`);
@@ -303,14 +333,14 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   activeSessions.delete(appId);
   persistSessions();
 
-  // The answer comes after the post-exit sync, which can outlast the limit
-  // with a working backend. The chain waits for it only that long; a later
-  // answer is still applied when it arrives, and touches no session state.
+  // A late answer is applied after the chain has moved on, so it must touch no
+  // session state. Why it can be late: `docs/architecture/save-file-sync-architecture.md`,
+  // "Post-exit sync".
   const applied = finalizeGameSession(romId)
     .then((result) => applyFinalizeResult(appId, romId, result))
     .catch((e: unknown) => logError(`Failed to finalize game session: ${e}`));
   await withTimeout(applied, SERVER_CALL_LIMIT_MS).catch((e: unknown) =>
-    logError(`Finalize for romId=${romId} has not answered (${e}) — moving on; its answer is applied when it arrives`),
+    logWarn(`Finalize for romId=${romId} has not answered (${e}) — moving on; its answer is applied when it arrives`),
   );
 }
 
@@ -529,6 +559,9 @@ export async function initSessionManager(): Promise<void> {
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
     if (update.bRunning) stoppedSinceStart.delete(update.unAppID);
     else stoppedSinceStart.add(update.unAppID);
+    // Taken at the notification, not when the chain reaches it: the window is
+    // about how long Steam took to report the start.
+    const notedRomId = update.bRunning ? takeNotedRom(update.unAppID) : null;
     lifecycleChain = lifecycleChain
       .then(async () => {
         if (update.bRunning) {
@@ -542,12 +575,11 @@ export async function initSessionManager(): Promise<void> {
           // start waited for it too); both are gone.
           const appId = update.unAppID;
           if (appId) {
-            // Refresh map in case a sync happened since init. A read that does
-            // not answer in time leaves the map it holds, as a failed one does.
+            // Refresh map in case a sync happened since init
             await withTimeout(refreshAppIdMap(), LOCAL_CALL_LIMIT_MS).catch((e: unknown) =>
               logError(`Failed to refresh app ID map: ${e}`),
             );
-            await handleGameStart(appId);
+            await handleGameStart(appId, notedRomId);
           }
         } else {
           // An app stopped — `handleGameStop` decides whether it is ours.

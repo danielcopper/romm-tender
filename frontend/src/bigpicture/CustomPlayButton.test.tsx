@@ -95,6 +95,7 @@ const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.h
 });
 vi.mock("../utils/sessionManager", () => ({
   readGameRunning: vi.fn(() => NOT_RUNNING),
+  noteAppRom: vi.fn(),
 }));
 vi.mock("../utils/runningApps", () => ({
   isAppRunning: vi.fn(() => false),
