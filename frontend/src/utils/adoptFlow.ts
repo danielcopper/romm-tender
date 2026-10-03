@@ -92,8 +92,9 @@ export interface AdoptionFlowHooks {
   /**
    * Called only when the flow ends `adopted`, which a launch-options write
    * that rejects, or is skipped for want of an appId or a launch command, does
-   * not prevent. A write refused because the caller's lease owner has gone ends
-   * `failed` instead, and this is not called. Called after both flags are
+   * not prevent. A write refused because the caller's lease owner has gone, or
+   * that outlasts the lease's time limit, ends `failed` instead, and this is not
+   * called. Called after both flags are
    * cleared and before `romm_data_changed` / `rom_adopted` is dispatched and the
    * success toast shown.
    */
@@ -260,8 +261,9 @@ async function resolveUnusable(flow: DownloadWithAdoption, unusable: UnusableNam
   return "cancelled";
 }
 
-// The backstop's two exits. Nothing is named, because nothing was found:
-// `replace` here only says the search has been answered.
+// The backstop's two exits. `replace` names nothing here, because nothing was
+// found: it says the search has been answered, and lets the download clear
+// whatever is at the game's location by then.
 async function resolveVanished(
   flow: DownloadWithAdoption,
   vanished: CandidateVanishedResult,

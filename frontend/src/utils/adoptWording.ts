@@ -87,9 +87,9 @@ export function lastChangedLine(occupied: TargetOccupiedResult): string | null {
 }
 
 /**
- * The sentence under the title. `candidate`, here and in every function below
- * that takes it, is what `AdoptionDialogs.showExisting` (`adoptFlow.ts`) says a
- * `candidatePath` means.
+ * The sentence under the title. `candidate`, here and in `existingSize`,
+ * `sizeVerdict` and `replaceWarning`, is what `AdoptionDialogs.showExisting`
+ * (`adoptFlow.ts`) says a `candidatePath` means.
  */
 export function existingIntro(occupied: TargetOccupiedResult, candidate: boolean): string {
   const noun = nounFor(occupied);
