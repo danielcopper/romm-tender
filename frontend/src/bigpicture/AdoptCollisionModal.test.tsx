@@ -27,6 +27,7 @@ function renderModal(collisions: RenameCollision[] = COLLISIONS) {
 // where it can be learned) and the plain statement that Replace does not delete
 // (the sentence that once contradicted the user guide).
 const STATED = [
+  { purpose: "is titled for the names, not the game", phrases: ["Some of These Names Are Taken"] },
   { purpose: "lists every collision, not just the first", phrases: ["Game (USA).srm", "Game (USA).state"] },
   { purpose: "says which kind of file each collision is", phrases: ["save", "savestate"] },
   { purpose: "says nothing has been moved yet", phrases: ["Nothing has been moved"] },

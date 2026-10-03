@@ -24,6 +24,12 @@ function renderModal() {
 }
 
 describe("AdoptVanishedModal — what it states", () => {
+  it("is titled for the copy that cannot be found, and offers a look before the download", () => {
+    const { container } = renderModal();
+    expect(container.textContent).toContain("The Copy on This Device Cannot Be Found");
+    expect(container.textContent).toContain("Or cancel and look in the folder yourself first.");
+  });
+
   it("says the page found a copy and that looking again turns up nothing", () => {
     const { container } = renderModal();
     expect(container.textContent).toContain("found a copy on this device");

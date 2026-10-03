@@ -77,6 +77,13 @@ beforeEach(() => {
 });
 
 describe("AdoptExistingModal — the comparison", () => {
+  it("is titled for the case and heads each side by where it is", () => {
+    const { container } = renderModal();
+    expect(container.textContent).toContain("This Game Is Already on Your Device");
+    expect(container.textContent).toContain("On this device");
+    expect(container.textContent).toContain("On the server");
+  });
+
   it("names both sides and states how the sizes relate", () => {
     const { container } = renderModal();
     expect(container.textContent).toContain("Game.sfc");

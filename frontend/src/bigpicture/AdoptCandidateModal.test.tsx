@@ -43,6 +43,15 @@ function renderModal(overrides: Partial<CandidatesFoundResult> = {}) {
 }
 
 describe("AdoptCandidateModal — what each row rests on", () => {
+  it("is titled as a maybe, and says nothing is touched until one is picked", () => {
+    const { container } = renderModal();
+    expect(container.textContent).toContain("This Game May Already Be on Your Device");
+    expect(container.textContent).toContain(
+      "These files sit in the same folder and carry this game's name. Tender did not put them there, so nothing is " +
+        "touched until you pick one.",
+    );
+  });
+
   it("names every candidate and the evidence behind it", () => {
     const { container } = renderModal();
     expect(container.textContent).toContain("Game (U).sfc");

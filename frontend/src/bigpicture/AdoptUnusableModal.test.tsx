@@ -43,6 +43,7 @@ function renderModal(unusable: UnusableNamesakeResult = FOLDER_IN_THE_WAY) {
 // cannot be used. Each row is one sentence that has to survive a rewrite of the
 // copy.
 const STATED = [
+  { purpose: "is titled for what is here", phrases: ["Something With This Name Is Already Here"] },
   { purpose: "names the entry that is in the way", phrases: ["Example Quest (U)"] },
   { purpose: "says which form the server sends", phrases: ["a single file"] },
   { purpose: "says the outcome of downloading anyway, in copies", phrases: ["two copies"] },
