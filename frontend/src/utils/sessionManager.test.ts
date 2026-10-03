@@ -1779,12 +1779,73 @@ describe("sessionManager with a ROM Tender's button named for the start", () => 
   });
 
   it("the map, where it holds the app, outranks the name", async () => {
+    // This start's refresh answers: the backend's current word.
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
+    const lifetime = captureLifetimeCb();
+    noteAppRom(OTHER_APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID }]);
+  });
+
+  it("a refresh that answered without the app opens no session on the name", async () => {
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
+    const lifetime = captureLifetimeCb();
+    noteAppRom(APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([]);
+  });
+
+  it("a refresh that did not answer lets the name outrank the held map", async () => {
+    // The held map can be older than the name — a version switch moved the shortcut.
     const lifetime = captureLifetimeCb();
     noteAppRom(OTHER_APP_ID, ROM_ID);
 
     lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
     await vi.advanceTimersByTimeAsync(5000);
 
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: ROM_ID }]);
+  });
+
+  it("a refresh that failed lets the name outrank the held map too", async () => {
+    vi.mocked(backend.getAppIdRomIdMap).mockRejectedValue(new Error("connection_lost"));
+    const lifetime = captureLifetimeCb();
+    noteAppRom(OTHER_APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: ROM_ID }]);
+  });
+
+  it("a refresh that did not answer and no name leave the held map's ROM", async () => {
+    const lifetime = captureLifetimeCb();
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(5000);
+
     expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID }]);
+  });
+
+  it("the name is taken when Steam reports the start, not when the held chain reaches it", async () => {
+    // Four finalizes that never answer hold the chain for 4 × (5 s + 15 s) before
+    // the named start's turn — past the name's 60 s window.
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+    for (let round = 0; round < 4; round++) {
+      lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+      lifetime({ bRunning: false, unAppID: OTHER_APP_ID });
+    }
+    noteAppRom(APP_ID, ROM_ID);
+    lifetime({ bRunning: true, unAppID: APP_ID });
+
+    await vi.advanceTimersByTimeAsync(90_000);
+
+    expect(sessionEvents).toContainEqual({ running: true, appId: APP_ID, romId: ROM_ID });
   });
 });

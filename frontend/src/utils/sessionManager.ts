@@ -59,8 +59,8 @@ function getRomIdForApp(appId: number): number | null {
   return romId ?? null;
 }
 
-// The ROM Tender's button named for an app right before it started it — what
-// the start falls back on when the map lacks the app. Why, and for how long:
+// The ROM Tender's button named for an app right before it started it. Which
+// source names a start's ROM, why, and for how long:
 // `docs/architecture/save-file-sync-architecture.md`, "App ID to ROM ID mapping".
 const NOTED_START_WINDOW_MS = 60_000;
 const notedStarts = new Map<number, { romId: number; notedAtMs: number }>();
@@ -70,10 +70,7 @@ export function noteAppRom(appId: number, romId: number): void {
   notedStarts.set(appId, { romId, notedAtMs: Date.now() });
 }
 
-/**
- * One-shot, and only within the window: a note for a start that never
- * happened must not name a later one.
- */
+/** One-shot, and only within the window. */
 function takeNotedRom(appId: number): number | null {
   const noted = notedStarts.get(appId);
   notedStarts.delete(appId);
@@ -152,10 +149,17 @@ export function readGameRunning(appId: number, romId: number | null | undefined)
  * leaves the map as it was.
  */
 export async function refreshAppIdMap(): Promise<void> {
+  await readAppIdMap();
+}
+
+/** {@link refreshAppIdMap}, answering whether the backend answered and the map was replaced. */
+async function readAppIdMap(): Promise<boolean> {
   try {
     appIdToRomId = await getAppIdRomIdMap();
+    return true;
   } catch (e) {
     logError(`Failed to refresh app ID map: ${e}`);
+    return false;
   }
 }
 
@@ -270,7 +274,7 @@ function dispatchSessionChanged(running: boolean, appId: number, romId: number):
  * It is keyed on the appId and checked BEFORE the romId lookup: a map that
  * emptied mid-session must not be able to drop a live entry.
  */
-async function handleGameStart(appId: number, notedRomId: number | null): Promise<void> {
+async function handleGameStart(appId: number, mapAnswered: boolean, notedRomId: number | null): Promise<void> {
   const open = activeSessions.get(appId);
   if (open) {
     detach(debugLog(`Session start ignored: appId=${appId} already has an open session (romId=${open.romId})`));
@@ -280,7 +284,7 @@ async function handleGameStart(appId: number, notedRomId: number | null): Promis
     return;
   }
 
-  const romId = getRomIdForApp(appId) ?? notedRomId;
+  const romId = mapAnswered ? getRomIdForApp(appId) : (notedRomId ?? getRomIdForApp(appId));
   if (!romId) return; // Not a RomM shortcut
 
   logInfo(`Session start: romId=${romId}, appId=${appId}`);
@@ -576,10 +580,11 @@ export async function initSessionManager(): Promise<void> {
           const appId = update.unAppID;
           if (appId) {
             // Refresh map in case a sync happened since init
-            await withTimeout(refreshAppIdMap(), LOCAL_CALL_LIMIT_MS).catch((e: unknown) =>
-              logError(`Failed to refresh app ID map: ${e}`),
-            );
-            await handleGameStart(appId, notedRomId);
+            const mapAnswered = await withTimeout(readAppIdMap(), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+              logError(`Failed to refresh app ID map: ${e}`);
+              return false;
+            });
+            await handleGameStart(appId, mapAnswered, notedRomId);
           }
         } else {
           // An app stopped — `handleGameStop` decides whether it is ours.
