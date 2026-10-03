@@ -1414,16 +1414,17 @@ Neither funnel waits for the backend without end. Every backend call the gate ma
 `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for `probe_reachability`, whose single
 heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s) for the two that read or sync the
 server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in `frontend/src/utils/launchGate.ts`; the
-session manager bounds its own backend calls with them too (see [Post-exit sync](#post-exit-sync)). A limit is a
-ceiling, not a delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the
-launch through, a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the
-"Save Sync Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can
-expire on a slow RomM while Tender itself is fine, which is why the dialog does not blame either. "Launch Anyway" starts
-the game on the local save without re-confirming the launch options, because that re-confirm asks the same backend and
-its own timeout stops a start; "Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start
-still cancelled. An answer that arrives after the dialog appeared starts nothing more. A wait on the user's answer in a
-dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits for
-`resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
+session manager bounds the backend calls it waits for while handling Steam's start and stop notifications with them too
+(see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a delay. A step's own fallback answers a call that
+**failed** — a launch-target read that throws lets the launch through, a probe that throws counts as offline — but never
+one that got **no answer**: that ends the check in the "Save Sync Unavailable" dialog, reading "Couldn't check your
+saves in time — launch with local saves?". The limit can expire on a slow RomM while Tender itself is fine, which is why
+the dialog does not blame either. "Launch Anyway" starts the game on the local save without re-confirming the launch
+options, because that re-confirm asks the same backend and its own timeout stops a start; "Cancel" leaves the game
+unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that arrives after the dialog
+appeared starts nothing more. A wait on the user's answer in a dialog is never bounded. One wait has no limit: once an
+action is picked in the conflict dialog, the dialog waits for `resolve_sync_conflict` with its Cancel disabled
+([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
 The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
 while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the
@@ -1490,14 +1491,17 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
 
 The session manager handles Steam's start and stop notifications one after another on a single chain, so a backend call
 there that never answers would hold every later notification — including the stop that takes Tender's Play button off
-"Launching..." and the Resume overlay off a game that has exited. Each backend call a notification makes is bounded,
-with the launch check's two values (`frontend/src/utils/launchGate.ts`). The map refresh before a start and
-`recordSessionStart` wait at most 5 s (`LOCAL_CALL_LIMIT_MS`); on expiry the map already held stays and the expiry is
-logged, as for a failed call. `finalizeGameSession` holds the chain at most 15 s (`SERVER_CALL_LIMIT_MS`). Its answer
-comes only after the post-exit sync, which can take longer than that with a working backend, so an answer that arrives
-later is still applied — the playtime shown in Steam, the toasts, the `romm_data_changed` refresh and the migration
-state — outside the chain; it touches no session state. Without a backend nothing arrives. A call past its limit is not
-cancelled. The reload adoption at start-up, which also runs on the chain, is not bounded this way.
+"Launching..." and the Resume overlay off a game that has exited. Each backend call a notification waits for is bounded,
+with the launch check's two values (`frontend/src/utils/launchGate.ts`). The map refresh before a start is under
+[App ID to ROM ID mapping](#app-id-to-rom-id-mapping). `recordSessionStart` waits at most 5 s (`LOCAL_CALL_LIMIT_MS`);
+on expiry it is logged, as a failed call is. `finalizeGameSession` holds the chain at most 15 s
+(`SERVER_CALL_LIMIT_MS`). Its answer comes only after the post-exit sync, which can take longer than that with a working
+backend, so an answer that arrives later is still applied — the playtime shown in Steam, the toasts, the
+`romm_data_changed` refresh and the migration state — outside the chain; it touches no session state, and its expiry is
+logged as a warning. Without a backend nothing arrives. A call past its limit is not cancelled. Once the chain has moved
+on, a second game's post-exit sync can wait behind a first one still running on the backend's device gate, and fails
+with the failure toast if that wait passes the gate's 60 s budget. The reload adoption at start-up, which also runs on
+the chain, is not bounded this way.
 
 ### Manual sync all
 
@@ -2041,7 +2045,16 @@ SQLite table, via `get_app_id_rom_id_map`). This map is refreshed:
 - On session manager initialization (panel load)
 - Before each game start event (in case a sync added new shortcuts)
 
-If the launched app ID is not in the map, it is not a RomM shortcut and the session manager ignores it.
+The refresh before a start waits at most 5 s (`LOCAL_CALL_LIMIT_MS`), because the start and stop notifications are
+handled one after another and a refresh without an answer would hold them all (see [Post-exit sync](#post-exit-sync)).
+On expiry the map already held stays and the expiry is logged, as after a failed read.
+
+The map can lack a game Tender owns: one synced after the map was last read, or every game when the read at panel load
+failed. So Tender's Play button names the ROM right before it starts a game (`noteAppRom`), and a start the map lacks
+takes that name. A name is used once, and only by a start Steam reports within 60 s of it being set, so a start that
+never happened cannot name a later one; the map, where it holds the app, outranks it. That window is not measured: it
+only has to outlast the time between the button's `RunGame` and Steam's start notification. A launched app that neither
+the map nor a name accounts for is not treated as a RomM shortcut, and the session manager ignores it.
 
 ### Suspend exclusion via the monotonic clock (#1148)
 
