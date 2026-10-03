@@ -100,6 +100,7 @@ vi.stubGlobal("SteamClient", {
     SetShortcutExe: vi.fn(),
     SetShortcutStartDir: vi.fn(),
     SetAppLaunchOptions: vi.fn(),
+    SetShortcutIcon: vi.fn(),
     RemoveShortcut: vi.fn(),
   },
   GameSessions: {

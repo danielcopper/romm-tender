@@ -457,6 +457,10 @@ Cover art is always applied from RomM. The other four types require a
 [SteamGridDB API key](configuration.md#steamgriddb-api-key). Games without a SteamGridDB match will show Steam's default
 placeholders for those slots.
 
+With a key, a shortcut the sync creates or takes over after an interrupted sync gets its SteamGridDB icon during the
+sync itself, before you open the game. A shortcut the sync only updates keeps the icon it has; **Refresh Artwork**
+replaces it.
+
 You can refresh artwork for any individual game from its
 [game detail page](managing-games.md#refreshing-artwork-and-metadata).
 

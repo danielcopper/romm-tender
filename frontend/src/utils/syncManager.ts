@@ -8,6 +8,7 @@ import {
   logInfo,
   logError,
 } from "../api/backend";
+import { applyShortcutIcon } from "./artwork";
 import {
   getExistingRomMShortcuts,
   getLiveRomMShortcutAppIds,
@@ -260,6 +261,19 @@ async function applyCoverArtwork(appId: number, romId: number): Promise<void> {
 }
 
 /**
+ * Apply the SteamGridDB icon to a newly-managed shortcut (see
+ * {@link applyShortcutIcon}). Fail-soft: an absent icon or a failed write never
+ * fails the shortcut.
+ */
+async function applySyncIcon(appId: number, romId: number): Promise<void> {
+  try {
+    await applyShortcutIcon(romId, appId);
+  } catch (e) {
+    logError(`Per-unit: failed to apply icon for rom ${romId} (appId ${appId}): ${e}`);
+  }
+}
+
+/**
  * Re-apply the covers of EXISTING shortcuts whose server-side cover changed
  * (#1386). The backend's cover-cache invalidation pass already re-downloaded
  * the per-ROM cache file and republished the grid copy — this loop pushes each
@@ -315,9 +329,10 @@ async function processCoverRefreshes(data: SyncApplyUnitData): Promise<void> {
  *
  * A newly-managed shortcut — a fresh create OR an adopted orphan (#1366) — has
  * its cover applied through Steam's artwork API in the same iteration (see
- * {@link applyCoverArtwork}) so covers appear as the shortcuts land — one per
- * item under the 50ms pacing, safe under the session-budget gate that brakes a
- * large run before the CEF heap overflows. Updates/rebinds keep their existing
+ * {@link applyCoverArtwork}), then its SGDB icon ({@link applySyncIcon}), so
+ * artwork appears as the shortcuts land — one per item under the 50ms pacing.
+ * The cover is priced by the session-budget gate that brakes a large run before
+ * the CEF heap overflows; the icon is not. Updates/rebinds keep their existing
  * grid file here; an update whose SERVER cover changed instead arrives on the
  * chunk's ``cover_refreshes`` list and is re-applied by
  * {@link processCoverRefreshes} (#1386). A cover failure is fail-soft and never
@@ -369,12 +384,15 @@ async function processUnitShortcuts(
           // reach platform_app_ids at all (#1205). Idempotent (Set.add); covers
           // created, updated, and rebind entries alike.
           registerRomMAppId(appId);
-          // Apply cover artwork to newly-managed shortcuts — a fresh create or an
-          // adopted orphan (#1366; ``created`` covers both). An updated/rebound
-          // shortcut keeps its existing grid file (cover refresh on change is
-          // #1386). Awaited so covers stay one-per-item under the 50ms pacing;
-          // fail-soft.
-          if (created) await applyCoverArtwork(appId, item.rom_id);
+          // Apply cover artwork and the SGDB icon to newly-managed shortcuts — a
+          // fresh create or an adopted orphan (#1366; ``created`` covers both). An
+          // updated/rebound shortcut keeps its existing grid files (cover refresh
+          // on change is #1386). Awaited so artwork stays one-per-item under the
+          // 50ms pacing; fail-soft.
+          if (created) {
+            await applyCoverArtwork(appId, item.rom_id);
+            await applySyncIcon(appId, item.rom_id);
+          }
         }
       } catch (e) {
         logError(`Per-unit: failed to process shortcut for rom ${item.rom_id}: ${e}`);

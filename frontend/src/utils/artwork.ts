@@ -1,9 +1,10 @@
 /**
- * SGDB artwork apply — downloads the four SGDB asset types for a ROM and
- * writes them onto the Steam shortcut. Shared by RomMPlaySection (passive
- * auto-apply + Refresh Artwork action) and SgdbGamePickerModal (re-apply
- * after a manual game-id pick), so it lives here rather than on either
- * component to keep their import graph acyclic.
+ * SGDB artwork apply — downloads SGDB assets for a ROM and writes them onto the
+ * Steam shortcut, each Steam write under the prune lease its fetch returned.
+ * Shared by RomMPlaySection (passive auto-apply + Refresh Artwork action),
+ * SgdbGamePickerModal (re-apply after a manual game-id pick) and the library
+ * sync (the icon of a newly-managed shortcut), so it lives here rather than on
+ * any one of them to keep their import graph acyclic.
  */
 
 import { getSgdbArtworkBase64, saveShortcutIcon, debugLog } from "../api/backend";
@@ -13,6 +14,7 @@ import {
   isPruneLeaseCancelled,
   mountPruneLeaseOwner,
   releasePruneLeasesByOwner,
+  withPruneLease,
   withPruneLeases,
 } from "./pruneLease";
 
@@ -105,6 +107,17 @@ export async function applyArtwork(romId: number, appId: number): Promise<number
     },
     leaseOwner,
     admission,
+  );
+}
+
+/**
+ * Fetch and apply the SGDB icon (type 4) alone, holding the fetch's prune lease
+ * until the Steam write has landed. Returns whether the icon was applied.
+ */
+export async function applyShortcutIcon(romId: number, appId: number): Promise<boolean> {
+  const { base64, prune_lease_token } = await getSgdbArtworkBase64(romId, 4);
+  return withPruneLease(prune_lease_token, "Shortcut icon", async (signal) =>
+    base64 ? applyIcon(appId, base64, signal) : false,
   );
 }
 
