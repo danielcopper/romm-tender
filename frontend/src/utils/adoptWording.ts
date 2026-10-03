@@ -1,30 +1,45 @@
 /**
  * The words of the "already on your device" dialogs a download opens (#260,
- * ADR-0028) — every word of theirs Tender writes, fixed labels included, except
- * the kind of an entry ("file", "folder", "shortcut"), which is
- * `ENTRY_KIND_LABEL` in `formatters.ts` — and the toasts about the same case:
- * how a Download press ended, and a resume refused because something now sits
- * at the game's location. One home, so every surface that draws those
- * dialogs states the same case the same way; the drawing itself stays with each
- * surface. Why a sentence says what it says sits on the constant
- * or function that builds it, so whoever draws a dialog sees which sentences
- * must not be softened.
+ * ADR-0028) — every title, sentence and label of theirs that the frontend
+ * writes, fixed labels included — and the toasts about the same case: how a
+ * Download press ended, and a resume refused because something now sits at the
+ * game's location. One home, so every surface that draws those dialogs states
+ * the same case the same way; the drawing itself stays with each surface. Why a
+ * sentence says what it says sits on the constant or function that builds it,
+ * so whoever draws a dialog sees which sentences must not be softened.
  */
 
-import { ENTRY_KIND_LABEL, formatBytes } from "./formatters";
+import { formatBytes } from "./formatters";
 import type {
   AdoptionCandidate,
   CandidatesFoundResult,
   CandidateVanishedResult,
+  EntryKind,
   RenameCollision,
   TargetOccupiedResult,
   UnusableNamesakeResult,
 } from "../types";
 
-// ── Every dialog ──
+// ── More than one dialog ──
 
-/** The exit every one of the dialogs offers; it changes nothing on disk. */
 export const CANCEL_LABEL = "Cancel";
+
+/**
+ * What each entry kind is called on screen (#260). One map for every dialog that
+ * names one, so a fourth kind cannot be spelled out in one place and left to
+ * render as its raw wire value in another: `Record<EntryKind, string>` makes
+ * adding one to the wire a type error at every door at once.
+ *
+ * Absence is deliberately not in here. A kind the backend declined to name is a
+ * different question per dialog — one of them never receives such an entry at
+ * all, the other has its own word for it — and folding that in would put a
+ * policy inside a vocabulary.
+ */
+export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
+  file: "file",
+  dir: "folder",
+  link: "shortcut to somewhere else",
+};
 
 // ── The comparison dialog: content at the game's location, or one candidate ──
 
@@ -173,7 +188,7 @@ export function verifyProgressLabel(progress: number | null): string {
     : `Checking the files… ${Math.round(progress * 100)}%`;
 }
 
-/** The verdict shown when the content check never reached the server. */
+/** The verdict shown when the content check's call threw rather than answering. */
 export const VERIFY_UNREACHABLE_MESSAGE = "Couldn't reach the server to check these files";
 
 /**
@@ -242,9 +257,9 @@ export const COLLISIONS_REPLACE_LABEL = "Replace Them";
 export const COLLISIONS_KEEP_LABEL = "Keep Them";
 
 /**
- * Says for both exits that nothing is destroyed, because this dialog is the only
- * place the user sees it while choosing. Implying that Keep's move was clean is
- * the one thing this sentence must not do.
+ * Says for both exits that none of the files listed is destroyed, because this
+ * dialog is the only place the user sees it while choosing. Implying that Keep's
+ * move was clean is the one thing this sentence must not do.
  */
 export const COLLISIONS_CONSEQUENCES =
   "Replace does not delete the files listed above — each is moved into a .romm-backup folder beside it, so you can " +
@@ -301,7 +316,7 @@ export function vanishedDownloadLabel(vanished: CandidateVanishedResult): string
 
 export const VANISHED_DOWNLOAD_NOTE = "Or cancel and look in the folder yourself first.";
 
-// ── Toasts: how a Download press ended, and a resume refused over the location ──
+// ── Toasts ──
 
 /** A refused download whose answer carried no message of its own. */
 export const DOWNLOAD_REFUSED_TOAST = "Download failed";

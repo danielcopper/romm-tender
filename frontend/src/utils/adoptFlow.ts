@@ -254,16 +254,16 @@ async function resolveCandidates(flow: DownloadWithAdoption, found: CandidatesFo
 // The only two honest exits for a namesake that cannot become this install:
 // fetch the server's copy alongside it, or stop. `replace` is what carries the
 // answer — it is what tells the backend the search has been answered — and no
-// candidate path goes with it, because nothing on disk is being taken over or
-// removed.
+// candidate path goes with it, because the entries listed are not taken over
+// or removed.
 async function resolveUnusable(flow: DownloadWithAdoption, unusable: UnusableNamesakeResult): Promise<AdoptionOutcome> {
   if ((await flow.dialogs.showUnusable(unusable)) === "download") return download(flow, true, undefined, null);
   return "cancelled";
 }
 
 // The backstop's two exits. `replace` names nothing here, because nothing was
-// found: it says the search has been answered, and lets the download clear
-// whatever is at the game's location by then.
+// found: it says the search has been answered, and leaves whatever is at the
+// game's location by then to the download gate (`check_download_target`).
 async function resolveVanished(
   flow: DownloadWithAdoption,
   vanished: CandidateVanishedResult,

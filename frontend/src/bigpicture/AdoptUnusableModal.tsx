@@ -8,16 +8,18 @@
  * is never adoptable whatever it points at, because an install row has to be
  * removable and the uninstall path refuses a link.
  *
- * Its question is whether to download a second copy beside the first, which
- * would otherwise be answered without the user. Nothing on disk is moved,
- * renamed or removed by either exit.
+ * Its question is whether to download a second copy beside the first. What its
+ * exits send is `resolveUnusable`'s (`adoptFlow.ts`); what the download does to
+ * anything else is the backend's:
+ * `check_download_target` for whatever is at the game's location by then,
+ * `supersede_sibling_installs` for another installed version of the game.
  */
 
 import { FC } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
-import { ENTRY_KIND_LABEL } from "../utils/formatters";
 import {
   CANCEL_LABEL,
+  ENTRY_KIND_LABEL,
   UNUSABLE_DOWNLOAD_NOTE,
   UNUSABLE_TITLE,
   unusableDownloadLabel,
