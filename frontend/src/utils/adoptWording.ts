@@ -36,20 +36,13 @@ export const ON_THIS_DEVICE_HEADING = "On this device";
 /** The heading over the side that describes what the server would send. */
 export const ON_THE_SERVER_HEADING = "On the server";
 
-/** Starts the content check — on a button, never as a wait before the dialog appears. */
 export const CHECK_AGAINST_SERVER_LABEL = "Check Against Server";
 
-/** The download exit. It opens the confirmation step rather than downloading. */
 export const DOWNLOAD_INSTEAD_LABEL = "Download Instead";
 
-/**
- * The confirmation step's destructive exit. It names the deletion because it is
- * one — `replaceWarning` above it says what is deleted — and is never shortened
- * to a label that hides that.
- */
+/** Names the deletion it confirms, and is never shortened to a label that hides it. */
 export const DELETE_AND_DOWNLOAD_LABEL = "Delete and Download";
 
-/** Leaves the confirmation step for the comparison, deleting nothing. */
 export const GO_BACK_LABEL = "Go Back";
 
 /** Locale-formatted date and time from POSIX epoch seconds; the empty string for a zero stamp. */
@@ -232,8 +225,8 @@ export function noneOfTheseLabel(found: CandidatesFoundResult): string {
 export const COLLISIONS_TITLE = "Some of These Names Are Taken";
 
 /**
- * Names the files, not the game: both exits reach this dialog, and on the
- * download path the game is deleted rather than renamed — only its saves move.
+ * Names the files, never the game: on one of the two paths that reach this
+ * dialog the game is not renamed at all.
  */
 export const COLLISIONS_INTRO =
   "Moving this game's files to the name your server uses would land on files that already exist. Nothing has been " +
@@ -249,11 +242,9 @@ export const COLLISIONS_REPLACE_LABEL = "Replace Them";
 export const COLLISIONS_KEEP_LABEL = "Keep Them";
 
 /**
- * Neither exit destroys anything, and this says so for both. Replace moves what
- * it displaces into `.romm-backup`, the funnel every other replaced save goes
- * through, and this dialog is the only place the user sees that while choosing.
- * Keep leaves the old-named files orphaned; implying that move was clean is the
- * one thing this sentence must not do.
+ * Says for both exits that nothing is destroyed, because this dialog is the only
+ * place the user sees it while choosing. Implying that Keep's move was clean is
+ * the one thing this sentence must not do.
  */
 export const COLLISIONS_CONSEQUENCES =
   "Replace does not delete the files listed above — each is moved into a .romm-backup folder beside it, so you can " +

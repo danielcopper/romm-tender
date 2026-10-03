@@ -90,11 +90,12 @@ export interface AdoptionFlowHooks {
   /** What the backend proved about a candidate under another name in the folder. */
   setCandidatePresent(present: boolean): void;
   /**
-   * The backend has recorded the adoption. Says nothing about the shortcut's
-   * launch command: a write that failed or was skipped is not a failed
-   * adoption. Called after both flags are cleared and before
-   * `romm_data_changed` / `rom_adopted` is dispatched and the success toast
-   * shown.
+   * Called only when the flow ends `adopted`, which a launch-options write
+   * that rejects, or is skipped for want of an appId or a launch command, does
+   * not prevent. A write refused because the caller's lease owner has gone ends
+   * `failed` instead, and this is not called. Called after both flags are
+   * cleared and before `romm_data_changed` / `rom_adopted` is dispatched and the
+   * success toast shown.
    */
   onAdopted(): void;
 }

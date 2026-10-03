@@ -9,7 +9,8 @@
  * removable and the uninstall path refuses a link.
  *
  * Its question is whether to download a second copy beside the first, which
- * would otherwise be answered without the user. Nothing on disk is moved, renamed or removed by either exit.
+ * would otherwise be answered without the user. Nothing on disk is moved,
+ * renamed or removed by either exit.
  */
 
 import { FC } from "react";
