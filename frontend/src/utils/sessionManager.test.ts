@@ -1705,9 +1705,9 @@ describe("sessionManager with a backend that does not answer", () => {
   });
 });
 
-// A game the held map lacks — synced after the map was read, or a map that
-// could not be read — still opens and closes its session when Tender's button
-// named its ROM before starting it, and no backend answers the refresh.
+// Which ROM a start opens on when Tender's button named one: the map if this
+// start's refresh answered, else the name, else the held map — and the name
+// alone carries a game the map lacks.
 describe("sessionManager with a ROM Tender's button named for the start", () => {
   const never = <T>(): Promise<T> => new Promise<T>(() => {});
   let sessionEvents: { running: boolean; appId: number; romId: number }[];
@@ -1778,7 +1778,7 @@ describe("sessionManager with a ROM Tender's button named for the start", () => 
     expect(sessionEvents).toEqual([]);
   });
 
-  it("the map, where it holds the app, outranks the name", async () => {
+  it("a refresh that answered with the app outranks the name", async () => {
     // This start's refresh answers: the backend's current word.
     vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
     const lifetime = captureLifetimeCb();

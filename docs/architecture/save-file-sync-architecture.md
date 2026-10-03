@@ -1653,10 +1653,10 @@ question asks; see [Is the game running](#is-the-game-running).
 **Concurrency of the post-exit work is deliberately not per-app.** Lifecycle events run on one serialized chain, and the
 post-exit save syncs behind them serialize further on a **device-wide** gate (`services/saves/sync_engine/_gate.py`, 60s
 budget) — RomM's `negotiate` is device-scoped and the engine's layout state is shared mutable state, so parallel syncs
-are not safe. Two games exiting close together therefore sync one after the other — the chain no longer keeps them apart
-once a finalize passes its 15 s limit, the gate still does; if the first overruns the budget the second is skipped and
-retried at its next sync. Playtime is unaffected either way — it is recorded before the sync runs. Per-app sync chains
-are a non-goal, not an oversight.
+are not safe. Two games exiting close together therefore sync one after the other — the gate keeps them apart even once
+the chain has moved on past a finalize's limit (see [Post-exit sync](#post-exit-sync)); if the first overruns the budget
+the second is skipped and retried at its next sync. Playtime is unaffected either way — it is recorded before the sync
+runs. Per-app sync chains are a non-goal, not an oversight.
 
 The skip says what it is (#1625). A gate timeout carries `reason: "sync_busy"` — never `server_unreachable` — and no
 additive `offline` flag, on the pre-launch side as much as the post-exit one: nothing on either path ever contacted the
@@ -2055,10 +2055,9 @@ since panel load. So Tender's Play button names the ROM right before it starts a
 comes from the map when this start's refresh of it answered — the backend's current word, so no name overrides it —
 otherwise from the button's name, otherwise from the map already held. The name outranks a held map because a held map
 can be older than it, for example after a version switch moved the shortcut to another ROM. A name is used once, and
-only by a start Steam reports within 60 s of it being set, so a start that never happened cannot name a later one; it is
-taken when Steam reports the start, not when the chain reaches it. That window is not measured: it only has to outlast
-the time between the button's `RunGame` and Steam's start notification. A launched app that none of the three accounts
-for is not treated as a RomM shortcut, and the session manager ignores it.
+only by a start Steam reports within 60 s of it being set, so a start that never happened cannot name a later one. That
+window is not measured: it only has to outlast the time between the button's `RunGame` and Steam's start notification. A
+launched app this ranking gives no ROM is not treated as a RomM shortcut, and the session manager ignores it.
 
 ### Suspend exclusion via the monotonic clock (#1148)
 
