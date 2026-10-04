@@ -158,7 +158,7 @@ describe("reconfirmLaunchOptions", () => {
     );
   });
 
-  it("never answers cancelled without an admission, where a torn-down owner's admission is cancelled", async () => {
+  it("answers cancelled for a torn-down owner's admission, and never without an admission", async () => {
     let answer!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
     const fetched = new Promise<Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>>((resolve) => {
       answer = resolve;

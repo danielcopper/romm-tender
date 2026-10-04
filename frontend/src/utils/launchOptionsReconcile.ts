@@ -20,7 +20,6 @@ const RECONFIRM_FETCH_TIMEOUT_MS = 3000;
 export type RelaunchOptionsReconfirmResult =
   { status: "ready" } | { status: "best_effort_failure" } | { status: "timeout" } | { status: "cancelled" };
 
-/** What a re-confirm without an owner can answer: nothing tears it down. */
 type UnownedReconfirmResult = Exclude<RelaunchOptionsReconfirmResult, { status: "cancelled" }>;
 
 function cancelledByOwner(admission: PruneLeaseAdmission | undefined): boolean {

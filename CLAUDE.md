@@ -798,7 +798,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   conflicts' lock (the preview rebuild does not), and frontend-owned Steam work holds a heartbeated lease through every
   continuation's final write, and a continuation with an owner is tombstoned by its owner's teardown** — test +
   prompt-only — prune service and prune conflicts race tests + contract endpoint-entry matrix
-  (`tests/contract/test_conflict_refusals.py`); new conflicting entry points are prompt-only
+  (`tests/contract/test_conflict_refusals.py`), and `frontend/src/utils/pruneLease.test.ts` for the heartbeat and the
+  owner's tombstone; new conflicting entry points are prompt-only
 - **A removed-game cleanup's run claim is registered on the prune conflicts before the start's reservation is given
   back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
   `tests/services/prune/test_service.py::test_a_started_run_holds_its_run_claim_until_it_ends` (registered by the time

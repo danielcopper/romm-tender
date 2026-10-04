@@ -42,10 +42,9 @@ export function isPruneLeaseCancelled(signal: AbortSignal | undefined): boolean 
  *
  * Two shapes count: the explicit {@link PruneLeaseAdmissionCancelled} thrown when
  * a continuation is refused at lease registration, and any error observed while
- * *admission* is already stale — an owner that unmounted mid-flight rejects its
- * own in-flight endpoint calls, and the backend work behind them either committed
- * or was never really attempted. Callers use this to stay silent instead of
- * toasting a failure the user cannot act on.
+ * *admission* is already stale — the owner's teardown aborts its continuations
+ * mid-flight, so a failure that surfaces afterwards is that cancellation. Callers
+ * use this to stay silent instead of toasting a failure the user cannot act on.
  */
 export function isPruneLeaseCancellation(error: unknown, admission: PruneLeaseAdmission): boolean {
   return error instanceof PruneLeaseAdmissionCancelled || !isPruneLeaseAdmissionCurrent(admission);
@@ -55,7 +54,7 @@ export function disownStrandedPruneLeases(): void {
   // A continuation whose JS context died mid-call never released its lease and
   // never renews it, so it would hold off every cleanup for its full TTL with
   // nobody behind it. A new context is the proof that no such continuation
-  // survives, so this runs once per JS context: a second call would disown the
+  // survives. Call this once per JS context: a second call would disown the
   // leases this context holds while they are still live.
   void releaseOrphanedPruneLeases()
     .then((result) => {

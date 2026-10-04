@@ -254,7 +254,7 @@ it("a refused renewal aborts future writes and abandons the refused token", asyn
   expect(releasePruneConflictLease).not.toHaveBeenCalledWith("lease-refused");
 });
 
-it("disowns leases stranded by a previous frontend context on mount", async () => {
+it("disowns leases stranded by a previous frontend context", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockResolvedValueOnce({ success: true, released: 1 });
 
   disownStrandedPruneLeases();
@@ -262,12 +262,12 @@ it("disowns leases stranded by a previous frontend context on mount", async () =
   await Promise.resolve();
 
   // A context torn down mid-call never released its lease and never renews it,
-  // so nothing but a fresh mount lets a cleanup start before the TTL.
+  // so nothing but a new context lets a cleanup start before the TTL.
   expect(releaseOrphanedPruneLeases).toHaveBeenCalled();
   expect(logError).toHaveBeenCalledWith(expect.stringContaining("disowned 1 lease(s) stranded"));
 });
 
-it("says nothing on a mount that had nothing to disown", async () => {
+it("says nothing when there was nothing to disown", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockResolvedValueOnce({ success: true, released: 0 });
 
   disownStrandedPruneLeases();
@@ -277,11 +277,11 @@ it("says nothing on a mount that had nothing to disown", async () => {
   expect(logError).not.toHaveBeenCalled();
 });
 
-it("does not throw when the disown call fails", async () => {
+it("logs a disown that fails instead of leaving it unhandled", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockRejectedValueOnce(new Error("bridge offline"));
 
-  // Mount must not be blocked by a best-effort cleanup; the TTL still backs it.
-  expect(() => disownStrandedPruneLeases()).not.toThrow();
+  // The panel's start must not be blocked by a best-effort cleanup; the lease TTL still backs it.
+  disownStrandedPruneLeases();
   await Promise.resolve();
   await Promise.resolve();
 

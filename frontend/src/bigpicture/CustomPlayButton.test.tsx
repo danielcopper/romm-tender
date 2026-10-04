@@ -2998,8 +2998,8 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
     const { getByText, queryByText, rerender } = await pressPlay();
     expect(getByText("Checking saves...")).toBeInTheDocument();
     // The button rendered again for another game releases the owner the press
-    // was admitted under. The new game's own read stays out, so only the stale
-    // start can put the button back on Play.
+    // was admitted under. The new game's detail read never answers, so only the
+    // stale start can put the button back on Play.
     vi.mocked(getCachedGameDetail).mockReturnValue(never());
     rerender(<CustomPlayButton appId={101} />);
     await act(async () => {

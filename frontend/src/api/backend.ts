@@ -518,7 +518,7 @@ export const reportRemovalResults = endpoint<
   [(string | number)[], string | null],
   { success: boolean; message: string }
 >("report_removal_results");
-/** Disown leases stranded by a previous frontend context; called once at mount. */
+/** Disown leases stranded by a previous frontend context; called once per JS context, at panel start. */
 export const releaseOrphanedPruneLeases = endpoint<[], { success: boolean; released: number }>(
   "release_orphaned_prune_leases",
 );
