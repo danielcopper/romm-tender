@@ -323,6 +323,7 @@ class StatusService:
             "device_id": device_id or "",
             "last_sync_check_at": last_sync_check_at,
             "conflicts": conflicts,
+            "active_slot": active_slot,
             "savefiles_in_content_dir": savefiles_in_content_dir,
             "save_resolution": _save_resolution_payload(save_answer),
             "save_sync_display": save_sync_display,

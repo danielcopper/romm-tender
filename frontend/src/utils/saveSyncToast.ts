@@ -11,7 +11,7 @@
  * helper from the per-direction counts on its result — pre-launch
  * (``CustomPlayButton``), post-exit (``sessionManager``, from the
  * ``finalize_game_session`` payload), and the manual per-game sync
- * (``RomMPlaySection``). The backend delivers the counts as data, never this
+ * (``manualSaveSync``). The backend delivers the counts as data, never this
  * copy; it owns only the offline/failure body it renders itself (#1481).
  */
 

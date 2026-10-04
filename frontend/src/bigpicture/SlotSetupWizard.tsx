@@ -26,7 +26,7 @@ import { formatBytes } from "../utils/formatters";
 import type { SaveSetupInfo, SlotMigrationConflict } from "../types";
 import { detach } from "../utils/detach";
 import { ConnectingIndicator } from "./saves/ConnectingIndicator";
-import { displaySlot } from "./saves/helpers";
+import { displaySlot } from "../utils/saveHelpers";
 
 interface SlotSetupWizardProps {
   romId: number;

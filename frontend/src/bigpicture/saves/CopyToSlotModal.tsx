@@ -10,7 +10,7 @@
 import { useState, FC, ChangeEvent, KeyboardEvent } from "react";
 import { ModalRoot, DialogButton, TextField } from "@decky/ui";
 import type { SaveSlotSummary } from "../../types";
-import { displaySlot } from "./helpers";
+import { displaySlot } from "../../utils/saveHelpers";
 
 export const CopyToSlotModal: FC<{
   availableSlots: SaveSlotSummary[];

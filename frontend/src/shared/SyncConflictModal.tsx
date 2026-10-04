@@ -1,12 +1,18 @@
 import { FC, useState } from "react";
 import { showToast } from "../utils/toast";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
-import { resolveSyncConflict, logError } from "../api/backend";
 import type { SyncConflict } from "../types";
-import { formatBytes, formatTimestamp } from "../utils/formatters";
-
-type SyncConflictAction = "keep_local" | "use_server";
-export type SyncConflictResolution = SyncConflictAction | "cancel";
+import {
+  CONFLICT_EXPLANATION,
+  conflictTitle,
+  localSaveDetail,
+  resolveConflictsSequentially,
+  resolveOneConflict,
+  serverSaveDetail,
+  serverSaveLabel,
+  type SyncConflictAction,
+  type SyncConflictResolution,
+} from "../utils/saveConflictFlow";
 
 interface SyncConflictModalProps {
   conflict: SyncConflict;
@@ -14,12 +20,6 @@ interface SyncConflictModalProps {
   onCancel: () => void;
   isLoading?: boolean;
   errorMessage?: string | null;
-}
-
-/** "unknown" when bytes is null or 0 — otherwise the shared byte formatter output. */
-function formatSize(bytes: number | null): string {
-  if (bytes == null || bytes === 0) return "unknown";
-  return formatBytes(bytes);
 }
 
 /**
@@ -57,7 +57,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
             color: "#fff",
           }}
         >
-          Save conflict for {conflict.filename}
+          {conflictTitle(conflict)}
         </div>
         <div
           style={{
@@ -67,8 +67,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
             lineHeight: "1.4",
           }}
         >
-          Both your local save and the server save have changed since the last sync. Pick which version to keep — the
-          other will be overwritten.
+          {CONFLICT_EXPLANATION}
         </div>
 
         {/* Local save block */}
@@ -85,7 +84,7 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
             Your local save
           </div>
           <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.7)", marginBottom: "2px" }}>
-            {formatSize(conflict.local_size)} · modified {formatTimestamp(conflict.local_mtime)}
+            {localSaveDetail(conflict)}
           </div>
           <div style={{ marginTop: "8px" }}>
             <DialogButton onClick={() => handleResolve("keep_local")} disabled={isLoading}>
@@ -105,10 +104,10 @@ const SyncConflictModal: FC<SyncConflictModalProps> = ({
           }}
         >
           <div style={{ fontSize: "12px", fontWeight: "bold", color: "#64b5f6", marginBottom: "6px" }}>
-            Server save (id={conflict.server_save_id})
+            {serverSaveLabel(conflict)}
           </div>
           <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.7)", marginBottom: "2px" }}>
-            {formatSize(conflict.server_size)} · uploaded {formatTimestamp(conflict.server_updated_at)}
+            {serverSaveDetail(conflict)}
           </div>
           <div style={{ marginTop: "8px" }}>
             <DialogButton onClick={() => handleResolve("use_server")} disabled={isLoading}>
@@ -161,38 +160,15 @@ const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, close
   const handleResolve = async (action: SyncConflictAction): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
-    try {
-      const result = await resolveSyncConflict(conflict.rom_id, conflict.filename, conflict.server_save_id, action);
-      if (!result.success) {
-        if (result.reason === "stale_conflict") {
-          const staleMsg =
-            "The server save has been updated by another device. Please cancel and retry sync to get the latest version.";
-          logError(
-            `resolveSyncConflict(${conflict.rom_id}, ${conflict.filename}, ${action}) stale: ${result.message ?? ""}`,
-          );
-          setErrorMessage(staleMsg);
-          setIsLoading(false);
-          return;
-        }
-        const msg = result.message ?? "Failed to resolve conflict";
-        logError(`resolveSyncConflict(${conflict.rom_id}, ${conflict.filename}, ${action}) failed: ${msg}`);
-        setErrorMessage(msg);
-        setIsLoading(false);
-        return;
-      }
-      const successBody =
-        action === "keep_local"
-          ? "Conflict resolved — kept your local save (uploaded to server)."
-          : "Conflict resolved — used the server save · your local was backed up.";
-      showToast(successBody);
-      closeModal?.();
-      onDone(action);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      logError(`resolveSyncConflict(${conflict.rom_id}, ${conflict.filename}, ${action}) threw: ${msg}`);
-      setErrorMessage(msg || "Failed to resolve conflict");
+    const outcome = await resolveOneConflict(conflict, action);
+    if (!outcome.ok) {
+      setErrorMessage(outcome.message);
       setIsLoading(false);
+      return;
     }
+    showToast(outcome.toast);
+    closeModal?.();
+    onDone(action);
   };
 
   const handleCancel = () => {
@@ -230,10 +206,6 @@ export function showSyncConflictModal(conflict: SyncConflict): Promise<SyncConfl
  * conflict was resolved (or the list was empty), "cancel" on the first
  * dismissal.
  */
-export async function handleConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved"> {
-  for (const conflict of conflicts) {
-    const resolution = await showSyncConflictModal(conflict);
-    if (resolution === "cancel") return "cancel";
-  }
-  return "resolved";
+export function handleConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved"> {
+  return resolveConflictsSequentially(conflicts, showSyncConflictModal);
 }

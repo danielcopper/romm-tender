@@ -8,7 +8,7 @@ import { FC, type ReactElement } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
 import type { SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
-import { MUTED_COLOR } from "./helpers";
+import { MUTED_COLOR } from "../../utils/saveHelpers";
 import { renderServerSaveRow } from "./ServerSaveRow";
 import type { CopyToSlotRowProps } from "./CopyToSlotButton";
 

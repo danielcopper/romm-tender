@@ -12,7 +12,7 @@ import type { SaveVersionEntry, RollbackStatus, ListFileVersionsResult } from ".
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, unsupportedRestoreMessage } from "./helpers";
+import { formatAttributionSegment, pickLastSyncer, formatRollbackFeedback } from "../../utils/saveHelpers";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 
@@ -102,59 +102,16 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
     setRestoring(version.id);
     try {
       const result: RollbackStatus = await savesRollbackToVersion(romId, slot, version.id);
-      if (result.status === "ok") {
-        showToast(`Save restored from ${formatRelativeTime(version.updated_at)}`);
+      const feedback = formatRollbackFeedback(result, version.updated_at);
+      if (feedback.kind === "conflict") {
+        await showSyncConflictModal(feedback.conflict);
+      } else {
+        showToast(feedback.message);
+      }
+      if (result.status === "ok" || result.status === "put_failed") {
         setVersions(null);
         setExpanded(false);
         onRestored();
-      } else if (result.status === "conflict_blocked") {
-        // Pre-flight surfaced a real conflict on the currently-tracked save.
-        // The user has to resolve it via the standard sync conflict modal
-        // before any switch can run. We surface the first conflict (in
-        // practice the slot only ever has one); the modal itself is
-        // identical to the one launched from the play button.
-        const first = result.conflicts[0];
-        if (first) {
-          // The modal owns the feedback — Keep Local / Use Server surface the
-          // normal save-sync resolution toast, Cancel stays silent (the state
-          // remains conflict). The panel must not stack a second toast on top.
-          await showSyncConflictModal(first);
-        } else {
-          // Degenerate: the server blocked on a conflict but sent none to
-          // show, so there is no modal to surface it — nudge the user directly
-          // instead of failing silently.
-          showToast("Restore blocked by a sync conflict. Sync this save, then try again.");
-        }
-      } else if (result.status === "preflight_failed") {
-        const detail = result.errors[0] ?? "preflight error";
-        showToast(`Sync failed before restore: ${detail}`);
-      } else if (result.status === "put_failed") {
-        // Local download succeeded but the server-side bump didn't — switch
-        // is locally complete, just won't propagate to other devices yet.
-        showToast(
-          "Restored locally, but the server didn't update. Other devices will see the previous version until you retry.",
-        );
-        setVersions(null);
-        setExpanded(false);
-        onRestored();
-      } else if (result.status === "rom_not_installed") {
-        // Distinct from ``version_deleted``: the chosen version may well
-        // still exist on the server; the local ROM install is what's gone
-        // (uninstalled between version-list load and restore tap).
-        showToast("ROM is no longer installed locally. Reinstall and try again.");
-      } else if (result.status === "version_deleted") {
-        showToast("This version no longer exists on the server");
-      } else if (result.status === "server_unreachable") {
-        // Distinct from ``not_found``: the version may well still exist;
-        // we just couldn't reach the server to confirm. Prompt for retry
-        // instead of telling the user the version is gone.
-        showToast("Couldn't reach RomM. Check your connection and try again.");
-      } else if (result.status === "not_found") {
-        // Mirror of the branch above: RomM answered, so a retry cannot help.
-        showToast("RomM couldn't find this game's save data — nothing was restored.");
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- exhaustive final branch of the 9-member RollbackStatus union; an explicit check (vs. plain `else`) keeps the per-status symmetry and leaves any future-added status unhandled instead of silently routing it to the "unsupported" toast
-      } else if (result.status === "unsupported") {
-        showToast(unsupportedRestoreMessage(result));
       }
     } catch (e) {
       detach(debugLog(`VersionHistoryPanel: restore error for save ${version.id}: ${e}`));

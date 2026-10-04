@@ -31,7 +31,6 @@ import { WarningCard } from "./WarningCard";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 import { applyArtwork, cancelArtworkApply } from "../utils/artwork";
 import { hasAnySaveConflict } from "../utils/saveStatus";
-import { saveSyncToastBody } from "../utils/saveSyncToast";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import {
@@ -42,7 +41,6 @@ import {
   refreshCoverArtwork,
   removeRom,
   downloadAllFirmware,
-  syncRomSaves,
   deleteLocalSaves,
   setGameCore,
   clearGameCore,
@@ -50,6 +48,7 @@ import {
   debugLog,
 } from "../api/backend";
 import { isStrandedPanelFailure } from "../api/host";
+import { executeManualSaveSync } from "../utils/manualSaveSync";
 import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {
   capturePruneLeaseAdmission,
@@ -610,39 +609,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
 
   const handleSyncSaves = async () => {
     if (actionPending || !detail.romId) return;
-    const romId = detail.romId;
     setActionPending("savesync");
     try {
-      const result = await syncRomSaves(romId);
-      if (result.success) {
-        // Directional completion toast via the shared helper — the single source
-        // of that copy across every save-sync surface (#1481).
-        const directionalBody = saveSyncToastBody(result.uploaded, result.downloaded);
-        const c = result.conflicts?.length ?? 0;
-        if (directionalBody) {
-          showToast(directionalBody);
-        } else if (c === 0) {
-          // Manual surface only (#1486): an explicit per-game "Sync Saves" click
-          // that moved nothing and hit no conflicts gets a short acknowledgement,
-          // so the click doesn't read as a no-op. The automatic surfaces
-          // (pre-launch, post-exit) stay silent on this zero-case.
-          showToast("Saves already up to date");
-        }
-        // Preserve the conflict signal as its own additive toast (mirroring the
-        // post-exit conflicts_toast) — it must stay visible even when nothing
-        // transferred. Gated above so "up to date" never contradicts pending
-        // conflicts.
-        if (c > 0) {
-          showToast(`${c} conflict(s) need resolution`);
-        }
-        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-        // Refresh save sync status — last_sync_check_at was just set by the backend
-        noteSaveSyncDisplay(appId, romId, { status: "synced", label: "Just now", last_sync_check_at: null });
-      } else {
-        showToast(result.message || "Save sync failed");
-      }
-    } catch {
-      showToast("Save sync failed");
+      await executeManualSaveSync(appId, detail.romId);
     } finally {
       setActionPending(null);
     }

@@ -6,7 +6,7 @@
 import type { ReactElement } from "react";
 import type { SlotSaveFile } from "../../types";
 import { formatBytes } from "../../utils/formatters";
-import { formatRelativeTime } from "./helpers";
+import { formatRelativeTime } from "../../utils/saveHelpers";
 import { renderCopyToSlotButton, type CopyToSlotRowProps } from "./CopyToSlotButton";
 
 export function renderServerSaveRow(f: SlotSaveFile, copy?: CopyToSlotRowProps): ReactElement {

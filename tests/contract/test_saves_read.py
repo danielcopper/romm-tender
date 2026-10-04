@@ -56,6 +56,7 @@ async def test_get_save_status_full_shape_and_partial_flag(harness):
         "device_id",
         "last_sync_check_at",
         "conflicts",
+        "active_slot",
         "savefiles_in_content_dir",
         "save_resolution",
         "save_sync_display",

@@ -35,8 +35,6 @@ import {
   forgetDownload,
   debugLog,
   preLaunchSync,
-  getSaveStatus,
-  isEndpointFailure,
   logError,
   isSaveTrackingConfigured,
   getSaveSetupInfo,
@@ -63,6 +61,7 @@ import {
   downloadForgottenToast,
   forgetRefusedToast,
 } from "../utils/missingDownloadWording";
+import { resolveKnownConflicts } from "../utils/saveConflictFlow";
 import { showAdoptExistingModal } from "./AdoptExistingModal";
 import { showAdoptCandidateModal } from "./AdoptCandidateModal";
 import { showAdoptCollisionModal } from "./AdoptCollisionModal";
@@ -1087,71 +1086,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
   };
 
-  // Resolve the conflict the button is already showing. This is not a re-sync:
-  // it pulls the already-known conflict via `getSaveStatus` and hands it to the
-  // shared resolution modal. `getSaveStatus` uploads and downloads nothing, but
-  // it may follow a moved save directory first and so move local files.
-  // Re-running the act-capable `preLaunchSync` here (the pre-#1276 behavior)
-  // could upload/download OTHER files in the ROM as a side effect and re-derive
-  // the conflict through a different path than the one that set the button to
-  // "conflict" — so the launch path keeps `preLaunchSync`, but conflict
-  // resolution must not act.
   const handleResolveConflict = async () => {
     if (!romId) return;
     setState("syncing");
-    try {
-      const result = await Promise.race([
-        getSaveStatus(romId),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000)),
-      ]);
-
-      if (isEndpointFailure(result)) {
-        detach(debugLog(`CustomPlayButton: resolve conflict deferred: ${result.message}`));
-        showToast(result.message);
-        setState("conflict");
-        return;
-      }
-
-      // A failed status read leaves every file "unknown" and an empty server
-      // list; treating that as "resolved" would drop the user back to Play
-      // believing the conflict was cleared. Surface it and stay in conflict,
-      // exactly like the network-throw catch below (#1276).
-      if (result.server_query_failed) {
-        // Only an explicit unreachable verdict is a connectivity signal — for
-        // the store AND the copy. Off the bare flag both blamed the connection
-        // for a ROM the server merely no longer has (#1570).
-        const unreachable = result.server_query_reason === "server_unreachable";
-        if (unreachable) {
-          reportServerReachable(false);
-        }
-        detach(debugLog(`CustomPlayButton: resolve conflict — server query failed for rom ${romId}`));
-        showToast(
-          unreachable
-            ? "Couldn't reach server to resolve conflict"
-            : "RomM couldn't find this game's save data — conflict left unresolved",
-        );
-        setState("conflict");
-        return;
-      }
-      // A clean status read proves the server is reachable again (#1345).
-      reportServerReachable(true);
-
-      if (result.conflicts && result.conflicts.length > 0) {
-        const conflictResult = await handleConflicts(result.conflicts);
-        if (conflictResult === "cancel") {
-          setState("conflict");
-          return;
-        }
-      }
-      // Resolved here, or the conflict was already cleared elsewhere (empty/
-      // absent conflicts) — notify siblings and go back to play.
-      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-      setState("play");
-    } catch (e) {
-      detach(debugLog(`CustomPlayButton: resolve conflict failed: ${e}`));
-      showToast("Couldn't reach server to resolve conflict");
-      setState("conflict");
-    }
+    const outcome = await resolveKnownConflicts(romId, handleConflicts, "CustomPlayButton");
+    setState(outcome === "resolved" ? "play" : "conflict");
   };
 
   const handleDownload = async () => {

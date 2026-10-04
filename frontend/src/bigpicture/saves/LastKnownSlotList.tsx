@@ -11,7 +11,7 @@
 import type { ReactElement } from "react";
 import type { LastKnownSlots, SaveSlotSummary } from "../../types";
 import { formatTimestamp } from "../../utils/formatters";
-import { displaySlot } from "./helpers";
+import { displaySlot } from "../../utils/saveHelpers";
 
 /** The line that says what the list below is. It carries no date on purpose:
  *  nothing on the device records when the slot listing was last refreshed, and

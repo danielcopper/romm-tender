@@ -16,7 +16,7 @@ import { switchSlot, getVersionList, checkLocalDrift, debugLog, logWarn } from "
 import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
-import { MUTED_COLOR } from "./saves/helpers";
+import { MUTED_COLOR, sortSaveSlots, filterSaveSlotsForDisplay } from "../utils/saveHelpers";
 import { renderLastKnownSlots } from "./saves/LastKnownSlotList";
 import { NewSlotModal } from "./saves/NewSlotModal";
 import { SlotPanel } from "./saves/SlotPanel";
@@ -194,25 +194,7 @@ export const SavesTab: FC<SavesTabProps> = ({
   }
 
   // --- Sort: active first, named alphabetically, legacy "" bucket last (#1478) ---
-  const slotRank = (s: SaveSlotSummary): number => {
-    if (s.slot === activeSlot) return 0;
-    if (s.slot === "") return 2;
-    return 1;
-  };
-  const sorted = [...availableSlots].sort((a, b) => {
-    const rankDiff = slotRank(a) - slotRank(b);
-    if (rankDiff !== 0) return rankDiff;
-    return a.slot.localeCompare(b.slot);
-  });
-
-  // An active slot the list doesn't carry still gets a panel — it is a slot the
-  // user is on. Only for a slot something ANSWERED, though: synthesised off the
-  // panel's placeholder it puts a slot name on screen that nothing ever said
-  // (#1747), and `default` is a real name here, so it reads as a fact.
-  const slotInList = sorted.some((s) => s.slot === activeSlot);
-  if (!slotInList && activeSlot && activeSlotKnown) {
-    sorted.unshift({ slot: activeSlot, source: "local", count: 0, latest_updated_at: null });
-  }
+  const sorted = sortSaveSlots(availableSlots, activeSlot, activeSlotKnown);
 
   // --- New Slot button handler ---
   const handleNewSlot = () => {
@@ -299,27 +281,25 @@ export const SavesTab: FC<SavesTabProps> = ({
       {lastKnownSection}
 
       {/* Slot panels — skip the "" (legacy) panel when already in legacy mode */}
-      {sorted
-        .filter((s) => activeSlot !== null || s.slot !== "")
-        .map((slot) => {
-          const isActive = activeSlot !== null && slot.slot === activeSlot;
-          return (
-            <SlotPanel
-              key={`panel-${slot.slot}-${versionHistoryKey}`}
-              romId={romId}
-              slot={slot}
-              isActive={isActive}
-              defaultExpanded={isActive}
-              saveStatus={isActive ? saveStatus : null}
-              conflicts={isActive ? conflicts : []}
-              isOffline={isOffline}
-              onSlotSwitched={onSlotSwitched}
-              onVersionRestored={handleVersionRestored}
-              onSlotDeleted={handleSlotDeleted}
-              onCopy={openCopyModal}
-            />
-          );
-        })}
+      {filterSaveSlotsForDisplay(sorted, activeSlot).map((slot) => {
+        const isActive = activeSlot !== null && slot.slot === activeSlot;
+        return (
+          <SlotPanel
+            key={`panel-${slot.slot}-${versionHistoryKey}`}
+            romId={romId}
+            slot={slot}
+            isActive={isActive}
+            defaultExpanded={isActive}
+            saveStatus={isActive ? saveStatus : null}
+            conflicts={isActive ? conflicts : []}
+            isOffline={isOffline}
+            onSlotSwitched={onSlotSwitched}
+            onVersionRestored={handleVersionRestored}
+            onSlotDeleted={handleSlotDeleted}
+            onCopy={openCopyModal}
+          />
+        );
+      })}
 
       {/* New Slot button + error feedback */}
       <div key="new-slot-area" style={{ marginTop: "10px" }}>

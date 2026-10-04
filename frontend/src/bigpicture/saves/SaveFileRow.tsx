@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import type { SaveFileStatus, SyncConflict } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, statusLabel } from "./helpers";
+import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, statusLabel } from "../../utils/saveHelpers";
 
 // Label column width — keeps values aligned vertically across rows
 const LABEL_WIDTH = "88px";

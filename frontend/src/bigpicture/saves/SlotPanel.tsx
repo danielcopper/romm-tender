@@ -11,7 +11,13 @@ import { getSlotSaves, switchSlot, debugLog, getSlotDeleteInfo, deleteSlot } fro
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { reportServerReachable } from "../../utils/connectionState";
-import { MUTED_COLOR, computeSyncSummary, displaySlot } from "./helpers";
+import {
+  MUTED_COLOR,
+  computeSyncSummary,
+  displaySlot,
+  switchSlotFailureMessage,
+  formatSlotDeleteDescription,
+} from "../../utils/saveHelpers";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
@@ -188,19 +194,10 @@ export const SlotPanel: FC<SlotPanelProps> = ({
         reportServerReachable(true);
         onSlotSwitched(slotName, result.save_status);
       } else {
-        let msg = "Failed to switch slot";
-        if (result.reason === "pending_uploads") {
-          msg = "Sync your saves first — local changes haven't been uploaded";
-        } else if (result.reason === "server_unreachable") {
+        if (result.reason === "server_unreachable") {
           reportServerReachable(false);
-          msg = "Can't switch — RomM server is not reachable";
-        } else if (result.reason === "not_installed") {
-          msg = "Can't switch — download the game first";
-        } else if (result.reason === "savefiles_in_content_dir") {
-          msg = "Can't switch — this game's saves are written beside the game file";
-        } else if (result.reason === "save_shape_unsupported" && result.message) {
-          msg = result.message;
         }
+        const msg = switchSlotFailureMessage(result.reason, result.message, "Failed to switch slot");
         setSwitchError(msg);
         if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);
         switchErrorTimerRef.current = setTimeout(() => setSwitchError(null), 5000);
@@ -224,26 +221,10 @@ export const SlotPanel: FC<SlotPanelProps> = ({
         return;
       }
 
-      // Build confirmation message
-      const lines: string[] = [];
-      if (info.source === "server" && info.server_save_count > 0) {
-        const n = info.server_save_count;
-        lines.push(
-          `This will permanently delete ${n} save${n === 1 ? "" : "s"} from slot '${info.slot}' on the RomM server.`,
-        );
-      } else {
-        lines.push(`This will remove slot '${info.slot}' from your local configuration.`);
-      }
-      if (info.local_file_count > 0) {
-        const n = info.local_file_count;
-        lines.push(`${n} tracked file${n === 1 ? "" : "s"} will be unlinked.`);
-      }
-      lines.push("This cannot be undone.");
-
       showModal(
         <ConfirmModal
           strTitle="Delete Slot"
-          strDescription={lines.join("\n\n")}
+          strDescription={formatSlotDeleteDescription(info)}
           strOKButtonText="Delete"
           strCancelButtonText="Cancel"
           onOK={() => {

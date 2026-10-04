@@ -63,6 +63,25 @@ class TestSaveStatus:
         assert result["conflicts"] == []
 
     @pytest.mark.asyncio
+    async def test_get_save_status_includes_active_slot(self, tmp_path):
+        """get_save_status includes active_slot matching save state."""
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_status(42)
+        assert "active_slot" in result
+        assert result["active_slot"] is None
+
+        # When active_slot is set in state
+        with svc._config.uow_factory() as uow:
+            state = uow.rom_save_sync_states.get(42) or RomSaveSyncState()
+            state.switch_active_slot("autosave")
+            uow.rom_save_sync_states.save(42, state)
+
+        result_switched = await svc.get_save_status(42)
+        assert result_switched["active_slot"] == "autosave"
+
+    @pytest.mark.asyncio
     async def test_get_save_status_includes_device_syncs(self, tmp_path):
         """get_save_status includes device_syncs and is_current per file."""
         svc, fake = make_service(tmp_path)
