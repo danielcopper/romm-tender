@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { batchConfirmLaunchOptions, reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import * as steamShortcuts from "./steamShortcuts";
 import * as backend from "../api/backend";
+import { capturePruneLeaseAdmission, mountPruneLeaseOwner, releasePruneLeasesByOwner } from "./pruneLease";
 
 vi.mock("./steamShortcuts");
 vi.mock("../api/backend");
@@ -155,6 +156,29 @@ describe("reconfirmLaunchOptions", () => {
     expect(backend.logError).toHaveBeenCalledWith(
       expect.stringContaining("Watcher: launch_options re-confirm failed (launching anyway)"),
     );
+  });
+
+  it("never answers cancelled without an admission, where a torn-down owner's admission is cancelled", async () => {
+    let answer!: (value: Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>) => void;
+    const fetched = new Promise<Awaited<ReturnType<typeof backend.getRomRelaunchOptions>>>((resolve) => {
+      answer = resolve;
+    });
+    vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(fetched);
+    mountPruneLeaseOwner("custom-play-button:100");
+    const owned = reconfirmLaunchOptions(
+      42,
+      100,
+      "CustomPlayButton",
+      capturePruneLeaseAdmission("custom-play-button:100"),
+    );
+    const unowned = reconfirmLaunchOptions(42, 100, "Watcher");
+
+    await releasePruneLeasesByOwner("custom-play-button:100");
+    answer({ success: true, app_id: 100, launch_options: RELAUNCH_COMMAND, prune_lease_token: "launch-lease" });
+
+    await expect(owned).resolves.toEqual({ status: "cancelled" });
+    await expect(unowned).resolves.toEqual({ status: "ready" });
+    expect(steamShortcuts.setLaunchOptionsConfirmed).toHaveBeenCalledTimes(1);
   });
 
   it("a hung fetch returns a distinct timeout without starting a Steam write", async () => {

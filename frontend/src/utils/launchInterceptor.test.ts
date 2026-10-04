@@ -6,7 +6,6 @@ import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
 import * as runningApps from "./runningApps";
 import * as steamShortcuts from "./steamShortcuts";
-import * as pruneLease from "./pruneLease";
 import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
@@ -454,24 +453,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       }
     });
 
-    it("a start whose admission went stale before the deadline stays cancelled", async () => {
-      vi.useFakeTimers();
-      try {
-        vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
-        register();
-        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
-        // A new plugin generation makes every admission captured before it stale.
-        pruneLease.mountPruneLeasePlugin();
-        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
-
-        expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("no backend answer"));
-        expect(runGameMock()).not.toHaveBeenCalled();
-        expect(toaster.toast).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
     it("a relaunch uses the event's game ID even when Steam's app store has no overview for it", async () => {
       vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(null);
       register();
@@ -822,26 +803,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Couldn't check your saves in time");
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
       expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
-    });
-
-    it("sync_failed after a step got no answer → a start whose admission went stale stays cancelled", async () => {
-      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
-        decision: "sync_failed",
-        message: launchGate.NO_ANSWER_MESSAGE,
-        noAnswer: true,
-      });
-      prompts.confirmFallbackLaunch.mockImplementation(async () => {
-        // A new plugin generation while the dialog is open makes the start stale.
-        pruneLease.mountPruneLeasePlugin();
-        return true;
-      });
-
-      register();
-      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
-      await flush();
-
-      expect(prompts.confirmFallbackLaunch).toHaveBeenCalled();
-      expect(runGameMock()).not.toHaveBeenCalled();
     });
 
     it("sync_failed with an answer → Launch Anyway re-confirms the launch options before the relaunch", async () => {

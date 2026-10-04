@@ -2,7 +2,6 @@ import { getRomRelaunchOptions, logError } from "../api/backend";
 import type { RelaunchOptionsResult } from "../api/backend";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import {
-  capturePruneLeaseAdmission,
   isPruneLeaseAdmissionCurrent,
   isPruneLeaseCancellation,
   releasePruneLease,
@@ -20,6 +19,13 @@ const RECONFIRM_FETCH_TIMEOUT_MS = 3000;
 
 export type RelaunchOptionsReconfirmResult =
   { status: "ready" } | { status: "best_effort_failure" } | { status: "timeout" } | { status: "cancelled" };
+
+/** What a re-confirm without an owner can answer: nothing tears it down. */
+type UnownedReconfirmResult = Exclude<RelaunchOptionsReconfirmResult, { status: "cancelled" }>;
+
+function cancelledByOwner(admission: PruneLeaseAdmission | undefined): boolean {
+  return admission !== undefined && !isPruneLeaseAdmissionCurrent(admission);
+}
 
 /**
  * Keep watching a re-confirm that timed out: its lease is still held by the
@@ -46,13 +52,13 @@ type FetchedRelaunchOptions =
 /**
  * Pull the ROM's resolved launch command, bounded by a timeout. Anything that is
  * not a usable command is already the whole answer: a timeout stops the launch,
- * a fetch or backend failure lets it proceed best-effort, and a lifecycle
- * cancellation outranks both.
+ * a fetch or backend failure lets it proceed best-effort, and the teardown of
+ * the owner whose admission is passed outranks both.
  */
 async function fetchRelaunchOptions(
   romId: number,
   context: string,
-  admission: PruneLeaseAdmission,
+  admission: PruneLeaseAdmission | undefined,
 ): Promise<FetchedRelaunchOptions> {
   const fetchOutcome = getRomRelaunchOptions(romId).then(
     (item) => ({ kind: "result" as const, item }),
@@ -66,22 +72,22 @@ async function fetchRelaunchOptions(
   if (outcome.kind === "timeout") {
     logError(`${context}: launch_options re-confirm timed out (launch cancelled)`);
     releaseLateReconfirmLease(fetchOutcome, context);
-    const status = isPruneLeaseAdmissionCurrent(admission) ? "timeout" : "cancelled";
+    const status = cancelledByOwner(admission) ? "cancelled" : "timeout";
     return { kind: "verdict", result: { status } };
   }
   clearTimeout(timer);
   if (outcome.kind === "error") {
-    if (!isPruneLeaseAdmissionCurrent(admission)) return { kind: "verdict", result: { status: "cancelled" } };
+    if (cancelledByOwner(admission)) return { kind: "verdict", result: { status: "cancelled" } };
     logError(`${context}: launch_options re-confirm failed (launching anyway): ${outcome.error}`);
     return { kind: "verdict", result: { status: "best_effort_failure" } };
   }
   const item = outcome.item;
   if (!item) {
-    const status = isPruneLeaseAdmissionCurrent(admission) ? "ready" : "cancelled";
+    const status = cancelledByOwner(admission) ? "cancelled" : "ready";
     return { kind: "verdict", result: { status } };
   }
   if (!item.success) {
-    if (!isPruneLeaseAdmissionCurrent(admission)) return { kind: "verdict", result: { status: "cancelled" } };
+    if (cancelledByOwner(admission)) return { kind: "verdict", result: { status: "cancelled" } };
     logError(`${context}: launch_options re-confirm failed (launching anyway): ${item.message}`);
     return { kind: "verdict", result: { status: "best_effort_failure" } };
   }
@@ -92,16 +98,24 @@ async function fetchRelaunchOptions(
  * Heal any mid-session `launch_options` drift on one shortcut right before a
  * launch: pull the ROM's resolved command (`get_rom_relaunch_options`) and
  * confirm-set it onto the shortcut's appId. Ordinary fetch/write failures remain
- * best-effort. Lifecycle cancellation and timeout are explicit launch-stopping
- * results; a timed-out endpoint call stays observed so a late lease is released.
+ * best-effort. A timeout, and the teardown of the owner whose admission is
+ * passed, are explicit launch-stopping results; a timed-out endpoint call stays
+ * observed so a late lease is released.
  */
+export function reconfirmLaunchOptions(romId: number, appId: number, context: string): Promise<UnownedReconfirmResult>;
+export function reconfirmLaunchOptions(
+  romId: number,
+  appId: number,
+  context: string,
+  admission: PruneLeaseAdmission,
+): Promise<RelaunchOptionsReconfirmResult>;
 export async function reconfirmLaunchOptions(
   romId: number,
   appId: number,
   context: string,
-  admission: PruneLeaseAdmission = capturePruneLeaseAdmission(),
+  admission?: PruneLeaseAdmission,
 ): Promise<RelaunchOptionsReconfirmResult> {
-  if (!isPruneLeaseAdmissionCurrent(admission)) return { status: "cancelled" };
+  if (cancelledByOwner(admission)) return { status: "cancelled" };
   const fetched = await fetchRelaunchOptions(romId, context, admission);
   if (fetched.kind === "verdict") return fetched.result;
   const item = fetched.options;
@@ -116,9 +130,9 @@ export async function reconfirmLaunchOptions(
       context,
       admission,
     );
-    return { status: isPruneLeaseAdmissionCurrent(admission) ? "ready" : "cancelled" };
+    return { status: cancelledByOwner(admission) ? "cancelled" : "ready" };
   } catch (e) {
-    if (isPruneLeaseCancellation(e, admission)) {
+    if (admission && isPruneLeaseCancellation(e, admission)) {
       return { status: "cancelled" };
     }
     logError(`${context}: launch_options re-confirm failed (launching anyway): ${e}`);

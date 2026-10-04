@@ -46,7 +46,6 @@ import {
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
-import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, type PruneLeaseAdmission } from "./pruneLease";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
@@ -234,13 +233,12 @@ function relaunchGameId(start: CancelledStart): string {
 
 /** Relaunch a previously-cancelled, now-approved launch. Heals any mid-session
  *  `launch_options` drift on the shortcut first (shared bounded-race re-confirm;
- *  ordinary I/O failure is best-effort, timeout/lifecycle cancellation stops), then marks the appId as
+ *  ordinary I/O failure is best-effort, timeout stops), then marks the appId as
  *  skipped immediately before this RunGame so it doesn't re-enter the watcher
  *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
  *  so it only adds a bounded (≤3s) wait to the cancel→relaunch window. */
-async function relaunch(start: CancelledStart, romId: number, admission: PruneLeaseAdmission): Promise<void> {
-  const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher", admission);
-  if (reconfirm.status === "cancelled") return;
+async function relaunch(start: CancelledStart, romId: number): Promise<void> {
+  const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher");
   if (reconfirm.status === "timeout") {
     // The watcher has no game-page UI to fall back to, so the refusal would
     // otherwise be a silently dead Play press — say it out loud instead
@@ -264,12 +262,11 @@ async function handleWatcherVerdict(
   verdict: GateVerdict,
   start: CancelledStart,
   romId: number,
-  admission: PruneLeaseAdmission,
   prompts: LaunchPrompts,
 ): Promise<"done" | "retry"> {
   switch (verdict.decision) {
     case "allow":
-      await relaunch(start, romId, admission);
+      await relaunch(start, romId);
       return "done";
     case "abort":
       // The user saw setup/core UI and declined — already cancelled, nothing to do.
@@ -286,36 +283,31 @@ async function handleWatcherVerdict(
       if (resolution === "cancel") return "done";
       // Conflicts resolved — notify sibling components to refresh, then relaunch.
       globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-      await relaunch(start, romId, admission);
+      await relaunch(start, romId);
       return "done";
     }
     case "offline_drift": {
       const choice = await prompts.askOfflineDrift();
-      if (choice === "start_anyway") await relaunch(start, romId, admission);
+      if (choice === "start_anyway") await relaunch(start, romId);
       if (choice === "retry") return "retry";
       return "done";
     }
     case "sync_failed":
       if (await prompts.confirmFallbackLaunch(verdict.message)) {
-        await relaunchAfterFallback(verdict.noAnswer === true, start, romId, admission);
+        await relaunchAfterFallback(verdict.noAnswer === true, start, romId);
       }
       return "done";
   }
 }
 
-async function relaunchAfterFallback(
-  noAnswer: boolean,
-  start: CancelledStart,
-  romId: number,
-  admission: PruneLeaseAdmission,
-): Promise<void> {
+async function relaunchAfterFallback(noAnswer: boolean, start: CancelledStart, romId: number): Promise<void> {
   // After a check that got no answer in time the re-confirm asks the same
   // backend, and its timeout would cancel the start the user just chose.
   if (!noAnswer) {
-    await relaunch(start, romId, admission);
+    await relaunch(start, romId);
     return;
   }
-  if (isPruneLeaseAdmissionCurrent(admission)) bareRelaunch(start);
+  bareRelaunch(start);
 }
 
 /**
@@ -326,12 +318,7 @@ async function relaunchAfterFallback(
  * path; still offline + drift re-shows the offline modal. A gate throw fails
  * open to `allow` so a gate bug never traps the user's already-cancelled launch.
  */
-async function runWatcherGate(
-  start: CancelledStart,
-  romId: number,
-  admission: PruneLeaseAdmission,
-  prompts: LaunchPrompts,
-): Promise<void> {
+async function runWatcherGate(start: CancelledStart, romId: number, prompts: LaunchPrompts): Promise<void> {
   let verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => {
     logError(`Watcher gate threw (failing open to allow): ${e}`);
     return { decision: "allow" };
@@ -340,7 +327,7 @@ async function runWatcherGate(
   // the awaits are sequential by design. S9382 is raised on the two await lines, so their NOSONARs
   // must stay there; prettier-ignore stops Prettier from moving them into the bodies.
   // prettier-ignore
-  while ((await handleWatcherVerdict(verdict, start, romId, admission, prompts)) === "retry") { // NOSONAR(typescript:S9382)
+  while ((await handleWatcherVerdict(verdict, start, romId, prompts)) === "retry") { // NOSONAR(typescript:S9382)
     verdict = await runLaunchGate(start.appId, romId, makeWatcherOps(romId, prompts)).catch((e): GateVerdict => { // NOSONAR(typescript:S9382)
       logError(`Watcher gate threw (failing open to allow): ${e}`);
       return { decision: "allow" };
@@ -424,7 +411,6 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // relaunch only on approval.
       SteamClient.Apps.CancelGameAction(gameActionId);
       logInfo(`Launch interceptor: appId=${appId} not running — running the launch gate [${running.diagnostics}]`);
-      const admission = capturePruneLeaseAdmission();
       const start: CancelledStart = { appId, gameId };
 
       detach(
@@ -449,7 +435,6 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
               logError(
                 `Launch interceptor: no backend answer for appId=${appId} within ${FIRST_CONTACT_DEADLINE_MS}ms — starting without the pre-launch sync`,
               );
-              if (!isPruneLeaseAdmissionCurrent(admission)) return;
               showToast(NOT_RESPONDING_TOAST_BODY);
               bareRelaunch(start);
               return;
@@ -457,7 +442,6 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
 
             // An appId the map does not know is not ours to gate — relaunch and bail.
             if (rom === null) {
-              if (!isPruneLeaseAdmissionCurrent(admission)) return;
               bareRelaunch(start);
               return;
             }
@@ -465,20 +449,17 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
             // The funnel assumes an installed ROM. Not installed → hard block
             // (no relaunch): the ROM is gone.
             if (!rom.installed) {
-              if (!isPruneLeaseAdmissionCurrent(admission)) return;
               showToast("ROM not downloaded. Download it from its game page first.");
               return;
             }
 
-            await runWatcherGate(start, rom.romId, admission, prompts);
+            await runWatcherGate(start, rom.romId, prompts);
           } catch (e) {
-            // An unexpected error must not trap a current launch. A stale launch
-            // belongs to a torn-down generation and must remain cancelled.
-            // Use the bare relaunch (no re-confirm): the failure may be the
-            // re-confirm's own dependency, and the priority here is escaping the
-            // cancelled state, not healing drift.
+            // An unexpected error must not trap the launch. Use the bare
+            // relaunch (no re-confirm): the failure may be the re-confirm's own
+            // dependency, and the priority here is escaping the cancelled state,
+            // not healing drift.
             logError(`Launch interceptor error: ${e}`);
-            if (!isPruneLeaseAdmissionCurrent(admission)) return;
             bareRelaunch(start);
           }
         })(),

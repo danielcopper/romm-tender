@@ -154,7 +154,6 @@ import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
 import { showCoreChangeModal } from "../shared/CoreChangeModal";
 import { HostTransportError } from "../api/hostSocket";
-import { mountPruneLeasePlugin } from "../utils/pruneLease";
 import { showStopGameModal } from "../bigpicture/StopGameModal";
 import { showAdoptExistingModal } from "../bigpicture/AdoptExistingModal";
 import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";
@@ -2993,14 +2992,16 @@ describe("CustomPlayButton — a launch check that gets no answer", () => {
   });
 
   it("a start whose admission went stale during the check puts the button back on Play", async () => {
-    vi.mocked(backend.releaseOrphanedPruneLeases).mockResolvedValue({ success: true, released: 0 });
     let answer!: (rom: null) => void;
     vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise((resolve) => (answer = resolve)));
 
-    const { getByText, queryByText } = await pressPlay();
+    const { getByText, queryByText, rerender } = await pressPlay();
     expect(getByText("Checking saves...")).toBeInTheDocument();
-    // A new plugin generation makes every admission captured before it stale.
-    mountPruneLeasePlugin();
+    // The button rendered again for another game releases the owner the press
+    // was admitted under. The new game's own read stays out, so only the stale
+    // start can put the button back on Play.
+    vi.mocked(getCachedGameDetail).mockReturnValue(never());
+    rerender(<CustomPlayButton appId={101} />);
     await act(async () => {
       answer(null);
     });

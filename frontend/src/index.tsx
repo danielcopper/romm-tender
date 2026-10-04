@@ -87,9 +87,8 @@ import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
 import {
-  capturePruneLeaseAdmission,
+  disownStrandedPruneLeases,
   isPruneLeaseCancelled,
-  mountPruneLeasePlugin,
   releasePruneLease,
   withPruneLease,
 } from "./utils/pruneLease";
@@ -402,8 +401,7 @@ const tender = definePlugin(() => {
     console.warn(`[${PLUGIN_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
-  mountPruneLeasePlugin();
-  const pluginAdmission = capturePruneLeaseAdmission();
+  disownStrandedPruneLeases();
   registerGameDetailPatch();
   registerLaunchInterceptor({
     confirmCoreChange: showCoreChangeModal,
@@ -497,7 +495,6 @@ const tender = definePlugin(() => {
               "Startup reconcile",
               (signal) => batchConfirmLaunchOptions(result.items, "startup_reconcile", signal),
               "Startup reconcile",
-              pluginAdmission,
             );
           }
         } catch (e) {
@@ -672,7 +669,6 @@ const tender = definePlugin(() => {
     restart_recommended?: boolean;
     prune_lease_token?: string;
   }) => {
-    const syncAdmission = capturePruneLeaseAdmission();
     logInfo(`sync_complete received: ${data.total_games} games, cancelled=${data.cancelled ?? false}`);
 
     const { body, duration } = buildSyncCompleteToast(data, getSyncDelta());
@@ -717,7 +713,6 @@ const tender = definePlugin(() => {
               return batchConfirmLaunchOptions(result.items, "sync_reconcile", signal);
             },
             "Installed reconcile",
-            syncAdmission,
           );
         }
       } catch (e) {
@@ -1112,7 +1107,6 @@ const tender = definePlugin(() => {
         logError(`Cleanup publication could not confirm claim release: ${lastMessage}`);
       },
       "root",
-      pluginAdmission,
     );
   };
 
