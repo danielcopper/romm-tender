@@ -249,11 +249,11 @@ The same reciprocal exclusion covers ordinary frontend Steam continuations outsi
 carry leases through hero/logo/grid/icon writes; `sync_complete` keeps one shared lease until launch-option, collection,
 playtime, and overview-metadata branches all settle; and bulk shortcut removal clears its collections before
 acknowledging and releasing the removal lease. Leases live in one frontend registry, renew only for a bounded active
-continuation, and receive a cooperative cancellation signal before their owner releases them. Owner/plugin mount
-generations are captured before backend waits, so a token arriving after an owner's teardown is released without
-admitting old continuation work even if a new owner has since mounted. Each non-empty `sync_stale` frame owns a lease
-through its paced tail; successful `sync_complete` processing overlaps that lease while joining the same tail. A backend
-emit failure rolls back a token the frontend never received.
+continuation, and receive a cooperative cancellation signal before their owner releases them. A continuation with an
+owner captures that owner's mount generation before backend waits, so a token arriving after the owner's teardown is
+released without admitting old continuation work even if a new owner has since mounted. Each non-empty `sync_stale`
+frame owns a lease through its paced tail; successful `sync_complete` processing overlaps that lease while joining the
+same tail. A backend emit failure rolls back a token the frontend never received.
 
 Recovery records the Steam-assigned appId and playtime, but there is no automatic restore and Steam cannot currently
 reattach those values to a newly created shortcut.

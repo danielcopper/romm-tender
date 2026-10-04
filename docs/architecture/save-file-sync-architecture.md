@@ -1404,10 +1404,9 @@ reported by a value that fits in 32 bits, the shortcut's game ID from Steam's ap
 The start is cancelled before the watcher asks the backend anything, and an endpoint call has no timeout: it waits for a
 backend that is away, and one uninstalled while Steam keeps running never comes back. So the watcher's first backend
 contact — the map refresh below, when one is needed, and the installed check — races `FIRST_CONTACT_DEADLINE_MS` (5 s).
-Past it the watcher fails open: if the start's prune-lease admission is still current, it starts the game again without
-the pre-launch sync, shows "Tender isn't responding — started without syncing saves." and logs it. An answer that
-arrives after the deadline is abandoned and starts nothing more. The later steps are not bounded by this deadline but by
-limits of their own, which both funnels share (below).
+Past it the watcher fails open: it starts the game again without the pre-launch sync, shows "Tender isn't responding —
+started without syncing saves." and logs it. An answer that arrives after the deadline is abandoned and starts nothing
+more. The later steps are not bounded by this deadline but by limits of their own, which both funnels share (below).
 
 Neither funnel waits for the backend without end. Every backend call the gate makes has a limit: `LOCAL_CALL_LIMIT_MS`
 (5 s) for the calls that stay on this machine — `get_installed_rom`, `is_save_tracking_configured`,

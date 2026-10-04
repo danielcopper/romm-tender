@@ -1250,10 +1250,10 @@ Format: **invariant** — tier — enforced by.
   received was an answer. Forget the store and a table stands over a decision already made; forget the backend and the
   terminal-stage re-ask fetches it back a round trip later
 - **A prune run's claim reservation and its refusal of every conflicting endpoint happen in one atomic hold of the prune
-  conflicts' lock (the preview rebuild does not), and frontend-owned Steam work holds a heartbeated,
-  generation-tombstoned lease through every continuation's final write** — test + prompt-only — prune service and prune
-  conflicts race tests + contract endpoint-entry matrix (`tests/contract/test_conflict_refusals.py`); new conflicting
-  entry points are prompt-only
+  conflicts' lock (the preview rebuild does not), and frontend-owned Steam work holds a heartbeated lease through every
+  continuation's final write, and a continuation with an owner is tombstoned by its owner's teardown** — test +
+  prompt-only — prune service and prune conflicts race tests + contract endpoint-entry matrix
+  (`tests/contract/test_conflict_refusals.py`); new conflicting entry points are prompt-only
 - **A removed-game cleanup's run claim is registered on the prune conflicts before the start's reservation is given
   back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
   `tests/services/prune/test_service.py::test_a_started_run_holds_its_run_claim_until_it_ends` and

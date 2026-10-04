@@ -314,16 +314,17 @@ mutate recovered state. Frontend-owned shortcut removal, core/disc writes, versi
 application, download completion, home migration, startup healing, pre-launch healing, and every post-sync Steam branch
 (launch options, collections, playtime, and overview metadata) hold tokenized conflict leases through their final Steam
 write and bounded release. Active continuations heartbeat those leases once per minute. A global frontend registry
-signals cooperative cancellation by owner. Every backend wait captures the current plugin/owner mount generation before
-it starts; an owner's teardown tombstones its generation synchronously, so a lease-bearing response that arrives
-afterward is released without running its continuation. Only a genuine remount opens a new owner generation.
-Cancellation stops every not-yet-started Steam mutation and lease renewal, but explicit backend release waits for any
-already-started non-cancellable Steam promise to settle. An unresolved operation stops renewing after a bounded five
-minutes; the backend's five-minute no-heartbeat expiry is the abandonment backstop if it never settles. Launch funnels
-carry the admission captured at the original Play action through every gate, modal, and launch-options confirmation
-wait. The version picker likewise rechecks its captured owner admission after save-sync and modal waits before any
-successor `switch_version` mutation, so an unmounted chain cannot resume under a new picker. Each non-empty `sync_stale`
-event carries its own lease through the paced removal tail; a later `sync_complete` lease overlaps and joins that same
+signals cooperative cancellation by owner. A continuation with an owner captures that owner's mount generation before
+each backend wait; the owner's teardown tombstones its generation synchronously, so a lease-bearing response that
+arrives afterward is released without running its continuation. Only a genuine remount opens a new owner generation. A
+continuation with no owner — Steam's launch watcher and the ones the panel registers at start — has no teardown to
+tombstone it. Cancellation stops every not-yet-started Steam mutation and lease renewal, but explicit backend release
+waits for any already-started non-cancellable Steam promise to settle. An unresolved operation stops renewing after a
+bounded five minutes; the backend's five-minute no-heartbeat expiry is the abandonment backstop if it never settles. The
+Play button carries the admission captured at its press through every gate, modal, and launch-options confirmation wait.
+The version picker likewise rechecks its captured owner admission after save-sync and modal waits before any successor
+`switch_version` mutation, so an unmounted chain cannot resume under a new picker. Each non-empty `sync_stale` event
+carries its own lease through the paced removal tail; a later `sync_complete` lease overlaps and joins that same
 promise, so success composes both leases while a post-stale backend failure still leaves the tail covered. A terminal
 prune result that needs repoint publication likewise acquires its lease before event delivery while the old run is
 active; the frontend holds it across release acknowledgement and cover publication. Event delivery failure releases a
