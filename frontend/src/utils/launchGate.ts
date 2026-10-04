@@ -17,6 +17,23 @@
 
 import type { SyncConflict } from "../types";
 import { logError } from "../api/backend";
+import { TimeoutError } from "./withTimeout";
+
+/**
+ * The limit on a launch-check call that does not read or sync the server's
+ * saves: the reads on this machine, and the reachability probe, whose own
+ * heartbeat gives up after about 3 s.
+ */
+export const LOCAL_CALL_LIMIT_MS = 5000;
+
+/**
+ * The limit on a launch-check call that reads or syncs the server's saves: the
+ * save-setup read and the pre-launch sync.
+ */
+export const SERVER_CALL_LIMIT_MS = 15000;
+
+/** What the fallback dialog says when a step of the check got no answer in time. */
+export const NO_ANSWER_MESSAGE = "Couldn't check your saves in time";
 
 /**
  * Outcome of the injected pre-launch sync, shaped after the
@@ -51,6 +68,9 @@ export interface PreLaunchSyncOutcome {
  *                          anyway (OfflineDriftModal).
  *   - `sync_failed`      — pre-launch sync ran online but failed; `message`
  *                          carries the backend reason for the caller's confirm.
+ *                          With `noAnswer`, a step got no answer within its
+ *                          limit instead, and `message` is
+ *                          {@link NO_ANSWER_MESSAGE}.
  */
 export type GateVerdict =
   | { decision: "allow" }
@@ -58,12 +78,18 @@ export type GateVerdict =
   | { decision: "abort" }
   | { decision: "conflict"; conflicts: SyncConflict[] }
   | { decision: "offline_drift" }
-  | { decision: "sync_failed"; message: string };
+  | { decision: "sync_failed"; message: string; noAnswer?: true };
 
 /**
  * Injected operations for {@link runLaunchGate}. Every side effect the gate
  * needs is a callback so the gate body itself touches no DOM, network, or
  * module state — which makes it fully unit-testable with stubs.
+ *
+ * An op bounds each backend call it makes ({@link LOCAL_CALL_LIMIT_MS},
+ * {@link SERVER_CALL_LIMIT_MS}) and lets an expired limit's
+ * {@link TimeoutError} through: its own fallback answers a call that failed,
+ * the gate answers one that got no answer. A dialog an op shows is never
+ * bounded — the user's answer is worth waiting for.
  */
 export interface LaunchGateOps {
   /**
@@ -131,7 +157,10 @@ export interface LaunchGateOps {
  * The gate NEVER throws and NEVER blocks the user on an internal error: the
  * whole body is wrapped so any thrown error (from an injected callback or
  * otherwise) resolves to `{ decision: "allow" }`. A bug in the gate must never
- * trap the user's game behind it.
+ * trap the user's game behind it. A step that got no answer within its limit is
+ * not such an error: it resolves to `sync_failed` with `noAnswer`, so the
+ * caller asks the user rather than starting on a save nothing checked or
+ * waiting forever.
  *
  * `_appId` / `_romId` are accepted so callers pass the identifiers the injected
  * ops were bound for (and to keep the signature stable as ops grow); the gate
@@ -183,6 +212,10 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
     }
     return { decision: "allow" };
   } catch (e) {
+    if (e instanceof TimeoutError) {
+      logError(`runLaunchGate: a step got no answer (${e.message}) — asking whether to launch on local saves`);
+      return { decision: "sync_failed", message: NO_ANSWER_MESSAGE, noAnswer: true };
+    }
     // Never trap the user's game behind a gate bug — fail open to "allow". The
     // log leaves a breadcrumb so a gate bug that should have blocked isn't
     // swallowed with zero trace. After the watcher's preLaunchSync op handles

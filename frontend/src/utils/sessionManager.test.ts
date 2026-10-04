@@ -12,6 +12,7 @@ const backendMock = vi.hoisted(() => ({
   getAppIdRomIdMap: vi.fn(),
   finalizeGameSession: vi.fn(),
   logInfo: vi.fn(),
+  logWarn: vi.fn(),
   logError: vi.fn(),
   debugLog: vi.fn(),
 }));
@@ -29,12 +30,13 @@ let initSessionManager: typeof import("./sessionManager").initSessionManager;
 let isSessionActive: typeof import("./sessionManager").isSessionActive;
 let readGameRunning: typeof import("./sessionManager").readGameRunning;
 let planAdoption: typeof import("./sessionManager").planAdoption;
+let noteAppRom: typeof import("./sessionManager").noteAppRom;
 let ADOPTION_POLL_MAX_MS: number;
 
 async function loadSessionManager(): Promise<void> {
   vi.resetModules();
   ({ toaster } = await import("../api/host"));
-  ({ initSessionManager, isSessionActive, readGameRunning, planAdoption, ADOPTION_POLL_MAX_MS } =
+  ({ initSessionManager, isSessionActive, readGameRunning, planAdoption, noteAppRom, ADOPTION_POLL_MAX_MS } =
     await import("./sessionManager"));
 }
 
@@ -1588,5 +1590,262 @@ describe("sessionManager stop scoping (#1621)", () => {
 
     await stopApp(lifetime, APP_ID);
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
+  });
+});
+
+// A backend that does not answer must not hold the serialized lifecycle chain:
+// a start and a stop still flip Tender's button to Resume and back to Play.
+describe("sessionManager with a backend that does not answer", () => {
+  const never = <T>(): Promise<T> => new Promise<T>(() => {});
+  let sessionEvents: { running: boolean; appId: number; romId: number }[];
+  let sessionListener: (e: WindowEventMap["romm_session_changed"]) => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    localStorage.clear();
+    stubLifecycleSteamClient();
+    stubNothingRunning();
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({
+      [String(APP_ID)]: ROM_ID,
+      [String(OTHER_APP_ID)]: OTHER_ROM_ID,
+    });
+    vi.mocked(backend.recordSessionStart).mockResolvedValue({ success: true });
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE });
+    sessionEvents = [];
+    sessionListener = (e) => sessionEvents.push(e.detail);
+    globalThis.addEventListener("romm_session_changed", sessionListener);
+  });
+
+  afterEach(() => {
+    globalThis.removeEventListener("romm_session_changed", sessionListener);
+    vi.useRealTimers();
+  });
+
+  it("a start whose map refresh never answers opens the session at the refresh's 5 s limit, and its stop closes it", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.getAppIdRomIdMap).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+
+    lifetime({ bRunning: true, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sessionEvents).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toEqual([{ running: true, appId: APP_ID, romId: ROM_ID }]);
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Failed to refresh app ID map"));
+
+    await stopGame(lifetime);
+    expect(sessionEvents).toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+  });
+
+  it("a stop queued behind a session-start record that never answers is handled at the record's 5 s limit", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.recordSessionStart).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+
+    await startGame(lifetime);
+    expect(sessionEvents).toEqual([{ running: true, appId: APP_ID, romId: ROM_ID }]);
+    lifetime({ bRunning: false, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(sessionEvents).not.toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toContainEqual({ running: false, appId: APP_ID, romId: ROM_ID });
+    expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("Failed to record session start"));
+  });
+
+  it("the notification after a finalize that never answers is handled at the finalize's 15 s limit", async () => {
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+    await startGame(lifetime);
+    await stopGame(lifetime);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(sessionEvents).not.toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sessionEvents).toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+  });
+
+  it("a finalize answered after its limit is still applied, once the chain has moved on", async () => {
+    await initDrainingAdoptionPoll();
+    let answer!: (result: Awaited<ReturnType<typeof backend.finalizeGameSession>>) => void;
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const refreshes: unknown[] = [];
+    const onDataChanged = (e: Event) => refreshes.push((e as CustomEvent).detail);
+    globalThis.addEventListener("romm_data_changed", onDataChanged);
+    try {
+      const lifetime = captureLifetimeCb();
+      await startGame(lifetime);
+      await stopGame(lifetime);
+      lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(sessionEvents).toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
+
+      const migration = { retrodeck: { pending: true } } as unknown as NonNullable<
+        Awaited<ReturnType<typeof backend.finalizeGameSession>>["migration"]
+      >;
+      answer({ ...IDLE_FINALIZE, total_seconds: 600, sync: { ...IDLE_FINALIZE.sync, uploaded: 2 }, migration });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(updatePlaytimeDisplay).toHaveBeenCalledWith(APP_ID, 600);
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Saves uploaded to RomM" }),
+      );
+      expect(refreshes).toContainEqual({ type: "save_sync", rom_id: ROM_ID });
+      const { setMigrationStatus } = await import("./migrationStore");
+      expect(setMigrationStatus).toHaveBeenCalledWith({ pending: true });
+    } finally {
+      globalThis.removeEventListener("romm_data_changed", onDataChanged);
+    }
+  });
+});
+
+// Which ROM a start opens on when Tender's button named one: the map if this
+// start's refresh answered, else the name, else the held map — and the name
+// alone carries a game the map lacks.
+describe("sessionManager with a ROM Tender's button named for the start", () => {
+  const never = <T>(): Promise<T> => new Promise<T>(() => {});
+  let sessionEvents: { running: boolean; appId: number; romId: number }[];
+  let sessionListener: (e: WindowEventMap["romm_session_changed"]) => void;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    localStorage.clear();
+    stubLifecycleSteamClient();
+    stubNothingRunning();
+    // The map read at init holds only the other game.
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
+    vi.mocked(backend.recordSessionStart).mockResolvedValue({ success: true });
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE });
+    sessionEvents = [];
+    sessionListener = (e) => sessionEvents.push(e.detail);
+    globalThis.addEventListener("romm_session_changed", sessionListener);
+    await initDrainingAdoptionPoll();
+    vi.mocked(backend.getAppIdRomIdMap).mockReturnValue(never());
+  });
+
+  afterEach(() => {
+    globalThis.removeEventListener("romm_session_changed", sessionListener);
+    vi.useRealTimers();
+  });
+
+  /** A start, then its stop, each run to the end of its 5 s refresh limit. */
+  async function startAndStop(lifetime: LifetimeCb): Promise<void> {
+    lifetime({ bRunning: true, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(5000);
+    lifetime({ bRunning: false, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+  }
+
+  it("a start the map lacks opens the session on the named ROM, and its stop closes it", async () => {
+    const lifetime = captureLifetimeCb();
+    noteAppRom(APP_ID, ROM_ID);
+
+    await startAndStop(lifetime);
+
+    expect(sessionEvents).toEqual([
+      { running: true, appId: APP_ID, romId: ROM_ID },
+      { running: false, appId: APP_ID, romId: ROM_ID },
+    ]);
+    expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
+  });
+
+  it("a name is used once: the next start of the same app without one opens nothing", async () => {
+    const lifetime = captureLifetimeCb();
+    noteAppRom(APP_ID, ROM_ID);
+    await startAndStop(lifetime);
+    sessionEvents.length = 0;
+
+    await startAndStop(lifetime);
+
+    expect(sessionEvents).toEqual([]);
+  });
+
+  it("a name for a start that never came does not name a start after the window", async () => {
+    const lifetime = captureLifetimeCb();
+    noteAppRom(APP_ID, ROM_ID);
+    await vi.advanceTimersByTimeAsync(60_001);
+
+    await startAndStop(lifetime);
+
+    expect(sessionEvents).toEqual([]);
+  });
+
+  it("a refresh that answered with the app outranks the name", async () => {
+    // This start's refresh answers: the backend's current word.
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
+    const lifetime = captureLifetimeCb();
+    noteAppRom(OTHER_APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID }]);
+  });
+
+  it("a refresh that answered without the app opens no session on the name", async () => {
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({ [String(OTHER_APP_ID)]: OTHER_ROM_ID });
+    const lifetime = captureLifetimeCb();
+    noteAppRom(APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([]);
+  });
+
+  it("a refresh that did not answer lets the name outrank the held map", async () => {
+    // The held map can be older than the name — a version switch moved the shortcut.
+    const lifetime = captureLifetimeCb();
+    noteAppRom(OTHER_APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: ROM_ID }]);
+  });
+
+  it("a refresh that failed lets the name outrank the held map too", async () => {
+    vi.mocked(backend.getAppIdRomIdMap).mockRejectedValue(new Error("connection_lost"));
+    const lifetime = captureLifetimeCb();
+    noteAppRom(OTHER_APP_ID, ROM_ID);
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: ROM_ID }]);
+  });
+
+  it("a refresh that did not answer and no name leave the held map's ROM", async () => {
+    const lifetime = captureLifetimeCb();
+
+    lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(sessionEvents).toEqual([{ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID }]);
+  });
+
+  it("the name is taken when Steam reports the start, not when the held chain reaches it", async () => {
+    // Four finalizes that never answer hold the chain for 4 × (5 s + 15 s) before
+    // the named start's turn — past the name's 60 s window.
+    vi.mocked(backend.finalizeGameSession).mockReturnValue(never());
+    const lifetime = captureLifetimeCb();
+    for (let round = 0; round < 4; round++) {
+      lifetime({ bRunning: true, unAppID: OTHER_APP_ID });
+      lifetime({ bRunning: false, unAppID: OTHER_APP_ID });
+    }
+    noteAppRom(APP_ID, ROM_ID);
+    lifetime({ bRunning: true, unAppID: APP_ID });
+
+    await vi.advanceTimersByTimeAsync(90_000);
+
+    expect(sessionEvents).toContainEqual({ running: true, appId: APP_ID, romId: ROM_ID });
   });
 });

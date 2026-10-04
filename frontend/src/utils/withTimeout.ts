@@ -32,3 +32,24 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+
+/**
+ * Rethrow `e` when it is an expired {@link withTimeout} deadline. For a catch
+ * whose fallback answers a call that FAILED: a call that got no answer at all
+ * is a different verdict, and the fallback must not answer it.
+ */
+export function rethrowTimeout(e: unknown): void {
+  if (e instanceof TimeoutError) throw e;
+}
+
+/**
+ * Race `call` against `ms` ({@link withTimeout}) and answer a call that FAILED
+ * with `onFailure`. An expired deadline is rethrown rather than answered
+ * ({@link rethrowTimeout}), so no fallback can turn "no answer" into a verdict.
+ */
+export function boundedOr<T, F>(call: Promise<T>, ms: number, onFailure: (e: unknown) => F): Promise<T | F> {
+  return withTimeout(call, ms).catch((e: unknown) => {
+    rethrowTimeout(e);
+    return onFailure(e);
+  });
+}

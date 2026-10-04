@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { romHasLaunchTarget, NO_LAUNCH_TARGET_TOAST_BODY } from "./launchTarget";
 import * as backend from "../api/backend";
 import type { InstalledRom } from "../types/api";
+import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
+import { TimeoutError } from "./withTimeout";
 
 vi.mock("../api/backend", () => ({
   getInstalledRom: vi.fn(),
@@ -52,6 +54,22 @@ describe("romHasLaunchTarget", () => {
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(
       expect.stringContaining("CustomPlayButton launch-target check threw (allowing launch)"),
     );
+  });
+
+  it("rejects with the expired limit, rather than failing open, when the read never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
+      const answer = romHasLaunchTarget(42, "CustomPlayButton");
+      const settled = expect(answer).rejects.toBeInstanceOf(TimeoutError);
+
+      await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS);
+
+      await settled;
+      expect(vi.mocked(backend.logError)).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

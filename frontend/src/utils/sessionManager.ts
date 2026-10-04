@@ -10,13 +10,23 @@
  */
 
 import { showToast } from "./toast";
-import { recordSessionStart, getAppIdRomIdMap, finalizeGameSession, logInfo, logError, debugLog } from "../api/backend";
+import {
+  recordSessionStart,
+  getAppIdRomIdMap,
+  finalizeGameSession,
+  logInfo,
+  logWarn,
+  logError,
+  debugLog,
+} from "../api/backend";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { setMigrationStatus } from "./migrationStore";
 import { updatePlaytimeDisplay } from "./metadataPatches";
 import { detach } from "./detach";
 import { readRunningApps, type RunningAppsReading } from "./runningApps";
 import { delay } from "./pacedOps";
+import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
+import { withTimeout } from "./withTimeout";
 
 // Active session tracking — ONE ENTRY PER RUNNING APP (#1624). Two RomM games at
 // once each hold their own entry, so a second start no longer displaces the
@@ -47,6 +57,25 @@ let appIdToRomId: Record<string, number> = {};
 function getRomIdForApp(appId: number): number | null {
   const romId = appIdToRomId[String(appId)];
   return romId ?? null;
+}
+
+// The ROM Tender's button named for an app right before it started it. Which
+// source names a start's ROM, why, and for how long:
+// `docs/architecture/save-file-sync-architecture.md`, "App ID to ROM ID mapping".
+const NOTED_START_WINDOW_MS = 60_000;
+const notedStarts = new Map<number, { romId: number; notedAtMs: number }>();
+
+/** Name the ROM `appId` belongs to, for the start Tender's button is about to make. */
+export function noteAppRom(appId: number, romId: number): void {
+  notedStarts.set(appId, { romId, notedAtMs: Date.now() });
+}
+
+/** One-shot, and only within the window. */
+function takeNotedRom(appId: number): number | null {
+  const noted = notedStarts.get(appId);
+  notedStarts.delete(appId);
+  if (!noted || Date.now() - noted.notedAtMs > NOTED_START_WINDOW_MS) return null;
+  return noted.romId;
 }
 
 /**
@@ -120,10 +149,17 @@ export function readGameRunning(appId: number, romId: number | null | undefined)
  * leaves the map as it was.
  */
 export async function refreshAppIdMap(): Promise<void> {
+  await readAppIdMap();
+}
+
+/** {@link refreshAppIdMap}, answering whether the backend answered and the map was replaced. */
+async function readAppIdMap(): Promise<boolean> {
   try {
     appIdToRomId = await getAppIdRomIdMap();
+    return true;
   } catch (e) {
     logError(`Failed to refresh app ID map: ${e}`);
+    return false;
   }
 }
 
@@ -238,7 +274,7 @@ function dispatchSessionChanged(running: boolean, appId: number, romId: number):
  * It is keyed on the appId and checked BEFORE the romId lookup: a map that
  * emptied mid-session must not be able to drop a live entry.
  */
-async function handleGameStart(appId: number): Promise<void> {
+async function handleGameStart(appId: number, mapAnswered: boolean, notedRomId: number | null): Promise<void> {
   const open = activeSessions.get(appId);
   if (open) {
     detach(debugLog(`Session start ignored: appId=${appId} already has an open session (romId=${open.romId})`));
@@ -248,7 +284,7 @@ async function handleGameStart(appId: number): Promise<void> {
     return;
   }
 
-  const romId = getRomIdForApp(appId);
+  const romId = mapAnswered ? getRomIdForApp(appId) : (notedRomId ?? getRomIdForApp(appId));
   if (!romId) return; // Not a RomM shortcut
 
   logInfo(`Session start: romId=${romId}, appId=${appId}`);
@@ -260,7 +296,7 @@ async function handleGameStart(appId: number): Promise<void> {
 
   // Record session start for playtime tracking
   try {
-    await recordSessionStart(romId);
+    await withTimeout(recordSessionStart(romId), LOCAL_CALL_LIMIT_MS);
   } catch (e) {
     logError(`Failed to record session start: ${e}`);
   }
@@ -301,48 +337,56 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   activeSessions.delete(appId);
   persistSessions();
 
-  try {
-    const result = await finalizeGameSession(romId);
+  // A late answer is applied after the chain has moved on, so it must touch no
+  // session state. Why it can be late: `docs/architecture/save-file-sync-architecture.md`,
+  // "Post-exit sync".
+  const applied = finalizeGameSession(romId)
+    .then((result) => applyFinalizeResult(appId, romId, result))
+    .catch((e: unknown) => logError(`Failed to finalize game session: ${e}`));
+  await withTimeout(applied, SERVER_CALL_LIMIT_MS).catch((e: unknown) =>
+    logWarn(`Finalize for romId=${romId} has not answered (${e}) — moving on; its answer is applied when it arrives`),
+  );
+}
 
-    // Playtime display update — appStore mutation must stay frontend.
-    if (result.total_seconds != null) {
-      updatePlaytimeDisplay(appId, result.total_seconds);
-    }
+function applyFinalizeResult(
+  appId: number,
+  romId: number,
+  result: Awaited<ReturnType<typeof finalizeGameSession>>,
+): void {
+  // Playtime display update — appStore mutation must stay frontend.
+  if (result.total_seconds != null) {
+    updatePlaytimeDisplay(appId, result.total_seconds);
+  }
 
-    // Post-exit save-sync toast. The directional success toast is rendered
-    // frontend-side from the transfer counts via the shared helper (the single
-    // source of that copy, #1481); the offline/failure body stays backend-owned
-    // (failure_toast). The two are mutually exclusive — a successful run carries
-    // failure_toast=null — so only one fires.
-    const directionalBody = result.sync.success
-      ? saveSyncToastBody(result.sync.uploaded, result.sync.downloaded)
-      : null;
-    if (directionalBody) {
-      showToast(directionalBody);
-    } else if (result.sync.failure_toast) {
-      showToast(result.sync.failure_toast);
-    }
+  // Post-exit save-sync toast. The directional success toast is rendered
+  // frontend-side from the transfer counts via the shared helper (the single
+  // source of that copy, #1481); the offline/failure body stays backend-owned
+  // (failure_toast). The two are mutually exclusive — a successful run carries
+  // failure_toast=null — so only one fires.
+  const directionalBody = result.sync.success ? saveSyncToastBody(result.sync.uploaded, result.sync.downloaded) : null;
+  if (directionalBody) {
+    showToast(directionalBody);
+  } else if (result.sync.failure_toast) {
+    showToast(result.sync.failure_toast);
+  }
 
-    // Save-sync event dispatch — fires unconditionally so open surfaces refresh
-    // to the honest post-sync state. A failed post-exit sync must refresh too
-    // (#1334): the panel would otherwise keep showing a stale green "synced" for
-    // a file that is now pending upload.
-    globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+  // Save-sync event dispatch — fires unconditionally so open surfaces refresh
+  // to the honest post-sync state. A failed post-exit sync must refresh too
+  // (#1334): the panel would otherwise keep showing a stale green "synced" for
+  // a file that is now pending upload.
+  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
 
-    // Additive conflicts toast — backend renders the count string.
-    if (result.sync.conflicts_toast) {
-      showToast(result.sync.conflicts_toast);
-    }
+  // Additive conflicts toast — backend renders the count string.
+  if (result.sync.conflicts_toast) {
+    showToast(result.sync.conflicts_toast);
+  }
 
-    // Migration store update — backend ran refresh_state, frontend just
-    // feeds the typed payload into the store. When backend refresh failed
-    // (``migration == null``) leave the store untouched: a failed refresh
-    // must not clear a stale "pending" badge it could not re-check.
-    if (result.migration) {
-      setMigrationStatus(result.migration.retrodeck);
-    }
-  } catch (e) {
-    logError(`Failed to finalize game session: ${e}`);
+  // Migration store update — backend ran refresh_state, frontend just
+  // feeds the typed payload into the store. When backend refresh failed
+  // (``migration == null``) leave the store untouched: a failed refresh
+  // must not clear a stale "pending" badge it could not re-check.
+  if (result.migration) {
+    setMigrationStatus(result.migration.retrodeck);
   }
 }
 
@@ -519,6 +563,9 @@ export async function initSessionManager(): Promise<void> {
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
     if (update.bRunning) stoppedSinceStart.delete(update.unAppID);
     else stoppedSinceStart.add(update.unAppID);
+    // Taken at the notification, not when the chain reaches it: the window is
+    // about how long Steam took to report the start.
+    const notedRomId = update.bRunning ? takeNotedRom(update.unAppID) : null;
     lifecycleChain = lifecycleChain
       .then(async () => {
         if (update.bRunning) {
@@ -533,8 +580,13 @@ export async function initSessionManager(): Promise<void> {
           const appId = update.unAppID;
           if (appId) {
             // Refresh map in case a sync happened since init
-            await refreshAppIdMap();
-            await handleGameStart(appId);
+            let mapAnswered = false;
+            try {
+              mapAnswered = await withTimeout(readAppIdMap(), LOCAL_CALL_LIMIT_MS);
+            } catch (e) {
+              logError(`Failed to refresh app ID map: ${e}`);
+            }
+            await handleGameStart(appId, mapAnswered, notedRomId);
           }
         } else {
           // An app stopped — `handleGameStop` decides whether it is ours.

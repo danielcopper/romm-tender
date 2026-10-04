@@ -20,9 +20,11 @@
  * cannot arrive anywhere a `{success, ...}` answer is read.
  *
  * **There is no timeout, deliberately.** A call issued while the socket is down
- * waits for it to come back rather than failing, and `index.tsx` races its own
- * deadline around the calls that must not wait. Adding one here would change
- * what every call does when the socket is down, at once and silently.
+ * waits for it to come back rather than failing, and a caller that must not
+ * wait races its own deadline around the call — among them `index.tsx` at
+ * start-up and the launch check through `utils/launchGate.ts`'s limits. Adding
+ * one here would change what every call does when the socket is down, at once
+ * and silently.
  */
 
 /** The reason a call fails when the socket goes before its reply comes back.

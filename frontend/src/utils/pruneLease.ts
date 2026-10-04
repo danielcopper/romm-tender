@@ -20,12 +20,10 @@ interface ActiveLease {
 
 const activeLeases = new Map<string, ActiveLease>();
 const ownerGenerations = new Map<string, { generation: number; mounted: boolean }>();
-let pluginGeneration = 0;
 
 export interface PruneLeaseAdmission {
-  pluginGeneration: number;
-  owner?: string;
-  ownerGeneration?: number;
+  owner: string;
+  ownerGeneration: number;
 }
 
 class UnsettledContinuation {
@@ -39,26 +37,25 @@ export function isPruneLeaseCancelled(signal: AbortSignal | undefined): boolean 
 }
 
 /**
- * Whether a thrown error means "this continuation was cancelled by a lifecycle
+ * Whether a thrown error means "this continuation was cancelled by its owner's
  * teardown", not "the operation failed".
  *
  * Two shapes count: the explicit {@link PruneLeaseAdmissionCancelled} thrown when
  * a continuation is refused at lease registration, and any error observed while
- * *admission* is already stale — an owner that unmounted (or a plugin generation
- * that rolled) mid-flight rejects its own in-flight endpoint calls, and the backend
- * work behind them either committed or was never really attempted. Callers use
- * this to stay silent instead of toasting a failure the user cannot act on.
+ * *admission* is already stale — the owner's teardown aborts its continuations
+ * mid-flight, so a failure that surfaces afterwards is that cancellation. Callers
+ * use this to stay silent instead of toasting a failure the user cannot act on.
  */
 export function isPruneLeaseCancellation(error: unknown, admission: PruneLeaseAdmission): boolean {
   return error instanceof PruneLeaseAdmissionCancelled || !isPruneLeaseAdmissionCurrent(admission);
 }
 
-export function mountPruneLeasePlugin(): void {
-  pluginGeneration++;
-  // Disown anything the previous context stranded. A continuation whose JS
-  // context died mid-call never released its lease and never renews it, so it
-  // would hold off every cleanup for its full TTL with nobody behind it. This
-  // mount is the proof that no such continuation survives.
+export function disownStrandedPruneLeases(): void {
+  // A continuation whose JS context died mid-call never released its lease and
+  // never renews it, so it would hold off every cleanup for its full TTL with
+  // nobody behind it. A new context is the proof that no such continuation
+  // survives. Call this once per JS context: a second call would disown the
+  // leases this context holds while they are still live.
   void releaseOrphanedPruneLeases()
     .then((result) => {
       if (result.released > 0) {
@@ -74,17 +71,11 @@ export function mountPruneLeaseOwner(owner: string): void {
   ownerGenerations.set(owner, { generation: (current?.generation ?? 0) + 1, mounted: true });
 }
 
-export function capturePruneLeaseAdmission(owner?: string): PruneLeaseAdmission {
-  const current = owner === undefined ? undefined : ownerGenerations.get(owner);
-  return {
-    pluginGeneration,
-    ...(owner === undefined ? {} : { owner, ownerGeneration: current?.generation ?? 0 }),
-  };
+export function capturePruneLeaseAdmission(owner: string): PruneLeaseAdmission {
+  return { owner, ownerGeneration: ownerGenerations.get(owner)?.generation ?? 0 };
 }
 
 export function isPruneLeaseAdmissionCurrent(admission: PruneLeaseAdmission): boolean {
-  if (admission.pluginGeneration !== pluginGeneration) return false;
-  if (admission.owner === undefined) return true;
   const current = ownerGenerations.get(admission.owner);
   return current?.mounted === true && current.generation === admission.ownerGeneration;
 }
@@ -178,10 +169,10 @@ export async function withPruneLeases<T>(
   context: string,
   operation: (signal: AbortSignal) => Promise<T>,
   owner = context,
-  admission: PruneLeaseAdmission = capturePruneLeaseAdmission(),
+  admission?: PruneLeaseAdmission,
 ): Promise<T> {
   const uniqueTokens = [...new Set(tokens.filter((token): token is string => !!token))];
-  if (!isPruneLeaseAdmissionCurrent(admission)) {
+  if (admission && !isPruneLeaseAdmissionCurrent(admission)) {
     await Promise.all(uniqueTokens.map((token) => releasePruneLease(token, context)));
     throw new PruneLeaseAdmissionCancelled(`${context}: continuation was cancelled before lease registration`);
   }

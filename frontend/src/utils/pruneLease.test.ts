@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   logError,
   releaseOrphanedPruneLeases,
@@ -7,10 +7,10 @@ import {
 } from "../api/backend";
 import {
   capturePruneLeaseAdmission,
+  disownStrandedPruneLeases,
   isPruneLeaseCancellation,
   maintainPruneLease,
   mountPruneLeaseOwner,
-  mountPruneLeasePlugin,
   PruneLeaseAdmissionCancelled,
   releasePruneLease,
   releasePruneLeasesByOwner,
@@ -23,10 +23,6 @@ vi.mock("../api/backend", () => ({
   releasePruneConflictLease: vi.fn(),
   renewPruneConflictLease: vi.fn(),
 }));
-
-beforeEach(() => {
-  mountPruneLeasePlugin();
-});
 
 afterEach(async () => {
   vi.useRealTimers();
@@ -55,14 +51,6 @@ it("reads any failure on a torn-down owner as a cancellation", async () => {
   expect(isPruneLeaseCancellation(new Error("io"), admission)).toBe(true);
 });
 
-it("reads any failure as a cancellation once the plugin generation rolls", async () => {
-  const admission = capturePruneLeaseAdmission();
-
-  mountPruneLeasePlugin();
-
-  expect(isPruneLeaseCancellation(new Error("io"), admission)).toBe(true);
-});
-
 it("rejects and releases a lease-bearing response that arrives after owner teardown", async () => {
   vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   mountPruneLeaseOwner("data-management");
@@ -76,20 +64,6 @@ it("rejects and releases a lease-bearing response that arrives after owner teard
 
   expect(operation).not.toHaveBeenCalled();
   expect(releasePruneConflictLease).toHaveBeenCalledWith("late-owner");
-});
-
-it("an old plugin generation stays stale after a genuine remount", async () => {
-  vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
-  const oldAdmission = capturePruneLeaseAdmission();
-  const operation = vi.fn().mockResolvedValue(undefined);
-
-  mountPruneLeasePlugin();
-  await expect(withPruneLease("late-plugin", "Late plugin", operation, "root", oldAdmission)).rejects.toThrow(
-    "cancelled before lease registration",
-  );
-
-  expect(operation).not.toHaveBeenCalled();
-  expect(releasePruneConflictLease).toHaveBeenCalledWith("late-plugin");
 });
 
 it("admits work only after the owner is genuinely mounted again", async () => {
@@ -109,6 +83,19 @@ it("admits work only after the owner is genuinely mounted again", async () => {
   ).resolves.toBe("applied");
 
   expect(operation).toHaveBeenCalledTimes(1);
+});
+
+it("never refuses a continuation that carries no admission, whatever its owner label", async () => {
+  vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+  await releasePruneLeasesByOwner("Startup reconcile");
+  const operation = vi.fn().mockResolvedValue("applied");
+
+  // An owner label only groups leases for a teardown; without an admission
+  // there is no owner whose teardown could cancel the continuation.
+  await expect(withPruneLease("unowned", "Startup reconcile", operation, "Startup reconcile")).resolves.toBe("applied");
+
+  expect(operation).toHaveBeenCalledTimes(1);
+  expect(releasePruneConflictLease).toHaveBeenCalledWith("unowned");
 });
 
 it("renews active ownership and stops heartbeats before release", async () => {
@@ -267,37 +254,36 @@ it("a refused renewal aborts future writes and abandons the refused token", asyn
   expect(releasePruneConflictLease).not.toHaveBeenCalledWith("lease-refused");
 });
 
-it("disowns leases stranded by a previous frontend context on mount", async () => {
+it("disowns leases stranded by a previous frontend context", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockResolvedValueOnce({ success: true, released: 1 });
 
-  mountPruneLeasePlugin();
+  disownStrandedPruneLeases();
   await Promise.resolve();
   await Promise.resolve();
 
   // A context torn down mid-call never released its lease and never renews it,
-  // so nothing but a fresh mount lets a cleanup start before the TTL.
+  // so nothing but a new context lets a cleanup start before the TTL.
   expect(releaseOrphanedPruneLeases).toHaveBeenCalled();
   expect(logError).toHaveBeenCalledWith(expect.stringContaining("disowned 1 lease(s) stranded"));
 });
 
-it("says nothing on a mount that had nothing to disown", async () => {
+it("says nothing when there was nothing to disown", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockResolvedValueOnce({ success: true, released: 0 });
 
-  mountPruneLeasePlugin();
+  disownStrandedPruneLeases();
   await Promise.resolve();
   await Promise.resolve();
 
   expect(logError).not.toHaveBeenCalled();
 });
 
-it("keeps mounting when the disown call fails", async () => {
+it("logs a disown that fails instead of leaving it unhandled", async () => {
   vi.mocked(releaseOrphanedPruneLeases).mockRejectedValueOnce(new Error("bridge offline"));
 
-  mountPruneLeasePlugin();
+  // The panel's start must not be blocked by a best-effort cleanup; the lease TTL still backs it.
+  disownStrandedPruneLeases();
   await Promise.resolve();
   await Promise.resolve();
 
-  // Mount must not be blocked by a best-effort cleanup; the TTL still backs it.
   expect(logError).toHaveBeenCalledWith(expect.stringContaining("could not disown stranded leases"));
-  expect(capturePruneLeaseAdmission().pluginGeneration).toBeGreaterThan(0);
 });

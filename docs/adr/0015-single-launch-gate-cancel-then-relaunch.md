@@ -1,12 +1,18 @@
+---
+status: accepted
+decided: 2026-06-24
+updated: 2026-10-02
+---
+
 # Every gaming-mode launch is gated through one shared path via cancel-then-relaunch
 
-## Status
+## Scope
 
-Proposed. Part of [#1051](https://github.com/danielcopper/decky-romm-sync/issues/1051) — the launch-gate / save-conflict
-/ offline hardening, expanded from "4b modal hardening" after a RomM-communication audit. Addresses the **gaming-mode**
-portion of [#1144](https://github.com/danielcopper/decky-romm-sync/issues/1144) (the one genuine non-Play-button launch
-path in gaming mode — `steam://rungameid` deep links — now funnels through the gate); **desktop-mode** coverage remains
-open there and under [#831](https://github.com/danielcopper/decky-romm-sync/issues/831).
+Part of [#1051](https://github.com/danielcopper/decky-romm-sync/issues/1051) — the launch-gate / save-conflict / offline
+hardening, expanded from "4b modal hardening" after a RomM-communication audit. Addresses the **gaming-mode** portion of
+[#1144](https://github.com/danielcopper/decky-romm-sync/issues/1144) (the one genuine non-Play-button launch path in
+gaming mode — `steam://rungameid` deep links — now funnels through the gate); **desktop-mode** coverage remains open
+there and under [#831](https://github.com/danielcopper/decky-romm-sync/issues/831).
 
 > **Errata (2026-08).** "any Steam running-app source" below overstates what `utils/runningApps` consulted. Two of its
 > three sources — `Router.MainRunningApp` and `Router.RunningApps` — were read as page globals that no SteamUI build
@@ -172,3 +178,28 @@ local file to `.romm-backup`, so there is no silent data loss. "Unknown because 
 reflects running state and foregrounds via `SteamUIStore` navigation, keeping this guard as its backstop). The
 suspend-time playtime fix and the multi-file-slot conflict fix are bundled in the same work but are separate bugfixes,
 not part of this ADR's decision.
+
+## Amendment — a launch check that gets no answer ends in the fallback dialog
+
+The rule that the gate never traps the user's game covered a step that throws, but not one that never answers: an
+endpoint call has no timeout, so against a backend that is stopped, restarting or frozen every step of the check but the
+pre-launch sync (already raced at 15 s) waited without end — on the Play button from the press, on the watcher after its
+first backend contact. [#2173](https://github.com/danielcopper/romm-tender/issues/2173) extends the rule to a wait:
+
+- Every backend call the gate makes has a limit — 15 s for the two that read or sync the server's saves (the save-setup
+  read and the pre-launch sync), 5 s for every other one, the reachability probe included. A dialog's wait for the
+  user's answer is never bounded.
+- A limit that expires ends the check in the existing "Save Sync Unavailable" dialog with a neutral message, on both
+  funnels. It does not fail open to a start: the limit can expire on a slow RomM while Tender is fine, and the Play
+  button has cancelled nothing, so the user decides. "Launch Anyway" starts on the local save, which the next sync with
+  RomM checks against the server's; "Cancel" starts nothing.
+- After such a check, "Launch Anyway" starts the game without re-confirming the launch options, as the watcher's own
+  first-contact fallback already did. Every other start keeps the re-confirm, including one after a sync that failed
+  with an answer.
+- The watcher's first backend contact is unchanged: past its 5 s it starts the game without the sync before it and says
+  so.
+
+The re-confirm's own sentence in Consequences no longer holds either: since
+[#1577](https://github.com/danielcopper/romm-tender/issues/1577) a re-confirm that hangs past its 3 s **stops** the
+launch instead of launching — the Play button returns to Play, and the watcher says "Launch cancelled — try again". A
+`None` item or an ordinary failure still launches.

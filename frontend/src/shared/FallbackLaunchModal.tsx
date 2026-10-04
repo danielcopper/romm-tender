@@ -2,8 +2,9 @@ import { ConfirmModal, showModal } from "@decky/ui";
 
 /**
  * "Save Sync Unavailable" fallback confirm (ADR-0015). Shown when an online
- * pre-launch sync failed without surfacing a conflict — asks whether to launch
- * with local saves anyway. The Play button's `sync_failed` verdict and the
+ * pre-launch sync failed without surfacing a conflict, or when a step of the
+ * launch check got no answer in time — asks whether to launch with local saves
+ * anyway. The Play button's `sync_failed` verdict and the
  * global watcher both show this one, so the copy stays identical.
  *
  * Mirrors the `showModal(...)`-returns-a-Promise pattern of

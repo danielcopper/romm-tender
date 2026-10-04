@@ -1,8 +1,9 @@
 /**
  * Custom Play button that replaces the native Steam Play button on RomM game
- * detail pages. Handles 3 primary states:
+ * detail pages. Primary states (the full set is `PlayButtonState`):
  * - Download: ROM not installed, click to download
  * - Play: ROM installed, launches the game (with pre-launch save sync)
+ * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
  *
  * Includes a dropdown menu button (arrow) to the right of the Play button
@@ -56,10 +57,10 @@ import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { showStopGameModal } from "./StopGameModal";
 import { getMigrationState } from "../utils/migrationStore";
-import { runLaunchGate, markLaunchSkipped } from "../utils/launchGate";
+import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
-import { readGameRunning } from "../utils/sessionManager";
+import { noteAppRom, readGameRunning } from "../utils/sessionManager";
 import type {
   DownloadProgressEvent,
   DownloadCompleteEvent,
@@ -79,12 +80,14 @@ import {
 } from "../utils/pruneLease";
 import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
 import { saveSyncToastBody } from "../utils/saveSyncToast";
+import { boundedOr, withTimeout } from "../utils/withTimeout";
 
 type PlayButtonState =
   | "loading"
   | "not_romm"
   | "download"
   | "conflict"
+  | "checking"
   | "syncing"
   | "play"
   | "launching"
@@ -138,7 +141,7 @@ interface CustomPlayButtonProps {
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
 // prettier-ignore
-export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
+export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // NOSONAR(typescript:S3776) — remaining cc is the per-state render branching (download/dl_complete/uninstalling/launching/checking/syncing/conflict/play each return a distinct button shape); the gate chain now lives in runLaunchGate, not here.
   const leaseOwner = `custom-play-button:${appId}`;
   const [state, setState] = useState<PlayButtonState>("loading");
   const [romId, setRomId] = useState<number | null>(null);
@@ -473,7 +476,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         // The download flash holds the button for its own 1100ms and applies
         // `announced` from `lastAnnouncedState` when it ends.
         if (prev === "dl_complete") return prev;
-        if (prev === "syncing" || prev === "launching" || prev === "download") return prev;
+        if (prev === "checking" || prev === "syncing" || prev === "launching" || prev === "download") return prev;
         return announced;
       });
     };
@@ -542,22 +545,18 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // cannot silently flip "abort" → "proceed" — the abort-propagation bug pattern
   // #619 was opened to prevent.
   const ensureTrackingConfigured = async (rid: number): Promise<"proceed" | "abort"> => {
-    const trackingResult = await isSaveTrackingConfigured(rid).catch(() => ({ configured: true }));
+    const trackingResult = await boundedOr(isSaveTrackingConfigured(rid), LOCAL_CALL_LIMIT_MS, () => ({
+      configured: true,
+    }));
     if (trackingResult.configured) return "proceed";
 
-    let setupInfo;
-    /* istanbul ignore next -- network-IO + defer-to-launch fallback; behavior tested at service layer */
-    try {
-      setupInfo = await getSaveSetupInfo(rid);
-    } catch {
-      // Network/backend failure — defer to launch rather than blocking the user.
-      return "proceed";
-    }
+    // A failed read defers to launch rather than blocking the user.
+    const setupInfo = await boundedOr(getSaveSetupInfo(rid), SERVER_CALL_LIMIT_MS, () => null);
+    if (setupInfo === null) return "proceed";
 
-    /* istanbul ignore next -- delegates to applyLaunchGateSetupOutcome; logic covered in frontend/src/utils/saveSetup.test.ts */
     return applyLaunchGateSetupOutcome(resolveSaveSetupOutcome(setupInfo), {
       rid,
-      confirmSlotChoice,
+      confirmSlotChoice: (...args) => withTimeout(confirmSlotChoice(...args), LOCAL_CALL_LIMIT_MS),
       toast: (body) => showToast(body),
       dispatchSavesTab: () =>
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "saves" } })),
@@ -567,7 +566,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // Detects emulator core change since last launch; if changed, surfaces the
   // core-change confirm modal. Returns true to proceed, false to bail.
   const confirmCoreChangeIfNeeded = async (rid: number): Promise<boolean> => {
-    const coreCheck = await checkCoreChange(rid).catch(
+    const coreCheck = await boundedOr(
+      checkCoreChange(rid),
+      LOCAL_CALL_LIMIT_MS,
       (): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => ({
         changed: false,
       }),
@@ -580,28 +581,23 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   // Online pre-launch sync, mapped onto the gate's PreLaunchSyncOutcome (the
-  // gate routes it to conflict / sync_failed / allow). Keeps the Play button's
-  // existing 15s timeout, the `setState("syncing")` transition, the benign
-  // `savefiles_in_content_dir` skip, and the success toast — all the
-  // side-effects the verdict mapping can't carry stay here; conflict resolution
-  // and the fallback confirm move to the verdict switch in `handlePlay`.
+  // gate routes it to conflict / sync_failed / allow). Keeps the
+  // `setState("syncing")` transition, the benign skips
+  // (`BENIGN_SYNC_SKIP_REASONS`) and the success toast — the side-effects the
+  // verdict can't carry; conflict resolution and the fallback confirm are
+  // `actOnVerdict`'s.
   //
-  // Like the watcher, this MUST NOT fail open: a throw or timeout returns
+  // Like the watcher, this MUST NOT fail open: a throw returns
   // `{ success: false }` (→ sync_failed → fallback confirm) rather than
   // propagating to the gate's blanket catch and silently launching on stale
-  // saves (#1050).
+  // saves (#1050). An expired limit is let through: the gate answers it.
   const runPreLaunchSync = async (rid: number): Promise<PreLaunchSyncOutcome> => {
     setState("syncing");
-    let result: Awaited<ReturnType<typeof preLaunchSync>>;
-    try {
-      result = await Promise.race([
-        preLaunchSync(rid),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 15000)),
-      ]);
-    } catch (e) {
+    const result = await boundedOr(preLaunchSync(rid), SERVER_CALL_LIMIT_MS, (e) => {
       detach(debugLog(`CustomPlayButton: pre-launch sync failed: ${e}`));
-      return { success: false, message: "" };
-    }
+      return null;
+    });
+    if (result === null) return { success: false, message: "" };
 
     detach(
       debugLog(
@@ -650,13 +646,27 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // shared skip-set immediately before RunGame so this RunGame does NOT re-enter
   // the global watcher and gate a start this button has already handled — run
   // the funnel for, or found to need none (the double-gate fix C1).
-  const dispatchLaunch = async (gameId: string, admission: PruneLeaseAdmission) => {
-    if (!isPruneLeaseAdmissionCurrent(admission)) return;
+  //
+  // `skipReconfirm` is for a start after a check that got no answer in time:
+  // the re-confirm asks the same backend, and its timeout would stop the start
+  // the user just chose. The watcher's first-contact fallback starts the same
+  // way, without it.
+  const dispatchLaunch = async (
+    gameId: string,
+    admission: PruneLeaseAdmission,
+    { skipReconfirm = false }: { skipReconfirm?: boolean } = {},
+  ) => {
+    if (!isPruneLeaseAdmissionCurrent(admission)) {
+      // A start this panel no longer answers for; the press it came from must
+      // not leave the button on a state that waits for it.
+      setState("play");
+      return;
+    }
     setState("launching");
     // Heal any mid-session launch_options drift on this shortcut before launch
     // (#1150) via the shared bounded-race re-confirm. Ordinary I/O failures stay
     // best-effort; timeout or the button's unmount cancels this launch.
-    if (romId) {
+    if (romId && !skipReconfirm) {
       const reconfirm = await reconfirmLaunchOptions(romId, appId, "CustomPlayButton", admission);
       if (reconfirm.status === "cancelled") return;
       if (reconfirm.status === "timeout") {
@@ -664,6 +674,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         return;
       }
     }
+    if (romId) noteAppRom(appId, romId);
     markLaunchSkipped(appId);
     SteamClient.Apps.RunGame(gameId, "", -1, 100);
   };
@@ -683,19 +694,18 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // store so the badge/Download re-derive (#1345). A throw is a bridge error,
       // not a server verdict, so it does NOT flip the store — but the launch still
       // treats it as offline (fail-safe).
-      try {
-        const { online } = await probeReachability();
-        reportServerReachable(online);
-        return online;
-      } catch (e) {
+      const probe = await boundedOr(probeReachability(), LOCAL_CALL_LIMIT_MS, (e) => {
         logError(`CustomPlayButton: reachability probe failed (treating as offline): ${e}`);
-        return false;
-      }
+        return null;
+      });
+      if (probe === null) return false;
+      reportServerReachable(probe.online);
+      return probe.online;
     },
     preLaunchSync: () => runPreLaunchSync(rid),
     checkLocalDrift: async () =>
       (
-        await checkLocalDrift(rid).catch((e) => {
+        await boundedOr(checkLocalDrift(rid), LOCAL_CALL_LIMIT_MS, (e) => {
           logError(`CustomPlayButton: local-drift check failed (treating as not-drifted): ${e}`);
           return { drifted: false, rom_id: rid };
         })
@@ -707,7 +717,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // verdict switch is the Play button's page-aware reaction (in-place button
   // states), mirroring the watcher's imperative-modal reaction.
   const handlePlay = async () => {
-    if (state === "syncing" || state === "launching") return; // debounce
+    if (state === "checking" || state === "syncing" || state === "launching") return; // debounce
     const overview = appStore.GetAppOverviewByAppID(appId);
     const gameId = overview?.GetGameID?.() ?? String(appId);
     const admission = capturePruneLeaseAdmission(leaseOwner);
@@ -737,15 +747,17 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     }
     detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
-    // `runPreLaunchSync` flips the button to "syncing"; an unexpected throw from
-    // the gate or a verdict's modal helper (framework-level) would otherwise
-    // leave the button frozen there. The watcher never traps the user's game;
+    // The press shows "checking" until the verdict is acted on, and
+    // `runPreLaunchSync` flips it to "syncing"; an unexpected throw from the gate
+    // or a verdict's modal helper (framework-level) would otherwise leave the
+    // button frozen there. The watcher never traps the user's game;
     // the Play-button equivalent is to reset the button to "play".
     //
     // Retry loop: the offline-drift modal can ask to re-probe. Each retry is a
     // fresh user action, so the loop is bounded by the user choosing "Retry"
     // again; the only thing that re-runs is the gate (which re-probes via the
     // fast reachability check), and `actOnVerdict` signals back "retry".
+    setState("checking");
     try {
       let verdict = await runLaunchGate(appId, romId, makePlayButtonOps(romId));
       while ((await actOnVerdict(verdict, gameId, romId, admission)) === "retry") {
@@ -802,10 +814,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           return "done";
         }
         if (choice === "retry") {
-          // Re-run the gate (re-probes via the fast reachability check). The
-          // button stays interactive while the modal is open; flip to "syncing"
-          // so the user sees the gate working again instead of a dead "play".
-          setState("syncing");
+          // Re-run the gate (re-probes via the fast reachability check); the
+          // button is still on the "checking" the press set.
           return "retry";
         }
         setState("play");
@@ -814,7 +824,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       case "sync_failed": {
         const proceed = await showFallbackLaunchModal(verdict.message);
         if (proceed) {
-          await dispatchLaunch(gameId, admission);
+          await dispatchLaunch(gameId, admission, { skipReconfirm: verdict.noAnswer === true });
           return "done";
         }
         setState("play");
@@ -1628,6 +1638,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
 
   if (state === "launching") {
     return renderThrobberButton("Launching...");
+  }
+
+  if (state === "checking") {
+    return renderThrobberButton("Checking saves...");
   }
 
   if (state === "syncing") {

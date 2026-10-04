@@ -6,11 +6,11 @@ import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
 import * as runningApps from "./runningApps";
 import * as steamShortcuts from "./steamShortcuts";
-import * as pruneLease from "./pruneLease";
 import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
 import type { GameRunningReading } from "./sessionManager";
+import { TimeoutError } from "./withTimeout";
 
 vi.mock("../api/backend", () => ({
   refreshMigrationState: vi.fn(),
@@ -453,24 +453,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       }
     });
 
-    it("a start whose admission went stale before the deadline stays cancelled", async () => {
-      vi.useFakeTimers();
-      try {
-        vi.mocked(backend.getInstalledRom).mockReturnValue(new Promise<never>(() => {}));
-        register();
-        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
-        // A new plugin generation makes every admission captured before it stale.
-        pruneLease.mountPruneLeasePlugin();
-        await vi.advanceTimersByTimeAsync(FIRST_CONTACT_DEADLINE_MS);
-
-        expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("no backend answer"));
-        expect(runGameMock()).not.toHaveBeenCalled();
-        expect(toaster.toast).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
     it("a relaunch uses the event's game ID even when Steam's app store has no overview for it", async () => {
       vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(null);
       register();
@@ -479,6 +461,78 @@ describe("launchInterceptor — full funnel watcher", () => {
 
       expect(launchGate.runLaunchGate).toHaveBeenCalled();
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+  });
+
+  describe("a later wait that gets no answer", () => {
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
+      vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+      vi.mocked(backend.probeReachability).mockReturnValue(new Promise<never>(() => {}));
+      // The re-confirm would ask the same silent backend.
+      vi.mocked(backend.getRomRelaunchOptions).mockReturnValue(new Promise<never>(() => {}));
+    });
+
+    it("ends in the fallback dialog at the step's limit; Launch Anyway starts the game", async () => {
+      vi.useFakeTimers();
+      try {
+        prompts.confirmFallbackLaunch.mockResolvedValue(true);
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+
+        await vi.advanceTimersByTimeAsync(4999);
+        expect(prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
+        expect(runGameMock()).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Couldn't check your saves in time");
+        expect(runGameMock()).toHaveBeenCalledTimes(1);
+        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+        // Not the first contact's start-without-asking.
+        expect(toaster.toast).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("Cancel on the dialog leaves the start cancelled", async () => {
+      vi.useFakeTimers();
+      try {
+        prompts.confirmFallbackLaunch.mockResolvedValue(false);
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+        expect(runGameMock()).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("an answer that arrives after the dialog appeared starts nothing more", async () => {
+      vi.useFakeTimers();
+      try {
+        let answer!: (probe: { online: boolean }) => void;
+        vi.mocked(backend.probeReachability).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+        prompts.confirmFallbackLaunch.mockReturnValue(new Promise<boolean>(() => {}));
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+
+        answer({ online: true });
+        await vi.advanceTimersByTimeAsync(20000);
+
+        expect(backend.preLaunchSync).not.toHaveBeenCalled();
+        expect(backend.checkLocalDrift).not.toHaveBeenCalled();
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(prompts.confirmFallbackLaunch).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -732,6 +786,35 @@ describe("launchInterceptor — full funnel watcher", () => {
       await flush();
 
       expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("sync_failed after a step got no answer → Launch Anyway relaunches without the re-confirm", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
+        decision: "sync_failed",
+        message: launchGate.NO_ANSWER_MESSAGE,
+        noAnswer: true,
+      });
+      prompts.confirmFallbackLaunch.mockResolvedValue(true);
+
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(prompts.confirmFallbackLaunch).toHaveBeenCalledWith("Couldn't check your saves in time");
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(backend.getRomRelaunchOptions).not.toHaveBeenCalled();
+    });
+
+    it("sync_failed with an answer → Launch Anyway re-confirms the launch options before the relaunch", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "sync_failed", message: "no device" });
+      prompts.confirmFallbackLaunch.mockResolvedValue(true);
+
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(backend.getRomRelaunchOptions).toHaveBeenCalledWith(42);
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
 
     it("migration_pending block → migration toast, no relaunch", async () => {
@@ -1133,6 +1216,97 @@ describe("launchInterceptor — full funnel watcher", () => {
       vi.mocked(backend.confirmSlotChoice).mockRejectedValueOnce(new Error("net"));
       expect(await ops.ensureTrackingConfigured()).toBe("proceed");
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("auto-adopt slot failed"));
+    });
+
+    describe("a call that never answers rejects the op at its limit, for the gate to answer", () => {
+      const never = (): Promise<never> => new Promise<never>(() => {});
+      const AUTO_CONFIRM_SETUP: Awaited<ReturnType<typeof backend.getSaveSetupInfo>> = {
+        has_local_saves: false,
+        local_files: [],
+        server_slots: [],
+        default_slot: "slot1",
+        slot_confirmed: false,
+        active_slot: null,
+        recommended_action: "auto_confirm_default",
+      };
+
+      it.each([
+        {
+          call: "get_installed_rom",
+          limit: 5000,
+          op: "hasLaunchTarget",
+          arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
+        },
+        {
+          call: "is_save_tracking_configured",
+          limit: 5000,
+          op: "ensureTrackingConfigured",
+          arrange: () => vi.mocked(backend.isSaveTrackingConfigured).mockReturnValue(never()),
+        },
+        {
+          call: "get_save_setup_info",
+          limit: 15000,
+          op: "ensureTrackingConfigured",
+          arrange: () => {
+            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+            vi.mocked(backend.getSaveSetupInfo).mockReturnValue(never());
+          },
+        },
+        {
+          call: "confirm_slot_choice",
+          limit: 5000,
+          op: "ensureTrackingConfigured",
+          arrange: () => {
+            vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: false, active_slot: null });
+            vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(AUTO_CONFIRM_SETUP);
+            vi.mocked(backend.confirmSlotChoice).mockReturnValue(never());
+          },
+        },
+        {
+          call: "check_core_change",
+          limit: 5000,
+          op: "checkCoreChange",
+          arrange: () => vi.mocked(backend.checkCoreChange).mockReturnValue(never()),
+        },
+        {
+          call: "probe_reachability",
+          limit: 5000,
+          op: "checkReachability",
+          arrange: () => vi.mocked(backend.probeReachability).mockReturnValue(never()),
+        },
+        {
+          call: "pre_launch_sync",
+          limit: 15000,
+          op: "preLaunchSync",
+          arrange: () => vi.mocked(backend.preLaunchSync).mockReturnValue(never()),
+        },
+        {
+          call: "check_local_drift",
+          limit: 5000,
+          op: "checkLocalDrift",
+          arrange: () => vi.mocked(backend.checkLocalDrift).mockReturnValue(never()),
+        },
+      ] as const)("$call → $op rejects at $limit ms", async ({ limit, op, arrange }) => {
+        const ops = await captureOps();
+        vi.useFakeTimers();
+        try {
+          arrange();
+          let outcome: unknown = "pending";
+          (ops[op] as () => Promise<unknown>)().then(
+            (value) => (outcome = value),
+            (e: unknown) => (outcome = e),
+          );
+
+          await vi.advanceTimersByTimeAsync(limit - 1);
+          expect(outcome).toBe("pending");
+
+          await vi.advanceTimersByTimeAsync(1);
+          expect(outcome).toBeInstanceOf(TimeoutError);
+          expect(backend.logError).not.toHaveBeenCalledWith(expect.stringMatching(/failed|threw/));
+        } finally {
+          vi.useRealTimers();
+        }
+      });
     });
   });
 });
