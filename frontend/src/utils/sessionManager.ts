@@ -580,10 +580,12 @@ export async function initSessionManager(): Promise<void> {
           const appId = update.unAppID;
           if (appId) {
             // Refresh map in case a sync happened since init
-            const mapAnswered = await withTimeout(readAppIdMap(), LOCAL_CALL_LIMIT_MS).catch((e: unknown) => {
+            let mapAnswered = false;
+            try {
+              mapAnswered = await withTimeout(readAppIdMap(), LOCAL_CALL_LIMIT_MS);
+            } catch (e) {
               logError(`Failed to refresh app ID map: ${e}`);
-              return false;
-            });
+            }
             await handleGameStart(appId, mapAnswered, notedRomId);
           }
         } else {

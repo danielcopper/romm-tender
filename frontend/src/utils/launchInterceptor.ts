@@ -295,19 +295,27 @@ async function handleWatcherVerdict(
       if (choice === "retry") return "retry";
       return "done";
     }
-    case "sync_failed": {
-      const proceed = await prompts.confirmFallbackLaunch(verdict.message);
-      if (!proceed) return "done";
-      // After a check that got no answer in time the re-confirm asks the same
-      // backend, and its timeout would cancel the start the user just chose.
-      if (verdict.noAnswer) {
-        if (isPruneLeaseAdmissionCurrent(admission)) bareRelaunch(start);
-      } else {
-        await relaunch(start, romId, admission);
+    case "sync_failed":
+      if (await prompts.confirmFallbackLaunch(verdict.message)) {
+        await relaunchAfterFallback(verdict.noAnswer === true, start, romId, admission);
       }
       return "done";
-    }
   }
+}
+
+async function relaunchAfterFallback(
+  noAnswer: boolean,
+  start: CancelledStart,
+  romId: number,
+  admission: PruneLeaseAdmission,
+): Promise<void> {
+  // After a check that got no answer in time the re-confirm asks the same
+  // backend, and its timeout would cancel the start the user just chose.
+  if (!noAnswer) {
+    await relaunch(start, romId, admission);
+    return;
+  }
+  if (isPruneLeaseAdmissionCurrent(admission)) bareRelaunch(start);
 }
 
 /**
