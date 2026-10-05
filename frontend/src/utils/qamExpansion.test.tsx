@@ -158,7 +158,7 @@ describe("useWideQamPanel", () => {
     expect(wideStyles(mod.WIDE_ROOT_CLASS)).toHaveLength(1);
   });
 
-  it("injects the rule into the page's own document, not the one plugin code runs in", async () => {
+  it("injects the rule into the page's own document, not the one the panel's code runs in", async () => {
     const mod = await loadQamExpansion(PROBE_CLASSES);
     // Plugin JS runs in the SharedJSContext document; the QAM panel and the wide
     // page's root live in a rendered-UI document. A rule injected into the
