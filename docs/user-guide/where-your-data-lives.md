@@ -19,20 +19,20 @@ Four more places sit outside those folders, because none of them holds anything 
 | `/run/user/<id>/romm-tender/`      | One note saying which port Tender is answering on while it runs. Your session clears it when you log out                                                                                                                                      |
 
 Your **games** are not in any of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
-exactly as before, and nothing on this page moves them. A recovery bundle can hold copies of a removed game's saves and,
-when you asked it to keep one, of its ROM files.
+exactly as before, and nothing on this page moves them. The one folder outside RetroDECK's that can hold copies of them
+is the recovery folder below.
 
 ## The recovery folder
 
 `~/romm-tender-recovery/` is Tender's too, and it holds things of yours: the recovery bundles **Clean Up Removed RomM
-Games** seals before it removes a game, so that what the removal takes away can be put back by hand. What a bundle holds
+Games** seals before it removes anything, so that what the bundle recorded can be put back by hand. What a bundle holds
 and how to restore from it is under
 [Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm).
 
-It sits directly in your home directory on purpose. It is the one folder you are meant to open yourself, and a folder
-under `~/.local` is hidden in a file manager by default.
+It sits directly in your home directory on purpose. It is the one folder you are meant to open in a file manager, and a
+folder under `~/.local` is hidden there by default.
 
-Tender never removes a bundle, and uninstalling leaves the folder where it is.
+Tender never removes a bundle, and uninstalling Tender leaves the folder where it is.
 
 Bundles that versions 0.30 to 0.32 sealed sit in `~/decky-romm-sync-recovery/` instead, are not counted on the Data
 Management page, and are yours to keep or delete â€” [Recovery bundles](troubleshooting.md#recovery-bundles) has the
@@ -108,8 +108,8 @@ and logs the program, database and cache folders, so the **last** `host: code â€
 thing. Look for the last one rather than the first: the log is appended to across runs, so the top of the file belongs
 to an older start.
 
-The recovery folder follows none of these variables: it is always `romm-tender-recovery` directly in your home
-directory, wherever the folders above have gone.
+The recovery folder follows none of the `TENDER_*` or `XDG_*` variables: it is always `romm-tender-recovery` directly in
+your home directory, wherever the folders above have gone.
 
 ## Coming from an older version
 

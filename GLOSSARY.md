@@ -108,17 +108,13 @@ handed to `bootstrap()`, which derives none of them (`domain/app_directories.py`
 an installer resolved and wrote into the service unit — then the XDG variables, then built-in defaults; the back two
 rungs are for a start by hand.
 
-One folder is written outside the seven: the root of the [recovery bundles](#recovery-bundle), directly under the home
-directory, its name taken from one of [the identifier's homes](#display-name-tender-vs-identifier-romm-tender). It is
-not a root resolved from the environment, and it sits where it does because it is the one folder a user is meant to open
-by hand — a folder under `~/.local` is hidden in a file manager by default.
-
 - **config root** — user-intent configuration: the settings file and its siblings.
 - **data root** — what cannot be fetched again: the database with its two WAL sidecars, the single-instance lock beside
   it, the legacy `save_sync_state.json` the settings fold still reads, and the installer's two copies of the database
   and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback by hand
-  replaces. Each is staged as `<name>.new` and the copy it replaces set aside as `<name>.prev`, which can outlast the
-  run. This list is the one inventory of that root; everywhere else names it rather than repeating it.
+  replaces, each of which can have a `.new` or `.prev` sibling beside it — and, on a machine updated from an install
+  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take. This
+  list is the one complete inventory of that root; the user guide names only what a user meets there.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.
@@ -130,9 +126,15 @@ All but the code root and the bin root are named after `APP_DIR_NAME` — the co
 installed, and the bin root is shared with every other program the user installed for themselves, so neither carries a
 name of ours. The bin root has no XDG variable either: the basedir spec names the path, so its ladder is
 `TENDER_BIN_DIR` and then the built-in default. Every reader takes the seven off the one `AppDirectories` the entry
-point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; nothing
-composes a directory of its own from a home or a folder name. `resolve_directories` has exactly one caller (`main.py`),
-and `config_root` / `data_root` have none left.
+point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; apart from
+the recovery root, nothing composes a directory of its own from a home or a folder name. `resolve_directories` has
+exactly one caller (`main.py`), and `config_root` / `data_root` have none left.
+
+One folder named after the program is written outside the seven: the root of the [recovery bundles](#recovery-bundle),
+directly under the home directory, its name built from `PACKAGE_NAME` (see
+[the identifier's homes](#display-name-tender-vs-identifier-romm-tender)). It is not a root resolved from the
+environment, and it sits where it does because it is the one folder a user is meant to open in a file manager — a folder
+under `~/.local` is hidden there by default.
 
 _Avoid_: **Decky-assigned directory** — those were named after the plugin's own folder, which is what made the data move
 on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin directory, install
