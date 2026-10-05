@@ -24,6 +24,7 @@ import pytest
 from _factories import _make_application, _make_services_bundle
 
 from host import HostStatus
+from lib.errors import Refused
 from main import Endpoints
 
 
@@ -501,11 +502,14 @@ class TestLifecycleEndpointDelegation:
         assert result == {"synced": False}
 
     @pytest.mark.asyncio
-    async def test_finalize_game_session_passes_a_refusal_through(self, endpoints, services):
-        refusal = {"success": False, "reason": "prune_active", "message": "held"}
-        services.session_lifecycle_service.finalize = AsyncMock(return_value=refusal)
+    async def test_finalize_game_session_answers_a_raised_refusal(self, endpoints, services):
+        services.session_lifecycle_service.finalize = AsyncMock(side_effect=Refused("prune_active", "held"))
 
-        assert await endpoints.finalize_game_session(7) == refusal
+        assert await endpoints.finalize_game_session(7) == {
+            "success": False,
+            "reason": "prune_active",
+            "message": "held",
+        }
 
     @pytest.mark.asyncio
     async def test_stop_running_game_delegates(self, endpoints, services):

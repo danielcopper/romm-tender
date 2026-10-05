@@ -515,8 +515,7 @@ class Endpoints:
 
     @route
     async def finalize_game_session(self, rom_id):
-        result = await self._services.session_lifecycle_service.finalize(rom_id)
-        return result if isinstance(result, dict) else asdict(result)
+        return asdict(await self._services.session_lifecycle_service.finalize(rom_id))
 
     # ── Download delegation to DownloadService ──────────────
 

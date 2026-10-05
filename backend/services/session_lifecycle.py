@@ -213,7 +213,7 @@ class SessionLifecycleService:
         if self._background_tasks:
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
 
-    async def finalize(self, rom_id: int) -> SessionFinalizeResult | dict[str, Any]:
+    async def finalize(self, rom_id: int) -> SessionFinalizeResult:
         """Run the four end-of-session steps and return the combined verdict.
 
         Checks the ``finalize_game_session`` endpoint's conflict rules at its
