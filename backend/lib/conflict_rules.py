@@ -19,8 +19,7 @@ if TYPE_CHECKING:
 
     from lib.prune_conflicts import PruneConflicts
 
-# Public because the sync engine raises these two refusals too; the reason stays
-# a literal at each raise site, never behind a helper.
+# Public because the sync engine raises these two refusals too.
 UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
 MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 _SYNC_MESSAGE = "A library sync is in progress — wait for it to finish or cancel it first."
