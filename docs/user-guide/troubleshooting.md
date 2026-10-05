@@ -646,7 +646,8 @@ carries it, and its size, newest first. The game is spelled the way the bundle's
 Shenmue II — so it matches what you see in a file manager. A folder whose name is not in the shape Tender writes — one
 you renamed, or one ending `.durability-uncertain` because its seal could not be confirmed — is listed under its folder
 name, with no day, at the bottom. **Nothing on this page removes one** — they are yours to keep, move or delete in a
-file manager. What a bundle holds is under [Gone from RomM](#gone-from-romm) above.
+file manager. What a bundle holds is under
+[Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm).
 
 The count covers that folder only. Bundles an older version sealed under `~/decky-romm-sync-recovery/bundles/` are still
 on your disk and are **not** counted here, so a device carrying those has more than this row reports.
