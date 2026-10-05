@@ -103,9 +103,10 @@ class RomRemovalService:
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
         # Read and written only on the loop thread — every mutation brackets a
-        # ``run_in_executor`` call rather than happening inside one — so both
-        # removal entry points share it without a lock, which `services/` may
-        # not import anyway (`.importlinter`, no-stdlib-io-in-services).
+        # ``run_in_executor`` call, or runs in that call's completion callback,
+        # rather than happening inside one — so both removal entry points share
+        # it without a lock, which `services/` may not import anyway
+        # (`.importlinter`, no-stdlib-io-in-services).
         self._removals_in_flight: set[int] = set()
 
     def _delete_rom_files(
