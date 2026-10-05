@@ -16,18 +16,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.unmock("./host");
 
-import { addEventListener, definePlugin, endpoint, removeEventListener, toaster, type Plugin } from "./host";
+import { addEventListener, definePanel, endpoint, removeEventListener, toaster, type PanelDefinition } from "./host";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("definePlugin", () => {
+describe("definePanel", () => {
   it("answers with the factory it was given", () => {
     // Whoever mounts the panel calls it, which is `qam/installEntry.tsx`:
     // exactly once, behind Tender's own Quick Access entry.
-    const factory = (): Plugin => ({ name: "Tender", icon: null });
-    expect(definePlugin(factory)).toBe(factory);
+    const factory = (): PanelDefinition => ({ name: "Tender", icon: null });
+    expect(definePanel(factory)).toBe(factory);
   });
 });
 

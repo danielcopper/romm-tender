@@ -74,7 +74,7 @@ import type {
   SyncPreview,
   SessionBudgetStatus,
   DownloadItem,
-  PluginSettings,
+  Settings,
   SyncProgress,
 } from "../types";
 
@@ -252,7 +252,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve };
 }
 
-function defaultSettings(): PluginSettings {
+function defaultSettings(): Settings {
   return {
     romm_url: "https://romm.local",
     has_token: true,
@@ -3199,7 +3199,7 @@ describe("MainPage", () => {
   });
 
   describe("the notice for a Steam that answers for no notifications", () => {
-    // Written once by the plugin factory out of the start-up check's report,
+    // Written once by the panel factory out of the start-up check's report,
     // which is why this sets the module store rather than a probe answer: what
     // the check itself reads is pinned in `boot/steamModules.test.ts`.
     afterEach(() => resetNotificationsHealthForTests());

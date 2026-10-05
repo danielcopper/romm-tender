@@ -36,7 +36,7 @@ class TestTheDisplayName:
         in order to hold an underline to its headline, and say nothing about
         what either one spells.
 
-        The QAM header reads the frontend's ``PLUGIN_NAME``; the RomM token
+        The QAM header reads the frontend's ``DISPLAY_NAME``; the RomM token
         label, the registered device's client and the two README headlines read
         this. Nothing checks that the two agree.
         """

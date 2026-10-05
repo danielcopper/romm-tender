@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { LibraryPage } from "./LibraryPage";
 import * as backend from "../api/backend";
-import type { PluginSettings } from "../types";
+import type { Settings } from "../types";
 
 // The wide frame reaches Steam's tabbed page through this module, which is a
 // webpack probe with no answer under happy-dom. The stub renders a button per
@@ -39,7 +39,7 @@ const flushAsync = () =>
     for (let i = 0; i < 6; i++) await Promise.resolve();
   });
 
-function settings(): PluginSettings {
+function settings(): Settings {
   return {
     romm_url: "",
     has_token: true,

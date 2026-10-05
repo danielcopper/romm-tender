@@ -175,9 +175,9 @@ absence is discovered by the fault it was there to catch.
 
 **Reload** clears the caught error, and that is the whole of the rebuild: React has already unmounted the subtree by the
 time the button exists, so rendering it again mounts a new tree with no state carried over. It deliberately does not
-re-evaluate the bundle (the injector's job, and nothing in this tree can ask for it) nor re-run the plugin factory,
-which would install a second copy of every listener and patch it registers. What survives is the panel's module-level
-state — the open page, the sync progress, the caches — so a reader whose Settings page threw comes back to Settings.
+re-evaluate the bundle (the injector's job, and nothing in this tree can ask for it) nor re-run the panel factory, which
+would install a second copy of every listener and patch it registers. What survives is the panel's module-level state —
+the open page, the sync progress, the caches — so a reader whose Settings page threw comes back to Settings.
 
 ## Two widths
 

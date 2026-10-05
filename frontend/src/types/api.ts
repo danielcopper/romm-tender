@@ -62,7 +62,7 @@ export interface RetroArchInputCheck {
   config_path?: string;
 }
 
-export interface PluginSettings {
+export interface Settings {
   romm_url: string;
   has_token: boolean;
   steam_input_mode: "default" | "force_on" | "force_off";

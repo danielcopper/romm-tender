@@ -43,7 +43,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { Plugin } from "../api/host";
+import type { PanelDefinition } from "../api/host";
 import { quickAccessMenuClasses } from "../utils/deckyUiInternals";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 
@@ -114,13 +114,13 @@ export function syncEntry(tabs: unknown[], entry: QuickAccessTabEntry): void {
 /**
  * The entry Steam's tab strip renders Tender from.
  *
- * Everything here is decided from `plugin` and from one read of Steam's own
+ * Everything here is decided from `definition` and from one read of Steam's own
  * bundle — `quickAccessMenuClasses`, for the heading — so answering for it
  * without Steam means handing it that class map, which is what the suite mocks.
  * Putting the entry in the strip is {@link installQuickAccessEntry}'s, in
  * `installEntry.tsx`.
  */
-export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
+export function buildEntry(definition: PanelDefinition): QuickAccessTabEntry {
   return {
     key: TENDER_TAB_KEY,
     // An element carrying Steam's own heading class, because Steam's tabs hand
@@ -129,18 +129,18 @@ export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
     // are in `docs/architecture/qam-panel.md`, The entry. Without the class map
     // the start-up check has already refused the panel, so this heads the
     // fallback page, and it costs that page its styling rather than its heading.
-    title: <div className={quickAccessMenuClasses?.Title}>{plugin.name}</div>,
-    // The glyph the plugin declares, not one chosen here: `icon` is what the
+    title: <div className={quickAccessMenuClasses?.Title}>{definition.name}</div>,
+    // The glyph the definition declares, not one chosen here: `icon` is what the
     // factory answers with and the fallback page answers with a different node,
     // so drawing a second copy would put the wrong one in the strip on exactly
     // the start-up this cut cannot test.
-    tab: plugin.icon,
+    tab: definition.icon,
     // The boundary wraps the panel and not the icon, because a boundary in the
     // strip has no panel mounted to render its fallback into — a throw there
     // takes the menu down whatever we do. That is the whole of the reason, and
     // it is why the icon guards the answer it works out for its dot rather than
     // relying on a boundary.
-    panel: <PanelErrorBoundary>{plugin.content}</PanelErrorBoundary>,
+    panel: <PanelErrorBoundary>{definition.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };
 }

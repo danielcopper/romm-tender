@@ -21,7 +21,7 @@ import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { buildEntry, syncEntry, TENDER_TAB_KEY, type QuickAccessTabEntry } from "./quickAccessEntry";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
-import type { Plugin } from "../api/host";
+import type { PanelDefinition } from "../api/host";
 
 // The class map is a webpack probe, so the suite-wide `@decky/ui` stub answers
 // `undefined` for it. A getter lets one case hand the entry a map and the next
@@ -136,15 +136,15 @@ describe("syncEntry", () => {
 });
 
 describe("buildEntry", () => {
-  const plugin = (over: Partial<Plugin> = {}): Plugin => ({
+  const definition = (over: Partial<PanelDefinition> = {}): PanelDefinition => ({
     name: "Tender",
-    icon: "the-glyph" as unknown as Plugin["icon"],
-    content: "the-panel" as unknown as Plugin["content"],
+    icon: "the-glyph" as unknown as PanelDefinition["icon"],
+    content: "the-panel" as unknown as PanelDefinition["content"],
     ...over,
   });
 
   it("files the entry under Tender's own key and marks it as ours", () => {
-    const entry = buildEntry(plugin());
+    const entry = buildEntry(definition());
 
     expect(entry.key).toBe(TENDER_TAB_KEY);
     // The marker, not the key, is what a later pass recognises it by.
@@ -156,35 +156,35 @@ describe("buildEntry", () => {
       probe.classes = undefined;
     });
 
-    it("draws the plugin's name in an element carrying Steam's own heading class", () => {
+    it("draws the definition's name in an element carrying Steam's own heading class", () => {
       // A bare string lands in the panel at body size; Steam's own tabs head
       // theirs larger and bolder through this class. The two readings are in
       // `docs/architecture/qam-panel.md`, The entry.
       probe.classes = { Title: "Title_hash" };
 
-      render(buildEntry(plugin({ name: "Another Name" })).title as ReactElement);
+      render(buildEntry(definition({ name: "Another Name" })).title as ReactElement);
 
       expect(screen.getByText("Another Name")).toHaveClass("Title_hash");
     });
 
     it("still draws the name when the class map is missing", () => {
-      render(buildEntry(plugin()).title as ReactElement);
+      render(buildEntry(definition()).title as ReactElement);
 
       expect(screen.getByText("Tender")).not.toHaveAttribute("class");
     });
   });
 
-  it("draws the glyph the plugin declares rather than one of its own", () => {
+  it("draws the glyph the definition declares rather than one of its own", () => {
     // The start-up-failure branch answers with a different icon, so an entry
     // that chose its own would draw the wrong one on exactly the start-up
     // nothing here can test.
-    const icon = "a-different-glyph" as unknown as Plugin["icon"];
+    const icon = "a-different-glyph" as unknown as PanelDefinition["icon"];
 
-    expect(buildEntry(plugin({ icon })).tab).toBe(icon);
+    expect(buildEntry(definition({ icon })).tab).toBe(icon);
   });
 
   it("puts the boundary around the panel and nothing around the glyph", () => {
-    const entry = buildEntry(plugin());
+    const entry = buildEntry(definition());
 
     expect((entry.panel as { type: unknown }).type).toBe(PanelErrorBoundary);
     expect(entry.tab).toBe("the-glyph");

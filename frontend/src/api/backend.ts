@@ -2,7 +2,7 @@ import { endpoint } from "./host";
 import { detach } from "../utils/detach";
 import type {
   DataInventory,
-  PluginSettings,
+  Settings,
   SyncStats,
   SyncRunsAnswer,
   SyncStatusAnswer,
@@ -247,7 +247,7 @@ export interface CachedGameDetail extends BiosAnswer {
 // module-scope cache + invalidation surface is in one place. Re-exported here
 // for back-compat with existing import sites.
 export { getCachedGameDetail, invalidateCachedGameDetail } from "../utils/cachedGameDetailStore";
-export const getSettings = endpoint<[], PluginSettings>("get_settings");
+export const getSettings = endpoint<[], Settings>("get_settings");
 export const saveServerUrl = endpoint<[string, boolean], BackendResult>("save_server_url");
 export const saveCustomHeaders = endpoint<[CustomHeaderEntry[]], CustomHeadersResult>("save_custom_headers");
 export const connectWithCredentials = endpoint<[string, string, string, boolean], BackendResult>(

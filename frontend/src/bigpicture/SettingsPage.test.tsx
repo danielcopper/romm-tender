@@ -189,7 +189,7 @@ const flushAsync = () =>
 // generic constraint is brittle to alias under our TS config.)
 
 // Default settings payload — tests override per case.
-function defaultSettings(): import("../types").PluginSettings {
+function defaultSettings(): import("../types").Settings {
   return {
     romm_url: "https://romm.local",
     has_token: true,
@@ -257,7 +257,7 @@ describe("SettingsPage", () => {
   describe("initial mount — getSettings", () => {
     // The payload feeds four sections and the pane mounts one at a time, so
     // each half of the hydration is asserted on the section that shows it.
-    const fullPayload = (): import("../types").PluginSettings => ({
+    const fullPayload = (): import("../types").Settings => ({
       ...defaultSettings(),
       romm_url: "https://my.romm",
       has_token: true,

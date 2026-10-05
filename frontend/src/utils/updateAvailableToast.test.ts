@@ -7,7 +7,7 @@ import {
   type UpdateInstallAttempt,
   type UpdateNotice,
 } from "../api/backend";
-import { PLUGIN_NAME } from "./toast";
+import { DISPLAY_NAME } from "./toast";
 import { resetFailedUpdateToastsForTests } from "./failedUpdateToast";
 import { updateAvailableToast, watchUpdateAvailableToast } from "./updateAvailableToast";
 import {
@@ -104,7 +104,7 @@ describe("the toast that a newer release is out", () => {
     await flush();
 
     expect(toaster.toast).toHaveBeenCalledOnce();
-    expect(toaster.toast).toHaveBeenCalledWith({ title: PLUGIN_NAME, body: BODY });
+    expect(toaster.toast).toHaveBeenCalledWith({ title: DISPLAY_NAME, body: BODY });
     expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledExactlyOnceWith("1.1.0");
     const [acknowledged] = vi.mocked(acknowledgeUpdateAvailableToast).mock.invocationCallOrder;
     const [raised] = vi.mocked(toaster.toast).mock.invocationCallOrder;
@@ -178,7 +178,7 @@ describe("the toast that a newer release is out", () => {
     setUpdateInstallAttempt({ ...downloading, step: "failed", failure: "download_failed" });
     await flush();
 
-    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: PLUGIN_NAME, body: BODY });
+    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: DISPLAY_NAME, body: BODY });
   });
 
   it("waits until every load-time read has settled, so a failure record answering last suppresses it", async () => {
@@ -245,7 +245,7 @@ describe("the toast that a newer release is out", () => {
 
     expect(toaster.toast).toHaveBeenCalledTimes(2);
     expect(toaster.toast).toHaveBeenLastCalledWith({
-      title: PLUGIN_NAME,
+      title: DISPLAY_NAME,
       body: "Tender 1.2.0 is available. Settings › Updates to install it.",
     });
     expect(acknowledgeUpdateAvailableToast).toHaveBeenLastCalledWith("1.2.0");
@@ -312,7 +312,7 @@ describe("the toast that a newer release is out", () => {
     takePushedUpdateNotice(OWED);
     await flush();
 
-    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: PLUGIN_NAME, body: BODY });
+    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: DISPLAY_NAME, body: BODY });
   });
 
   it("is held from a press of Install until that attempt ended, a stopped attempt's card coming down at it included", async () => {
@@ -337,7 +337,7 @@ describe("the toast that a newer release is out", () => {
 
     setUpdateInstallAttempt({ ...downloading, step: "failed", failure: "download_failed" });
     await flush();
-    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: PLUGIN_NAME, body: BODY });
+    expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: DISPLAY_NAME, body: BODY });
   });
 
   it("is raised once a press of Install did not start an attempt", async () => {
@@ -420,7 +420,7 @@ describe("the toast that a newer release is out", () => {
 
       await steamUp();
 
-      expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: PLUGIN_NAME, body: BODY });
+      expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: DISPLAY_NAME, body: BODY });
       expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledExactlyOnceWith("1.1.0");
       const [raised] = vi.mocked(toaster.toast).mock.invocationCallOrder;
       const [acknowledged] = vi.mocked(acknowledgeUpdateAvailableToast).mock.invocationCallOrder;
@@ -465,7 +465,7 @@ describe("the toast that a newer release is out", () => {
       setUpdateInstallAttempt({ ...downloading, step: "failed", failure: "download_failed" });
       await vi.advanceTimersByTimeAsync(TOAST_READINESS_POLL_MS);
 
-      expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: PLUGIN_NAME, body: BODY });
+      expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({ title: DISPLAY_NAME, body: BODY });
       expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledExactlyOnceWith("1.1.0");
     });
 
@@ -478,7 +478,7 @@ describe("the toast that a newer release is out", () => {
       await steamUp();
 
       expect(toaster.toast).toHaveBeenCalledExactlyOnceWith({
-        title: PLUGIN_NAME,
+        title: DISPLAY_NAME,
         body: "Tender 1.2.0 is available. Settings › Updates to install it.",
       });
       expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledExactlyOnceWith("1.2.0");

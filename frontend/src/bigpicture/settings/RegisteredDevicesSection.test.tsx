@@ -186,7 +186,7 @@ describe("RegisteredDevicesSection", () => {
       }
     });
 
-    it("gives Client a track wide enough for the client name the plugin registers", () => {
+    it("gives Client a track wide enough for the longest client name the server holds", () => {
       const device = makeDevice({ client: REAL_CLIENT, client_version: REAL_VERSION });
       const { getByTestId } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: [device] })} />);
       // The cell really does carry the long string, so the width below is

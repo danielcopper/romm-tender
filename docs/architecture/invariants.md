@@ -773,7 +773,7 @@ Format: **invariant** — tier — enforced by.
   loaded beside a running Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`, `ControllerGlyph` — a
   package disagreement reported on every miss, which is what `SteamLookup.deckyUiExport` and its sweep-derived lock
   exist to prevent), reading an unreadable `DFL` as an absence rather than as nothing established, and letting the
-  reading THROW at all — `definePlugin`'s factory reads it before it returns anything, so an unguarded `window.DFL` or
+  reading THROW at all — `definePanel`'s factory reads it before it returns anything, so an unguarded `window.DFL` or
   `name in DFL` costs the page AND the log line and leaves the blank panel the check exists to tell apart from a dead
   backend. The version beside the name is an enrichment only — `_versionInfo.current` is internal, guarded, and every
   sentence is complete without it; `remote` beside it is the PUBLISHED version and is never consulted

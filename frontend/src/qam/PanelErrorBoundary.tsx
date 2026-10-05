@@ -19,7 +19,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { ButtonItem, PanelSection, PanelSectionRow } from "@decky/ui";
-import { PLUGIN_NAME } from "../utils/toast";
+import { DISPLAY_NAME } from "../utils/toast";
 
 interface PanelErrorBoundaryProps {
   children: ReactNode;
@@ -55,7 +55,7 @@ export class PanelErrorBoundary extends Component<PanelErrorBoundaryProps, Panel
     // The console is the whole record: the panel is gone, so there is no surface
     // of ours left to carry a stack, and the component stack is the only thing
     // that says WHERE — the message alone rarely does.
-    console.error(`[${PLUGIN_NAME}] the panel threw`, error, info.componentStack);
+    console.error(`[${DISPLAY_NAME}] the panel threw`, error, info.componentStack);
   }
 
   /**
@@ -90,10 +90,10 @@ export class PanelErrorBoundary extends Component<PanelErrorBoundaryProps, Panel
     const { failure } = this.state;
     if (failure === null) return this.props.children;
     return (
-      <PanelSection title={PLUGIN_NAME}>
+      <PanelSection title={DISPLAY_NAME}>
         <PanelSectionRow>
           <div style={{ fontSize: "13px", lineHeight: 1.4 }}>
-            {PLUGIN_NAME} ran into an error and stopped drawing this panel. The rest of the Quick Access menu is
+            {DISPLAY_NAME} ran into an error and stopped drawing this panel. The rest of the Quick Access menu is
             unaffected.
           </div>
         </PanelSectionRow>
@@ -102,7 +102,7 @@ export class PanelErrorBoundary extends Component<PanelErrorBoundaryProps, Panel
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" onClick={this.reload}>
-            Reload {PLUGIN_NAME}
+            Reload {DISPLAY_NAME}
           </ButtonItem>
         </PanelSectionRow>
       </PanelSection>

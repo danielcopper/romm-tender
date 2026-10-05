@@ -19,7 +19,7 @@ import type { ReactElement } from "react";
 import { showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
 import * as backend from "../../api/backend";
-import type { CollectionSyncSetting, PluginSettings } from "../../types";
+import type { CollectionSyncSetting, Settings } from "../../types";
 import { COLLECTION_RENDER_CAP } from "./CollectionsDetail";
 import { CONFIRM_ABOVE } from "./collectionKinds";
 import { ENTRY_FOCUS_DELAY_MS, ENTRY_STOP_ATTR } from "../../utils/entryFocus";
@@ -45,7 +45,7 @@ vi.mock("../../utils/deckyUiInternals", async () => {
   };
 });
 
-function settings(overrides: Partial<PluginSettings> = {}): PluginSettings {
+function settings(overrides: Partial<Settings> = {}): Settings {
   return {
     romm_url: "",
     has_token: true,
@@ -1071,9 +1071,9 @@ describe("Library › Collections", () => {
 
   describe("the owner switch against its settings read", () => {
     it("keeps a switch flipped while the settings read was out, once the read answers with the old value", async () => {
-      let answerRead: (value: PluginSettings) => void = () => {};
+      let answerRead: (value: Settings) => void = () => {};
       vi.mocked(backend.getSettings).mockReturnValueOnce(
-        new Promise<PluginSettings>((r) => {
+        new Promise<Settings>((r) => {
           answerRead = r;
         }),
       );
@@ -1094,9 +1094,9 @@ describe("Library › Collections", () => {
     });
 
     it("goes back to the scope a settings read found while the refused write was in flight", async () => {
-      let answerRead: (value: PluginSettings) => void = () => {};
+      let answerRead: (value: Settings) => void = () => {};
       vi.mocked(backend.getSettings).mockReturnValueOnce(
-        new Promise<PluginSettings>((r) => {
+        new Promise<Settings>((r) => {
           answerRead = r;
         }),
       );
