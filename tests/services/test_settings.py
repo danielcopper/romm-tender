@@ -244,8 +244,9 @@ class TestSaveCustomHeaders:
 
     async def test_keep_for_an_unknown_name_fails_without_writing(self, service, settings, settings_persister):
         settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
+        coro = service.save_custom_headers([self._keep("X-Other")])
         with pytest.raises(Refused) as refused:
-            await service.save_custom_headers([self._keep("X-Other")])
+            await coro
         assert refused.value.reason == "no_stored_header_value"
         assert "X-Other" in refused.value.message
         assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
@@ -265,8 +266,9 @@ class TestSaveCustomHeaders:
         assert settings["romm_custom_headers"] == []
 
     async def test_authorization_is_refused_with_its_own_message(self, service, settings):
+        coro = service.save_custom_headers([self._set("Authorization", "Basic abc")])
         with pytest.raises(Refused) as refused:
-            await service.save_custom_headers([self._set("Authorization", "Basic abc")])
+            await coro
         assert refused.value.reason == "authorization_reserved"
         assert "RomM API token" in refused.value.message
         assert "romm_custom_headers" not in settings
@@ -296,8 +298,9 @@ class TestSaveCustomHeaders:
         settings_persister.save_settings.assert_not_called()
 
     async def test_a_refusal_never_carries_the_value(self, service):
+        coro = service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
         with pytest.raises(Refused) as refused:
-            await service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
+            await coro
         assert "s3cret" not in refused.value.message
 
 

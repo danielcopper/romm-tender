@@ -146,8 +146,9 @@ class TestTestConnectionBadPath:
     def test_missing_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         settings = {"romm_url": ""}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
 
@@ -155,16 +156,18 @@ class TestTestConnectionBadPath:
         """``romm_url`` absent from settings dict → config_error."""
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(NotConfigured):
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
 
     def test_no_token_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger):
         """A configured URL but no minted token short-circuits before any network
         call — an unauthenticated scoped probe is never fired (#928)."""
         settings = {"romm_url": "http://romm.local"}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Not signed in — sign in to RomM first", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.list_platforms.assert_not_called()
@@ -173,8 +176,9 @@ class TestTestConnectionBadPath:
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.side_effect = RommConnectionError("connection refused")
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         romm_api.set_version.assert_called_once_with(None)
         romm_api.list_platforms.assert_not_called()
 
@@ -184,8 +188,9 @@ class TestTestConnectionBadPath:
         error = RommServerError("boom", status_code=503)
         romm_api.list_platforms.side_effect = error
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(RommServerError) as raised:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert raised.value is error
         # The heartbeat answered, so the version it detected stays cached.
         romm_api.set_version.assert_called_once_with("5.3.0")
@@ -195,8 +200,9 @@ class TestTestConnectionBadPath:
         error = RommAuthError("bad credentials")
         romm_api.list_platforms.side_effect = error
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(RommAuthError) as raised:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert raised.value is error
 
     def test_a_platform_listing_that_is_not_a_list_fails(self, event_loop, logger):
@@ -210,8 +216,9 @@ class TestTestConnectionBadPath:
         romm_api = MagicMock(wraps=RommApiAdapter(client))
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
+        coro = service.test_connection()
         with pytest.raises(RommApiError, match=r"^Unexpected response from /api/platforms: dict$"):
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
 
 
 class TestTestConnectionVersionGate:
@@ -219,8 +226,9 @@ class TestTestConnectionVersionGate:
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         assert refused.value.details == {"romm_version": "4.5.0"}
         assert "5.3.0" in refused.value.message
@@ -231,8 +239,9 @@ class TestTestConnectionVersionGate:
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
 
     def test_prerelease_at_exact_floor_rejected(self, event_loop, romm_api, logger):
@@ -240,8 +249,9 @@ class TestTestConnectionVersionGate:
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0-beta.1"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.test_connection()
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         assert refused.value.details == {"romm_version": "5.3.0-beta.1"}
 
@@ -324,8 +334,9 @@ class TestTestConnectionEdgeCases:
             logger=logger,
             min_required_version=(5, 4, 0),
         )
+        coro = service.test_connection()
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.test_connection())
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         assert "5.4.0" in refused.value.message
 
@@ -605,8 +616,9 @@ class TestEstablishTokenHappyPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("http://romm.local", "alice", "secret")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "alice", "secret"))
+            event_loop.run_until_complete(coro)
         assert settings["_settings_reset_notice"] == {"backed_up_to": "settings.json.corrupt-42"}
         settings_persister.save_settings.assert_not_called()
 
@@ -676,8 +688,9 @@ class TestEstablishTokenHappyPath:
             logger=logger,
             clear_playtime_scope_notice=clear,
         )
+        coro = service.establish_token("http://romm.local", "alice", "secret")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "alice", "secret"))
+            event_loop.run_until_complete(coro)
         clear.assert_not_called()
 
     def test_sign_in_succeeds_even_if_scope_notice_clear_raises(self, event_loop, romm_api, logger):
@@ -816,8 +829,9 @@ class TestEstablishTokenDeviceForget:
         service = _make_service(
             settings=settings, romm_api=romm_api, loop=event_loop, logger=logger, forget_device=forget_device
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         forget_device.assert_not_called()
 
     def test_does_not_forget_on_version_gate_failure(self, event_loop, romm_api, logger):
@@ -828,8 +842,9 @@ class TestEstablishTokenDeviceForget:
         service = _make_service(
             settings=settings, romm_api=romm_api, loop=event_loop, logger=logger, forget_device=forget_device
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(VersionUnsupported):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         forget_device.assert_not_called()
 
     def test_forget_failure_does_not_fail_sign_in(self, event_loop, romm_api, logger):
@@ -893,8 +908,9 @@ class TestEstablishTokenProvenance:
 class TestEstablishTokenBadPath:
     def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("", "u", "p")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_token("", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.mint_client_token.assert_not_called()
 
@@ -902,8 +918,9 @@ class TestEstablishTokenBadPath:
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         """A scheme-less / non-http(s) / hostless URL is rejected before any network call (#1015)."""
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token(bad_url, "u", "p")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_token(bad_url, "u", "p"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.mint_client_token.assert_not_called()
@@ -920,23 +937,26 @@ class TestEstablishTokenBadPath:
     def test_an_unreachable_server_propagates_and_mints_nothing(self, event_loop, romm_api, logger):
         romm_api.heartbeat.side_effect = RommConnectionError("refused")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         romm_api.mint_client_token.assert_not_called()
 
     def test_version_too_old_is_refused_with_version_error_no_mint(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         romm_api.mint_client_token.assert_not_called()
 
     def test_forbidden_mint_is_refused_with_actionable_message(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.side_effect = RommForbiddenError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         # The 403 is indistinguishable between wrong credentials and a missing
         # token-creation permission, so the message names both causes.
@@ -946,21 +966,24 @@ class TestEstablishTokenBadPath:
     def test_a_401_on_the_mint_propagates(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.side_effect = RommAuthError("401")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(RommAuthError):
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
 
     def test_a_mint_answer_without_a_raw_token_is_refused_as_server_unreachable(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.return_value = {"id": 42}  # no raw_token
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(ServerUnreachable) as refused:
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "server_unreachable"
 
     def test_a_mint_answer_without_an_id_is_refused_as_server_unreachable(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.return_value = {"raw_token": "rmm_x"}  # no id
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(ServerUnreachable) as refused:
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "server_unreachable"
 
     def test_a_failed_settings_write_is_refused_as_save_failed(self, event_loop, romm_api, logger, settings_persister):
@@ -973,8 +996,9 @@ class TestEstablishTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("http://romm.local", "u", "p")
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.reason, refused.value.message, refused.value.details) == (
             "save_failed",
             "Save failed: disk full",
@@ -1096,16 +1120,18 @@ class TestEstablishUserTokenHappyPath:
 class TestEstablishUserTokenBadPath:
     def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("", "rmm_x")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_user_token("", "rmm_x"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token(bad_url, "rmm_x")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_user_token(bad_url, "rmm_x"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.get_current_user.assert_not_called()
@@ -1113,8 +1139,9 @@ class TestEstablishUserTokenBadPath:
     @pytest.mark.parametrize("blank_token", ["", "   ", "\t\n"])
     def test_blank_token_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, blank_token):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("http://romm.local", blank_token)
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", blank_token))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Enter your RomM API token", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.get_current_user.assert_not_called()
@@ -1126,15 +1153,17 @@ class TestEstablishUserTokenBadPath:
         romm_api.heartbeat.side_effect = RommConnectionError("refused")
         romm_api.heartbeat_once.side_effect = RommConnectionError("refused")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("http://romm.local", "rmm_x")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_x"))
+            event_loop.run_until_complete(coro)
         romm_api.get_current_user.assert_not_called()
 
     def test_version_gate_failure_is_refused_with_version_error_no_validation(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("http://romm.local", "rmm_x")
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_x"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         romm_api.get_current_user.assert_not_called()
 
@@ -1147,8 +1176,9 @@ class TestEstablishUserTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("http://romm.local", "rmm_bad")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_bad"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "invalid or has been revoked" in refused.value.message
         settings_persister.save_settings.assert_not_called()
@@ -1156,16 +1186,18 @@ class TestEstablishUserTokenBadPath:
     def test_scope_403_is_refused_with_actionable_scope_message(self, event_loop, romm_api, logger):
         romm_api.get_current_user.side_effect = RommForbiddenError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("http://romm.local", "rmm_readonly")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_readonly"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "scopes" in refused.value.message
 
     def test_a_server_error_from_the_validation_propagates(self, event_loop, romm_api, logger):
         romm_api.get_current_user.side_effect = RommServerError("boom", status_code=500)
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_user_token("http://romm.local", "rmm_x")
         with pytest.raises(RommServerError):
-            event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_x"))
+            event_loop.run_until_complete(coro)
 
     def test_a_failed_settings_write_is_refused_as_save_failed(self, event_loop, romm_api, logger, settings_persister):
         cause = OSError("disk full")
@@ -1178,8 +1210,9 @@ class TestEstablishUserTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("https://new.server", "rmm_x")
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_x"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.reason, refused.value.message, refused.value.details) == (
             "save_failed",
             "Save failed: disk full",
@@ -1215,8 +1248,9 @@ class TestEstablishUserTokenProbeRejection:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("https://new.server", "rmm_bad")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_bad"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == (_USER_TOKEN_REJECTED_MESSAGE, {})
         # The pasted token never reached the /api/users/me validation.
         romm_api.get_current_user.assert_not_called()
@@ -1243,8 +1277,9 @@ class TestEstablishUserTokenProbeRejection:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("https://new.server", "rmm_bad")
         with pytest.raises(RommServerError) as raised:
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_bad"))
+            event_loop.run_until_complete(coro)
         # The ORIGINAL probe exception propagates, for the translator to classify.
         assert raised.value is probe_error
         romm_api.get_current_user.assert_not_called()
@@ -1274,8 +1309,9 @@ class TestEstablishUserTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("https://new.server", "rmm_bad")
         with pytest.raises(AuthFailed):
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_bad"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1289,8 +1325,9 @@ class TestEstablishUserTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_user_token("https://new.server", "rmm_bad")
         with pytest.raises(AuthFailed):
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_bad"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1349,8 +1386,9 @@ class TestEstablishTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1366,8 +1404,9 @@ class TestEstablishTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
@@ -1382,8 +1421,9 @@ class TestEstablishTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
@@ -1398,8 +1438,9 @@ class TestEstablishTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(Refused, match=r"^Save failed: disk full$"):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
 
     def test_clears_old_token_before_probe(self, event_loop, romm_api, logger):
@@ -1672,16 +1713,18 @@ class TestEstablishPairedTokenHappyPath:
 class TestEstablishPairedTokenBadPath:
     def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("", "ABCD2345")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
     def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token(bad_url, "ABCD2345")
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_paired_token(bad_url, "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.exchange_pairing_code.assert_not_called()
@@ -1689,8 +1732,9 @@ class TestEstablishPairedTokenBadPath:
     @pytest.mark.parametrize("blank_code", ["", "   ", "\t\n", "-", "- -"])
     def test_blank_code_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, blank_code):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", blank_code)
         with pytest.raises(NotConfigured) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", blank_code))
+            event_loop.run_until_complete(coro)
         assert (refused.value.message, refused.value.details) == ("Enter the pairing code from RomM", {})
         romm_api.heartbeat.assert_not_called()
         romm_api.exchange_pairing_code.assert_not_called()
@@ -1698,15 +1742,17 @@ class TestEstablishPairedTokenBadPath:
     def test_an_unreachable_server_propagates_and_exchanges_nothing(self, event_loop, romm_api, logger):
         romm_api.heartbeat.side_effect = RommConnectionError("refused")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         romm_api.exchange_pairing_code.assert_not_called()
 
     def test_version_gate_failure_is_refused_with_version_error_no_exchange(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(VersionUnsupported) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "version_error"
         romm_api.exchange_pairing_code.assert_not_called()
 
@@ -1719,8 +1765,9 @@ class TestEstablishPairedTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("http://romm.local", "BADCODE1")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "BADCODE1"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "invalid or has expired" in refused.value.message
         # No validation probe runs after a failed exchange, and nothing persists.
@@ -1730,32 +1777,36 @@ class TestEstablishPairedTokenBadPath:
     def test_token_gone_is_refused_with_auth_failed_with_own_message(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeTokenGoneError("404")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "no longer exists" in refused.value.message
 
     def test_owner_disabled_is_refused_with_auth_failed_with_own_message(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeOwnerDisabledError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "disabled" in refused.value.message
 
     def test_rate_limited_is_refused_with_rate_limited_reason(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeRateLimitedError("429")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "rate_limited"
         assert "Too many attempts" in refused.value.message
 
     def test_a_server_error_during_the_exchange_propagates(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = RommServerError("boom", status_code=500)
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(RommServerError):
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
 
     def test_an_exchange_answer_without_a_raw_token_is_refused_as_server_unreachable(
         self, event_loop, romm_api, logger, settings_persister
@@ -1768,8 +1819,9 @@ class TestEstablishPairedTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(ServerUnreachable) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "server_unreachable"
         assert "did not return a usable token" in refused.value.message
         settings_persister.save_settings.assert_not_called()
@@ -1787,8 +1839,9 @@ class TestEstablishPairedTokenBadPath:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("http://romm.local", "ABCD2345")
         with pytest.raises(AuthFailed) as refused:
-            event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         assert refused.value.reason == "auth_failed"
         assert "invalid or has been revoked" in refused.value.message
         settings_persister.save_settings.assert_not_called()
@@ -1813,8 +1866,9 @@ class TestEstablishPairedTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("https://new.server", "BADCODE1")
         with pytest.raises(AuthFailed):
-            event_loop.run_until_complete(service.establish_paired_token("https://new.server", "BADCODE1"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1828,8 +1882,9 @@ class TestEstablishPairedTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("https://new.server", "ABCD2345")
         with pytest.raises(Refused):
-            event_loop.run_until_complete(service.establish_paired_token("https://new.server", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1843,8 +1898,9 @@ class TestEstablishPairedTokenSnapshotRestore:
             logger=logger,
             settings_persister=settings_persister,
         )
+        coro = service.establish_paired_token("https://new.server", "ABCD2345")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_paired_token("https://new.server", "ABCD2345"))
+            event_loop.run_until_complete(coro)
         self._assert_old_state_intact(settings)
         settings_persister.save_settings.assert_not_called()
 
@@ -1951,8 +2007,9 @@ class TestSignOut:
             settings_persister=settings_persister,
         )
 
+        coro = service.sign_out()
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(service.sign_out())
+            event_loop.run_until_complete(coro)
 
         assert (refused.value.reason, refused.value.message, refused.value.details) == (
             "save_failed",
@@ -2135,8 +2192,9 @@ class TestUserIdentityStamping:
         settings["romm_user_id"] = 5
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(RommConnectionError):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
 
         assert settings["romm_user_id"] == 5
 
@@ -2250,8 +2308,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             settings_persister=settings_persister,
         )
 
+        coro = getattr(service, sign_in)(*args)
         with pytest.raises(Refused) as refused:
-            event_loop.run_until_complete(getattr(service, sign_in)(*args))
+            event_loop.run_until_complete(coro)
 
         assert (refused.value.reason, refused.value.message, refused.value.details) == (
             "save_failed",
@@ -2274,8 +2333,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
         settings = _signed_in_settings()
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
+        coro = getattr(service, sign_in)(*args)
         with pytest.raises(VersionUnsupported):
-            event_loop.run_until_complete(getattr(service, sign_in)(*args))
+            event_loop.run_until_complete(coro)
 
         assert settings == _signed_in_settings()
 
@@ -2292,8 +2352,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             settings_persister=settings_persister,
         )
 
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(AttributeError):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
 
         assert settings == _signed_in_settings()
         settings_persister.save_settings.assert_not_called()
@@ -2311,8 +2372,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             settings_persister=settings_persister,
         )
 
+        coro = service.establish_paired_token("https://new.server", "ABCD2345")
         with pytest.raises(AttributeError):
-            event_loop.run_until_complete(service.establish_paired_token("https://new.server", "ABCD2345"))
+            event_loop.run_until_complete(coro)
 
         assert settings == _signed_in_settings()
 
@@ -2338,8 +2400,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             settings_persister=settings_persister,
         )
 
+        coro = getattr(service, sign_in)(*args)
         with pytest.raises(TypeError):
-            event_loop.run_until_complete(getattr(service, sign_in)(*args))
+            event_loop.run_until_complete(coro)
 
         assert settings == _signed_in_settings()
 
@@ -2348,8 +2411,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
         settings = _signed_in_settings()
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
 
+        coro = service.establish_token("https://new.server", "u", "p")
         with pytest.raises(_Interrupted):
-            event_loop.run_until_complete(service.establish_token("https://new.server", "u", "p"))
+            event_loop.run_until_complete(coro)
 
         assert settings == _signed_in_settings()
 
@@ -2375,8 +2439,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             forget_device=MagicMock(side_effect=_Interrupted()),
         )
 
+        coro = getattr(service, sign_in)(*args)
         with pytest.raises(_Interrupted):
-            event_loop.run_until_complete(getattr(service, sign_in)(*args))
+            event_loop.run_until_complete(coro)
 
         settings_persister.save_settings.assert_called_once_with()
         assert settings["romm_url"] == "https://new.server"
@@ -2403,8 +2468,9 @@ class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
             settings_persister=settings_persister,
         )
 
+        coro = service.establish_user_token("https://new.server", "rmm_bad")
         with pytest.raises(AuthFailed):
-            event_loop.run_until_complete(service.establish_user_token("https://new.server", "rmm_bad"))
+            event_loop.run_until_complete(coro)
 
         assert seen == _signed_in_settings()
         assert settings == _signed_in_settings()
