@@ -222,8 +222,8 @@ class TestRemovePlatformShortcuts:
             assert uow.roms.get(10).shortcut_app_id == 1001
 
     @pytest.mark.asyncio
-    async def test_a_failed_database_read_is_not_answered(self, svc):
-        """Nothing but the database can fail the read, and a failed database is a bug, not a refusal."""
+    async def test_a_failed_database_read_arrives_as_a_transport_error(self, svc):
+        """Nothing but the database can fail the read, and a database failure is not a refusal: it propagates."""
         mock_loop = MagicMock()
         mock_loop.run_in_executor = MagicMock(side_effect=sqlite3.OperationalError("database is locked"))
         svc._loop = mock_loop
@@ -395,8 +395,8 @@ class TestReconcileLiveShortcuts:
         assert result["unbound_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_a_failed_database_write_is_not_answered(self, svc):
-        """Nothing but the database can fail the reconcile, and a failed database is a bug, not a refusal."""
+    async def test_a_failed_database_write_arrives_as_a_transport_error(self, svc):
+        """Nothing but the database can fail the reconcile, and a database failure is not a refusal: it propagates."""
         mock_loop = MagicMock()
         mock_loop.run_in_executor = MagicMock(side_effect=sqlite3.OperationalError("database is locked"))
         svc._loop = mock_loop
@@ -718,7 +718,7 @@ class TestTheRemovalLease:
         assert "prune_lease_token" not in result
         assert prune_conflicts.conflicting_operations == 0
 
-    async def test_a_failed_platform_read_carries_none(self, svc, prune_conflicts):
+    async def test_a_failed_platform_read_takes_no_lease(self, svc, prune_conflicts):
         def _raise(_slug):
             raise RuntimeError("database is gone")
 

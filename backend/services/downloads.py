@@ -56,8 +56,8 @@ if TYPE_CHECKING:
     )
 
 _DOWNLOAD_QUEUE_MAX_TERMINAL = 50
-# One wording for a disk that cannot be prepared: the user reads the same
-# sentence whichever step that touches it raised.
+# One wording for both blocks that refuse a disk that cannot be read or prepared:
+# the user reads the same sentence whichever step raised.
 _START_FAILED_MESSAGE = "Failed to start download"
 # Said twice for a single refusal — once to the frontend as a failure frame,
 # once to the caller as the refusal itself — so the two cannot drift apart.
@@ -235,7 +235,7 @@ class DownloadService:
     async def supersede_sibling_installs(self, rom_id: int) -> None:
         """Strip any other installed version of ``rom_id``'s sibling group (#1298 T7).
 
-        The single home of the supersede — ``_begin_download`` once its occupancy
+        The single home of the supersede — ``_start_claimed_download`` once its occupancy
         gate has passed (a refusal must not already have deleted another version),
         and adoption through ``SiblingSupersedeFn`` for the same reason: an adopted
         install is an install (ADR-0028). Neither caller may copy the selection
@@ -317,8 +317,9 @@ class DownloadService:
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
         download, a cancelled start included, so the ROM is never stuck "Already downloading". Of what the steps
-        raise, only a disk that cannot be prepared (``OSError``) is refused here, with ``download_start_failed``;
-        a RomM error and a refusal pass on unchanged.
+        raise, an ``OSError`` (a disk that cannot be read or prepared) is refused here with ``download_start_failed``
+        and an unsafe platform slug with ``path_traversal``; a RomM error and a refusal pass on unchanged, and
+        anything else is a bug.
         """
         self._download_in_progress.add(rom_id)
         try:
@@ -508,7 +509,7 @@ class DownloadService:
         (``..``/``.``/empty/whitespace — which would resolve to the roms root
         or the platform dir and turn a later ``remove_tree`` into a
         library-wide delete) falls back to the synthetic ``rom_<id>`` identity.
-        Mirrors the ``file_name`` guard in ``_begin_download``.
+        Mirrors the ``file_name`` guard in ``_start_claimed_download``.
         """
         raw = resolve_extract_dir_name(rom_detail)
         safe, changed = coerce_safe_component(raw, synthetic_rom_name(rom_detail))
@@ -823,7 +824,7 @@ class DownloadService:
 
     async def _do_download(self, rom_id, rom_detail, target_path, system, file_name, control=None, *, resume=False):
         if control is None:
-            # Direct invocation (no ``_begin_download``): own + register a control
+            # Direct invocation (no ``_start_claimed_download``): own + register a control
             # so the ``finally``'s identity-gated cleanup releases this task's
             # registrations like the real path does.
             control = _DownloadControl()
@@ -1016,7 +1017,7 @@ class DownloadService:
             # task's finally runs. Gate ALL of them on the control-token identity
             # so a zombie/superseded task never evicts the newer attempt's task,
             # in-progress flag, reservation, or token (#144). The control is
-            # registered by ``_begin_download``; a direct-call test that never
+            # registered by ``_start_claimed_download``; a direct-call test that never
             # registered it simply skips these no-op pops.
             if self._control_tokens.get(rom_id) is control:
                 self._download_tasks.pop(rom_id, None)

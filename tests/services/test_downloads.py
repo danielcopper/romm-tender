@@ -4274,12 +4274,12 @@ class TestCleanupPartialDownloadFailureInjection:
 class TestStartDownloadInProgressLeak:
     """An early exception in start_download must release the in-progress flag.
 
-    A raise between ``_download_in_progress.add`` and the create_task block —
-    an OSError from make_dirs or disk_free (SD card unmounted), which refuses
-    with ``download_start_failed``, a TypeError from the path join when
-    roms_path() returns None, a cancelled call — fails the call and leaves the
-    ROM free to be downloaded again, not stuck "Already downloading" until the
-    backend restarts.
+    A raise between ``_download_in_progress.add`` and the task's creation — an
+    OSError from make_dirs or disk_free (SD card unmounted), refused with
+    ``download_start_failed``; a TypeError from the path join when roms_path()
+    returns None; a cancelled call — fails the call and leaves the ROM free to
+    be downloaded again, not stuck "Already downloading" until the backend
+    restarts.
     """
 
     def _wire(self, downloads, tmp_path):
@@ -5720,13 +5720,12 @@ class TestSiblingSupersedeRemoval:
         remover = AsyncMock(return_value={"success": True, "message": "ROM removed"})
         downloads.service._rom_remover = lambda: remover
 
-        result = await downloads.service.supersede_sibling_installs(1)
+        await downloads.service.supersede_sibling_installs(1)
 
-        assert result is None
         remover.assert_awaited_once_with(2)
 
     @pytest.mark.asyncio
-    async def test_not_installed_result_is_clean_not_abort(self, downloads):
+    async def test_a_sibling_already_uninstalled_is_skipped_not_an_abort(self, downloads):
         from unittest.mock import AsyncMock
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
@@ -5735,9 +5734,8 @@ class TestSiblingSupersedeRemoval:
         remover = AsyncMock(side_effect=NotInstalled("ROM not installed"))
         downloads.service._rom_remover = lambda: remover
 
-        result = await downloads.service.supersede_sibling_installs(1)
+        await downloads.service.supersede_sibling_installs(1)
 
-        assert result is None
         remover.assert_awaited_once_with(2)
 
     @pytest.mark.asyncio
@@ -5763,7 +5761,7 @@ class TestSiblingSupersedeRemoval:
         provider = MagicMock(side_effect=AssertionError("remover must not be resolved when nothing is superseded"))
         downloads.service._rom_remover = provider
 
-        assert await downloads.service.supersede_sibling_installs(1) is None
+        await downloads.service.supersede_sibling_installs(1)
         provider.assert_not_called()
 
     @pytest.mark.asyncio
@@ -5869,8 +5867,7 @@ class TestSiblingSupersedeRemoval:
         downloads.service._download_queue[2] = {"rom_id": 2, "status": "paused"}
         downloads.service._rom_remover = lambda: AsyncMock(return_value={"success": True, "message": "removed"})
 
-        result = await downloads.service.supersede_sibling_installs(1)
-        assert result is None
+        await downloads.service.supersede_sibling_installs(1)
         assert 2 not in downloads.service._download_queue
 
     @pytest.mark.asyncio

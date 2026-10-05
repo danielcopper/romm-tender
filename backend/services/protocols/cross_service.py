@@ -366,9 +366,7 @@ class InstalledRomRemoverFn(Protocol):
     Before downloading a version whose sibling group already has another version
     on disk, DownloadService strips that install through this seam — reusing the
     canonical file-deletion + ``rom_installs`` cleanup rather than duplicating it.
-    Returns the removal's success answer and raises its refusal:
-    :class:`lib.errors.NotInstalled` is an already-clean no-op, any other
-    refusal aborts the download.
+    Returns the removal's success answer and raises its refusal.
     """
 
     async def __call__(self, rom_id: int) -> dict[str, Any]: ...
@@ -377,8 +375,9 @@ class InstalledRomRemoverFn(Protocol):
 class InstalledRomFilesRemoverFn(Protocol):
     """Filesystem-only installed-ROM removal consumed by explicit prune.
 
-    Answers what the removal came to and never raises a refusal; a ROM with
-    nothing installed is a removal that changed nothing.
+    Answers what the removal came to and never raises a refusal: a ROM with
+    nothing installed is a removal that changed nothing, and one that raised is
+    ambiguous, because it may have deleted files before it stopped.
     """
 
     def __call__(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> InstalledContentRemoval: ...

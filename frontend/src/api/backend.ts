@@ -547,7 +547,7 @@ export const uninstallAllRoms = endpoint<
     app_ids?: number[];
     reason?: string;
     message?: string;
-    prune_lease_token?: string;
+    prune_lease_token?: string | null;
   }
 >("uninstall_all_roms");
 export const saveSgdbApiKey = endpoint<[string], { success: boolean; message: string }>("save_sgdb_api_key");
