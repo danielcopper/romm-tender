@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from models.prune import InstalledContentRemoval
@@ -42,11 +43,7 @@ _PROGRESS_INTERVAL_S = 0.5
 
 @dataclass(frozen=True)
 class UninstallIncomplete(PartialFailure):
-    """A bulk uninstall that removed only part of the installed ROMs.
-
-    ``app_ids`` are the bound shortcuts of the ROMs whose files were deleted,
-    and ``prune_lease_token`` the lease for resetting them, when there are any.
-    """
+    """A bulk uninstall that removed only part of the installed ROMs."""
 
     removed_count: int
     errors: list[dict[str, str]]
@@ -215,12 +212,7 @@ class RomRemovalService:
         return f"{self._clock.monotonic() - started:.1f}s"
 
     def delete_rom_files(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> InstalledContentRemoval:
-        """Delete only installed content, leaving every database row untouched.
-
-        Answers what the removal came to and never refuses: a ROM with nothing
-        installed is a removal that changed nothing. A removal that raised is
-        ambiguous, because it may have deleted files before it stopped.
-        """
+        """Delete only installed content, leaving every database row untouched."""
         with self._uow_factory() as uow:
             install = uow.rom_installs.get(int(rom_id))
         if install is None:
@@ -285,11 +277,15 @@ class RomRemovalService:
         to remove. The running one has renamed its source to a staging name, so
         a second attempt against it would report the source as vanished while
         the removal it duplicates is still working. A call cancelled while its
-        files are being deleted keeps that claim until the deletion ends.
+        files are being deleted keeps that claim, and an operation on the prune
+        conflicts, until the deletion ends; every caller calls it inside a
+        ``hold(..., prune=True)`` block, which that operation outlives.
 
         Raises :class:`NotInstalled` for a ROM with nothing installed, and
-        ``uninstall_failed`` for what the file store raises by design; anything
-        else it raises is a bug.
+        ``uninstall_failed`` for a removal that failed the ways a removal can —
+        an ``OSError`` from the file store, a path the guards refuse
+        (``ValueError``), or a removal the store reported as failed
+        (``RuntimeError``); anything else it raises is a bug.
         """
         rom_id_int = int(rom_id)
         with self._uow_factory() as uow:
@@ -299,27 +295,63 @@ class RomRemovalService:
         if rom_id_int in self._removals_in_flight:
             raise Refused("in_progress", "This ROM is already being uninstalled")
 
+        removal = self._loop.run_in_executor(None, self._remove_rom_io, rom_id_int, install)
         self._removals_in_flight.add(rom_id_int)
         started = self._clock.monotonic()
         self._logger.info(f"Uninstall started: rom_id={rom_id_int}")
-        removal = self._loop.run_in_executor(None, self._remove_rom_io, rom_id_int, install)
         try:
             await asyncio.shield(removal)
+        except asyncio.CancelledError:
+            if not removal.done():
+                await self._outlive_the_call(removal, "remove_rom", partial(self._end_cancelled_removal, rom_id_int))
+            raise
         except (OSError, ValueError, RuntimeError) as e:
             self._logger.error(f"Failed to delete ROM files after {self._elapsed(started)}: {e}")
             raise Refused("uninstall_failed", "Failed to delete ROM files") from e
         finally:
-            # A cancelled call leaves the thread deleting, so the claim goes when the thread ends.
             if removal.done():
                 self._removals_in_flight.discard(rom_id_int)
-            else:
-                removal.add_done_callback(lambda _: self._removals_in_flight.discard(rom_id_int))
         self._logger.info(f"Uninstall completed: rom_id={rom_id_int} in {self._elapsed(started)}")
 
         if self._download_queue_cleanup is not None:
             self._download_queue_cleanup.evict(rom_id_int)
 
         return {"success": True, "message": "ROM removed"}
+
+    async def _outlive_the_call(
+        self, work: asyncio.Future[Any], label: str, on_end: Callable[[asyncio.Future[Any]], None]
+    ) -> None:
+        """Keep a cancelled call's removal claimed until *work* ends, under an operation named *label*.
+
+        *on_end* gives the claim back when the thread ends. The operation is
+        retained from inside the call's ``hold(..., prune=True)`` block, so no
+        cleanup starts between the call's end and the thread's.
+        """
+        work.add_done_callback(on_end)
+        await self._rules.retain(self._loop.create_task(asyncio.wait([work])), label)
+
+    def _end_cancelled_removal(self, rom_id: int, removal: asyncio.Future[None]) -> None:
+        """Give back the claim of a removal whose call was cancelled, and log how its thread ended."""
+        self._removals_in_flight.discard(rom_id)
+        failure = None if removal.cancelled() else removal.exception()
+        if failure is not None:
+            self._logger.error(f"Uninstall of rom_id={rom_id} ended after its call was cancelled: {failure}")
+        else:
+            self._logger.info(f"Uninstall of rom_id={rom_id} ended after its call was cancelled")
+
+    def _end_cancelled_bulk_run(
+        self, claimed: set[int], run: asyncio.Future[tuple[int, list[dict[str, str]], list[int]]]
+    ) -> None:
+        """Give back the claims of a bulk run whose call was cancelled, and log how its thread ended."""
+        self._removals_in_flight -= claimed
+        if run.cancelled():
+            return
+        failure = run.exception()
+        if failure is not None:
+            self._logger.error(f"Bulk uninstall ended after its call was cancelled: {failure}")
+            return
+        count, errors, _app_ids = run.result()
+        self._logger.info(f"Bulk uninstall ended after its call was cancelled: {count} removed, {len(errors)} failed")
 
     def _uninstall_all_roms_io(self, installs: list[RomInstall]) -> tuple[int, list[dict[str, str]], list[int]]:
         """Sync helper for uninstall_all_roms — bulk file deletion (outside UoW) then row deletes in a write UoW.
@@ -368,20 +400,22 @@ class RomRemovalService:
     async def uninstall_all_roms(self) -> dict[str, Any] | UninstallIncomplete:
         """Remove all installed ROMs: delete files and drop their install records.
 
-        A run in which every per-ROM deletion succeeded answers ``success``,
+        A run in which every per-ROM deletion succeeded answers ``success: True``,
         ``removed_count`` (number of ROMs whose files were deleted), ``errors``
         (empty) and ``app_ids`` (the bound Steam ``shortcut_app_id`` of each ROM
-        whose files were deleted) so the frontend can reset those kept
-        shortcuts' now-stale ``launch_options`` to the uninstalled placeholder
-        (#1146). A run in which any failed answers :class:`UninstallIncomplete`
-        with the same counts, one ``{"rom_id", "error"}`` entry per failed
-        deletion in ``errors``. Install records for the failing entries are
-        left intact so the user can retry.
+        whose files were deleted), so the frontend can reset those kept
+        shortcuts' now-stale ``launch_options`` to the uninstalled placeholder.
+        A run in which any deletion failed answers :class:`UninstallIncomplete`
+        with the same ``removed_count``, ``errors`` and ``app_ids``, ``errors``
+        holding one ``{"rom_id", "error"}`` entry per failed deletion. Install
+        records for the failing entries are left intact so the user can retry.
 
         Claims every ROM it is about to remove before dispatching the worker, so
         a single uninstall of any of them is refused while this runs and this is
         refused while any of them is already being removed — one bulk run and
-        one single removal must never work the same tree. The refusal carries no
+        one single removal must never work the same tree. A call cancelled
+        while the files are being deleted keeps those claims, and an operation
+        on the prune conflicts, until the deletion ends. The refusal carries no
         removal payload, which is how the frontend already tells a refusal from
         a partial failure.
 
@@ -416,13 +450,19 @@ class RomRemovalService:
         if claimed & self._removals_in_flight:
             raise Refused("in_progress", "A ROM is already being uninstalled")
 
+        run = self._loop.run_in_executor(None, self._uninstall_all_roms_io, installs)
         self._removals_in_flight |= claimed
         started = self._clock.monotonic()
         self._logger.info("Bulk uninstall started")
         try:
-            count, errors, app_ids = await self._loop.run_in_executor(None, self._uninstall_all_roms_io, installs)
+            count, errors, app_ids = await asyncio.shield(run)
+        except asyncio.CancelledError:
+            if not run.done():
+                await self._outlive_the_call(run, "uninstall_all_roms", partial(self._end_cancelled_bulk_run, claimed))
+            raise
         finally:
-            self._removals_in_flight -= claimed
+            if run.done():
+                self._removals_in_flight -= claimed
         self._logger.info(
             f"Bulk uninstall completed: {count} removed, {len(errors)} failed in {self._elapsed(started)}"
         )

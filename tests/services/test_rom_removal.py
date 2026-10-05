@@ -215,7 +215,7 @@ class TestDeleteRomFiles:
         assert service.delete_rom_files(7) == InstalledContentRemoval(changed=False, ambiguous=False)
 
     def test_a_removal_that_raised_is_ambiguous(self, service, uow, rom_files):
-        """Files may already be gone when the removal stops, so it never answers that nothing changed."""
+        """Files may already be gone when the removal stops, so its ``changed=False`` is marked ambiguous."""
         rom_dir = f"{_ROMS_BASE}/psx/FF7"
         rom_files.files[f"{rom_dir}/disc1.bin"] = b"\x00" * 100
         rom_files.remove_tree_failures.add(rom_dir)
@@ -991,8 +991,8 @@ class TestBadPathRemoveRom:
         assert queue_cleanup.evicted == []
 
     @pytest.mark.asyncio
-    async def test_a_failure_the_file_store_does_not_raise_by_design_is_not_refused(self, service, uow, rom_files):
-        """A bug stays a bug: only what the file store raises by design becomes ``uninstall_failed``."""
+    async def test_an_exception_outside_the_three_handled_types_is_not_refused(self, service, uow, rom_files):
+        """A bug stays a bug: only an ``OSError``, ``ValueError`` or ``RuntimeError`` becomes ``uninstall_failed``."""
         _seed_installed_file(uow, rom_files, 42)
 
         def broken(*_args):
@@ -1391,6 +1391,114 @@ class TestConcurrentUninstall:
         assert service._removals_in_flight == set()
         assert rom_path not in rom_files.files
 
+    @pytest.mark.asyncio
+    async def test_a_cancelled_bulk_run_keeps_refusing_a_single_removal_until_its_files_are_deleted(
+        self, service, uow, rom_files
+    ):
+        """The bulk run's claims are its thread's too, so a single press cannot work a tree it is still deleting."""
+        _seed_installed_file(uow, rom_files, 1)
+        rom_path = _seed_installed_file(uow, rom_files, 2)
+        entered = threading.Event()
+        release = threading.Event()
+        original = service._delete_rom_files
+
+        def remove_once_released(*args, **kwargs):
+            if not entered.is_set():
+                entered.set()
+                assert release.wait(timeout=5)
+            return original(*args, **kwargs)
+
+        service._delete_rom_files = remove_once_released
+        bulk = asyncio.ensure_future(service.uninstall_all_roms())
+        assert await asyncio.to_thread(entered.wait, 5)
+        bulk.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await bulk
+
+        single = service.remove_rom(2)
+        with pytest.raises(Refused) as refused:
+            await single
+        assert refused.value.reason == "in_progress"
+
+        release.set()
+        await _until(lambda: not service._removals_in_flight)
+        assert rom_path not in rom_files.files
+
+    @pytest.mark.asyncio
+    async def test_a_cancelled_removal_whose_thread_then_fails_is_logged(self, service, uow, rom_files, caplog):
+        """Nobody awaits the failure any more, so the log line is the only place it can show."""
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+        rom_files.remove_file_failures.add(rom_path)
+        entered = threading.Event()
+        release = threading.Event()
+        original = service._delete_rom_files
+
+        def remove_once_released(*args, **kwargs):
+            entered.set()
+            assert release.wait(timeout=5)
+            return original(*args, **kwargs)
+
+        service._delete_rom_files = remove_once_released
+        removal = asyncio.ensure_future(service.remove_rom(42))
+        assert await asyncio.to_thread(entered.wait, 5)
+        removal.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await removal
+
+        with caplog.at_level(logging.INFO):
+            release.set()
+            await _until(lambda: not service._removals_in_flight)
+
+        assert [
+            (r.levelno, r.getMessage()) for r in caplog.records if "after its call was cancelled" in r.getMessage()
+        ] == [
+            (
+                logging.ERROR,
+                f"Uninstall of rom_id=42 ended after its call was cancelled: simulated remove_file failure: {rom_path}",
+            )
+        ]
+
+
+async def _until(condition) -> None:
+    """Let the loop run until *condition* holds, failing after five seconds."""
+    for _ in range(500):
+        if condition():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("the condition never held")
+
+
+class TestACancelledRemovalHoldsOffACleanup:
+    """A removal whose call was cancelled keeps a cleanup from starting until its files are deleted."""
+
+    @pytest.mark.parametrize("call", ["remove_rom", "uninstall_all_roms"])
+    async def test_a_cleanup_cannot_start_until_the_thread_ends(self, service, uow, rom_files, prune_conflicts, call):
+        _seed_installed_file(uow, rom_files, 42)
+        entered = threading.Event()
+        release = threading.Event()
+        original = service._delete_rom_files
+
+        def remove_once_released(*args, **kwargs):
+            entered.set()
+            assert release.wait(timeout=5)
+            return original(*args, **kwargs)
+
+        service._delete_rom_files = remove_once_released
+        removal = asyncio.ensure_future(
+            service.remove_rom(42) if call == "remove_rom" else service.uninstall_all_roms()
+        )
+        assert await asyncio.to_thread(entered.wait, 5)
+        removal.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await removal
+
+        assert await prune_conflicts.reserve_start("start_prune") is not None
+
+        release.set()
+        await _until(lambda: prune_conflicts.conflicting_operations == 0)
+        assert await prune_conflicts.reserve_start("start_prune") is None
+        prune_conflicts.release_reservation()
+
 
 class TestRemovalProgressFrames:
     """``uninstall_progress`` visibility for a removal long enough to look dead (#1664)."""
@@ -1466,7 +1574,7 @@ class TestTheRemoveRomLease:
 
         assert seen == [["remove_rom"]]
 
-    async def test_a_removal_that_failed_carries_none(self, service, prune_conflicts):
+    async def test_a_rom_with_nothing_installed_takes_no_lease(self, service, prune_conflicts):
         coro = service.remove_rom(42)
         with pytest.raises(NotInstalled):
             await coro
@@ -1571,7 +1679,7 @@ class TestTheBulkUninstallLease:
         assert "prune_lease_token" not in result
         assert prune_conflicts.conflicting_operations == 0
 
-    async def test_the_services_own_refusal_carries_none(self, service, uow, rom_files, prune_conflicts):
+    async def test_the_services_own_refusal_takes_no_lease(self, service, uow, rom_files, prune_conflicts):
         _seed_installed_file(uow, rom_files, 1)
         service._removals_in_flight.add(1)
 
