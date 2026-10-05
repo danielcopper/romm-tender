@@ -19,20 +19,12 @@ if TYPE_CHECKING:
 
     from lib.prune_conflicts import PruneConflicts
 
-_UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
-_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
+# Public because the sync engine raises these two refusals too; the reason stays
+# a literal at each raise site, never behind a helper.
+UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
+MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 _SYNC_MESSAGE = "A library sync is in progress — wait for it to finish or cancel it first."
 _PRUNE_ACTIVE_MESSAGE = "A removed-game cleanup is in progress; wait for it to finish before changing local game data."
-
-
-def update_refused(**details: Any) -> Refused:
-    """The refusal of a use case while an update of this program is being installed, *details* beside it."""
-    return Refused("blocked_by_update", _UPDATE_MESSAGE, **details)
-
-
-def migration_refused(**details: Any) -> Refused:
-    """The refusal of a use case while a RetroDECK migration is pending, *details* beside it."""
-    return Refused("blocked_by_migration", _MIGRATION_MESSAGE, **details)
 
 
 class ConflictRuleSet:
@@ -80,7 +72,7 @@ class ConflictRuleSet:
             raise Refused("prune_active", _PRUNE_ACTIVE_MESSAGE)
         if update and self._update_in_progress():
             await self._prune_conflicts.release_operation(registration)
-            raise update_refused()
+            raise Refused("blocked_by_update", UPDATE_MESSAGE)
         try:
             yield
         finally:
@@ -117,9 +109,9 @@ class ConflictRuleSet:
 
     def _refuse_on_first_rule(self, *, update: bool, migration: bool, sync: bool) -> None:
         if update and self._update_in_progress():
-            raise update_refused()
+            raise Refused("blocked_by_update", UPDATE_MESSAGE)
         if migration and self._migration_pending():
-            raise migration_refused()
+            raise Refused("blocked_by_migration", MIGRATION_MESSAGE)
         if sync and self._sync_in_flight():
             raise Refused("sync_active", _SYNC_MESSAGE)
 

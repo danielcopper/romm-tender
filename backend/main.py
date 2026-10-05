@@ -483,7 +483,7 @@ class Endpoints:
 
     @route
     async def get_rom_relaunch_options(self, rom_id):
-        """Return one lease-bearing relaunch item, a refusal, or ``None``.
+        """Return one lease-bearing relaunch item, or ``None``.
 
         Both launch funnels — the game-detail Play button and Steam's
         direct-launch watcher — re-confirm the shortcut's launch command from

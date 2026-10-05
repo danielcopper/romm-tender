@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from lib.conflict_rules import ConflictRuleSet, migration_refused, update_refused
+from lib.conflict_rules import ConflictRuleSet
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
 
@@ -82,15 +82,6 @@ def _said(refused: Refused | None) -> tuple[str, str, dict[str, Any]] | None:
         return None
     assert type(refused) is Refused
     return (refused.reason, refused.message, refused.details)
-
-
-# ── The refusals ─────────────────────────────────────────────────────────────
-
-
-def test_the_update_and_the_migration_refusal_carry_the_details_they_are_given():
-    """The sync engine raises both with its counts beside them."""
-    assert _said(update_refused(synced=0)) == (*_UPDATE_REFUSAL[:2], {"synced": 0})
-    assert _said(migration_refused(synced=0, conflicts=0)) == (*_MIGRATION_REFUSAL[:2], {"synced": 0, "conflicts": 0})
 
 
 # ── Each rule on its own ─────────────────────────────────────────────────────

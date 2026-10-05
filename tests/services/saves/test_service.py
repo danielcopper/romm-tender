@@ -10,7 +10,12 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
+from _factories import (
+    _CONFLICT_REFUSAL_MESSAGES,
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
@@ -452,7 +457,7 @@ class TestListDevices:
 
 class TestRetroDeckMigrationBlocksSaveSync:
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_skips_when_retrodeck_migration_pending(self, tmp_path):
+    async def test_pre_launch_sync_is_refused_when_retrodeck_migration_pending(self, tmp_path):
         svc, _ = make_service(tmp_path, is_retrodeck_migration_pending=lambda: True)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
@@ -463,12 +468,12 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
         assert (refused.value.reason, refused.value.message) == (
             "blocked_by_migration",
-            "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+            _CONFLICT_REFUSAL_MESSAGES["blocked_by_migration"],
         )
         assert refused.value.details == {"synced": 0}
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_skips_when_retrodeck_migration_pending(self, tmp_path):
+    async def test_post_exit_sync_is_refused_when_retrodeck_migration_pending(self, tmp_path):
         svc, _ = make_service(tmp_path, is_retrodeck_migration_pending=lambda: True)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
@@ -480,7 +485,7 @@ class TestRetroDeckMigrationBlocksSaveSync:
 
         assert (refused.value.reason, refused.value.message) == (
             "blocked_by_migration",
-            "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+            _CONFLICT_REFUSAL_MESSAGES["blocked_by_migration"],
         )
         assert refused.value.details == {"synced": 0}
 

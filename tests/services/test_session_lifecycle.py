@@ -7,9 +7,15 @@ import logging
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
+from _factories import (
+    _CONFLICT_REFUSAL_MESSAGES,
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _refused_by_conflict_rule,
+)
 
-from lib.conflict_rules import migration_refused, update_refused
+from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
+from lib.errors import Refused
 from services.session_lifecycle import (
     SessionFinalizeMigration,
     SessionFinalizeResult,
@@ -630,16 +636,11 @@ class TestFinalizeSyncToasts:
         # The exception text must never leak into the failure toast body.
         assert "Authentication failed" not in result.sync.failure_toast
 
-    @pytest.mark.parametrize(
-        ("refused", "toast"),
-        [
-            (update_refused, "Tender is installing an update and will restart in a moment."),
-            (migration_refused, "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."),
-        ],
-    )
-    def test_a_refusal_the_sync_raises_is_toasted_with_its_own_message(self, event_loop, logger, refused, toast):
+    @pytest.mark.parametrize("reason", ["blocked_by_update", "blocked_by_migration"])
+    def test_a_refusal_the_sync_raises_is_toasted_with_its_own_message(self, event_loop, logger, reason):
         """The engine's own update and migration guards raise; the toast names the refusal, not a failed sync."""
-        post = FakePostExitSync(side_effect=refused(synced=0))
+        toast = _CONFLICT_REFUSAL_MESSAGES[reason]
+        post = FakePostExitSync(side_effect=Refused(reason, toast, synced=0))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -774,6 +775,32 @@ class TestFinalizeContentDirBenignSkip:
         event_loop.run_until_complete(_drain_background_tasks(service))
 
         assert result.sync.failure_toast == "Failed to sync saves after exit"
+
+    @pytest.mark.parametrize("reason", sorted(BENIGN_SYNC_SKIP_REASONS))
+    def test_a_benign_skip_the_sync_raises_suppresses_the_failure_toast(self, event_loop, logger, reason):
+        """A benign skip raised rather than returned is still no failure."""
+        post = FakePostExitSync(side_effect=Refused(reason, "Save sync is unavailable for this game.", synced=0))
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync == SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=0,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=None,
+            conflicts_toast=None,
+        )
 
 
 class TestFinalizeConflicts:

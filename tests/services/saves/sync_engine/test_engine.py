@@ -15,6 +15,7 @@ import zipfile
 from typing import TYPE_CHECKING, cast
 
 import pytest
+from _factories import _CONFLICT_REFUSAL_MESSAGES
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
@@ -58,8 +59,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-_UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
-_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
+_UPDATE_MESSAGE = _CONFLICT_REFUSAL_MESSAGES["blocked_by_update"]
+_MIGRATION_MESSAGE = _CONFLICT_REFUSAL_MESSAGES["blocked_by_migration"]
 
 
 def _corrupt_zip_bytes() -> bytes:
@@ -645,7 +646,7 @@ class TestMigrationPendingGuards:
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_is_refused_when_migration_pending(self, tmp_path):
-        """pre_launch_sync must short-circuit with the ``blocked_by_migration`` refusal."""
+        """pre_launch_sync must raise the ``blocked_by_migration`` refusal with nothing synced."""
         svc, fake = make_service(
             tmp_path,
             is_retrodeck_migration_pending=lambda: True,
@@ -665,7 +666,7 @@ class TestMigrationPendingGuards:
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_is_refused_when_migration_pending(self, tmp_path):
-        """post_exit_sync must short-circuit with the ``blocked_by_migration`` refusal."""
+        """post_exit_sync must raise the ``blocked_by_migration`` refusal with nothing synced."""
         svc, fake = make_service(
             tmp_path,
             is_retrodeck_migration_pending=lambda: True,

@@ -543,8 +543,9 @@ class SessionPostExitSync(Protocol):
     The composition root satisfies this with ``SaveService``'s
     ``post_exit_sync``. Returned shape carries ``offline`` / ``success``
     / ``synced`` / ``conflicts`` which the lifecycle service maps into
-    toast strings; any raised exception is collapsed to the "failed"
-    toast.
+    toast strings; a raised ``Refused`` is mapped from its reason and
+    message as a returned failure is, and any other raised exception is
+    collapsed to the "failed" toast.
     """
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]: ...
