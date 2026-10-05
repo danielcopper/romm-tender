@@ -9,8 +9,12 @@ and surfaced read-only in the play-section "Version" row.
 
 from __future__ import annotations
 
+import os
+
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
+
+from ._seed import seed_install
 
 
 def _seed_versioned_rom(harness, **overrides):
@@ -170,3 +174,25 @@ async def test_bios_status_without_an_emulator_list_is_unknown(harness):
 
     assert result["bios_status"] is None
     assert result["bios_status_unknown"] is True
+
+
+async def test_cached_game_detail_names_a_download_whose_file_is_gone(harness):
+    """An install record whose file is not on disk ships the path it names."""
+    file_path = seed_install(harness, 7)
+
+    result = await harness.endpoints.get_cached_game_detail(7)
+
+    assert result["installed"] is True
+    assert result["file_missing_at"] == file_path
+
+
+async def test_cached_game_detail_names_nothing_while_the_file_is_there(harness):
+    file_path = seed_install(harness, 7)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as handle:
+        handle.write(b"rom")
+
+    result = await harness.endpoints.get_cached_game_detail(7)
+
+    assert result["installed"] is True
+    assert result["file_missing_at"] is None

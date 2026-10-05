@@ -434,6 +434,84 @@ class TestGetCachedGameDetailInstalled:
         assert result["rom_file"] == "game_10.sfc"
 
 
+class TestFileMissingAt:
+    """An installed ROM whose recorded file and folder are gone names the path it was recorded at."""
+
+    @pytest.mark.asyncio
+    async def test_an_installed_rom_whose_file_is_gone_names_its_path(self, game_detail, tmp_path):
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes")
+        _install_rom(game_detail, tmp_path, rom_id=10, system="snes", file_name="game.sfc")
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["installed"] is True
+        assert result["file_missing_at"] == str(tmp_path / "retrodeck" / "roms" / "snes" / "game.sfc")
+
+    @pytest.mark.asyncio
+    async def test_an_installed_rom_whose_file_is_there_reports_nothing(self, game_detail, tmp_path, path_probe):
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes")
+        _install_rom(game_detail, tmp_path, rom_id=10, system="snes", file_name="game.sfc")
+        path_probe.paths.add(str(tmp_path / "retrodeck" / "roms" / "snes" / "game.sfc"))
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["file_missing_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_folder_backed_download_is_named_by_its_folder(self, game_detail):
+        from domain.rom_install import RomInstall
+
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="psx")
+        rom_dir = f"{_ROMS_BASE}/psx/FF7"
+        with game_detail.uow:
+            game_detail.uow.rom_installs.save(
+                RomInstall.mark_installed(
+                    rom_id=10,
+                    file_path=f"{rom_dir}/FF7.m3u",
+                    rom_dir=rom_dir,
+                    platform_slug="psx",
+                    system="psx",
+                    installed_at="2025-01-01T00:00:00",
+                )
+            )
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["file_missing_at"] == rom_dir
+
+    @pytest.mark.asyncio
+    async def test_a_folder_that_is_still_there_is_not_missing(self, game_detail, path_probe):
+        from domain.rom_install import RomInstall
+
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="psx")
+        rom_dir = f"{_ROMS_BASE}/psx/FF7"
+        with game_detail.uow:
+            game_detail.uow.rom_installs.save(
+                RomInstall.mark_installed(
+                    rom_id=10,
+                    file_path=f"{rom_dir}/FF7.m3u",
+                    rom_dir=rom_dir,
+                    platform_slug="psx",
+                    system="psx",
+                    installed_at="2025-01-01T00:00:00",
+                )
+            )
+        path_probe.paths.add(rom_dir)
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["file_missing_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_rom_with_no_install_record_reports_nothing(self, game_detail):
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes")
+
+        result = await game_detail.service.get_cached_game_detail(50000)
+
+        assert result["installed"] is False
+        assert result["file_missing_at"] is None
+
+
 class TestTargetPathOccupied:
     """The single ``stat`` this network-free page runs on an uninstalled ROM (#260).
 

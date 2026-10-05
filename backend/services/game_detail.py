@@ -67,8 +67,9 @@ class GameDetailServiceConfig:
     ``retrodeck_paths`` / ``resolve_system`` are the single ``stat`` the page
     runs on an uninstalled ROM's target path; ``candidate_probe`` is the one
     ``readdir`` beside it, answering whether the same game is in the folder under
-    another name. Both are bounded and network-free, which is the whole
-    constraint on this page.
+    another name. For an installed ROM ``path_exists`` instead answers whether
+    the recorded file or folder is still there. All are bounded and
+    network-free, which is the whole constraint on this page.
     """
 
     settings: dict[str, Any]
@@ -238,8 +239,9 @@ class GameDetailService:
     async def get_cached_game_detail(self, app_id) -> dict[str, Any]:
         """Return the game page's whole payload, assembled off the loop thread.
 
-        Network-free but not free: a read UoW, and for an uninstalled ROM a
-        ``stat`` and a directory listing on storage that may have to wake up.
+        Network-free but not free: a read UoW, and on storage that may have to
+        wake up, a ``stat`` and a directory listing for an uninstalled ROM, or
+        up to two ``stat`` calls for an installed one.
         Every game page opens this, so it goes to a worker — which is also where
         a `SqliteUnitOfWork` connection is meant to live (ADR-0004).
         """
@@ -270,6 +272,7 @@ class GameDetailService:
 
         installed = install is not None
         rom_file = self._resolve_rom_file(install, rom)
+        file_missing_at = self._missing_install_path(install)
         target_occupied = False if installed else self._target_path_occupied(rom)
         # An occupied target and a candidate elsewhere are different states, and
         # the occupied one wins: it is the exact path this ROM would claim, so
@@ -353,7 +356,22 @@ class GameDetailService:
             "fs_size_bytes": rom.fs_size_bytes,
             "target_path_occupied": target_occupied,
             "adoption_candidate_present": candidate_present,
+            "file_missing_at": file_missing_at,
         }
+
+    def _missing_install_path(self, install: RomInstall | None) -> str | None:
+        """The path an install record names when neither its file nor its folder exists, else ``None``.
+
+        A folder-backed download is named by its folder, a single-file one by
+        its file. ``None`` too for a ROM with no install record.
+        """
+        if install is None:
+            return None
+        file_path = install.file_path
+        rom_dir = install.rom_dir
+        if (file_path and self._path_exists.exists(file_path)) or (rom_dir and self._path_exists.exists(rom_dir)):
+            return None
+        return rom_dir or file_path
 
     def _target_path_occupied(self, rom: Rom) -> bool:
         """Whether something already sits where a download of *rom* would write.
