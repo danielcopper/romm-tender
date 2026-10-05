@@ -11,6 +11,7 @@ without the deletion.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any
@@ -23,7 +24,7 @@ from lib.path_safety import is_safe_rom_path
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
+    from collections.abc import AsyncIterator, Callable
 
     from models.prune import MutationOutcome, SourceClaim
 
@@ -292,12 +293,8 @@ class RomRemovalService:
         :meth:`remove_rom` without its conflict rules or its lease, for the
         download service's sibling supersede, which a download or an adoption
         runs from inside its own call once that call has answered for its own
-        rules.
-
-        A call cancelled while its files are being deleted keeps the ROM's
-        claim, and an operation on the prune conflicts, until the deletion
-        ends; every caller calls it inside a ``hold(..., prune=True)`` block,
-        which that operation outlives.
+        rules. Every caller calls it inside a ``hold(..., prune=True)`` block,
+        which a cancelled call's operation outlives (:meth:`_removal_claim`).
 
         Raises :class:`NotInstalled` for a ROM with nothing installed, and
         ``uninstall_failed`` for a removal that failed the ways a removal can —
@@ -308,19 +305,12 @@ class RomRemovalService:
         rom_id_int = int(rom_id)
         install = self._admit_removal(rom_id_int, "This ROM is already being uninstalled")
         removal = self._loop.run_in_executor(None, self._remove_rom_io, rom_id_int, install)
-        started = self._claim_removal(rom_id_int, "Uninstall")
-        try:
-            await asyncio.shield(removal)
-        except asyncio.CancelledError:
-            if not removal.done():
-                await self._outlive_the_call(removal, "remove_rom", partial(self._end_cancelled_removal, rom_id_int))
-            raise
-        except (OSError, ValueError, RuntimeError) as e:
-            self._logger.error(f"Failed to delete ROM files after {self._elapsed(started)}: {e}")
-            raise Refused("uninstall_failed", "Failed to delete ROM files") from e
-        finally:
-            if removal.done():
-                self._removals_in_flight.discard(rom_id_int)
+        async with self._removal_claim(rom_id_int, "Uninstall", "remove_rom", removal) as started:
+            try:
+                await asyncio.shield(removal)
+            except (OSError, ValueError, RuntimeError) as e:
+                self._logger.error(f"Failed to delete ROM files after {self._elapsed(started)}: {e}")
+                raise Refused("uninstall_failed", "Failed to delete ROM files") from e
         self._complete_removal(rom_id_int, "Uninstall", started)
         return {"success": True, "message": "ROM removed"}
 
@@ -343,19 +333,12 @@ class RomRemovalService:
     async def _forget_download(self, rom_id: int) -> dict[str, Any]:
         install = self._admit_removal(rom_id, "This ROM is already being uninstalled or forgotten")
         forget = self._loop.run_in_executor(None, self._forget_download_io, rom_id, install)
-        started = self._claim_removal(rom_id, "Forget download")
-        try:
-            present = await asyncio.shield(forget)
-        except asyncio.CancelledError:
-            if not forget.done():
-                await self._outlive_the_call(forget, "forget_download", partial(self._end_cancelled_removal, rom_id))
-            raise
-        except (OSError, ValueError, RuntimeError) as e:
-            self._logger.error(f"Failed to forget the download after {self._elapsed(started)}: {e}")
-            return {"success": False, "reason": "unknown", "message": "Failed to forget the download"}
-        finally:
-            if forget.done():
-                self._removals_in_flight.discard(rom_id)
+        async with self._removal_claim(rom_id, "Forget download", "forget_download", forget) as started:
+            try:
+                present = await asyncio.shield(forget)
+            except Exception as e:
+                self._logger.error(f"Failed to forget the download after {self._elapsed(started)}: {e}")
+                return {"success": False, "reason": "unknown", "message": "Failed to forget the download"}
         if present is not None:
             self._logger.info(f"Forget download refused: rom_id={rom_id}: {present} exists")
             return {
@@ -371,11 +354,13 @@ class RomRemovalService:
         """Read the ROM's install record, or refuse to start a removal on it.
 
         Raises :class:`NotInstalled` for a ROM with nothing installed. Refused
-        with ``in_progress`` while any removal that owns this ROM's tree is
-        running — its own earlier press, a forget, or a bulk uninstall, which
-        claims every ROM it is about to remove. The running one has renamed its
-        source to a staging name, so a second attempt against it would report
-        the source as vanished while the removal it duplicates is still working.
+        with ``in_progress`` while any removal holds this ROM's claim — an
+        uninstall, a forget, or a bulk uninstall, which claims every ROM it is
+        about to remove. A running uninstall has renamed its source to a staging
+        name, so a second uninstall would report the source as vanished, and a
+        forget would find the file gone and drop the record the uninstall is
+        still working under. A forget renames nothing; it takes the same claim
+        so that one removal of a ROM at a time holds without an exception.
         """
         with self._uow_factory() as uow:
             install = uow.rom_installs.get(rom_id)
@@ -385,14 +370,30 @@ class RomRemovalService:
             raise Refused("in_progress", in_progress_message)
         return install
 
-    def _claim_removal(self, rom_id: int, label: str) -> float:
-        """Claim *rom_id* for one removal and log its start; answers the start time.
+    @contextlib.asynccontextmanager
+    async def _removal_claim(
+        self, rom_id: int, label: str, operation: str, work: asyncio.Future[Any]
+    ) -> AsyncIterator[float]:
+        """Hold *rom_id*'s removal claim while *work* runs, logging its start; yields the start time.
 
-        The caller gives the claim back once its worker call has ended.
+        The block awaits *work* through ``asyncio.shield``. The claim is given
+        back once *work* has ended — a success, a refusal or a failure — so the
+        next removal of this ROM is admitted. A call cancelled before *work*
+        ended keeps the claim, and an operation named *operation* on the prune
+        conflicts, until it does: the worker thread may still be deleting files
+        or dropping the record.
         """
         self._removals_in_flight.add(rom_id)
         self._logger.info(f"{label} started: rom_id={rom_id}")
-        return self._clock.monotonic()
+        try:
+            yield self._clock.monotonic()
+        except asyncio.CancelledError:
+            if not work.done():
+                await self._outlive_the_call(work, operation, partial(self._end_cancelled_removal, rom_id, label))
+            raise
+        finally:
+            if work.done():
+                self._removals_in_flight.discard(rom_id)
 
     def _complete_removal(self, rom_id: int, label: str, started: float) -> None:
         """Log a finished removal and drop the ROM's download-queue entry."""
@@ -412,14 +413,14 @@ class RomRemovalService:
         work.add_done_callback(on_end)
         await self._rules.retain(self._loop.create_task(asyncio.wait([work])), label)
 
-    def _end_cancelled_removal(self, rom_id: int, removal: asyncio.Future[None]) -> None:
+    def _end_cancelled_removal(self, rom_id: int, label: str, removal: asyncio.Future[Any]) -> None:
         """Give back the claim of a removal whose call was cancelled, and log how its thread ended."""
         self._removals_in_flight.discard(rom_id)
         failure = None if removal.cancelled() else removal.exception()
         if failure is not None:
-            self._logger.error(f"Uninstall of rom_id={rom_id} ended after its call was cancelled: {failure}")
+            self._logger.error(f"{label} of rom_id={rom_id} ended after its call was cancelled: {failure}")
         else:
-            self._logger.info(f"Uninstall of rom_id={rom_id} ended after its call was cancelled")
+            self._logger.info(f"{label} of rom_id={rom_id} ended after its call was cancelled")
 
     def _end_cancelled_bulk_run(
         self, claimed: set[int], run: asyncio.Future[tuple[int, list[dict[str, str]], list[int]]]

@@ -1823,6 +1823,50 @@ class TestForgetDownload:
             "message": "This ROM is already being uninstalled or forgotten",
         }
 
+    async def test_an_uninstall_after_a_refused_forget_is_accepted(self, service, uow, rom_files):
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+
+        refused = await service.forget_download(42)
+        removed = await service.remove_rom(42)
+
+        assert refused["reason"] == "file_present"
+        assert removed["success"] is True
+        assert rom_path not in rom_files.files
+
+    async def test_a_second_forget_after_a_refused_one_is_accepted(self, service, uow, rom_files):
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+        assert (await service.forget_download(42))["reason"] == "file_present"
+        del rom_files.files[rom_path]
+
+        result = await service.forget_download(42)
+
+        assert result["success"] is True
+        assert uow.rom_installs.get(42) is None
+
+    async def test_a_forget_after_a_completed_one_is_admitted(self, service, uow, rom_files):
+        _seed_missing_download(uow, 42)
+        assert (await service.forget_download(42))["success"] is True
+        _seed_missing_download(uow, 42)
+
+        result = await service.forget_download(42)
+
+        assert result["success"] is True
+
+    async def test_an_uninstall_after_a_failed_forget_is_accepted(self, service, uow, rom_files, monkeypatch):
+        _seed_missing_download(uow, 42)
+        original = service._drop_install_record
+
+        def fail_once(rom_id):
+            monkeypatch.setattr(service, "_drop_install_record", original)
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(service, "_drop_install_record", fail_once)
+        failed = await service.forget_download(42)
+        removed = await service.remove_rom(42)
+
+        assert failed["reason"] == "unknown"
+        assert removed["success"] is True
+
     async def test_it_evicts_the_download_queue_entry(self, service, uow, rom_files, queue_cleanup):
         _seed_missing_download(uow, 42)
 
