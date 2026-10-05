@@ -18,7 +18,7 @@ through `request_once`).
 
 So a new request method must send its request with `self._urlopen(req, timeout=...)`, never by calling
 `urllib.request.urlopen` itself. Reaching for `urlopen` directly fails silently in the worst way: the call succeeds, the
-tests pass, and the plugin just stays in degraded single-attempt mode until some unrelated path happens to succeed.
+tests pass, and the backend just stays in degraded single-attempt mode until some unrelated path happens to succeed.
 `scripts/check_urlopen_choke_point.py` enforces this structurally (AST call sites, not dataflow — it would not see an
 alias or a `getattr`).
 

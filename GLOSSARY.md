@@ -57,12 +57,15 @@ operation's own serialization (the per-ROM save lock, the single library-sync ta
 
 ### What Tender is
 
-A **Steam plugin** and a **RomM client**. It extends Steam's own interface — a Quick Access entry, a section on the game
-page, the panel — and talks to a RomM server as a registered client. It is not a Decky Loader plugin: it hosts itself,
-and it runs beside a Decky Loader when one is installed. "The plugin" means Tender in that first sense.
+A **RomM client** called Tender. It syncs a RomM library into Steam, shows itself inside Steam's own interface — a Quick
+Access entry, a section on the game page, the panel — and talks to a RomM server as a registered client. It hosts
+itself: its backend runs as a process of its own, and it runs beside a Decky Loader when one is installed. It is not a
+plugin, neither Decky Loader's nor Steam's.
 
-_Avoid_: **Decky plugin**, **plugin loader**, **plugin folder** — each implies a host that loads Tender, and there is
-none.
+_Avoid_: **the plugin** or **this plugin** for Tender, and **Steam plugin**, **Decky plugin**, **plugin loader**,
+**plugin folder**. Each says that something hosts or loads Tender, and nothing does. Say **Tender**, or name the part
+that is meant: **the backend** (the process) or **the panel** (the code that runs in Steam). "Plugin" stays for what
+really is one, such as Decky Loader's plugins or a build tool's.
 
 ### Display name (Tender) vs identifier (romm-tender)
 
@@ -100,8 +103,8 @@ other half of the same story — what a start-up migration searched, which is a 
 come from the environment, so neither question has an asker left. Why the four stay apart is argued once, in
 `backend/domain/identity.py`'s module docstring.
 
-_Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
-identifier" — the display name is machine-read too, by the frontend that puts it in the QAM header.
+_Avoid_: reading "a machine parses it" as "so it is the identifier" — the display name is machine-read too, by the
+frontend that puts it in the QAM header.
 
 ### The program's directories
 
@@ -296,7 +299,7 @@ Two objects the backend is made of, built in this order:
   record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
   Endpoints answers a refusal the use case raises in the wire's failure shape.
 
-_Avoid_: **Plugin** for either — "the plugin" is Tender itself ([What Tender is](#what-tender-is)).
+_Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#what-tender-is)).
 
 ### Refusal / partial failure
 
@@ -359,11 +362,11 @@ key — it lives in `PRAGMA user_version`.
 ### Custom header
 
 An extra HTTP header the user configures for their own RomM front door, so a server behind an authenticating reverse
-proxy (Pangolin, Cloudflare Access, Authelia, Authentik forward-auth) lets the plugin's requests through. It is
-user-intent config (`settings.json` `romm_custom_headers`, a list so the entry order survives), and its value is a
-**credential**: write-only to the frontend, absent from every log line and refusal message.
+proxy (Pangolin, Cloudflare Access, Authelia, Authentik forward-auth) lets Tender's requests through. It is user-intent
+config (`settings.json` `romm_custom_headers`, a list so the entry order survives), and its value is a **credential**:
+write-only to the frontend, absent from every log line and refusal message.
 
-Bound to the **destination**, not to a request's purpose: the plugin attaches them to every request it issues to the
+Bound to the **destination**, not to a request's purpose: Tender attaches them to every request it issues to the
 configured RomM origin, sign-in included, and to no other request it issues. Attachment is the claim — a redirect the
 server answers with is followed by urllib, which carries them onward whatever the new host is (#1889). A custom header
 never carries a name the transport sets itself — that would not add a header but replace one. _Avoid_: "auth header"
@@ -373,11 +376,11 @@ never carries a name the transport sets itself — that would not add a header b
 
 Three things spell similarly; distinct meanings:
 
-- **Rom** — the aggregate / domain entity owned by this plugin (`domain/rom.py`). Represents one ROM as the plugin
-  tracks it locally: identity, the denormalized `platform_slug`, sync metadata, the Steam shortcut binding.
+- **Rom** — the aggregate / domain entity owned by Tender (`domain/rom.py`). Represents one ROM as Tender tracks it
+  locally: identity, the denormalized `platform_slug`, sync metadata, the Steam shortcut binding.
 - **ROM** (or "ROM file") — the actual playable game file on disk (e.g. `.iso`, `.cue`, `.gba`). What `RomInstall`
   records once a `Rom` has been downloaded.
-- **RomM** — the upstream self-hosted server. The source of truth this plugin syncs _from_.
+- **RomM** — the upstream self-hosted server. The source of truth Tender syncs _from_.
 
 Convention: always write `Rom` (PascalCase) when referring to the aggregate. Write "ROM file" when referring to the
 on-disk artifact.
@@ -463,16 +466,16 @@ irrelevant because the baked target is the game directory.
 
 ### Adopt
 
-To take something already present into the plugin's records without having produced it. The object varies — a local save
+To take something already present into Tender's records without having produced it. The object varies — a local save
 file becomes a tracked baseline (`adopt_baseline(...)`), a play session survives a JS-context rebuild, an identity-only
 claim picks up the debris of an interrupted removal
 ([ADR-0027](docs/adr/0027-claim-discipline-follows-the-recovery-bundle.md)), a ROM already on disk becomes an install —
-but the rule does not: the recorded state derives from what was found, not from what the plugin did. _Avoid_: claim
+but the rule does not: the recorded state derives from what was found, not from what Tender did. _Avoid_: claim
 (reserved for the removal machinery's authorization), import, link, register.
 
 ### Adopted install
 
-A `rom_installs` row for content the plugin did not download. Indistinguishable from a downloaded one in every respect,
+A `rom_installs` row for content Tender did not download. Indistinguishable from a downloaded one in every respect,
 **including deletion authority**: uninstall and removed-game cleanup delete an adopted ROM's files exactly as they would
 a downloaded ROM's. The protection therefore sits at the moment of adoption — proving the content is the ROM the row
 will claim — never in a downstream exemption, because a second class of install row would need a second branch in every
@@ -485,7 +488,7 @@ what the server serves, and whose **normalized name** equals the ROM's. "Candida
 deliberately: a name says nothing about content, so until it is verified this is a guess — and what ranks one candidate
 above another is only cheap evidence (a single-member archive's CRC32 from the ZIP index, an exact size), never proof.
 The verification (CRC32/MD5, read from a ZIP's central directory where the content is archived) is always
-user-triggered, never a wait imposed before the plugin will say anything.
+user-triggered, never a wait imposed before Tender will say anything.
 
 ### Entry kind
 
@@ -554,11 +557,11 @@ Three distinct notions in core selection, kept separate because they have differ
 
 - **Default core** — the emulator RetroDECK declares for a platform (in `es_systems.xml`) — see **default emulator** for
   the precise selection rule, which may resolve to a RetroArch core **or** a standalone emulator. RetroDECK-owned; it
-  can change on a RetroDECK update. The plugin reads it live and **never stores** it — a stored copy would go stale.
+  can change on a RetroDECK update. Tender reads it live and **never stores** it — a stored copy would go stale.
 - **Emulator override** — a deliberate user choice to deviate from the default core, at **per-game** or **per-platform**
-  scope. The plugin owns the override and stores **only the deviation**; the absence of an override means "follow the
+  scope. Tender owns the override and stores **only the deviation**; the absence of an override means "follow the
   default." A core the user picks inside ES-DE's own UI is _not_ an emulator override in this sense — it is ES-DE's
-  state, which the plugin does not own.
+  state, which Tender does not own.
 - **Launching emulator** — the one emulator a ROM actually launches with: the per-game **emulator override** when one
   exists, else the **platform pick**, else the **default core** — and **whatever kind it is**, a RetroArch core or a
   standalone emulator, which is why it is not named after either. One resolver answers it for both the launch and every
@@ -624,7 +627,7 @@ platform-wide readiness verdict: unknown / ok / partial / missing).
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
 platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards
 readiness, because it is a real prerequisite that is really absent, and never towards a download or a progress ratio,
-because nothing in the plugin can fetch it.
+because nothing in Tender can fetch it.
 
 ### Row verdict (firmware): met / unmet / withheld
 
@@ -637,8 +640,8 @@ counting what the RomM library holds rather than what is met.
 
 - **met** — raises `required_downloaded`. For a declared folder, the resolver listed it and an image inside passes the
   core's own content check. For a declared file it is presence at the destination, answered by the resolver wherever it
-  placed the file under the BIOS root and by the plugin's own probe for the rest — a library file no core declares, and
-  a file an emulator keeps in its own tree.
+  placed the file under the BIOS root and by Tender's own probe for the rest — a library file no core declares, and a
+  file an emulator keeps in its own tree.
 - **unmet** — counted as a file shown to be absent, so it reads red and raises the play row's **BIOS badge**. A folder
   the resolver listed and found no image in is exactly this, and so is one that is not there at all.
 - **withheld** — the reading established neither. It raises neither count, and while a required row carries one the
@@ -670,7 +673,7 @@ was done to establish it.
 It is needed because a withheld verdict has several causes and one of them is not a withholding at all. A file the
 emulator **read and does not recognise** was checked — DuckStation boots such an image and calls it an unknown BIOS — so
 the verdict stays withheld while "could not be checked" is simply untrue of it. Beside that sit a file whose **bytes did
-not come back**, which is a statement about the plugin's own read and no evidence the launch cannot read it, and one the
+not come back**, which is a statement about Tender's own read and no evidence the launch cannot read it, and one the
 emulator **refuses** on its size before reading a byte, which arrives with the verdict already unmet and needs the
 reason rather than a verdict. Everything else — the bytes matched, they did not, nothing asked — leaves the row to the
 axes it always had.
@@ -777,9 +780,9 @@ its own file name.
 
 What the RomM library has for a platform, and how much of it is on this machine — the third counted set beside the
 **required by the launching emulator** files and the console's own **system image** demand. **offered** (`server_count`)
-is every firmware file the library holds for the platform; **held** (`local_count`) is how many of those the plugin
-found at their destination. Both are counted over the library's files alone, so a row the library does not have — **not
-on server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
+is every firmware file the library holds for the platform; **held** (`local_count`) is how many of those Tender found at
+their destination. Both are counted over the library's files alone, so a row the library does not have — **not on
+server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
 
 It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off a
 **row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is
@@ -793,8 +796,8 @@ names ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-a
 
 ### Safely-bakeable
 
-An ES-DE `<command>` the plugin can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends
-in `%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` sidecar (that is _needs-setup_, not
+An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends in
+`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` sidecar (that is _needs-setup_, not
 launchable from Steam until ES-DE has run it once), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form,
 no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder
 outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything not
@@ -806,9 +809,9 @@ safely-bakeable command a system falls back to).
 
 The emulator a ROM launches with absent any per-game or per-platform **emulator override**: the **first
 _safely-bakeable_ command in a system's `es_systems.xml` document order**. ES-DE lists a system's emulators in
-preference order, so ES-DE's own preference picks it — the plugin adds no curation. It may be a **RetroArch core** or a
-**standalone emulator** (PCSX2, RPCS3, Dolphin, …), whichever ES-DE lists first that the plugin can bake. Resolved live
-from the sole source (`es_systems.xml`) — there is no bundled snapshot (the curated `core_defaults.json` was deleted in
+preference order, so ES-DE's own preference picks it — Tender adds no curation. It may be a **RetroArch core** or a
+**standalone emulator** (PCSX2, RPCS3, Dolphin, …), whichever ES-DE lists first that Tender can bake. Resolved live from
+the sole source (`es_systems.xml`) — there is no bundled snapshot (the curated `core_defaults.json` was deleted in
 \#1210). **Document order** here is the order the file DECLARES, never the order ES-DE would run: a gamelist
 `<altemulator>` / `<alternativeEmulator>` promotes an entry for ES-DE and moves nothing here
 ([ADR-0030](docs/adr/0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md)). When no command is
@@ -848,9 +851,9 @@ disc no longer present) degrades to the default with a WARNING, never fatal.
 
 ### Save answer
 
-What one ROM's save consists of, where the emulator keeps it, and whether this plugin may carry it —
+What one ROM's save consists of, where the emulator keeps it, and whether Tender may carry it —
 `domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
-It replaced a per-system extension table the plugin maintained by hand. Its **directory** is where a sync, a probe, the
+It replaced a per-system extension table Tender maintained by hand. Its **directory** is where a sync, a probe, the
 adoption rename and the [directory follow](#answered-save-directory) look; an answer with no directory is never given
 one by a guess.
 
@@ -874,9 +877,9 @@ their uninstalled game already has save files.
 
 ### Save state: per-game files / shared / inside the content / hole / not established
 
-The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
-plugin can carry; the other four **refuse** — the sync probes no path, writes no sync state, and returns the benign-skip
-shape rather than a failure. A refusing answer can still have its directory recorded as the
+The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
+carry; the other four **refuse** — the sync probes no path, writes no sync state, and returns the benign-skip shape
+rather than a failure. A refusing answer can still have its directory recorded as the
 [answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
@@ -908,9 +911,8 @@ never an acceptable stand-in, because it answers a different question in a shape
 
 So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
 
-This is why the question goes to the **catalogue entry** the plugin resolved for this ROM (the label
-`ActiveCoreResolver` produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator
-answers for itself.
+This is why the question goes to the **catalogue entry** Tender resolved for this ROM (the label `ActiveCoreResolver`
+produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator answers for itself.
 
 ### Answered save directory
 
@@ -928,13 +930,13 @@ files are followed.
 A named channel for a ROM's saves (e.g. `default`). **Every slot is a real, addressable name** — the active slot for a
 ROM is recorded on its `RomSaveSyncState`, and `default_slot` (a `settings.json` config value, per #822) is the slot a
 newly-tracked ROM starts on. Slots let the same ROM carry distinct save sets without clobbering one another. Confirming
-a slot (`confirm_slot(...)`) is an explicit user/flow decision that requires a real slot name — the plugin never
-silently adopts a foreign slot, and it never confirms a ROM onto the legacy `slot:null`. The legacy `slot:null` is
-**retired as a confirmable target** (#1276 / ADR-0017): it survives only as a one-time migration **source** — the Slot
-Setup Wizard offers to copy a game's slot-less saves into a named slot, leaving the originals where they are in RomM —
-and is never a ROM's active slot. RomM still creates slot-less saves, from a manual upload without a slot. The user sees
-the bucket as the **Manual archive**, RomM's own word for it (`frontend/src/locales/en_US/rom.json`, `upload-slot-hint`,
-at RomM 5.3.1); `legacy` stays the word in code. A `null` slot is never the same as `"default"`.
+a slot (`confirm_slot(...)`) is an explicit user/flow decision that requires a real slot name — Tender never silently
+adopts a foreign slot, and it never confirms a ROM onto the legacy `slot:null`. The legacy `slot:null` is **retired as a
+confirmable target** (#1276 / ADR-0017): it survives only as a one-time migration **source** — the Slot Setup Wizard
+offers to copy a game's slot-less saves into a named slot, leaving the originals where they are in RomM — and is never a
+ROM's active slot. RomM still creates slot-less saves, from a manual upload without a slot. The user sees the bucket as
+the **Manual archive**, RomM's own word for it (`frontend/src/locales/en_US/rom.json`, `upload-slot-hint`, at RomM
+5.3.1); `legacy` stays the word in code. A `null` slot is never the same as `"default"`.
 
 ### Baseline
 
@@ -1063,11 +1065,11 @@ The axis on which a RomM collection is classified for syncing — the internal l
 values match RomM's own kind labels (Standard / Smart / Virtual); RomM's code calls the first kind `regular`.
 **Standard** is a manually-created collection (one of RomM's two owned kinds — its ROM membership is hand-picked; the
 auto-managed favorites collection is a Standard one); **Smart** is a saved-search whose membership resolves at query
-time, and the other owned kind; **Virtual** is an ownerless grouping RomM derives from game metadata, of which the
-plugin syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). Only Standard and Smart are
-stampable for the incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it
-`standard` (display "My" → "Standard"). What the QAM calls the kinds is decided in `docs/architecture/qam-panel.md` §
-Library, not here, and the literals stay as they are whatever it calls them.
+time, and the other owned kind; **Virtual** is an ownerless grouping RomM derives from game metadata, of which Tender
+syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). Only Standard and Smart are stampable for
+the incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it `standard` (display
+"My" → "Standard"). What the QAM calls the kinds is decided in `docs/architecture/qam-panel.md` § Library, not here, and
+the literals stay as they are whatever it calls them.
 
 ### Collection owner-scope
 
@@ -1096,7 +1098,7 @@ still union.
 
 ### Surface (bigpicture / desktop)
 
-One of the two UIs the plugin draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad
+One of the two UIs Tender draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad
 surface — the QAM panel and the patch into Steam's game-detail route (`frontend/src/bigpicture/`) — and **desktop** is
 the keyboard-and-mouse client (`frontend/src/desktop/`, which holds a README and nothing else so far). They are **peers,
 not layers**: the two share data and logic and almost nothing visual, so neither may import from the other. Anything
@@ -1108,7 +1110,7 @@ The word predates the directories and the older use is still current: `docs/arch
 `frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that
 page's **surfaces** — an open-ended set ("however many surfaces are mounted"), never a fixed number (see **Game-detail
 store**). Every one of them lives inside `bigpicture/`, so in the sense above they are viewers of one surface, and only
-the scope tells the readings apart: a surface of the plugin is a directory, a surface of a game page is a component
+the scope tells the readings apart: a surface of Tender is a directory, a surface of a game page is a component
 subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
 surfaces and everything below them).
 
@@ -1147,7 +1149,7 @@ for the entry's heading, which is one thing and takes one name.
 
 ### QAM page / Main / wide page
 
-What the plugin's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in
+What Tender's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in
 `frontend/src/types/navigation.ts`). Exactly one page is mounted at a time; navigating to another unmounts it. **Main**
 is the page the panel opens on: notices, status, the conditional slot, the download summary and the menu. A **wide
 page** is a page that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the
@@ -1209,7 +1211,7 @@ page where it is acted on. A notice names the condition and jumps to its home; t
 the notice — with one exception today, the RetroArch input driver, whose **Fix** still applies in place behind a
 confirmation until Settings (#1816) gives it a home. A condition answered **once and for all** — the user picks between
 named outcomes, and answering ends the condition for good — has no page to return to, so its home is a modal opened from
-the notice; that modal _is_ the home, not a second exception to the rule. A condition with no home in the plugin stays a
+the notice; that modal _is_ the home, not a second exception to the rule. A condition with no home in the panel stays a
 notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only),
 warning, alert.
 

@@ -182,9 +182,9 @@ locally with `mise run docs`.
   `appStore.GetAppOverviewByAppID(appId)` (`waitForAppOverview`), never a blind fixed delay. Use 50ms between operations
   in the apply loop.
 - **Shortcut appId is assigned, not derived**: Steam assigns it at creation and it is stable for the shortcut's
-  lifetime; the plugin records it in `roms.shortcut_app_id` and detects ownership by the exe path. Never re-derive it
-  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are appId-safe,
-  and each rests on its own measurement: `launchOptions` on #827's hardware runs, and `exe` on rewriting every one of a
+  lifetime; Tender records it in `roms.shortcut_app_id` and detects ownership by the exe path. Never re-derive it (the
+  `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are appId-safe, and
+  each rests on its own measurement: `launchOptions` on #827's hardware runs, and `exe` on rewriting every one of a
   826-shortcut library and finding every appId still there, against a `shortcuts.vdf` backup taken before it (0 new, 0
   lost, names unchanged). "They are all `Set*` calls on an existing shortcut" is a description of the three, not
   evidence about any of them — it is equally true of `SetShortcutName`, which is the one that has **never** been
@@ -215,7 +215,7 @@ locally with `mise run docs`.
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
 - **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
-  `domain/identity.py`) — the plugin is inert until the server is updated.
+  `domain/identity.py`) — Tender is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403, and GitHub's API refuses a request with no UA at all. The three adapters that talk to a server off this
   machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`, `adapters/github_releases.py`) take a `user_agent: str`
@@ -235,11 +235,11 @@ locally with `mise run docs`.
   (7.46 MiB), so a 4 MiB cap would have refused it silently.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
-- **`instanceof` against a DOM global is false in QAM code**: plugin code runs in the **SharedJSContext** window while
-  the QAM panel's nodes belong to the QAM view's own document — two realms, confirmed live (the two documents do not
-  share a URL, and neither can see the other's elements). What is **measured** is the `instanceof`: such a test is false
-  for **every** node such code will ever see, so a guard written that way rejects everything and the feature is simply
-  inert. Whether a constructor that takes the node as an argument — `new ResizeObserver(...)`,
+- **`instanceof` against a DOM global is false in QAM code**: the panel's code runs in the **SharedJSContext** window
+  while the QAM panel's nodes belong to the QAM view's own document — two realms, confirmed live (the two documents do
+  not share a URL, and neither can see the other's elements). What is **measured** is the `instanceof`: such a test is
+  false for **every** node such code will ever see, so a guard written that way rejects everything and the feature is
+  simply inert. Whether a constructor that takes the node as an argument — `new ResizeObserver(...)`,
   `new MutationObserver(...)` — also misbehaves across realms is **not** established here in either direction; those are
   named because taking the constructor from the node costs a property read, so the question need not be answered. Take
   the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
@@ -523,7 +523,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/test_game_detail.py::TestGetCachedGameDetailCarriesNoBiosAnswer` and the two contract cases in
   `tests/contract/test_game_detail_read.py`; prompt-only: no stored or cached BIOS answer is added back (`BiosChecker`
   keeps its one method)
-- **The plugin attaches a configured custom header to a RomM-origin request and to no other request it issues, and never
+- **Tender attaches a configured custom header to a RomM-origin request and to no other request it issues, and never
   over a header the adapter sets itself** — test + prompt-only — `tests/domain/test_custom_headers.py` and
   `tests/adapters/romm/test_http.py::TestCustomProxyHeaders`; prompt-only: every RomM-origin request method calls
   `_apply_origin_headers` and `download_external` never does, and the adapter adds its own headers after
@@ -669,14 +669,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   prompt-only
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem
-  probe covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
+- **A firmware row's presence comes from the resolver wherever the resolver declared it; Tender's own filesystem probe
+  covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point, and nothing enforces it. The three leftovers: a library file with no placement in the
-  platform's catalogue, a placement the plugin cannot honour, and the already-there check before a download (the batch
-  and the per-row fetch). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off
-  the row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a consumer
-  keeps `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be
-  checked", and `refused` is not a withheld verdict
+  platform's catalogue, a placement Tender cannot honour, and the already-there check before a download (the batch and
+  the per-row fetch). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off the
+  row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a consumer keeps
+  `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be checked", and
+  `refused` is not a withheld verdict
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents`,
