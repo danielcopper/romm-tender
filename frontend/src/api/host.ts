@@ -63,7 +63,7 @@ export interface Toaster {
   toast(toast: ToastData): ToastNotification;
 }
 
-/** What `definePanel`'s factory answers with — the panel. */
+/** What `definePanel`'s factory answers with — the panel's definition: its name, its glyph and the panel itself. */
 export interface PanelDefinition {
   /** The entry's title, which Steam files the panel under. */
   name: string;

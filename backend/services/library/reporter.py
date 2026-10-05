@@ -574,7 +574,7 @@ class SyncReporter:
         whole unit's shortcut-shaped build), binds the ROM only when it is a
         binding target this cycle (else preserves its existing binding — a
         non-representative sibling stays unbound, a bound row not re-acked keeps
-        its shortcut), read-merges the plugin-resolved ids
+        its shortcut), read-merges the locally resolved ids
         (``sgdb_id`` / ``ra_id`` / ``cover_path`` / ``cover_source`` follow
         "confirmed new wins, else preserve existing, else None"), saves the Rom,
         then stamps its cached metadata. Saving the Rom before its metadata satisfies the
@@ -651,7 +651,7 @@ class SyncReporter:
         """Advance the row's fetch generation, or carry the existing one forward.
 
         Follows the same "confirmed new wins, else preserve existing, else None"
-        merge as the plugin-resolved fields: a **platform** unit's commit supplies
+        merge as the locally resolved fields: a **platform** unit's commit supplies
         the generation and advances every row it upserts, while a **collection**
         unit (which supplies none) must leave a foreign platform's row on its own
         generation — re-marking it would drop it from that platform's counted
@@ -685,7 +685,7 @@ class SyncReporter:
 
     @staticmethod
     def _merge_optional_id(new_value, existing_value) -> int | None:
-        """Resolve a plugin-resolved id: non-None new wins, else preserve existing, else None."""
+        """Resolve a locally resolved id: non-None new wins, else preserve existing, else None."""
         if new_value is not None:
             return int(new_value)
         if existing_value is not None:
