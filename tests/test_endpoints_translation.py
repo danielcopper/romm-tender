@@ -35,6 +35,7 @@ from lib.errors import (
     NamedRefused,
     PairingCodeInvalidError,
     Refused,
+    RommApiError,
     RommAuthError,
     RommConflictError,
     RommConnectionError,
@@ -439,7 +440,7 @@ class TestWhatTheEntrypointLogs:
     async def test_only_an_unreachable_verdict_is_logged_below_warning(self, caplog):
         caplog.set_level(logging.DEBUG)
 
-        cases = [case.values for case in _ROMM_API_ERRORS]
+        cases = [cast("tuple[RommApiError, str]", case.values) for case in _ROMM_API_ERRORS]
         for exc, _reason in cases:
             await _call(_dispatcher_raising(exc), _AN_ASYNC_ROUTE)
 
