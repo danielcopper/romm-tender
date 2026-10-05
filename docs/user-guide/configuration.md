@@ -238,6 +238,16 @@ After changing the mode, tap **Apply to All Shortcuts** to update all existing R
 **Applying to all shortcuts…** and stops responding while the run is going — a second tap is refused rather than
 starting a second pass over the same shortcuts.
 
+The mode lives in Steam's own `localconfig.vdf`, and the line under the button says when it could not be written there.
+Nothing is changed for any shortcut in that case:
+
+| The line under the button says                             | What happened                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Not applied — no Steam user was found on this device       | No Steam user folder was found under Steam's `userdata`                  |
+| Not applied — Steam's localconfig.vdf was not found        | That Steam user has no `config/localconfig.vdf` yet                      |
+| Not applied — Steam's localconfig.vdf could not be read    | The file is there but could not be opened or parsed                      |
+| Not applied — Steam's localconfig.vdf could not be written | Writing the changed file failed, for example on a full or read-only disk |
+
 <!-- Screenshot: Steam Input Mode dropdown with the three options -->
 
 ## Preferred region

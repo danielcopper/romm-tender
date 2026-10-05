@@ -9,6 +9,7 @@ from _vendor import vdf
 from adapters.steam_config import SteamConfigAdapter
 from lib.errors import SteamGridDirMissingError
 from lib.input_driver_fix import InputDriverFix
+from lib.steam_input_apply import SteamInputApply
 
 
 @pytest.fixture
@@ -300,21 +301,21 @@ class TestSetSteamInputConfig:
             vdf.dump(localconfig_data, f, pretty=True)
         return SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
 
-    def test_no_user_dir_returns_early(self, tmp_path):
+    def test_no_user_dir_answers_no_steam_user(self, tmp_path):
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        # Should not raise
-        adapter.set_steam_input_config([12345], mode="force_on")
+        assert adapter.set_steam_input_config([12345], mode="force_on") is SteamInputApply.NO_STEAM_USER
 
-    def test_no_localconfig_returns_early(self, tmp_path):
+    def test_no_localconfig_answers_no_localconfig(self, tmp_path):
         userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
         (userdata / "config").mkdir(parents=True)
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        adapter.set_steam_input_config([12345], mode="force_on")
+        assert adapter.set_steam_input_config([12345], mode="force_on") is SteamInputApply.NO_LOCALCONFIG
+        assert not (userdata / "config" / "localconfig.vdf").exists()
 
     def test_force_on_sets_value_2(self, tmp_path):
         data = {"UserLocalConfigStore": {"Apps": {}}}
         adapter = self._make_adapter_with_localconfig(tmp_path, data)
-        adapter.set_steam_input_config([12345], mode="force_on")
+        assert adapter.set_steam_input_config([12345], mode="force_on") is SteamInputApply.APPLIED
         # Re-read and verify
         userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
         with open(str(userdata / "config" / "localconfig.vdf")) as f:
@@ -349,11 +350,10 @@ class TestSetSteamInputConfig:
             result = vdf.load(f)
         assert "42" not in result["UserLocalConfigStore"]["Apps"]
 
-    def test_default_mode_no_apps_key_returns_early(self, tmp_path):
+    def test_default_mode_with_no_apps_key_has_nothing_to_change(self, tmp_path):
         data = {"UserLocalConfigStore": {}}
         adapter = self._make_adapter_with_localconfig(tmp_path, data)
-        # Should not raise, just return
-        adapter.set_steam_input_config([42], mode="default")
+        assert adapter.set_steam_input_config([42], mode="default") is SteamInputApply.APPLIED
 
     def test_force_on_creates_apps_key_if_missing(self, tmp_path):
         data = {"UserLocalConfigStore": {}}
@@ -371,19 +371,20 @@ class TestSetSteamInputConfig:
         lc_path = userdata / "config" / "localconfig.vdf"
         mtime_before = os.path.getmtime(str(lc_path))
         # default mode on non-existent app -> no change
-        adapter.set_steam_input_config([999], mode="default")
+        assert adapter.set_steam_input_config([999], mode="default") is SteamInputApply.APPLIED
         mtime_after = os.path.getmtime(str(lc_path))
         assert mtime_before == mtime_after
 
-    def test_parse_error_returns_early(self, tmp_path):
+    def test_parse_error_answers_unreadable_and_writes_nothing(self, tmp_path):
         userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
         config_dir = userdata / "config"
         config_dir.mkdir(parents=True)
+        # An unclosed block: the parser accepts a bare ``key value {{{`` line as one pair.
         with open(str(config_dir / "localconfig.vdf"), "w") as f:
-            f.write("not valid vdf {{{")
+            f.write('"UserLocalConfigStore"\n{\n')
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
-        # Should not raise
-        adapter.set_steam_input_config([42], mode="force_on")
+        assert adapter.set_steam_input_config([42], mode="force_on") is SteamInputApply.UNREADABLE
+        assert (config_dir / "localconfig.vdf").read_text() == '"UserLocalConfigStore"\n{\n'
 
     def test_multiple_app_ids(self, tmp_path):
         data = {"UserLocalConfigStore": {"Apps": {}}}
@@ -395,7 +396,7 @@ class TestSetSteamInputConfig:
         for app_id in ["100", "200", "300"]:
             assert result["UserLocalConfigStore"]["Apps"][app_id]["UseSteamControllerConfig"] == "2"
 
-    def test_write_failure_logged(self, tmp_path):
+    def test_write_failure_answers_write_failed_and_leaves_the_file(self, tmp_path):
         data = {"UserLocalConfigStore": {"Apps": {}}}
         logger = logging.getLogger("test_write_fail")
         userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"
@@ -403,10 +404,20 @@ class TestSetSteamInputConfig:
         config_dir.mkdir(parents=True)
         with open(str(config_dir / "localconfig.vdf"), "w", encoding="utf-8") as f:
             vdf.dump(data, f, pretty=True)
+        before = (config_dir / "localconfig.vdf").read_bytes()
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logger)
         with patch("adapters.steam_config.vdf.dump", side_effect=OSError("disk full")):
-            # Should not raise, just log
-            adapter.set_steam_input_config([42], mode="force_on")
+            assert adapter.set_steam_input_config([42], mode="force_on") is SteamInputApply.WRITE_FAILED
+        assert (config_dir / "localconfig.vdf").read_bytes() == before
+        assert not (config_dir / "localconfig.vdf.tmp").exists()
+
+    def test_a_failed_replace_answers_write_failed(self, tmp_path):
+        data = {"UserLocalConfigStore": {"Apps": {}}}
+        adapter = self._make_adapter_with_localconfig(tmp_path, data)
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        with patch("adapters.steam_config.os.replace", side_effect=PermissionError("read-only")):
+            assert adapter.set_steam_input_config([42], mode="force_on") is SteamInputApply.WRITE_FAILED
+        assert not (config_dir / "localconfig.vdf.tmp").exists()
 
 
 # ── check_retroarch_input_driver ────────────────────────────

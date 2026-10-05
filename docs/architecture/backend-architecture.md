@@ -88,11 +88,12 @@ to: a raised `Refused` (`lib/errors.py`) or `DomainRefused` (`domain/refusal.py`
 (`lib/partial_failure.py`), the result of work that stopped partway, answers the same shape with what was done; and a
 raised `RommApiError` answers `classify_error`'s reason and message. Nothing else is caught there: any other exception,
 a raw `ConnectionError` or `OSError` included, is still a `backend_exception`. A translated RomM error is logged as one
-warning line, its type and message without a stack; a refusal is a decision and is not logged. A `def` endpoint stays a
-`def`, and an awaitable it hands back is translated when the dispatcher awaits it. The conflict rules refuse this way
-too: `hold` and `hold_start` raise the refusal of the first rule that holds, so the use case's block does not run
-(GLOSSARY.md → Conflict rules). Services not yet converted still return the failure dict, and both forms reach the panel
-identically.
+line, its type and message without a stack: at info when `classify_error` answers it `server_unreachable`, because an
+offline handheld is an expected state, and at warning otherwise. A refusal is a decision and is not logged. A `def`
+endpoint stays a `def`, and an awaitable it hands back is translated when the dispatcher awaits it. The conflict rules
+refuse this way too: `hold` and `hold_start` raise the refusal of the first rule that holds, so the use case's block
+does not run (GLOSSARY.md → Conflict rules). Services not yet converted still return the failure dict, and both forms
+reach the panel identically.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
@@ -1569,7 +1570,10 @@ stored token in memory first so the version probe never carries the old server's
 persists nothing until the mint succeeds. On any failure (probe unreachable, version too old, forbidden/error mint, no
 usable token, or a disk error) the in-memory auth state is rolled back to the previous working URL + token, and because
 disk was never touched the prior working credentials survive a failed sign-in. Only a successful mint commits
-`romm_url` + SSL flag + token + id + origin to disk in a single `save_settings()` call.
+`romm_url` + SSL flag + token + id + origin to disk in a single `save_settings()` call. Every step of a sign-in up to
+that save gives the previous state back when it fails, a bug or an interrupted call included, and nothing after a
+successful save does, which would leave memory and file disagreeing. A settings file that cannot be written refuses the
+sign-in with `save_failed` and the write's cause; any other exception from the write stays a transport error.
 
 **The old-token DELETE is origin-guarded and provenance-guarded.** RomM scopes a Client API Token to the account, and
 re-auth deletes the device's previous token. That DELETE is only fired when the old token's stored origin matches the
@@ -1664,8 +1668,8 @@ registration) is inert until that sign-in, a stale device id from this path cann
 (`romm_api_token` / `romm_api_token_id` / `romm_api_token_origin` / `romm_api_token_source`) in the in-memory settings
 dict and persists them in a **single** `save_settings()` (the same atomic-write funnel `_persist_token` uses), keeping
 `romm_url` and the SSL flag so the user need not re-enter them. It mirrors the sign-in paths' persist discipline: the
-auth state is snapshotted first, and a failed save rolls the in-memory quad back to the snapshot and returns the
-canonical failure shape (via `error_response`), so a disk error never strands the user with a half-forgotten but
+auth state is snapshotted first, and a failed save rolls the in-memory quad back to the snapshot and refuses the
+sign-out with `save_failed` and the write's cause, so a disk error never strands the user with a half-forgotten but
 still-valid token. Only on a **successful** save does it drop the cached RomM server version (`set_version(None)`) so no
 stale value lingers. It is synchronous — no `run_in_executor`, no network — and idempotent (signing out when already
 signed out still returns success). It **never** issues the server-side token DELETE: a minted token deliberately lacks

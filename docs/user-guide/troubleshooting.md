@@ -307,6 +307,14 @@ appears on the main QAM page with a **Change to sdl2** button. Tap it to fix the
 If the warning doesn't appear, you can manually change `input_driver = "x"` to `input_driver = "sdl2"` in your RetroArch
 config file.
 
+### Apply to All Shortcuts says "Not applied"
+
+**Symptom**: Under **Settings › Controller**, tapping **Apply to All Shortcuts** shows a line starting with "Not
+applied".
+
+**What happened**: The Steam Input mode could not be written into Steam's `localconfig.vdf`. What each line means is
+listed under [Steam Input Mode](configuration.md#steam-input-mode).
+
 ## Saves Not Syncing
 
 ### Auto-sync is disabled
