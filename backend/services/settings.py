@@ -25,7 +25,7 @@ from domain.custom_headers import (
     stored_custom_headers,
 )
 from domain.sibling_resolution import AUTO_REGION
-from lib.errors import Refused
+from lib.errors import NotConfigured, Refused
 from lib.input_driver_fix import InputDriverFix
 from lib.steam_input_apply import SteamInputApply
 from lib.url_host import is_valid_server_url
@@ -150,8 +150,9 @@ class SettingsService:
     async def save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         """Persist the trimmed server URL and optional SSL flag.
 
-        Rejects a blank or non-http(s) URL without writing anything.
-        Credentials and tokens are never touched here — minting and
+        Refuses a blank or non-http(s) URL with ``NotConfigured`` without
+        writing anything, and a settings file that cannot be written with
+        ``save_failed`` and its cause. Credentials and tokens are never touched here — minting and
         storing the Client API Token is ``ConnectionService``'s job.
         ``allow_insecure_ssl=None`` leaves the SSL flag unchanged.
 
@@ -167,16 +168,16 @@ class SettingsService:
     def _save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
-            return {"success": False, "reason": "config_error", "message": "Enter a valid http(s):// server URL"}
+            raise NotConfigured("Enter a valid http(s):// server URL")
+        self._settings["romm_url"] = trimmed
+        if allow_insecure_ssl is not None:
+            self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
         try:
-            self._settings["romm_url"] = trimmed
-            if allow_insecure_ssl is not None:
-                self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
             self._settings_persister.save_settings()
-            return {"success": True, "message": "Settings saved"}
-        except Exception as e:
+        except OSError as e:
             self._logger.error(f"Failed to save settings: {e}")
-            return {"success": False, "reason": "save_failed", "message": f"Save failed: {e}"}
+            raise Refused("save_failed", f"Save failed: {e}") from e
+        return {"success": True, "message": "Settings saved"}
 
     async def save_custom_headers(self, headers: object) -> dict[str, Any]:
         """Validate and persist the extra headers sent to the RomM origin.
@@ -195,11 +196,8 @@ class SettingsService:
         stored = stored_custom_headers(self._settings.get("romm_custom_headers"))
         resolved = resolve_custom_headers(headers, stored)
         if isinstance(resolved, HeaderRefusal):
-            return {
-                "success": False,
-                "reason": resolved.problem.value,
-                "message": _header_refusal_message(resolved),
-            }
+            # A ``HeaderProblem`` value rather than a literal: every value of that StrEnum is one.
+            raise Refused(resolved.problem.value, _header_refusal_message(resolved))
         self._settings["romm_custom_headers"] = [{"name": h.name, "value": h.value} for h in resolved]
         self._settings_persister.save_settings()
         return {"success": True}
@@ -236,7 +234,7 @@ class SettingsService:
     def save_log_level(self, level: str) -> dict[str, Any]:
         """Validate and persist the runtime log level."""
         if level not in _VALID_LOG_LEVELS:
-            return {"success": False, "reason": "invalid_log_level", "message": "Invalid log level"}
+            raise Refused("invalid_log_level", "Invalid log level")
         self._settings["log_level"] = level
         self._settings_persister.save_settings()
         return {"success": True}
@@ -256,7 +254,7 @@ class SettingsService:
         untrusted frontend wire is rejected.
         """
         if not isinstance(region, str):
-            return {"success": False, "reason": "invalid_region", "message": "Invalid region"}
+            raise Refused("invalid_region", "Invalid region")
         self._settings["preferred_region"] = region.strip() or AUTO_REGION
         self._settings_persister.save_settings()
         return {"success": True}
@@ -275,7 +273,7 @@ class SettingsService:
         wire is rejected.
         """
         if not isinstance(enabled, bool):
-            return {"success": False, "reason": "invalid_value", "message": "Invalid value"}
+            raise Refused("invalid_value", "Invalid value")
         self._settings["skip_preview"] = enabled
         self._settings_persister.save_settings()
         return {"success": True}
@@ -314,7 +312,7 @@ class SettingsService:
     def save_steam_input_setting(self, mode: str) -> dict[str, Any]:
         """Validate and persist the Steam Input mode preference."""
         if mode not in _VALID_STEAM_INPUT_MODES:
-            return {"success": False, "reason": "invalid_mode", "message": f"Invalid mode: {mode}"}
+            raise Refused("invalid_mode", f"Invalid mode: {mode}")
         self._settings["steam_input_mode"] = mode
         self._settings_persister.save_settings()
         return {"success": True}
@@ -376,21 +374,13 @@ class SettingsService:
         """Validate and persist whitelist settings.
 
         Both arguments must be lists of strings. Anything else is
-        rejected with an error response so a malformed frontend call
+        refused with ``invalid_whitelist`` so a malformed frontend call
         cannot corrupt the on-disk shape.
         """
         if not isinstance(disabled_defaults, list) or not all(isinstance(s, str) for s in disabled_defaults):
-            return {
-                "success": False,
-                "reason": "invalid_whitelist",
-                "message": "disabled_defaults must be a list of strings",
-            }
+            raise Refused("invalid_whitelist", "disabled_defaults must be a list of strings")
         if not isinstance(custom_names, list) or not all(isinstance(s, str) for s in custom_names):
-            return {
-                "success": False,
-                "reason": "invalid_whitelist",
-                "message": "custom_names must be a list of strings",
-            }
+            raise Refused("invalid_whitelist", "custom_names must be a list of strings")
         self._settings["whitelist_disabled_defaults"] = disabled_defaults
         self._settings["whitelist_custom_names"] = custom_names
         self._settings_persister.save_settings()
@@ -410,11 +400,11 @@ class SettingsService:
         ``"all"`` (the default) syncs every collection the server lists;
         ``"own"`` restricts the sync + display to the signed-in user's own
         collections (virtual collections have no owner and always sync). An
-        unrecognised value from the untrusted frontend wire is rejected
-        with the canonical failure shape so a bad call cannot corrupt the setting.
+        unrecognised value from the untrusted frontend wire is refused with
+        ``invalid_scope`` so a bad call cannot corrupt the setting.
         """
         if scope not in ("own", "all"):
-            return {"success": False, "reason": "invalid_scope", "message": f"Invalid owner scope: {scope}"}
+            raise Refused("invalid_scope", f"Invalid owner scope: {scope}")
         self._settings["collection_owner_scope"] = scope
         self._settings_persister.save_settings()
         return {"success": True}
@@ -426,11 +416,11 @@ class SettingsService:
         ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming
         mode. The change takes effect on the next normal sync, with no Force Full
         Sync; how it reaches Steam is described in the same section.
-        An unrecognised value from the untrusted frontend wire is rejected with
-        the canonical failure shape so a bad call cannot corrupt the setting.
+        An unrecognised value from the untrusted frontend wire is refused with
+        ``invalid_mode`` so a bad call cannot corrupt the setting.
         """
         if mode not in ("merge", "by_label"):
-            return {"success": False, "reason": "invalid_mode", "message": f"Invalid naming mode: {mode}"}
+            raise Refused("invalid_mode", f"Invalid naming mode: {mode}")
         self._settings["collection_naming_mode"] = mode
         self._settings_persister.save_settings()
         return {"success": True}

@@ -114,6 +114,7 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/library/service.py",
     "backend/services/relaunch_options_resolver.py",
     "backend/services/session_lifecycle.py",
+    "backend/services/settings.py",
     "backend/services/startup_healing.py",
 )
 

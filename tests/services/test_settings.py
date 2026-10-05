@@ -14,7 +14,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from host.logging_setup import LOG_FILENAME, configure_logging
-from lib.errors import Refused
+from lib.errors import NotConfigured, Refused
 from lib.input_driver_fix import InputDriverFix
 from lib.steam_input_apply import SteamInputApply
 from services.settings import SettingsService, SettingsServiceConfig
@@ -162,11 +162,22 @@ class TestSaveServerUrl:
         await service.save_server_url("http://romm.local", False)
         assert settings["romm_allow_insecure_ssl"] is False
 
-    async def test_persistence_failure_returns_error(self, service, settings_persister):
-        settings_persister.save_settings.side_effect = OSError("disk full")
-        result = await service.save_server_url("http://romm.local")
-        assert result["success"] is False
-        assert "disk full" in result["message"]
+    async def test_a_failed_settings_write_is_refused_as_save_failed(self, service, settings_persister):
+        cause = OSError("disk full")
+        settings_persister.save_settings.side_effect = cause
+        with pytest.raises(Refused) as refused:
+            await service.save_server_url("http://romm.local")
+        assert (refused.value.reason, refused.value.message, refused.value.details) == (
+            "save_failed",
+            "Save failed: disk full",
+            {},
+        )
+        assert refused.value.__cause__ is cause
+
+    async def test_a_write_that_fails_with_a_bug_is_not_refused(self, service, settings_persister):
+        settings_persister.save_settings.side_effect = TypeError("Object of type set is not JSON serializable")
+        with pytest.raises(TypeError):
+            await service.save_server_url("http://romm.local")
 
     async def test_trims_url_before_persisting(self, service, settings, settings_persister):
         result = await service.save_server_url("  https://romm.local  ")
@@ -176,12 +187,9 @@ class TestSaveServerUrl:
 
     @pytest.mark.parametrize("bad_url", ["", "   ", "romm.local", "ftp://romm.local", "https://"])
     async def test_invalid_url_rejected_without_writing(self, service, settings, settings_persister, bad_url):
-        result = await service.save_server_url(bad_url)
-        assert result == {
-            "success": False,
-            "reason": "config_error",
-            "message": "Enter a valid http(s):// server URL",
-        }
+        with pytest.raises(NotConfigured) as refused:
+            await service.save_server_url(bad_url)
+        assert (refused.value.message, refused.value.details) == ("Enter a valid http(s):// server URL", {})
         assert "romm_url" not in settings
         settings_persister.save_settings.assert_not_called()
 
@@ -217,10 +225,10 @@ class TestSaveCustomHeaders:
 
     async def test_keep_for_an_unknown_name_fails_without_writing(self, service, settings, settings_persister):
         settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
-        result = await service.save_custom_headers([self._keep("X-Other")])
-        assert result["success"] is False
-        assert result["reason"] == "no_stored_header_value"
-        assert "X-Other" in result["message"]
+        with pytest.raises(Refused) as refused:
+            await service.save_custom_headers([self._keep("X-Other")])
+        assert refused.value.reason == "no_stored_header_value"
+        assert "X-Other" in refused.value.message
         assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
         settings_persister.save_settings.assert_not_called()
 
@@ -238,10 +246,10 @@ class TestSaveCustomHeaders:
         assert settings["romm_custom_headers"] == []
 
     async def test_authorization_is_refused_with_its_own_message(self, service, settings):
-        result = await service.save_custom_headers([self._set("Authorization", "Basic abc")])
-        assert result["success"] is False
-        assert result["reason"] == "authorization_reserved"
-        assert "RomM API token" in result["message"]
+        with pytest.raises(Refused) as refused:
+            await service.save_custom_headers([self._set("Authorization", "Basic abc")])
+        assert refused.value.reason == "authorization_reserved"
+        assert "RomM API token" in refused.value.message
         assert "romm_custom_headers" not in settings
 
     @pytest.mark.parametrize(
@@ -261,17 +269,17 @@ class TestSaveCustomHeaders:
     async def test_garbage_from_the_wire_is_rejected_without_writing(
         self, service, settings, settings_persister, entries, reason
     ):
-        result = await service.save_custom_headers(entries)
-        assert result["success"] is False
-        assert result["reason"] == reason
-        assert result["message"]
+        with pytest.raises(Refused) as refused:
+            await service.save_custom_headers(entries)
+        assert refused.value.reason == reason
+        assert refused.value.message
         assert "romm_custom_headers" not in settings
         settings_persister.save_settings.assert_not_called()
 
     async def test_a_refusal_never_carries_the_value(self, service):
-        result = await service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
-        assert result["success"] is False
-        assert "s3cret" not in result["message"]
+        with pytest.raises(Refused) as refused:
+            await service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
+        assert "s3cret" not in refused.value.message
 
 
 class TestGetSettings:
@@ -436,15 +444,16 @@ class TestSaveLogLevel:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_invalid_level(self, service, settings, settings_persister):
-        result = service.save_log_level("verbose")
-        assert result["success"] is False
-        assert "Invalid log level" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.save_log_level("verbose")
+        assert "Invalid log level" in refused.value.message
         assert "log_level" not in settings
         settings_persister.save_settings.assert_not_called()
 
     def test_empty_string_rejected(self, service, settings):
-        result = service.save_log_level("")
-        assert result["success"] is False
+        with pytest.raises(Refused) as refused:
+            service.save_log_level("")
+        assert refused.value.reason == "invalid_log_level"
         assert "log_level" not in settings
 
 
@@ -470,9 +479,9 @@ class TestSavePreferredRegion:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_non_string_rejected_without_writing(self, service, settings, settings_persister):
-        result = service.save_preferred_region(42)
-        assert result["success"] is False
-        assert result["reason"] == "invalid_region"
+        with pytest.raises(Refused) as refused:
+            service.save_preferred_region(42)
+        assert refused.value.reason == "invalid_region"
         assert "preferred_region" not in settings
         settings_persister.save_settings.assert_not_called()
 
@@ -492,8 +501,13 @@ class TestSaveSkipPreview:
 
     @pytest.mark.parametrize("value", ["true", 1, None, [], {"on": True}])
     def test_non_bool_rejected_without_writing(self, service, settings, settings_persister, value):
-        result = service.save_skip_preview(value)
-        assert result == {"success": False, "reason": "invalid_value", "message": "Invalid value"}
+        with pytest.raises(Refused) as refused:
+            service.save_skip_preview(value)
+        assert (refused.value.reason, refused.value.message, refused.value.details) == (
+            "invalid_value",
+            "Invalid value",
+            {},
+        )
         assert "skip_preview" not in settings
         settings_persister.save_settings.assert_not_called()
 
@@ -664,8 +678,9 @@ class TestLogLevel:
     @pytest.mark.asyncio
     async def test_save_log_level_invalid(self, service, settings):
         settings["log_level"] = "warn"
-        result = service.save_log_level("verbose")
-        assert result["success"] is False
+        with pytest.raises(Refused) as refused:
+            service.save_log_level("verbose")
+        assert refused.value.reason == "invalid_log_level"
         assert settings["log_level"] == "warn"  # unchanged
 
     @pytest.mark.asyncio
@@ -723,15 +738,16 @@ class TestSaveSteamInputSetting:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_invalid_mode(self, service, settings, settings_persister):
-        result = service.save_steam_input_setting("turbo")
-        assert result["success"] is False
-        assert "turbo" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.save_steam_input_setting("turbo")
+        assert "turbo" in refused.value.message
         assert "steam_input_mode" not in settings
         settings_persister.save_settings.assert_not_called()
 
     def test_empty_string_rejected(self, service, settings):
-        result = service.save_steam_input_setting("")
-        assert result["success"] is False
+        with pytest.raises(Refused) as refused:
+            service.save_steam_input_setting("")
+        assert refused.value.reason == "invalid_mode"
         assert "steam_input_mode" not in settings
 
 
@@ -909,27 +925,27 @@ class TestUpdateWhitelistSettings:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_disabled_defaults_not_list_rejected(self, service, settings_persister):
-        result = service.update_whitelist_settings("not-a-list", [])
-        assert result["success"] is False
-        assert "disabled_defaults" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings("not-a-list", [])
+        assert "disabled_defaults" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_custom_names_not_list_rejected(self, service, settings_persister):
-        result = service.update_whitelist_settings([], "not-a-list")
-        assert result["success"] is False
-        assert "custom_names" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings([], "not-a-list")
+        assert "custom_names" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_disabled_defaults_with_non_string_rejected(self, service, settings_persister):
-        result = service.update_whitelist_settings([1, 2], [])
-        assert result["success"] is False
-        assert "disabled_defaults" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings([1, 2], [])
+        assert "disabled_defaults" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_custom_names_with_non_string_rejected(self, service, settings_persister):
-        result = service.update_whitelist_settings([], ["ok", 42])
-        assert result["success"] is False
-        assert "custom_names" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings([], ["ok", 42])
+        assert "custom_names" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_empty_lists_accepted(self, service, settings):
@@ -960,27 +976,27 @@ class TestWhitelistSettings:
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_disabled_defaults(self, service):
         """Rejects non-list disabled_defaults."""
-        result = service.update_whitelist_settings("not-a-list", [])
-        assert result["success"] is False
-        assert "disabled_defaults" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings("not-a-list", [])
+        assert "disabled_defaults" in refused.value.message
 
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_custom_names(self, service):
         """Rejects non-list custom_names."""
-        result = service.update_whitelist_settings([], "not-a-list")
-        assert result["success"] is False
-        assert "custom_names" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.update_whitelist_settings([], "not-a-list")
+        assert "custom_names" in refused.value.message
 
     @pytest.mark.asyncio
     async def test_update_whitelist_validates_inner_types(self, service):
         """Rejects lists containing non-string items."""
-        result_dd = service.update_whitelist_settings([1, 2], [])
-        assert result_dd["success"] is False
-        assert "disabled_defaults" in result_dd["message"]
+        with pytest.raises(Refused) as refused_dd:
+            service.update_whitelist_settings([1, 2], [])
+        assert "disabled_defaults" in refused_dd.value.message
 
-        result_cn = service.update_whitelist_settings([], ["valid", 42])
-        assert result_cn["success"] is False
-        assert "custom_names" in result_cn["message"]
+        with pytest.raises(Refused) as refused_cn:
+            service.update_whitelist_settings([], ["valid", 42])
+        assert "custom_names" in refused_cn.value.message
 
     @pytest.mark.asyncio
     async def test_update_whitelist_persists(self, service, settings):
@@ -1027,16 +1043,17 @@ class TestSetCollectionOwnerScope:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_invalid_scope_rejected_with_canonical_failure(self, service, settings, settings_persister):
-        result = service.set_collection_owner_scope("everyone")
-        assert result["success"] is False
-        assert result["reason"] == "invalid_scope"
-        assert "Invalid owner scope" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.set_collection_owner_scope("everyone")
+        assert refused.value.reason == "invalid_scope"
+        assert "Invalid owner scope" in refused.value.message
         assert "collection_owner_scope" not in settings
         settings_persister.save_settings.assert_not_called()
 
     def test_non_string_rejected(self, service, settings, settings_persister):
-        result = service.set_collection_owner_scope(None)  # type: ignore[arg-type]
-        assert result["success"] is False
+        with pytest.raises(Refused) as refused:
+            service.set_collection_owner_scope(None)  # type: ignore[arg-type]
+        assert refused.value.reason == "invalid_scope"
         assert "collection_owner_scope" not in settings
         settings_persister.save_settings.assert_not_called()
 
@@ -1050,17 +1067,17 @@ class TestSetCollectionNamingMode:
         settings_persister.save_settings.assert_called_once_with()
 
     def test_invalid_mode_rejected_with_canonical_failure(self, service, settings, settings_persister):
-        result = service.set_collection_naming_mode("fancy")
-        assert result["success"] is False
-        assert result["reason"] == "invalid_mode"
-        assert "Invalid naming mode" in result["message"]
+        with pytest.raises(Refused) as refused:
+            service.set_collection_naming_mode("fancy")
+        assert refused.value.reason == "invalid_mode"
+        assert "Invalid naming mode" in refused.value.message
         assert "collection_naming_mode" not in settings
         settings_persister.save_settings.assert_not_called()
 
     def test_non_string_rejected(self, service, settings, settings_persister):
-        result = service.set_collection_naming_mode(None)  # type: ignore[arg-type]
-        assert result["success"] is False
-        assert result["reason"] == "invalid_mode"
+        with pytest.raises(Refused) as refused:
+            service.set_collection_naming_mode(None)  # type: ignore[arg-type]
+        assert refused.value.reason == "invalid_mode"
         assert "collection_naming_mode" not in settings
         settings_persister.save_settings.assert_not_called()
 
