@@ -265,8 +265,9 @@ download completes.
 download**, and no Play.
 
 **What happened**: The file Tender downloaded is not at that path any more — it was deleted, its folder moved, or the
-drive holding it is not mounted. **Fix**: Put the drive or folder back if that is what happened; otherwise choose one of
-the two actions, described in
+drive holding it is unmounted.
+
+**Fix**: Put the drive or folder back if that is what happened; otherwise choose one of the two actions, described in
 [Managing Games → When a Downloaded Game's File Is Missing](managing-games.md#when-a-downloaded-games-file-is-missing).
 
 ### The download has no launchable file

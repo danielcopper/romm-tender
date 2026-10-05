@@ -273,11 +273,6 @@ maps 1:1 onto these tables.
 | `collection_sync_state`     | `CollectionSyncState`            | `(collection_id, collection_kind)` | a standard/smart collection fully synced |
 | `kv_config`                 | misc singleton scalars           | `key`                              | per key                                  |
 
-A `rom_installs` row records a download, not that its file is still on disk. A file that went missing — deleted, its
-folder moved, its drive not mounted — leaves the row in place: start-up only logs it, and the game page names the
-missing path and leaves the row to the user's **Download again** (replaced through the download-complete writer once the
-new download lands) or **Forget this download** (dropped through the uninstall's writer, no file touched).
-
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
 `platform_slug → display_name` cache), `retrodeck_home_path` (+ its pending-migration `_previous`, and — when the home
@@ -301,9 +296,17 @@ key — it is tracked in `PRAGMA user_version` by the [migration runner](#the-mi
 (`status='running'`, no stats yet) erase the last completed run's displayable stats. "Last successful sync" is the
 newest row with `status='completed'`; "is a sync running" is any row with `status='running'`.
 
+### A download whose file is missing
+
+A `rom_installs` row records a download, not that its file is still on disk. A deleted file, a moved ROM folder and an
+unmounted drive look the same from here, and only the first is gone for good, so a missing file leaves the row in place:
+start-up only logs it, and the game page names the missing path (`file_missing_at`) and leaves the row to the user's
+**Download again** (replaced through the download-complete writer once the new download lands) or **Forget this
+download** (dropped through the uninstall's writer, no file touched).
+
 ### Foreign keys
 
-Most relationships are _not_ parent-child (`startup_healing` prunes against disk truth; playtime survives shortcut
+Most relationships are _not_ parent-child (an install record outlives its file on disk; playtime survives shortcut
 removal), so foreign keys are deliberately sparse:
 
 - **Per-ROM tables → `roms`, `ON DELETE CASCADE`** (`rom_installs`, `rom_metadata`, `rom_playtime`,

@@ -509,8 +509,8 @@ interrupted one stopped.
 
 If a game's downloaded file is no longer where Tender put it, its detail page says **File missing at** and names that
 path, and offers **Download again** and **Forget this download** instead of Play. Tender cannot tell a deleted file from
-a moved ROM folder or an SD card that is not inserted, so it forgets nothing on its own — not at start-up, and not when
-you open the page. If the card or folder comes back, the game is playable again as it was.
+a moved ROM folder or an unmounted drive, so it forgets nothing on its own — not at start-up, and not when you open the
+page. If the drive or folder comes back, the game is playable again as it was.
 
 - **Download again** is an ordinary download of the game, to where every download goes. Until it completes, the game
   stays as it was; a cancelled or failed download leaves it showing **File missing** again.

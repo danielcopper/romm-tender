@@ -287,12 +287,12 @@ the links in it that still exist and leaves the missing tail as spelled. A marke
 and turns out to name the live home is dropped on that same pass, because otherwise it would stand until the user
 migrates or dismisses.
 
-The install prune (`StartupHealingService`, via the `ResolvedPathFn` seam) resolves **both** sides before its prefix
-match: the pending-home markers, and each install's own recorded paths. Neither side is reliably one spelling — a
-download is recorded through `safe_join` and so resolved, while a row an older migration relocated carries whatever
-spelling the home had when it ran — and a match that misses prunes a record whose files are still on disk. Resolving the
-recorded path is safe there in a way it is not in the deletion guards: the prune decides what to keep and authorizes
-nothing.
+The start-up report of missing installs (`StartupHealingService`, via the `ResolvedPathFn` seam) resolves **both** sides
+before its prefix match: the pending-home markers, and each install's own recorded paths. Neither side is reliably one
+spelling — a download is recorded through `safe_join` and so resolved, while a row an older migration relocated carries
+whatever spelling the home had when it ran — and a match that misses reports an install the move will relocate as
+missing. Resolving the recorded path is safe there in a way it is not in the deletion guards: the report decides what a
+log line says and authorizes nothing.
 
 Three user-visible spellings change with this: the `root_missing` banner's "Expected at:" line reports `resolved_home`,
 and the migration-blocked page renders `old_path` and `new_path`, both of which are now the resolved markers.
