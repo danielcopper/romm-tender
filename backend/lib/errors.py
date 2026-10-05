@@ -228,6 +228,29 @@ def classify_error(exc):
     return ErrorCode.UNKNOWN.value, str(exc)
 
 
+class Refused(Exception):
+    """An operation the service layer will not carry out, raised rather than answered.
+
+    The entrypoint (``main.Endpoints``) is what turns it into the wire's
+    ``{"success": False, "reason", "message", **details}`` answer; a service
+    raising it never builds that dict itself. ``reason`` is a literal at the
+    raise site: the first argument here, or the class attribute of a named
+    subclass, which passes its own ``reason`` on. ``details`` are written
+    beside ``reason`` and ``message`` on the wire.
+
+    A refusal is a decision, never a bug: a broken invariant raises
+    ``ValueError`` and its kind, which reach the panel as a transport error.
+    """
+
+    reason: str
+
+    def __init__(self, reason: str, message: str, **details: Any) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.message = message
+        self.details = details
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 
