@@ -47,7 +47,7 @@ const PreferredRegionModalContent: FC<PreferredRegionModalProps> = ({ oldLabel, 
           }}
         >
           <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.8)", lineHeight: "1.4" }}>
-            This applies to games synced <b>from now on</b>. When a game has several regional versions, the plugin will
+            This applies to games synced <b>from now on</b>. When a game has several regional versions, Tender will
             prefer this region for the version it binds and the name it gives the new Steam shortcut.
             <br />
             <br />

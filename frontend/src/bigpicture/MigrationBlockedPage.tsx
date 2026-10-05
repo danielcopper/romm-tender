@@ -54,7 +54,7 @@ export const MigrationBlockedPage: FC<MigrationBlockedPageProps> = ({ migration 
         strTitle="Dismiss Migration?"
         strDescription={
           "This will accept that some ROMs and saves remain at the old location. " +
-          "The plugin will continue with the new path. Save data may be inconsistent " +
+          "Tender will continue with the new path. Save data may be inconsistent " +
           "across sessions. Are you sure?"
         }
         strOKButtonText="Dismiss"
@@ -134,7 +134,7 @@ export const MigrationBlockedPage: FC<MigrationBlockedPageProps> = ({ migration 
       )}
       <PanelSectionRow>
         <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.55)", padding: "4px 0" }}>
-          Or revert RetroDECK to its previous location — the plugin will detect it automatically.
+          Or revert RetroDECK to its previous location — Tender will detect it automatically.
         </div>
       </PanelSectionRow>
     </PanelSection>

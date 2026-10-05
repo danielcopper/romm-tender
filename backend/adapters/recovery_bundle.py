@@ -46,8 +46,8 @@ _ROOT_README_HEADLINE = f"{DISPLAY_NAME} recovery bundles"
 _ROOT_README_TEXT = (
     f"{_ROOT_README_HEADLINE}\n{'=' * len(_ROOT_README_HEADLINE)}\n"
     + """
-This folder holds snapshots the Tender plugin took immediately BEFORE it
-deleted a game's local data, during "Clean Up Removed RomM Games".
+This folder holds snapshots Tender took immediately BEFORE it deleted a
+game's local data, during "Clean Up Removed RomM Games".
 
   bundles/   one folder per cleaned-up game, named <game>_<date>_<id>.
              Each has its own README.txt explaining what it holds and how to
@@ -55,8 +55,8 @@ deleted a game's local data, during "Clean Up Removed RomM Games".
   staging/   scratch space used while a bundle is being written. It is normally
              empty; anything left here is from a run that failed mid-write.
 
-Nothing here is ever read back automatically — there is no restore button. The
-plugin only writes to this folder, so it is safe to move, archive, or delete a
+Nothing here is ever read back automatically — there is no restore button.
+Tender only writes to this folder, so it is safe to move, archive, or delete a
 bundle once you are sure you no longer need it.
 """
 )

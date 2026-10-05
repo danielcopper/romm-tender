@@ -331,8 +331,8 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
         <>
           <div style={helperTextStyle}>
             Create a token in RomM&apos;s web UI (Settings → API Tokens) and paste it here. Make sure it has the scopes
-            listed in the plugin docs so downloads, saves, and device sync work. The plugin never deletes a pasted
-            token; you manage it in RomM.
+            listed in Tender&apos;s configuration guide so downloads, saves, and device sync work. Tender never deletes
+            a pasted token; you manage it in RomM.
           </div>
           {/* The token field is the only input in this mode and, unwrapped, is a
                 direct child of the modal body. On the Deck, R2/OSK-Enter on the
@@ -357,7 +357,7 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
         <>
           <div style={helperTextStyle}>
             In RomM&apos;s web UI open your API token and click <strong>Pair</strong>, then enter the 8-character code
-            here within 60 seconds. The plugin fetches the token itself — nothing to copy or paste.
+            here within 60 seconds. Tender fetches the token itself — nothing to copy or paste.
           </div>
           <div style={codeLabelStyle}>Pairing code</div>
           {/* Focusable + flow-children="horizontal" tells Steam's gamepad nav to
@@ -384,7 +384,7 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
       {mode === "credentials" && (
         <>
           <div style={helperTextStyle}>
-            Enter your RomM username and password once. The plugin exchanges them for an API token and never stores your
+            Enter your RomM username and password once. Tender exchanges them for an API token and never stores your
             password.
           </div>
           {/* A plain wrapping div carries the ref used to advance Enter from the

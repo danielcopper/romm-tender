@@ -292,8 +292,7 @@ _STATE_MESSAGES: dict[str, str] = {
     SAVE_STATE_SHARED: "Save sync is unavailable: this emulator keeps one save card that all games share.",
     SAVE_STATE_INSIDE_CONTENT: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
     SAVE_STATE_HOLE: (
-        "Save sync is unavailable: this emulator files saves under an identity of the game "
-        "that this plugin cannot read."
+        "Save sync is unavailable: this emulator files saves under an identity of the game that Tender cannot read."
     ),
     SAVE_STATE_UNESTABLISHED: "Save sync is unavailable: what this emulator writes could not be established.",
 }

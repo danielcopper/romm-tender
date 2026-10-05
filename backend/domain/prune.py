@@ -174,7 +174,7 @@ def render_bundle_readme(context: BundleReadmeContext, records: Sequence[Mapping
         "3. ROM files and saves are usable immediately once copied back.",
         "4. Database state (playtime, save-sync baselines, install records) lives in",
         "   manifest.json and is not restored by copying files. Re-syncing the game",
-        "   in the plugin rebuilds its row; the recorded playtime is reference only.",
+        "   in Tender rebuilds its row; the recorded playtime is reference only.",
         "",
     ]
     return "\n".join(lines)

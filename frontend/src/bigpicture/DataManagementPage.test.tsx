@@ -225,7 +225,7 @@ describe("DataManagementPage", () => {
     it("opens on the first row's pane", async () => {
       const view = await renderPage();
 
-      expect(view.container.textContent).toContain("The Steam entries this plugin created");
+      expect(view.container.textContent).toContain("The Steam entries Tender created");
     });
   });
 
@@ -764,7 +764,7 @@ describe("DataManagementPage", () => {
   });
 
   describe("Other non-Steam games is disjoint from Tender's shortcuts", () => {
-    it("counts only the entries this plugin did not create", async () => {
+    it("counts only the entries Tender did not create", async () => {
       stubCollectionStore([1, 2, 3]);
       stubAppStore({
         1: { strDisplayName: "Some RomM Game" },

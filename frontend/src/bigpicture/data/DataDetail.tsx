@@ -108,8 +108,8 @@ const ShortcutsPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        The Steam entries this plugin created for your RomM games. Removing them leaves downloaded ROM files and save
-        files where they are; the next sync puts the shortcuts back.
+        The Steam entries Tender created for your RomM games. Removing them leaves downloaded ROM files and save files
+        where they are; the next sync puts the shortcuts back.
       </Muted>
       <Figures>
         {figureLine(state.shortcutCount, "The shortcut count", (count) => `${pluralize(count, "shortcut")} in Steam`)}
@@ -134,8 +134,8 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        The ROMs this plugin downloaded to your device, one per install — a game you keep two versions of is two of
-        these. Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
+        The ROMs Tender downloaded to your device, one per install — a game you keep two versions of is two of these.
+        Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
       </Muted>
       <Figures>
         {figureLine(
@@ -184,7 +184,7 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
     <>
       <Muted>
         Steam keeps the images it shows for a shortcut after the shortcut is gone. These are the leftovers: images whose
-        shortcut no longer exists. Images of games still in your library — including games this plugin did not add — are
+        shortcut no longer exists. Images of games still in your library — including games Tender did not add — are
         kept.
       </Muted>
       {line !== null && <Figures>{line}</Figures>}
@@ -353,9 +353,9 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        Everything in your Steam library that neither Steam nor this plugin installed — emulators, launchers, browsers,
-        games you added by hand. Your RomM games are not counted here; they are the Tender&apos;s shortcuts row. The
-        whitelist below protects what you keep; everything else is what the button removes.
+        Everything in your Steam library that neither Steam nor Tender installed — emulators, launchers, browsers, games
+        you added by hand. Your RomM games are not counted here; they are the Tender&apos;s shortcuts row. The whitelist
+        below protects what you keep; everything else is what the button removes.
       </Muted>
       <Figures>{figures()}</Figures>
       {state.unidentifiedCount > 0 && (

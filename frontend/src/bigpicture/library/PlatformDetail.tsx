@@ -675,7 +675,7 @@ function rowAction(
     showModal(
       <ConfirmModal
         strTitle={folder ? `Delete ${count} file(s) in ${file.file_name}?` : `Delete ${file.file_name}?`}
-        strDescription="This deletes only what this plugin downloaded, at the places it wrote them. Files your emulator came with, or that you put there yourself, are never touched — and a folder the emulator lists is never removed. Games that need them won't launch until you download them again."
+        strDescription="This deletes only what Tender downloaded, at the places it wrote them. Files your emulator came with, or that you put there yourself, are never touched — and a folder the emulator lists is never removed. Games that need them won't launch until you download them again."
         strOKButtonText="Delete"
         strCancelButtonText="Cancel"
         onOK={() => {
@@ -778,7 +778,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     showModal(
       <ConfirmModal
         strTitle={`Delete BIOS files for ${row.name}?`}
-        strDescription="This deletes only the BIOS files this plugin downloaded for this system. Files your emulator came with, or that you put there yourself, are left where they are. Games that need the deleted files won't launch until you download them again."
+        strDescription="This deletes only the BIOS files Tender downloaded for this system. Files your emulator came with, or that you put there yourself, are left where they are. Games that need the deleted files won't launch until you download them again."
         strOKButtonText="Delete BIOS Files"
         strCancelButtonText="Cancel"
         onOK={() => state.deleteBios(row.slug)}

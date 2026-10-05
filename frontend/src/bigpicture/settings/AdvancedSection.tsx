@@ -18,7 +18,7 @@ export const AdvancedSection: FC<AdvancedSectionProps> = ({ logLevel, onLogLevel
       <PanelSectionRow>
         <DropdownItem
           label="Log Level"
-          description="Controls how much detail is written to plugin logs"
+          description="Controls how much detail Tender writes to its log"
           rgOptions={[
             { data: "error", label: "Error" },
             { data: "warn", label: "Warn" },

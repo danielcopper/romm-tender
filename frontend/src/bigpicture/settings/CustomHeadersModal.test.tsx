@@ -155,14 +155,20 @@ describe("CustomHeadersModal", () => {
   it("stays open and surfaces the backend's refusal", async () => {
     const closeModal = vi.fn();
     const { container, getByText, getByTestId } = render(
-      <CustomHeadersModal closeModal={closeModal} storedNames={[]} onSave={saveFail("'Host' is set by the plugin")} />,
+      <CustomHeadersModal
+        closeModal={closeModal}
+        storedNames={[]}
+        onSave={saveFail("'Host' is set for you when the request is sent and cannot be overridden.")}
+      />,
     );
     fireEvent.click(getByText("Add header"));
     fireEvent.change(nameField(rows(container)[0]!), { target: { value: "Host" } });
     fireEvent.click(getByText("Save"));
     await flushSubmit();
     expect(closeModal).not.toHaveBeenCalled();
-    expect(getByTestId("custom-headers-error").textContent).toBe("'Host' is set by the plugin");
+    expect(getByTestId("custom-headers-error").textContent).toBe(
+      "'Host' is set for you when the request is sent and cannot be overridden.",
+    );
   });
 
   it("reports a rejected save rather than closing on it", async () => {

@@ -190,7 +190,7 @@ const OptionsSection: FC<{ state: SyncPageState }> = ({ state }) => {
             showModal(
               <ConfirmModal
                 strTitle="Force a full re-sync?"
-                strDescription="This forgets what has already been synced, so the next run re-fetches every platform and rewrites every shortcut. Your games stay in Steam — only the plugin's record of what is already correct is cleared, which is also what a resume would have continued from."
+                strDescription="This forgets what has already been synced, so the next run re-fetches every platform and rewrites every shortcut. Your games stay in Steam — only Tender's record of what is already correct is cleared, which is also what a resume would have continued from."
                 strOKButtonText="Force Full Sync"
                 strCancelButtonText="Cancel"
                 onOK={state.forceFullSync}
