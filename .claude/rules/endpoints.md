@@ -22,6 +22,14 @@ Two carve-outs (pattern-exempt in the gate):
 
 Full convention paragraph: the `lib/list_result.py` module docstring.
 
+**A service may raise its refusal instead of answering it** — `Refused` (`lib/errors.py`) from the service layer,
+`DomainRefused` (`domain/refusal.py`) from a domain rule, with the reason a literal at the raise site — and return a
+`PartialFailure` (`lib/partial_failure.py`) for work that stopped partway. `Endpoints` translates all three into the
+shape above, and a raised `RommApiError` into `classify_error`'s reason and message; it catches nothing else, so a bug
+stays a transport error (`.claude/rules/host.md`, rule 1). A failure dict stays valid in a module not yet converted. A
+converted module is listed in `CONVERTED_MODULES` in `scripts/check_failure_shape.py`, which then fails on any failure
+shape built in it; the list only grows.
+
 Two adjacent rules that bite when adding or changing an endpoint:
 
 - **An endpoint is a public method on `Endpoints` marked `@route`**, placed topmost — `def` or `async def` alike. An

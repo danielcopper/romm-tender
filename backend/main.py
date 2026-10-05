@@ -40,10 +40,12 @@ from host import (
 from lib.errors import Refused, RommApiError, classify_error
 from lib.partial_failure import PartialFailure
 
-# Only these become an answer. Anything else an endpoint raises is a bug and
-# reaches the panel as the host's transport error, never as a failure shape
-# (``.claude/rules/host.md``, rule 1) — which is why ``classify_error``'s
-# socket-error and catch-all branches are never reached from here.
+# Only these become an answer. Anything else an endpoint raises reaches the
+# panel as the host's transport error, never as a failure shape
+# (``.claude/rules/host.md``, rule 1): a catch-all here would show a programming
+# error as a sentence about the user's game. That is also why
+# ``classify_error``'s socket-error and catch-all branches are never reached
+# from here; a further type joins this tuple only by decision.
 _TRANSLATED = (Refused, DomainRefused, RommApiError)
 
 

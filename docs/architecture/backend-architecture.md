@@ -81,6 +81,15 @@ keeping the two apart is prose and review. Reachable methods are exactly the end
 methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
 is the one `scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
+**A refusal can be raised, and the entrypoint answers it.** Every endpoint on `Endpoints` is wrapped once (in `main.py`,
+not per method, so `@route` stays the first decorator): a raised `Refused` (`lib/errors.py`) or `DomainRefused`
+(`domain/refusal.py`) answers `{success: False, reason, message}` with the refusal's details beside them; a returned
+`PartialFailure` (`lib/partial_failure.py`), the result of work that stopped partway, answers the same shape with what
+was done; and a raised `RommApiError` answers `classify_error`'s reason and message. Nothing else is caught there: any
+other exception, a raw `ConnectionError` or `OSError` included, is still a `backend_exception`, and a further type is
+added only by decision, one type at a time. A `def` endpoint stays a `def`. Services not yet converted still return the
+failure dict, and both forms reach the panel identically.
+
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
 socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it.
@@ -2904,6 +2913,11 @@ two documented carve-outs (discriminated-status unions — a `status` key with n
 carrying an additive `server_query_failed` / `recommended_action` flag) are pattern-exempt. Run without `--check` for
 the report-mode inventory grouped by classification. The routing slugs come from `lib.list_result.ErrorCode` (the Lean
 enum) plus bespoke plain-string reasons for non-server-reachability guards.
+
+The gate also carries `CONVERTED_MODULES`, the modules that raise their refusals instead of answering them. In those
+(anywhere under `backend/`, adapters included) `--check` fails on any dict literal with a falsy `success`, any
+`error_response(...)` call and a `**spread` of a refusal helper, and on a listed path that no longer exists. The list
+only grows; the script's docstring names what it cannot see.
 
 ### 5. Enforced: underscore prefix
 
