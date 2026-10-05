@@ -87,9 +87,10 @@ class TestNothingRunning:
     @pytest.mark.asyncio
     async def test_refuses_with_not_running(self) -> None:
         control = FakeGameProcessControlAdapter(pids=[])
+        service = _make_service(control)
 
         with pytest.raises(Refused) as refused:
-            await _make_service(control).stop_running_game(ROM_ID)
+            await service.stop_running_game(ROM_ID)
 
         assert refused.value.reason == "not_running"
         assert refused.value.message == "No running game was found to stop."
@@ -97,9 +98,10 @@ class TestNothingRunning:
     @pytest.mark.asyncio
     async def test_signals_nothing_at_all(self) -> None:
         control = FakeGameProcessControlAdapter(pids=[])
+        service = _make_service(control)
 
         with pytest.raises(Refused):
-            await _make_service(control).stop_running_game(ROM_ID)
+            await service.stop_running_game(ROM_ID)
 
         assert control.stop_calls == []
         assert control.kill_calls == []
@@ -109,9 +111,10 @@ class TestNothingRunning:
         # The service must ask about RetroDECK, not some other flatpak — a
         # mismatched id resolves to nothing on the fake.
         control = FakeGameProcessControlAdapter(pids=[101], app_id="org.videolan.VLC")
+        service = _make_service(control)
 
         with pytest.raises(Refused) as refused:
-            await _make_service(control).stop_running_game(ROM_ID)
+            await service.stop_running_game(ROM_ID)
 
         assert control.find_calls == [APP_ID]
         assert refused.value.reason == "not_running"

@@ -110,9 +110,11 @@ def _translating_refusals[C: type](cls: C) -> C:
     host for its marker; a public method without the marker is wrapped too, and
     stays unreachable.
     """
-    for name, value in list(vars(cls).items()):
-        if not name.startswith("_") and inspect.isfunction(value):
-            setattr(cls, name, _translated(value))
+    public = {
+        name: value for name, value in vars(cls).items() if not name.startswith("_") and inspect.isfunction(value)
+    }
+    for name, value in public.items():
+        setattr(cls, name, _translated(value))
     return cls
 
 
