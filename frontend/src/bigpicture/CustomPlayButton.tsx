@@ -56,6 +56,7 @@ import {
   FORGET_FAILED_TOAST,
   downloadForgottenToast,
   fileMissingNote,
+  forgetRefusedToast,
 } from "../utils/missingDownloadWording";
 import { showAdoptExistingModal } from "./AdoptExistingModal";
 import { showAdoptCandidateModal } from "./AdoptCandidateModal";
@@ -179,12 +180,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // an undifferentiated Download; the comparison itself arrives at click time.
   const [targetOccupied, setTargetOccupied] = useState(false);
   const [candidatePresent, setCandidatePresent] = useState(false);
-  // Where the install record says this download's file was, while neither the
-  // file nor its folder is there. Set only from the cached detail; while it is
-  // set the download state offers "Download again" and "Forget this download"
-  // in place of a plain Download, and nothing offers Play.
   const [missingPath, setMissingPath] = useState<string | null>(null);
   const [forgetPending, setForgetPending] = useState(false);
+  // Set synchronously before the forget's first await, for the same reason as
+  // `uninstallPendingRef`.
+  const forgetPendingRef = useRef(false);
   // Per-file progress of an in-flight uninstall (multi-file ROMs only).
   const [uninstallProgress, setUninstallProgress] = useState<{ removed: number; total: number } | null>(null);
   // Set synchronously before the uninstall's first await, so a second press
@@ -387,6 +387,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         if (evt.rom_id !== romIdRef.current) return;
         setDlProgress(null);
         setActionPending(false);
+        setMissingPath(null);
         lastAnnouncedState = null;
         setState("dl_complete");
         transitionTimerRef.current = setTimeout(() => {
@@ -427,9 +428,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // is already showing. Not this component's own dispatch: `handleUninstall`
       // dispatches before it sets `uninstalling`, so both land in one React
       // batch and the pulse wins on ordering, guard or no guard. Clearing the
-      // flags is unconditional either way — the uninstall deleted exactly the
-      // content the stat found, and the candidate answer was read at page-open
-      // against a folder this removal has just changed.
+      // flags is unconditional either way — the install record is gone, so
+      // the content the stat found is either deleted (an uninstall) or was
+      // missing already (a forget), and the candidate answer was read at
+      // page-open against a folder that has changed since.
       setState((prev) => (prev === "uninstalling" ? prev : "download"));
       setActionPending(false);
       setTargetOccupied(false);
@@ -1160,6 +1162,37 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
   };
 
+  /**
+   * Run a removal of this ROM's install record — an uninstall or a forget — and,
+   * once the backend has answered success, reset the shortcut's now-stale launch
+   * command to the uninstalled "" placeholder under the removal's lease and
+   * announce the ROM as not installed. The reset keeps a raced-past
+   * not_installed launch from exec'ing a stale `flatpak run … "<path>"`
+   * (#1051); it is best-effort, so a launch-options hiccup never turns a
+   * removal that happened into an error.
+   */
+  const removeInstallRecord = async <R extends { success: boolean; prune_lease_token?: string }>(
+    rid: number,
+    remove: () => Promise<R>,
+    context: string,
+  ): Promise<R> => {
+    const admission = capturePruneLeaseAdmission(leaseOwner);
+    const result = await remove();
+    if (!result.success) return result;
+    await withPruneLease(
+      result.prune_lease_token,
+      context,
+      async (signal) => {
+        if (signal.aborted) return;
+        await setLaunchOptionsConfirmed(appId, "").catch(() => false);
+      },
+      leaseOwner,
+      admission,
+    );
+    globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: rid } }));
+    return result;
+  };
+
   const handleUninstall = async () => {
     if (!romId || uninstallPendingRef.current) return;
     // Removing a large multi-file ROM takes long enough that a button which only
@@ -1171,24 +1204,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     setState("uninstall_pending");
     detach(debugLog(`CustomPlayButton: uninstalling romId=${romId}`));
     try {
-      const admission = capturePruneLeaseAdmission(leaseOwner);
-      const result = await removeRom(romId);
+      const result = await removeInstallRecord(romId, () => removeRom(romId), "ROM uninstall");
       if (result.success) {
-        // Reset the now-stale launch command to the uninstalled "" placeholder so a
-        // raced-past not_installed launch execs `bin/tender-rom-launcher` with no args (clean
-        // exit 1) instead of a stale `flatpak run … "<deleted path>"` (#1051). Best-effort:
-        // a launch-options hiccup must not turn a successful uninstall into an error.
-        await withPruneLease(
-          result.prune_lease_token,
-          "ROM uninstall",
-          async (signal) => {
-            if (signal.aborted) return;
-            await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-          },
-          leaseOwner,
-          admission,
-        );
-        globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
         showToast(`${romName || "ROM"} uninstalled`);
         // Dark pulse transition before showing Download button
         setState("uninstalling");
@@ -1207,35 +1224,17 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     }
   };
 
-  // "Forget this download": the uninstall without the deletion, for a download
-  // whose file is gone. The shortcut's launch command is cleared exactly as an
-  // uninstall clears it, and the same `romm_rom_uninstalled` announcement takes
-  // every surface — this button included — to the not-installed state.
   const handleForget = async () => {
-    if (!romId || forgetPending) return;
+    if (!romId || forgetPendingRef.current) return;
+    forgetPendingRef.current = true;
     setForgetPending(true);
     try {
-      const admission = capturePruneLeaseAdmission(leaseOwner);
-      const result = await forgetDownload(romId);
-      if (result.success) {
-        await withPruneLease(
-          result.prune_lease_token,
-          "Forget download",
-          async (signal) => {
-            if (signal.aborted) return;
-            await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-          },
-          leaseOwner,
-          admission,
-        );
-        globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
-        showToast(downloadForgottenToast(romName));
-      } else {
-        showToast(result.message || FORGET_FAILED_TOAST);
-      }
+      const result = await removeInstallRecord(romId, () => forgetDownload(romId), "Forget download");
+      showToast(result.success ? downloadForgottenToast(romName) : forgetRefusedToast(result));
     } catch {
       showToast(FORGET_FAILED_TOAST);
     } finally {
+      forgetPendingRef.current = false;
       setForgetPending(false);
     }
   };

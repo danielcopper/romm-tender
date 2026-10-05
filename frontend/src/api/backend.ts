@@ -389,10 +389,19 @@ export const refreshSaveStatus = endpoint<[number], { success: boolean }>("refre
 export const removeRom = endpoint<[number], BackendResult>("remove_rom");
 /**
  * Forget a download whose files are gone: the uninstall without the deletion.
- * Refused with `file_present` while the recorded file or folder exists. A
- * success carries the same `rom_uninstall` lease as `removeRom`.
+ * Refused with `file_present`, naming the `path` found, while the recorded file
+ * or folder exists. A success carries the same `rom_uninstall` lease as
+ * `removeRom`.
  */
-export const forgetDownload = endpoint<[number], BackendResult>("forget_download");
+export interface ForgetDownloadResult {
+  success: boolean;
+  message: string;
+  reason?: string;
+  /** With `file_present`: the recorded file or folder found on disk. */
+  path?: string;
+  prune_lease_token?: string;
+}
+export const forgetDownload = endpoint<[number], ForgetDownloadResult>("forget_download");
 export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
 // `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads
