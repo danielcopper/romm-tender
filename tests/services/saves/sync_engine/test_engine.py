@@ -698,8 +698,9 @@ class TestUpdateInProgressGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
+        run = getattr(svc, entry)
         with pytest.raises(Refused) as refused:
-            await getattr(svc, entry)(42)
+            await run(42)
 
         assert (refused.value.reason, refused.value.message) == ("blocked_by_update", _UPDATE_MESSAGE)
         assert refused.value.details == {"synced": 0}
@@ -715,8 +716,9 @@ class TestUpdateInProgressGuards:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
+        run = getattr(svc, entry)
         with pytest.raises(Refused) as refused:
-            await getattr(svc, entry)(42)
+            await run(42)
 
         assert refused.value.reason == "blocked_by_update"
 
@@ -732,8 +734,9 @@ class TestUpdateInProgressGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
+        run = getattr(svc, entry)
         with pytest.raises(Refused) as refused:
-            await getattr(svc, entry)(*args)
+            await run(*args)
 
         assert (refused.value.reason, refused.value.message) == ("blocked_by_update", _UPDATE_MESSAGE)
         assert refused.value.details == {"synced": 0, **extra}
@@ -832,8 +835,9 @@ class TestTheEnginesMigrationRefusalIsTheSharedOne:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
+        run = getattr(svc, entry)
         with pytest.raises(Refused) as refused:
-            await getattr(svc, entry)(42)
+            await run(42)
 
         assert (refused.value.reason, refused.value.message) == ("blocked_by_migration", _MIGRATION_MESSAGE)
         assert refused.value.details == {"synced": 0}
