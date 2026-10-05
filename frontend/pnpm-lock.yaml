@@ -23,7 +23,7 @@ importers:
         version: 16.0.3(rollup@4.63.1)
       '@rollup/rollup-linux-x64-musl':
         specifier: ^4.62.2
-        version: 4.63.5
+        version: 4.63.6
       '@size-limit/file':
         specifier: ^13.0.0
         version: 13.0.3(size-limit@13.0.3)
@@ -538,8 +538,8 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-x64-musl@4.63.5':
-    resolution: {integrity: sha512-VDC7rRJlee/scpki96GZ27Omf6yU87s1YXwVTpjE5841faVlDYYT565rgfmoR1U0sqL7z5ivQSDjcsF6VRXyBA==}
+  '@rollup/rollup-linux-x64-musl@4.63.6':
+    resolution: {integrity: sha512-8EZ1Q3PB7yUjvR4MbFAnCBF1wF0XRe5QQqbtlJXP7ZX5C8iYlSQJugUhj9oS0gbUP4jp9qGhaIgFnV9Nvod86Q==}
     cpu: [x64]
     os: [linux]
 
@@ -2906,7 +2906,7 @@ snapshots:
   '@rollup/rollup-linux-x64-musl@4.63.1':
     optional: true
 
-  '@rollup/rollup-linux-x64-musl@4.63.5': {}
+  '@rollup/rollup-linux-x64-musl@4.63.6': {}
 
   '@rollup/rollup-openbsd-x64@4.63.1':
     optional: true
