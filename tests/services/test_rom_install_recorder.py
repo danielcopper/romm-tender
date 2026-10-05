@@ -52,7 +52,7 @@ class _Harness:
 
 
 @pytest.fixture
-def plugin():
+def backend():
     return _Harness()
 
 
@@ -66,9 +66,9 @@ class TestRecordInstallLaunchTarget:
     _PS3 = frozenset({".desktop", ".iso", ".ps3", ".ps3dir"})
     _DREAMCAST = frozenset({".cdi", ".chd", ".cue", ".dat", ".elf", ".gdi", ".iso", ".lst", ".m3u", ".7z", ".zip"})
 
-    def _record(self, plugin, *, file_path, rom_dir, system, cleanup=lambda: None):
-        _seed_rom(plugin._uow, 42)
-        return plugin._install_recorder.do_record_install(
+    def _record(self, backend, *, file_path, rom_dir, system, cleanup=lambda: None):
+        _seed_rom(backend._uow, 42)
+        return backend._install_recorder.do_record_install(
             rom_id=42,
             rom_detail={"platform_slug": system},
             file_path=file_path,
@@ -77,15 +77,15 @@ class TestRecordInstallLaunchTarget:
             cleanup=cleanup,
         )
 
-    def test_ps3_pkg_records_an_unlaunchable_install_and_keeps_the_files(self, plugin):
+    def test_ps3_pkg_records_an_unlaunchable_install_and_keeps_the_files(self, backend):
         # The reported case (#1582). The row is written, the install is NOT
         # refused, and cleanup is NEVER called — the package stays on disk so the
         # user can install it by hand in RPCS3.
-        plugin._system_extensions = {"ps3": self._PS3}
+        backend._system_extensions = {"ps3": self._PS3}
         cleanup_calls = []
 
         file_path, error = self._record(
-            plugin,
+            backend,
             file_path="/roms/ps3/Puppeteer/Puppeteer.pkg",
             rom_dir="/roms/ps3/Puppeteer",
             system="ps3",
@@ -95,45 +95,45 @@ class TestRecordInstallLaunchTarget:
         assert error is None
         assert file_path == "/roms/ps3/Puppeteer/Puppeteer.pkg"
         assert cleanup_calls == []
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is False
         assert install.file_path == "/roms/ps3/Puppeteer/Puppeteer.pkg"
         assert install.rom_dir == "/roms/ps3/Puppeteer"
 
-    def test_dreamcast_track_bin_records_an_unlaunchable_install(self, plugin):
+    def test_dreamcast_track_bin_records_an_unlaunchable_install(self, backend):
         # A multi-file GDI rip with no .cue: the fallback picks the largest track
         # file, and dreamcast's accept-list carries no .bin.
-        plugin._system_extensions = {"dreamcast": self._DREAMCAST}
+        backend._system_extensions = {"dreamcast": self._DREAMCAST}
 
         _, error = self._record(
-            plugin, file_path="/roms/dc/Game/track03.bin", rom_dir="/roms/dc/Game", system="dreamcast"
+            backend, file_path="/roms/dc/Game/track03.bin", rom_dir="/roms/dc/Game", system="dreamcast"
         )
 
         assert error is None
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is False
 
-    def test_ps3_folder_boot_dump_stays_launchable(self, plugin):
+    def test_ps3_folder_boot_dump_stays_launchable(self, backend):
         # The carve-out that protects every working PS3 dump: file_path records
         # the nested EBOOT (a .bin, absent from ps3's list) but the bake target
         # is the game directory, which ES-DE spells .ps3dir (ADR-0019).
-        plugin._system_extensions = {"ps3": self._PS3}
+        backend._system_extensions = {"ps3": self._PS3}
 
         _, error = self._record(
-            plugin,
+            backend,
             file_path="/roms/ps3/MyGame/PS3_GAME/USRDIR/EBOOT.BIN",
             rom_dir="/roms/ps3/MyGame",
             system="ps3",
         )
 
         assert error is None
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is True
 
-    def test_ps3_folder_boot_dump_still_bakes_the_game_directory_end_to_end(self, plugin):
+    def test_ps3_folder_boot_dump_still_bakes_the_game_directory_end_to_end(self, backend):
         # The one shape that can silently break a working install, walked end to
         # end: record the install through the real check, then resolve the
         # persisted row through the REAL DiscLaunchResolver the bake sites use.
@@ -142,63 +142,63 @@ class TestRecordInstallLaunchTarget:
         # ROM in a typical library has this shape, so only this fixture pins it.
         from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 
-        plugin._system_extensions = {"ps3": self._PS3}
+        backend._system_extensions = {"ps3": self._PS3}
         rom_dir = "/roms/ps3/MyGame"
         eboot = f"{rom_dir}/PS3_GAME/USRDIR/EBOOT.BIN"
 
-        self._record(plugin, file_path=eboot, rom_dir=rom_dir, system="ps3")
+        self._record(backend, file_path=eboot, rom_dir=rom_dir, system="ps3")
 
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is True
         resolver = DiscLaunchResolver(
             config=DiscLaunchResolverConfig(
                 list_files=lambda directory: [eboot] if directory == rom_dir else [],
-                system_extensions=lambda system_name: plugin._system_extensions.get(system_name, frozenset()),
+                system_extensions=lambda system_name: backend._system_extensions.get(system_name, frozenset()),
                 logger=logging.getLogger("test_rom_install_recorder"),
             ),
         )
         assert resolver.resolve_for_install(install, None) == rom_dir
 
-    def test_desktop_entry_stays_launchable(self, plugin):
-        plugin._system_extensions = {"ps3": self._PS3}
+    def test_desktop_entry_stays_launchable(self, backend):
+        backend._system_extensions = {"ps3": self._PS3}
 
-        _, error = self._record(plugin, file_path="/roms/ps3/Game.desktop", rom_dir=None, system="ps3")
+        _, error = self._record(backend, file_path="/roms/ps3/Game.desktop", rom_dir=None, system="ps3")
 
         assert error is None
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is True
 
-    def test_unknown_system_stays_launchable(self, plugin):
+    def test_unknown_system_stays_launchable(self, backend):
         # ES-DE could not answer (empty accept-list). A missing answer must never
         # turn a working install into an unlaunchable one.
-        plugin._system_extensions = {}
+        backend._system_extensions = {}
 
         _, error = self._record(
-            plugin, file_path="/roms/ps3/Puppeteer/Puppeteer.pkg", rom_dir="/roms/ps3/Puppeteer", system="ps3"
+            backend, file_path="/roms/ps3/Puppeteer/Puppeteer.pkg", rom_dir="/roms/ps3/Puppeteer", system="ps3"
         )
 
         assert error is None
-        install = plugin._uow.rom_installs.get(42)
+        install = backend._uow.rom_installs.get(42)
         assert install is not None
         assert install.launchable is True
 
-    def test_unlaunchable_install_is_logged(self, plugin, caplog):
-        plugin._system_extensions = {"ps3": self._PS3}
+    def test_unlaunchable_install_is_logged(self, backend, caplog):
+        backend._system_extensions = {"ps3": self._PS3}
 
         with caplog.at_level(logging.WARNING):
             self._record(
-                plugin, file_path="/roms/ps3/Puppeteer/Puppeteer.pkg", rom_dir="/roms/ps3/Puppeteer", system="ps3"
+                backend, file_path="/roms/ps3/Puppeteer/Puppeteer.pkg", rom_dir="/roms/ps3/Puppeteer", system="ps3"
             )
 
         assert any("No launch target for rom_id=42" in r.message for r in caplog.records)
 
-    def test_launchable_install_logs_nothing(self, plugin, caplog):
-        plugin._system_extensions = {"ps3": self._PS3}
+    def test_launchable_install_logs_nothing(self, backend, caplog):
+        backend._system_extensions = {"ps3": self._PS3}
 
         with caplog.at_level(logging.WARNING):
-            self._record(plugin, file_path="/roms/ps3/Game.iso", rom_dir=None, system="ps3")
+            self._record(backend, file_path="/roms/ps3/Game.iso", rom_dir=None, system="ps3")
 
         assert not any("No launch target" in r.message for r in caplog.records)
 
@@ -210,11 +210,11 @@ class TestRecordInstallFsSizeWriteBack:
     missing/zero server size never clobbers a good persisted value.
     """
 
-    def test_successful_install_stamps_server_size(self, plugin):
-        uow = plugin._uow
+    def test_successful_install_stamps_server_size(self, backend):
+        uow = backend._uow
         _seed_rom(uow, 42)
 
-        file_path, error = plugin._install_recorder.do_record_install(
+        file_path, error = backend._install_recorder.do_record_install(
             rom_id=42,
             rom_detail={"platform_slug": "n64", "fs_size_bytes": 3_145_728},
             file_path="/roms/n64/game_42.z64",
@@ -231,9 +231,9 @@ class TestRecordInstallFsSizeWriteBack:
         # The install itself still persisted in the same UoW.
         assert uow.rom_installs.get(42) is not None
 
-    def test_missing_fs_size_bytes_does_not_overwrite(self, plugin):
+    def test_missing_fs_size_bytes_does_not_overwrite(self, backend):
         # The guard protects a good persisted value when the detail omits the size.
-        uow = plugin._uow
+        uow = backend._uow
         seeded = Rom.synced(
             rom_id=42,
             platform_slug="n64",
@@ -245,7 +245,7 @@ class TestRecordInstallFsSizeWriteBack:
         )
         uow.roms.save(seeded)
 
-        _, error = plugin._install_recorder.do_record_install(
+        _, error = backend._install_recorder.do_record_install(
             rom_id=42,
             rom_detail={"platform_slug": "n64"},  # no fs_size_bytes key
             file_path="/roms/n64/game_42.z64",
@@ -259,9 +259,9 @@ class TestRecordInstallFsSizeWriteBack:
         assert rom is not None
         assert rom.fs_size_bytes == 999_000
 
-    def test_zero_fs_size_bytes_does_not_overwrite(self, plugin):
+    def test_zero_fs_size_bytes_does_not_overwrite(self, backend):
         # A zero size is falsy — the guard skips the write, preserving the value.
-        uow = plugin._uow
+        uow = backend._uow
         seeded = Rom.synced(
             rom_id=42,
             platform_slug="n64",
@@ -273,7 +273,7 @@ class TestRecordInstallFsSizeWriteBack:
         )
         uow.roms.save(seeded)
 
-        _, error = plugin._install_recorder.do_record_install(
+        _, error = backend._install_recorder.do_record_install(
             rom_id=42,
             rom_detail={"platform_slug": "n64", "fs_size_bytes": 0},
             file_path="/roms/n64/game_42.z64",

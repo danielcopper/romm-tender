@@ -8,8 +8,8 @@ def _snapshot(app_id: int = 9001) -> dict[str, object]:
     return {
         "app_id": app_id,
         "name": "Game",
-        "exe": "/plugin/bin/tender-rom-launcher",
-        "start_dir": "/plugin",
+        "exe": "/tender/bin/tender-rom-launcher",
+        "start_dir": "/tender",
         "launch_options": "launch",
         "minutes_playtime_forever": 10,
         "minutes_playtime_last_two_weeks": None,

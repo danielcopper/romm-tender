@@ -1740,7 +1740,7 @@ class TestBadPathDeleteSavesPartialFailure:
         assert good_path not in fake.files
 
 
-class TestPluginVersionResolution:
+class TestDeviceVersionResolution:
     """The version a registered device is stamped with is the program's own."""
 
     def test_the_device_registry_is_handed_the_programs_version(self, monkeypatch, tmp_path):
@@ -1763,7 +1763,7 @@ class TestPluginVersionResolution:
 
         service, _ = make_service(tmp_path)
 
-        assert service._device_registry._plugin_version == "9.9.9"
+        assert service._device_registry._version == "9.9.9"
 
 
 class TestBuildSaveInventory:

@@ -1098,7 +1098,7 @@ class TestVerifyArchives:
 
         assert result["status"] == "unverifiable"
 
-    async def test_a_container_this_plugin_cannot_open_is_unverifiable_never_a_mismatch(self, h):
+    async def test_a_container_tender_cannot_open_is_unverifiable_never_a_mismatch(self, h):
         members = {"Game.gba": b"rom bytes" * 16}
         h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members))
         h.store.files["/roms/snes/Game.zip"] = b"7z\xbc\xaf\x27\x1c" + b"compressed" * 4
@@ -1111,7 +1111,7 @@ class TestVerifyArchives:
         # otherwise would send the user looking for a problem on the server.
         assert "could not be read" in result["message"]
 
-    async def test_an_archive_format_the_plugin_cannot_read_is_not_accused_of_differing(self, h):
+    async def test_an_archive_format_tender_cannot_read_is_not_accused_of_differing(self, h):
         # RomM hashes a .7z by its contents too, so the container's own bytes
         # match nothing it published — and this plugin cannot look inside one.
         payload = b"7z\xbc\xaf\x27\x1c" + b"compressed" * 4

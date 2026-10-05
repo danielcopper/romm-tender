@@ -461,7 +461,7 @@ class TestEveryWayTheQuestionCannotBePut:
 class TestHowTheQuestionIsPut:
     """The entry the plugin resolved, asked about this game."""
 
-    def test_the_entry_is_chosen_by_the_plugins_own_label(self, traces):
+    def test_the_entry_is_chosen_by_tenders_own_label(self, traces):
         wanted = _Entry("Kronos", _placement(files=("Game Title.bkr",)))
         others = (_Entry("Beetle Saturn", _placement(files=("wrong.srm",))), wanted)
         adapter = _adapter(_Installation(others), traces)

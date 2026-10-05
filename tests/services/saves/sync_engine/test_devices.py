@@ -70,7 +70,7 @@ def _make_registry(*, settings=None, settings_persister=None):
         logger=logging.getLogger("test"),
         log_debug=lambda msg: None,
         settings_persister=settings_persister or _FailingSettingsPersister(RuntimeError("unused")),
-        plugin_version="0.14.0",
+        version="0.14.0",
     )
     return registry, uow_factory, fake
 

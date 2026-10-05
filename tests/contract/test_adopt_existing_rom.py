@@ -330,7 +330,7 @@ def _stage_archived_detail(harness, archive: Path, members: dict[str, bytes], *,
     _stage_detail(harness, fs_name=archive.name, fs_size_bytes=archive.stat().st_size, files=[entry])
 
 
-async def test_verify_matches_a_zipped_rom_the_plugin_itself_downloaded(harness):
+async def test_verify_matches_a_zipped_rom_tender_itself_downloaded(harness):
     # The regression this pins: the same bytes RomM served, re-offered to the
     # gate, reported a mismatch because the digest describes the ROM inside the
     # zip and the check hashed the zip.

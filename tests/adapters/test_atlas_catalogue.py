@@ -434,7 +434,7 @@ class TestActiveCore:
         )
         assert _adapter(installation, traces).get_active_core("ps3") == (None, None)
 
-    def test_a_libretro_command_the_plugin_cannot_bake_still_names_its_core(self, traces):
+    def test_a_libretro_command_tender_cannot_bake_still_names_its_core(self, traces):
         # Bakeability is a fact about this plugin's -e override; which core a
         # command loads is a fact about the command, and the BIOS filter asks
         # the second question.

@@ -92,7 +92,7 @@ class SaveService:
             logger=config.logger,
             log_debug=config.log_debug,
             settings_persister=config.settings_persister,
-            plugin_version=VERSION,
+            version=VERSION,
         )
 
         self._rom_info = RomInfoService(

@@ -129,10 +129,10 @@ def first_detected_installation(user_home: str) -> Any:
     return installations[0] if installations else None
 
 
-def _plugin_core_so(core_so: str) -> str:
-    """Atlas's ``mgba_libretro.so`` in the plugin's own identifier space.
+def _own_core_so(core_so: str) -> str:
+    """Atlas's ``mgba_libretro.so`` in Tender's own identifier space.
 
-    Every core identifier the plugin holds — the resolved active core, the
+    Every core identifier Tender holds — the resolved active core, the
     ``platform_cores`` override, an ES-DE ``<command>``'s core — is the bare
     ``.so`` basename without its extension. Comparing the two spellings without
     normalising here would silently match nothing.
@@ -248,7 +248,7 @@ class AtlasCatalogueAdapter:
             return (None, None)
         for entry in _declared_order(answer.entries):
             if entry.kind == KIND_LIBRETRO and entry.core_so:
-                return (_plugin_core_so(entry.core_so), entry.label)
+                return (_own_core_so(entry.core_so), entry.label)
         return (None, None)
 
     def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None:

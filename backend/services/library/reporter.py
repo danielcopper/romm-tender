@@ -603,7 +603,7 @@ class SyncReporter:
         except ValueError as e:
             self._logger.warning(f"Skipping invalid ROM {rom_id} during commit: {e}")
             return
-        self._merge_plugin_resolved_fields(rom, rom_id, built, finalized, existing)
+        self._merge_locally_resolved_fields(rom, rom_id, built, finalized, existing)
         self._merge_fetch_generation(rom, fetch_id, existing)
         uow.roms.save(rom)
 
@@ -621,8 +621,8 @@ class SyncReporter:
 
         self._stamp_rom_metadata(uow, rom_id, roms_by_id.get(rom_id))
 
-    def _merge_plugin_resolved_fields(self, rom: Rom, rom_id: int, built, finalized, existing) -> None:
-        """Read-merge the plugin-resolved fields onto the freshly built Rom.
+    def _merge_locally_resolved_fields(self, rom: Rom, rom_id: int, built, finalized, existing) -> None:
+        """Read-merge the locally resolved fields onto the freshly built Rom.
 
         Each field follows "confirmed new wins, else preserve existing, else
         None": ``cover_path`` from this unit's finalized grid copies,

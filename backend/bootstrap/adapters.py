@@ -410,7 +410,7 @@ def bootstrap(
     recovery_store = RecoveryBundleAdapter(
         user_home=user_home,
         package_name=PACKAGE_NAME,
-        plugin_version=VERSION,
+        version=VERSION,
     )
     # The CACHE root: this adapter's whole subject is ``covers/`` and
     # ``artwork/``, which live there and not under the data root.

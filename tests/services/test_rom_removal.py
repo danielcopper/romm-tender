@@ -246,7 +246,7 @@ class TestDeleteRomFiles:
         recovery = RecoveryBundleAdapter(
             user_home=str(tmp_path),
             package_name="romm-tender",
-            plugin_version="test",
+            version="test",
         )
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romfile",
@@ -321,7 +321,7 @@ class TestDeleteRomFiles:
         rom_dir.mkdir(parents=True)
         child = rom_dir / "disc.bin"
         child.write_bytes(b"sealed")
-        recovery = RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm-tender", plugin_version="test")
+        recovery = RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm-tender", version="test")
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romdir",
             {"roms": [{"rom_id": 1}]},
