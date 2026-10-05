@@ -40,6 +40,28 @@ The dict-literal heuristic is intentionally conservative: it only inspects
 caught — a guardrail, not a prover. A ``**spread`` or computed key hides the
 full key set; such returns are flagged for manual review (AD_HOC) unless they
 look like a carve-out, so the heuristic never silently passes an unknown shape.
+
+Converted modules
+-----------------
+
+A module on :data:`CONVERTED_MODULES` raises its refusals (``lib.errors.Refused``)
+and leaves the failure shape to the entrypoint, ``main.Endpoints``. In such a
+module ``--check`` also fails on any dict literal with a falsy ``success``
+entry, wherever it stands and whatever keys it carries, on any
+``error_response(...)`` call, and on a ``**spread`` of a call to a refusal
+helper (a callee whose name contains ``refusal`` or ``failure``). A listed path
+that is not a file, or does not parse, fails too, so a renamed module cannot
+drop off the list unnoticed.
+
+**The list only grows.** Each conversion adds its modules and none is ever
+taken off; a module that falls back to building a failure dict fails the
+check instead.
+
+What it cannot see in a listed module: a failure dict built without a literal
+(``dict(success=False, ...)``, ``answer["success"] = False``), a ``success``
+value that is not a literal, a dict a helper in another module builds, a
+spread of a variable that holds a refusal, and a refusal helper named any
+other way. Nothing outside the list is read by these rules.
 """
 
 from __future__ import annotations
@@ -76,6 +98,17 @@ REPORT_ORDER = (
 
 # Findings in these classifications fail enforce mode (``--check``).
 VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
+
+# Repo-relative paths of the modules converted to raising their refusals; the
+# list only grows (module docstring, "Converted modules").
+CONVERTED_MODULES: tuple[str, ...] = ()
+
+# What the paths above are relative to — a name of its own, apart from
+# ``REPO_ROOT``, which the services walk's own tests move.
+CONVERTED_ROOT = REPO_ROOT
+
+ERROR_RESPONSE = "error_response"
+REFUSAL_HELPER_MARKERS = ("refusal", "failure")
 
 # Additive failure-flag keys that mark a partial-success payload (carve-out 2).
 # A return carrying one of these alongside a full payload keeps the flag.
@@ -241,6 +274,69 @@ def collect_findings(services_dir: Path = SERVICES_DIR) -> list[Finding]:
     return findings
 
 
+@dataclass(frozen=True)
+class ConvertedFinding:
+    """One way a converted module still builds the wire's failure shape."""
+
+    rel: str
+    lineno: int
+    detail: str
+
+    def render(self) -> str:
+        return f"{self.rel}:{self.lineno}  {self.detail}"
+
+
+def _callee_name(call: ast.Call) -> str | None:
+    """The name a call is made through — ``f(...)`` or ``x.f(...)`` — or None."""
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return None
+
+
+def _is_refusal_helper(call: ast.Call) -> bool:
+    name = _callee_name(call)
+    return name is not None and any(marker in name for marker in REFUSAL_HELPER_MARKERS)
+
+
+def _converted_findings_in(rel: str, node: ast.AST) -> list[ConvertedFinding]:
+    """What *node* itself does that a converted module may not."""
+    found: list[ConvertedFinding] = []
+    if isinstance(node, ast.Dict):
+        if _has_falsy_success_entry(node):
+            found.append(ConvertedFinding(rel, node.lineno, "a failure dict literal"))
+        for key, value in zip(node.keys, node.values, strict=True):
+            if key is None and isinstance(value, ast.Call) and _is_refusal_helper(value):
+                found.append(ConvertedFinding(rel, value.lineno, f"a spread of {_callee_name(value)}()"))
+    elif isinstance(node, ast.Call) and _callee_name(node) == ERROR_RESPONSE:
+        found.append(ConvertedFinding(rel, node.lineno, f"a call to {ERROR_RESPONSE}()"))
+    return found
+
+
+def scan_converted_module(root: Path, rel: str) -> list[ConvertedFinding]:
+    """Every way the converted module at *root*/*rel* still builds the failure shape."""
+    path = root / rel
+    if not path.is_file():
+        return [ConvertedFinding(rel, 0, "listed as converted but not a file — follow a rename, never drop the entry")]
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except SyntaxError as exc:
+        return [ConvertedFinding(rel, exc.lineno or 0, "does not parse, so nothing in it could be checked")]
+    found: list[ConvertedFinding] = []
+    for node in ast.walk(tree):
+        found.extend(_converted_findings_in(rel, node))
+    return sorted(found, key=lambda finding: finding.lineno)
+
+
+def collect_converted_findings() -> list[ConvertedFinding]:
+    """Scan every module on :data:`CONVERTED_MODULES`."""
+    found: list[ConvertedFinding] = []
+    for rel in CONVERTED_MODULES:
+        found.extend(scan_converted_module(CONVERTED_ROOT, rel))
+    return found
+
+
 def _group_by_class(findings: list[Finding]) -> dict[str, list[Finding]]:
     by_class: dict[str, list[Finding]] = {label: [] for label in REPORT_ORDER}
     for finding in findings:
@@ -284,6 +380,18 @@ def _print_violations(findings: list[Finding]) -> None:
     )
 
 
+def _print_converted(found: list[ConvertedFinding]) -> None:
+    """Print what the converted modules still build, with a fix hint."""
+    print(f"=== CONVERTED_MODULE ({len(found)}) ===")
+    for finding in found:
+        print(f"  {finding.render()}")
+    print()
+    print(
+        "ERROR: a converted module raises its refusal (lib.errors.Refused) and returns a "
+        "lib.partial_failure.PartialFailure for partial work; main.Endpoints builds the failure shape."
+    )
+
+
 def main(argv: list[str]) -> int:
     if any(a in {"-h", "--help"} for a in argv):
         print(__doc__)
@@ -294,10 +402,17 @@ def main(argv: list[str]) -> int:
 
     if enforce:
         violations = [f for f in findings if f.classification in VIOLATION_CLASSES]
+        converted = collect_converted_findings()
         if violations:
             _print_violations(findings)
+        if converted:
+            _print_converted(converted)
+        if violations or converted:
             return 1
-        print(f"OK: no failure-shape dialect violations in {SERVICES_DIR.relative_to(REPO_ROOT)}.")
+        print(
+            f"OK: no failure-shape dialect violations in {SERVICES_DIR.relative_to(REPO_ROOT)}, "
+            f"and no failure shape built in the {len(CONVERTED_MODULES)} converted module(s)."
+        )
         return 0
 
     _print_report(findings)

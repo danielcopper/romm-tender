@@ -9,7 +9,8 @@ constants for the duration of the test.
 Coverage centres on the required-key rule (a ``success: False`` failure
 return must carry both ``reason`` and ``message`` and must not carry
 ``error`` / ``error_code``) and the two pattern-exempt carve-outs
-(discriminated-status unions and partial-success payloads).
+(discriminated-status unions and partial-success payloads), and on the
+converted-modules list, in which no failure shape may be built at all.
 """
 
 from __future__ import annotations
@@ -304,3 +305,114 @@ class TestMainEntryPoint:
         assert f"=== {check.CANONICAL} (1) ===" in out
         assert f"=== {check.ERROR_KEY_DIALECT} (1) ===" in out
         assert "TOTAL: 2" in out
+
+
+# ── Converted modules: the ratchet ───────────────────────────────────────
+
+_CONVERTED_SOURCE = """\
+from lib.errors import error_response
+from lib.conflict_rules import update_refusal
+
+
+def refuse():
+    answer = {"success": False, "message": "m"}
+    return answer
+
+
+def translate(exc):
+    return error_response(exc)
+
+
+def spread():
+    return {**update_refusal(), "synced": 0}
+"""
+
+
+def _converted_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str, *, listed: bool) -> None:
+    """Lay out ``backend/adapters/mod.py`` under *tmp_path*, on the converted list or off it."""
+    module = tmp_path / "backend" / "adapters" / "mod.py"
+    module.parent.mkdir(parents=True)
+    module.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(check, "CONVERTED_ROOT", tmp_path)
+    monkeypatch.setattr(check, "CONVERTED_MODULES", ("backend/adapters/mod.py",) if listed else ())
+    monkeypatch.setattr(check, "SERVICES_DIR", tmp_path / "backend" / "services")
+    monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
+
+
+class TestConvertedModules:
+    def test_a_listed_module_building_the_failure_shape_fails_the_check(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        _converted_tree(monkeypatch, tmp_path, _CONVERTED_SOURCE, listed=True)
+
+        assert check.main(["--check"]) == 1
+        out = capsys.readouterr().out
+        assert "backend/adapters/mod.py:6  a failure dict literal" in out
+        assert "backend/adapters/mod.py:11  a call to error_response()" in out
+        assert "backend/adapters/mod.py:15  a spread of update_refusal()" in out
+
+    def test_the_same_module_off_the_list_passes(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        _converted_tree(monkeypatch, tmp_path, _CONVERTED_SOURCE, listed=False)
+
+        assert check.main(["--check"]) == 0
+        assert "OK:" in capsys.readouterr().out
+
+    def test_a_failure_dict_carrying_reason_and_message_still_fails(self, tmp_path: Path):
+        """In a converted module the shape is the entrypoint's, however canonical the dict."""
+        (tmp_path / "mod.py").write_text(_wrap_return('{"success": False, "reason": "x", "message": "m"}'))
+
+        found = check.scan_converted_module(tmp_path, "mod.py")
+
+        assert [finding.detail for finding in found] == ["a failure dict literal"]
+
+    def test_an_error_response_reached_through_its_module_fails(self, tmp_path: Path):
+        (tmp_path / "mod.py").write_text("import lib.errors\n\ndef f(e):\n    lib.errors.error_response(e)\n")
+
+        found = check.scan_converted_module(tmp_path, "mod.py")
+
+        assert [finding.detail for finding in found] == ["a call to error_response()"]
+
+    def test_a_spread_of_a_failure_helper_fails(self, tmp_path: Path):
+        (tmp_path / "mod.py").write_text("def f(self):\n    return {**self._failure('x', 'm'), 'claimed': 0}\n")
+
+        found = check.scan_converted_module(tmp_path, "mod.py")
+
+        assert [finding.detail for finding in found] == ["a spread of _failure()"]
+
+    def test_what_the_entrypoint_takes_over_passes(self, tmp_path: Path):
+        source = (
+            "from lib.errors import Refused\n\n"
+            "def f(done):\n"
+            "    if not done:\n"
+            "        raise Refused('nothing_to_fix', 'No fix needed')\n"
+            "    return {'success': True, **dict(done)}\n"
+        )
+        (tmp_path / "mod.py").write_text(source)
+
+        assert check.scan_converted_module(tmp_path, "mod.py") == []
+
+    def test_a_listed_path_that_is_not_a_file_fails(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        monkeypatch.setattr(check, "CONVERTED_ROOT", tmp_path)
+        monkeypatch.setattr(check, "CONVERTED_MODULES", ("backend/services/renamed.py",))
+        monkeypatch.setattr(check, "SERVICES_DIR", tmp_path / "backend" / "services")
+        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
+
+        assert check.main(["--check"]) == 1
+        assert "backend/services/renamed.py:0  listed as converted but not a file" in capsys.readouterr().out
+
+    def test_a_listed_module_that_does_not_parse_fails(self, tmp_path: Path):
+        (tmp_path / "mod.py").write_text("def broken(:\n")
+
+        found = check.scan_converted_module(tmp_path, "mod.py")
+
+        assert [finding.detail for finding in found] == ["does not parse, so nothing in it could be checked"]
+
+    def test_every_listed_module_of_the_real_repo_is_clean(self):
+        assert check.collect_converted_findings() == []
+
+    def test_the_real_list_names_repo_relative_python_files(self):
+        assert all(rel.startswith("backend/") and rel.endswith(".py") for rel in check.CONVERTED_MODULES)
