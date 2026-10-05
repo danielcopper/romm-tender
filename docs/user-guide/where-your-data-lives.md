@@ -82,11 +82,12 @@ So a cleanup tool that empties caches is safe to point at the first folder and n
 
 ## Why they are named after Tender
 
-Earlier versions kept this data inside Decky's plugin folders. Decky names those after the plugin's own folder, and that
-name is not something Tender chooses — so when the project was renamed at version 0.31.0, every user's data moved with
-it, and a freshly updated Tender opened on an empty library while everything was still sitting in the old folder.
+Earlier versions kept this data inside Decky's plugin folders. Decky names those after the folder it installed Tender
+into, and that name is not something Tender chooses — so when the project was renamed at version 0.31.0, every user's
+data moved with it, and a freshly updated Tender opened on an empty library while everything was still sitting in the
+old folder.
 
-Naming the folders after Tender ends that. They no longer depend on how the plugin happens to be packaged, so a rename
+Naming the folders after Tender ends that. They no longer depend on how Tender happens to be packaged, so a rename
 cannot move them again.
 
 ## If your folders are somewhere else

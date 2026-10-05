@@ -269,8 +269,8 @@ PS3 game shipped as a `.pkg` (plus a `.rap` licence file): the game is sealed in
 installs it, so there is nothing for a shortcut to launch. The same applies to a disc rip that arrived as raw `.bin`
 tracks with no `.cue` or `.gdi` alongside them.
 
-Rather than write a launch command that cannot work, the plugin leaves the shortcut without one and says so. **Your
-download is not deleted** — the files are on disk exactly where the ROM would normally live.
+Rather than write a launch command that cannot work, Tender leaves the shortcut without one and says so. **Your download
+is not deleted** — the files are on disk exactly where the ROM would normally live.
 
 **Fix**: Install the content in the emulator yourself. For a PS3 `.pkg`, that is RetroDECK's documented procedure — open
 **RetroDECK → Configurator → Open Emulator → RPCS3**, use **File → Install Packages (PKG)**, point it at the downloaded
@@ -301,8 +301,8 @@ answer, restart Steam.
 **Symptom**: The game plays fine, but the RetroArch Quick Menu (L3+R3) can't be navigated with the controller — only
 mouse/touch works.
 
-**Fix**: This is caused by RetroArch using the `x` input driver on a Wayland system. If the plugin detects this, a
-warning appears on the main QAM page with a **Change to sdl2** button. Tap it to fix the issue.
+**Fix**: This is caused by RetroArch using the `x` input driver on a Wayland system. If Tender detects this, a warning
+appears on the main QAM page with a **Change to sdl2** button. Tap it to fix the issue.
 
 If the warning doesn't appear, you can manually change `input_driver = "x"` to `input_driver = "sdl2"` in your RetroArch
 config file.
@@ -317,13 +317,13 @@ config file.
 
 **Symptom**: Toast notifications say "RomM unreachable" or sync operations show in the Failed Syncs list.
 
-**Fix**: Check your network connection and verify the RomM server is running. The **Connection** row on the plugin's
-main QAM panel shows the live status (and names the problem when it can't connect). Failed syncs are queued and retried
+**Fix**: Check your network connection and verify the RomM server is running. The **Connection** row on Tender's main
+QAM panel shows the live status (and names the problem when it can't connect). Failed syncs are queued and retried
 automatically when the server is reachable again.
 
 ### Offline detection and recovery
 
-When the plugin can't reach RomM, it notices from the calls that fail (a connection probe, a save-status or slot load, a
+When Tender can't reach RomM, it notices from the calls that fail (a connection probe, a save-status or slot load, a
 version switch, or the first-time save-slot setup) and marks itself offline. On a game's detail page you'll see a **RomM
 offline** badge in the play row, the **Download** button and slot switching are disabled (they need the server), and the
 **Saves** tab shows a "RomM is offline" banner and renders straight away instead of hanging. The **Achievements** tab
@@ -333,19 +333,19 @@ its "RomM server is not reachable" message and a **Retry** button immediately ra
 attempts. Playtime keeps showing — it's tracked locally and doesn't depend on the connection.
 
 While a save load is actually reaching the server, the **Saves** tab and the setup screen show a spinner labelled
-**Connecting to RomM…**. If the server is briefly slow or flaky, the plugin retries a couple of times before giving up,
-and the spinner shows which attempt is in progress — **Connecting to RomM… (attempt 2/3)** — so a slow connection reads
-as busy rather than stuck. Several parts of the page can be waiting on the server at once, so the count follows the
-furthest one along and never walks backwards while a page is loading. Once the plugin already knows the server is
+**Connecting to RomM…**. If the server is briefly slow or flaky, Tender retries a couple of times before giving up, and
+the spinner shows which attempt is in progress — **Connecting to RomM… (attempt 2/3)** — so a slow connection reads as
+busy rather than stuck. Several parts of the page can be waiting on the server at once, so the count follows the
+furthest one along and never walks backwards while a page is loading. Once Tender already knows the server is
 unreachable it stops retrying — one attempt, then the answer — so the spinner reads plain **Connecting to RomM…** with
 no attempt to count, and the offline state arrives quickly instead of after a full round of retries.
 
-You don't need to do anything: while a game page is open, the plugin checks the server roughly every 30 seconds in both
+You don't need to do anything: while a game page is open, Tender checks the server roughly every 30 seconds in both
 directions. If RomM goes away, the **RomM offline** badge appears on its own within that window; the moment RomM is
 reachable again the badge clears, Download and slot switching re-enable, and the saves list, achievements, and setup
 screen reload themselves on the spot — no need to leave and re-open the page.
 
-Only a genuine connection failure marks the plugin offline. If RomM replies that it no longer has the thing being asked
+Only a genuine connection failure marks Tender offline. If RomM replies that it no longer has the thing being asked
 about — most often because the game was deleted and re-added on the server, which gives it a brand-new id, or because
 the RomM database was reset and this device's registration disappeared with it — that is the server _answering_, so the
 **RomM offline** badge stays clear and the surface tells you what's missing instead. If you see such a message while the
@@ -359,26 +359,25 @@ same thing as a page that found RomM missing.
 When the missing thing is this device's own registration — the RomM database was wiped or restored and the id this
 device was issued no longer exists — you don't have to do anything. Both when Tender's panel loads (installing an update
 counts: the panel is loaded again after one) and before every save-sync (before a game launches, after it exits, or a
-manual sync), the plugin first checks that this device's id still exists on the server; the moment it finds the id is
-gone it registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the
-old, dead one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away —
-is carried over to the new registration, so it still lands on the server under this device rather than being stranded.
+manual sync), Tender first checks that this device's id still exists on the server; the moment it finds the id is gone
+it registers this device afresh and carries on under the new id. A new entry shows up in RomM's device list; the old,
+dead one can be ignored. Play time that was recorded but not yet uploaded — sessions played while RomM was away — is
+carried over to the new registration, so it still lands on the server under this device rather than being stranded.
 
 The first-time save-slot setup screen is the clearest example. If RomM can't find the save data that setup needs, it
 pauses with "RomM couldn't find the save data for this setup" rather than the "server is not reachable" message, and the
-offline badge stays clear. Setup deliberately stops there instead of picking a slot for you: the plugin has no
-trustworthy view of what's on the server, and choosing a slot on that basis could overwrite real saves on the first
-sync. Re-check the game in RomM (a server database reset re-registers this device automatically — see above), then tap
-**Retry**.
+offline badge stays clear. Setup deliberately stops there instead of picking a slot for you: Tender has no trustworthy
+view of what's on the server, and choosing a slot on that basis could overwrite real saves on the first sync. Re-check
+the game in RomM (a server database reset re-registers this device automatically — see above), then tap **Retry**.
 
 ### Save file not found
 
 **Symptom**: The game detail page shows save status but no save file is being synced.
 
-**Fix**: What syncs is not one file type. For each game, the plugin asks the emulator that will launch it which files
-its save consists of, and syncs only those. Where that answer is something the plugin cannot carry — a card many games
-share, a save inside the game file, a name built from the game's own identity, or nothing established — save sync does
-nothing for that game rather than guessing.
+**Fix**: What syncs is not one file type. For each game, Tender asks the emulator that will launch it which files its
+save consists of, and syncs only those. Where that answer is something Tender cannot carry — a card many games share, a
+save inside the game file, a name built from the game's own identity, or nothing established — save sync does nothing
+for that game rather than guessing.
 [When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why) explains each
 case, and the [save sync support matrix](save-sync-support-matrix.md) shows how each system usually lands.
 
@@ -421,16 +420,16 @@ Also make sure each person using RomM has their own account — shared accounts 
 **Symptom**: After an emulator crash, a full disk, or a power loss mid-save, the next sync shows a conflict prompt
 instead of uploading — and the local save shown is 0 bytes or much smaller than expected.
 
-**Why**: A crash can leave a 0-byte or truncated save file on disk. The plugin refuses to upload it over your good
-server copy, because the server overwrites the existing save **in place** — there would be no older version left to
-recover. So instead of silently destroying your progress, it asks you to choose.
+**Why**: A crash can leave a 0-byte or truncated save file on disk. Tender refuses to upload it over your good server
+copy, because the server overwrites the existing save **in place** — there would be no older version left to recover. So
+instead of silently destroying your progress, it asks you to choose.
 
 **Fix**: In the conflict prompt, pick **Use Server** to restore the good copy from RomM (the bad local file is moved
 aside into the `.romm-backup` folder next to your saves first, so nothing is lost). Only pick **Keep Local** if you are
 certain the small/empty local file is the one you want to keep — that uploads it and replaces the server copy.
 
 If you need to recover a save by hand, look in the `.romm-backup` folder inside your saves directory (e.g.
-`<saves_path>/gba/.romm-backup/`): every file the plugin moves aside is timestamped there. The plugin moves a save aside
+`<saves_path>/gba/.romm-backup/`): every file Tender moves aside is timestamped there. Tender moves a save aside
 whenever it is about to be overwritten or removed — not just when resolving a conflict with **Use Server**, but also
 when you switch save slots and when the setup wizard copies an archived save (one uploaded without a slot) into a slot.
 
@@ -456,11 +455,11 @@ sometimes missing — especially for obscure ports and regional releases — eve
 a differently-linked entry.
 
 **Fix**: The durable fix is on your RomM server — set the correct SteamGridDB id on the game (or enable the SteamGridDB
-metadata source and rescan). RomM is the source of truth for artwork matching, so the plugin picks up the corrected id
-on the next sync or **Refresh Artwork**. When RomM _and_ the IGDB cross-reference both come up empty, **Refresh
-Artwork** opens a picker where you can search SteamGridDB by name and apply a match on the spot — but that pick is
-temporary and is replaced once RomM provides an id for the game. If a game genuinely has no artwork uploaded to
-SteamGridDB, those slots fall back to Steam's defaults — you can contribute artwork there to help the community.
+metadata source and rescan). RomM is the source of truth for artwork matching, so Tender picks up the corrected id on
+the next sync or **Refresh Artwork**. When RomM _and_ the IGDB cross-reference both come up empty, **Refresh Artwork**
+opens a picker where you can search SteamGridDB by name and apply a match on the spot — but that pick is temporary and
+is replaced once RomM provides an id for the game. If a game genuinely has no artwork uploaded to SteamGridDB, those
+slots fall back to Steam's defaults — you can contribute artwork there to help the community.
 
 ### Artwork not appearing after sync
 
@@ -480,11 +479,11 @@ This re-fetches all artwork and metadata. (Hero banners, logos, and wide grid im
 **Symptom**: Games synced on your Steam Deck also appear on your HTPC (or vice versa), but without artwork. They
 disappear when the source device goes offline.
 
-**Explanation**: This is Steam's Remote Play discovery protocol, not a plugin bug. Steam automatically advertises all
+**Explanation**: This is Steam's Remote Play discovery protocol, not a bug in Tender. Steam automatically advertises all
 non-Steam shortcuts to other Steam clients on the same network. These "phantom" shortcuts are ephemeral — they only
 exist while both devices are online.
 
-The plugin cannot prevent this. Your options are:
+Tender cannot prevent this. Your options are:
 
 - Disable Remote Play entirely in Steam Settings > Remote Play
 - Ignore them — they show a "Stream" button instead of "Play" so they're distinguishable
@@ -495,8 +494,8 @@ For technical details, see [Steam Remote Play and Cross-Device Shortcuts](../arc
 
 ### Download shows no progress
 
-**Fix**: Check your connection to the RomM server (the **Connection** row on the plugin's main QAM panel). If the server
-is reachable, try cancelling and restarting the download from the game detail page.
+**Fix**: Check your connection to the RomM server (the **Connection** row on Tender's main QAM panel). If the server is
+reachable, try cancelling and restarting the download from the game detail page.
 
 ### Download failed
 
@@ -577,14 +576,14 @@ can't start a second removal (or a new one from another button) until the curren
 
 ### Tender's shortcuts
 
-The row counts the shortcuts this plugin created. **Remove all shortcuts** removes every one of them, across all
-platforms; collections are cleaned up with them. It also sweeps up any shortcut of ours that Steam still holds without a
-record on our side — what a run interrupted mid-apply leaves behind — so the button stays useful when the count reads
-zero. Downloaded ROM files and save files are left where they are, and the next sync puts the shortcuts back.
+The row counts the shortcuts Tender created. **Remove all shortcuts** removes every one of them, across all platforms;
+collections are cleaned up with them. It also sweeps up any shortcut of ours that Steam still holds without a record on
+our side — what a run interrupted mid-apply leaves behind — so the button stays useful when the count reads zero.
+Downloaded ROM files and save files are left where they are, and the next sync puts the shortcuts back.
 
 ### Installed ROMs
 
-The row counts the installs this plugin downloaded — one per install, so a multi-disc game counts once and two installed
+The row counts the installs Tender downloaded — one per install, so a multi-disc game counts once and two installed
 versions of one game count twice — and the pane states their total size with a `≈`. That size is what your RomM server
 reported for those games rather than a measurement of your disk, so it is close rather than exact — an unpacked archive,
 a patch beside the original or extras in the same folder are not what the server named, and a game whose size the server
@@ -602,8 +601,8 @@ An image counts as orphaned only when **all** of these hold:
 
 - its filename is a Steam grid-image name for a **non-Steam shortcut** appId — custom images you saved for regular Steam
   games are never touched,
-- that appId belongs to **no live shortcut** — the plugin scans your full shortcut list first, so images of shortcuts
-  from other tools (Heroic, Lutris, manually added games, …) are protected too, not just RomM's.
+- that appId belongs to **no live shortcut** — Tender scans your full shortcut list first, so images of shortcuts from
+  other tools (Heroic, Lutris, manually added games, …) are protected too, not just RomM's.
 
 The row reads **scan** until you press **Scan for orphaned images**, which counts them without deleting anything and
 puts the number on the row. The button then offers to remove that many, and asks once before it does. Deletion is
@@ -615,14 +614,16 @@ runs, the page is busy and no other removal can start. Afterwards the row reads 
 found was deleted. If some could not be deleted, the pane says how many, and the row goes back to **scan**; the same
 happens when the removal's result never came back. Removing Tender's shortcuts or other non-Steam games, or finishing a
 Gone from RomM cleanup, also puts the row back to **scan**, because each can leave images the scan did not count — a
-Tender shortcut the plugin had no record of, a non-Steam game whose images nothing here deletes, or a cleanup run
-without recovery, which leaves its games' images behind. Press **Scan for orphaned images** again to count what is left.
+Tender shortcut that Tender itself had no record of, a non-Steam game whose images nothing here deletes, or a cleanup
+run without recovery, which leaves its games' images behind. Press **Scan for orphaned images** again to count what is
+left.
 
 ### Other non-Steam games
 
 Everything in your Steam library that neither Steam nor Tender installed — emulators, launchers, browsers, games you
-added by hand. **Your RomM games are not in this row**, and the removal here cannot touch them: Tender's own shortcuts
-are told apart by what they launch, not by their names, and removing them is the Tender's shortcuts row's job.
+added by hand. **Your RomM games are not in this row**; they are counted under Tender's shortcuts, and removing them is
+that row's job. The removal here cannot touch them: Tender's own shortcuts are told apart by what they launch, not by
+their names.
 
 If Steam's shortcut list cannot be read, that ownership cannot be established — the count shows a dash, the pane says
 the list could not be read, and the removal is refused rather than guessed at. Steam also does not always answer for an
@@ -636,7 +637,7 @@ A **whitelist** system lets you protect the rest from removal:
 3. Use the search box to find specific games in long lists
 4. Protected games are excluded from the removal count
 
-The plugin shows extra warnings if RetroDECK is not whitelisted, since removing it would break all emulation.
+Tender shows extra warnings if RetroDECK is not whitelisted, since removing it would break all emulation.
 
 ### Recovery bundles
 

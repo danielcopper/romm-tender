@@ -5,22 +5,20 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 
 ## How Sync Works
 
-1. The plugin fetches all ROMs from your RomM server (filtered by your enabled platforms)
+1. Tender fetches all ROMs from your RomM server (filtered by your enabled platforms)
 2. For each ROM, a Non-Steam shortcut is created in Steam via the SteamClient API — no restart required
 3. Cover art from RomM is applied as the portrait grid image
 4. If you have a SteamGridDB API key configured, hero banners, logos, and wide grid images are also fetched
-5. Metadata (description, developer, genres, release date) is cached and displayed in the plugin's custom game detail
-   panel
+5. Metadata (description, developer, genres, release date) is cached and displayed in Tender's custom game detail panel
 6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)")
 
 ## Starting a Sync
 
 1. Open the QAM and find **Tender**
 2. Tap **Sync** in the menu on the main page
-3. On the **Sync page**, tap **Check for changes** and the plugin works out what would change. When it lands you get a
-   table of the changes; tap **Apply Sync** to start the run, **Refresh** to work out a fresh one, or **Cancel** to
-   throw it away (with **Skip preview** switched on the button reads **Sync Library** instead, and the run starts
-   straight away)
+3. On the **Sync page**, tap **Check for changes** and Tender works out what would change. When it lands you get a table
+   of the changes; tap **Apply Sync** to start the run, **Refresh** to work out a fresh one, or **Cancel** to throw it
+   away (with **Skip preview** switched on the button reads **Sync Library** instead, and the run starts straight away)
 4. A progress bar shows the sync status — on the main page as one bar with a step counter, and on the Sync page with a
    row per platform
 5. When complete, a toast reports what actually changed — the true delta, not the total in your library. It shows the
@@ -64,10 +62,10 @@ platform and collection the run plans to touch. A finished one shows what it add
 shows what it is doing and how far in it is, and the rest show what is waiting for them. That list scrolls on its own,
 and the platform being worked is kept in the middle of it, so a run over sixteen platforms does not walk out of sight.
 **Cancel Sync** sits just under the bar, above that list, so stopping a run is never more than a press or two away
-however many platforms it covers. While the plugin is working out a preview there are no rows to show yet, so the line
-names what it is fetching instead. If Steam reloads its interface mid-run the plan is gone for the rest of that run: the
-bar, the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail
-is not available for the run.
+however many platforms it covers. While Tender is working out a preview there are no rows to show yet, so the line names
+what it is fetching instead. If Steam reloads its interface mid-run the plan is gone for the rest of that run: the bar,
+the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail is
+not available for the run.
 
 **On the right** are **Skip preview** (now remembered between sessions), **Force Full Sync** behind a confirmation,
 Steam's memory now and how much the last run added to it, and your last ten sync runs with when each started, what it
@@ -77,9 +75,9 @@ covered and how it ended.
 cannot: a run is going, the clear has already been made and is waiting for its next run, or nothing has been synced yet
 so there is nothing to forget. If a change table is up when you confirm it, that table goes — the clear has just thrown
 away what the table was worked out against, so applying it afterwards would skip the very platforms the clear asked to
-be re-fetched. Work out a fresh preview, or start the run. And if the plugin could not read what has already been
-synced, the button stays pressable and says so rather than going quiet: not being able to check is not the same as there
-being nothing to clear.
+be re-fetched. Work out a fresh preview, or start the run. And if Tender could not read what has already been synced,
+the button stays pressable and says so rather than going quiet: not being able to check is not the same as there being
+nothing to clear.
 
 ![Tender QAM panel showing connection status, a Sync Library button with Skip Preview and Force Full Sync, and a menu of
 Library, Settings and Data Management](../assets/screenshot-qam.jpg)
@@ -108,39 +106,39 @@ Cover changes count too: if you replaced a game's cover on the server but nothin
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
 tiles without touching the shortcuts. Only when there is truly nothing to do does it read "Everything is up to date."
 
-A preview stays good for **30 minutes**, and it belongs to the plugin rather than to the page you are looking at: you
-can leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
-holds while it is still being worked out, too — leave while the plugin is comparing your library and come back, and you
-get the progress for the comparison that is still running, then its table the moment it finishes, whether you were
-watching or not. The Sync page says how long it has left — "expires in 26 min" beside the heading, counting down. If you
-leave it past the half hour it says "expired"; the change table stays readable, **Apply Sync** greys out, and
-**Refresh** is what moves you on. Nothing you were shown is discarded behind your back. Once it has expired the main
-page's **Changes ready** row disappears, and **Refresh** works out a fresh preview in place of the old one.
+A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
+leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
+holds while it is still being worked out, too — leave while Tender is comparing your library and come back, and you get
+the progress for the comparison that is still running, then its table the moment it finishes, whether you were watching
+or not. The Sync page says how long it has left — "expires in 26 min" beside the heading, counting down. If you leave it
+past the half hour it says "expired"; the change table stays readable, **Apply Sync** greys out, and **Refresh** is what
+moves you on. Nothing you were shown is discarded behind your back. Once it has expired the main page's **Changes
+ready** row disappears, and **Refresh** works out a fresh preview in place of the old one.
 
-That starting estimate is **skip-aware**: when the run is planned, the plugin already knows which platforms haven't
-changed since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental
-re-sync of an unchanged library reads seconds, not the minutes a full first import would take. The prediction is only an
-estimate (the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make
-the readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped
-the same way a platform is: if a collection's membership hasn't changed and none of its games did either, the plugin
-skips it without re-listing its contents — so a large, collection-heavy library re-syncs quickly.
+That starting estimate is **skip-aware**: when the run is planned, Tender already knows which platforms haven't changed
+since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental re-sync of
+an unchanged library reads seconds, not the minutes a full first import would take. The prediction is only an estimate
+(the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make the
+readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped the
+same way a platform is: if a collection's membership hasn't changed and none of its games did either, Tender skips it
+without re-listing its contents — so a large, collection-heavy library re-syncs quickly.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing
 shortcut does neither. So a re-sync over games your library already has is estimated at the cheaper update rate rather
 than as though it were building your library from scratch — including a **Force Full Sync**, which re-applies every game
 your platforms already hold but adds none, so its platforms are estimated at that cheaper rate too. One exception
-remains: after a Force Full Sync, your **collections** are estimated at the dearer "adding" rate for that run. The
-plugin only knows which games are in a collection from the record it keeps when that collection last finished syncing,
-and Force Full Sync deliberately wipes those records — so for that one run it can't tell that your collections' games
-are already in Steam. The run itself is unaffected, and the estimate only ever reads too long, never too short. Cover
+remains: after a Force Full Sync, your **collections** are estimated at the dearer "adding" rate for that run. Tender
+only knows which games are in a collection from the record it keeps when that collection last finished syncing, and
+Force Full Sync deliberately wipes those records — so for that one run it can't tell that your collections' games are
+already in Steam. The run itself is unaffected, and the estimate only ever reads too long, never too short. Cover
 updates are counted on their own, so a run that only refreshes cover art is estimated from how many covers changed
 instead of falling back to a fixed number.
 
 Once the sync has been creating shortcuts for a few seconds, that "up to" ceiling is replaced by a **live countdown** —
 "2 min left" — measured from the actual speed on your device and updated as the run proceeds. The countdown waits until
-it has genuinely measured the apply speed before it appears: at the very start of a run the plugin takes a one-off look
-at the shortcuts already in Steam, which can take ten seconds or so on a large library, and readings taken across that
+it has genuinely measured the apply speed before it appears: at the very start of a run Tender takes a one-off look at
+the shortcuts already in Steam, which can take ten seconds or so on a large library, and readings taken across that
 pause would make the first countdown read several times too long. Both the countdown and the progress counter show
 **net** progress: they count the games this run actually needs to add or update (say "100/801"), not every game in your
 library. It holds steady across the short pauses where the sync fetches the next platform's game list, rather than
@@ -171,7 +169,7 @@ A few things worth knowing for a large library:
   or lose progress. For a large first sync, plug it in so the battery lasts the whole run.
 - **A very large sync may pause itself to protect Steam.** Steam holds every shortcut it creates in memory for the rest
   of the session, and that memory only frees on a Steam restart. A very large first import can approach that limit, so
-  the plugin watches Steam's memory and, when it gets close, pauses cleanly at a safe point rather than risking a Steam
+  Tender watches Steam's memory and, when it gets close, pauses cleanly at a safe point rather than risking a Steam
   crash. If the preview expects this, it shows a blue note up front ("will likely pause partway to protect Steam's
   memory — normal for large syncs"). When a pause happens, the **main page** shows a short "Sync paused" notice with an
   **Open Sync** button, and the **Sync page** shows the full **blue card** — "Steam memory is full (2.3 GB). 1200 of
@@ -221,10 +219,10 @@ complete the job.
   skipped, so a resume finishes quickly and the counter shows just the remaining work. This is true whether or not you
   restart Steam in between.
   - **The line under the Sync page's button is what tells you a resume is waiting** — for example "1200 games already
-    synced — a resume continues from there." It counts what is already done, not what is left: the plugin can only know
-    the finished side without asking your server, so no total is shown. It is left out in the one case where the plugin
-    knows a resume is possible but cannot put a number on it — a library synced before the plugin started recording
-    per-game progress, where whole platforms are skipped but no individual game is counted.
+    synced — a resume continues from there." It counts what is already done, not what is left: Tender can only know the
+    finished side without asking your server, so no total is shown. It is left out in the one case where Tender knows a
+    resume is possible but cannot put a number on it — a library synced before Tender started recording per-game
+    progress, where whole platforms are skipped but no individual game is counted.
   - **The button says what the press does, not what the library needs.** With **Skip preview** off it reads **Check for
     changes** whether or not a resume is waiting, because that press works out a preview and adds nothing to Steam
     either way — the line under it is where the resume shows. With **Skip preview** on the press starts the run, so the
@@ -256,18 +254,18 @@ complete the job.
 ## Multiple versions of a game
 
 When your RomM library holds several dumps of the same game — region variants like `(USA)` / `(Europe)` / `(Japan)`,
-multi-language dumps, or revisions — the plugin treats them as **one game** and creates **one Steam shortcut** for it,
-not one per dump. RomM already groups these versions together; the plugin mirrors that grouping. Because of this, the
-sync counts (in the preview and the completion toast) count **games**, not individual files: a five-region game is one
+multi-language dumps, or revisions — Tender treats them as **one game** and creates **one Steam shortcut** for it, not
+one per dump. RomM already groups these versions together; Tender mirrors that grouping. Because of this, the sync
+counts (in the preview and the completion toast) count **games**, not individual files: a five-region game is one
 "added", not five.
 
 The version the shortcut points at (the **active version**) is chosen automatically: a version you have already
-installed wins, otherwise the shortcut follows the "SET DEFAULT" version you picked in RomM, otherwise the plugin picks
-the best dump for you (see below). Switching versions from inside the plugin is a later feature; for now the active
-version follows what is installed and RomM's default.
+installed wins, otherwise the shortcut follows the "SET DEFAULT" version you picked in RomM, otherwise Tender picks the
+best dump for you (see below). Switching versions from inside Tender is a later feature; for now the active version
+follows what is installed and RomM's default.
 
-**How the plugin picks the best dump, and how the shortcut is named.** When nothing is installed and you haven't set a
-default in RomM, the plugin ranks the dumps like a 1G1R (one-game-one-ROM) tool. A **finished release always beats a
+**How Tender picks the best dump, and how the shortcut is named.** When nothing is installed and you haven't set a
+default in RomM, Tender ranks the dumps like a 1G1R (one-game-one-ROM) tool. A **finished release always beats a
 prerelease** — a beta, prototype, alpha, sample or demo dump loses even to a finished release from a less-preferred
 region (so a finished Japanese dump wins over a US beta). Among finished dumps, it prefers a region in the fixed order
 **World → USA → Europe → Japan**, then any other region alphabetically, and a dump with no region last. (This is a fixed
@@ -284,8 +282,8 @@ does mean the shortcut's name can differ from the version it currently launches,
 only affects games synced **after** the change.
 
 If you synced **before** this update and already have several Steam shortcuts for one game, those existing shortcuts are
-**kept** — the plugin never deletes a shortcut you can see. They converge to a single entry naturally as you uninstall
-the extra versions.
+**kept** — Tender never deletes a shortcut you can see. They converge to a single entry naturally as you uninstall the
+extra versions.
 
 ## Per-Platform Toggles
 
@@ -316,8 +314,8 @@ apart from any an enabled collection still holds, and turning it back on brings 
 
 ## Collections
 
-The plugin automatically creates Steam collections for each synced platform. Collection names include your machine's
-hostname to avoid conflicts if you run the plugin on multiple devices:
+Tender automatically creates Steam collections for each synced platform. Collection names include your machine's
+hostname to avoid conflicts if you run Tender on multiple devices:
 
 - `RomM: Nintendo 64 (steamdeck)`
 - `RomM: Game Boy Advance (steamdeck)`
@@ -351,12 +349,12 @@ its first sentence. What **Distinguish collection types in Steam names** adds to
 The table has these columns:
 
 - **Collection** — the collection's name.
-- **Owner** — _you_, or the RomM user name of the user it belongs to (Collections and Smart collections only). Until the
-  plugin knows your RomM account it cannot tell which are yours, so it shows each collection's owner name instead.
+- **Owner** — _you_, or the RomM user name of the user it belongs to (Collections and Smart collections only). Until
+  Tender knows your RomM account it cannot tell which are yours, so it shows each collection's owner name instead.
 - **ROMs** — how many games RomM lists in it.
 - **In Steam** — how many of those games are already in Steam. The difference to **ROMs** is roughly what turning the
-  collection on adds (roughly, because several versions of one game share one shortcut). A dash means the plugin could
-  not tell, not that there are none.
+  collection on adds (roughly, because several versions of one game share one shortcut). A dash means Tender could not
+  tell, not that there are none.
 - **Sync** — the switch.
 
 Collections that are on are listed first. The order stays put while the page is open, so switching one does not move it
@@ -406,13 +404,13 @@ On a **shared RomM server** the collection list includes every other user's _pub
   change which collections are switched on. The `N of M` counts follow it too.
 
 **Franchises and IGDB collections always appear** either way: they are auto-generated groupings that have no owner. The
-switch only takes effect once the plugin knows your account, which it learns the first time you sign in (existing
-sign-ins pick it up on the next connection check). Until then turning it off hides nothing.
+switch only takes effect once Tender knows your account, which it learns the first time you sign in (existing sign-ins
+pick it up on the next connection check). Until then turning it off hides nothing.
 
 Another user's public **favorites** collection is listed under **Collections** like any other of theirs, with their name
-as its owner. If more than one favorites collection counts as yours — which can happen before the plugin knows your
-account — the **Favorites** row is greyed out with "more than one, listed under Collections", and each of them has its
-own switch under **Collections**. If your account has no favorites collection, the row is greyed out with a dash.
+as its owner. If more than one favorites collection counts as yours — which can happen before Tender knows your account
+— the **Favorites** row is greyed out with "more than one, listed under Collections", and each of them has its own
+switch under **Collections**. If your account has no favorites collection, the row is greyed out with a dash.
 
 #### Collections that share a name
 
@@ -421,9 +419,9 @@ called the same thing, or (on a shared server) another account's public collecti
 **Distinguish collection types in Steam names** setting on the **Settings** page under **Steam Library**:
 
 - **Off** (default) — the same-named collections **merge into a single Steam collection** carrying the combined set of
-  games. RomM allows collections to share a name, but Steam identifies a collection by its name, so the plugin unions
-  their members rather than dropping one. Names that differ only in **capitalisation** ("7 up" vs "7 Up") count as the
-  same name and merge too — Steam itself treats collection names case-insensitively.
+  games. RomM allows collections to share a name, but Steam identifies a collection by its name, so Tender unions their
+  members rather than dropping one. Names that differ only in **capitalisation** ("7 up" vs "7 Up") count as the same
+  name and merge too — Steam itself treats collection names case-insensitively.
 - **On** — hand-picked collections (**Collections** and **Favorites**) keep their plain name, and every other kind gets
   its **type** added to the Steam name: `(Smart)`, `(Franchise)` or `(IGDB Collection)`. A hand-picked collection, a
   franchise and an IGDB collection all called "Mario" become `RomM: [Mario] (<device>)`,
@@ -431,8 +429,8 @@ called the same thing, or (on a shared server) another account's public collecti
   Collections that end up with the same Steam name still merge: two of the same name **and** type, and also a
   hand-picked collection named, say, "Mario (Smart)" with a smart collection called "Mario".
 
-The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync: the
-plugin creates the Steam collections under their new names and, at the end of a sync that finishes in full, removes the
+The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync: Tender
+creates the Steam collections under their new names and, at the end of a sync that finishes in full, removes the
 old-named ones.
 
 If you had the setting on with an earlier version, your hand-picked collections were named with `(Standard)` in Steam,
@@ -478,7 +476,7 @@ To remove one platform's games, use that platform's pane in **Library › Platfo
 the **Data Management** page; see [Troubleshooting — Data Management](troubleshooting.md#data-management) for the
 populations it lists and what each one offers.
 
-If you delete a synced game directly from **Steam's own library**, the next sync brings it back. The plugin notices the
+If you delete a synced game directly from **Steam's own library**, the next sync brings it back. Tender notices the
 shortcut is gone at sync start and re-creates it, so deleting through Steam is not a permanent way to remove a RomM game
 — use one of those two places for that.
 

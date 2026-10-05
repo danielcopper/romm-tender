@@ -25,9 +25,9 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 
 Many games exist in a RomM library as several **versions** — different dumps of the same title: a `(USA)` release and a
 `(Europe)` one, a multi-language `(En,Fr,De)` dump, a `(Rev 1)` revision, a `(Demo)`. RomM groups these as a **sibling
-group** (one game, many versions), and the plugin represents the whole group with a **single Steam shortcut**. The
-version currently bound to that shortcut is the **active version** — the one the Download button fetches, and the one
-that launches and syncs saves.
+group** (one game, many versions), and Tender represents the whole group with a **single Steam shortcut**. The version
+currently bound to that shortcut is the **active version** — the one the Download button fetches, and the one that
+launches and syncs saves.
 
 ### The Switch-version control
 
@@ -37,8 +37,8 @@ art** (so two regions of the same game are told apart at a glance; a version who
 icon), with markers for:
 
 - **✓ (active)** — the version currently bound to the shortcut. This is exactly what the Download button will fetch.
-- **Default** — the version the plugin would pick on its own, following RomM's "SET DEFAULT" choice (`is_main_sibling`)
-  and, failing that, your [Preferred region](configuration.md) setting. It's a suggestion, not a lock.
+- **Default** — the version Tender would pick on its own, following RomM's "SET DEFAULT" choice (`is_main_sibling`) and,
+  failing that, your [Preferred region](configuration.md) setting. It's a suggestion, not a lock.
 - **Downloaded** — a version you already have on disk.
 - **not synced** — a version RomM has that isn't in your local library yet. Selecting it records it on the spot — unless
   it's dimmed as a conflicting metadata match (see below).
@@ -64,23 +64,23 @@ When the version the shortcut is bound to is the one confirmed gone, the **Downl
 stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
 or remove the local data, to get the button back.
 
-This availability check is fresh each time the version list loads and is not saved in the plugin database. Only a 404
-for that exact ROM id establishes that it is gone. Timeouts, sign-in/permission errors, server errors, and malformed
-responses fail open: the plugin does not disable a version merely because it could not get a trustworthy answer. A
-ROM-specific 404 also does not make the rest of the plugin report that RomM is offline.
+This availability check is fresh each time the version list loads and is not saved in Tender's database. Only a 404 for
+that exact ROM id establishes that it is gone. Timeouts, sign-in/permission errors, server errors, and malformed
+responses fail open: Tender does not disable a version merely because it could not get a trustworthy answer. A
+ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
 
 Selecting a different version **rebinds** the game to it: the Download button now fetches that version, the panel's
 title and Region/Languages rows update to reflect it, and its cover refreshes to the new version. The Steam shortcut
 keeps its name, its place in your collections, and its playtime — all tied to the shortcut, which never changes. A
 single-version game shows no Version control.
 
-The plugin checks the selected version again immediately before moving the shortcut. If RomM now answers that the exact
+Tender checks the selected version again immediately before moving the shortcut. If RomM now answers that the exact
 version no longer exists, the switch is refused with **Could not switch version**, nothing about the shortcut changes,
 and the picker refreshes directly so the row becomes unavailable without starting a library sync. This protection also
 applies after **Sync now & switch** and **Switch anyway**; the latter bypasses only the unsynced-save warning. If RomM
 cannot provide a definitive answer because of a timeout, connection/sign-in/server error, or malformed response, the
 local switch is allowed to continue. In particular, the offline **Switch anyway** path does not wait through the normal
-retry sequence. A target-specific refusal does not by itself change the plugin's global online/offline status. When the
+retry sequence. A target-specific refusal does not by itself change Tender's global online/offline status. When the
 refusal follows a **Sync now & switch** whose upload already succeeded, the **Saves** tab is refreshed as well, so it
 shows the saves that were just uploaded rather than the state from before the sync.
 
@@ -157,14 +157,15 @@ freeing disk space. The backend remeasures selected ROMs plus mandatory saves, b
 before mutation and safely fails the group if the complete bundle does not fit.
 
 Recovery always records the affected database state, local playtime and pending sessions, exact attributable current
-saves (including path-safe filenames retained in prior save-sync state) and backup history, and relevant plugin caches.
-Fully vanished shortcut recovery also records bounded Steam details, collections/playtime fields, grid art, Steam Input
-files, and the controller setting. It contains no settings, credentials, tokens, whole database, BIOS, or save states.
-Recovery is manual only: there is no restore UI, and a new Steam shortcut cannot inherit the recorded Steam-assigned
-appId or playtime. Because the folder is the recovery interface, it is written to be read months later. Each bundle is
-named `<game>_<date>_<id>`, and its `README.txt` lists every game the bundle covers and what the run did to it, every
-copied file with the exact path to put it back, the playtime in hours and minutes, and the steps to restore by hand
-starting with `sha256sum -c checksums.sha256`. The recovery folder itself carries a `README.txt` explaining what it is.
+saves (including path-safe filenames retained in prior save-sync state) and backup history, and Tender's relevant
+caches. Fully vanished shortcut recovery also records bounded Steam details, collections/playtime fields, grid art,
+Steam Input files, and the controller setting. It contains no settings, credentials, tokens, whole database, BIOS, or
+save states. Recovery is manual only: there is no restore UI, and a new Steam shortcut cannot inherit the recorded
+Steam-assigned appId or playtime. Because the folder is the recovery interface, it is written to be read months later.
+Each bundle is named `<game>_<date>_<id>`, and its `README.txt` lists every game the bundle covers and what the run did
+to it, every copied file with the exact path to put it back, the playtime in hours and minutes, and the steps to restore
+by hand starting with `sha256sum -c checksums.sha256`. The recovery folder itself carries a `README.txt` explaining what
+it is.
 
 A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
 confirmation scoped to that one version. A singleton vanished binding shows the same trash action as a single button,
@@ -199,8 +200,8 @@ outcomes are intentional and retryable rather than being reported as unchanged.
 
 ### Region and Languages
 
-In the panel's **Game Info** tab, the plugin shows the **Region** (e.g. `USA/Europe`) and **Languages** (e.g. `En, Fr`)
-of the **active version**, when RomM has them. These are attributes of that one version — they change when you switch
+In the panel's **Game Info** tab, Tender shows the **Region** (e.g. `USA/Europe`) and **Languages** (e.g. `En, Fr`) of
+the **active version**, when RomM has them. These are attributes of that one version — they change when you switch
 versions, and a version with no region/language detail simply omits the rows. The values refresh on every sync.
 
 ## Downloading ROMs
@@ -224,7 +225,7 @@ leaves your existing install intact. If the cancel happens to land just as the d
 Downloaded ROMs are stored in your RetroDECK roms directory (e.g. `~/retrodeck/roms/gba/`).
 
 **Only one version of a game is kept on disk at a time.** If you tap **Download** on a version while another version of
-the same game (its [sibling group](#versions)) is already on disk, the plugin removes the old install first and then
+the same game (its [sibling group](#versions)) is already on disk, Tender removes the old install first and then
 downloads the new one — no prompt. **Use Existing Files** ([below](#when-the-game-is-already-on-your-device)) removes
 the old install the same way, just before it records the files you placed yourself. This keeps a multi-version game to a
 single copy on disk. Your **save files are never touched** by this cleanup, so switching back and re-downloading the
@@ -233,15 +234,15 @@ untouched.
 
 ### When the game is already on your device
 
-If you copied ROMs into your RetroDECK folders yourself, a game the plugin has no record of may already be sitting
-exactly where a download would write. The plugin never writes over it. Instead, the Play button reads **Use Existing
-Files**, and pressing it opens a dialog rather than starting a download.
+If you copied ROMs into your RetroDECK folders yourself, a game Tender has no record of may already be sitting exactly
+where a download would write. Tender never writes over it. Instead, the Play button reads **Use Existing Files**, and
+pressing it opens a dialog rather than starting a download.
 
 The dialog shows both sides — what is on your device (name, size, when it last changed) and what the server would send —
 and says plainly whether the two are the same size. From there you have three choices:
 
-- **Use These Files** — the plugin records what is already there as the installed copy. Nothing is downloaded, nothing
-  is renamed, and no playlist is generated: your files are taken exactly as they are. The game becomes playable
+- **Use These Files** — Tender records what is already there as the installed copy. Nothing is downloaded, nothing is
+  renamed, and no playlist is generated: your files are taken exactly as they are. The game becomes playable
   immediately. One thing is removed, and only one: if another version of the same game was already on disk, that
   version's files and its install record go — the same one-version-at-a-time cleanup a download does, without a prompt.
   Your saves are not part of it, and that version can be downloaded again whenever you want it back.
@@ -258,7 +259,7 @@ and says plainly whether the two are the same size. From there you have three ch
   a multi-disc release, or a game packed next to a readme) usually cannot be, because your server publishes one checksum
   for the whole archive and nothing says which of its files that number covers. Newer RomM libraries — ones rescanned
   since RomM 4.9.0 — publish a checksum per file inside the archive, and those are checked one by one, with anything the
-  server did not list ignored as usual. An archive in a format the plugin cannot open, such as `.7z` or `.rar`, is never
+  server did not list ignored as usual. An archive in a format Tender cannot open, such as `.7z` or `.rar`, is never
   reported as differing; it simply cannot be confirmed. One case still works outside a zip: if you unpacked a
   single-game archive yourself, the loose file is compared against the game it came from.
 
@@ -280,10 +281,10 @@ Your copy is rarely named the way your server names it. `Example Quest - Second 
 `Example Quest - Second Journey (USA).zip` are the same game, and a download would land beside your file rather than on
 it — leaving you with two copies of one game.
 
-So the plugin has a look around the platform folder — when the game's page opens, and again when you press the button.
-It reads that folder's top level only — never inside your subfolders, and never inside a game folder — keeps whatever
-your emulator accepts as a ROM for that system, skips anything it already has an install record for, and compares names
-with the version tags removed. `Example Quest - Second Journey (Rev 1) (USA).zip` and
+So Tender has a look around the platform folder — when the game's page opens, and again when you press the button. It
+reads that folder's top level only — never inside your subfolders, and never inside a game folder — keeps whatever your
+emulator accepts as a ROM for that system, skips anything it already has an install record for, and compares names with
+the version tags removed. `Example Quest - Second Journey (Rev 1) (USA).zip` and
 `Example Quest - Second Journey (U).zip` both reduce to the same game.
 
 **You find out before you press anything.** If your copy is there, the button reads **Use Existing Files** rather than
@@ -342,15 +343,14 @@ anything has been moved**, lists everything that collides, and asks once for the
 either exit, because it is the same question:
 
 - **Replace Them** — yours take those names. The files that were there are **not** destroyed: each is moved into a
-  `.romm-backup` folder beside it — the same safety net every other save the plugin replaces goes through — so you can
-  get one back by hand if you picked wrong. The ten most recent backups of each file are kept.
+  `.romm-backup` folder beside it — the same safety net every other save Tender replaces goes through — so you can get
+  one back by hand if you picked wrong. The ten most recent backups of each file are kept.
 - **Keep Them** — the existing files stay and your old-named ones stay where they are. Nothing is lost, but those old
   files are now orphaned: nothing will read them.
 - **Cancel** — nothing happens at all.
 
 If a rename cannot be completed — saves on internal storage and ROMs on an SD card is the case that makes it awkward —
-the plugin tells you exactly which files moved and which did not, by name, rather than claiming success or a plain
-failure.
+Tender tells you exactly which files moved and which did not, by name, rather than claiming success or a plain failure.
 
 One case is still out of reach by design: a copy of the game whose name is genuinely different, not just differently
 tagged. `Example Quest` will not be found for `Example Quest - Second Journey`, and it should not be — it is a different
@@ -382,28 +382,28 @@ download and start again to see the dialog for what is there now.
 ### Multi-Disc and Multi-File Games
 
 Some games ship as more than one file — multi-disc PS1 titles, a base game plus updates and DLC, a BIN+CUE pair. RomM
-downloads these as a single ZIP, which the plugin extracts automatically. You just download and play; the layout is
-handled for you.
+downloads these as a single ZIP, which Tender extracts automatically. You just download and play; the layout is handled
+for you.
 
 After the byte transfer finishes, the download button and the QAM queue show a brief **Extracting…** phase with its own
 progress (the percentage climbs back from 0 as the archive unpacks — a large Switch or disc image takes a moment). The
 extraction can't be cancelled, so the cancel/pause controls are replaced by a spinner until it's done; the game then
 flips to **Installed** as usual. Single-file ROMs download as a bare file and skip this phase entirely.
 
-The plugin gives the extracted game its own folder and names that folder after the real **launch file** (including the
+Tender gives the extracted game its own folder and names that folder after the real **launch file** (including the
 extension, e.g. `Example Quest - Second Journey (USA).m3u/` or `Example Quest (USA).iso/`) so that ES-DE collapses it
 into a single game entry instead of showing a folder plus loose files.
 
 **Disc switching only applies to systems whose emulator supports it.** For the disc-swapping consoles — PS1, Saturn,
 Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like — a game-named `.m3u` playlist is generated so you can
-flip between discs in-game, and the folder is named after that playlist. The plugin decides this by reading ES-DE's own
+flip between discs in-game, and the folder is named after that playlist. Tender decides this by reading ES-DE's own
 per-system supported-extension list, so a game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind
 it) actually understands one.
 
 **Cartridge and folder systems get no playlist.** Switch (`.nsp`), Xbox 360 (`.iso`), and other systems with no disc
 concept collapse to their real game file instead — the folder is named after the cartridge/disc image (`<Game>.nsp/`,
-`<Game>.iso/`) and the game launches straight from it. RomM bundles a generic `.m3u` into every multi-file ZIP, but the
-plugin ignores it on these systems rather than launching from a file the emulator can't read.
+`<Game>.iso/`) and the game launches straight from it. RomM bundles a generic `.m3u` into every multi-file ZIP, but
+Tender ignores it on these systems rather than launching from a file the emulator can't read.
 
 Single-file titles (most `.chd`/`.iso` games on disc-image systems) download as a bare file with no folder, so they need
 no playlist either way.
@@ -420,8 +420,8 @@ A few titles are distributed as an **installer** rather than as playable content
 `.pkg` (plus a `.rap` licence file), where the game stays sealed inside the package until an emulator installs it. A
 disc rip that arrived as raw `.bin` tracks with no `.cue` or `.gdi` alongside them has the same problem.
 
-The plugin checks what the download actually produced against the list of formats the system can open. When nothing in
-it qualifies, the shortcut is left **without a launch command** and the game's **ROM File** section says so, instead of
+Tender checks what the download actually produced against the list of formats the system can open. When nothing in it
+qualifies, the shortcut is left **without a launch command** and the game's **ROM File** section says so, instead of
 writing a command that would fail the first time you press Play. Pressing Play shows the same explanation.
 
 **Your download is kept.** The files stay on disk where the ROM would normally live, and **Uninstall** works as usual —
@@ -470,10 +470,10 @@ the default disc rather than failing to launch.
 
 ### Where it applies
 
-The disc you pick applies to **the Steam shortcut this plugin created for the game**, whenever Steam launches it — in
-**game mode** (the couch UI) or **desktop mode**. It does **not** touch any custom non-plugin shortcut you set up
-yourself (for example a hand-made Xenia or standalone-emulator shortcut) — those carry their own launch command, which
-the plugin doesn't manage.
+The disc you pick applies to **the Steam shortcut Tender created for the game**, whenever Steam launches it — in **game
+mode** (the couch UI) or **desktop mode**. It does **not** touch any shortcut Tender did not create, such as a hand-made
+Xenia or standalone-emulator shortcut you set up yourself: those carry their own launch command, which Tender doesn't
+manage.
 
 !!! note "RetroDECK is the supported launcher"
 
@@ -492,14 +492,14 @@ To remove a downloaded ROM file:
 
 This only removes the ROM file — the Steam shortcut, artwork, and metadata are preserved.
 
-This applies to files you told the plugin to [use from your device](#when-the-game-is-already-on-your-device) as well:
-once they are the installed copy, **Uninstall** deletes them exactly as it would a downloaded one. The plugin has one
-kind of install and does not remember where the files came from — which is why the choice is put to you at the moment
-you make it, not afterwards.
+This applies to files you told Tender to [use from your device](#when-the-game-is-already-on-your-device) as well: once
+they are the installed copy, **Uninstall** deletes them exactly as it would a downloaded one. Tender has one kind of
+install and does not remember where the files came from — which is why the choice is put to you at the moment you make
+it, not afterwards.
 
 The button switches to **Uninstalling…** as soon as you tap it, and a game made of many files counts them down as they
 go. Pressing it again while that is on screen does nothing — the removal already running is the one that finishes, and
-the plugin refuses a second one for the same game rather than letting two run against the same folder. That holds across
+Tender refuses a second one for the same game rather than letting two run against the same folder. That holds across
 both entry points: **Uninstall all ROM files** on Data Management claims every game it is about to remove, so it is
 refused while a single uninstall is running, and a single uninstall is refused while the bulk run holds that game. If
 Tender's backend restarts or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
@@ -534,12 +534,12 @@ Tap **Refresh Metadata** in the game detail panel to:
 This is useful if artwork was missing on first sync (SteamGridDB may have added new images since) or if metadata has
 changed on your RomM server.
 
-When you tap **Refresh Artwork**, the plugin asks your RomM server which SteamGridDB game the ROM maps to and applies
-the hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
-SteamGridDB id for a game, that id wins — on both sync and refresh. If RomM has no id, the plugin tries to derive one
-from the game's IGDB id. Only when neither resolves a SteamGridDB game does a picker open, where you search SteamGridDB
-by name and choose from the results (with thumbnails). A name pick is applied immediately but is **not permanent** —
-once your RomM server has a SteamGridDB id for that game, that id takes over. Because a manual pick isn't stored as the
+When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
+hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
+SteamGridDB id for a game, that id wins — on both sync and refresh. If RomM has no id, Tender tries to derive one from
+the game's IGDB id. Only when neither resolves a SteamGridDB game does a picker open, where you search SteamGridDB by
+name and choose from the results (with thumbnails). A name pick is applied immediately but is **not permanent** — once
+your RomM server has a SteamGridDB id for that game, that id takes over. Because a manual pick isn't stored as the
 resolved id, you can change it any time: just tap **Refresh Artwork** again and the picker reopens. To pin a specific
 match for good, set the SteamGridDB id on the game in RomM.
 
@@ -558,7 +558,7 @@ The **Downloads** page (accessible from the main QAM panel) shows all active and
 - **Clear Completed** button to clean up the list
 
 At most **two** ROMs download at the same time. If you start more, the extra ones wait their turn and begin
-automatically as soon as a slot frees up. Before a download starts, the plugin checks there's enough free disk space for
+automatically as soon as a slot frees up. Before a download starts, Tender checks there's enough free disk space for
 everything already in flight, so a batch of downloads won't overcommit the SD card.
 
 <!-- Screenshot: Download Queue page with an active download and completed entries -->
@@ -585,10 +585,10 @@ in-game save may be lost.
 
 Steam's own "Stop Game" cannot end these games. Your shortcut starts RetroDECK through Flatpak, and Flatpak launches the
 emulator outside the process tree Steam watches — so Steam has nothing to stop, and pressing its button does nothing at
-all. The plugin's Stop Game finds the emulator itself and ends it.
+all. Tender's Stop Game finds the emulator itself and ends it.
 
 It ends **only the game you pressed it for**. RetroDECK can be running more than one thing at a time — a second game
-launched from another shortcut, or ES-DE opened on its own — so the plugin identifies the session by the ROM the button
+launched from another shortcut, or ES-DE opened on its own — so Tender identifies the session by the ROM the button
 belongs to and leaves the rest alone. If it cannot pin down that game's session — nothing matches, or it cannot tell two
 sessions apart with certainty — it stops nothing and tells you so: ending someone else's game mid-save would be worse
 than not stopping at all. Should that happen while the game really is running, Resume stays available, and quitting from
@@ -602,7 +602,7 @@ first, then stop.
 
 Because of that, the menu item greys out and reads **Stopping…** while it works. Those few seconds of nothing visibly
 happening are normal — the emulator is writing your save. Pressing Stop again would be the very thing that discards it,
-so the plugin ignores a second press until the first one finishes.
+so Tender ignores a second press until the first one finishes.
 
 ---
 

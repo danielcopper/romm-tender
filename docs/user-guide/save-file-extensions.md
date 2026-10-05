@@ -1,12 +1,12 @@
 # Save File Extensions
 
-Research results for which save file extensions RetroDECK cores produce, and what our plugin needs to support. This
-informs the implementation of [#196](https://github.com/danielcopper/romm-tender/issues/196).
+Research results for which save file extensions RetroDECK cores produce, and what Tender needs to support. This informs
+the implementation of [#196](https://github.com/danielcopper/romm-tender/issues/196).
 
 !!! warning "Historical — the extension table this page designed no longer exists"
 
-    The plugin held a per-system list of save extensions, and this page is the research behind it. **That list is
-    retired.** The plugin now asks the machine which files a game's save consists of, per game and per the emulator
+    Tender held a per-system list of save extensions, and this page is the research behind it. **That list is
+    retired.** Tender now asks the machine which files a game's save consists of, per game and per the emulator
     that will launch it, and reads the answer fresh on every sync — see
     [Save File Discovery](../architecture/save-file-sync-architecture.md#save-file-discovery),
     [Save sync coverage](../architecture/save-sync-coverage.md) and

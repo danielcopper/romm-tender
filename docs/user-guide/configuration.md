@@ -1,7 +1,7 @@
 # Configuration
 
-All settings are accessible from the plugin's QAM panel. Open the Quick Access Menu (**...** button), select **Tender**,
-and pick **Settings** from the menu at the bottom of the panel.
+All settings are accessible from Tender's QAM panel. Open the Quick Access Menu (**...** button), select **Tender**, and
+pick **Settings** from the menu at the bottom of the panel.
 
 ## The Settings page
 
@@ -27,7 +27,7 @@ accounts.
 
 ### Getting there from a notice
 
-Four of the notices on the plugin's main panel are doors into a section, and the action they are about lives only behind
+Four of the notices on Tender's main panel are doors into a section, and the action they are about lives only behind
 that door:
 
 | The notice says               | Its button           | Where it takes you     |
@@ -75,36 +75,36 @@ The **Connections** section manages your RomM server connection.
   it, and any custom headers — and use your account, so turn it on only on a network you trust. While it is on, every
   start of the backend writes a warning to its log saying certificate verification is off.
 
-The plugin checks the connection for you — there is no manual "Test Connection" button. The **Connection** row on the
-plugin's main QAM panel shows the live status whenever you open it, and names the problem when it can't connect (for
-example _Sign-in rejected_, _Server unreachable_, or _No server URL_).
+Tender checks the connection for you — there is no manual "Test Connection" button. The **Connection** row on Tender's
+main QAM panel shows the live status whenever you open it, and names the problem when it can't connect (for example
+_Sign-in rejected_, _Server unreachable_, or _No server URL_).
 
 ### Custom headers for an authenticating proxy
 
 If your RomM server sits behind a proxy that authenticates requests before they reach RomM — Pangolin, Cloudflare
-Access, Authelia, Authentik forward-auth — the proxy rejects the plugin's requests and you cannot connect at all. A
-browser gets past it because you logged in to the proxy there; the plugin has no such session.
+Access, Authelia, Authentik forward-auth — the proxy rejects Tender's requests and you cannot connect at all. A browser
+gets past it because you logged in to the proxy there; Tender has no such session.
 
 The way through is a header the proxy accepts. Tap **Edit** on the **Custom headers** row, add a row per header, enter
-its name and value, and save. From then on every request the plugin sends to your RomM server carries them — including
-the sign-in itself, since the proxy sits in front of that too.
+its name and value, and save. From then on every request Tender sends to your RomM server carries them — including the
+sign-in itself, since the proxy sits in front of that too.
 
-**Where they go.** The plugin puts them on the requests it sends to the RomM server you configured, and on no other
-request it sends — they are credentials for your front door. The plugin does reach other hosts: SteamGridDB for artwork,
-and a metadata provider's CDN for a cover image RomM has no local copy of. Neither carries them.
+**Where they go.** Tender puts them on the requests it sends to the RomM server you configured, and on no other request
+it sends — they are credentials for your front door. Tender does reach other hosts: SteamGridDB for artwork, and a
+metadata provider's CDN for a cover image RomM has no local copy of. Neither carries them.
 
-One case is outside the plugin's hands: if your server answers with a redirect to a **different** host, the HTTP library
+One case is outside Tender's hands: if your server answers with a redirect to a **different** host, the HTTP library
 carries the headers along to it, the same way it already carries your RomM API token. That is worth knowing if your RomM
 URL is plain `http://`, where anyone on the network between you and the server could insert such a redirect. Over
 `https://` to a server you control it is not a practical concern.
 
-**What they cannot be.** These names are refused when you save, so nothing you enter can quietly replace a header the
-plugin or its HTTP library already sets: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`,
+**What they cannot be.** These names are refused when you save, so nothing you enter can quietly replace a header Tender
+or its HTTP library already sets: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`,
 `Accept-Encoding`, `Range`, `If-None-Match` and `If-Modified-Since`.
 
 `Authorization` is the one worth explaining. Proxy documentation often suggests it — Pangolin documents a Basic-auth
 `Authorization` header — but that is exactly the header your RomM API token travels in. One request cannot carry both,
-so the plugin refuses it rather than silently sending one and dropping the other. A proxy built for non-browser clients
+so Tender refuses it rather than silently sending one and dropping the other. A proxy built for non-browser clients
 usually offers a header of its own as well; use that one.
 
 **Worked example — Pangolin.** Issue a resource access token in Pangolin, then enter its two parts as rows:
@@ -116,31 +116,31 @@ usually offers a header of its own as well; use that one.
 
 Save, then check the **Connection** row on the main QAM panel — it should stop reporting a rejection.
 
-**Values are write-only.** A saved value is never sent back to the plugin's UI: reopening the editor shows each header's
-name with an empty value field marked `•••• stored`. Leave it empty to keep the stored value, or type to replace it.
-Removing a row and saving deletes that header. Values are never written to the plugin's log.
+**Values are write-only.** A saved value is never sent back to the panel: reopening the editor shows each header's name
+with an empty value field marked `•••• stored`. Leave it empty to keep the stored value, or type to replace it. Removing
+a row and saving deletes that header. Values are never written to Tender's log.
 
 ### Sign out
 
 The **Sign out** button (shown only while signed in) forgets the stored token **on this device**: it clears the token,
-its server-side id, its origin, and its provenance from the plugin's settings, but keeps the **server URL** and the SSL
+its server-side id, its origin, and its provenance from Tender's settings, but keeps the **server URL** and the SSL
 setting so you do not have to re-enter them. It asks for confirmation first.
 
-Signing out **never deletes or revokes the token in RomM** — the token stays valid on the server. A token the plugin
-minted from your username and password can only be deleted during a same-server re-sign-in (the stored token
-deliberately lacks the permission to delete itself), and a token you supplied (pasted or paired) is yours to manage. To
-revoke a token for good, delete it in RomM's web UI under **Settings → API Tokens**.
+Signing out **never deletes or revokes the token in RomM** — the token stays valid on the server. A token Tender minted
+from your username and password can only be deleted during a same-server re-sign-in (the stored token deliberately lacks
+the permission to delete itself), and a token you supplied (pasted or paired) is yours to manage. To revoke a token for
+good, delete it in RomM's web UI under **Settings → API Tokens**.
 
 If you just want to switch accounts or re-authenticate, prefer **Sign in again** over signing out and back in. For
-username/password accounts, re-signing in on the **same** server revokes the token the plugin minted before — a path
-that a sign-out then sign-in cannot take, since sign-out has already forgotten the old token's id. RomM caps the number
-of Client API Tokens per user, so avoiding stranded minted tokens matters.
+username/password accounts, re-signing in on the **same** server revokes the token Tender minted before — a path that a
+sign-out then sign-in cannot take, since sign-out has already forgotten the old token's id. RomM caps the number of
+Client API Tokens per user, so avoiding stranded minted tokens matters.
 
 ### Sign in with an API token (OIDC)
 
-If you log in to RomM through an identity provider (OIDC / SSO), your RomM account has no password, so the plugin cannot
-mint a token for you. Instead you create a Client API Token yourself in RomM's web UI and hand it to the plugin. There
-are two ways to do that — **pairing code** (recommended) and **pasting the token** — and both grant the same scopes and
+If you log in to RomM through an identity provider (OIDC / SSO), your RomM account has no password, so Tender cannot
+mint a token for you. Instead you create a Client API Token yourself in RomM's web UI and hand it to Tender. There are
+two ways to do that — **pairing code** (recommended) and **pasting the token** — and both grant the same scopes and
 carry the same warnings (see [Required scopes](#required-scopes) below).
 
 Start the same way for either method:
@@ -155,8 +155,8 @@ Pairing hands the device the token over a short-lived one-time code, so you neve
 
 1. Create the token with the scopes above (steps 1–2).
 2. On that token in RomM's web UI, click **Pair**. RomM shows an 8-character pairing code, valid for **60 seconds**.
-3. In the plugin's Connection Settings, tap **Sign in**, switch the **Sign-in method** dropdown to **Pairing code**,
-   enter the code, and confirm — within the 60-second window. The plugin exchanges the code for the token itself.
+3. In Tender's Connection Settings, tap **Sign in**, switch the **Sign-in method** dropdown to **Pairing code**, enter
+   the code, and confirm — within the 60-second window. Tender exchanges the code for the token itself.
 
 > **Pairing rotates the token's secret.** Exchanging a pairing code hands the device a **freshly rotated** secret for
 > that token — any raw token value you copied earlier stops working. Use **one token per device** so pairing a new
@@ -166,12 +166,12 @@ Pairing hands the device the token over a short-lived one-time code, so you neve
 
 1. Create the token with the scopes above (steps 1–2).
 2. Copy the token value (RomM shows it only once).
-3. In the plugin's Connection Settings, tap **Sign in**, switch the **Sign-in method** dropdown to **API token**, paste
-   the token, and confirm.
+3. In Tender's Connection Settings, tap **Sign in**, switch the **Sign-in method** dropdown to **API token**, paste the
+   token, and confirm.
 
 Both methods validate the token at sign-in with an authenticated probe against your RomM profile: a wrong, revoked, or
 expired credential is rejected there with an actionable message. Sign-in only confirms that the token **authenticates**,
-though — the plugin cannot verify the token's granted scopes, so double-check that you granted the write scopes
+though — Tender cannot verify the token's granted scopes, so double-check that you granted the write scopes
 (`assets.write`, `devices.write`, `roms.user.write`) when creating it. A missing write scope is not caught at sign-in;
 it surfaces later as a permissions error on the affected action (save upload, device sync, or playtime).
 
@@ -194,20 +194,20 @@ it surfaces later as a permissions error on the affected action (save upload, de
 All eleven scopes are within RomM's **Viewer** role, so a token created by any account (including OIDC accounts) can
 carry them. `me.write` is deliberately **not** requested — a pasted token cannot mint or delete tokens.
 
-> **The plugin never deletes a pasted token.** Signing out of or back into the plugin, or switching servers, leaves your
-> token untouched on the RomM server — you manage its lifecycle in RomM's web UI. (This differs from the
-> username/password method, where the plugin revokes the token it minted when you re-sign-in on the same server.)
+> **Tender never deletes a pasted token.** Signing out and back in, or switching servers, leaves your token untouched on
+> the RomM server — you manage its lifecycle in RomM's web UI. (This differs from the username/password method, where
+> Tender revokes the token it minted when you re-sign-in on the same server.)
 >
 > Note the reverse case too: if you previously signed in with your username and password and then switch to a pasted
-> token on the **same** server, the token the plugin minted earlier is left behind on RomM — it can only revoke that
-> during a same-server password re-sign-in (it has no password once you switch to a token). Revoke the old token
-> manually in RomM's web UI if you no longer want it.
+> token on the **same** server, the token Tender minted earlier is left behind on RomM — it can only revoke that during
+> a same-server password re-sign-in (it has no password once you switch to a token). Revoke the old token manually in
+> RomM's web UI if you no longer want it.
 
 ## SteamGridDB API Key
 
 Under **Settings › Connections**, below the RomM group — SteamGridDB is one of the two services Tender talks to.
 
-The plugin uses [SteamGridDB](https://www.steamgriddb.com/) to fetch additional artwork for your games — hero banners,
+Tender uses [SteamGridDB](https://www.steamgriddb.com/) to fetch additional artwork for your games — hero banners,
 logos, and wide grid images. RomM provides cover art, but SteamGridDB fills in the rest so your games look like
 first-class Steam titles.
 
@@ -243,8 +243,8 @@ starting a second pass over the same shortcuts.
 ## Preferred region
 
 A dropdown in **Settings › Steam Library**. When a game exists in your RomM library as several regional dumps
-(versions), this decides which region the plugin prefers when it picks the version to bind and the name it gives the
-Steam shortcut.
+(versions), this decides which region Tender prefers when it picks the version to bind and the name it gives the Steam
+shortcut.
 
 | Option                                   | Effect                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -252,7 +252,7 @@ Steam shortcut.
 | a specific region (World, USA, Japan, …) | Put that region at the top of the order; everything else keeps the default order behind it          |
 
 **"Default" is a fixed order, not auto-detection.** It always prefers `World > USA > Europe > Japan` (then other regions
-alphabetically, then dumps with no region); the plugin never looks at your language or system region.
+alphabetically, then dumps with no region); Tender never looks at your language or system region.
 
 **The dropdown's options** are the fixed anchors — Default, World, USA, Europe, Japan — followed by every other region
 actually present in the games you have already synced (read from the local database, sorted alphabetically; no server
@@ -447,7 +447,7 @@ with no time in its title:
 
 ## RetroArch Input Driver Fix
 
-If the plugin detects that RetroArch is using the `x` input driver (which causes controller issues in menus on Wayland
+If Tender detects that RetroArch is using the `x` input driver (which causes controller issues in menus on Wayland
 systems), a notice appears on the main panel with an **Open Controller** button. The fix itself is in **Settings ›
 Controller**: **Fix input_driver to sdl2** modifies your RetroArch config to use `sdl2` instead, which fixes controller
 navigation in RetroArch menus. The result is reported under the button, and the warning goes away once the config has
@@ -455,8 +455,8 @@ been changed.
 
 The button **asks before it acts** — it opens a confirmation naming the change, and only **Apply Fix** writes anything;
 **Cancel** leaves your config exactly as it was. The confirmation is there because the change is written straight into
-your config and the plugin keeps no copy of the file it replaces, so if you have hand-edited your `retroarch.cfg` and
-want a copy, take one before confirming.
+your config and Tender keeps no copy of the file it replaces, so if you have hand-edited your `retroarch.cfg` and want a
+copy, take one before confirming.
 
 <!-- Screenshot: RetroArch input_driver warning with fix button -->
 

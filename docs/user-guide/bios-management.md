@@ -1,10 +1,10 @@
 # BIOS and Emulator Core Management
 
 Some emulated systems require BIOS files to run games. Without the correct BIOS files, games for those systems will fail
-to launch. The plugin can download BIOS files directly from your RomM server.
+to launch. Tender can download BIOS files directly from your RomM server.
 
 Which BIOS files a system needs depends on the **emulator core** in use — some cores need BIOS, some don't. Because the
-two concerns are related but independent, the plugin presents the **active core** and its **BIOS state** together in one
+two concerns are related but independent, Tender presents the **active core** and its **BIOS state** together in one
 place: the **Platforms** tab of the **Library** page, where picking a platform on the left shows everything about it on
 the right. Core selection and BIOS file management can each be used on their own — they share a pane only because the
 active core determines which BIOS files matter.
@@ -24,7 +24,7 @@ Not all systems need BIOS files. Cartridge-based systems like Game Boy, SNES, an
 
 When you open a game whose platform has BIOS files — on your RomM server, or asked for by the emulator that will run it
 — the game detail panel's **BIOS** tab shows the readiness line. Its dot color reflects the same
-unknown/ok/partial/missing verdict used everywhere in the plugin:
+unknown/ok/partial/missing verdict used everywhere in Tender:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
   files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs, or "SwanStation
@@ -39,7 +39,7 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
   one), or "Beetle PSX cannot start this system without a BIOS image" where the console itself will not start without
   one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
 - **Grey** — no readiness claim, in one of three wordings: "Nothing could be established about what mGBA needs", where
-  the plugin could not work the requirement out at all (see
+  Tender could not work the requirement out at all (see
   [When the requirement is unknown](#when-the-requirement-is-unknown)), or "One file mGBA requires could not be checked"
   and "Whether the BIOS image Beetle PSX needs is in place could not be checked", where it knows the requirement and
   could not settle whether you have it (see [When readiness cannot be stated](#when-readiness-cannot-be-stated))
@@ -58,12 +58,12 @@ may well require one.
 
 The line says whose requirement it is on purpose, and it is a statement about the **emulator**, not about the console.
 It names that emulator, and the name is the one the rest of the line was worked out for — the same pick the counts
-beside it were filtered by, so the sentence and the numbers can never be about two different emulators. Where the plugin
+beside it were filtered by, so the sentence and the numbers can never be about two different emulators. Where Tender
 could not settle on one, the line says "The launching emulator marks none of its BIOS files as required" instead.
 Whether the console itself starts without a BIOS image is a separate question with a line of its own (see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)), and where nothing is recorded about the
-console the plugin says nothing about it either — so a line reading only "nothing required" would have claimed an
-all-clear nobody gave.
+console Tender says nothing about it either — so a line reading only "nothing required" would have claimed an all-clear
+nobody gave.
 
 Where the line says how many of the required files are in place, it can carry two counts, and they count different
 things. The sentence counts the files the emulator you launch with requires, every one of them whether your RomM library
@@ -89,7 +89,7 @@ packager wrote about the file follows the name on the same line, in the packager
 file name, and many are nothing else. Where the file also has something to say about its state, that comes last, behind
 a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
 your RomM library`. It is the **emulator's own** wording — a
-RetroArch core's description file — and it is shown for no other source. Where the plugin's own card stands in for an
+RetroArch core's description file — and it is shown for no other source. Where Tender's own card stands in for an
 emulator that ships no description of its own, that card explains the requirement in full sentences, which is a
 paragraph on a line meant for a few words; the row shows the file and its state instead.
 
@@ -97,18 +97,18 @@ Beside the Play button there is also a short **BIOS** badge, which is a shortcut
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
 core requires nothing, or requires only files you already have, there is no badge — however many optional files are
 missing, and whether or not the requirement could be worked out at all. A required **folder** counts here like any other
-requirement: once the plugin has established that it holds no BIOS image, the badge appears, because what satisfies the
+requirement: once Tender has established that it holds no BIOS image, the badge appears, because what satisfies the
 requirement is a file inside the folder and there is none. What raises no badge is a requirement nothing could settle —
-a folder the plugin could not read, say — since it has not shown anything to be absent. Those cases are worth reading,
-but not worth a warning next to Play, so they live in the tab.
+a folder Tender could not read, say — since it has not shown anything to be absent. Those cases are worth reading, but
+not worth a warning next to Play, so they live in the tab.
 
 The second: the **console itself** does not start without a BIOS image, and the image this game needs is not in place —
 none of the core's images at all ("Beetle PSX cannot start this system without a BIOS image"), or none for **this game's
 region** ("Beetle PSX needs scph5500.bin to start this game (Japan) — it is missing"; see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)). It follows the same rule as the first:
 shown to be absent raises it, not-yet-established does not. So a PlayStation with only a USA image raises no badge on a
-game whose region the plugin cannot tell — the image may well be the one it needs — and none where whether the image is
-in place could not be checked.
+game whose region Tender cannot tell — the image may well be the one it needs — and none where whether the image is in
+place could not be checked.
 
 The badge is always **red**. It is a warning, not a status: the four-colour dot above belongs to the tab's readiness
 line, and every state that raises the badge is one where firmware the emulator needs is not there. Having one of three
@@ -126,7 +126,7 @@ second number and never in the first. Where nothing is shown missing there is no
 _Unknown_.
 
 A BIOS warning only ever disappears on an **answer**. When a check cannot be run at all — most often right after a BIOS
-download or delete, before the state has been read again — the plugin keeps showing the last status it knew rather than
+download or delete, before the state has been read again — Tender keeps showing the last status it knew rather than
 reporting "no BIOS needed". So a check that could not be completed never quietly clears a missing-BIOS warning and lets
 the game launch without its files; it leaves the warning where it was.
 
@@ -141,7 +141,7 @@ again in the background and fills the answer in a moment later. So a game opened
 gets its BIOS tab a beat after the rest of the page, and a core or version switch settles on the new core's or new
 version's readiness rather than the one before it.
 
-An unreachable RomM server usually does **not** put the plugin in that position. Everything the readiness line needs is
+An unreachable RomM server usually does **not** put Tender in that position. Everything the readiness line needs is
 local: which emulator is active comes from your RetroDECK configuration, what that emulator needs comes from the
 emulator itself, and what you already have comes from your BIOS folder. Your server contributes the **download** — so
 while it is unreachable you still see what is needed and what is missing, you just cannot fetch anything, and files that
@@ -149,10 +149,10 @@ exist only in your RomM library are not listed.
 
 Below the readiness line the tab lists individual files — not every file the platform has, but the ones this game gives
 you something to do or to know: files the emulator you launch with requires, the images it would start the console from
-(one of them per region), files you already have, files you can still download, and files the plugin could not judge.
-What is left over — an installed emulator names it, this launch does not require it, it is not there, and no page offers
-a download for it — is counted on one line instead: _6 more files an installed emulator asks for — none required for
-this launch, none to download; the Library page's Platforms tab lists them_.
+(one of them per region), files you already have, files you can still download, and files Tender could not judge. What
+is left over — an installed emulator names it, this launch does not require it, it is not there, and no page offers a
+download for it — is counted on one line instead: _6 more files an installed emulator asks for — none required for this
+launch, none to download; the Library page's Platforms tab lists them_.
 
 A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
 beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The
@@ -163,13 +163,12 @@ Each row shows whether that file is present or missing, and lists the cores that
 (optional)_); the **active core**'s line is highlighted in amber so you can spot at a glance which core's requirements
 the file applies to.
 
-A core's word for a file is the core's own, and the plugin prints it unchanged — with one exception. Where the file is
-one of the images a core needs **one of**, picked by the region of the disc, the line says which region it serves
-instead: _Beetle PSX (for Japan discs)_, or _SwanStation (boots it for every region)_ for an image that core starts
-every disc from. None of those images is _required_ on its own: each is what the discs of its own region start from, and
-the group, not the image, is the requirement. See
-[When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for what the line above the list does with
-them.
+A core's word for a file is the core's own, and Tender prints it unchanged — with one exception. Where the file is one
+of the images a core needs **one of**, picked by the region of the disc, the line says which region it serves instead:
+_Beetle PSX (for Japan discs)_, or _SwanStation (boots it for every region)_ for an image that core starts every disc
+from. None of those images is _required_ on its own: each is what the discs of its own region start from, and the group,
+not the image, is the requirement. See [When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for
+what the line above the list does with them.
 
 Files in your RomM library that no emulator was found to ask for are not listed one by one. One line below the list
 counts them instead, worded one of two ways — every one of those files turns on the same question, whether the emulator
@@ -177,23 +176,23 @@ you launch with could be read, so they all get the same answer:
 
 - "3 files on server no installed emulator asks for" — the emulator you launch with was read, and none of the emulators
   RetroDECK offers for the system was found to ask for these files. That is a finished answer for this launch, and not a
-  promise about every emulator you have installed: another one the plugin could not read may still want one of these
-  files, and that does not keep the file off this line.
-- "1 file on server nothing installed could answer for" — the emulator you launch with could not be read, or the plugin
+  promise about every emulator you have installed: another one Tender could not read may still want one of these files,
+  and that does not keep the file off this line.
+- "1 file on server nothing installed could answer for" — the emulator you launch with could not be read, or Tender
   could not tell which emulator that is, so nothing could be said about these files either way.
 
-A file your emulator needs that is **not in your RomM library** is listed too, marked _not in your RomM library_. The
-plugin cannot fetch it — nothing in it can — so it is shown for what it is rather than left out. Adding the file to RomM
-makes it downloadable like any other.
+A file your emulator needs that is **not in your RomM library** is listed too, marked _not in your RomM library_. Tender
+cannot fetch it — nothing in it can — so it is shown for what it is rather than left out. Adding the file to RomM makes
+it downloadable like any other.
 
 Not holding a file is a different question from not having it, and the row says both. If it is also absent from your
 BIOS folder it reads _missing, not in your RomM library_; if it is already sitting there it reads only _not in your RomM
 library_, with the green dot every present file gets.
 
-A red row has a second cause worth knowing about. Where the plugin could not look at the place a file goes at all —
-broken permissions, or storage going bad — the row says _its location could not be read_ rather than calling the file
-missing, so you know to check the folder instead of hunting for a download. It still counts as not ready, because an
-emulator will not get in there either.
+A red row has a second cause worth knowing about. Where Tender could not look at the place a file goes at all — broken
+permissions, or storage going bad — the row says _its location could not be read_ rather than calling the file missing,
+so you know to check the folder instead of hunting for a download. It still counts as not ready, because an emulator
+will not get in there either.
 
 Where a file **is** there and the emulator looked at its contents, the row says what came of that, because "not ready"
 covers three quite different situations and only one of them is a problem you can fix by downloading:
@@ -202,8 +201,8 @@ covers three quite different situations and only one of them is a problem you ca
   failure: DuckStation starts such an image and calls it an unknown BIOS. It is also not a clean bill of health, which
   is why the row stays neutral rather than going green — a dump nobody has catalogued and a wrong file look the same
   from here.
-- _its bytes could not be read_ — the plugin asked for the contents and did not get them. This says nothing about
-  whether your emulator can read the file; it says this plugin could not.
+- _its bytes could not be read_ — Tender asked for the contents and did not get them. This says nothing about whether
+  your emulator can read the file; it says Tender could not.
 - _the emulator refuses a file of this size_ — your emulator will not even open it, so whatever is in it, the game will
   not start from it. This one is red, and the fix is a different copy of the file rather than a different setting.
 
@@ -212,10 +211,10 @@ emulator distribution ships, the row names the distribution instead — _provide
 distribution's file, and if it ever went missing the repair is a RetroDECK component reset rather than a download.
 `dolphin-emu/Sys/codehandler.bin` is the usual example, and that one no library holds; others are perfectly ordinary
 files you may well have in RomM too, and the row still names the distribution, because whose copy is at the destination
-is the more useful fact. The name is printed exactly as the plugin's emulator-knowledge library writes it.
+is the more useful fact. The name is printed exactly as Tender's emulator-knowledge library writes it.
 
 A row can also be a **folder** rather than a file — LRPS2 asks for `pcsx2/bios`, which is where your PS2 BIOS files go.
-A folder is satisfied by what is **inside** it, never by the folder being there, so the plugin opens the files in it and
+A folder is satisfied by what is **inside** it, never by the folder being there, so Tender opens the files in it and
 reads them the way the core does:
 
 - A folder holding a PS2 BIOS image is green, and the row lists what it found underneath itself, one image per line and
@@ -225,13 +224,13 @@ reads them the way the core does:
   from this folder instead._ That is not a fault: LRPS2 falls back to the images it finds in the folder, so the row
   keeps its colour. Where its settings name an image that IS there, that image is the one it opens.
 - A folder holding no image is red, exactly like a missing file: _holds no BIOS image_. That is the honest answer for a
-  PS2 system that will not boot, and it is what the red **BIOS** badge beside Play appears for. The plugin does not
-  always have to read the files to say it — a folder holding nothing even the right size for a BIOS is answered by their
-  sizes alone — and the row reads the same either way.
+  PS2 system that will not boot, and it is what the red **BIOS** badge beside Play appears for. Tender does not always
+  have to read the files to say it — a folder holding nothing even the right size for a BIOS is answered by their sizes
+  alone — and the row reads the same either way.
 - Where the read could not finish — a file whose bytes would not come back, a folder that could not be listed in full,
-  or an image the plugin's identity table and the emulator's own check disagree about — the row says so and gets an
-  amber dot, and the system's readiness line declines (see
-  [When readiness cannot be stated](#when-readiness-cannot-be-stated) below). Nothing is being claimed either way.
+  or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets an amber
+  dot, and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
+  below). Nothing is being claimed either way.
 
 A folder that is **absent** is red like any other requirement that is not there, with no note beside it: there is
 nothing to have found, so there is nothing to say. It is never offered as a download either — what the emulator opens
@@ -264,11 +263,11 @@ and the row you focus is the one the right-hand pane describes.
 4. Move down the list to pick a platform; the pane on the right changes with the focus
 5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
    launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.
-   If it reads **RetroDECK decides**, the plugin could not pin any of this platform's emulators — they may need setting
-   up, or ES-DE's command for them is not one the plugin can bake — so RetroDECK chooses one itself when a game starts.
-   If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
-   machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
-   all. The sentence below the line says which of the three it is
+   If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need setting up,
+   or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game starts. If it
+   reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this machine, and
+   the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at all. The
+   sentence below the line says which of the three it is
 6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
@@ -283,12 +282,12 @@ and the row you focus is the one the right-hand pane describes.
    regions" where every region has its image, "1 / 3 regions · USA only" where only some do, with the line under it
    naming the regions whose discs will not start, and "0 / 3 regions" where none does. An emulator that requires plain
    files as well counts those first and the regions after them — see
-   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
+   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row Tender
    could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
    [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
    line 5: pick a different one from the chip button and the numbers, the dot and the file rows are answered for it, so
    this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a **standalone** emulator
-   too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the plugin has no source for the
+   too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where Tender has no source for the
    emulator, the files are shown against every emulator that declares them instead of against one
 8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
@@ -305,8 +304,8 @@ and the row you focus is the one the right-hand pane describes.
    the group: a green ✓ where it is there, a red ✗ where it is not — that region's discs have nothing to start from —
    and a line under the row says which region it serves: _for USA discs · ✓ in place_. A violet ⊘ appears **beside**
    that mark — never in place of it — when your RomM library does not hold the file: a file you already have keeps its
-   green ✓, one you still need keeps its red ✗, and the ⊘ adds that the plugin cannot fetch it for you. A legend under
-   the table, one line per mark, names the marks that are actually on it. Anything else a row has to say is printed
+   green ✓, one you still need keeps its red ✗, and the ⊘ adds that Tender cannot fetch it for you. A legend under the
+   table, one line per mark, names the marks that are actually on it. Anything else a row has to say is printed
    **under** the row rather than in the column — that a file was provided by RetroDECK, that a folder holds no image,
    that a location could not be read
 9. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
@@ -315,27 +314,27 @@ and the row you focus is the one the right-hand pane describes.
    "checked, and nothing there": filling it for file rows is still to come. Where the emulator did look at a file's
    contents, what came of that is printed **under** the row with the rest of its notes
 10. A **Download** button sits on every row that is missing and in your RomM library, and a **Delete** button on every
-    row this plugin downloaded and still has on disk — that is the only thing it will remove, so a file your emulator
-    came with never offers one. A **folder** row (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we downloaded
-    into it. While a download runs, the button you pressed becomes a spinner and the other download buttons grey out;
-    when it finishes the list re-reads itself. **If it fails**, that button turns red and says **Failed** for about two
-    seconds — the other buttons stay greyed until it clears — and a line under the section says what went wrong
-11. **Download required** and **Download all** fetch several at once, and **Delete BIOS** removes everything this plugin
+    row Tender downloaded and still has on disk — that is the only thing it will remove, so a file your emulator came
+    with never offers one. A **folder** row (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we downloaded into
+    it. While a download runs, the button you pressed becomes a spinner and the other download buttons grey out; when it
+    finishes the list re-reads itself. **If it fails**, that button turns red and says **Failed** for about two seconds
+    — the other buttons stay greyed until it clears — and a line under the section says what went wrong
+11. **Download required** and **Download all** fetch several at once, and **Delete BIOS** removes everything Tender
     downloaded for the platform (see below). **Download required** fetches the files the emulator requires and, where
     the console needs one image per region, the images of the regions that have none yet — nothing more once every
     region has its image — and the number on it counts exactly what it would fetch. All three are always there and grey
     out when there is nothing to do. What they follow is your **library**, not the readiness line above them: a system
-    the plugin could work out nothing about still offers everything your library holds for it, because those are two
+    Tender could work out nothing about still offers everything your library holds for it, because those are two
     separate questions — see [When the requirement is unknown](#when-the-requirement-is-unknown)
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 
 BIOS files are downloaded to your RetroDECK bios directory (e.g. `~/retrodeck/bios/`). Some platforms use
-subdirectories: Dreamcast BIOS goes into `bios/dc/`, because that is the location the Dreamcast core declares. The
-plugin handles the correct placement automatically — the location is the one your emulator itself declares, so a file
-for a subdirectory lands in that subdirectory rather than loose in the BIOS root.
+subdirectories: Dreamcast BIOS goes into `bios/dc/`, because that is the location the Dreamcast core declares. Tender
+handles the correct placement automatically — the location is the one your emulator itself declares, so a file for a
+subdirectory lands in that subdirectory rather than loose in the BIOS root.
 
-PS2 looks like a subdirectory and is not one. Nothing declares a location for an individual PS2 BIOS dump, so the plugin
+PS2 looks like a subdirectory and is not one. Nothing declares a location for an individual PS2 BIOS dump, so Tender
 puts it in the BIOS root — and RetroDECK links `bios/pcsx2/bios` back to that same folder, which is why the file appears
 in both places at once. There is one copy, not two.
 
@@ -348,7 +347,7 @@ offline.
 The **Delete BIOS** button under the table takes all of them, and its label shows how many (e.g. "Delete BIOS (3)"). It
 is always there and greys out when there is nothing to remove.
 
-Each row also carries its own **Delete** where the plugin downloaded that file — so a file your emulator came with never
+Each row also carries its own **Delete** where Tender downloaded that file — so a file your emulator came with never
 offers one. A row that is a **folder** the emulator reads (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we
 downloaded into it; the folder itself stays.
 
@@ -357,27 +356,27 @@ downloaded into it; the folder itself stays.
 3. Confirm the action in the dialog that appears — every one of them asks first
 
 This is a destructive action, so a confirmation dialog asks you to confirm before anything is deleted. Once confirmed,
-the plugin removes the BIOS files **it downloaded** for that system from your RetroDECK bios directory and reports the
+Tender removes the BIOS files **it downloaded** for that system from your RetroDECK bios directory and reports the
 result. Games that need those files won't launch until you download them again with **Download All** or **Download
 Required**.
 
-**It only ever deletes its own downloads.** A file is removed when the plugin has a record of downloading it, and for no
+**It only ever deletes its own downloads.** A file is removed when Tender has a record of downloading it, and for no
 other reason. Everything else in the BIOS folder is left alone, including:
 
 - **Firmware RetroDECK ships itself.** RetroDECK installs some files into the BIOS folder with its own components —
   `bios/dolphin-emu/Sys/codehandler.bin` is one. Your emulator asks for it, so it is listed on the page, marked
-  _provided by RetroDECK_, but the plugin did not put it there. That one in particular is in no RomM library either, so
+  _provided by RetroDECK_, but Tender did not put it there. That one in particular is in no RomM library either, so
   nothing here could fetch it back.
 - **Files you placed there by hand**, even where the name matches one your RomM library holds. Without a download record
-  the plugin has no claim on it.
+  Tender has no claim on it.
 
 Being in your RomM library is neither necessary nor sufficient. A file you have since removed from RomM is still deleted
-if the plugin downloaded it — otherwise its own downloads would be stranded on disk with no way to clean them up — and a
+if Tender downloaded it — otherwise its own downloads would be stranded on disk with no way to clean them up — and a
 file that is in your library but arrived some other way is left where it is. If you want one of those gone, delete it in
 the file manager.
 
-The count on the button is the same set: it counts the plugin's own downloads that are still on disk, so it matches what
-the delete reports. A file it downloaded that you have since removed by hand does not appear in it, and the leftover
+The count on the button is the same set: it counts Tender's own downloads that are still on disk, so it matches what the
+delete reports. A file it downloaded that you have since removed by hand does not appear in it, and the leftover
 bookkeeping entry is cleared the next time you run the delete.
 
 This is the only place a platform's BIOS files are deleted. The Data Management page used to offer the same action
@@ -390,24 +389,24 @@ Saturn, Dreamcast, and some arcade systems. A platform appears with a BIOS statu
 for it **or** one of its emulators asks for a file — so a missing BIOS you have never uploaded is visible rather than
 silent.
 
-### Where the plugin gets its answers
+### Where Tender gets its answers
 
-The plugin asks the **emulators RetroDECK offers for that system** what they want — every one it lists, RetroArch cores
-and standalone emulators alike. A RetroArch core ships a small description file next to it declaring the firmware it
-needs and where each file goes. A standalone emulator (PCSX2, DuckStation, Cemu, melonDS, xemu) states its firmware in
-its own format instead, and for those the plugin uses a packaged rule card that reads the emulator's own settings. Both
-are read live, so the answers follow your RetroDECK install, including emulators added after the plugin was released.
+Tender asks the **emulators RetroDECK offers for that system** what they want — every one it lists, RetroArch cores and
+standalone emulators alike. A RetroArch core ships a small description file next to it declaring the firmware it needs
+and where each file goes. A standalone emulator (PCSX2, DuckStation, Cemu, melonDS, xemu) states its firmware in its own
+format instead, and for those Tender uses a packaged rule card that reads the emulator's own settings. Both are read
+live, so the answers follow your RetroDECK install, including emulators added after your version of Tender was released.
 
 That same reading also answers whether a **declared** file is already sitting where the emulator will look for it, and
-for those placed under your BIOS folder the plugin takes its answer rather than checking the path itself. The difference
+for those placed under your BIOS folder Tender takes its answer rather than checking the path itself. The difference
 matters on a stock RetroDECK: `bios/pcsx2/bios` is a link pointing back at the BIOS folder, so working the location out
 from where a link ends up loses the folder the emulator actually opens. Following the emulator's own spelling gets the
-check right. The rest the plugin looks up itself, in three cases. A file in your library that no emulator RetroDECK
-offers for the system was found to declare has no reading to take. A file whose declared location the plugin cannot
-place under your BIOS folder — a standalone emulator keeping its firmware in a folder of its own, for example — is
-checked where the plugin would put it itself, since the reading is about somewhere else. And every BIOS download the
-plugin offers — one file or several at once — checks each destination before fetching, because the reading was taken
-before the files it fetches arrived.
+check right. The rest Tender looks up itself, in three cases. A file in your library that no emulator RetroDECK offers
+for the system was found to declare has no reading to take. A file whose declared location Tender cannot place under
+your BIOS folder — a standalone emulator keeping its firmware in a folder of its own, for example — is checked where
+Tender would put it itself, since the reading is about somewhere else. And every BIOS download Tender offers — one file
+or several at once — checks each destination before fetching, because the reading was taken before the files it fetches
+arrived.
 
 The reading **opens files and reads them**, which is what two answers need. Where an emulator asks for a **folder**
 rather than a file, the folder being there settles nothing — a folder is satisfied by what is in it — so the candidates
@@ -417,7 +416,7 @@ time: reading your whole BIOS folder every time a game page opened would be far 
 files one system's emulators care about.
 
 **Not every standalone emulator can be answered for.** The packaged cards cover five of them today; the rest are
-installed emulators the plugin has no source for, and it says so rather than guessing — a system launching one of those
+installed emulators Tender has no source for, and it says so rather than guessing — a system launching one of those
 reads **unknown** (below), never "not needed".
 
 Each file on your server therefore gets one of four answers:
@@ -435,13 +434,13 @@ emulator requires the file is a separate question, and it is the one the readine
 ### When the requirement is unknown
 
 "Not needed" and "unknown" are deliberately kept apart. The first is an answer; the second is the absence of one, and
-the plugin will not present it as an all-clear.
+Tender will not present it as an all-clear.
 
 The doubt is scoped to **the emulator your games will actually launch with** — the one named at the top of the platform
-page. An emulator RetroDECK also offers, that the plugin could not read, says nothing about a launch that does not use
-it, so it does not grey out the answer. The other side of that: switching a platform to an emulator the plugin has no
-source for moves it from a finished answer to **unknown**, which is the truth about the new emulator rather than
-anything having gone wrong with the old one.
+page. An emulator RetroDECK also offers, that Tender could not read, says nothing about a launch that does not use it,
+so it does not grey out the answer. The other side of that: switching a platform to an emulator Tender has no source for
+moves it from a finished answer to **unknown**, which is the truth about the new emulator rather than anything having
+gone wrong with the old one.
 
 A **file** reads unknown when no emulator RetroDECK offers for the system was found to ask for it and the emulator you
 launch with could not be asked, for any of the reasons listed below. A file another emulator does ask for keeps that
@@ -467,19 +466,19 @@ one cause:
 - a standalone emulator with no packaged card, or one whose card named no file
 - a RetroArch core that ships without a description file — on a stock RetroDECK that is rare, since only a handful of
   bundled cores are in that state
-- an emulator whose declaration the plugin could not follow to a location
-- a launching emulator the plugin cannot name — a configuration it could not read at all leaves it unable to name one in
-  the first place
+- an emulator whose declaration Tender could not follow to a location
+- a launching emulator Tender cannot name — a configuration it could not read at all leaves it unable to name one in the
+  first place
 - no answer at all: no emulator installation found to ask, or the reading of the installation itself failing
 
 Under that headline the page names the emulator your games on that system launch with — _Nothing could be established
-about what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that
-instead: _Nothing could be established about what the launching emulator needs_. Your games still launch either way:
-where the plugin names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is
-about **one** emulator. Others you have installed may have answered perfectly well, and where they did, their answers
-are in the rows below.
+about what PCSX2 needs_ — and, where Tender could not settle on an emulator to name for that system, says that instead:
+_Nothing could be established about what the launching emulator needs_. Your games still launch either way: where Tender
+names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about **one**
+emulator. Others you have installed may have answered perfectly well, and where they did, their answers are in the rows
+below.
 
-This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
+This is informational, not an error: your files may be perfectly fine, Tender simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
 reads as ready.
 
@@ -493,21 +492,21 @@ library holds are two separate questions, and neither answers the other: a syste
 library behind it, and fetching from it is the one action that moves the system along at all. **Download All**,
 **Download Required** and every row's own **Download** follow your library exactly as they do on a system that answered.
 
-That matters most on the systems most likely to be in this state. PS2, GameCube and PSP launch standalone emulators the
-plugin has no card for, so their readiness line declines — while your library may well hold every file they need. A page
+That matters most on the systems most likely to be in this state. PS2, GameCube and PSP launch standalone emulators
+Tender has no card for, so their readiness line declines — while your library may well hold every file they need. A page
 that withdrew the downloads there would leave you with nothing to press on exactly the systems that need the files most.
 
-What the page also does **not** say is that BIOS management is unsupported here: that would describe the plugin, and the
-plugin is not the limitation. Install an emulator that declares firmware for this system and the page answers for it,
-with nothing changed on our side. Downloading the files from RomM's own web interface and dropping them in your BIOS
-folder works exactly as it always did; nothing about the files changes, only what this page will claim about them.
+What the page also does **not** say is that BIOS management is unsupported here: that would describe Tender, and Tender
+is not the limitation. Install an emulator that declares firmware for this system and the page answers for it, with
+nothing changed on our side. Downloading the files from RomM's own web interface and dropping them in your BIOS folder
+works exactly as it always did; nothing about the files changes, only what this page will claim about them.
 
 !!! note "Systems that used to read \"Not managed by the plugin\" will have moved"
 
     That state meant only \"no entry in the built-in table\", and the table is gone. Those systems now get whatever
     their emulators say, which can go three ways: **green**, where the emulator you launch with requires nothing you do
     not have, **red or amber**, where it requires a file you do not have — or the console needs a BIOS image and none is
-    in place — and the table simply never knew, or **grey**, where the plugin could not settle an answer. All three are
+    in place — and the table simply never knew, or **grey**, where Tender could not settle an answer. All three are
     new, and all three are honest.
 
 ### When the console needs a BIOS image
@@ -517,12 +516,12 @@ no way to say that. Its description file marks each file it wants **required** o
 core like SwanStation marks every PlayStation BIOS image _optional_ — which is true of each file on its own, because any
 one of them will do, and misleading about the console, which needs one of them.
 
-Where the plugin's emulator-knowledge library knows how a core picks its image, it states the requirement the way the
-core boots: **one of these images**, picked by the region of the disc. A PlayStation disc is from Japan, the USA or
-Europe — the regions RomM names a game by, and the ones the BIOS descriptions name (_PS1 US BIOS_) — and Beetle PSX
-opens `scph5500.bin` for the first, `scph5501.bin` for the second and `scph5502.bin` for the third. SwanStation opens
-the image its settings name for the disc's region and, where that is not there, searches your BIOS folder for any image
-it knows — so one image it finds can serve every region.
+Where Tender's emulator-knowledge library knows how a core picks its image, it states the requirement the way the core
+boots: **one of these images**, picked by the region of the disc. A PlayStation disc is from Japan, the USA or Europe —
+the regions RomM names a game by, and the ones the BIOS descriptions name (_PS1 US BIOS_) — and Beetle PSX opens
+`scph5500.bin` for the first, `scph5501.bin` for the second and `scph5502.bin` for the third. SwanStation opens the
+image its settings name for the disc's region and, where that is not there, searches your BIOS folder for any image it
+knows — so one image it finds can serve every region.
 
 That group is **one requirement**, however many images it lists, and the Library page's platform pane counts it in
 regions — how many of the regions the core names have their image — rather than as files:
@@ -553,8 +552,8 @@ Japan discs)_ on that emulator's line. An image a core found by searching the BI
 BIOS folder_. A file the core also lists in its own description file under the same name is still one row, not two; an
 image the core found under another of the names it tries is a row of its own.
 
-**The game page answers for the game's own region.** RomM records which regions a game was released in, and the plugin
-reads them as the console's disc regions: USA and Canada as USA, Japan as Japan, and Europe, the European countries and
+**The game page answers for the game's own region.** RomM records which regions a game was released in, and Tender reads
+them as the console's disc regions: USA and Canada as USA, Japan as Japan, and Europe, the European countries and
 Australia as Europe. With a Japanese game and only a USA image the page reads red — _Beetle PSX needs scph5500.bin to
 start this game (Japan) — it is missing_ — and the **BIOS** badge appears beside Play. With a USA game it reads green —
 _The BIOS image Beetle PSX needs for this game's region (USA) is in place_. A game released in several regions is
@@ -580,42 +579,42 @@ it needs.
 **Download required** fetches the images of the regions that have none yet, where your RomM library holds them, and
 nothing more once every region has its image. The number on the button counts exactly those.
 
-Where a core states no such group, the plugin falls back to the console's own record: a core whose console will not
-start without an image, with none of the images it lists in place, reads **"… cannot start this system without a BIOS
-image"** in red, under the Library page's **Needs a BIOS image** heading, and raises the badge; where whether one of
-them is in place could not be settled it reads **"Whether the BIOS image … needs is in place could not be
-established"**. PCSX ReARMed ships its own built-in replacement for the PlayStation BIOS, so the same page with that
-core selected reads green.
+Where a core states no such group, Tender falls back to the console's own record: a core whose console will not start
+without an image, with none of the images it lists in place, reads **"… cannot start this system without a BIOS image"**
+in red, under the Library page's **Needs a BIOS image** heading, and raises the badge; where whether one of them is in
+place could not be settled it reads **"Whether the BIOS image … needs is in place could not be established"**. PCSX
+ReARMed ships its own built-in replacement for the PlayStation BIOS, so the same page with that core selected reads
+green.
 
-Systems the plugin holds no such record for are unaffected, and this is deliberate: no record means nobody has checked
-that console, which is not the same as "this console needs nothing". Those systems keep exactly the page they had.
+Systems Tender holds no such record for are unaffected, and this is deliberate: no record means nobody has checked that
+console, which is not the same as "this console needs nothing". Those systems keep exactly the page they had.
 
 ### When readiness cannot be stated
 
 There is a second grey state, and it is a different sentence: **"One file LRPS2 requires could not be checked"**. Here
-the plugin knows perfectly well what the system needs — it is whether you **have** it that could not be settled for one
-of the required things.
+Tender knows perfectly well what the system needs — it is whether you **have** it that could not be settled for one of
+the required things.
 
-The usual cause is a required **folder** the plugin could not read all the way: a file inside it whose bytes would not
-come back, a folder it could not list in full, or an image its identity table and the emulator's own check disagree
-about. It is not the ordinary state of a PS2 system — a folder that reads cleanly is answered green or red like any
-other requirement.
+The usual cause is a required **folder** Tender could not read all the way: a file inside it whose bytes would not come
+back, a folder it could not list in full, or an image its identity table and the emulator's own check disagree about. It
+is not the ordinary state of a PS2 system — a folder that reads cleanly is answered green or red like any other
+requirement.
 
 The second cause is the one the previous section describes: the console needs a BIOS image and whether one is in place
 could not be settled — an image there that could not be read, or a region nothing could check beside the regions that
 have their image. The requirement is known; only the answer is not.
 
-What the plugin will not do is guess at the part it could not reach. A folder whose listing broke off part-way might
-hold a BIOS image in the part that was never read, or might not; calling it ready and calling it empty are both claims
-about files nobody looked at. It declines instead, and says so.
+What Tender will not do is guess at the part it could not reach. A folder whose listing broke off part-way might hold a
+BIOS image in the part that was never read, or might not; calling it ready and calling it empty are both claims about
+files nobody looked at. It declines instead, and says so.
 
 What that state does **not** do is flatten the rest of the page:
 
 - The **file rows keep their own answers.** A file that is present is still green, one that is missing is still red, and
   only the row nothing could be established for reads amber, with the reason beside it.
 - **Downloads stay.** Every file your library holds is still fetchable, and fetching them is the thing that actually
-  gets a PS2 system running. That holds for the state above too: what your library offers never depends on what the
-  plugin could work out about the emulator.
+  gets a PS2 system running. That holds for the state above too: what your library offers never depends on what Tender
+  could work out about the emulator.
 - The system is **not** flagged "BIOS needed", because that would be a claim too.
 - The red **BIOS** badge beside Play still appears for a file that is genuinely missing — the unjudgeable row is simply
   not one of them.
@@ -640,9 +639,9 @@ red by itself — and what each row means for the core you actually launch with 
 
 ## Active Core Detection
 
-Different emulator cores can have different BIOS requirements for the same platform. The plugin detects which core
-RetroDECK is actually configured to use and filters the BIOS list accordingly, so you only see the files that matter for
-your setup.
+Different emulator cores can have different BIOS requirements for the same platform. Tender detects which core RetroDECK
+is actually configured to use and filters the BIOS list accordingly, so you only see the files that matter for your
+setup.
 
 ### Example: Game Boy Advance
 
@@ -651,27 +650,27 @@ your setup.
 - With **gpSP**, `gba_bios.bin` is shown as _required_ — gpSP cannot run without it
 
 The active core name appears on the game detail page (the **Emulator** column) and on the platform's header line in
-**Library › Platforms**. This tells you at a glance which core the plugin is filtering for.
+**Library › Platforms**. This tells you at a glance which core Tender is filtering for.
 
 **How the core is determined:**
 
-1. If you set a **per-game core** for this game in the plugin, that wins. (Per-game cores are stored by the plugin
-   itself — see [Per-Game (Game Detail Page)](#per-game-game-detail-page) below.)
-2. If no per-game core, the plugin checks for a **per-platform core** you set in Library › Platforms — stored by the
-   plugin in its own settings, not in ES-DE.
-3. The plugin reads RetroDECK's ES-DE configuration (`es_systems.xml`) from the flatpak installation to find the default
+1. If you set a **per-game core** for this game in Tender, that wins. (Per-game cores are stored by Tender itself — see
+   [Per-Game (Game Detail Page)](#per-game-game-detail-page) below.)
+2. If no per-game core, Tender checks for a **per-platform core** you set in Library › Platforms — stored by Tender in
+   its own settings, not in ES-DE.
+3. Tender reads RetroDECK's ES-DE configuration (`es_systems.xml`) from the flatpak installation to find the default
    emulator for each platform — the first one it can launch with, RetroArch core or standalone. This live file is the
    only source; there is no bundled fallback snapshot.
-4. If the live configuration can't be read, or the plugin has no source for whatever that platform launches with, it has
+4. If the live configuration can't be read, or Tender has no source for whatever that platform launches with, it has
    nothing to filter with — so it does not filter, and it does not guess either. Every BIOS file the platform has is
    listed, each marked _unknown_, and the platform's summary reads **Requirement unknown** with a grey dot — including
    when the platform has no files to list, which is where saying nothing at all would have read as "nothing needed".
-   That is the honest answer for a platform like PS3, whose emulator the plugin has no card for: saying nothing is
-   needed would report it ready over firmware the emulator will not boot without. The download buttons are unaffected —
-   they follow your library, which is a different question — see
+   That is the honest answer for a platform like PS3, whose emulator Tender has no card for: saying nothing is needed
+   would report it ready over firmware the emulator will not boot without. The download buttons are unaffected — they
+   follow your library, which is a different question — see
    [When the requirement is unknown](#when-the-requirement-is-unknown).
 
-Whatever this chain resolves to is the **same core the game launches on** — the plugin bakes the resolved core into the
+Whatever this chain resolves to is the **same core the game launches on** — Tender bakes the resolved core into the
 Steam shortcut, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
 
 The detection chain ensures BIOS filtering works even when RetroDECK's configuration files aren't accessible (e.g. after
@@ -680,13 +679,13 @@ showing all files.
 
 ## Changing the Active Core
 
-You can change the active emulator core directly from the plugin, without leaving Game Mode. There are two scopes, and
-**both are stored by the plugin itself** — neither touches ES-DE's `gamelist.xml`. The plugin bakes the chosen core
-directly into each game's Steam shortcut, so your choice applies reliably for any ROM filename.
+You can change the active emulator core directly from Tender, without leaving Game Mode. There are two scopes, and
+**both are stored by Tender itself** — neither touches ES-DE's `gamelist.xml`. Tender bakes the chosen core directly
+into each game's Steam shortcut, so your choice applies reliably for any ROM filename.
 
-- **Per-platform** changes set the core for every game on a platform. Stored in the plugin's own settings.
-- **Per-game** changes set the core for a single game and take priority over the platform choice. Stored by the plugin
-  on the game, so they survive uninstalling and re-downloading.
+- **Per-platform** changes set the core for every game on a platform. Stored in Tender's own settings.
+- **Per-game** changes set the core for a single game and take priority over the platform choice. Stored by Tender on
+  the game, so they survive uninstalling and re-downloading.
 
 ### Per-Platform (Library Platforms tab)
 
@@ -694,28 +693,28 @@ In **Library › Platforms**, a platform with more than one emulator shows a **c
 line — the same button a game's page carries, grey when the platform is on its default emulator and gold when you have
 picked another. It opens a menu listing every emulator ES-DE offers for that platform — both RetroArch cores and
 **standalone emulators** (e.g. PCSX2, RPCS3, Dolphin, PPSSPP). Some entries appear **disabled** with a short reason (for
-example "script/shortcut form" or "needs setup files (launch via ES-DE once)") when the plugin can't launch them
-directly from Steam; those can't be picked. Picking an enabled emulator sets it as the default for all games on that
-platform. A "Switching cores may affect save compatibility" note is the first line of the menu.
+example "script/shortcut form" or "needs setup files (launch via ES-DE once)") when Tender can't launch them directly
+from Steam; those can't be picked. Picking an enabled emulator sets it as the default for all games on that platform. A
+"Switching cores may affect save compatibility" note is the first line of the menu.
 
 1. Open **Library** from the main QAM page and move to the **Platforms** tab
 2. Move to the platform you want to change
 3. Press the chip button and pick an emulator from the menu
 4. The BIOS table below updates to show what the new choice needs
 
-A platform that offers one emulator says so instead of showing a button. A platform whose emulators the plugin cannot
-pin — they may need setting up, or ES-DE's command for them may not be one the plugin can bake — says that too, and
-RetroDECK picks one itself when a game starts. Where the emulator RetroDECK would have fallen back to is **not
-installed**, the pane names it and says nothing here can pin a different one; those games will not start until it is
-installed. And a platform RetroDECK lists **no** emulator for says so, which is a different thing again: there is
-nothing for RetroDECK to fall back to at all. If the emulator list itself can't be read — RetroDECK not found, or its
-ES-DE configuration missing or unreadable — the pane says it is unavailable rather than showing an empty picker.
+A platform that offers one emulator says so instead of showing a button. A platform whose emulators Tender cannot pin —
+they may need setting up, or ES-DE's command for them may not be one Tender can bake — says that too, and RetroDECK
+picks one itself when a game starts. Where the emulator RetroDECK would have fallen back to is **not installed**, the
+pane names it and says nothing here can pin a different one; those games will not start until it is installed. And a
+platform RetroDECK lists **no** emulator for says so, which is a different thing again: there is nothing for RetroDECK
+to fall back to at all. If the emulator list itself can't be read — RetroDECK not found, or its ES-DE configuration
+missing or unreadable — the pane says it is unavailable rather than showing an empty picker.
 
-The plugin stores the choice in its own settings and **immediately re-applies it** to every installed game on that
-platform — the change takes effect right away, with no sync needed (games that already have a per-game core keep their
-own choice). If the switch cannot be made, the pane says so under the button and the header keeps naming the core that
-is actually in effect. The page works even when your RomM server is offline — core switching and BIOS status are
-available, only the download buttons are withdrawn.
+Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
+— the change takes effect right away, with no sync needed (games that already have a per-game core keep their own
+choice). If the switch cannot be made, the pane says so under the button and the header keeps naming the core that is
+actually in effect. The page works even when your RomM server is offline — core switching and BIOS status are available,
+only the download buttons are withdrawn.
 
 !!! note "A RetroDECK default-core change needs a Force Full Sync"
 
@@ -728,8 +727,7 @@ available, only the download buttons are withdrawn.
 
 On the game detail page, a **CPU button** (microchip icon) appears between the RomM and Steam gear buttons when the
 game's platform offers more than one emulator. The menu lists the same emulators as the platform pane — RetroArch cores
-and **standalone emulators** — and shows the ones the plugin can't launch from Steam as **disabled** with a short
-reason.
+and **standalone emulators** — and shows the ones Tender can't launch from Steam as **disabled** with a short reason.
 
 1. Open a game's detail page
 2. Tap the **CPU button** (microchip icon)
@@ -745,7 +743,7 @@ Each core in the list below can show up to three markers, one per role:
 
 - **(default)** — the RetroDECK/es_systems default core for this platform.
 - **(system)** — the per-platform core you picked in [Library › Platforms](#per-platform-library-platforms-tab) (stored
-  in the plugin's settings). Absent when the platform has no per-platform override.
+  in Tender's settings). Absent when the platform has no per-platform override.
 - **✓** (checkmark) — the core this game actually launches with right now.
 
 The three roles are independent, so a single core can carry more than one marker: "(default) (system)" when your
@@ -762,37 +760,37 @@ following the system (no per-game core), the **Use System Override** item carrie
 actually in effect. When you pin a per-game core, only that pinned core carries the ✓ and the **Use System Override**
 item does not.
 
-When you set or reset a per-game core for an installed game, the plugin updates the game's Steam shortcut immediately
-and confirms the change landed before reporting success. If Steam can't accept the change in the current session, you'll
-see a "Core saved — restart Steam to apply" message — your choice is still saved; it takes effect after a Steam restart
-(or the next sync).
+When you set or reset a per-game core for an installed game, Tender updates the game's Steam shortcut immediately and
+confirms the change landed before reporting success. If Steam can't accept the change in the current session, you'll see
+a "Core saved — restart Steam to apply" message — your choice is still saved; it takes effect after a Steam restart (or
+the next sync).
 
-Per-game cores work for **any ROM filename**. The plugin bakes the chosen core directly into the game's launch command,
-so it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in
-filenames) and is not affected by that upstream limitation.
+Per-game cores work for **any ROM filename**. Tender bakes the chosen core directly into the game's launch command, so
+it does not rely on RetroDECK's gamelist lookup (which mishandles parentheses and other special characters in filenames)
+and is not affected by that upstream limitation.
 
 ### Core choices are not migrated from ES-DE
 
-The plugin now owns core selection entirely and no longer reads or writes ES-DE's `gamelist.xml`. A few notes for anyone
+Tender now owns core selection entirely and no longer reads or writes ES-DE's `gamelist.xml`. A few notes for anyone
 upgrading from an older build or who edits ES-DE directly:
 
 - **Per-platform cores set in ES-DE are not carried over — re-apply them once.** Earlier builds stored a per-system core
-  as a `<alternativeEmulator>` in ES-DE's `gamelist.xml`; the plugin now stores per-platform cores in its own settings
-  and does **not** read or import that ES-DE entry. If you had set a per-system core, re-apply it once in **Library ›
+  as a `<alternativeEmulator>` in ES-DE's `gamelist.xml`; Tender now stores per-platform cores in its own settings and
+  does **not** read or import that ES-DE entry. If you had set a per-system core, re-apply it once in **Library ›
   Platforms** (the Emulator Core button/menu) and it sticks from then on.
-- **Per-game cores set with an older plugin build are not carried over.** Earlier builds stored per-game cores in
-  ES-DE's `gamelist.xml`; the plugin now stores them itself and does not import the old entries. Re-apply any per-game
-  core once through the CPU-button menu and it sticks from then on (including across uninstall/re-download).
-- **A core set directly in ES-DE is not seen by the plugin.** If you pick a core for a game (or a system) in ES-DE's own
-  interface, the plugin's BIOS badge, per-core save path, and core-change warning will **not** reflect it — those follow
-  the core the plugin knows about, and the plugin's launches always use the core it has baked in. ES-DE-native launches
-  still honour your ES-DE setting. To keep the plugin's badges, save paths, and launches in sync, set the core through
-  the plugin (the CPU-button menu for one game, Library › Platforms for a whole platform) instead.
+- **Per-game cores set with an older version of Tender are not carried over.** Earlier builds stored per-game cores in
+  ES-DE's `gamelist.xml`; Tender now stores them itself and does not import the old entries. Re-apply any per-game core
+  once through the CPU-button menu and it sticks from then on (including across uninstall/re-download).
+- **A core set directly in ES-DE is not seen by Tender.** If you pick a core for a game (or a system) in ES-DE's own
+  interface, Tender's BIOS badge, per-core save path, and core-change warning will **not** reflect it — those follow the
+  core Tender knows about, and Tender's launches always use the core it has baked in. ES-DE-native launches still honour
+  your ES-DE setting. To keep Tender's badges, save paths, and launches in sync, set the core through Tender (the
+  CPU-button menu for one game, Library › Platforms for a whole platform) instead.
 - **A custom system definition IS seen.** If you have added your own
-  `<RetroDECK home>/ES-DE/custom_systems/es_systems.xml`, the plugin now reads it the way ES-DE does: a system you
-  redefine there replaces the shipped one entirely, and a `<loadExclusive/>` in that file makes it the whole list. So
-  the emulators the picker offers, and the default it marks, can differ from what an older plugin build showed for a
-  system you customised. That is deliberate — the plugin's list should match the emulators your ES-DE actually has.
+  `<RetroDECK home>/ES-DE/custom_systems/es_systems.xml`, Tender now reads it the way ES-DE does: a system you redefine
+  there replaces the shipped one entirely, and a `<loadExclusive/>` in that file makes it the whole list. So the
+  emulators the picker offers, and the default it marks, can differ from what an older version of Tender showed for a
+  system you customised. That is deliberate — Tender's list should match the emulators your ES-DE actually has.
 
 ### Non-Default Core Indicator
 

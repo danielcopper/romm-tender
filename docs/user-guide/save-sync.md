@@ -5,8 +5,8 @@ Deck, then continue where you left off on your HTPC — your saves travel with y
 
 ## How It Works
 
-The plugin uploads and downloads your RetroArch game saves to and from your RomM server. When you start a game, the
-plugin checks if the server has a newer save and downloads it. When you stop playing, it uploads your updated save.
+Tender uploads and downloads your RetroArch game saves to and from your RomM server. When you start a game, Tender
+checks if the server has a newer save and downloads it. When you stop playing, it uploads your updated save.
 
 > **Important:** Save sync runs before and after a RomM game you start with **Tender's Play button** on the game detail
 > page, with Steam's own Play, or through a `steam://rungameid` link. If Tender does not answer within about five
@@ -18,14 +18,14 @@ plugin checks if the server has a newer save and downloads it. When you stop pla
 
 Sync uses a **newest-wins** model with a hash-divergence guard:
 
-- The plugin asks the RomM server for the saves in your active slot for the game and picks the newest (highest
+- Tender asks the RomM server for the saves in your active slot for the game and picks the newest (highest
   `updated_at`).
 - If the server tracks your device as up-to-date and your local file matches the recorded baseline, there's nothing to
   do.
 - If another device pushed a newer save and your local file is unchanged, the new server save is downloaded silently.
 - If you played offline and your local file changed, your save is pushed back to the server.
-- A conflict modal only appears if **both sides changed** since the last sync — the plugin won't silently overwrite
-  either version.
+- A conflict modal only appears if **both sides changed** since the last sync — Tender won't silently overwrite either
+  version.
 
 This is the same model used by the official RomM clients (Argosy and Grout). It keeps cross-device save sync simple: one
 timeline per slot, newest wins.
@@ -37,10 +37,10 @@ so on — each version has its **own** saves, on RomM and on disk. Automatic syn
 (the one currently bound to the shortcut). Switching versions never copies, moves, or deletes a save.
 
 That means an inactive version's local saves simply wait: if you switch away from a downloaded version whose saves were
-never uploaded, those saves stay on disk untouched and resume syncing the moment you switch back to that version. The
-plugin warns you before you leave such a version and shows a reminder banner on the **Saves** tab so the saves aren't
-forgotten (see [Managing Games → Versions](managing-games.md#versions)). Nothing is lost — the saves just don't sync
-while their version is inactive.
+never uploaded, those saves stay on disk untouched and resume syncing the moment you switch back to that version. Tender
+warns you before you leave such a version and shows a reminder banner on the **Saves** tab so the saves aren't forgotten
+(see [Managing Games → Versions](managing-games.md#versions)). Nothing is lost — the saves just don't sync while their
+version is inactive.
 
 The reminder never tells you to switch back to a retained version that the current version-list check positively
 confirmed is [no longer available on RomM](managing-games.md#the-switch-version-control). Such a row may still keep its
@@ -51,7 +51,7 @@ inactive versions.
 
 Save files in RomM are tied to the authenticated user account. If multiple people share the same RomM account, their
 saves will overwrite each other. Each person should have their own RomM account with their own credentials configured in
-the plugin.
+Tender.
 
 ## Supported Systems
 
@@ -81,7 +81,7 @@ Open **Save Sync** from the main QAM page to configure sync behavior.
 
 ### When saves conflict
 
-The plugin uses a single, automatic resolution policy:
+Tender uses a single, automatic resolution policy:
 
 - **Newest server save in your slot wins** by default. If your local save hasn't changed since the last successful sync,
   the server version is downloaded silently.
@@ -142,24 +142,24 @@ The button is unavailable while RomM is offline. If the game's current slot has 
 (you'll be prompted). If the destination slot has newer changes from another device, sync that slot first, then copy
 again.
 
-A game whose save the plugin does not sync is refused here too, and so are switching its slot and restoring an older
-version — for example a memory card every game shares (standalone PCSX2's, even though the plugin knows its folder), a
-save written into the game file itself, or saves written beside it; the message says why.
+A game whose save Tender does not sync is refused here too, and so are switching its slot and restoring an older version
+— for example a memory card every game shares (standalone PCSX2's, even though Tender knows its folder), a save written
+into the game file itself, or saves written beside it; the message says why.
 
 ## Core Switch Warning
 
-When you switch the emulator core for a game (e.g., from mGBA to gpSP for GBA), the plugin detects the change and shows
-a warning before launching. This is because some cores use incompatible save formats — launching with a different core
-may overwrite your existing save with data the previous core can't read.
+When you switch the emulator core for a game (e.g., from mGBA to gpSP for GBA), Tender detects the change and shows a
+warning before launching. This is because some cores use incompatible save formats — launching with a different core may
+overwrite your existing save with data the previous core can't read.
 
 The warning shows which core you're switching from and to. You can:
 
 - **Continue** — launch with the new core (your save may be overwritten)
 - **Cancel** — go back and switch the core back before launching
 
-A per-game core applies for any ROM filename — the plugin bakes the chosen core into the game's launch command rather
-than relying on RetroDECK's gamelist lookup. See [Changing the Active Core](bios-management.md#changing-the-active-core)
-for how per-game and per-platform cores work.
+A per-game core applies for any ROM filename — Tender bakes the chosen core into the game's launch command rather than
+relying on RetroDECK's gamelist lookup. See [Changing the Active Core](bios-management.md#changing-the-active-core) for
+how per-game and per-platform cores work.
 
 ### Which cores are compatible?
 
@@ -210,14 +210,14 @@ show, so its tab stays as described above.
 "Server offline" is reported **only** for a genuine reachability failure (the server can't be reached or times out). A
 sync that fails for another reason — for example an expired or revoked login token, or an SSL certificate problem —
 shows that specific reason instead (such as "Authentication failed — check your username and password"), so a working
-server is never mislabelled as offline. That includes the case where RomM answers that it no longer _has_ something the
-plugin asked about: if the game was deleted and re-added on the server (which gives it a new id), or the RomM database
+server is never mislabelled as offline. That includes the case where RomM answers that it no longer _has_ something
+Tender asked about: if the game was deleted and re-added on the server (which gives it a new id), or the RomM database
 was wiped and this device's registration went with it, the server is answering perfectly well. You'll see a message
 naming what's missing rather than "RomM is offline", and the offline badge stays clear. This applies to both surfaces:
 the warning shown before launch and the "after exit" toast both name the actual cause rather than a generic "failed to
 sync" message. When more than one save file fails in the same sync, the toast shows the first file's reason followed by
 a "(+N more)" count so the message stays short. If you see an authentication message, re-enter your server URL and sign
-in again in the plugin settings.
+in again in Tender's settings.
 
 One more thing "Server offline" is never used for: syncs run one at a time on your Deck, so if you exit two games within
 moments of each other, the second one's sync waits for the first. If that wait runs long the second sync is skipped, and
@@ -231,22 +231,21 @@ sync after the update picks it up.
 After a failed sync the game-detail save panel reflects the honest state right away: a file whose upload failed shows a
 yellow **Local changes** badge (not a green "synced"), and its "Last synced" line keeps the time of the last
 _successful_ sync — a green checkmark appears only once a sync actually succeeds. A separate "Checked" line shows when
-the plugin last attempted a sync, so a recent failed attempt and the last good sync are both visible.
+Tender last attempted a sync, so a recent failed attempt and the last good sync are both visible.
 
 ## Sync Disabled for This Device on the Server
 
 RomM lets you turn save sync off for a specific device in its own **device settings** (on the RomM web UI). If you
-disable sync for this device there, the plugin stops syncing that device's saves and tells you so — a manual sync
-reports "Save sync is disabled for this device on the RomM server", and the after-exit toast says the same. Your local
-saves are left untouched, and the game still launches normally (before-launch sync just skips). Re-enable sync for the
-device in RomM to resume. This is separate from the plugin's own **Save Sync** toggle in the QAM — either one being off
-stops syncing.
+disable sync for this device there, Tender stops syncing that device's saves and tells you so — a manual sync reports
+"Save sync is disabled for this device on the RomM server", and the after-exit toast says the same. Your local saves are
+left untouched, and the game still launches normally (before-launch sync just skips). Re-enable sync for the device in
+RomM to resume. This is separate from Tender's own **Save Sync** toggle in the QAM — either one being off stops syncing.
 
 ## Playtime Tracking
 
-The plugin tracks playtime per game. Session start and end times are recorded, and time the device spent suspended
-(asleep) during a session is excluded, so a game left running overnight in sleep does not inflate its playtime. Playtime
-is displayed on the game detail page next to the save sync status.
+Tender tracks playtime per game. Session start and end times are recorded, and time the device spent suspended (asleep)
+during a session is excluded, so a game left running overnight in sleep does not inflate its playtime. Playtime is
+displayed on the game detail page next to the save sync status.
 
 Each finished session is sent to RomM's built-in play-session store, so your `last_played` time shows correctly in the
 RomM web UI. This is separate from save sync — playtime is recorded for **every** game on every exit, even when save
@@ -258,7 +257,7 @@ without needing to navigate away and back. Opening a game's detail page also rec
 played the same game on another device, that device's play is folded in (the total only ever goes up, never backwards)
 and shown as soon as the page loads. Cross-device reconcile needs a RomM server version that grants the play-session
 read scope and a fresh sign-in; until then the displayed value is your local total. **After upgrading, sign in again to
-enable cross-device playtime** — the plugin shows a banner in the QAM panel prompting this whenever your saved login
+enable cross-device playtime** — Tender shows a banner in the QAM panel prompting this whenever your saved login
 predates the play-session read scope. When RomM is unreachable the displayed value stays on your local total.
 
 The **LAST PLAYED** date on the detail page comes from this same cross-device history, so it stays correct after you
@@ -268,22 +267,22 @@ recorded session for a game (or while RomM is unreachable), the date falls back 
 Steam also tracks playtime natively for non-Steam shortcuts, so you'll see playtime in the standard Steam UI as well.
 
 > **Upgrading from an older version:** earlier releases stored playtime in a hidden RomM note named
-> `romm-sync:playtime`. The plugin no longer uses these notes and starts fresh with the native store — your local total
-> is preserved and keeps showing until the server re-accumulates. The old notes are left on the server, harmless; you
-> can delete them yourself from RomM if you like.
+> `romm-sync:playtime`. Tender no longer uses these notes and starts fresh with the native store — your local total is
+> preserved and keeps showing until the server re-accumulates. The old notes are left on the server, harmless; you can
+> delete them yourself from RomM if you like.
 
 ## Save File Location
 
-Save files live where the emulator itself keeps them. The plugin does not work that folder out on its own: it asks, for
-each game and for the emulator that game launches with, where that emulator reads and writes the save — the same answer
-that says which files the save consists of. On a stock RetroDECK install that is typically:
+Save files live where the emulator itself keeps them. Tender does not work that folder out on its own: it asks, for each
+game and for the emulator that game launches with, where that emulator reads and writes the save — the same answer that
+says which files the save consists of. On a stock RetroDECK install that is typically:
 
 - **Internal SSD**: `~/retrodeck/saves/{system}/{rom_name}.srm`
 - **SD card**: `/run/media/deck/Emulation/retrodeck/saves/{system}/{rom_name}.srm`
 
 Some cores keep their saves in a folder of their own below that — the 3DO core, for example, writes to
-`saves/3do/opera/per_game` — and the plugin now looks there, because that is where the answer points. That has not yet
-been observed on a device.
+`saves/3do/opera/per_game` — and Tender now looks there, because that is where the answer points. That has not yet been
+observed on a device.
 
 ## RetroArch Save Sorting
 
@@ -302,12 +301,12 @@ On a fresh RetroDECK install the first row is what you have.
 ### When you change the sorting
 
 RetroArch does not move existing saves when you change these settings, so after a change your saves sit in a folder it
-no longer reads. The plugin notices the next time it touches that game's saves — at launch, when the server can be
-reached; at exit, when **Sync after exit** is on; when you sync the game by hand; when the game page shows its saves;
-before a slot switch, a restore of an older version, a copy to another slot or a conflict resolution; before **Delete
-Local Saves**; when **Library › Platforms** counts a platform's save files as you pick it, or before its **Delete _N_
-save files**; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's
-save files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on its own.
+no longer reads. Tender notices the next time it touches that game's saves — at launch, when the server can be reached;
+at exit, when **Sync after exit** is on; when you sync the game by hand; when the game page shows its saves; before a
+slot switch, a restore of an older version, a copy to another slot or a conflict resolution; before **Delete Local
+Saves**; when **Library › Platforms** counts a platform's save files as you pick it, or before its **Delete _N_ save
+files**; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's save
+files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on its own.
 
 Following a game's saves into the new folder is part of save sync: with save sync off, neither happens. A sorting change
 made while it is off is followed once save sync is on again, the next time Tender touches that game's saves — for a game
@@ -330,20 +329,20 @@ Atari ST `.st`) is a different case, and syncing that game by hand says so.
 ### Updating from a version with the save-sorting migration
 
 Earlier versions asked you to migrate save files in Settings after a sorting change. If you changed the sorting and had
-not run that migration yet when you updated, the plugin cannot tell where those saves were: it starts from where
-RetroArch looks now. A game whose save is on your RomM server gets it back at its next sync, downloaded into the new
-folder. A save that exists only on this device stays in the old folder — move it into the new folder yourself, or set
-the sorting back to what it was before.
+not run that migration yet when you updated, Tender cannot tell where those saves were: it starts from where RetroArch
+looks now. A game whose save is on your RomM server gets it back at its next sync, downloaded into the new folder. A
+save that exists only on this device stays in the old folder — move it into the new folder yourself, or set the sorting
+back to what it was before.
 
 ## RomM Version Compatibility
 
-The plugin requires **RomM >= 5.3.0**. Pre-release builds whose numeric core is **above** that floor pass — for example
+Tender requires **RomM >= 5.3.0**. Pre-release builds whose numeric core is **above** that floor pass — for example
 `5.3.1-beta` or `5.4.0-alpha.1`. Tags at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are rejected because they
 rank below the `5.3.0` release. Servers below 5.3.0 are rejected at connection time with a full error page in both the
-QAM panel and the game detail view. The plugin uses server-side device tracking, content hashing, save slots, and
+QAM panel and the game detail view. Tender uses server-side device tracking, content hashing, save slots, and
 `device_syncs` for conflict detection. Save sync is built on RomM's Device Sync, which arrived in RomM 4.9.0. Nothing
-the plugin does needs a newer server than that yet; the minimum is 5.3.0 so that coming updates can use what that
-release added without having to raise it first.
+Tender does needs a newer server than that yet; the minimum is 5.3.0 so that coming updates can use what that release
+added without having to raise it first.
 
 For technical details on how save sync works internally (three-way conflict detection, state schema, session detection),
 see the [Save File Sync Architecture](../architecture/save-file-sync-architecture.md) technical reference.

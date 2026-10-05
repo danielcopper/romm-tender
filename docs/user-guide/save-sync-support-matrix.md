@@ -6,19 +6,19 @@ this page shows what syncs for each system today, and what's planned.
 
 ## How reliable is this page?
 
-**The plugin no longer decides what a save is from a table like this one.** It asks your machine, per game and per the
+**Tender no longer decides what a save is from a table like this one.** It asks your machine, per game and per the
 emulator that will launch it, every time it syncs — so the answer follows your actual core choice and your actual core
 options rather than a row written in advance. This page is now background reading: it explains why a platform behaves
-the way it does, and the plugin's own answer is what governs.
+the way it does, and Tender's own answer is what governs.
 
 Two things still matter when you read a row:
 
 - **A ❌ often means "not with the settings that ship", not "impossible".** Several cores can write per-game saves if
-  you change a core option — the rows below say which. Turning that on is not yet something the plugin does for you, but
-  it does now **notice**: change the option and the next sync reads the new answer.
+  you change a core option — the rows below say which. Turning that on is not yet something Tender does for you, but it
+  does now **notice**: change the option and the next sync reads the new answer.
 - **Rows are stated for each platform's _default_ core.** You can override the core per system and per game, and a
-  different core can behave differently — which is exactly why the plugin asks per game. A save written beside the game
-  file (usually RetroArch's `savefiles_in_content_dir`) keeps save sync off, and that is reported separately.
+  different core can behave differently — which is exactly why Tender asks per game. A save written beside the game file
+  (usually RetroArch's `savefiles_in_content_dir`) keeps save sync off, and that is reported separately.
 
 Most of this table is derived from libretro's documentation and from reading core source, not from watching each core
 write a save. Where the [emu-atlas](https://github.com/danielcopper/emu-atlas) audit has corrected an earlier
@@ -26,11 +26,11 @@ assumption, this page reflects the audit.
 
 ## When save sync does nothing, and why
 
-Where the plugin cannot carry a game's saves it now says so instead of quietly finding nothing. There are four reasons,
-and they mean different things:
+Where Tender cannot carry a game's saves it now says so instead of quietly finding nothing. There are four reasons, and
+they mean different things:
 
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
-  would copy other games' progress onto this one's record, so the plugin leaves it alone.
+  would copy other games' progress onto this one's record, so Tender leaves it alone.
 - **The save is written inside the game file itself.** There is no separate file to carry.
 - **The emulator files saves under the game's own identity**, which Tender cannot read yet — in the file name for
   Dreamcast, in the folder name for GameCube. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
@@ -62,14 +62,14 @@ itself, a `.lha` names a `WHDSaves` folder whose contents the core does not list
 be established at all.
 
 3DO and Neo Geo keep their saves in a subfolder of the emulator's own — `saves/3do/opera/per_game` and
-`saves/neogeo/fbneo` — and the plugin now looks there, because it takes each game's save folder from the emulator rather
+`saves/neogeo/fbneo` — and Tender now looks there, because it takes each game's save folder from the emulator rather
 than working it out itself. That has not yet been observed on a device.
 
 !!! warning "3DO saves were not backed up by earlier versions"
 
     3DO once showed as ✅ on the assumption that the Opera core writes a plain `<game>.srm` into the save folder. It
     does not: Opera writes its NVRAM to `opera/per_game/` with a version number in the filename, and earlier versions
-    of the plugin never looked there. **If you played 3DO games with an earlier version, those saves were never uploaded
+    of Tender never looked there. **If you played 3DO games with an earlier version, those saves were never uploaded
     to RomM.** This version looks where Opera writes them, which has not yet been observed on a device — check that
     your 3DO saves reach RomM before relying on it.
 
@@ -81,9 +81,9 @@ convention and are expected to behave identically, but haven't been observed one
 
 Per-game saves for these systems fit the sync model and are planned for a future release:
 
-| System      | Notes                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------ |
-| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet. |
+| System      | Notes                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| PlayStation | Memory-card saves. The cores write them per game, but under a name Tender doesn't probe yet. |
 
 A few less-common systems (some DOS, PICO-8, ST-V) may also gain support pending confirmation.
 
