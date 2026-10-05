@@ -467,8 +467,10 @@ irrelevant because the baked target is the game directory.
 
 A **missing download** is a `rom_installs` row whose recorded file and folder are both absent; the row stays until the
 user decides ([why](docs/architecture/database-design.md#a-download-whose-file-is-missing)). To **forget** it
-(`Forget this download`) is the uninstall without the deletion: the row goes, no file is touched. _Avoid_: stale
-install, prune.
+(`Forget this download`) is the uninstall without the deletion: the row goes, no file is touched.
+
+_Avoid_: **stale install** — the record is not stale, its file is missing. **prune** — nothing removes the row on its
+own.
 
 ### Adopt
 

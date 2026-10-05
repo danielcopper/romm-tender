@@ -179,8 +179,8 @@ class TestTheStartUpRepairs:
     async def test_the_report_is_skipped_when_the_detection_fails(self):
         """The report reads the pending homes the detection writes.
 
-        Without them it reports every install under the home RetroDECK just
-        left as missing rather than as waiting for the move.
+        Without them it reports the installs under the home RetroDECK just left
+        whose files are gone as missing rather than as waiting for the move.
         """
         recorded = _Recorded(failing=frozenset({"detect_retrodeck_path_change"}))
         failures: list[str] = []

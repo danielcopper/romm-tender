@@ -518,8 +518,8 @@ page. If the drive or folder comes back, the game is playable again as it was.
   launch command is cleared, as after an uninstall, and no file is touched. It is refused while the file or folder is in
   fact there: the drive or folder came back, so reopen the game page to play it.
 
-While the file is missing, the page's RomM menu offers no **Uninstall** — there is nothing to delete — and the disc and
-emulator pickers are hidden.
+While the file is missing, the page's **RomM Actions** menu offers no **Uninstall** — there is nothing to delete — and
+neither the disc picker nor the **CPU button** (the emulator picker) is shown.
 
 ## Removing a Platform from Steam
 

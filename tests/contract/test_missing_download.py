@@ -1,6 +1,6 @@
 """Contract tests for a download whose file is missing (#2188 D23, D28, D29).
 
-Driven frontend-shaped: ``forgetDownload = endpoint<[number], BackendResult>``
+Driven frontend-shaped: ``forgetDownload = endpoint<[number], ForgetDownloadResult>``
 and ``startDownload`` over the real ``bootstrap()`` + SQLite and real file
 stores under ``tmp_path``; only the RomM transport is the fake.
 

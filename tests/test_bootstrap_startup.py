@@ -79,8 +79,8 @@ class TestTheOneEdgeBetweenSteps:
     """``report_missing_installs`` runs only after a SUCCESSFUL detection.
 
     The report reads the pending homes the detection writes; if the detection
-    broke off, every install under the home RetroDECK just left is reported as
-    missing rather than as waiting for the move.
+    broke off, the installs under the home RetroDECK just left whose files are
+    gone are reported as missing rather than as waiting for the move.
     """
 
     def test_a_failed_detection_answers_false_so_the_report_can_be_skipped(self, steps):

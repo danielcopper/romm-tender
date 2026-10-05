@@ -757,7 +757,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   something the user does (Uninstall, Uninstall all ROM files, "Forget this download", a download or adoption of another
   version of the game, Clean Up Removed RomM Games), never by the start-up step, which only reports a missing file;
   Forget deletes no file and refuses while the file or folder exists
-  (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`)
+  (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`).
+  Prompt-only: a new path that deletes `rom_installs` rows is one the user starts
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios`, `::TestDeleteOneBiosFile` and

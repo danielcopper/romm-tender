@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     )
 
 
-# How many paths one report line names before it gives only the count.
+# The most paths one report line names; its count covers every one.
 _PATHS_LOGGED = 3
 
 
@@ -46,15 +46,16 @@ class StartupHealingServiceConfig:
 
     Carries the runtime logger, the clock, the generic path-exists probe, the
     path resolver that turns a stored home marker into the directory it names,
-    and the SQLite Unit-of-Work factory (the transactional seam over the ``rom_installs``, ``sync_runs``,
-    and ``kv_config`` repositories — the last holding the pending-migration
-    previous home marker). The shared ``relaunch_options`` seam builds each
-    installed+bound ROM's full launch command (active core, selected disc) so
-    the startup launch-options reconcile draws its items from the same resolver
-    the RetroDECK-home migration does. ``loop`` runs that build off the loop
-    thread, and ``conflict_rules`` are what its use case checks and leases
-    through. Bundled here so the ctor stays within the S107 parameter budget
-    and the service stays free of raw filesystem I/O.
+    and the SQLite Unit-of-Work factory (the transactional seam over the
+    ``rom_installs``, ``sync_runs``, and ``kv_config`` repositories — the last
+    holding the pending-migration previous home marker). The shared
+    ``relaunch_options`` seam builds each installed+bound ROM's full launch
+    command (active core, selected disc) so the startup launch-options
+    reconcile draws its items from the same resolver the RetroDECK-home
+    migration does. ``loop`` runs that build off the loop thread, and
+    ``conflict_rules`` are what its use case checks and leases through. Bundled
+    here so the ctor stays within the S107 parameter budget and the service
+    stays free of raw filesystem I/O.
     """
 
     logger: logging.Logger

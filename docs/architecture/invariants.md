@@ -1142,7 +1142,9 @@ Format: **invariant** — tier — enforced by.
   while the recorded file or folder exists), a download or adoption of another version of the game (the sibling
   supersede through `remove_rom_unchecked`), and **Clean Up Removed RomM Games** (the `roms` row's delete cascades);
   never by the start-up step, which only reports it (`StartupHealingService.report_missing_installs`). Pinned by
-  `tests/services/test_startup_healing.py::TestReportMissingInstalls` and `tests/contract/test_missing_download.py`
+  `tests/services/test_startup_healing.py::TestReportMissingInstalls` and `tests/contract/test_missing_download.py` for
+  the start-up step and the forget; that the list of paths is complete is prompt-only — nothing fails when a new path
+  that deletes `rom_installs` rows is not one the user starts
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios` and `::TestDeleteOneBiosFile` pin every direction

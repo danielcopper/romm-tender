@@ -1,9 +1,9 @@
 /**
  * Custom Play button that replaces the native Steam Play button on RomM game
  * detail pages. Primary states (the full set is `PlayButtonState`):
- * - Download: ROM not installed, click to download
- * - File missing: installed, but its recorded file is gone — Download again or
- *   Forget this download, and no Play
+ * - Download: ROM not installed, click to download. The same state, while
+ *   the recorded file of an installed ROM is gone, says so and offers
+ *   Download again and Forget this download instead, and no Play
  * - Play: ROM installed, launches the game (with pre-launch save sync)
  * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
