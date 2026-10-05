@@ -8,7 +8,8 @@ failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
 response shapes" — forbids a second ``error`` field and the legacy
 ``error_code`` key.
 
-This check walks ``backend/services/`` and classifies every failure-shaped
+This check walks ``backend/services/`` (and, under "Converted modules" below,
+every module on its list) and classifies every failure-shaped
 ``return`` against a **required-key rule**: a failure shape must carry both
 ``reason`` and ``message`` and must NOT carry ``error`` or ``error_code``.
 
@@ -44,14 +45,16 @@ look like a carve-out, so the heuristic never silently passes an unknown shape.
 Converted modules
 -----------------
 
-A module on :data:`CONVERTED_MODULES` raises its refusals (``lib.errors.Refused``)
-and leaves the failure shape to the entrypoint, ``main.Endpoints``. In such a
+A module on :data:`CONVERTED_MODULES` builds no failure shape: a service there
+raises its refusals (``lib.errors.Refused``, or ``domain.refusal.DomainRefused``
+from a domain rule) and the entrypoint, ``main.Endpoints``, builds the shape; an
+adapter there reports an outcome its service decides on. In such a
 module ``--check`` also fails on any dict literal with a falsy ``success``
 entry, wherever it stands and whatever keys it carries, on any
 ``error_response(...)`` call, and on a ``**spread`` of a call to a refusal
 helper (a callee whose name contains ``refusal`` or ``failure``). A listed path
-that is not a file, or does not parse, fails too, so a renamed module cannot
-drop off the list unnoticed.
+that is not a file, or does not parse, fails too, so a module renamed without
+its entry fails rather than dropping off the list.
 
 **The list only grows.** Each conversion adds its modules and none is ever
 taken off; a module that falls back to building a failure dict fails the
@@ -59,9 +62,10 @@ check instead.
 
 What it cannot see in a listed module: a failure dict built without a literal
 (``dict(success=False, ...)``, ``answer["success"] = False``), a ``success``
-value that is not a literal, a dict a helper in another module builds, a
-spread of a variable that holds a refusal, and a refusal helper named any
-other way. Nothing outside the list is read by these rules.
+key or value that is not a literal (``{SUCCESS_KEY: False}``), a dict a helper
+in another module builds, a spread of a variable that holds a refusal, and a
+refusal helper named any other way. Nothing outside the list is read by these
+rules, and nothing notices an entry taken off the list.
 """
 
 from __future__ import annotations
@@ -99,8 +103,8 @@ REPORT_ORDER = (
 # Findings in these classifications fail enforce mode (``--check``).
 VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 
-# Repo-relative paths of the modules converted to raising their refusals; the
-# list only grows (module docstring, "Converted modules").
+# Repo-relative paths of the modules that build no failure shape; the list only
+# grows (module docstring, "Converted modules").
 CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
     "backend/services/game_process.py",
@@ -390,8 +394,9 @@ def _print_converted(found: list[ConvertedFinding]) -> None:
         print(f"  {finding.render()}")
     print()
     print(
-        "ERROR: a converted module raises its refusal (lib.errors.Refused) and returns a "
-        "lib.partial_failure.PartialFailure for partial work; main.Endpoints builds the failure shape."
+        "ERROR: a converted module builds no failure shape — a service raises its refusal "
+        "(lib.errors.Refused / domain.refusal.DomainRefused) or returns a lib.partial_failure.PartialFailure "
+        "for partial work, and main.Endpoints builds the shape."
     )
 
 

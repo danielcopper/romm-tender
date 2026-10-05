@@ -2,9 +2,10 @@
 
 The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path`` (and is excluded from ruff/basedpyright). Fixtures use
-``tmp_path`` to lay out a small ``backend/services/`` tree the check
-walks, monkeypatching the script's ``SERVICES_DIR`` / ``REPO_ROOT``
-constants for the duration of the test.
+``tmp_path`` to lay out a small ``backend/`` tree the check walks,
+monkeypatching the script's ``SERVICES_DIR`` / ``REPO_ROOT`` (and, for the
+converted-modules list, ``CONVERTED_ROOT`` / ``CONVERTED_MODULES``) constants
+for the duration of the test.
 
 Coverage centres on the required-key rule (a ``success: False`` failure
 return must carry both ``reason`` and ``message`` and must not carry
