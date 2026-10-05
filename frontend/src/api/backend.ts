@@ -380,6 +380,12 @@ export const stopRunningGame = endpoint<[number], StopGameResult>("stop_running_
 export const probeReachability = endpoint<[], { online: boolean }>("probe_reachability");
 export const refreshSaveStatus = endpoint<[number], { success: boolean }>("refresh_save_status");
 export const removeRom = endpoint<[number], BackendResult>("remove_rom");
+/**
+ * Forget a download whose files are gone: the uninstall without the deletion.
+ * Refused with `file_present` while the recorded file or folder exists. A
+ * success carries the same `rom_uninstall` lease as `removeRom`.
+ */
+export const forgetDownload = endpoint<[number], BackendResult>("forget_download");
 export const getPlatforms = endpoint<[], { success: boolean; platforms: PlatformSyncSetting[] }>("get_platforms");
 // `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads

@@ -589,6 +589,10 @@ class Endpoints:
         return await self._services.rom_removal_service.remove_rom(rom_id)
 
     @route
+    async def forget_download(self, rom_id):
+        return await self._services.rom_removal_service.forget_download(rom_id)
+
+    @route
     async def uninstall_all_roms(self):
         return await self._services.rom_removal_service.uninstall_all_roms()
 

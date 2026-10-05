@@ -1713,3 +1713,154 @@ class TestTheBulkUninstallLease:
 
         assert rom_path in rom_files.files
         assert prune_conflicts.conflicting_operations == 0
+
+
+def _seed_missing_download(uow: FakeUnitOfWork, rom_id: int, *, bound: bool = True) -> str:
+    """Seed an install record whose file is not on disk. Returns the recorded path."""
+    rom_path = f"{_ROMS_BASE}/n64/game_{rom_id}.z64"
+    with uow:
+        uow.roms.save(_make_rom(rom_id, bound=bound))
+        uow.rom_installs.save(_make_install(rom_id, file_path=rom_path))
+        uow.roms.set_applied_launch_options(rom_id, f"flatpak run net.retrodeck.retrodeck {rom_path}")
+    return rom_path
+
+
+class TestForgetDownload:
+    """An uninstall without the deletion, for a download whose files are gone (#2188 D28)."""
+
+    async def test_it_drops_the_record_and_records_the_uninstalled_launch_command(self, service, uow, rom_files):
+        _seed_missing_download(uow, 42)
+
+        result = await service.forget_download(42)
+
+        assert result["success"] is True
+        assert result["message"] == "Download forgotten"
+        assert uow.rom_installs.get(42) is None
+        rom = uow.roms.get(42)
+        assert rom is not None
+        assert rom.applied_launch_options == ""
+
+    async def test_an_unbound_rom_records_no_launch_command(self, service, uow, rom_files):
+        _seed_missing_download(uow, 50, bound=False)
+
+        result = await service.forget_download(50)
+
+        assert result["success"] is True
+        assert uow.rom_installs.get(50) is None
+        rom = uow.roms.get(50)
+        assert rom is not None
+        assert rom.applied_launch_options == f"flatpak run net.retrodeck.retrodeck {_ROMS_BASE}/n64/game_50.z64"
+
+    async def test_it_deletes_no_file(self, service, uow, rom_files):
+        rom_path = _seed_missing_download(uow, 42)
+        bystander = f"{_ROMS_BASE}/n64/other.z64"
+        rom_files.files[bystander] = b"rom"
+
+        await service.forget_download(42)
+
+        assert rom_files.files == {bystander: b"rom"}
+        assert rom_files.remove_file_calls == []
+        assert rom_files.remove_tree_calls == []
+        assert rom_files.claim_digests == []
+        assert rom_files.reclaim_calls == []
+        assert rom_path not in rom_files.files
+
+    async def test_a_file_that_is_there_refuses_it(self, service, uow, rom_files, prune_conflicts):
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+
+        result = await service.forget_download(42)
+
+        assert result == {
+            "success": False,
+            "reason": "file_present",
+            "message": f"The download is still at {rom_path}. Uninstall it instead.",
+        }
+        assert uow.rom_installs.get(42) is not None
+        assert rom_path in rom_files.files
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_a_folder_that_is_there_refuses_it(self, service, uow, rom_files):
+        rom_dir = f"{_ROMS_BASE}/psx/FF7"
+        rom_files.dirs.add(rom_dir)
+        _seed_install(
+            uow,
+            _make_install(42, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir, system="psx"),
+            platform_slug="psx",
+        )
+
+        result = await service.forget_download(42)
+
+        assert result["reason"] == "file_present"
+        assert rom_dir in result["message"]
+        assert uow.rom_installs.get(42) is not None
+
+    async def test_a_rom_with_no_record_is_not_installed(self, service, prune_conflicts):
+        result = await service.forget_download(999)
+
+        assert result["reason"] == "not_installed"
+        assert "prune_lease_token" not in result
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_it_is_refused_while_a_removal_holds_the_rom(self, service, uow, rom_files):
+        rom_path = f"{_ROMS_BASE}/n64/game.z64"
+        rom_files.files[rom_path] = b"rom"
+        _seed_install(uow, _make_install(42, file_path=rom_path))
+        forgotten: dict[str, object] = {}
+        original = service._delete_rom_files
+
+        def remove_while_a_forget_arrives(*args, **kwargs):
+            forgotten.update(asyncio.run_coroutine_threadsafe(service.forget_download(42), service._loop).result())
+            return original(*args, **kwargs)
+
+        service._delete_rom_files = remove_while_a_forget_arrives
+        result = await service.remove_rom(42)
+
+        assert result["success"] is True
+        assert forgotten["reason"] == "in_progress"
+
+    async def test_it_evicts_the_download_queue_entry(self, service, uow, rom_files, queue_cleanup):
+        _seed_missing_download(uow, 42)
+
+        await service.forget_download(42)
+
+        assert queue_cleanup.evicted == [42]
+
+    async def test_a_forget_that_succeeded_carries_the_uninstall_lease(self, service, uow, rom_files, prune_conflicts):
+        _seed_missing_download(uow, 42)
+
+        result = await service.forget_download(42)
+
+        assert result["prune_lease_token"].startswith("rom_uninstall:")
+        assert prune_conflicts.conflicting_operations == 1
+
+    async def test_the_lease_is_taken_while_the_forgets_operation_still_holds(
+        self, service, uow, rom_files, prune_conflicts, monkeypatch
+    ):
+        _seed_missing_download(uow, 42)
+        seen = _record_operations_at_lease(prune_conflicts, monkeypatch)
+
+        await service.forget_download(42)
+
+        assert seen == [["forget_download"]]
+
+    async def test_a_refused_forget_drops_nothing_and_carries_none(self, service, uow, rom_files, prune_conflicts):
+        _seed_missing_download(uow, 42)
+        prune_conflicts.register_run("held-run")
+
+        with _refused_by_conflict_rule("prune_active"):
+            await service.forget_download(42)
+
+        assert uow.rom_installs.get(42) is not None
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_a_failed_write_answers_a_failure(self, service, uow, rom_files, monkeypatch):
+        _seed_missing_download(uow, 42)
+
+        def fail(_rom_id):
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(service, "_drop_install_record", fail)
+        result = await service.forget_download(42)
+
+        assert result == {"success": False, "reason": "unknown", "message": "Failed to forget the download"}
+        assert "prune_lease_token" not in result
