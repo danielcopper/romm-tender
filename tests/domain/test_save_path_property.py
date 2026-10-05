@@ -31,9 +31,9 @@ from domain.save_path import compute_local_save_target
 # property about the grouping key, not a claim about what any emulator writes —
 # which emulator writes what is the save resolver's answer now
 # (``domain.save_answer``), read live off the machine. These twelve are the ones
-# real cores were observed writing when the plugin still held its own table, and
+# real cores were observed writing when Tender still held its own table, and
 # they stay here because a realistic spread of extensions is what makes the
-# property meaningful; adding one never changes what the plugin syncs.
+# property meaningful; adding one never changes what Tender syncs.
 _ALL_EXTENSIONS: tuple[str, ...] = (
     "bcr",
     "bkr",

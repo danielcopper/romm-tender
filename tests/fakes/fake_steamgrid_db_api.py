@@ -195,7 +195,7 @@ class FakeSteamGridDbApi:
 
 
 # Mirror the singular asset-type vocabulary owned by ``domain.sgdb_artwork``
-# so tests can seed by plugin-internal name without importing the domain
+# so tests can seed by internal name without importing the domain
 # module. Kept in sync intentionally — the fake's contract is the SGDB
 # HTTP path shape, not the domain mapping.
 _ASSET_TYPE_TO_ENDPOINT: dict[str, str] = {

@@ -50,7 +50,7 @@ class FakeSaveLocationReader:
     to the game too.
 
     Deliberately insensitive to *emulator_label*, including ``None``. What a
-    machine answers and whether the plugin had an emulator to ask about are two
+    machine answers and whether Tender had an emulator to ask about are two
     questions, and only the first is this seam's; the real adapter refuses a
     ``None`` label and ``tests/adapters/test_atlas_saves.py`` pins that. A fake
     that refused here would make every save test that leaves

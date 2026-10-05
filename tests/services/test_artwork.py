@@ -121,7 +121,7 @@ def _registry(uow):
 
 @pytest.fixture
 def cover_cache_dir(tmp_path) -> str:
-    """The plugin-owned per-ROM cover cache directory (distinct from the grid)."""
+    """Tender's own per-ROM cover cache directory (distinct from the grid)."""
     return str(tmp_path / "covers")
 
 

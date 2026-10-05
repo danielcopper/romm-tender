@@ -1,4 +1,4 @@
-"""Tests for the two roots the plugin's data lives under, and the launcher's two paths."""
+"""Tests for the two roots Tender's data lives under, and the launcher's two paths."""
 
 from __future__ import annotations
 

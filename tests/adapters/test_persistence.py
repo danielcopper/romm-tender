@@ -398,7 +398,7 @@ class TestVersionNoDownStamp:
             return json.load(f)
 
     def test_newer_version_preserved(self, adapter):
-        """A settings dict from a NEWER plugin (version > current) is preserved,
+        """A settings dict from a NEWER version of Tender (version > current) is preserved,
         never down-stamped to _SETTINGS_VERSION."""
         future = _SETTINGS_VERSION + 5
         adapter.save_settings({"romm_url": "http://example.com", "version": future})

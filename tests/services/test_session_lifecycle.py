@@ -690,7 +690,7 @@ class TestFinalizeContentDirBenignSkip:
     """A benign skip is not a failure, so leaving a game raises no toast.
 
     Two reasons qualify: RetroArch writes saves to the content dir (#239), and
-    this game's emulator keeps no per-game save set the plugin can carry
+    this game's emulator keeps no per-game save set Tender can carry
     (#1858). Both are standing facts about the machine, so a toast on every exit
     would be noise — and for the second one that is roughly half the mapped
     systems on a stock RetroDECK. The control below keeps the set from becoming

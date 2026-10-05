@@ -230,7 +230,7 @@ jobs:
 
       - name: Check stated RomM minimum matches the enforced one
         run: python scripts/check_romm_min_version.py
-      # The compiled gavel core ships with the plugin and has no source in
+      # The compiled gavel core ships with Tender and has no source in
       # this repo — a silently swapped binary must fail CI. Verify the vendored
       # .so against its checksum (bumped only by a deliberate native/README.md
       # update when pulling a newer romm-gavel release).

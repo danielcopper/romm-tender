@@ -332,7 +332,7 @@ class TestMovePairsCrossDevice:
     ) -> None:
         # A staged link that survives the undo occupies a target the rename pass
         # then needs. Without naming it the refusal reads as "something is
-        # already there" about a file the plugin itself put down.
+        # already there" about a file Tender itself put down.
         rom = _write(tmp_path / "Game (U).gba", b"rom bytes")
         save = _write(tmp_path / "Game (U).srm", b"save bytes")
         rom_target = tmp_path / "Game (USA).gba"

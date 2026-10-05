@@ -1847,7 +1847,7 @@ class TestDoDownloadMultiFile:
         """#855: one top-level file but len(files) > 1 → RomM zips → EXTRACT path.
 
         Switch base/update/DLC: ``has_multiple_files=False`` (single top-level
-        file) yet ``len(files) > 1``. RomM streams a mod_zip ZIP, so the plugin
+        file) yet ``len(files) > 1``. RomM streams a mod_zip ZIP, so Tender
         must extract it into a per-game folder instead of writing the ZIP bytes
         verbatim into one .nsp.
         """

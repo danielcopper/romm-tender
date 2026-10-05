@@ -841,7 +841,7 @@ async def test_cancel_before_the_run_task_starts_still_releases_the_claim(harnes
     await asyncio.sleep(0)
 
     # A claim left set here would refuse Play, downloads and saves for the rest
-    # of the plugin's life, with no run to release it.
+    # of the backend's life, with no run to release it.
     assert harness.service.is_active() is False
     assert harness.conflicts.cleanup_running is False
     assert harness.uow.roms.get(1) is not None

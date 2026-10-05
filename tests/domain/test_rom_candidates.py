@@ -102,7 +102,7 @@ class TestNormalizeRomName:
         assert normalize_rom_name("Example Quest 3.0") == "example quest 3"
 
     def test_an_es_de_collapsed_directory_name_loses_its_extension(self) -> None:
-        # The plugin's own multi-file installs are named ``<game>.m3u/`` so ES-DE
+        # Tender's own multi-file installs are named ``<game>.m3u/`` so ES-DE
         # collapses them; a hand-made directory carries no extension. Both have
         # to reduce to the same game.
         assert normalize_rom_name("Example Quest - Second Journey (USA).m3u") == normalize_rom_name(
@@ -353,7 +353,7 @@ class TestRankCandidates:
         assert candidates[0].evidence == NAME_MATCH
 
     def test_a_multi_member_archive_cannot_claim_the_server_s_one_number(self) -> None:
-        # RomM's file-level digest for such an archive is a composite this plugin
+        # RomM's file-level digest for such an archive is a composite Tender
         # cannot attribute to any single member (ADR-0028), so agreement with one
         # of them proves nothing and must not be printed as if it did.
         entry = _entry("Set (U).zip", size=7)

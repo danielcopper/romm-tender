@@ -1,8 +1,8 @@
-"""Tests for the atlas savefile adapter — the translation into plugin vocabulary.
+"""Tests for the atlas savefile adapter — the translation into Tender's vocabulary.
 
 What is under test is the adapter's own work: putting the question to the entry
-the plugin resolved rather than to a bare core, restating a placement in the
-plugin's save vocabulary, and turning every way the question cannot be put into
+Tender resolved rather than to a bare core, restating a placement in
+Tender's save vocabulary, and turning every way the question cannot be put into
 the one honest refusal. The resolver's own decisions are upstream's and are not
 re-tested here.
 
@@ -229,7 +229,7 @@ class TestTheFiveStates:
 
     @pytest.mark.parametrize("code", [CAVEAT_SAVE_INSIDE_CONTENT, CAVEAT_SAVE_INSIDE_IMAGE])
     def test_a_save_inside_the_game_file_refuses(self, traces, code: str):
-        # There is no separate file, so the plugin would search forever for a
+        # There is no separate file, so Tender would search forever for a
         # name that cannot exist — which is what it did for Amiga before this.
         answer = _ask(_placement(files=(), caveats=(code,)), traces)
 
@@ -378,7 +378,7 @@ class TestEveryWayTheQuestionCannotBePut:
     ``not_asked`` where nothing reached the resolver, so the emulator is not
     implicated. ``nothing_established`` where it WAS asked and could not answer.
     Rendering those as one sentence would tell a user their emulator is a
-    mystery when the truth is that the plugin never asked.
+    mystery when the truth is that Tender never asked.
     """
 
     def _assert_refused(self, answer, shape: str) -> None:
@@ -459,7 +459,7 @@ class TestEveryWayTheQuestionCannotBePut:
 
 
 class TestHowTheQuestionIsPut:
-    """The entry the plugin resolved, asked about this game."""
+    """The entry Tender resolved, asked about this game."""
 
     def test_the_entry_is_chosen_by_tenders_own_label(self, traces):
         wanted = _Entry("Kronos", _placement(files=("Game Title.bkr",)))
@@ -513,7 +513,7 @@ class TestHowTheQuestionIsPut:
 
     def test_the_installation_handle_is_memoised(self, traces):
         # Worth 170 ms against 490 ms per reading on the reference machine, and
-        # nothing this plugin writes can invalidate it.
+        # nothing Tender writes can invalidate it.
         chooses: list[int] = []
         entry = _Entry("mGBA", _placement())
         installation = _Installation((entry,))
@@ -606,7 +606,7 @@ class TestWhatTheAnswerCarries:
         assert answer.sync_directory == _SAVES
 
     def test_a_save_beside_the_content_is_read_off_the_root_kind(self, traces):
-        # RetroArch's savefiles_in_content_dir: a per-game file set the plugin
+        # RetroArch's savefiles_in_content_dir: a per-game file set Tender
         # still does not sync, because the directory is the ROM's own.
         answer = _ask(_placement(root_kind=ROOT_CONTENT_DIRECTORY), traces)
 
@@ -767,7 +767,7 @@ class TestTheVocabularyIsTheResolversOwn:
 _PLATFORM_MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "defaults", "config.json")
 
 # What each system answers TODAY, so an emu-atlas bump that changes one is loud
-# instead of silently changing what this plugin syncs. The key carries the
+# instead of silently changing what Tender syncs. The key carries the
 # CONTENT EXTENSION the answer was measured with, because the answer turns on it
 # — the same system answers differently for a disc image and for a raw dump, and
 # a pin that did not say which one it asked with would be pinning nothing. Each

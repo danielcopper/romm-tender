@@ -1,7 +1,7 @@
 """Contract tests for ``cleanup_orphaned_grid_images`` (#1385).
 
 Data Management's orphaned grid-image cleanup (the Grid images row) driven
-frontend-shaped over the real wired plugin: positional
+frontend-shaped over the real wired backend: positional
 ``(live_app_ids, dry_run)`` exactly as ``frontend/src/api/backend.ts`` declares.
 Pins the dry-run/real success shapes (the real run answers its own
 ``candidate_count`` beside ``removed_count``),

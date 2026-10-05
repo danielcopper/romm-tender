@@ -467,7 +467,7 @@ class TestFirmwareDestPath:
     def test_a_placement_outside_the_root_falls_back_to_the_file_name(self, fw, tmp_path):
         """An emulator keeping firmware in its own tree states no placement here.
 
-        The plugin owns one BIOS directory and writes only inside it, so a
+        Tender owns one BIOS directory and writes only inside it, so a
         destination the resolver could not express relative to the firmware root
         leaves the flat default in charge rather than an absolute path from
         outside.
@@ -678,7 +678,7 @@ class TestTheOverviewRowsAreAlphabetical:
 
     @pytest.mark.asyncio
     async def test_local_only_rows_are_not_simply_appended(self, firmware, tmp_path):
-        """A file the plugin holds sorts among the library's, not below them.
+        """A file Tender holds sorts among the library's, not below them.
 
         The rows come from two sources — the library's listing, then what the
         emulators want beyond it — and the second was appended, so
@@ -2145,7 +2145,7 @@ class TestGetFirmwareStatusDeletableCount:
         assert rows["IPL.bin"]["deletable_count"] == 0
         assert rows["card.bin"]["deletable_count"] == 0
         # And the positive direction, which is the one that fails silently: a row
-        # the plugin DID place must offer its button. Without it, forcing every
+        # Tender DID place must offer its button. Without it, forcing every
         # file row to 0 leaves the suite green and the button simply never
         # appears.
         assert rows["ours.bin"]["deletable_count"] == 1
@@ -4144,7 +4144,7 @@ class TestDeletePlatformBios:
         no library. Both are declared, so both reach the delete as rows marked
         downloaded — which is the whole of what the old guard looked at.
 
-        No download record is written here. Which file the plugin is supposed to
+        No download record is written here. Which file Tender is supposed to
         have fetched is the axis under test, so each case states its own records
         (``_record_download``) — including the one that deliberately states none.
         """
@@ -4196,7 +4196,7 @@ class TestDeletePlatformBios:
 
     @pytest.mark.asyncio
     async def test_an_emulator_shipped_file_survives_the_delete(self, firmware, tmp_path):
-        """Deleting a platform's BIOS never touches a file the plugin did not fetch.
+        """Deleting a platform's BIOS never touches a file Tender did not fetch.
 
         The reported data loss: pressing Delete BIOS on GameCube removed
         ``dolphin-emu/Sys/codehandler.bin``, which RetroDECK ships with its own
@@ -4219,13 +4219,13 @@ class TestDeletePlatformBios:
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert shipped in store.files
-        # The plugin's own download still goes, record and all.
+        # Tender's own download still goes, record and all.
         assert ipl not in store.files
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
 
     @pytest.mark.asyncio
     async def test_a_file_with_no_download_record_survives_the_delete(self, firmware, tmp_path):
-        """A hand-placed file is not the plugin's to delete, even under a server name.
+        """A hand-placed file is not Tender's to delete, even under a server name.
 
         This file IS in the RomM library, so it looks like every other
         downloadable row and a guard reading the library would remove it.
@@ -5039,8 +5039,8 @@ class TestDownloadRequiredFirmware:
                 "md5_hash": "",
             },
         ]
-        # The requiring core is the one the NORMALIZED system resolves to, in the
-        # plugin's own bare identifier space (no ".so").
+        # The requiring core is the one the NORMALIZED system resolves to, in
+        # Tender's own bare identifier space (no ".so").
         _resolver(fw).declare("boot.bin", required_by=[_id("flycast_libretro")], description="Boot")
         _stub_listing(fw, firmware_list)
         _inline_executor(fw)

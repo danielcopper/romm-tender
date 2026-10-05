@@ -10,7 +10,7 @@ ANY path clears it, the paths that deliberately skip ``with_retry`` included
 
 A request method that reaches ``urllib.request.urlopen`` on its own therefore
 never clears the bit. Nothing about that fails: the call succeeds, the tests
-pass, and the plugin simply stays in its degraded single-attempt mode until some
+pass, and Tender simply stays in its degraded single-attempt mode until some
 other path happens to succeed. That is the regression this gate exists to catch.
 
 It enforces a **structural** rule: inside ``backend/adapters/romm/http.py``,

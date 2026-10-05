@@ -70,7 +70,7 @@ class TestDiskSpaceVerdict:
         assert verdict.fits is True
 
     def test_a_rom_of_unstated_size_always_fits(self):
-        # Refusing on a number the server never sent would be a claim the plugin
+        # Refusing on a number the server never sent would be a claim Tender
         # cannot make.
         verdict = disk_space_verdict(file_size=0, free_space=0, reserved_bytes=0, multi_file=False)
         assert verdict.fits is True

@@ -146,8 +146,8 @@ async def test_an_unbound_adopt_is_issued_no_prune_lease(harness):
 
 async def test_adopting_supersedes_the_group_s_other_installed_version(harness):
     # #1298 through the real removal service: one installed version per shortcut
-    # binding, whichever route produced it. The sibling's files are content the
-    # plugin downloaded and can fetch again — a different class from the file the
+    # binding, whichever route produced it. The sibling's files are content
+    # Tender downloaded and can fetch again — a different class from the file the
     # dialog protects, at a different path (ADR-0028).
     seed_group_member(harness, _ROM_ID, group_key=_GROUP, shortcut_app_id=700)
     sibling_path = seed_group_member(

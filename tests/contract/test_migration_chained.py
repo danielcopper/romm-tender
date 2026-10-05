@@ -1,4 +1,4 @@
-"""Contract test — chained RetroDECK home migration over the real plugin (#1042).
+"""Contract test — chained RetroDECK home migration over the real backend (#1042).
 
 Drives the real ``Endpoints`` through the real ``bootstrap()`` + real SQLite: an
 install is recorded under home A, then the RetroDECK home is changed twice

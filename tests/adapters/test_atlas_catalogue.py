@@ -1,7 +1,7 @@
-"""Tests for the atlas catalogue adapter — the translation into plugin vocabulary.
+"""Tests for the atlas catalogue adapter — the translation into Tender's vocabulary.
 
 What is under test is the adapter's own work: recovering the DECLARED order from
-an answer stated in effective order, classifying each entry through the plugin's
+an answer stated in effective order, classifying each entry through Tender's
 own bake kernel, telling the five catalogue refusals apart from a frontend that
 genuinely declares no emulator, and refusing to turn any failure into an empty
 list. The resolver's own decisions are upstream's and are not re-tested here.
@@ -176,7 +176,7 @@ def _labels(adapter: AtlasCatalogueAdapter, system: str = "ps3") -> list[str]:
 
 
 class TestDeclaredOrder:
-    """ES-DE's own selections never move the plugin's default (ADR-0012)."""
+    """ES-DE's own selections never move Tender's default (ADR-0012)."""
 
     def test_a_promoted_entry_does_not_become_the_default(self, traces):
         # The answer is in EFFECTIVE order: the user's gamelist promotion put the
@@ -256,7 +256,7 @@ class TestDeclaredOrder:
 
     def test_an_undeclared_entry_says_so_in_the_log(self, traces):
         # "No default" is not a bug in this one shape, so the log has to be able
-        # to tell it apart from a default the plugin failed to find.
+        # to tell it apart from a default Tender failed to find.
         installation = _Installation(
             catalogue=_answer(
                 _entry(label="Derived", command="", declared_index=None),
@@ -300,7 +300,7 @@ class TestCatalogueRefusals:
     def test_a_refusal_suppresses_the_entries_it_arrived_with(self, traces):
         # `sealed` is the one refusal that may accompany real entries: what the
         # readable layers declare is stated, and the caveat says the rest may
-        # declare more. The plugin cannot show a list it knows is partial as if
+        # declare more. Tender cannot show a list it knows is partial as if
         # it were the whole one.
         installation = _Installation(
             catalogue=_answer(
@@ -435,7 +435,7 @@ class TestActiveCore:
         assert _adapter(installation, traces).get_active_core("ps3") == (None, None)
 
     def test_a_libretro_command_tender_cannot_bake_still_names_its_core(self, traces):
-        # Bakeability is a fact about this plugin's -e override; which core a
+        # Bakeability is a fact about Tender's -e override; which core a
         # command loads is a fact about the command, and the BIOS filter asks
         # the second question.
         installation = _Installation(
@@ -673,7 +673,7 @@ class TestTheRealResolverOverARealTree:
 
     Successors to the deleted parser's ``test_unavailable_when_parse_fails`` and
     ``test_wrong_root_tag_returns_empty``: ES-DE refuses its whole load on either
-    file, so the resolver truthfully enumerates nothing — and the plugin must not
+    file, so the resolver truthfully enumerates nothing — and Tender must not
     render that as "this frontend knows no emulator".
     """
 

@@ -1,7 +1,7 @@
-"""The plugin's platform map speaks the system names the vendored resolver knows.
+"""Tender's platform map speaks the system names the vendored resolver knows.
 
 ``defaults/config.json``'s ``platform_map`` translates a RomM platform slug into a
-system name, and every question this plugin puts to the resolver is keyed on that
+system name, and every question Tender puts to the resolver is keyed on that
 name: the emulator catalogue, the accept-list, the ROM directory. A name outside
 the resolver's vocabulary answers nothing everywhere at once, and it answers
 quietly — an unknown system is a legitimate answer for a catalogue that was read.

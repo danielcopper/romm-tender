@@ -6,7 +6,7 @@ sync the user never cancelled — so it would abort and report cancelled. The
 run-scoped cancel ignores a stale run id; an unscoped (falsy) cancel still
 cancels unconditionally.
 
-Driven through the real ``cancel_sync`` endpoint over the real wired plugin,
+Driven through the real ``cancel_sync`` endpoint over the real wired backend,
 asserting the response shape and the downstream effect on run B's terminal
 ``sync_complete`` event.
 """

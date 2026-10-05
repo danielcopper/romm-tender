@@ -268,7 +268,7 @@ class TestACollisionIsNeverOverwritten:
 
     def test_a_folder_in_the_way_carries_nothing_and_keeps_the_record(self, tmp_path, dirs):
         # The funnel moves regular files only, and a move onto a folder would
-        # put the save inside it. The next time the plugin touches that game's
+        # put the save inside it. The next time Tender touches that game's
         # saves, it tries again.
         old, new = dirs
         svc, _ = make_service(tmp_path)
@@ -485,7 +485,7 @@ class TestTheSecondaryWritePathsFollowFirst:
     @pytest.mark.asyncio
     async def test_delete_local_saves_after_a_sort_flip_takes_the_old_folders_files_too(self, tmp_path, dirs):
         # Without the follow the delete looks in the new folder, finds nothing,
-        # and the next time the plugin touches that game's saves it carries the
+        # and the next time Tender touches that game's saves it carries the
         # old file back in.
         old, new = dirs
         svc, _ = make_service(tmp_path)
