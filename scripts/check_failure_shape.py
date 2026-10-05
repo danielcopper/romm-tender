@@ -101,7 +101,9 @@ VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 
 # Repo-relative paths of the modules converted to raising their refusals; the
 # list only grows (module docstring, "Converted modules").
-CONVERTED_MODULES: tuple[str, ...] = ()
+CONVERTED_MODULES: tuple[str, ...] = (
+    "backend/adapters/steam_config.py",
+)
 
 # What the paths above are relative to — a name of its own, apart from
 # ``REPO_ROOT``, which the services walk's own tests move.

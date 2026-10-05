@@ -16,6 +16,7 @@ from _vendor import vdf
 from domain.sgdb_artwork import to_unsigned_app_id
 from domain.shortcut_data import RETRODECK_APP_ID
 from lib.errors import SteamGridDirMissingError
+from lib.input_driver_fix import InputDriverFix
 
 if TYPE_CHECKING:
     import logging
@@ -275,8 +276,8 @@ class SteamConfigAdapter:
                 continue
         return None
 
-    def fix_retroarch_input_driver(self) -> dict[str, Any]:
-        """Change RetroArch input_driver from 'x' to 'sdl2'.
+    def fix_retroarch_input_driver(self) -> InputDriverFix:
+        """Change RetroArch input_driver from 'x' to 'sdl2', and say what came of it.
 
         Only the ``input_driver`` line changes; every other line keeps its
         bytes and its line ending. The file is written through a temp file and
@@ -285,7 +286,7 @@ class SteamConfigAdapter:
         """
         check = self.check_retroarch_input_driver()
         if not check or not check.get("warning"):
-            return {"success": False, "message": "No fix needed"}
+            return InputDriverFix.NOTHING_TO_FIX
         cfg_path = os.path.realpath(check["config_path"])
         tmp_path = cfg_path + ".tmp"
         try:
@@ -300,9 +301,9 @@ class SteamConfigAdapter:
                         f.write(line)
             os.chmod(tmp_path, stat.S_IMODE(os.stat(cfg_path).st_mode))
             os.replace(tmp_path, cfg_path)
-            return {"success": True, "message": "Changed input_driver to sdl2"}
+            return InputDriverFix.FIXED
         except Exception as e:
             with contextlib.suppress(FileNotFoundError):
                 os.remove(tmp_path)
             self._logger.error(f"Failed to fix RetroArch input_driver: {e}")
-            return {"success": False, "message": "Operation failed"}
+            return InputDriverFix.WRITE_FAILED

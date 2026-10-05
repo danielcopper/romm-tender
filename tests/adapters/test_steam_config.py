@@ -8,6 +8,7 @@ from _vendor import vdf
 
 from adapters.steam_config import SteamConfigAdapter
 from lib.errors import SteamGridDirMissingError
+from lib.input_driver_fix import InputDriverFix
 
 
 @pytest.fixture
@@ -467,7 +468,7 @@ class TestFixRetroarchInputDriver:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is True
+        assert result is InputDriverFix.FIXED
         content = cfg_path.read_text()
         assert 'input_driver = "sdl2"' in content
         assert 'other = "yes"' in content
@@ -479,7 +480,7 @@ class TestFixRetroarchInputDriver:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is True
+        assert result is InputDriverFix.FIXED
         assert cfg_path.read_bytes() == b'other = "yes"\r\ninput_driver = "sdl2"\r\nmore = "no"\nlast = "1"'
 
     def test_input_driver_as_last_line_without_newline_gains_none(self, tmp_path):
@@ -523,7 +524,7 @@ class TestFixRetroarchInputDriver:
             patch("adapters.steam_config.open", fake_open, create=True),
         ):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is False
+        assert result is InputDriverFix.WRITE_FAILED
         assert cfg_path.read_bytes() == original
         assert os.listdir(tmp_path) == ["retroarch.cfg"]
 
@@ -545,7 +546,7 @@ class TestFixRetroarchInputDriver:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         with patch("adapters.steam_config.os.path.expanduser", return_value=str(link)):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is True
+        assert result is InputDriverFix.FIXED
         assert link.is_symlink()
         assert target.read_text() == 'input_driver = "sdl2"\n'
 
@@ -555,14 +556,13 @@ class TestFixRetroarchInputDriver:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         with patch("adapters.steam_config.os.path.expanduser", return_value=str(cfg_path)):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is False
-        assert "No fix needed" in result["message"]
+        assert result is InputDriverFix.NOTHING_TO_FIX
 
     def test_no_config_found(self, tmp_path):
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         with patch("adapters.steam_config.os.path.expanduser", return_value=str(tmp_path / "nope.cfg")):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is False
+        assert result is InputDriverFix.NOTHING_TO_FIX
 
     def test_write_error_returns_failure(self, tmp_path):
         cfg_path = tmp_path / "retroarch.cfg"
@@ -580,5 +580,4 @@ class TestFixRetroarchInputDriver:
             ),
         ):
             result = adapter.fix_retroarch_input_driver()
-        assert result["success"] is False
-        assert "failed" in result["message"].lower()
+        assert result is InputDriverFix.WRITE_FAILED

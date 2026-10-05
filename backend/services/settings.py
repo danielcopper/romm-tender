@@ -25,6 +25,8 @@ from domain.custom_headers import (
     stored_custom_headers,
 )
 from domain.sibling_resolution import AUTO_REGION
+from lib.errors import Refused
+from lib.input_driver_fix import InputDriverFix
 from lib.list_result import ErrorCode
 from lib.url_host import is_valid_server_url
 
@@ -344,8 +346,17 @@ class SettingsService:
     # ── RetroArch input driver ──────────────────────────────────────────
 
     def fix_retroarch_input_driver(self) -> dict[str, Any]:
-        """Repair a problematic RetroArch ``input_driver`` value (``x`` -> ``sdl2``)."""
-        return self._steam_config.fix_retroarch_input_driver()
+        """Repair a problematic RetroArch ``input_driver`` value (``x`` -> ``sdl2``).
+
+        Raises ``Refused`` with ``nothing_to_fix`` when no config uses ``x``, and
+        with ``unknown`` when the write failed; the panel shows the message.
+        """
+        outcome = self._steam_config.fix_retroarch_input_driver()
+        if outcome is InputDriverFix.NOTHING_TO_FIX:
+            raise Refused("nothing_to_fix", "No fix needed")
+        if outcome is InputDriverFix.WRITE_FAILED:
+            raise Refused(ErrorCode.UNKNOWN, "Operation failed")
+        return {"success": True, "message": "Changed input_driver to sdl2"}
 
     # ── Whitelist (non-Steam shortcut removal) ──────────────────────────
 

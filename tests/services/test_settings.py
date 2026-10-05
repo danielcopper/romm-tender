@@ -13,6 +13,8 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
 from host.logging_setup import LOG_FILENAME, configure_logging
+from lib.errors import Refused
+from lib.input_driver_fix import InputDriverFix
 from services.settings import SettingsService, SettingsServiceConfig
 
 
@@ -49,9 +51,7 @@ def settings_persister() -> MagicMock:
 def steam_config() -> MagicMock:
     cfg = MagicMock()
     cfg.check_retroarch_input_driver = MagicMock(return_value=None)
-    cfg.fix_retroarch_input_driver = MagicMock(
-        return_value={"success": True, "message": "Changed input_driver to sdl2"},
-    )
+    cfg.fix_retroarch_input_driver = MagicMock(return_value=InputDriverFix.FIXED)
     cfg.set_steam_input_config = MagicMock()
     return cfg
 
@@ -787,11 +787,23 @@ class TestApplySteamInputSetting:
 
 
 class TestFixRetroarchInputDriver:
-    def test_delegates_to_adapter(self, service, steam_config):
-        steam_config.fix_retroarch_input_driver.return_value = {"success": True, "message": "ok"}
+    def test_a_fixed_config_answers_success(self, service, steam_config):
+        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.FIXED
         result = service.fix_retroarch_input_driver()
-        assert result == {"success": True, "message": "ok"}
+        assert result == {"success": True, "message": "Changed input_driver to sdl2"}
         steam_config.fix_retroarch_input_driver.assert_called_once_with()
+
+    def test_nothing_to_fix_is_refused(self, service, steam_config):
+        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.NOTHING_TO_FIX
+        with pytest.raises(Refused) as refused:
+            service.fix_retroarch_input_driver()
+        assert (refused.value.reason, refused.value.message) == ("nothing_to_fix", "No fix needed")
+
+    def test_a_failed_write_is_refused_as_unknown(self, service, steam_config):
+        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.WRITE_FAILED
+        with pytest.raises(Refused) as refused:
+            service.fix_retroarch_input_driver()
+        assert (refused.value.reason, refused.value.message) == ("unknown", "Operation failed")
 
 
 # ── whitelist ──────────────────────────────────────────────────────────
