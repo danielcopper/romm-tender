@@ -1,10 +1,10 @@
 # Logo
 
-The plugin mark: a button diamond ringed by a pair of sync arrows, set in a disc and split along a facet that runs
+Tender's mark: a button diamond ringed by a pair of sync arrows, set in a disc and split along a facet that runs
 parallel to the buttons' own slant. It animates — the ring turns while the diamond folds into a d-pad cross and back.
 
 The banner lockup sets **TENDER** beneath the mark. Versals are for the banner alone; everywhere the name appears as
-text — the plugin's display name, the QAM header, toasts, prose — it is `Tender`.
+text — Tender's display name, the QAM header, toasts, prose — it is `Tender`.
 
 ![The palette candidates on a dark and a light ground](preview.png)
 

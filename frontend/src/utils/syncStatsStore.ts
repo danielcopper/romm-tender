@@ -33,7 +33,7 @@
  * second round-trip, under the admission rule stated in `api/sharedReads.ts`:
  * joinable only where the answer cannot change between the moment the first
  * caller issued the read and the moment this one joins it. Both facts here are
- * whole-plugin reads taking no argument, so the join needs no key.
+ * Tender-wide reads taking no argument, so the join needs no key.
  *
  * What that rule excludes is every read issued BECAUSE the fact just changed.
  * The open read such a caller would join was issued before the change, so

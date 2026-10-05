@@ -10,7 +10,7 @@ const MAX_64_BITS = 0xffffffffffffffffn;
 const SHORTCUT_TYPE_MARK = 0x02000000n;
 
 /**
- * The appId `gameId` names, or `null` when it names nothing this plugin can own.
+ * The appId `gameId` names, or `null` when it names nothing Tender can own.
  *
  * A value that fits in 32 bits is taken as the appId itself: Steam has not been
  * seen reporting a shortcut's start that way, and accepting it keeps a Steam

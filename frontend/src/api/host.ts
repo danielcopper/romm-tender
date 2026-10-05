@@ -1,6 +1,6 @@
 /**
  * The one module the panel imports for what it gets from its host: `endpoint`,
- * `addEventListener`, `removeEventListener`, `toaster` and `definePlugin`.
+ * `addEventListener`, `removeEventListener`, `toaster` and `definePanel`.
  * Three of them are the wire — they go over the WebSocket in `hostSocket.ts`.
  * **Two of them reach no socket at all**, and they live here anyway: `index.tsx`
  * takes both kinds, and splitting the module would give it two imports for a
@@ -8,7 +8,7 @@
  *
  * ## The two that are not the wire
  *
- * `definePlugin` answers with the factory unchanged and calls nothing, so it
+ * `definePanel` answers with the factory unchanged and calls nothing, so it
  * opens no socket; it sits beside the three because a call site importing it
  * asks for the same thing the others answer.
  *
@@ -58,13 +58,13 @@ export interface ToastNotification {
   dismiss: () => void;
 }
 
-/** Raises toasts under the plugin's name. */
+/** Raises toasts under Tender's name. */
 export interface Toaster {
   toast(toast: ToastData): ToastNotification;
 }
 
-/** What `definePlugin`'s factory answers with — the panel. */
-export interface Plugin {
+/** What `definePanel`'s factory answers with — the panel's definition: its name, its glyph and the panel itself. */
+export interface PanelDefinition {
   /** The entry's title, which Steam files the panel under. */
   name: string;
   /** Drawn in the Quick Access tab strip. */
@@ -144,7 +144,7 @@ export const removeEventListener = <Payload = unknown>(
  * seam is where it is so this module stays the wire and reaches no view — the
  * declaration is all of it that belongs here.
  */
-export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
+export const definePanel = (fn: () => PanelDefinition): (() => PanelDefinition) => fn;
 
 // -- the one that reaches Steam instead ---------------------------------------
 

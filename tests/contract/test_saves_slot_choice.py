@@ -10,7 +10,7 @@ for the source). These pin the explicit-contract fix: ``migrate`` is a real bool
 (no ``"__no_migration__"`` sentinel string) and the default call runs no
 migration. All three endpoints share one rule: the slot-less legacy bucket is no
 longer a confirmable / switchable target (#1276) and is read-only — never
-deletable — from the plugin (#1478), so an empty / ``None`` slot name returns the
+deletable — from Tender (#1478), so an empty / ``None`` slot name returns the
 canonical ``invalid_slot_name`` failure and never mutates state or hits the wire.
 """
 
@@ -250,7 +250,7 @@ async def test_delete_slot_legacy_rejected(harness):
     Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``deleteSlot``
     is ``endpoint<[number, string], …>``). The endpoint returns the canonical
     ``invalid_slot_name`` failure before any server I/O, so the game's
-    slot-less bucket can never be torn down from the plugin.
+    slot-less bucket can never be torn down from Tender.
     """
     enable_save_sync(harness)
     seed_rom(harness, 42)

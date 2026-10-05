@@ -289,7 +289,7 @@ class PersistenceAdapter:
 
         The version stamp never *down*-stamps: ``data["version"]`` is set to
         ``max(stored_version, _SETTINGS_VERSION)``. A file written by a newer
-        plugin (stored version > current) is preserved as-is so a later
+        version of Tender (stored version > current) is preserved as-is so a later
         re-upgrade does not re-run migrations against down-stamped data;
         an absent or older version is stamped up to ``_SETTINGS_VERSION``.
         A non-numeric stored version (e.g. a hand-edited ``"abc"``) coerces to

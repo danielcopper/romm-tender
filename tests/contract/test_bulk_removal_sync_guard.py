@@ -8,7 +8,7 @@ removal racing a running sync would delete shortcuts the apply is writing
 and corrupt the registry mid-run. At IDLE (which paused and completed runs
 reset the live state to) each endpoint answers with its normal shape.
 
-Driven through the real endpoints over the real wired plugin, frontend-shaped
+Driven through the real endpoints over the real wired backend, frontend-shaped
 (positional args), asserting the response shape with and without a sync in
 flight.
 """

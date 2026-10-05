@@ -192,7 +192,7 @@ locally with `mise run docs`.
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for what the panel gets from its
   host — it replaces `@decky/api`, which is no longer a dependency, so nothing imports that package. Three of the five
-  things the panel takes from it go over the backend's WebSocket (`endpoint` and the event pair); `definePlugin` sits
+  things the panel takes from it go over the backend's WebSocket (`endpoint` and the event pair); `definePanel` sits
   beside them and opens no socket. `toaster` pushes into Steam's own notification store and draws its entries itself,
   chained behind whatever already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to
   the backend"). `@decky/api`'s `routerHook`, Decky Loader's route installer, has no counterpart here: Tender's section
@@ -202,7 +202,7 @@ locally with `mise run docs`.
   that borrowed the loader's wherever it found it would behave differently on a machine with Decky from one without —
   which is the difference this program exists not to depend on. **The reference machine runs the loader** (measured:
   `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
-  than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
+  than hide. `definePanel` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
   `Endpoints` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the
@@ -454,6 +454,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `DB_FILENAME` to be string literals (a transform over `PACKAGE_NAME` fails too); the reverse fold through an aliased
   import and the third home, the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The four homes are listed in
   `backend/domain/identity.py`'s module docstring
+- **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
+  with its reason** — check — `frontend/eslint.config.js` (`no-restricted-syntax` over every identifier in every file
+  ESLint lints, tests and config files included; exceptions `NAMES_NOT_ABOUT_TENDER`), kept live by
+  `frontend/src/eslintNoPluginNames.test.ts`, and `tests/domain/test_identity.py::TestNoNameMisnamesTender` (every name
+  the Python syntax tree of `backend/` less `_vendor/` and `native/`, `tests/` and `scripts/` binds, reads, declares or
+  imports; exceptions `_NAMES_NOT_ABOUT_TENDER`); on either side an exception nothing carries any more fails too. Unseen
+  by both: string literals (the `"plugin_version"` manifest key stays; a Python string annotation too), comments and
+  docstrings, shell, file names, a name built at run time, and an excepted name put to a new use for Tender
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`

@@ -182,7 +182,7 @@ class RommHttpAdapter:
     def _apply_origin_headers(self, req: urllib.request.Request) -> None:
         """Attach what EVERY request to the configured RomM origin carries.
 
-        The user's configured proxy headers (#1822) and the plugin
+        The user's configured proxy headers (#1822) and Tender's
         ``User-Agent`` — the two that do not depend on being signed in, so the
         sign-in requests carry them too: an authenticating proxy sits in front of
         sign-in as well, and without them the user cannot authenticate at all.
@@ -205,10 +205,10 @@ class RommHttpAdapter:
         """Record which custom headers go out, whenever that set changes.
 
         Names only: a value is the credential the proxy checks (#1822). This is
-        the only place that can answer whether the plugin attached anything at
+        the only place that can answer whether Tender attached anything at
         all — the first question a "my proxy still rejects me" report raises,
         and one nothing else on the machine can settle, since the request
-        leaves over TLS and the plugin is the last reader of its own headers.
+        leaves over TLS and Tender is the last reader of its own headers.
 
         Logged on CHANGE rather than per request because this helper runs on
         every outgoing call: a library sync would otherwise write one identical
@@ -757,8 +757,8 @@ class RommHttpAdapter:
         For a ROM's ``url_cover`` (an external metadata-provider CDN such as
         SteamGridDB / IGDB) used as the fallback when the RomM-local cover asset
         404s (#1450): neither the host-bound RomM bearer nor the user's
-        configured proxy headers may reach a third-party origin, so only the
-        plugin ``User-Agent`` is attached — no
+        configured proxy headers may reach a third-party origin, so only
+        Tender's ``User-Agent`` is attached — no
         ``Authorization`` header is ever built here (the CDN behind Cloudflare
         Bot Fight Mode also 403s the default ``Python-urllib`` UA). The *url*
         scheme is validated against :attr:`_EXTERNAL_URL_SCHEMES` first and a

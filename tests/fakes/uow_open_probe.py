@@ -3,7 +3,7 @@
 GLOSSARY.md's Unit of Work entry keeps a transaction to database reads and
 writes: the real ``SqliteUnitOfWork`` opens with ``BEGIN IMMEDIATE``, SQLite's
 global write lock, so a seam doing file or server I/O inside one blocks every
-other connection in the plugin until ``busy_timeout`` gives up. A test driving
+other connection in the backend until ``busy_timeout`` gives up. A test driving
 :class:`FakeUnitOfWork` shares no connection and can never see that lock — the
 observable is the ORDER, so this wraps one seam method and records, per call,
 whether a unit was open at the moment it ran.

@@ -48,7 +48,7 @@ _logger = logging.getLogger(__name__)
 _MAX_PLAY_SESSION_PAGES = 50
 
 # RomM computes an unused character index and a filter-values aggregation on
-# every ``/api/roms`` list request unless disabled. The plugin reads only
+# every ``/api/roms`` list request unless disabled. Tender reads only
 # ``items`` / ``total`` from the list endpoints, so both are turned off to skip
 # that server-side work. Appended to every list-endpoint query string.
 _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"

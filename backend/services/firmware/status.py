@@ -388,13 +388,13 @@ class FirmwareStatusReader:
         download. Distinct for the reason the platform count is — a row's number
         is what its button promises to unlink. The folder path is used to NARROW
         the record set and never to widen it, so a destination that has since
-        moved can only offer fewer files, never something the plugin did not
+        moved can only offer fewer files, never something Tender did not
         place.
 
         None of this is ``downloaded``, and none of it may be replaced by that:
         it is ``os.path.exists`` at the row's own destination, equally true of
         firmware the emulator shipped with. ``local_count`` is a third set again
-        — the library's progress ratio, which includes files the plugin never
+        — the library's progress ratio, which includes files Tender never
         placed and drops our own downloads once RomM stops listing them; used
         for the button it was wrong in both directions.
         """
@@ -481,7 +481,7 @@ class FirmwareStatusReader:
         plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
         # Alphabetical, and only here: the two halves arrive in their own
         # orders — the library's listing, then the rows it does not hold,
-        # appended — so a file the plugin downloaded sat below one the
+        # appended — so a file Tender downloaded sat below one the
         # library still offers for no reason a reader could see. Sorted
         # AFTER the merge, because the zip above is positional and because
         # `declared_path` only exists once `_wanted_fields` has run.

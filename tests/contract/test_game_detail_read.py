@@ -160,7 +160,7 @@ async def test_bios_status_without_an_emulator_list_is_unknown(harness):
 
     The harness has no ``es_systems.xml``, so which emulators the platform offers
     — the scope an absence is judged against — cannot be established. An empty
-    result then states nothing: an emulator outside the plugin's view could want
+    result then states nothing: an emulator outside Tender's view could want
     a file the server has never held, and "needs none" would clear a real
     warning on ignorance (#1693).
     """

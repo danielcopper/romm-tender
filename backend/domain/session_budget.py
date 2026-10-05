@@ -4,7 +4,7 @@ Steam's ``SharedJSContext`` renderer (a child of ``steamwebhelper``) carries a
 hard per-session heap budget: it dies of an out-of-memory crash once its RSS
 reaches roughly 2.45-2.53 GB and the budget never self-recovers within a session
 — only a Steam client restart resets it to a fresh ~400-440 MB baseline. Every
-Steam shortcut the plugin creates costs 0.7-1.5 MB of that budget permanently
+Steam shortcut Tender creates costs 0.7-1.5 MB of that budget permanently
 (the rate is constant per client boot but varies between boots), so a very large
 first import can walk the renderer into the cliff.
 

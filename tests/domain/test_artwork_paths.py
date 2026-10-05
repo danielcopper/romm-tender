@@ -96,7 +96,7 @@ class TestParseGridImageAppId:
             "123p.PNG",  # uppercase extension (Steam writes lowercase)
             "123_grid.png",  # not one of the five grid forms
             "123p.png.tmp",  # atomic-write sidecar
-            "romm_42_cover.png",  # plugin staging file
+            "romm_42_cover.png",  # Tender's staging file
             "123",  # no extension
             ".png",  # no digits
             "",  # empty

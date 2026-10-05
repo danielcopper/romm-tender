@@ -331,8 +331,8 @@ def seed_retrodeck_marker(harness: ContractHarness) -> None:
     """Write ``retrodeck.json`` so a RetroDECK installation is detected at all.
 
     The emulator catalogue is resolved per installation, and an installation is
-    detected by this file's existence. Its paths are written to exactly what the
-    plugin's own path adapter falls back to when the file is absent, so seeding
+    detected by this file's existence. Its paths are written to exactly what
+    Tender's own path adapter falls back to when the file is absent, so seeding
     it moves the catalogue from "no installation" to "readable" and changes
     nothing else about where a contract test's roots point.
     """

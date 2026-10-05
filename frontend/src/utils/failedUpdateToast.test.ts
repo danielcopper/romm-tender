@@ -8,7 +8,7 @@ import {
   type UpdateAttemptToast,
   type UpdateInstallFailure,
 } from "../api/backend";
-import { PLUGIN_NAME } from "./toast";
+import { DISPLAY_NAME } from "./toast";
 import {
   attemptFailureToast,
   raiseFailureToastOnce,
@@ -83,7 +83,7 @@ describe("failedUpdateToast", () => {
 
       expect(toaster.toast).toHaveBeenCalledOnce();
       expect(toaster.toast).toHaveBeenCalledWith({
-        title: PLUGIN_NAME,
+        title: DISPLAY_NAME,
         body: "Update to 1.0.52 was cancelled. A game was started. Nothing was changed.",
       });
       expect(acknowledgeUpdateAttemptToast).toHaveBeenCalledWith(3);

@@ -147,14 +147,14 @@ export interface DataPageState {
   /** The installed-game and recovery-bundle figures. */
   inventory: PageRead<DataInventory>;
   /**
-   * The non-Steam entries this plugin did NOT create — answered only once
+   * The non-Steam entries Tender did NOT create — answered only once
    * ownership has been established.
    *
    * `failed` is not "none": it means Steam's shortcut store could not be read,
    * so nothing here can be proven foreign. The row reads as unavailable and the
    * removal is refused — the same abort the grid cleanup takes when its scan
    * cannot run, and for the same reason: without the ownership answer a removal
-   * would take this plugin's whole library with it. `reading` refuses too, for
+   * would take Tender's whole library with it. `reading` refuses too, for
    * the same want of an answer. An entry the sweep could not identify is the
    * same refusal one entry wide: see `unidentifiedCount`.
    */
@@ -255,7 +255,7 @@ export function useDataPage(): DataPageState {
   }, []);
 
   /**
-   * Re-ask Steam which of its non-Steam entries are this plugin's.
+   * Re-ask Steam which of its non-Steam entries are Tender's.
    *
    * Read every time the enumeration is, because both answers describe the same
    * moment: a removal that shrinks one must not leave the other standing.
@@ -337,9 +337,9 @@ export function useDataPage(): DataPageState {
   );
 
   /**
-   * Steam's non-Steam entries minus the ones this plugin put there.
+   * Steam's non-Steam entries minus the ones Tender put there.
    *
-   * This row is about what ELSE is in the library; removing what this plugin
+   * This row is about what ELSE is in the library; removing what Tender
    * created is the Tender's-shortcuts row's job, and it removes by binding and
    * ownership rather than by name. Without both the enumeration and the
    * ownership answer the set cannot be formed at all, which is what an
@@ -590,7 +590,7 @@ export function useDataPage(): DataPageState {
   const handleRemoveNonSteamApps = async (apps: NonSteamApp[]) => {
     if (foreignApps.state !== "answered") {
       // Ownership has not been established, so nothing here can be proven
-      // foreign — refuse rather than remove a set this plugin may be in.
+      // foreign — refuse rather than remove a set Tender may be in.
       setNonSteamStatus("Could not read Steam's shortcut list — nothing was removed.");
       return;
     }

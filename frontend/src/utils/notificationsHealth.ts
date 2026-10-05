@@ -24,8 +24,8 @@ export function resetNotificationsHealthForTests(): void {
 }
 
 /**
- * The notice's copy. It names no action because there is none inside the
- * plugin. Its example of a failure only a notification reports is one of the
+ * The notice's copy. It names no action because there is none inside
+ * Tender. Its example of a failure only a notification reports is one of the
  * known cases the docs page lists under the same heading, which is where the
  * list lives.
  */

@@ -9,7 +9,7 @@
 --     where a sync or a probe looks. Why a table of its own: ADR-0041.
 --
 -- Created empty. No value can be derived here: the answer is a live reading of
--- the machine, so the plugin records it after this migration.
+-- the machine, so Tender records it after this migration.
 --
 -- The save-sort markers are deleted with the code that read them:
 -- ``save_sort_settings`` held the last-seen RetroArch sort flags and

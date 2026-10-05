@@ -78,7 +78,7 @@ export function formatResumeScope(resumableGames: number): string {
  * the completion stamps and the recorded launch commands. So the offer survived
  * a clear that had just discarded everything it offered to continue (#1789).
  *
- * What a resume actually rests on is skip authority, of which this plugin keeps
+ * What a resume actually rests on is skip authority, of which Tender keeps
  * two kinds and clears both together in that one place: a completion stamp
  * (whole platform or collection skipped at fetch time) or a recorded launch
  * command (one game skipped at apply time). Either is a real resume — a run

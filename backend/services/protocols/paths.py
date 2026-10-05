@@ -4,7 +4,7 @@ Services query the host RetroDECK/RetroArch/ES-DE environment through
 these Protocols: filesystem path getters (saves, roms, BIOS,
 RetroDECK home), platform-to-system resolution, where a game's save
 lives, and RetroArch core lookups for ES-DE configured systems.
-``PlatformCoreReader`` exposes the plugin-owned per-platform core
+``PlatformCoreReader`` exposes Tender's own per-platform core
 selection (stored in ``settings.json``, not the ES-DE gamelist) that the
 resolver layers over the es_systems default.
 """
@@ -108,7 +108,7 @@ class CoreInfoProvider(Protocol):
     Exposes the read seam services need to answer, from the frontend's own
     emulator catalogue alone, "which emulator is the system-layer default for
     this system, and what else could it launch with?" without depending on the
-    concrete adapter. Resolution is system-layer only; the plugin-owned
+    concrete adapter. Resolution is system-layer only; Tender's own
     per-platform and per-game selections are layered on top by
     ``active_emulator_for_rom``, not here. Implementations own the underlying
     reads and may cache answers; ``reset_cache`` lets writers invalidate the
@@ -141,7 +141,7 @@ class CoreInfoProvider(Protocol):
 class SaveLocationReader(Protocol):
     """Where one ROM's save lives, what it consists of, and whether it may be synced.
 
-    The read seam behind every save-file question this plugin used to answer
+    The read seam behind every save-file question Tender used to answer
     from its own per-system extension table. It is asked per ROM and per the
     emulator that would launch it, because a save location is a property of the
     emulator and not of the platform: the same PS2 game is two shared memory
@@ -158,7 +158,7 @@ class SaveLocationReader(Protocol):
     Every call is a live reading. A remembered granularity is the failure this
     seam exists to avoid: the user changes a core's options in the emulator's
     own quick menu between one launch and the next sync, and a stale answer
-    would have the plugin carry a shared card as though it were one game's.
+    would have Tender carry a shared card as though it were one game's.
     Within one sync operation the entry gate's reading is handed down rather
     than taken again — live is a property of operations, not of layers.
 
@@ -254,13 +254,13 @@ class SystemKnownFn(Protocol):
 
 
 class PlatformCoreReader(Protocol):
-    """Read seam for the plugin-owned per-platform core selection.
+    """Read seam for Tender's own per-platform core selection.
 
     Exposes the ``settings.json`` ``platform_cores`` map (RomM platform
     slug → core label) so the resolver can layer a user-chosen
     platform-wide core over the es_systems default without reading the
     retired ES-DE gamelist. Returns the stored core label for a slug, or
-    ``None`` when the platform has no plugin-owned selection.
+    ``None`` when the platform has no selection of Tender's own.
     """
 
     def get_platform_core(self, platform_slug: str) -> str | None: ...

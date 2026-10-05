@@ -206,7 +206,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // `SP_REACTDOM` at none, in both bundles. In `dist/index.js` the two sites are
   // lines 852 (react-icons' `IconContext`) and 4969 (a module-scope `SP_JSX.jsx`
   // from `PlatformDetail.tsx`); in `dist/index-coexistence.js` the same two are
-  // at 231 and 4348. All four run before `definePlugin`'s factory can be
+  // at 231 and 4348. All four run before `definePanel`'s factory can be
   // obtained, so with either global unset the bundle throws at import, this
   // check never runs, and nothing it would have said is written anywhere.
   //

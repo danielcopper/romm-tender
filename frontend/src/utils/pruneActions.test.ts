@@ -28,8 +28,8 @@ describe("handlePruneAction", () => {
     vi.mocked(isRomMShortcutDetails).mockReturnValue(true);
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/tender-rom-launcher",
-      strShortcutStartDir: "/plugin",
+      strShortcutExe: "/tender/bin/tender-rom-launcher",
+      strShortcutStartDir: "/tender",
       strLaunchOptions: "launch-command",
     });
     vi.stubGlobal("collectionStore", {
@@ -42,8 +42,8 @@ describe("handlePruneAction", () => {
   it("captures bounded Steam state without file bytes", async () => {
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/tender-rom-launcher",
-      strShortcutStartDir: "/plugin",
+      strShortcutExe: "/tender/bin/tender-rom-launcher",
+      strShortcutStartDir: "/tender",
       strLaunchOptions: "launch-command",
     });
     vi.stubGlobal("collectionStore", {
@@ -77,8 +77,8 @@ describe("handlePruneAction", () => {
       snapshot: {
         app_id: 9001,
         name: "Removed Game",
-        exe: "/plugin/bin/tender-rom-launcher",
-        start_dir: "/plugin",
+        exe: "/tender/bin/tender-rom-launcher",
+        start_dir: "/tender",
         launch_options: "launch-command",
         minutes_playtime_forever: 120,
         minutes_playtime_last_two_weeks: 15,
@@ -128,8 +128,8 @@ describe("handlePruneAction", () => {
   it("fails closed when Steam playtime state is unavailable", async () => {
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/tender-rom-launcher",
-      strShortcutStartDir: "/plugin",
+      strShortcutExe: "/tender/bin/tender-rom-launcher",
+      strShortcutStartDir: "/tender",
       strLaunchOptions: "launch-command",
     });
     vi.stubGlobal("collectionStore", { userCollections: [], deckDesktopApps: { apps: new Map([[9001, {}]]) } });
@@ -162,7 +162,7 @@ describe("handlePruneAction", () => {
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "cover" });
     const setArtwork = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: setArtwork } });
-    vi.mocked(getAppDetails).mockResolvedValue({ strShortcutExe: "/plugin/bin/tender-rom-launcher" });
+    vi.mocked(getAppDetails).mockResolvedValue({ strShortcutExe: "/tender/bin/tender-rom-launcher" });
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
 
@@ -331,8 +331,8 @@ describe("handlePruneAction", () => {
       expected_snapshot: {
         app_id: 9001,
         name: "Earlier Name",
-        exe: "/plugin/bin/tender-rom-launcher",
-        start_dir: "/plugin",
+        exe: "/tender/bin/tender-rom-launcher",
+        start_dir: "/tender",
         launch_options: "launch-command",
         minutes_playtime_forever: null,
         minutes_playtime_last_two_weeks: null,

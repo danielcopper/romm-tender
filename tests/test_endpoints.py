@@ -87,7 +87,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "save_server_url",
     # Custom proxy headers (#1822) — a settings.json-only write, never touches
     # RetroDECK state. It has to answer while a migration is pending for a
-    # stronger reason than the other settings writes: without them the plugin
+    # stronger reason than the other settings writes: without them Tender
     # cannot reach the server at all, so blocking it would leave a user behind an
     # authenticating proxy unable to configure their way out.
     "save_custom_headers",

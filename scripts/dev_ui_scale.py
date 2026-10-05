@@ -84,11 +84,11 @@ debuggable targets; ``SharedJSContext`` is where ``SteamClient`` lives, and the
 
 The RFC 6455 client below is a deliberate copy of the one in
 ``backend/adapters/renderer_gc.py`` rather than a shared import: that adapter is
-shipped plugin code with a fail-open, single-command, payload-discarding contract, while
+shipped backend code with a fail-open, single-command, payload-discarding contract, while
 this dev tool needs the evaluate *result*, several commands per run, and loud failures.
 Sharing would mean either widening the shipped adapter's contract for a dev-only need or
 adding a generic client to shipped ``lib/`` that no production path uses (it would ship
-with the plugin and land in Sonar's scope). RFC 6455 is frozen; these ~80 lines don't drift.
+with Tender and land in Sonar's scope). RFC 6455 is frozen; these ~80 lines don't drift.
 """
 
 from __future__ import annotations
@@ -503,7 +503,7 @@ def _qdbus_binary() -> str | None:
 def _qdbus(binary: str, path: str, method: str, *args: str) -> str | None:
     """Call a KWin DBus method; ``None`` on any failure (the caller degrades, never crashes)."""
     try:
-        result = subprocess.run(  # dev tool: not shipped plugin code
+        result = subprocess.run(  # dev tool: not shipped backend code
             [binary, _KWIN_SERVICE, path, method, *args],
             capture_output=True,
             text=True,
@@ -578,7 +578,7 @@ def _kwin_read_reply(token: str) -> dict[str, Any] | None:
     deadline = time.monotonic() + _TIMEOUT_SEC
     while time.monotonic() < deadline:
         try:
-            journal = subprocess.run(  # dev tool: not shipped plugin code
+            journal = subprocess.run(  # dev tool: not shipped backend code
                 ["journalctl", "--user", "--since=-2min", "--no-pager", "-o", "cat"],
                 capture_output=True,
                 text=True,

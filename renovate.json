@@ -29,7 +29,7 @@
   },
   "packageRules": [
     {
-      "description": "Python dev/docs tooling: refresh the uv-compiled lock within the declared range. Auto-merge — the required CI checks are the gate; nothing from pip ships in the plugin. (update-lockfile keeps in-range bumps lock-only, but does NOT stop a range-widening PR when the newest version is ABOVE the declared ceiling — that case is covered by the allowedVersions cap below and the no-major-auto-merge rule.)",
+      "description": "Python dev/docs tooling: refresh the uv-compiled lock within the declared range. Auto-merge — the required CI checks are the gate; nothing from pip ships in Tender. (update-lockfile keeps in-range bumps lock-only, but does NOT stop a range-widening PR when the newest version is ABOVE the declared ceiling — that case is covered by the allowedVersions cap below and the no-major-auto-merge rule.)",
       "matchManagers": [
         "pip-compile"
       ],

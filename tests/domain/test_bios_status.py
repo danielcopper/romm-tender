@@ -82,8 +82,8 @@ def _image(name: str, *, satisfied: bool | None, core: str = _CORE) -> BiosFileE
 def _withheld_folder_row() -> BiosFileEntry:
     """The LRPS2 folder row nothing could judge — required by the launching core.
 
-    ``required_by_active`` is what carries the active core onto the row: the
-    plugin sets it from that core's own entry in ``cores``, so such a row is
+    ``required_by_active`` is what carries the active core onto the row:
+    Tender sets it from that core's own entry in ``cores``, so such a row is
     always one of the rows the console's disjunction is read over.
     """
     return BiosFileEntry(

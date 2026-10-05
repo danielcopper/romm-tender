@@ -81,7 +81,7 @@ accident. The identically SPELT pair is `PACKAGE_NAME` against `APP_DIR_NAME`, a
 standing in two modules.
 
 The display name has **two** homes, and nothing checks that they agree: `DISPLAY_NAME` in `backend/domain/identity.py`
-and `PLUGIN_NAME` in `frontend/src/utils/toast.ts`. Inside a user-facing **sentence** it stays literal text —
+and `DISPLAY_NAME` in `frontend/src/utils/toast.ts`. Inside a user-facing **sentence** it stays literal text —
 interpolating a constant into prose costs readability and buys nothing. A **heading** is not a sentence: a headline and
 the rule under it are one thing, so the headline is interpolated and the underline derived from its length.
 

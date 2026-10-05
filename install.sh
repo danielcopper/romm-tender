@@ -1132,8 +1132,9 @@ parse_arguments() {
 # Every refusal below is exit 1 and names both the reason and the fix. The order
 # is the order in which the answers become useful: a Python to run anything
 # with, a manager to run it under, then Steam for it to load a panel into, then
-# the plugin that would otherwise share the database with it, and last the
-# backend that would already be holding what the service's own needs.
+# an older Tender still installed in Decky, which would otherwise share the
+# database with it, and last the backend that would already be holding what
+# the service's own needs.
 preflight() {
     local found status=0
     found="$(check_python)" || status=$?
@@ -1196,7 +1197,7 @@ check_native_steam() {
 # Two backends working on one database is the failure this refuses. Parsed with
 # grep rather than jq, which is not on every target: a plugin.json is one line
 # per field in practice, and what is needed is only whether the name field names
-# this plugin.
+# Tender.
 refuse_decky_plugin() {
     local manifest folder
     for manifest in "$HOME"/homebrew/plugins/*/plugin.json; do

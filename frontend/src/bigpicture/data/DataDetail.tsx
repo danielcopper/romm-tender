@@ -42,7 +42,7 @@ import type { DataRowId } from "./rows";
 /**
  * The one alarm colour on this page, brighter than the pane palette's `RED`.
  * It marks the single press that would remove RetroDECK, which breaks every
- * game this plugin launches — the page has no second thing to say this about.
+ * game Tender launches — the page has no second thing to say this about.
  */
 const ALARM = "#ff4444";
 
@@ -225,7 +225,7 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
   const [showWhitelist, setShowWhitelist] = useState(false);
   const [whitelistSearch, setWhitelistSearch] = useState("");
   // The list is what the removal would take, so it lists the foreign entries
-  // and never this plugin's own — protecting one of ours from a removal that
+  // and never Tender's own — protecting one of ours from a removal that
   // cannot reach it would say the two were ever in the same set.
   const listed = state.foreignApps.state === "answered" ? state.foreignApps.value : [];
   const filteredApps = whitelistSearch ? listed.filter((app) => fuzzyMatch(whitelistSearch, app.name)) : listed;
@@ -299,12 +299,12 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
 };
 
 /**
- * What is in the Steam library that neither Steam nor this plugin put there.
+ * What is in the Steam library that neither Steam nor Tender put there.
  *
  * Tender's own shortcuts are excluded by OWNERSHIP rather than by name; why
  * that is the only rule that holds is `docs/architecture/qam-panel.md`,
  * section Data Management — "Two rows would overlap if either were read
- * naively". Removing what this plugin created is the Tender's-shortcuts row's
+ * naively". Removing what Tender created is the Tender's-shortcuts row's
  * job.
  *
  * Where the store could not be read at all the pane offers nothing — the same

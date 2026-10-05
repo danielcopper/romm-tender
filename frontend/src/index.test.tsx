@@ -1,6 +1,6 @@
 /**
  * Exercises index.tsx's `download_complete` and `migration_relaunch_options`
- * listeners through the backend-event harness. The plugin factory registers
+ * listeners through the backend-event harness. The panel factory registers
  * the listeners on the in-memory bus; tests dispatch events via emitHostEvent
  * and assert the launch-options confirm-poll fires for the payload's appId.
  *
@@ -15,7 +15,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { toaster, type Plugin } from "./api/host";
+import { toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
 import {
   getSettingsResetNotice,
@@ -216,8 +216,8 @@ import "./index";
 // Importing `./index` runs its last act, which hands the factory to the Quick
 // Access installer mocked above — so the factory is taken from that call, the
 // one argument index.tsx really passes. Calling it registers the listeners and
-// returns the plugin descriptor with the panel itself.
-const pluginFactory: () => Plugin = vi.mocked(installQuickAccessEntry).mock.calls[0]![0];
+// returns the panel definition, which carries the panel itself.
+const panelFactory: () => PanelDefinition = vi.mocked(installQuickAccessEntry).mock.calls[0]![0];
 
 function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
@@ -283,15 +283,15 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
   });
 
   it("mounts the fallback page instead of the panel, and names what is missing", () => {
-    const plugin = pluginFactory();
-    render(createElement("div", null, plugin.content));
+    const panel = panelFactory();
+    render(createElement("div", null, panel.content));
 
     expect(screen.getByText(/can't start right now/i)).toBeInTheDocument();
     expect(screen.getByText(/Focusable, PanelSection/)).toBeInTheDocument();
   });
 
   it("puts the same names in the log, where a user with no panel can still reach them", () => {
-    pluginFactory();
+    panelFactory();
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("Missing: Focusable, PanelSection"));
   });
 
@@ -304,7 +304,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     vi.mocked(registerLaunchInterceptor).mockClear();
     relocateShortcutsToLauncher.mockClear();
 
-    pluginFactory();
+    panelFactory();
 
     expect(registerGameDetailPatch).not.toHaveBeenCalled();
     expect(registerLaunchInterceptor).not.toHaveBeenCalled();
@@ -338,15 +338,15 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     // The whole point: a glyph the one place that draws it already renders
     // without must not cost the user their interface.
     vi.mocked(registerGameDetailPatch).mockClear();
-    const plugin = pluginFactory();
-    render(createElement("div", null, plugin.content));
+    const panel = panelFactory();
+    render(createElement("div", null, panel.content));
 
     expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
     expect(registerGameDetailPatch).toHaveBeenCalled();
   });
 
   it("reports it in the log, which is the only place it is reported at all", () => {
-    pluginFactory();
+    panelFactory();
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Missing: ControllerGlyph"));
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
   });
@@ -371,7 +371,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
       missingPackageNames: [],
       checked: 33,
     };
-    pluginFactory();
+    panelFactory();
     expect(notificationsUnavailable()).toBe(true);
     expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Tender's notifications are off"));
     consoleWarn.mockRestore();
@@ -379,7 +379,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
 
   it("records nothing owed when every search answered", () => {
     setNotificationsUnavailable(true);
-    pluginFactory();
+    panelFactory();
     expect(notificationsUnavailable()).toBe(false);
   });
 });
@@ -391,7 +391,7 @@ describe("index.tsx — launcher relocation at panel load", () => {
   });
 
   it("points the shortcuts at the launcher without the panel being opened", async () => {
-    pluginFactory();
+    panelFactory();
     await act(flush);
 
     expect(relocateShortcutsToLauncher).toHaveBeenCalledTimes(1);
@@ -401,7 +401,7 @@ describe("index.tsx — launcher relocation at panel load", () => {
   it("leaves the relocation unestablished when the backend blocked the rewrite", async () => {
     relocateShortcutsToLauncher.mockResolvedValue({ status: "blocked" });
 
-    pluginFactory();
+    panelFactory();
     await act(flush);
 
     expect(getLauncherState().relocated).toBe(false);
@@ -410,7 +410,7 @@ describe("index.tsx — launcher relocation at panel load", () => {
   it("leaves the relocation unestablished when the pass throws", async () => {
     relocateShortcutsToLauncher.mockRejectedValue(new Error("shortcut store exploded"));
 
-    pluginFactory();
+    panelFactory();
     await act(flush);
 
     expect(getLauncherState().relocated).toBe(false);
@@ -420,7 +420,7 @@ describe("index.tsx — launcher relocation at panel load", () => {
 
 describe("index.tsx — persistent prune listeners", () => {
   it("handles tokenized Steam actions in the panel's entry module", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-1");
     const action = {
       run_id: "run-1",
@@ -440,7 +440,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("stores progress and completion, invalidates affected details, and emits a refresh", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-1");
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
@@ -478,7 +478,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("a foreign or duplicate terminal frame has no root side effects", () => {
-    pluginFactory();
+    panelFactory();
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
     vi.mocked(unregisterRomMAppId).mockClear();
@@ -510,7 +510,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("surfaces a zero-row committed partial instead of reporting that nothing changed", () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-partial");
 
     act(() => {
@@ -544,7 +544,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("hands back a continuation lease the terminal frame gave it nothing to do with", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-nothing");
 
     await act(async () => {
@@ -570,7 +570,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("publishes a known committed partial repoint after terminal completion", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-repoint");
     let release: ((value: { success: true; message: string }) => void) | undefined;
     vi.mocked(waitForPruneRelease).mockImplementationOnce(
@@ -614,7 +614,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("does not publish an ambiguous repoint outcome", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-ambiguous");
 
     act(() => {
@@ -650,7 +650,7 @@ describe("index.tsx — persistent prune listeners", () => {
   });
 
   it("fails closed when a committed repoint terminal frame has no publication lease", async () => {
-    pluginFactory();
+    panelFactory();
     beginPrunePreview("preview-missing-publication-lease");
 
     act(() => {
@@ -693,7 +693,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
   });
 
   it("confirm-sets launch options for the payload appId on download_complete", async () => {
-    pluginFactory();
+    panelFactory();
 
     const event: DownloadCompleteEvent = {
       rom_id: 42,
@@ -715,7 +715,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
   });
 
   it("no-ops gracefully when the downloaded rom has no bound appId (null)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<DownloadCompleteEvent>("download_complete", {
@@ -734,7 +734,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
 
   it("surfaces a logError when setLaunchOptionsConfirmed rejects", async () => {
     setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<DownloadCompleteEvent>("download_complete", {
@@ -756,7 +756,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
 
 describe("index.tsx — download_progress cancelled eviction (#149 downloads-round)", () => {
   it("drops the entry from the store when a cancelled frame arrives", async () => {
-    pluginFactory();
+    panelFactory();
     setDownloads([
       {
         rom_id: 42,
@@ -791,7 +791,7 @@ describe("index.tsx — download_progress cancelled eviction (#149 downloads-rou
   });
 
   it("updates in place (does not drop) for a non-cancelled frame", async () => {
-    pluginFactory();
+    panelFactory();
     setDownloads([]);
 
     act(() => {
@@ -822,7 +822,7 @@ describe("index.tsx — sync_stale listener", () => {
     // No getExistingRomMShortcuts is even imported — proving the orphan race is
     // gone: removal happens via the payload app_id the backend captured before
     // unbinding, so an empty backend map can't strand the shortcut.
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncStaleData>("sync_stale", {
@@ -840,7 +840,7 @@ describe("index.tsx — sync_stale listener", () => {
   });
 
   it("ignores an empty remove array", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncStaleData>("sync_stale", { remove: [] });
@@ -851,7 +851,7 @@ describe("index.tsx — sync_stale listener", () => {
   });
 
   it("chunk-paces a large stale removal (25 back-to-back, 50ms breather) and records the delta up front (#977)", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     removeShortcut.mockClear();
     resetSyncDelta();
@@ -884,7 +884,7 @@ describe("index.tsx — sync_stale listener", () => {
   });
 
   it("holds its own event lease through a paced tail when sync_complete never arrives", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
     const remove = Array.from({ length: 26 }, (_, i) => ({ rom_id: i + 1, app_id: 2000 + i }));
@@ -911,7 +911,7 @@ describe("index.tsx — sync_stale listener", () => {
   });
 
   it("catches a rejecting stale tail so it never wedges the later sync_complete continuation", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
     vi.mocked(renewPruneConflictLease).mockResolvedValue({ success: true, message: "renewed" });
@@ -985,7 +985,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
   });
 
   it("confirm-sets launch options for each migrated item", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1002,7 +1002,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
   });
 
   it("ignores an empty items array", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1016,7 +1016,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
 
   it("surfaces a logError when setLaunchOptionsConfirmed rejects for an item", async () => {
     setLaunchOptionsConfirmed.mockRejectedValue(new Error("set failed"));
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
@@ -1057,7 +1057,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
         { app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"' },
       ]),
     );
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
@@ -1067,7 +1067,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
 
   it("never confirm-sets when there is nothing installed to reconcile", async () => {
     vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(relaunchOptions([]));
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(getInstalledRelaunchOptions).toHaveBeenCalled();
@@ -1079,7 +1079,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     vi.mocked(getInstalledRelaunchOptions).mockResolvedValue(
       relaunchOptions([{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"' }]),
     );
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
@@ -1088,7 +1088,7 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
 
   it("surfaces a startup_reconcile-prefixed logError when the pull endpoint rejects", async () => {
     vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
@@ -1127,7 +1127,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   });
 
   it("re-confirms launch options for every installed+bound ROM after a sync", async () => {
-    pluginFactory();
+    panelFactory();
     await flush(); // settle the startup reconcile (empty set)
     setLaunchOptionsConfirmed.mockClear();
     vi.mocked(getInstalledRelaunchOptions).mockClear();
@@ -1150,7 +1150,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   });
 
   it("reconciles even when the sync was cancelled", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();
     vi.mocked(getInstalledRelaunchOptions).mockClear();
@@ -1171,7 +1171,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   });
 
   it("surfaces a sync_reconcile-prefixed logError when the pull endpoint rejects", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     setLaunchOptionsConfirmed.mockClear();
     logError.mockClear();
@@ -1201,7 +1201,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
           finishCollections = resolve;
         }),
     );
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
 
@@ -1222,7 +1222,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
   });
 
   it("holds the sync event lease until the paced sync_stale tail settles", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(releasePruneConflictLease).mockClear();
     removeShortcut.mockClear();
@@ -1297,7 +1297,7 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
   });
 
   it("registers every platform and RomM-collection appId from the payload", async () => {
-    pluginFactory();
+    panelFactory();
     await flush(); // settle startup detaches (they call registerRomMAppId with the empty appIdMap)
     vi.mocked(registerRomMAppId).mockClear();
 
@@ -1319,7 +1319,7 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
     // The #1205 core repro: a collection-only sync never populates
     // platform_app_ids, so its new shortcuts land only in romm_collection_app_ids.
     // The old platform-only loop left them unregistered until a Steam restart.
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(registerRomMAppId).mockClear();
 
@@ -1349,7 +1349,7 @@ describe("index.tsx — corrupt-settings reset notice", () => {
       pending: true,
       backed_up_to: "settings.json.corrupt-1781697600",
     });
-    pluginFactory();
+    panelFactory();
     await flush();
 
     // Persistent banner store is populated — surfaced by the QAM banner +
@@ -1363,7 +1363,7 @@ describe("index.tsx — corrupt-settings reset notice", () => {
 
   it("leaves the store not-pending and fires no toast when the boot notice reports no reset", async () => {
     vi.mocked(getSettingsResetNotice).mockResolvedValue({ pending: false, backed_up_to: null });
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(getSettingsResetState()).toEqual({ pending: false, backedUpTo: null });
@@ -1372,7 +1372,7 @@ describe("index.tsx — corrupt-settings reset notice", () => {
 
   it("surfaces a logError when the reset-notice check rejects", async () => {
     vi.mocked(getSettingsResetNotice).mockRejectedValue(new Error("boom"));
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check settings reset notice"));
@@ -1398,7 +1398,7 @@ describe("index.tsx — the release check at panel load", () => {
       toast_owed: false,
       seen: false,
     });
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(getUpdateNotice).toHaveBeenCalledTimes(1);
@@ -1407,15 +1407,15 @@ describe("index.tsx — the release check at panel load", () => {
 
   it("does not hold the panel up while GitHub is slow to answer", () => {
     vi.mocked(getUpdateNotice).mockReturnValue(new Promise(() => {}));
-    const plugin = pluginFactory();
+    const panel = panelFactory();
 
-    expect(plugin.content).toBeDefined();
+    expect(panel.content).toBeDefined();
     expect(getUpdateNoticeState().available).toBe(false);
   });
 
   it("logs a check that rejected and shows no card", async () => {
     vi.mocked(getUpdateNotice).mockRejectedValue(new Error("boom"));
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for a newer release"));
@@ -1431,7 +1431,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("takes a notice from the backend's own check into the store the card and the section read", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() =>
       emitHostEvent("update_notice", {
@@ -1449,7 +1449,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("takes an install frame into the store Settings › Updates reads", () => {
-    pluginFactory();
+    panelFactory();
     const frame = {
       version: "0.35.0",
       step: "verifying",
@@ -1469,7 +1469,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
     vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
     vi.mocked(toaster.toast).mockClear();
     resetFailedUpdateToastsForTests();
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(getUpdateAttemptToast).mockResolvedValue({
       attempt: 2,
@@ -1498,7 +1498,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("asks for no toast over a frame that did not turn failed", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(getUpdateAttemptToast).mockClear();
 
@@ -1517,7 +1517,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("takes a stopped attempt judged after panel load into the store the card on Main reads", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() =>
       emitHostEvent("update_attempt_stopped", {
@@ -1532,7 +1532,7 @@ describe("index.tsx — what the backend pushes about updates", () => {
   });
 
   it("takes a refusal by the pre-install check into the store the card on Main reads, with its card up", () => {
-    pluginFactory();
+    panelFactory();
     const record = {
       attempted_version: "0.35.0",
       restored_version: "0.33.0",
@@ -1568,7 +1568,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
     vi.stubGlobal("SteamUIStore", { WindowStore: { GamepadUIMainWindowInstance: null } });
     resetFailedUpdateToastsForTests();
     vi.mocked(getUpdateAttemptToast).mockResolvedValue({ attempt: 1, version: "1.3.0", failure: "download_failed" });
-    pluginFactory();
+    panelFactory();
 
     await vi.waitFor(() =>
       expect(toaster.toast).toHaveBeenCalledWith({
@@ -1589,7 +1589,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
       failure_dismissed: false,
       failure_toast_owed: false,
     });
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(getUpdateOutcome).toHaveBeenCalledTimes(1);
@@ -1612,7 +1612,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
       failure_dismissed: false,
       failure_toast_owed: false,
     });
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(getUpdateOutcomeState().failure?.attemptedVersion).toBe("1.3.0");
@@ -1621,7 +1621,7 @@ describe("index.tsx — what the last update did, at panel load", () => {
 
   it("logs a read that rejected and announces nothing", async () => {
     vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("boom"));
-    pluginFactory();
+    panelFactory();
     await flush();
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to read what the last update did"));
@@ -1674,7 +1674,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
   });
 
   it("raises it once the reads answered, and acknowledges it", async () => {
-    pluginFactory();
+    panelFactory();
 
     await vi.waitFor(() => expect(acknowledgeUpdateAvailableToast).toHaveBeenCalledWith("1.4.0"));
     expect(availableToasts()).toEqual([
@@ -1702,7 +1702,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
           });
       }),
     );
-    pluginFactory();
+    panelFactory();
     await flush();
     await flush();
 
@@ -1716,7 +1716,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
 
   it("raises none, and acknowledges none, where what the last update did could not be read", async () => {
     vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("socket closed"));
-    pluginFactory();
+    panelFactory();
     await vi.waitFor(() =>
       expect(logError).toHaveBeenCalledWith("Failed to read what the last update did: Error: socket closed"),
     );
@@ -1732,7 +1732,7 @@ describe("index.tsx — the toast that a newer release is out, at panel load", (
       ...NOTHING_INSTALLING,
       attempt: { version: "1.4.0", step: "downloading", bytes_done: 10, bytes_total: 100, failure: null },
     });
-    pluginFactory();
+    panelFactory();
     await vi.waitFor(() => expect(getUpdateInstallAttempt()?.step).toBe("downloading"));
     await flush();
     await flush();
@@ -1787,7 +1787,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("runs the stale cleanup on a completed (non-cancelled) sync", async () => {
     const { faves } = seedCollections();
-    pluginFactory();
+    panelFactory();
 
     // Only "Nintendo 64" is active — SNES and [Faves] are stale and removed.
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
@@ -1799,7 +1799,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("keeps a case-variant ACTIVE RomM collection (does not delete it) (#1569)", async () => {
     const { snes, faves } = seedCollections();
-    pluginFactory();
+    panelFactory();
 
     // The live collection is "[Faves]"; the active map keys it as "faves" (the
     // reporter's folded-first-seen casing). Case-insensitive identity → it is
@@ -1819,7 +1819,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("keeps a case-variant ACTIVE platform collection (does not clear it) (#1569)", async () => {
     const { faves } = seedCollections();
-    pluginFactory();
+    panelFactory();
 
     // Live "RomM: Super Nintendo (steamdeck)"; active map keys it "super nintendo".
     // Case-insensitive → ACTIVE, must not be cleared. [Faves] has no active RomM
@@ -1837,7 +1837,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
   it("sweeps a stale RomM collection whose prefix is a case variant of ours (#2131)", async () => {
     const shouted = { id: "shouted-id", displayName: "ROMM: [Faves] (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [shouted] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
     await flush();
@@ -1848,7 +1848,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
   it("sweeps a stale RomM collection whose host suffix is a case variant of ours (#2131)", async () => {
     const shouted = { id: "shouted-id", displayName: "RomM: [Faves] (STEAMDECK)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [shouted] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
     await flush();
@@ -1860,7 +1860,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const theirs = { id: "theirs-id", displayName: "ROMM: [Faves] (othermachine)", Delete: vi.fn() };
     const ours = { id: "ours-id", displayName: "ROMM: [Gone] (STEAMDECK)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [theirs, ours] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
     await flush();
@@ -1873,7 +1873,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
   it("clears a stale platform collection whose prefix and host suffix are case variants of ours (#2131)", async () => {
     const shouted = { id: "shouted-id", displayName: "ROMM: Super Nintendo (STEAMDECK)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [shouted] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1 });
     await flush();
@@ -1885,7 +1885,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const strasse = { id: "strasse-id", displayName: "RomM: [STRASSE] (steamdeck)", Delete: vi.fn() };
     const gone = { id: "gone-id", displayName: "RomM: [Gone] (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [strasse, gone] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({
       platform_app_ids: { "Nintendo 64": [1] },
@@ -1903,7 +1903,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const strasse = { id: "strasse-id", displayName: "RomM: STRASSE (steamdeck)", Delete: vi.fn() };
     const gone = { id: "gone-id", displayName: "RomM: Super Nintendo (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [strasse, gone] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { Straße: [1] }, total_games: 1 });
     await flush();
@@ -1920,7 +1920,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     const oldName = { id: "old-id", displayName: "RomM: [Kids (Standard)] (steamdeck)", Delete: vi.fn() };
     const newName = { id: "new-id", displayName: "RomM: [Kids] (steamdeck)", Delete: vi.fn() };
     vi.stubGlobal("collectionStore", { userCollections: [oldName, newName] });
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({
       platform_app_ids: {},
@@ -1936,7 +1936,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("skips the stale cleanup on a cancelled sync with a partial map (regression)", async () => {
     const { snes, faves } = seedCollections();
-    pluginFactory();
+    panelFactory();
 
     // Cancel reached only "Nintendo 64"; SNES + [Faves] must SURVIVE.
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
@@ -1949,7 +1949,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("skips the stale cleanup on an early cancel with an empty map (full-wipe case)", async () => {
     const { snes, faves } = seedCollections();
-    pluginFactory();
+    panelFactory();
 
     // Cancel fired before unit 1 — the map is empty. Treating it as the active
     // set would wipe EVERY RomM collection; nothing must be deleted.
@@ -1963,7 +1963,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("still fires the cancelled toast and re-applies playtime on a cancelled sync", async () => {
     seedCollections();
-    pluginFactory();
+    panelFactory();
     // The factory's own init runs one initial playtime apply; clear it so the
     // assertion counts only the apply triggered by sync_complete.
     await flush();
@@ -1979,7 +1979,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   it("still creates/updates the reached platforms' collections on a cancelled sync", async () => {
     seedCollections();
-    pluginFactory();
+    panelFactory();
 
     emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
     await flush();
@@ -2024,7 +2024,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
   });
 
   it("re-fetches the paged cache + map and re-applies on a normal completion", async () => {
-    pluginFactory();
+    panelFactory();
     await flush(); // init done — registerMetadataPatches called once with the empty init cache
     vi.mocked(registerMetadataPatches).mockClear();
     vi.mocked(applyAllMetadata).mockClear();
@@ -2048,7 +2048,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
   });
 
   it("re-applies overview metadata on a CANCELLED sync too (partial units are still fresh)", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(registerMetadataPatches).mockClear();
     vi.mocked(applyAllMetadata).mockClear();
@@ -2065,7 +2065,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
   });
 
   it("logs and leaves the other blocks intact when the metadata re-fetch fails", async () => {
-    pluginFactory();
+    panelFactory();
     await flush();
     vi.mocked(applyAllMetadata).mockClear();
     vi.mocked(applyAllPlaytime).mockClear();
@@ -2120,7 +2120,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("sync_plan resets the per-run cancel flag (#1198)", async () => {
-    pluginFactory();
+    panelFactory();
     vi.mocked(resetSyncCancel).mockClear();
 
     act(() => {
@@ -2138,7 +2138,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // frame, sync_complete arrived, but the separate backend stage:"done"
     // sync_progress frame never did — so the QAM stayed stuck on "Applying".
     // sync_complete alone must flip the store to a terminal stage.
-    pluginFactory();
+    panelFactory();
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
@@ -2151,7 +2151,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("flips the store to a cancelled stage when sync_complete is cancelled", async () => {
-    pluginFactory();
+    panelFactory();
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
@@ -2164,7 +2164,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("reports 'X added, Y removed' when both are non-zero (ignores total_games)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 2 });
@@ -2187,7 +2187,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("omits the zero part — only removals → 'Sync complete — N removed.'", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 0 });
@@ -2209,7 +2209,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("reports 'Library up to date.' when nothing changed (the #744 repro)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 53 });
@@ -2225,7 +2225,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("dedups a shortcut created in two units (platform + collection) — counted once", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 1 });
@@ -2243,7 +2243,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on cancel with partial work → 'Sync cancelled — … so far.'", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2264,7 +2264,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on cancel before any work → 'Sync cancelled.' (no delta)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2282,7 +2282,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on a heartbeat-timeout interrupt with partial work → 'Sync interrupted — … so far.' (#1384)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2307,7 +2307,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on a heartbeat-timeout interrupt before any work → 'Sync interrupted.' (no delta, #1384)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2326,7 +2326,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on a session-budget pause → shows the pause guidance verbatim with the delta (#1383)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2357,7 +2357,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("a non-pause completion toast carries no custom duration (default lifetime)", async () => {
-    pluginFactory();
+    panelFactory();
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
     });
@@ -2372,7 +2372,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on a session-budget pause with no delta → shows just the reason (#1383)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
@@ -2394,7 +2394,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   });
 
   it("on a clean run with restart_recommended → appends the restart nudge (#1383)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
@@ -2438,7 +2438,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("names the failure when the run's work queue could not be built", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame());
@@ -2449,7 +2449,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("does not say it twice when the frame already does", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: `Sync failed — ${UNREACHABLE}` }));
@@ -2459,7 +2459,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("still says the sync failed when the frame carries no message", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ message: "" }));
@@ -2469,7 +2469,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("toasts a run once, however often its error frame arrives", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame());
@@ -2480,7 +2480,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("toasts the next run's failure too", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runId: "run-1" }));
@@ -2491,7 +2491,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("leaves a preview's failure to the Sync page", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ runKind: "preview" }));
@@ -2501,7 +2501,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
   });
 
   it("raises nothing for a frame that does not stop a run at stage error", () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncProgress>("sync_progress", errorFrame({ stage: "done", message: "Sync complete" }));
@@ -2515,7 +2515,7 @@ describe("index.tsx — an apply run that ends at stage error is toasted", () =>
 
 describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estimate)", () => {
   it("writes the composition-priced seed (unbound rows as creates) into the sync progress store", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2532,7 +2532,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("prices already-bound rows as cheap updates, not as fresh creates (#1511)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2562,7 +2562,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("prices a Force Full Sync's sibling duplicates as nothing, not as phantom creates (#1517)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2593,7 +2593,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("preserves etaSeconds across a subsequent backend sync_progress frame", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2619,7 +2619,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("does NOT clobber an etaSeconds already seeded by the preview path (handleApply)", async () => {
-    pluginFactory();
+    panelFactory();
 
     // handleApply full-replaces the store with a tighter delta-based etaSeconds
     // before sync_plan arrives; the listener must leave that seed intact. Both
@@ -2636,7 +2636,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("still seeds the total_roms bound when no preview seed is present (skip-preview path)", async () => {
-    pluginFactory();
+    panelFactory();
 
     // Skip-preview never sets an etaSeconds — the store has none at sync_plan
     // time, so the listener still supplies the upper bound. Regression guard for
@@ -2655,7 +2655,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("excludes predicted-skip units from the seed (#1382 skip-aware)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2685,7 +2685,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("seeds the live estimator with skip-aware unit weights (predicted_skip → 0, collapsed over raw)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2730,7 +2730,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
   });
 
   it("falls back to raw weights and total_roms when the estimate fields are absent (old backend)", async () => {
-    pluginFactory();
+    panelFactory();
 
     act(() => {
       emitHostEvent<SyncPlanData>("sync_plan", {
@@ -2760,8 +2760,8 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
   it("focuses the mounted page's first button", async () => {
     vi.useFakeTimers();
     try {
-      const plugin = pluginFactory();
-      render(plugin.content);
+      const panel = panelFactory();
+      render(panel.content);
 
       // Steam's gamepad nav keeps a focus pointer across page swaps and would
       // otherwise resolve it onto whatever sits at the old page's position.
@@ -2781,8 +2781,8 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     vi.useFakeTimers();
     try {
       mainPageDeclaresEntryStop = true;
-      const plugin = pluginFactory();
-      render(plugin.content);
+      const panel = panelFactory();
+      render(panel.content);
 
       // The router still does the placing — the page only says where. Main is
       // the one page that says anything: its status rows act on nothing, so
@@ -2805,8 +2805,8 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     // Main nothing is bound, so the press travels on to whatever holds the panel.
     // Steam already prints "B ZURÜCK" — this makes it true rather than
     // misleading.
-    const plugin = pluginFactory();
-    const { container } = render(plugin.content);
+    const panel = panelFactory();
+    const { container } = render(panel.content);
 
     // Fired on the page's own content and allowed to bubble, so the binding has
     // to sit on an ANCESTOR of that content to answer it. Steam dispatches a
@@ -2845,8 +2845,8 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     vi.useFakeTimers();
     try {
       mainPageOwnsEntryFocus = true;
-      const plugin = pluginFactory();
-      render(plugin.content);
+      const panel = panelFactory();
+      render(panel.content);
 
       // A wide page's first button is its Back row, which sits above the tabs
       // and so outside Steam's tabbed page — landing there would hide the L1/R1

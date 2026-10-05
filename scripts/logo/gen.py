@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the plugin mark: a button diamond ringed by a pair of sync arrows,
+"""Generates Tender's mark: a button diamond ringed by a pair of sync arrows,
 set in a disc and split along a facet.
 
 Everything is driven by two small config objects — a `Palette` (colours) and a

@@ -202,7 +202,7 @@ function requestFor(
  * Why Confirm is unavailable, in the user's words. Several of these conditions
  * already render a warning somewhere in the dialog, but the dialog scrolls —
  * a greyed button with its explanation off-screen reads as a dead control, and
- * a press that does nothing at all is indistinguishable from a broken plugin.
+ * a press that does nothing at all is indistinguishable from a broken backend.
  */
 function confirmBlockedReason(state: {
   completed: boolean;
@@ -652,7 +652,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   const start = async (): Promise<void> => {
     // Confirm is the destructive commit point, so every press is logged and
     // every outcome is visible in the dialog. A press that returns silently is
-    // indistinguishable on device from a plugin that has stopped responding.
+    // indistinguishable on device from a backend that has stopped responding.
     logInfo(`[prune] Confirm pressed (preview=${initial.preview_id ?? "none"}, scope=${scope}, total=${total})`);
     if (!initial.preview_id) {
       setStatus("This cleanup preview has no id — close and scan again.");

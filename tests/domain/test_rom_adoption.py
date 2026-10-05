@@ -182,7 +182,7 @@ class TestOccupiedTargetRefusal:
         assert _refusal(kind=LINK)["message"] == "A shortcut named 'Game.sfc' is already in place"
 
     def test_something_with_no_kind_is_named_as_vaguely_as_it_is_known(self):
-        # The plugin looked and has no word for what is there. Calling it a file
+        # Tender looked and has no word for what is there. Calling it a file
         # is the invention that let a named pipe be offered as a game.
         assert _refusal(kind=None)["message"] == "Something named 'Game.sfc' is already in place"
 
@@ -258,7 +258,7 @@ class TestCompareManifest:
         assert difference.detail == "contents differ from the server's copy"
 
     def test_extra_files_on_disk_are_not_a_difference(self):
-        # The plugin's own directories carry a generated .m3u and a healed
+        # Tender's own directories carry a generated .m3u and a healed
         # PS3_DISC.SFB the server never listed.
         local = {"a.bin": LocalFile(size_bytes=10, digest="ab"), "Game.m3u": LocalFile(size_bytes=44, digest="ff")}
         assert compare_manifest((self._ENTRY,), local) == ()
@@ -558,7 +558,7 @@ class TestDigestsToRead:
         assert digests_to_read(_archived(_MEMBER), LocalFile(size_bytes=40, digest="", is_archive=True)) == ()
 
     def test_an_unopenable_container_the_server_only_described_as_a_whole_is_not_read(self):
-        # Its digest speaks for content this plugin cannot produce; hashing the
+        # Its digest speaks for content Tender cannot produce; hashing the
         # container would compare the wrong bytes and call it a difference.
         assert digests_to_read(_WHOLE_ARCHIVE, LocalFile(size_bytes=4096, digest="", is_archive=True)) == ()
 

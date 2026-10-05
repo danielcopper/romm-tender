@@ -4,7 +4,7 @@
 -- =============================================================================
 --
 -- RomM returns ``fs_size_bytes`` — the total on-server size of a ROM's file(s)
--- — on both its list and detail responses, the same value in each. The plugin
+-- — on both its list and detail responses, the same value in each. Tender
 -- needs it at the frontend before a download so the game-detail UI can show how
 -- much space the download will take. This column carries that fact locally.
 --

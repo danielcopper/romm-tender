@@ -251,7 +251,7 @@ search result whose cause is inferred, and the repair `disagreement` names cover
 
 Every part of that reading is guarded and every guard falls the same way: no `DFL` to question, a `DFL` whose read
 throws, a name the question itself throws on — none of them claims anything. An absence has to be demonstrated, and a
-throw demonstrates nothing. The guards are not decoration: `definePlugin`'s factory reads this before it returns
+throw demonstrates nothing. The guards are not decoration: `definePanel`'s factory reads this before it returns
 anything, so a throw would take the failure page and the log line with it and leave exactly the blank panel the check
 exists to tell apart from a backend that is not running.
 
@@ -300,7 +300,7 @@ Decky's copy carries a name whose value this check never reads.
 ## Talking to the backend
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,
-`addEventListener`, `removeEventListener`, `definePlugin`, `toaster`.
+`addEventListener`, `removeEventListener`, `definePanel`, `toaster`.
 
 **Three of them are the wire.** `endpoint`, `addEventListener` and `removeEventListener` go through
 `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
@@ -319,12 +319,12 @@ Three properties are worth knowing before changing anything there:
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
 
-**A fourth opens no socket and is the one the panel reaches the screen through.** `definePlugin` answers with the
-factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once
-and mounts what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The entry). The
-seam is arranged that way so this module stays the wire and reaches no view — the declaration is all of it that belongs
-here. Under Decky Loader the call was Decky's; nothing else in the tree makes it, so without that line the panel is
-built for nobody.
+**A fourth opens no socket and is the one the panel reaches the screen through.** `definePanel` answers with the factory
+unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once and mounts
+what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The entry). The seam is
+arranged that way so this module stays the wire and reaches no view — the declaration is all of it that belongs here.
+Under Decky Loader the call was Decky's; nothing else in the tree makes it, so without that line the panel is built for
+nobody.
 
 **The fifth reaches Steam instead.** `toaster` has no host answer, so it is Tender's own rather than a backend route:
 `utils/steamToaster.tsx` pushes a notification into Steam's own `NotificationStore`, which then owns the popup window

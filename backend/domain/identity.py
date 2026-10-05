@@ -81,7 +81,7 @@ from the environment, so neither question has an asker left.
 
 from __future__ import annotations
 
-# Must match the frontend's ``PLUGIN_NAME`` (``frontend/src/utils/toast.ts``),
+# Must match the frontend's ``DISPLAY_NAME`` (``frontend/src/utils/toast.ts``),
 # which is the name the QAM header carries. Nothing checks that the two agree.
 DISPLAY_NAME = "Tender"
 

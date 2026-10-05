@@ -1,4 +1,4 @@
-"""BiosFile — one downloaded BIOS/firmware file the plugin tracks on disk.
+"""BiosFile — one downloaded BIOS/firmware file Tender tracks on disk.
 
 Identified by ``(platform_slug, file_name)`` — a bare filename is unsafe because
 two platforms can ship same-named BIOS. ``firmware_id`` is nullable metadata

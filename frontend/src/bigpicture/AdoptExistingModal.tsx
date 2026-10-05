@@ -1,5 +1,5 @@
 /**
- * The dialog a download opens instead of writing over content the plugin did not
+ * The dialog a download opens instead of writing over content Tender did not
  * put there, and the one it opens for a file already on the device under a
  * different name (#260, ADR-0028). It states both sides of the comparison,
  * offers the content check on a button — never as a wait before the dialog

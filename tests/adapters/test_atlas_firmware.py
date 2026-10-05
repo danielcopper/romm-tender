@@ -1,9 +1,9 @@
-"""Tests for the atlas firmware adapters — the translation into plugin vocabulary.
+"""Tests for the atlas firmware adapters — the translation into Tender's vocabulary.
 
 What is under test is the adapters' own work: folding the resolver's per-entry
 answer into one row per file, keying everything on the emulator IDENTITY rather
 than on a core file or a display label, naming the emulators that could not be
-asked, deciding whether a declared location is one the plugin's own BIOS root can
+asked, deciding whether a declared location is one Tender's own BIOS root can
 honour, and refusing to turn any failure into "nothing needed". The resolver's
 own decisions are upstream's and are not re-tested here — including what it read
 at a destination, which is carried through rather than re-derived.
@@ -245,7 +245,7 @@ class TestPlacements:
     def test_the_identifier_is_the_resolvers_own_spelling(self, adapter, monkeypatch):
         """One identity per emulator, stated by the resolver and never rewritten here.
 
-        The plugin used to strip the ``.so`` and key on the bare basename, which
+        Tender used to strip the ``.so`` and key on the bare basename, which
         left a standalone emulator with no name at all. The identity is now the
         one field that carries both kinds, so it travels verbatim.
         """
@@ -472,7 +472,7 @@ class TestPlacements:
         assert adapter().placements[0].relative_path == "pcsx2/bios"
 
     def test_an_absolute_declaration_has_no_placement_under_our_root(self, adapter, monkeypatch):
-        """A location stated as an address is not one this plugin can join under its own root."""
+        """A location stated as an address is not one Tender can join under its own root."""
         answer = _answer(
             _core(
                 core_so="duckstation_libretro.so",
@@ -605,7 +605,7 @@ class TestDestinationReadings:
         assert placement.present is True
 
     def test_the_supplying_distribution_travels_as_the_resolver_writes_it(self, adapter, monkeypatch):
-        """The resolver's own display form — the plugin never maps an identifier itself."""
+        """The resolver's own display form — Tender never maps an identifier itself."""
         placement = self._placement(
             adapter,
             monkeypatch,
@@ -622,7 +622,7 @@ class TestDestinationReadings:
         assert placement.supplied_by == "RetroDECK"
 
     def test_a_reading_at_a_destination_we_cannot_honour_does_not_travel(self, adapter, monkeypatch):
-        """An emulator keeping its firmware in its own tree: that file is not the plugin's.
+        """An emulator keeping its firmware in its own tree: that file is not Tender's.
 
         With no location to honour the caller places the file by its own flat
         default, and what was read in the emulator's XDG tree says nothing
@@ -1030,7 +1030,7 @@ class TestDegradation:
         assert catalogue.caveats == ("firmware-root-unstated",)
 
     def test_the_first_detected_installation_answers(self, adapter, monkeypatch):
-        """Detection orders its finds; the plugin takes the leader, never a merge."""
+        """Detection orders its finds; Tender takes the leader, never a merge."""
         first = _Installation(_answer(_core(requirements=(_requirement(file_name="first.bin"),))))
         second = _Installation(_answer(_core(requirements=(_requirement(file_name="second.bin"),))))
         monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(first, second))
@@ -1353,7 +1353,7 @@ class TestFolderVerdicts:
     def test_a_statement_naming_the_cores_short_name_reaches_its_row(self, adapter, monkeypatch):
         """The resolver names a core by its libretro short name under ``core`` — ``pcsx2``.
 
-        That is no identity this plugin keys on, and matched against the
+        That is no identity Tender keys on, and matched against the
         identity alone the statement fell off the very folder row it is about.
         """
         placement = self._placement(

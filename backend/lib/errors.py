@@ -160,8 +160,8 @@ class DeviceNotRegisteredError(Exception):
     """A save upload was attempted with no registered device id.
 
     A client-side precondition failure, not a RomM HTTP error (hence a plain
-    ``Exception``, outside the :class:`RommApiError` hierarchy). Every RomM the
-    plugin accepts has Device Sync, so a registered device is the norm and a
+    ``Exception``, outside the :class:`RommApiError` hierarchy). Every RomM
+    version Tender accepts has Device Sync, so a registered device is the norm and a
     missing id is a fault. RomM runs ``add_save``'s write-time 409 gates, and
     records the calling device's sync row on ``add_save`` and ``update_save``,
     only when a device is named (``endpoints/saves.py``, read at 5.3.0), so a

@@ -28,7 +28,7 @@ _TOKEN = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 
 # Header names the transport sets itself, matched case-insensitively.
 # ``host`` is here for a reason that is invisible at the call site: nothing in
-# the plugin writes it, but ``http.client._send_request`` skips its own derived
+# Tender writes it, but ``http.client._send_request`` skips its own derived
 # ``Host`` header when the caller supplied one, so a configured ``Host`` silently
 # retargets every request's virtual host.
 RESERVED_NAMES = frozenset(
@@ -96,7 +96,7 @@ def value_problem(value: str) -> HeaderProblem | None:
     ``\\r\\n`` in a value is a second header injected into every outgoing
     request. Surrounding whitespace is refused rather than trimmed — a value is a
     credential, and silently changing one is how a user ends up debugging a
-    rejection the plugin caused.
+    rejection Tender caused.
     """
     if value == "":
         return HeaderProblem.EMPTY_VALUE
@@ -202,7 +202,7 @@ def stored_custom_headers(stored: object) -> tuple[CustomHeader, ...]:
     transport attaches what this returns and the settings read reports its names.
     Anything :func:`resolve_custom_headers` would have refused is skipped rather
     than sent: the only way such an entry reaches the file is a hand edit, and a
-    header the plugin cannot vouch for must never ride on a request. That is the
+    header Tender cannot vouch for must never ride on a request. That is the
     second of the two defences against a reserved name — the first is that the
     transport attaches these before its own headers, so even a name that got
     through could not displace one.

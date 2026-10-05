@@ -46,7 +46,7 @@ import { ENTRY_FOCUS_DELAY_MS } from "../utils/entryFocus";
 import { regionAround } from "../test-utils/regionAround";
 import { FOCUS_RING_REACH } from "./layout/ScrollRegion";
 import type {
-  PluginSettings,
+  Settings,
   SessionBudgetStatus,
   SyncPlanUnit,
   SyncPreview,
@@ -164,7 +164,7 @@ function buttonByExactText(container: HTMLElement, text: string): HTMLButtonElem
   return (btn as HTMLButtonElement | undefined) ?? null;
 }
 
-function defaultSettings(): PluginSettings {
+function defaultSettings(): Settings {
   return {
     romm_url: "https://romm.local",
     has_token: true,

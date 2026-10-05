@@ -45,7 +45,7 @@ describe("biosFileNote", () => {
     // which wrapped the row and left its status dot on a line of its own. The
     // core needs exactly one of them, so none is labelled required or optional
     // and none is marked as the one that will load — which of them LRPS2 picks
-    // is a core option this plugin does not read.
+    // is a core option Tender does not read.
     const images = ["Europe  v02.00(14/06/2004)", "Japan   v02.00(14/06/2004)"];
 
     const words = biosFileNote(folder(true, ["firmware-image-identified"], images));
@@ -95,7 +95,7 @@ describe("biosFileNote", () => {
   });
 
   it("says a file's destination could not be read, rather than leaving it to read as absent", () => {
-    // The row is red and counted unmet either way — what the plugin cannot read
+    // The row is red and counted unmet either way — what Tender cannot read
     // the emulator cannot open — so the note says the READ failed and claims
     // nothing about whether the file is there.
     expect(

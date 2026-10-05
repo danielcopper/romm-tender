@@ -300,7 +300,7 @@ describe("ScrollRegion", () => {
     });
 
     it("asks the node's own view what an element is, not this module's global", async () => {
-      // Plugin code runs in the SharedJSContext window while these nodes belong
+      // The panel's code runs in the SharedJSContext window while these nodes belong
       // to the QAM's own document, so a bare `instanceof HTMLElement` names a
       // constructor from the wrong realm and rejects every node. Standing in
       // for that here: a view whose HTMLElement nothing is an instance of. The

@@ -387,8 +387,8 @@ def bootstrap(
     settings = migrate_settings(settings)
     # If load_settings quarantined a corrupt file this boot, fold the reset into
     # the settings dict as a persistent marker. Set AFTER migration and BEFORE
-    # the save so it lands in the fresh settings.json and survives a plugin
-    # reload — the frontend surfaces it as a banner (QAM + game detail) until the
+    # the save so it lands in the fresh settings.json and survives a backend
+    # restart — the frontend surfaces it as a banner (QAM + game detail) until the
     # next successful sign-in clears it (ConnectionService pops it on persist).
     if persistence.corrupt_reset is not None:
         settings["_settings_reset_notice"] = {"backed_up_to": persistence.corrupt_reset["backed_up_to"]}
@@ -410,7 +410,7 @@ def bootstrap(
     recovery_store = RecoveryBundleAdapter(
         user_home=user_home,
         package_name=PACKAGE_NAME,
-        plugin_version=VERSION,
+        version=VERSION,
     )
     # The CACHE root: this adapter's whole subject is ``covers/`` and
     # ``artwork/``, which live there and not under the data root.
@@ -456,7 +456,7 @@ def bootstrap(
     # action and the upload-409 resolution. Loaded eagerly so a missing /
     # wrong-architecture artifact is fatal here (like the SQLite migration gate
     # above) rather than surfacing mid-sync — there is no Python fallback
-    # (GavelNativeLoadError propagates, plugin stays inert).
+    # (GavelNativeLoadError propagates, Tender stays inert).
     gavel = GavelNativeAdapter()
     uuid_gen = SystemUuidGen()
     sleeper = AsyncioSleeper()

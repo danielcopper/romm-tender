@@ -1,5 +1,5 @@
-import { definePlugin, addEventListener, toaster } from "./api/host";
-import { showToast, PLUGIN_NAME } from "./utils/toast";
+import { definePanel, addEventListener, toaster } from "./api/host";
+import { showToast, DISPLAY_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
@@ -358,7 +358,7 @@ function registerAppIds(map: Record<string, number[]>): void {
   }
 }
 
-const tender = definePlugin(() => {
+const tender = definePanel(() => {
   // Before anything else runs, and before anything mounts: did every search into
   // Steam's own interface find what it was looking for?
   //
@@ -387,9 +387,9 @@ const tender = definePlugin(() => {
     // something missed, so the ordinary start touches none of Decky's globals.
     const copy = readSearchingCopy(startup);
     if (!startup.panelMayMount) {
-      console.error(`[${PLUGIN_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+      console.error(`[${DISPLAY_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
       return {
-        name: PLUGIN_NAME,
+        name: DISPLAY_NAME,
         icon: <TabIcon />,
         content: <StartupFailurePanel report={startup} copy={copy} />,
       };
@@ -398,7 +398,7 @@ const tender = definePlugin(() => {
     // whole record, and the next reader of it is whoever is asked why a button
     // lost its glyph, or why a debug dump prints `UNDEFINED` where a class name
     // belongs.
-    console.warn(`[${PLUGIN_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+    console.warn(`[${DISPLAY_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
   disownStrandedPruneLeases();
@@ -1156,7 +1156,7 @@ const tender = definePlugin(() => {
   });
 
   return {
-    name: PLUGIN_NAME,
+    name: DISPLAY_NAME,
     icon: <TabIcon />,
     content: <QAMPanel />,
   };
@@ -1165,7 +1165,7 @@ const tender = definePlugin(() => {
 /**
  * The bundle's last act: put Tender's entry in Steam's Quick Access strip.
  *
- * The composition root is here rather than inside `definePlugin`, which stays
+ * The composition root is here rather than inside `definePanel`, which stays
  * what its name says — a typed declaration of the panel — so the wire layer
  * (`api/host.ts`) keeps its hands off the view. Under Decky Loader this line was
  * Decky's; nothing else in the tree calls the factory, so without it the panel
@@ -1178,6 +1178,6 @@ const tender = definePlugin(() => {
 const quickAccessEntry = installQuickAccessEntry(tender);
 if (!quickAccessEntry.patched) {
   console.error(
-    `[${PLUGIN_NAME}] Steam's Quick Access renderers were not found, so there is no tab to mount the panel behind.`,
+    `[${DISPLAY_NAME}] Steam's Quick Access renderers were not found, so there is no tab to mount the panel behind.`,
   );
 }

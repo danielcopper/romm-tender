@@ -11,8 +11,8 @@ run makes of the outcome is settled after it.
 Nothing here opens a transaction or touches the outside world on its own:
 every durable write goes through :class:`~services.library.reporter.SyncReporter`
 and every message to the frontend through the injected emitter. That is why the
-dependency surface carries no Unit-of-Work factory, no settings, no plugin
-directory and no event loop — reaching for one would mean the round-trip had
+dependency surface carries no Unit-of-Work factory, no settings, no directory
+of Tender's and no event loop — reaching for one would mean the round-trip had
 started doing something other than dispatching.
 
 **The run's lifecycle stays with the orchestrator.** A chunk is a step inside a

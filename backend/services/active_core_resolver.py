@@ -2,7 +2,7 @@
 
 The one place that answers "which RetroArch core will this ROM actually launch
 with?", combining the per-game ``emulator_override`` and per-platform core
-selection (the two deviations the plugin owns) with the system-layer
+selection (the two deviations Tender owns) with the system-layer
 ES-DE/RetroDECK resolution. Every per-game core read consumer and every
 launch-bake site draws from this seam so the read-path core never diverges from
 the launched core.

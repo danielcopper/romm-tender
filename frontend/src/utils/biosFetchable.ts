@@ -1,5 +1,5 @@
 /**
- * Can this plugin fetch this firmware row?
+ * Can Tender fetch this firmware row?
  *
  * Three clauses, and each excludes a row for its own reason: the RomM library
  * has to hold the file (`on_server`), it must not already be at its destination
@@ -39,7 +39,7 @@ export interface FetchableRow {
   declared_kind?: FirmwareDeclaredKind;
 }
 
-/** Whether the plugin can download this row from the user's RomM library. */
+/** Whether Tender can download this row from the user's RomM library. */
 export function isFetchable(file: FetchableRow): boolean {
   return file.on_server === true && !file.downloaded && file.declared_kind !== "directory";
 }

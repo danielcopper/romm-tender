@@ -200,7 +200,7 @@ def matching_entries[EntryT: LocalName](
       extension-tested: it usually carries none, and excluding it would exclude
       the whole multi-file case.
     * **Install rows** — anything a ``rom_installs`` row already accounts for is
-      another ROM's content, and the plugin's claim on it is that row.
+      another ROM's content, and Tender's claim on it is that row.
     * **Name** — the normalized names must be equal. An empty normalization
       matches nothing, on either side.
 
@@ -243,7 +243,7 @@ def rank_candidates(
     member CRC32 can be held against *server_crc32*: RomM's file-level digest for
     an archive describes the content inside it, and over one member every hashing
     rule it has used reduces to that member (ADR-0028). Over several the number
-    is a composite this plugin cannot attribute, so those rank on size or name
+    is a composite Tender cannot attribute, so those rank on size or name
     like anything else.
     """
     candidates = sorted(

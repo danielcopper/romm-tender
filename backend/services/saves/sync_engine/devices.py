@@ -72,7 +72,7 @@ class DeviceRegistry:
         logger: logging.Logger,
         log_debug: DebugLogger,
         settings_persister: SettingsPersister,
-        plugin_version: str,
+        version: str,
     ) -> None:
         self._uow_factory = uow_factory
         self._settings = settings
@@ -81,7 +81,7 @@ class DeviceRegistry:
         self._logger = logger
         self._log_debug = log_debug
         self._settings_persister = settings_persister
-        self._plugin_version = plugin_version
+        self._version = version
         # Cached server device id. ``_device_id_loaded`` distinguishes
         # "never read" from "read and found absent" (``None``) so an
         # unregistered device is not re-queried on every call. The id is a
@@ -274,7 +274,7 @@ class DeviceRegistry:
             try:
                 await loop.run_in_executor(
                     None,
-                    lambda: self._romm_api.update_device(server_id_str, client_version=self._plugin_version),
+                    lambda: self._romm_api.update_device(server_id_str, client_version=self._version),
                 )
             except RommNotFoundError as e:
                 self._log_debug(
@@ -304,7 +304,7 @@ class DeviceRegistry:
                     name=hostname,
                     platform="linux",
                     client=DISPLAY_NAME,
-                    client_version=self._plugin_version,
+                    client_version=self._version,
                     hostname=machine_id,
                 ),
             )

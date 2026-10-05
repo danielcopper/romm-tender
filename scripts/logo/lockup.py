@@ -13,8 +13,8 @@ disappears on GitHub's dark canvas, so the dark variant sets the wordmark in the
 disc's blue instead. The README picks between them with `<picture>` and
 `prefers-color-scheme`.
 
-Versals are for the banner alone. Everywhere the name appears as text — the
-plugin's display name, the QAM header, toasts, prose — it is `Tender`.
+Versals are for the banner alone. Everywhere the name appears as text —
+Tender's display name, the QAM header, toasts, prose — it is `Tender`.
 """
 
 from __future__ import annotations

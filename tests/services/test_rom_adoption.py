@@ -1,6 +1,6 @@
 """RomAdoptionService — the download gate, adoption, and the content check.
 
-Every case here is about content the plugin did not put on disk, so the
+Every case here is about content Tender did not put on disk, so the
 destructive assertions are the load-bearing ones: what survives a refusal, what
 a replace is allowed to remove, and that a failed adoption never deletes.
 """
@@ -337,8 +337,8 @@ class TestCheckDownloadTarget:
         assert result["adoptable"] is False
 
     async def test_a_rom_s_own_recorded_install_is_not_asked_about(self, h):
-        # A re-download finds its own files in the way. The install record is the
-        # plugin's claim on them, so it replaces them as it always has.
+        # A re-download finds its own files in the way. The install record is
+        # Tender's claim on them, so it replaces them as it always has.
         h.seed_rom()
         h.seed_install(file_path="/roms/snes/Game.sfc")
         h.store.files["/roms/snes/Game.sfc"] = b"ours"
@@ -1092,7 +1092,7 @@ class TestVerifyArchives:
 
     async def test_a_bundled_extra_file_leaves_a_single_member_archive_unconfirmed(self, h):
         # The same rule seen from the other side: a readme packed beside the ROM
-        # makes two members, and the plugin will not guess which one the
+        # makes two members, and Tender will not guess which one the
         # server's single number covers.
         members = {"Game.gba": b"rom bytes" * 16}
         h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members))
@@ -1102,7 +1102,7 @@ class TestVerifyArchives:
 
         assert result["status"] == "unverifiable"
 
-    async def test_a_container_this_plugin_cannot_open_is_unverifiable_never_a_mismatch(self, h):
+    async def test_a_container_tender_cannot_open_is_unverifiable_never_a_mismatch(self, h):
         members = {"Game.gba": b"rom bytes" * 16}
         h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members))
         h.store.files["/roms/snes/Game.zip"] = b"7z\xbc\xaf\x27\x1c" + b"compressed" * 4
@@ -1115,9 +1115,9 @@ class TestVerifyArchives:
         # otherwise would send the user looking for a problem on the server.
         assert "could not be read" in result["message"]
 
-    async def test_an_archive_format_the_plugin_cannot_read_is_not_accused_of_differing(self, h):
+    async def test_an_archive_format_tender_cannot_read_is_not_accused_of_differing(self, h):
         # RomM hashes a .7z by its contents too, so the container's own bytes
-        # match nothing it published — and this plugin cannot look inside one.
+        # match nothing it published — and Tender cannot look inside one.
         payload = b"7z\xbc\xaf\x27\x1c" + b"compressed" * 4
         h.stage_detail(
             _single_file_detail(

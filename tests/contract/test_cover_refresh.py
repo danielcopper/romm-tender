@@ -1,6 +1,6 @@
 """Contract tests for cover-cache invalidation across sync runs (#1386).
 
-Drives two real per-unit syncs over the real wired plugin: run one downloads a
+Drives two real per-unit syncs over the real wired backend: run one downloads a
 new ROM's cover and records the ``cover_source`` fingerprint; the fake RomM then
 changes the cover's ``?ts=`` cache-buster, and run two must re-download the
 cache file and carry the ``{rom_id, app_id}`` refresh entry on the emitted

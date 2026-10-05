@@ -203,16 +203,16 @@ class FirmwareService:
                 return await self._downloads.download_required_firmware(platform_slug)
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any]:
-        """Delete the BIOS files the plugin downloaded for a platform."""
+        """Delete the BIOS files Tender downloaded for a platform."""
         async with self._rules.hold("delete_platform_bios", update=True, migration=True):
             return await self._deletion.delete_platform_bios(platform_slug)
 
     async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any]:
-        """Delete one BIOS file the plugin downloaded for a platform."""
+        """Delete one BIOS file Tender downloaded for a platform."""
         async with self._rules.hold("delete_bios_file", update=True, migration=True):
             return await self._deletion.delete_bios_file(platform_slug, file_name)
 
     async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any]:
-        """Delete the BIOS files the plugin downloaded inside a declared folder."""
+        """Delete the BIOS files Tender downloaded inside a declared folder."""
         async with self._rules.hold("delete_bios_folder", update=True, migration=True):
             return await self._deletion.delete_bios_folder(platform_slug, folder_path)

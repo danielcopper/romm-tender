@@ -71,7 +71,7 @@ function cells(el: Element): string[] {
   return Array.from(grid(el).children).map((cell) => cell.textContent);
 }
 
-// The longest client string the server can hand back — NOT what this plugin
+// The longest client string the server can hand back — NOT what Tender
 // registers under now, which is `DISPLAY_NAME`, "Tender" (`domain/identity.py`).
 // RomM keeps the rows earlier versions wrote, and up to 0.32 they said
 // `decky-romm-sync`; those rows do not expire, so this is what the column has to
@@ -186,7 +186,7 @@ describe("RegisteredDevicesSection", () => {
       }
     });
 
-    it("gives Client a track wide enough for the client name the plugin registers", () => {
+    it("gives Client a track wide enough for the longest client name the server holds", () => {
       const device = makeDevice({ client: REAL_CLIENT, client_version: REAL_VERSION });
       const { getByTestId } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: [device] })} />);
       // The cell really does carry the long string, so the width below is
@@ -221,7 +221,7 @@ describe("RegisteredDevicesSection", () => {
     it("puts the name, the client with its version, and the relative time in their own columns", () => {
       const device = makeDevice({
         name: "Steam Deck",
-        // What this plugin registers under today is `DISPLAY_NAME`, "Tender"
+        // What Tender registers under today is `DISPLAY_NAME`, "Tender"
         // (`domain/identity.py`). The older spelling is used here because the
         // column has to render what the SERVER holds, and the server keeps the
         // rows earlier versions wrote — a real listing shows both.

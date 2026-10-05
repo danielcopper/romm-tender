@@ -1,4 +1,4 @@
-"""Pure schema-migration functions for plugin state files.
+"""Pure schema-migration functions for Tender's state files.
 
 Each function accepts a raw dict (as loaded from disk) and returns
 the same dict promoted to the current schema version.  No I/O —
@@ -245,7 +245,7 @@ def _migrate_v8_to_v9(data: dict[str, Any]) -> dict[str, Any]:
 def _migrate_v9_to_v10(data: dict[str, Any]) -> dict[str, Any]:
     """v<10 → v10: stamp the token-provenance slot.
 
-    Introduces ``romm_api_token_source`` — ``"minted"`` for a token the plugin
+    Introduces ``romm_api_token_source`` — ``"minted"`` for a token Tender
     minted from credentials, ``"user"`` for a token the user pasted in. Before
     this version every stored token came from the credential-mint path, so a
     truthy ``romm_api_token`` is stamped ``"minted"`` and a token-less install
@@ -313,7 +313,7 @@ def _migrate_v12_to_v13(data: dict[str, Any]) -> dict[str, Any]:
     """v<13 → v13: rename the ``enabled_collections`` ``user`` bucket to ``standard``.
 
     RomM's own UI calls the ownership-carrying first collection kind **Standard**;
-    the plugin's internal name for it was ``user`` (a misnomer — every kind is a
+    Tender's internal name for it was ``user`` (a misnomer — every kind is a
     user's), so the on-disk enabled bucket keyed ``user`` is renamed to ``standard``
     with every enabled id preserved — a previously-enabled standard collection stays
     enabled and keeps syncing.

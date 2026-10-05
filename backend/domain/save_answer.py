@@ -1,4 +1,4 @@
-"""What a game's save consists of, where it lives, and whether this plugin may sync it.
+"""What a game's save consists of, where it lives, and whether Tender may sync it.
 
 The vocabulary the resolver's savefile answer is translated into, and the rule
 that turns one such answer into exactly one of five states. Adapters read the
@@ -10,7 +10,7 @@ per-ROM record on the server, and that model is simply wrong for most of what
 emulators actually write — a card many games share, a directory whose contents
 nobody enumerated, a path or a name half of which is the game's own identity.
 Only
-:data:`SAVE_STATE_PER_GAME_FILES` is a save this plugin can carry; the other four
+:data:`SAVE_STATE_PER_GAME_FILES` is a save Tender can carry; the other four
 are refusals, and each says something different about why. Every one of them is
 an honest "we are not touching this", never "there is nothing here".
 
@@ -54,11 +54,11 @@ SaveState = Literal[
 # doubt lands, so collapsing them would make one message stand for all of them.
 #
 # ``not_asked`` is the one that is easy to lose: the question was never put, so
-# the emulator is not implicated at all. A save the plugin could otherwise sync
+# the emulator is not implicated at all. A save Tender could otherwise sync
 # sitting beside the content reaches it (the status read reports that case as
 # not asked), and so does a ROM with no resolvable emulator. Without
 # it those payloads are byte-identical to an unaudited core's, and a page would
-# tell a user their emulator is a mystery when the truth is that the plugin
+# tell a user their emulator is a mystery when the truth is that Tender
 # never asked.
 UNESTABLISHED_NOTHING = "nothing_established"
 UNESTABLISHED_DIRECTORY_KNOWN = "directory_known"
@@ -111,12 +111,12 @@ ROOT_CONTENT_DIRECTORY = "content_directory"
 # routes on the SAME value without a service-to-service import.
 #
 # ``SAVE_SYNC_CONTENT_DIR_REASON`` says the emulator writes this game's save
-# next to its content, outside what the plugin syncs; the saves sync-engine gate
+# next to its content, outside what Tender syncs; the saves sync-engine gate
 # stamps it on its skip result and the session-lifecycle post-exit branch reads
 # it to suppress the false-failure toast.
 #
 # ``SAVE_SHAPE_UNSUPPORTED_REASON`` says the SHAPE of this game's save is not one
-# the plugin can carry per game, which is a statement about the emulator and
+# Tender can carry per game, which is a statement about the emulator and
 # never about the server.
 SAVE_SYNC_CONTENT_DIR_REASON = "savefiles_in_content_dir"
 SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported"
@@ -231,7 +231,7 @@ class SaveAnswer:
 
     @property
     def syncable(self) -> bool:
-        """Whether this emulator's save is a per-game file set the plugin can carry."""
+        """Whether this emulator's save is a per-game file set Tender can carry."""
         return self.state == SAVE_STATE_PER_GAME_FILES
 
     @property
@@ -239,7 +239,7 @@ class SaveAnswer:
         """Whether sitting beside the content is the one reason this save may not be synced.
 
         The answer names a per-game file set a sync could carry, but anchored in
-        the content's own directory — outside what the plugin syncs, and syncing
+        the content's own directory — outside what Tender syncs, and syncing
         there is a decision this answer does not make. Any answer that would not
         be syncable anyway (inside the content file, writes discarded, nothing
         named) is answered by its own refusal instead, wherever it is anchored:

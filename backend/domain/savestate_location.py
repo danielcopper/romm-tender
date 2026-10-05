@@ -1,6 +1,6 @@
-"""Where one game's emulator keeps its savestates — the one savestate fact the plugin reads.
+"""Where one game's emulator keeps its savestates — the one savestate fact Tender reads.
 
-A savestate is synced nowhere, so the only question the plugin puts about one is
+A savestate is synced nowhere, so the only question Tender puts about one is
 where it sits: a rename that moves a ROM has to carry the states named after it.
 That question is the resolver's, asked of the same catalogue entry the save
 answer comes from, and this module is the vocabulary its answer is restated in so

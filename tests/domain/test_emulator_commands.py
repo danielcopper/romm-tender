@@ -2,7 +2,7 @@
 
 The command strings are sampled verbatim from a live RetroDECK
 ``es_systems.xml`` (linux/ flavor) so the rules are pinned against the real
-shapes the plugin must classify: plain + env-prefixed emulators, the ``%INJECT%``
+shapes Tender must classify: plain + env-prefixed emulators, the ``%INJECT%``
 and OS-shell forms, the MAME quoting/``\\;`` templates, and the ``%STARTDIR%``
 prefix. A handful of synthetic strings cover branches the current es_systems
 does not exercise (an unknown ``%PLACEHOLDER%``, a lone double-quote).

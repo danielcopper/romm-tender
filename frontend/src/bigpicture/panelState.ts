@@ -251,7 +251,7 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
  *  ran and said so (the flag with the `"unknown"` level). `BiosTab` renders the
  *  grey dot off that level, over the sentence `utils/biosSummary.ts` gives a
  *  declined level with no gap it can name. No file rows, because there is
- *  nothing the plugin could say about any file. */
+ *  nothing Tender could say about any file. */
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game

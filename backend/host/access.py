@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lib.http_messages import RequestHead
 
-# Steam's own UI. Plugin code runs in the SharedJSContext window, whose origin
+# Steam's own UI. The panel's code runs in the SharedJSContext window, whose origin
 # this is; it is the one origin that is not ours.
 STEAM_UI_ORIGIN = "https://steamloopback.host"
 

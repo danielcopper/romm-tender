@@ -153,7 +153,7 @@ async function checkCoreChangeWatcher(romId: number, prompts: LaunchPrompts): Pr
  * A benign skip is treated as a successful proceed (no conflict, no failure) —
  * exactly as the Play button does — so it never surfaces a fallback confirm.
  * Two slugs are benign: saves written to the content directory, and an emulator
- * whose save is not a per-game file set this plugin can carry. Both mean sync
+ * whose save is not a per-game file set Tender can carry. Both mean sync
  * did not run and nothing is wrong, which is a different thing from sync
  * failing.
  *

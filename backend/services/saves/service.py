@@ -92,7 +92,7 @@ class SaveService:
             logger=config.logger,
             log_debug=config.log_debug,
             settings_persister=config.settings_persister,
-            plugin_version=VERSION,
+            version=VERSION,
         )
 
         self._rom_info = RomInfoService(
@@ -319,7 +319,7 @@ class SaveService:
         """Record the installed ROMs' answered save directories, once per database.
 
         The first start after the record existed has no record for any game, so
-        a directory that moved before the plugin next touched that game's saves
+        a directory that moved before Tender next touched that game's saves
         would be taken for a first sight and its files left behind. This pass
         closes that: it asks the resolver about each installed ROM, serially,
         and records the answer where nothing is recorded yet and the follow

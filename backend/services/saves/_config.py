@@ -2,7 +2,7 @@
 
 Holds every dependency SaveService needs at construction time —
 Protocol-typed adapters, runtime infrastructure, live mutable state
-references, plugin metadata, and callbacks into other services.
+references, Tender's own metadata, and callbacks into other services.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class SaveServiceConfig:
         Threaded down to the ``MatrixExecutor``, which calls it once per file to
         pick ``Skip`` / ``Upload`` / ``Download`` / ``Conflict``.
     settings:
-        Live reference to the main plugin settings dict.
+        Live reference to Tender's main settings dict.
     settings_persister:
         Protocol-typed zero-arg flush for ``settings.json``. SaveService
         calls ``.save_settings()`` after mutating the save-sync feature
@@ -70,7 +70,7 @@ class SaveServiceConfig:
         calls SaveService and its sub-services use when reading,
         writing, backing up, hashing, and removing local save files.
     loop:
-        The plugin's ``asyncio`` event loop (for ``run_in_executor``).
+        The backend's ``asyncio`` event loop (for ``run_in_executor``).
     logger:
         Standard-library logger, injected rather than fetched.
     retrodeck_paths:

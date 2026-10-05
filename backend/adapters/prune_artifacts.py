@@ -1,4 +1,4 @@
-"""Per-ROM plugin cache artifacts that follow a purged ROM aggregate."""
+"""Tender's per-ROM cache files that follow a purged ROM aggregate."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ _SGDB_TYPES = ("hero", "logo", "grid", "icon")
 
 
 class PruneArtifactAdapter:
-    """Own recovery discovery and deletion for plugin cover/SGDB caches."""
+    """Own recovery discovery and deletion for Tender's cover/SGDB caches."""
 
     def __init__(self, *, cache_dir: str) -> None:
         """*cache_dir* is the CACHE root: this adapter owns ``covers/`` and ``artwork/``.

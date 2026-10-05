@@ -45,8 +45,8 @@ class StatusServiceConfig:
     Unit-of-Work factory (the transactional seam over the SQLite
     repositories), the peer save sub-services (sync_engine, rom_info, and
     the shared :class:`DeviceRegistry` that owns the server device id),
-    the Protocol-typed RomM adapter and retry strategy, the plugin event
-    loop, the standard-library logger, the ``DebugLogger`` seam, the
+    the Protocol-typed RomM adapter and retry strategy, the backend's
+    event loop, the standard-library logger, the ``DebugLogger`` seam, the
     per-ROM active-core resolver, and the event emitter used to push background
     status updates to the frontend.
     """
@@ -366,7 +366,7 @@ class StatusService:
         explicit ``server_unreachable`` drives the UI's offline state (#1570).
 
         The additive ``savefiles_in_content_dir: bool`` flag is ``True``
-        where a save the plugin could otherwise sync sits beside the ROM
+        where a save Tender could otherwise sync sits beside the ROM
         (``SaveAnswer.in_content_directory``): local probing is skipped and
         the display reads "Save sync off", while playtime / device_id stay
         intact.

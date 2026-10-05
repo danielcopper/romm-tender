@@ -16,22 +16,22 @@ shared memory cards where a libretro core would keep a file per game, and asking
 resolved for this ROM — the label
 :class:`services.active_core_resolver.ActiveCoreResolver` already produced,
 which is the label the launch bakes — and this adapter puts the question to that
-entry. Where the plugin resolved no emulator, or the catalogue no longer offers
+entry. Where Tender resolved no emulator, or the catalogue no longer offers
 one under that label, there is nobody to ask and the answer says so.
 
 The catalogue is asked WITH the content path, unlike
 :mod:`adapters.atlas_catalogue`, and that is not a drift from ADR-0012. The
-entry is chosen by the plugin's own resolved label, so a per-game
+entry is chosen by Tender's own resolved label, so a per-game
 ``<altemulator>`` still cannot promote anything into the launch; what the
 content path buys is that the per-game configuration layers are read for the
 game actually being asked about, which is what decides a granularity.
 
 **Nothing is cached but the installation handle.** Every call is a live reading,
 because the user changes a core's options in the emulator's own quick menu
-between one launch and the next sync and a remembered granularity would have the
-plugin sync a shared card per game. Holding the handle is what keeps that
+between one launch and the next sync and a remembered granularity would have
+Tender sync a shared card per game. Holding the handle is what keeps that
 affordable: on the reference machine a repeat reading costs 167 ms through a held
-installation and 489 ms through a fresh one, and no write this plugin performs
+installation and 489 ms through a fresh one, and no write Tender performs
 can invalidate the handle.
 
 The resolver never logs and raises on its own invariant violations rather than
@@ -81,7 +81,7 @@ class AtlasSaveLocationAdapter:
     ) -> SaveAnswer:
         """What *emulator_label* saves for the game at *content_path*, and whether it may be synced.
 
-        *emulator_label* is the emulator the plugin resolved for this ROM;
+        *emulator_label* is the emulator Tender resolved for this ROM;
         ``None`` means it resolved none, so there is no entry to ask. That, no
         installation, and a catalogue no longer offering the label are all
         ``not_asked`` — the question never reached the resolver, so none of them
@@ -204,7 +204,7 @@ class AtlasSaveLocationAdapter:
 
 
 def _translate(placement: Any, emulator_label: str, content_installed: bool) -> SaveAnswer:
-    """Restate one resolved placement in the plugin's own save vocabulary."""
+    """Restate one resolved placement in Tender's own save vocabulary."""
     file_set = placement.file_set
     granularity = placement.granularity
     return build_save_answer(

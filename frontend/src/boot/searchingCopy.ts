@@ -125,7 +125,7 @@ function readDeckyVersion(w: DeckyWindow): string | null {
  * What Decky's `@decky/ui` carries, or `null` where it cannot be questioned.
  *
  * Guarded on both axes, for the reason stated at {@link readDeckyVersion} and
- * with a sharper cost here: `definePlugin`'s factory reads this BEFORE it
+ * with a sharper cost here: `definePanel`'s factory reads this BEFORE it
  * returns anything, so a throw takes the failure page and the log line with it
  * — the one screen that tells a stale search apart from a backend that is not
  * running, gone in the moment it exists for. `DFL` is another program's global,

@@ -36,7 +36,7 @@ if (launchOptions !== "") await setLaunchOptionsConfirmed(appId, launchOptions);
 ```
 
 Steam must finish registering the new app internally before the `Set*` calls land, or they silently fail. Rather than a
-fixed worst-case wait, the plugin polls `appStore` for the new overview (readiness) — the common case proceeds in ~100ms
+fixed worst-case wait, Tender polls `appStore` for the new overview (readiness) — the common case proceeds in ~100ms
 instead of a blind 500ms, and the 1000ms ceiling keeps the old wait's safety net when the overview is slow. Skipping the
 launch-options write for the (majority) uninstalled case also avoids `setLaunchOptionsConfirmed`'s
 `RegisterForAppDetails` poll, which forces Steam to load and cache a fat `AppDetails` object per call.
@@ -87,8 +87,8 @@ SteamClient.Apps.SetShortcutExe(appId, "/home/deck/.local/bin/tender-rom-launche
 ### Updating existing shortcuts
 
 Steam **assigns** a shortcut's `appId` when `AddShortcut` creates it, and that `appId` is **stable for the shortcut's
-lifetime**. The plugin never computes it: it records Steam's assigned id in `roms.shortcut_app_id` and detects ownership
-by the exe path (`…/bin/tender-rom-launcher`), not by re-deriving the id. (The historical "`appId` is
+lifetime**. Tender never computes it: it records Steam's assigned id in `roms.shortcut_app_id` and detects ownership by
+the exe path (`…/bin/tender-rom-launcher`), not by re-deriving the id. (The historical "`appId` is
 `CRC32(exe + appName)`" formula does not hold on current Steam — see [App IDs and Artwork](#app-ids-and-artwork).) Two
 consequences follow:
 
@@ -96,10 +96,10 @@ consequences follow:
   the shortcut's identity, artwork, collection membership, and `roms.shortcut_app_id` binding all survive.
   `SetAppLaunchOptions` on an existing shortcut is **reliable** — confirmed on hardware in
   [#827](https://github.com/danielcopper/romm-tender/issues/827) across in-session writes, a Steam restart, and
-  removal-churn re-syncs. The plugin uses it directly to bake the launch command in at download-complete and to
-  re-resolve paths after a RetroDECK-home migration.
+  removal-churn re-syncs. Tender uses it directly to bake the launch command in at download-complete and to re-resolve
+  paths after a RetroDECK-home migration.
 - **`exe` is appId-safe too, and that is now measured.** Every one of a 826-shortcut library had its `exe` and
-  `startDir` rewritten in one pass — the relocation 0.33 ran at plugin start, into the launcher home of
+  `startDir` rewritten in one pass — the relocation 0.33 ran at start-up, into the launcher home of
   [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) that ADR-0038 has since superseded (see
   [Where the exe points](#where-the-exe-points)) — and the appId set afterwards was identical to a `shortcuts.vdf`
   backup taken before it: 0 new, 0 lost, names unchanged, and the 1,652 `Set*` calls (one `SetShortcutExe` and one
@@ -111,7 +111,7 @@ consequences follow:
   established what a `SetShortcutName` does to the appId, in either direction. Do not read the `exe` measurement above
   as covering it: it says nothing about the name, and no delete + recreate path exists for one to fall back on.
 
-Because `SetAppLaunchOptions` returns `void` with no success signal, the plugin **fires the set then polls**
+Because `SetAppLaunchOptions` returns `void` with no success signal, Tender **fires the set then polls**
 `RegisterForAppDetails` until the read-back `strLaunchOptions` matches (`setLaunchOptionsConfirmed`). Setting `""` — the
 placeholder an uninstalled ROM carries until it is downloaded — is valid and confirms against an empty read-back.
 
@@ -125,7 +125,7 @@ See: `frontend/src/utils/steamShortcuts.ts`
 Switching the RomM server URL — or re-importing on the same server — reissues `rom_id`s while the Steam shortcuts are
 **not** deleted (their assigned appIds persist) and the `roms` rows survive (ADR-0007 retention) with the binding in
 `roms.shortcut_app_id`, reverse-lookupable via `get_app_id_rom_id_map()`. Because Steam **assigns** the appId at
-creation (the `CRC32(exe + name)` derivation is disproven — see [App IDs and Artwork](#app-ids-and-artwork)), the plugin
+creation (the `CRC32(exe + name)` derivation is disproven — see [App IDs and Artwork](#app-ids-and-artwork)), Tender
 never re-derives an id to "find" the old shortcut. It keeps a game's shortcut alive across the `rom_id` churn through
 three lanes:
 
@@ -260,7 +260,7 @@ reattach those values to a newly created shortcut.
 
 ## Sync-start reconcile of Steam-UI-deleted shortcuts
 
-A user can delete a RomM shortcut through **Steam's own UI** (remove from library), which the plugin never observes. The
+A user can delete a RomM shortcut through **Steam's own UI** (remove from library), which Tender never observes. The
 `roms` row keeps its now-dead `shortcut_app_id`, so `get_app_id_rom_id_map` keeps serving it (playtime writes and
 launch-options bakes aim at a Steam app that no longer exists) and the **incremental skip never recreates it**: the skip
 counts bound `roms` rows, not live Steam shortcuts, so the platform reports "unchanged" forever. The game stays gone
@@ -303,8 +303,8 @@ shortcut store.
 Non-Steam shortcuts return `BIsModOrShortcut() = true` by default. This is their natural state — Steam uses this flag to
 determine how to render and launch an app.
 
-An earlier version of the plugin used a "bypass counter" pattern (inspired by MetaDeck) to temporarily return `false`
-from `BIsModOrShortcut()` so that Steam would render metadata sections (description, developer, etc.) on the game detail
+An earlier version of Tender used a "bypass counter" pattern (inspired by MetaDeck) to temporarily return `false` from
+`BIsModOrShortcut()` so that Steam would render metadata sections (description, developer, etc.) on the game detail
 page. This approach was **dropped in Phase 5.6** because it caused launch failures — Steam skips the shortcut launch
 path when `BIsModOrShortcut()` returns `false`.
 
@@ -317,9 +317,9 @@ See: `frontend/src/bigpicture/patches/gameDetailPatch.tsx`, `frontend/src/bigpic
 
 ## Overview metadata mutations (readiness-gated)
 
-Beyond the custom UI, the plugin writes three fields directly onto each RomM shortcut's `SteamAppOverview` so the
-shortcut presents like a native Steam game: `controller_support = 2` (the "Full Controller Support" badge — important so
-Game Mode doesn't flag the controller-driven RetroDECK launch), `metacritic_score` (from RomM's `average_rating`), and
+Beyond the custom UI, Tender writes three fields directly onto each RomM shortcut's `SteamAppOverview` so the shortcut
+presents like a native Steam game: `controller_support = 2` (the "Full Controller Support" badge — important so Game
+Mode doesn't flag the controller-driven RetroDECK launch), `metacritic_score` (from RomM's `average_rating`), and
 `m_setStoreCategories` (RomM's `steam_categories`).
 
 Steam rebuilds `appStore` from scratch on every `SharedJSContext` mount, so these in-memory mutations are lost on each
@@ -343,12 +343,12 @@ See: `frontend/src/utils/metadataPatches.ts` (which appId gets which value, and 
 ## VDF Format Notes
 
 Shortcut creation and every field update go through the frontend `SteamClient.Apps.AddShortcut()` / `Set*` API —
-`AddShortcut` returns the real `appId` directly, so the plugin never computes app IDs itself and never edits
-`shortcuts.vdf` while Steam is running (Steam holds the file in memory and rewrites it from memory, silently clobbering
-external writes — see [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)). The backend
-`SteamConfigAdapter` (`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the
-icon PNG; its `shortcuts.vdf` read/write helpers remain in the adapter but are no longer on any live path after the icon
-write moved to `SteamClient.Apps.SetShortcutIcon`.
+`AddShortcut` returns the real `appId` directly, so Tender never computes app IDs itself and never edits `shortcuts.vdf`
+while Steam is running (Steam holds the file in memory and rewrites it from memory, silently clobbering external writes
+— see [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)). The backend `SteamConfigAdapter`
+(`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG; its
+`shortcuts.vdf` read/write helpers remain in the adapter but are no longer on any live path after the icon write moved
+to `SteamClient.Apps.SetShortcutIcon`.
 
 ### shortcuts.vdf structure
 
@@ -368,23 +368,23 @@ Each entry has these key fields:
 | `LaunchOptions` | string       | The full launch command the `bin/tender-rom-launcher` exec wrapper runs, e.g. `flatpak run net.retrodeck.retrodeck "/path/to/game.iso"` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
 | `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                              |
 | `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                            |
-| `tags`          | object       | Steam collection tags. The plugin manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                              |
+| `tags`          | object       | Steam collection tags. Tender manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                                  |
 
 ### shortcuts.vdf is memory-authoritative
 
 While Steam is running, `shortcuts.vdf` is authoritative **in Steam's memory**: Steam rewrites the file from memory
-mid-session and on exit, so any external write to it while Steam runs is silently clobbered. The plugin therefore
-creates and mutates shortcuts only through the `SteamClient` API (`AddShortcut` / `Set*` / `SetShortcutIcon`), never by
-editing `shortcuts.vdf` directly. Pass raw, **unquoted** paths through those APIs — the API adds any quoting internally,
-and on-device inspection confirms `AddShortcut`-created entries are stored unquoted; pre-quoting double-quotes the path
-and breaks launches (see [Exe quoting](#exe-quoting)).
+mid-session and on exit, so any external write to it while Steam runs is silently clobbered. Tender therefore creates
+and mutates shortcuts only through the `SteamClient` API (`AddShortcut` / `Set*` / `SetShortcutIcon`), never by editing
+`shortcuts.vdf` directly. Pass raw, **unquoted** paths through those APIs — the API adds any quoting internally, and
+on-device inspection confirms `AddShortcut`-created entries are stored unquoted; pre-quoting double-quotes the path and
+breaks launches (see [Exe quoting](#exe-quoting)).
 
 See: `backend/adapters/steam_config.py`
 
 ## Collection management
 
 Steam collections are managed entirely on the frontend via `collectionStore`, not by writing the shortcut's `tags` VDF
-field. The plugin owns machine-scoped collections named `RomM: <platform> (<hostname>)` for platforms and
+field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname>)` for platforms and
 `RomM: [<name>] (<hostname>)` for synced RomM collections. The `sync_complete` event carries `platform_app_ids` and
 `romm_collection_app_ids` maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps
 it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
@@ -460,7 +460,7 @@ standard collection over a run recorded while standard collections still carried
 
 **Name identity is case-insensitive (#1569).** Steam collapses collection names by a **case-insensitive** identity — two
 collections whose display names differ only in case (`RomM: [7 up]` vs `RomM: [7 Up]`) are the same Steam collection, so
-creating the second silently overwrites the first and loses its games. To match, the plugin folds both names wherever it
+creating the second silently overwrites the first and loses its games. To match, Tender folds both names wherever it
 asks whether two names are one Steam collection, by one rule on both sides: lower case, then upper case, then lower case
 again — `fold_collection_name` (`backend/domain/collection_name.py`) on the backend, `foldCollectionName`
 (`frontend/src/utils/collectionName.ts`) on the frontend, both tested against the names in
@@ -469,8 +469,8 @@ no counterpart for, and rather than a single lower-casing, which keeps `Straße`
 JavaScript compute the chain identically on every code point both assign, and it joins each code point with everything
 `str.casefold()`, `toLowerCase()` or `toUpperCase()` joins it with — plus one pair `str.casefold()` keeps apart, a
 dotless `ı` and `i` (measured: CPython 3.13 / Unicode 15.1 against Node 24 / Unicode 17). For grouping and for the
-create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and the plugin keeps
-apart. On the delete matchers, joining more means deleting more.
+create/find, joining more is the safe direction: what loses games is a pair Steam holds as one and Tender keeps apart.
+On the delete matchers, joining more means deleting more.
 
 Where the fold applies: the reporter groups both `romm_collection_app_ids` and `platform_app_ids` by the folded key,
 keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both sides); the
@@ -486,18 +486,18 @@ name — so there is no migration.
 
 ## App IDs and Artwork
 
-`SteamClient.Apps.AddShortcut()` returns the real `appId`, so the plugin does **not** compute shortcut app IDs itself —
+`SteamClient.Apps.AddShortcut()` returns the real `appId`, so Tender does **not** compute shortcut app IDs itself —
 there is no app-ID generator in the codebase. Steam **assigns** the `appId` at creation and it is stable for the
 shortcut's lifetime, which is why mutating `launchOptions` or `startDir` keeps the same `appId` (see
 [Updating existing shortcuts](#updating-existing-shortcuts)) while delete + recreate yields a new one.
 
 > **Errata (2026-07): the appId is not `CRC32(exe + appName)`.** Earlier docs described the `appId` as
-> `CRC32(exe + appName)`. On-device inspection of 68 live plugin-created shortcuts matched **none** against any CRC32
+> `CRC32(exe + appName)`. On-device inspection of 68 live shortcuts Tender created matched **none** against any CRC32
 > candidate (exe/name variants, quoted/unquoted, with/without a trailing NUL, top bit set), and the live appids are
 > uniformly spread across `[0x80000000, 0xFFFFFFFF]` — consistent with random assignment at creation (and with the
 > community observation that delete + re-add yields a different appid). The load-bearing facts are unchanged: the appId
 > is stable for the shortcut's lifetime (so `launchOptions` / `startDir` edits are appId-safe), delete + recreate yields
-> a new appId, and the plugin's identity model never computes appIds — it records Steam's assigned id in
+> a new appId, and Tender's identity model never computes appIds — it records Steam's assigned id in
 > `roms.shortcut_app_id` and detects ownership by the exe path. Only the derivation _mechanism_ was wrong.
 
 The frontend stores the returned `appId` and the backend persists it as `shortcut_app_id` on the ROM's `roms` row (the
@@ -520,7 +520,7 @@ Grid artwork is stored at `userdata/<user_id>/config/grid/`, keyed by the shortc
 | `<appId>.png`      | Wide grid / horizontal |
 | `<appId>_icon.png` | Icon                   |
 
-Each form also occurs with a `.jpg` / `.jpeg` extension. On shortcut removal the plugin deletes the **full** suffix ×
+Each form also occurs with a `.jpg` / `.jpeg` extension. On shortcut removal Tender deletes the **full** suffix ×
 extension set for the removed appId (`ArtworkService.remove_artwork_files`), so companion art (hero/logo/icon/wide)
 never outlives its shortcut. Files a removal missed historically are reclaimed by Data Management's **Grid images**
 cleanup (`cleanup_orphaned_grid_images`): candidates are only grid-image-named files whose appId sits in the
@@ -598,7 +598,7 @@ Pre-quoting the exe path in `AddShortcut` or `SetShortcutExe` causes double-quot
 
 Calling `Set*` methods too quickly after `AddShortcut` (before the new app's overview is registered) results in the
 properties not being saved. The shortcut appears in the library but with wrong or missing exe/startDir/launchOptions.
-Launches fail or open the wrong thing. The plugin gates the `Set*` calls on an overview-readiness poll
+Launches fail or open the wrong thing. Tender gates the `Set*` calls on an overview-readiness poll
 (`waitForAppOverview`, 1000ms fallback) rather than a fixed delay.
 
 ### Removal-churn can corrupt shortcut state

@@ -124,7 +124,7 @@ describe("what can be read off Decky Loader", () => {
 
   it("can be asked nothing when reading DFL throws", () => {
     // Another program's global, and a future Decky may install it as a getter.
-    // `definePlugin`'s factory calls this before it returns anything, so a throw
+    // `definePanel`'s factory calls this before it returns anything, so a throw
     // here costs the page AND the log line — the one screen that tells a stale
     // search apart from a backend that is not running.
     const w = deckyWindow();

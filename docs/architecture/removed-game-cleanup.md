@@ -1,6 +1,6 @@
 # Removed-game cleanup
 
-When RomM stops serving a ROM id, the plugin keeps the local row. Nothing is ever deleted automatically — a library sync
+When RomM stops serving a ROM id, Tender keeps the local row. Nothing is ever deleted automatically — a library sync
 that no longer sees an id retains everything it already has. Removing that local state is an explicit, separately
 confirmed operation, and this page owns how it stays safe.
 
@@ -398,8 +398,8 @@ individual-row toggle.
 
 The shortcut's Steam-side files — grid artwork, the per-app Steam Input roots, and the `localconfig.vdf` controller
 entry — are removed only when a recovery bundle captured them, because the capture is where their claims are taken and
-no claim means no mutation. With recovery off, the shortcut, rows, ROM content, and plugin caches are still removed, but
-those Steam files stay behind: the existing user-triggered orphaned-artwork cleanup collects the grid images later,
+no claim means no mutation. With recovery off, the shortcut, rows, ROM content, and Tender's caches are still removed,
+but those Steam files stay behind: the existing user-triggered orphaned-artwork cleanup collects the grid images later,
 while the Steam Input files and controller value linger harmlessly under an appId no shortcut uses.
 
 ## Run outcomes

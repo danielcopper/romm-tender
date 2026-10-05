@@ -13,7 +13,7 @@ interface PreferredRegionModalProps {
  * (ADR-0021 §3). The key semantics the copy must make unmistakable: the setting
  * persists immediately, but it only affects shortcuts minted from the NEXT sync
  * onward (new games / groups without a binding). Already-synced games keep their
- * bound version and shortcut name — the plugin never implicitly switches
+ * bound version and shortcut name — Tender never implicitly switches
  * versions or renames a shortcut. No resync is forced; this modal only explains.
  */
 const PreferredRegionModalContent: FC<PreferredRegionModalProps> = ({ oldLabel, newLabel, closeModal, onDone }) => {

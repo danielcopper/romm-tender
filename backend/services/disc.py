@@ -153,7 +153,7 @@ class DiscService:
                 }
         # Enumerate and validate between the two transactions: enumeration lists
         # the install directory, and a UoW holds SQLite's BEGIN IMMEDIATE write
-        # lock, so file I/O inside one stalls every other writer in the plugin.
+        # lock, so file I/O inside one stalls every other writer in the backend.
         discs = self._disc_resolver.enumerate_discs(install)
         if len(discs) < 2:
             return {

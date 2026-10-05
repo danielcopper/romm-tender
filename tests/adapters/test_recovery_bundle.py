@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _adapter(tmp_path) -> RecoveryBundleAdapter:
-    return RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm tender/", plugin_version="1.2.3")
+    return RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm tender/", version="1.2.3")
 
 
 def _create_layout(adapter: RecoveryBundleAdapter) -> None:
@@ -128,8 +128,8 @@ def test_the_recovery_root_is_named_after_the_package(tmp_path):
     drift away from the package, and the drift lands on the one surface a
     destructive cleanup leaves behind.
     """
-    for package_name in ("romm-tender", "some-other-plugin"):
-        adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, plugin_version="1.2.3")
+    for package_name in ("romm-tender", "some-other-program"):
+        adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, version="1.2.3")
         assert adapter.root() == str(tmp_path / f"{package_name}-recovery")
 
 

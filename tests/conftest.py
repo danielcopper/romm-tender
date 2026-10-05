@@ -75,7 +75,7 @@ def _isolated_environment(home: Path) -> Iterator[None]:
 
     Only paths under the home are covered. The system Flatpak root
     (``/var/lib/flatpak``) lies outside it: any other test whose code can reach
-    that root through the plugin's or the vendored resolver's constant for it
+    that root through Tender's or the vendored resolver's constant for it
     repoints the constant itself, and ``_isolate_system_flatpak_root`` in
     ``tests/contract/conftest.py`` names both.
 

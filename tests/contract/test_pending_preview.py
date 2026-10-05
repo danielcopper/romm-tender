@@ -7,7 +7,7 @@ to be exactly the payload ``sync_preview`` answered with — including the
 absolute ``expires_at`` deadline the card counts down against — and "nothing
 pending" has to read as a normal answer rather than a failure.
 
-Driven through the real endpoints over the real wired plugin.
+Driven through the real endpoints over the real wired backend.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
-"""A save this plugin cannot carry per game is refused, and the refusal costs nothing.
+"""A save Tender cannot carry per game is refused, and the refusal costs nothing.
 
 Four of the five states refuse, and a refusal has to be a real one: no file is
 probed for, no sync state is written, and the result is the benign-skip shape
-rather than a failure. Probing anyway is not merely wasted work — it is how the
-plugin used to search forever for an Amiga ``.nvr`` that no core writes, and how
+rather than a failure. Probing anyway is not merely wasted work — it is how
+Tender used to search forever for an Amiga ``.nvr`` that no core writes, and how
 a PS2 memory card many games share would be carried onto one game's record.
 
 Every case here runs beside a **control** in the same class that asserts the
@@ -307,7 +307,7 @@ class TestAFileTheAnswerDoesNotCarryIsLeftAlone:
 
     @pytest.mark.asyncio
     async def test_a_server_save_whose_extension_the_answer_never_names_is_left_alone(self, tmp_path):
-        # The legacy shape: a ``.sav`` uploaded when the plugin guessed
+        # The legacy shape: a ``.sav`` uploaded when Tender guessed
         # extensions. Beetle Saturn writes no such file, so there is nothing
         # local to compare it to and nothing to bring down.
         svc, fake = self._saturn(tmp_path, with_battery=False)

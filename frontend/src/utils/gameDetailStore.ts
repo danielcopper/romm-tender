@@ -602,7 +602,7 @@ async function handleCoreChange(entry: Entry): Promise<void> {
   }));
 }
 
-/** How long a failed load waits before its one retry. The plugin's own
+/** How long a failed load waits before its one retry. Tender's own
  *  backend-readiness ladders — `RETRY_DELAYS` in index.tsx (#1203) and
  *  `CONNECTION_RETRY_DELAYS` in utils/connectionProbe.ts (#1045) — both go 2000,
  *  5000, so 2000 is the interval this project has already recorded as regularly

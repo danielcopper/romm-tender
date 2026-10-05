@@ -134,7 +134,7 @@ vi.mock("./api/host", async () => {
   return {
     endpoint: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
     toaster: { toast: vi.fn() },
-    definePlugin: (fn: unknown) => fn,
+    definePanel: (fn: unknown) => fn,
     addEventListener: bus.mockAddEventListener,
     removeEventListener: bus.mockRemoveEventListener,
   };

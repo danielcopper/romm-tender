@@ -5,7 +5,7 @@
 --
 -- RomM models one game as several dumps (region/language/revision/tag variants)
 -- and coalesces siblings by a shared external-metadata id, scoped per platform.
--- The plugin dropped every one of these fields on fetch; these columns capture
+-- Tender dropped every one of these fields on fetch; these columns capture
 -- them on the Rom aggregate (its anchor table, so they survive uninstall per
 -- ADR-0007). Unlike the user-pin columns emulator_override / selected_disc,
 -- these are SERVER-DERIVED facts: they ride the sync UPSERT and refresh every

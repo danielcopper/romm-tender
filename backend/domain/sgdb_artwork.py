@@ -1,7 +1,7 @@
 """Pure helpers for SteamGridDB asset-type maps, endpoint paths, and app-id math.
 
-Owns the stateless compute SteamGridService needs to translate the
-plugin's internal asset-type vocabulary into SteamGridDB API endpoints
+Owns the stateless compute SteamGridService needs to translate
+Tender's internal asset-type vocabulary into SteamGridDB API endpoints
 and to convert unsigned Steam app IDs into the signed int32 form
 ``shortcuts.vdf`` records use.
 """
@@ -17,7 +17,7 @@ from urllib.parse import quote
 # sgdb_id (if any) should win. RomM is the source of truth.
 ResolutionDecision = Literal["use_state", "use_romm", "unresolved"]
 
-# Plugin-internal singular asset-type names mapped to the SGDB endpoint segment.
+# Internal singular asset-type names mapped to the SGDB endpoint segment.
 # The asset-type strings on the right are what the SGDB HTTP API exposes
 # (``/heroes/game/{id}``, ``/logos/game/{id}``, ``/grids/game/{id}``,
 # ``/icons/game/{id}``).

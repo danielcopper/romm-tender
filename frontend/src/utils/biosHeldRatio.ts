@@ -8,7 +8,7 @@
  * is `docs/architecture/qam-panel.md` → BIOS files.
  *
  * The pair is the RomM library's inventory for the platform: `server_count` is
- * what the library holds, and `local_count` how many of those the plugin found
+ * what the library holds, and `local_count` how many of those Tender found
  * at their destination. The rest of the tree calls that axis the **held/offered
  * ratio** (`domain/bios_status.py`, `types/firmware.ts`, GLOSSARY.md → Library
  * inventory) — the same two numbers under the name the code gives them, which is

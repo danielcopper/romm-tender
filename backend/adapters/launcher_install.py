@@ -90,7 +90,7 @@ class LauncherInstallAdapter:
         only path that narrows it and it costs the same read either way.
 
         Deliberately not ``os.access(..., X_OK)``: that answers for the account
-        this plugin runs as, and the account that matters is the one Steam
+        Tender runs as, and the account that matters is the one Steam
         launches under. Where those differ no mode would help, and where they
         are the same the mode comparison already says it.
         """

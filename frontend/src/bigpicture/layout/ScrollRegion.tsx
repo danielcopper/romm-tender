@@ -148,7 +148,7 @@ function revealBottom(region: HTMLElement, focused: HTMLElement): boolean {
 function revealEdge(event: FocusEvent<HTMLElement>): void {
   const region = event.currentTarget;
   const focused = event.target;
-  // Asked of the node's OWN view, never the module's global. Plugin code runs
+  // Asked of the node's OWN view, never the module's global. The panel's code runs
   // in the SharedJSContext window and these nodes belong to the QAM's separate
   // document, so a bare `focused instanceof HTMLElement` names a different
   // realm's constructor and is false for every node this handler will ever

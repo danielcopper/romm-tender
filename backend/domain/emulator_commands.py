@@ -1,7 +1,7 @@
 """Classify ES-DE ``<command>`` strings into safely-bakeable emulator options.
 
-Given the label + command text of one ES-DE ``<command>``, decide whether the
-plugin can bake it into a Steam shortcut's ``-e`` override — a real emulator
+Given the label + command text of one ES-DE ``<command>``, decide whether
+Tender can bake it into a Steam shortcut's ``-e`` override — a real emulator
 invocation ending in ``%ROM%`` — and whether it is a RetroArch libretro core or
 a standalone emulator. The system-layer default is the first *safely-bakeable*
 command in document order; the emulator picker offers every command annotated
@@ -22,7 +22,7 @@ from typing import Any, Protocol
 
 from domain.shortcut_data import EmulatorInvocation
 
-# A RetroArch libretro command in the exact shape the plugin bakes: the
+# A RetroArch libretro command in the exact shape Tender bakes: the
 # RetroArch launcher, ``-L`` the core ``.so``, then ``%ROM%``. The captured
 # group is the bare libretro core name (no ``.so``).
 _LIBRETRO_RE = re.compile(r"^%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/([\w-]+_libretro)\.so %ROM%$")
@@ -63,7 +63,7 @@ class EmulatorOption:
 
     ``status`` is the bake verdict:
 
-    - ``"bakeable"`` — a real emulator invocation ending in ``%ROM%`` the plugin
+    - ``"bakeable"`` — a real emulator invocation ending in ``%ROM%`` Tender
       can bake into a shortcut ``-e`` override (``reason`` is ``None``).
     - ``"needs_setup"`` — a command that is well-formed but not yet launchable
       from Steam as-is: a ``%INJECT%`` form that needs ES-DE to generate a
@@ -219,8 +219,8 @@ def _emulator_kind(text: str) -> tuple[str, str | None]:
 def select_default_option(options: list[EmulatorOption]) -> EmulatorOption | None:
     """Return the first *bakeable* option in document order, or ``None``.
 
-    ES-DE lists a system's emulators in preference order; the first one the
-    plugin can bake is the system-layer default. Skips ``needs_setup`` and
+    ES-DE lists a system's emulators in preference order; the first one
+    Tender can bake is the system-layer default. Skips ``needs_setup`` and
     ``unbakeable`` options (the ``%INJECT%`` / shortcut / quoting forms). When
     nothing is bakeable the caller bakes the plain RetroDECK launch and lets
     RetroDECK resolve the emulator itself.
@@ -311,7 +311,7 @@ def resolve_platform_label(options: list[EmulatorOption], override: str | None) 
 
     The name half of :func:`resolve_platform_option`. ``None`` where the platform
     resolves to no bakeable emulator at all — a surface states THAT; it is never
-    a name, and least of all "Default", which says the plugin picked one.
+    a name, and least of all "Default", which says Tender picked one.
     """
     option = resolve_platform_option(options, override)
     return option.label if option is not None else None

@@ -53,7 +53,7 @@ export interface CollectionSyncSetting {
   /**
    * Whether this collection is the signed-in user's own (#1532). Virtual
    * collections have no owner and are always `true`. A standard or smart
-   * collection is `null` while the plugin does not yet know who the user is:
+   * collection is `null` while Tender does not yet know who the user is:
    * nothing established it either way, and the owner scope hides nothing then.
    */
   is_own: boolean | null;
@@ -388,7 +388,7 @@ export interface SyncPreview {
   /**
    * Absolute wall-clock deadline (epoch SECONDS) the backend stops accepting
    * this preview at — 30 minutes after it was computed. Absolute rather than a
-   * remaining-seconds count because the plugin and the panel share a machine
+   * remaining-seconds count because the backend and the panel share a machine
    * and a clock, and a deadline survives the Deck suspending where a locally
    * counted-down number does not. Absent on older backends; the card then shows
    * no countdown and behaves exactly as it did before.

@@ -1,7 +1,7 @@
 """Filesystem adapter for cover-art file operations.
 
 Owns the raw POSIX calls used by ArtworkService to manage cover art across the
-plugin-owned per-ROM cover cache and the Steam grid directory. Path
+Tender's own per-ROM cover cache and the Steam grid directory. Path
 construction, registry lookups, and orphan detection remain a service concern;
 this adapter exposes only the I/O seams declared by
 ``services.protocols.CoverArtFileStore``.

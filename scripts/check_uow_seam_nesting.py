@@ -198,7 +198,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # ES-DE's catalogue for the entry, the emulator's own configuration for
         # the granularity, and the save root for the directory, on EVERY call:
         # this seam caches no answer at all, because a remembered granularity
-        # would have the plugin carry a shared card as one game's save. 170 ms
+        # would have Tender carry a shared card as one game's save. 170 ms
         # warm and 490 ms cold on the reference machine, which makes it the most
         # expensive entry in this list. It is a method on an object-shaped
         # Protocol, so the method name is what a consumer writes and there is no
@@ -227,7 +227,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the implementation's own method name.
         "resolve_sandbox_launcher",
         "_sandbox_launcher",
-        # SystemResolver (services/protocols/paths.py) — parses the plugin's
+        # SystemResolver (services/protocols/paths.py) — parses Tender's
         # OWN bundled defaults/config.json for its platform_map. Implemented
         # on the RomM HTTP adapter, which the name makes easy to misread twice
         # over: it does no network work, and the file is not RetroDECK's
@@ -320,7 +320,7 @@ _DEADLOCK_REMEDY = (
 _WRITE_LOCK_REMEDY = (
     "snapshot inside the UoW, close it, "
     "then do the I/O outside (BEGIN IMMEDIATE holds the write lock even for a "
-    "read-only UoW, so every other writer in the plugin waits for as long as the I/O "
+    "read-only UoW, so every other writer in the backend waits for as long as the I/O "
     "takes, up to busy_timeout)"
 )
 

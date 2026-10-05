@@ -91,7 +91,7 @@
 
 -- -----------------------------------------------------------------------------
 -- roms — Rom aggregate: ROM identity + the Steam-shortcut binding.
--- One row per ROM the plugin tracks. Created when a ROM is synced from RomM;
+-- One row per ROM Tender tracks. Created when a ROM is synced from RomM;
 -- the anchor every per-ROM child table cascades from. Deleted only on a
 -- deliberate library prune (see retention note above).
 -- -----------------------------------------------------------------------------

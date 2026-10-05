@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 _SYNC_CANCELLED = "Sync cancelled"
 
-# The RomM virtual-collection types the plugin syncs as browsable collections.
+# The RomM virtual-collection types Tender syncs as browsable collections.
 # RomM's ``VirtualCollection`` model has five ``type`` values, but only these two
 # are surfaced as browsable collections in RomM's own Collections view: IGDB
 # ``franchise`` groupings and the default IGDB ``collection`` (series) groupings.

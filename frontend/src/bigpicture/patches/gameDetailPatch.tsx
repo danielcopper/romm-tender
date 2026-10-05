@@ -25,7 +25,7 @@ import { debugLog } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { isRomMAppId, rommAppIdCount } from "../../utils/rommAppIds";
 import { installGamePagePatch } from "./installGamePagePatch";
-import { PLUGIN_NAME } from "../../utils/toast";
+import { DISPLAY_NAME } from "../../utils/toast";
 
 // Tracks which appIds have already had their tree dumped (once per page load)
 let treeDumped = false;
@@ -251,6 +251,6 @@ export function registerGameDetailPatch() {
     // records the miss in the line it logs there — nothing reaches the screen,
     // since the answer costs a feature rather than the panel. This line names
     // the game page, for whoever reads the log with the game page in mind.
-    console.warn(`[${PLUGIN_NAME}] Steam's game-page route was not found, so no Tender section will appear on it.`);
+    console.warn(`[${DISPLAY_NAME}] Steam's game-page route was not found, so no Tender section will appear on it.`);
   }
 }

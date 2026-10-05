@@ -3,7 +3,7 @@
 RomM stores a multi-file save as a single zipped asset and identifies it by a
 content hash computed *per zip entry*, not over the raw archive bytes — the zip
 container's own framing (member order, timestamps, compression) is not stable,
-so hashing the archive whole would never converge across clients. The plugin
+so hashing the archive whole would never converge across clients. Tender
 must reproduce that exact scheme so a zip save's local and server hashes match
 and save-sync converges instead of round-tripping forever.
 

@@ -191,7 +191,7 @@ class TestStoredReading:
         ],
     )
     def test_an_entry_the_validation_would_refuse_is_never_sent(self, entry):
-        """A hand-edited settings.json must not put a header on the wire the plugin cannot vouch for."""
+        """A hand-edited settings.json must not put a header on the wire Tender cannot vouch for."""
         assert stored_custom_headers([entry]) == ()
 
     def test_a_later_duplicate_is_dropped(self):

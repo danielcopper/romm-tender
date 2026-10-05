@@ -8,7 +8,7 @@
  * resolver's per-file answer and the reading's completeness together produce.
  * `not_needed` is a finished answer — every emulator the platform offers was
  * read and none asks for the file — while `unknown` is the absence of one. They
- * are never folded together: the collapse is what made a file the plugin could
+ * are never folded together: the collapse is what made a file Tender could
  * not ask about look like a file nothing wanted.
  */
 export type FirmwareWanted = "needed" | "optional" | "not_needed" | "unknown";
@@ -205,7 +205,7 @@ interface FirmwareFile extends FirmwareVerdict {
   used_by_active?: boolean;
   on_server: boolean;
   supplied_by?: string | null;
-  /** How many of the plugin's own downloads a delete on THIS row would remove:
+  /** How many of Tender's own downloads a delete on THIS row would remove:
    *  1 for a declared file a download record names and still holds, and for a
    *  declared FOLDER the number of recorded files written underneath it — the
    *  emulator lists the folder, but whatever we downloaded into it is ours.
@@ -368,7 +368,7 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
   local_count?: number;
   known_count?: number;
   unknown_count?: number;
-  /** How many files Delete BIOS would remove: download records this plugin
+  /** How many files Delete BIOS would remove: download records Tender
    *  wrote whose file is still on disk. Deliberately not `local_count` — that is
    *  the library's progress ratio, which counts files nothing here put on disk
    *  and drops our own downloads once RomM stops listing them. */
@@ -425,7 +425,7 @@ export interface BiosFileStatus extends FirmwareVerdict {
   cores?: Record<string, { required: boolean; one_of?: OneOfMembership | null }>;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
-   *  It still counts as missing — it just cannot be fetched from the plugin. */
+   *  It still counts as missing — Tender just cannot fetch it. */
   on_server?: boolean;
   /** The distribution whose own copy is sitting at the destination, as the
    *  resolver writes that distribution's name — printed verbatim, never mapped

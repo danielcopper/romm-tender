@@ -87,7 +87,7 @@ describe("removeShortcutConfirmedOutcome", () => {
       Apps: {
         RemoveShortcut: remove,
         RegisterForAppDetails: (_appId: number, callback: (details: SteamAppDetails) => void) => {
-          queueMicrotask(() => callback({ strShortcutExe: "/plugin/bin/tender-rom-launcher" }));
+          queueMicrotask(() => callback({ strShortcutExe: "/tender/bin/tender-rom-launcher" }));
           return { unregister: vi.fn() };
         },
       },
@@ -133,7 +133,7 @@ describe("removeShortcutConfirmedOutcome", () => {
       Apps: {
         RemoveShortcut: remove,
         RegisterForAppDetails: (_appId: number, callback: (details: SteamAppDetails) => void) => {
-          queueMicrotask(() => callback({ strShortcutExe: "/plugin/bin/tender-rom-launcher" }));
+          queueMicrotask(() => callback({ strShortcutExe: "/tender/bin/tender-rom-launcher" }));
           return { unregister: vi.fn() };
         },
       },

@@ -14,7 +14,7 @@
  */
 
 import type { DownloadFailedEvent, DownloadItem } from "../types";
-import { PLUGIN_NAME } from "./toast";
+import { DISPLAY_NAME } from "./toast";
 
 export interface ToasterLike {
   toast: (msg: { title: string; body: string }) => void;
@@ -50,7 +50,7 @@ export function handleGlobalDownloadFailure(
     error: event.error_message,
   });
   toast.toast({
-    title: PLUGIN_NAME,
+    title: DISPLAY_NAME,
     body: `Download failed: ${event.rom_name} — ${event.error_message}`,
   });
 }

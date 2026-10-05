@@ -1459,7 +1459,7 @@ describe("gameDetailStore", () => {
         expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalledTimes(2);
 
         // The one thing this must not turn into is a spin, or a second
-        // backend-readiness ladder next to the plugin's own: the retry having
+        // backend-readiness ladder next to Tender's own: the retry having
         // failed too is not itself a reason to read again — not now, and not
         // five minutes from now either.
         await act(async () => {

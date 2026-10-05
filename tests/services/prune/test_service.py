@@ -409,8 +409,8 @@ def _steam_snapshot(app_id: int) -> dict[str, object]:
     return {
         "app_id": app_id,
         "name": "Game",
-        "exe": "/plugin/bin/tender-rom-launcher",
-        "start_dir": "/plugin",
+        "exe": "/tender/bin/tender-rom-launcher",
+        "start_dir": "/tender",
         "launch_options": "launch",
         "minutes_playtime_forever": 10,
         "minutes_playtime_last_two_weeks": 2,
@@ -841,7 +841,7 @@ async def test_cancel_before_the_run_task_starts_still_releases_the_claim(harnes
     await asyncio.sleep(0)
 
     # A claim left set here would refuse Play, downloads and saves for the rest
-    # of the plugin's life, with no run to release it.
+    # of the backend's life, with no run to release it.
     assert harness.service.is_active() is False
     assert harness.conflicts.cleanup_running is False
     assert harness.uow.roms.get(1) is not None

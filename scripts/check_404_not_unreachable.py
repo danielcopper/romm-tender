@@ -3,7 +3,7 @@
 
 RomM answers a request for an entity it no longer has with HTTP 404. That is
 the server *answering*, not the server being unreachable, so it must reach the
-frontend as ``not_found`` — never as ``server_unreachable``. The plugin already
+frontend as ``not_found`` — never as ``server_unreachable``. Tender already
 owns the funnel that decides this (:func:`lib.errors.classify_error`, which maps
 ``RommNotFoundError`` to :data:`ErrorCode.NOT_FOUND`); the recurring defect is a
 catch-all ``except Exception`` that ignores the funnel and hardcodes the

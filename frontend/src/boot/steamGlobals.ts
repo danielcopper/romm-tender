@@ -194,7 +194,7 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // the report names is installed. The panel itself gets no chance to notice: a
     // module-scope `SP_JSX.jsx` sits in its import graph (`dist/index.js:4892`,
     // from `PlatformDetail.tsx`), so with `SP_JSX` unset it throws while being
-    // evaluated — before `definePlugin`'s factory exists, and long before any
+    // evaluated — before `definePanel`'s factory exists, and long before any
     // check inside it could run.
     //
     // `SP_REACT` and `SP_REACTDOM` have no such hole: a miss leaves them unset.

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Target:
-    """Where a ROM's content belongs, and what the plugin expects to find there.
+    """Where a ROM's content belongs, and what Tender expects to find there.
 
     ``manifest_name`` is the name the server's manifest uses for the single-file
     case, which need not equal the on-disk name the download derives from

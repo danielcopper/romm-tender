@@ -574,7 +574,7 @@ class SyncReporter:
         whole unit's shortcut-shaped build), binds the ROM only when it is a
         binding target this cycle (else preserves its existing binding — a
         non-representative sibling stays unbound, a bound row not re-acked keeps
-        its shortcut), read-merges the plugin-resolved ids
+        its shortcut), read-merges the locally resolved ids
         (``sgdb_id`` / ``ra_id`` / ``cover_path`` / ``cover_source`` follow
         "confirmed new wins, else preserve existing, else None"), saves the Rom,
         then stamps its cached metadata. Saving the Rom before its metadata satisfies the
@@ -603,7 +603,7 @@ class SyncReporter:
         except ValueError as e:
             self._logger.warning(f"Skipping invalid ROM {rom_id} during commit: {e}")
             return
-        self._merge_plugin_resolved_fields(rom, rom_id, built, finalized, existing)
+        self._merge_locally_resolved_fields(rom, rom_id, built, finalized, existing)
         self._merge_fetch_generation(rom, fetch_id, existing)
         uow.roms.save(rom)
 
@@ -621,8 +621,8 @@ class SyncReporter:
 
         self._stamp_rom_metadata(uow, rom_id, roms_by_id.get(rom_id))
 
-    def _merge_plugin_resolved_fields(self, rom: Rom, rom_id: int, built, finalized, existing) -> None:
-        """Read-merge the plugin-resolved fields onto the freshly built Rom.
+    def _merge_locally_resolved_fields(self, rom: Rom, rom_id: int, built, finalized, existing) -> None:
+        """Read-merge the locally resolved fields onto the freshly built Rom.
 
         Each field follows "confirmed new wins, else preserve existing, else
         None": ``cover_path`` from this unit's finalized grid copies,
@@ -651,7 +651,7 @@ class SyncReporter:
         """Advance the row's fetch generation, or carry the existing one forward.
 
         Follows the same "confirmed new wins, else preserve existing, else None"
-        merge as the plugin-resolved fields: a **platform** unit's commit supplies
+        merge as the locally resolved fields: a **platform** unit's commit supplies
         the generation and advances every row it upserts, while a **collection**
         unit (which supplies none) must leave a foreign platform's row on its own
         generation — re-marking it would drop it from that platform's counted
@@ -685,7 +685,7 @@ class SyncReporter:
 
     @staticmethod
     def _merge_optional_id(new_value, existing_value) -> int | None:
-        """Resolve a plugin-resolved id: non-None new wins, else preserve existing, else None."""
+        """Resolve a locally resolved id: non-None new wins, else preserve existing, else None."""
         if new_value is not None:
             return int(new_value)
         if existing_value is not None:
@@ -943,7 +943,7 @@ class SyncReporter:
         bound-shortcut count in ``roms``.
 
         The last two are what makes the panel's resume offer honest, and
-        they are two facts rather than one because this plugin keeps **two** kinds
+        they are two facts rather than one because Tender keeps **two** kinds
         of durable progress. A **completion stamp** makes the next run pass over a
         whole platform or collection at fetch time; a **recorded launch command**
         makes it pass over one game at apply time. Both survive a stopped run and

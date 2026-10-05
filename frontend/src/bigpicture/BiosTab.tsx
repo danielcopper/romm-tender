@@ -22,7 +22,7 @@
  * Library page's Platforms tab, which is the management surface.
  *
  * A row can also be a file an emulator wants that the RomM library does not hold
- * (`on_server` false). No page in the plugin can fetch it, so it says so rather
+ * (`on_server` false). No page in Tender can fetch it, so it says so rather
  * than looking like a download nobody has started. Not holding it is a separate
  * question from not having it: RetroDECK ships `dolphin-emu/Sys/codehandler.bin`
  * into the BIOS directory, so that row is unfetchable and satisfied at once —

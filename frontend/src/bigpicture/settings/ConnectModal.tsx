@@ -1,7 +1,7 @@
 /**
  * One-time prompt for signing in to RomM — by minting a Client API Token from a
  * username + password, by pasting a token created in RomM's web UI, or by
- * entering a short-lived pairing code the plugin exchanges for a token (the two
+ * entering a short-lived pairing code Tender exchanges for a token (the two
  * token paths are for OIDC accounts, which have no password to mint from).
  *
  * The credentials and the pasted token are write-only: never pre-filled, never

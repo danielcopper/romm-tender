@@ -1,5 +1,5 @@
 /**
- * Plugin-wide developer/diagnostic toggles. Currently houses the log-level
+ * Tender-wide developer/diagnostic toggles. Currently houses the log-level
  * dropdown; future additions belong here when they're orthogonal to any other
  * panel. Pure renderer: parent owns the current log level.
  */

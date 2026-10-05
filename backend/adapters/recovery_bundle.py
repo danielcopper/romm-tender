@@ -65,10 +65,10 @@ bundle once you are sure you no longer need it.
 class RecoveryBundleAdapter:
     """Single owner of recovery staging, verification, and atomic sealing."""
 
-    def __init__(self, *, user_home: str, package_name: str, plugin_version: str) -> None:
+    def __init__(self, *, user_home: str, package_name: str, version: str) -> None:
         self._home = os.path.abspath(user_home)
         self._root = os.path.join(self._home, f"{sanitize_package_name(package_name)}-recovery")
-        self._plugin_version = plugin_version
+        self._version = version
 
     def root(self) -> str:
         return self._root
@@ -356,7 +356,7 @@ class RecoveryBundleAdapter:
             free_bytes = self._free_bytes_fd(root_fd)
             records, source_sets, checksums = self._copy_artifacts(staging_fd, artifacts, free_bytes, should_abort)
             enriched = dict(snapshot)
-            enriched["plugin_version"] = self._plugin_version
+            enriched["plugin_version"] = self._version
             enriched["bundle_id"] = bundle_id
             enriched["artifacts"] = records
             enriched["source_sets"] = source_sets

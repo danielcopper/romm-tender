@@ -533,7 +533,7 @@ class MigrationService:
         """Yield ``(path relative to old_saves, absolute path)`` for each file a migration may move.
 
         Hidden directories (those whose name begins with ``.``) and the files
-        they contain are skipped, as is any hidden file: the RomM plugin's
+        they contain are skipped, as is any hidden file: Tender's
         ``.romm-backup`` sidecars and any ad-hoc user dotdirs must not be
         migrated.
         """

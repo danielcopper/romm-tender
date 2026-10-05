@@ -384,7 +384,7 @@ class GroupFinalizer:
         handle: RecoveryHandle | None,
         ledger: MutationLedger,
     ) -> tuple[str, object] | None:
-        """Clear the plugin's own caches, then the Steam files a removal orphaned."""
+        """Clear Tender's own caches, then the Steam files a removal orphaned."""
         try:
             claims = handle.source_claims if handle is not None else None
             artifact_outcome = await self._loop.run_in_executor(

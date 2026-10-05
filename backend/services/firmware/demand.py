@@ -37,7 +37,7 @@ class FirmwareDemandConfig:
     Holds the two resolver seams — the per-platform reading every status answer
     is built from, and the whole-machine one the two callers with no platform to
     name fall back to — the RetroDECK path accessor the destinations are built
-    under, the file store the plugin's own presence probe goes through, and the
+    under, the file store Tender's own presence probe goes through, and the
     logger a poisoned entry is reported on.
     """
 

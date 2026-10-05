@@ -823,7 +823,7 @@ class TestSetGameCoreTransactionBoundary:
     """The label resolution runs between transactions, never inside one.
 
     The emulator-options read re-probes ES-DE's config and each option's
-    install on every call; the slug→system resolver parses the plugin's own
+    install on every call; the slug→system resolver parses Tender's own
     ``config.json`` once and memoises it for the life of the process, so it is
     the first call that can land on the file. A UoW takes SQLite's ``BEGIN
     IMMEDIATE`` write lock, so either read held inside one stalls every other

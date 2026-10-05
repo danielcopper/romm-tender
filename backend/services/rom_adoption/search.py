@@ -244,8 +244,8 @@ class CandidateSearch:
         on removable storage — one side would describe a file under a path the
         other never produces, and the install rows the search subtracts are
         recorded under the download's spelling. The page would then report a copy
-        the click search cannot find, and the backstop would fire on the
-        plugin's own installs.
+        the click search cannot find, and the backstop would fire on
+        Tender's own installs.
 
         ``None`` for anything that cannot be derived, including the traversal
         ``safe_join`` refuses; the caller's answer is "no candidate", which is
@@ -363,8 +363,8 @@ class CandidateSearch:
     def _installed_paths(self) -> frozenset[str]:
         """Every path a ``rom_installs`` row already accounts for.
 
-        A ROM the plugin installed is another game's content and the row is the
-        plugin's claim on it, so the search subtracts it rather than offering one
+        A ROM Tender installed is another game's content and the row is
+        Tender's claim on it, so the search subtracts it rather than offering one
         game's files as a candidate for another's.
         """
         with self._uow_factory() as uow:

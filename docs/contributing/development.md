@@ -11,9 +11,9 @@ Guide for setting up a development environment and contributing to Tender.
   ([How the panel gets into Steam](../architecture/loading-the-panel.md#steams-remote-debugging-marker)).
   [Decky Loader](https://decky.xyz/) is no longer needed, and the panel coexists with one that is installed.
 
-> **On Windows, develop inside [WSL2](https://learn.microsoft.com/windows/wsl/install).** The plugin targets Linux —
-> some adapters import Unix-only modules (e.g. `fcntl`), a few dev dependencies have no Windows wheel, and CI runs on
-> Linux. Native Windows is not supported for running the test suite; in a WSL2 Linux distro the same `mise install` /
+> **On Windows, develop inside [WSL2](https://learn.microsoft.com/windows/wsl/install).** Tender targets Linux — some
+> adapters import Unix-only modules (e.g. `fcntl`), a few dev dependencies have no Windows wheel, and CI runs on Linux.
+> Native Windows is not supported for running the test suite; in a WSL2 Linux distro the same `mise install` /
 > `mise run setup` / `mise run test` work unchanged.
 
 ## Setup
@@ -118,9 +118,9 @@ python -m pytest tests/adapters/test_gavel_native_property.py tests/domain/test_
 ```
 
 Hypothesis is a dev-only dependency (pinned in `requirements-dev.txt`, compiled into `requirements-dev.lock` via
-`mise run lock-update` — it never ships in the plugin). A CI-safe profile in `tests/conftest.py` sets `deadline=None`
-(no timing flakes on shared runners) and a fixed example count. The example database is written to `.hypothesis/`, which
-is gitignored. See `.claude/rules/testing-backend.md` for the convention on pinning a property that encodes an open bug.
+`mise run lock-update` — it never ships in Tender). A CI-safe profile in `tests/conftest.py` sets `deadline=None` (no
+timing flakes on shared runners) and a fixed example count. The example database is written to `.hypothesis/`, which is
+gitignored. See `.claude/rules/testing-backend.md` for the convention on pinning a property that encodes an open bug.
 
 ### Contract tests
 

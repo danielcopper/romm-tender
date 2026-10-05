@@ -44,8 +44,8 @@ def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None
 
     Read live on every call and never remembered ACROSS operations — the user
     changes a core's options in the emulator's own quick menu between one launch
-    and the next sync, and a granularity read before that change would have the
-    plugin carry a shared card as though it belonged to one game. Within a
+    and the next sync, and a granularity read before that change would have
+    Tender carry a shared card as though it belonged to one game. Within a
     single operation the caller hands this same reading to the consumers that
     would otherwise take their own — the directory follow, the matrix, and the
     negotiate session's inventory on a confirmed ROM — rather than taking a
@@ -90,7 +90,7 @@ def content_dir_skip() -> dict[str, Any]:
 
 
 def save_shape_skip(answer: SaveAnswer) -> dict[str, Any]:
-    """The benign-skip result for a save this plugin cannot carry per game.
+    """The benign-skip result for a save Tender cannot carry per game.
 
     The same shape the ``savefiles_in_content_dir`` skip returns, and for the
     same reason — nothing went wrong, and the game still launches — carrying its

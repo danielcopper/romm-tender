@@ -20,8 +20,8 @@
  */
 
 import { afterPatch, createReactTreePatcher, findInReactTree, findModuleByExport, getReactRoot } from "@decky/ui";
-import type { Plugin } from "../api/host";
-import { PLUGIN_NAME } from "../utils/toast";
+import type { PanelDefinition } from "../api/host";
+import { DISPLAY_NAME } from "../utils/toast";
 import { buildEntry, syncEntry } from "./quickAccessEntry";
 
 /**
@@ -93,7 +93,7 @@ export interface QuickAccessEntryHandle {
  * Build Tender's entry, put it in the Quick Access strip, and keep it there.
  *
  * Takes the FACTORY rather than a built panel, because calling it exactly once
- * is part of the contract `definePlugin` describes: it registers Steam patches,
+ * is part of the contract `definePanel` describes: it registers Steam patches,
  * backend listeners and interceptors that are context-wide, and a second call
  * would install a second set of them.
  *
@@ -106,7 +106,7 @@ export interface QuickAccessEntryHandle {
  * context is unreachable, and an unpatch would be a teardown nothing could ever
  * call.
  */
-export function installQuickAccessEntry(factory: () => Plugin): QuickAccessEntryHandle {
+export function installQuickAccessEntry(factory: () => PanelDefinition): QuickAccessEntryHandle {
   const entry = buildEntry(factory());
 
   const renderers = findQuickAccessRenderers();
@@ -120,7 +120,7 @@ export function installQuickAccessEntry(factory: () => Plugin): QuickAccessEntry
       if (Array.isArray(holder?.props?.tabs)) syncEntry(holder.props.tabs, entry);
       return ret;
     },
-    PLUGIN_NAME,
+    DISPLAY_NAME,
   );
 
   let patched = false;

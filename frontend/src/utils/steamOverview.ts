@@ -8,7 +8,7 @@
  * seam is the object, not the judgement: the three guards below — the rating
  * only where the server sent one, rounded; the categories only where the
  * overview offers the setter; the timestamp only where the caller asked for it
- * — are this plugin's decisions rather than Steam's, so each is asserted in
+ * — are Tender's decisions rather than Steam's, so each is asserted in
  * both directions through its caller in `metadataPatches.test.ts` rather than
  * exempted. The timestamp is the pair worth stating: a single-app write stamps
  * `rt_last_time_played` because a session has just ended, a bulk pass must not
