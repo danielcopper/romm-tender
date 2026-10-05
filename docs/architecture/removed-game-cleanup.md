@@ -337,10 +337,10 @@ only moment the root is known to be wanted is the one that creates it. It is bes
 fail to seal over its folder's signpost.
 
 A bundle records the complete pre-cascade state in lossless JSON: the ROM aggregate, install and metadata state,
-save-sync baselines and files, playtime including pending sessions, completion stamps, plugin artifacts, and applicable
-Steam-only state. Every exact attributable current save is copied and checksum-verified, and existing `.romm-backup`
-history is copied in while remaining at its original location. Bundles are sealed, checksum-verified, descriptor-bound,
-and published atomically under `bundles/`.
+save-sync baselines and files, playtime including pending sessions, completion stamps, Tender's cache files, and
+applicable Steam-only state. Every exact attributable current save is copied and checksum-verified, and existing
+`.romm-backup` history is copied in while remaining at its original location. Bundles are sealed, checksum-verified,
+descriptor-bound, and published atomically under `bundles/`.
 
 ### The human layer
 

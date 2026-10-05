@@ -236,7 +236,7 @@ complete the job.
     **error** offers no resume either: those usually fail before adding anything, so "resume" would be the wrong word
     for it.
 - **Force Full Sync starts over from scratch.** On the **Sync page**, under Options and behind a confirmation, **Force
-  Full Sync** clears the plugin's record of what it has already synced and re-fetches every platform and collection from
+  Full Sync** clears Tender's record of what it has already synced and re-fetches every platform and collection from
   RomM on the next run — and that run also rewrites every shortcut instead of skipping the ones that look correct, so it
   repairs anything that drifted on the Steam side (a manually edited or broken shortcut). Reach for it if you suspect a
   platform is out of sync or want a clean rebuild; a normal sync — or a resume — is enough for everyday updates. It is
@@ -249,9 +249,9 @@ complete the job.
   - **Nothing is left to resume afterwards.** Force Full Sync discards exactly the records a resume would continue from
     — both what it knows about finished platforms and what it knows about each already-correct game — so the line naming
     what would be skipped goes, and with **Skip preview** on the button reads **Sync Library** again even when your last
-    run was cancelled or interrupted. Your games stay in Steam; it is only the plugin's record of what is already
-    correct that goes, which is what makes the next run redo all of it. Whichever button you press next, the run is a
-    full one — nothing on the page promises otherwise.
+    run was cancelled or interrupted. Your games stay in Steam; it is only Tender's record of what is already correct
+    that goes, which is what makes the next run redo all of it. Whichever button you press next, the run is a full one —
+    nothing on the page promises otherwise.
 
 ## Multiple versions of a game
 

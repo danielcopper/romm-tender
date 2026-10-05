@@ -32,7 +32,7 @@ and they mean different things:
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so the plugin leaves it alone.
 - **The save is written inside the game file itself.** There is no separate file to carry.
-- **The emulator files saves under the game's own identity**, which the plugin cannot read yet — in the file name for
+- **The emulator files saves under the game's own identity**, which Tender cannot read yet — in the file name for
   Dreamcast, in the folder name for GameCube. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
 - **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
   known and the names inside it are not.

@@ -620,9 +620,9 @@ without recovery, which leaves its games' images behind. Press **Scan for orphan
 
 ### Other non-Steam games
 
-Everything in your Steam library that neither Steam nor this plugin installed — emulators, launchers, browsers, games
-you added by hand. **Your RomM games are not in this row**, and the removal here cannot touch them: this plugin's own
-shortcuts are told apart by what they launch, not by their names, and removing them is the Tender's shortcuts row's job.
+Everything in your Steam library that neither Steam nor Tender installed — emulators, launchers, browsers, games you
+added by hand. **Your RomM games are not in this row**, and the removal here cannot touch them: Tender's own shortcuts
+are told apart by what they launch, not by their names, and removing them is the Tender's shortcuts row's job.
 
 If Steam's shortcut list cannot be read, that ownership cannot be established — the count shows a dash, the pane says
 the list could not be read, and the removal is refused rather than guessed at. Steam also does not always answer for an

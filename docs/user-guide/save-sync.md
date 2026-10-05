@@ -310,11 +310,11 @@ save files**; or, for games whose save slot you have set up, when you use **Sync
 save files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on its own.
 
 Following a game's saves into the new folder is part of save sync: with save sync off, neither happens. A sorting change
-made while it is off is followed once save sync is on again, the next time the plugin touches that game's saves — for a
-game whose save folder the plugin had already noted before the change. It notes every installed game's folder once, on
-the first start of this version, and each game's again whenever it follows it; a game it had never noted starts from
-where RetroArch looks now. While a [RetroDECK home migration](retrodeck-path-migration.md) is waiting or running,
-nothing is followed: those files are the migration's to move.
+made while it is off is followed once save sync is on again, the next time Tender touches that game's saves — for a game
+whose save folder Tender had already noted before the change. It notes every installed game's folder once, on the first
+start of this version, and each game's again whenever it follows it; a game it had never noted starts from where
+RetroArch looks now. While a [RetroDECK home migration](retrodeck-path-migration.md) is waiting or running, nothing is
+followed: those files are the migration's to move.
 
 If the new folder already holds a file with the same name, nothing is overwritten: the older of the two copies is moved
 into a `.romm-backup` folder beside it, and the newer one is kept where RetroArch looks.

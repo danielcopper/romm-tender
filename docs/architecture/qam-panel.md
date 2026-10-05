@@ -1821,7 +1821,7 @@ since.
 Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Six sections: five hold
 what the narrow page stacked in eight — Registered Devices sits under Save Sync, SteamGridDB joins the other external
 service under Connections, and the save-sort migration the narrow page carried is gone, because each game now follows
-its own save directory the next time the plugin touches its saves — and Updates is new.
+its own save directory the next time Tender touches its saves — and Updates is new.
 
 | Section       | Holds                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

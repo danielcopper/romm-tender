@@ -342,8 +342,8 @@ in both places at once. There is one copy, not two.
 ### Deleting BIOS Files
 
 You can remove BIOS files from a platform's pane in **Library › Platforms**, one at a time or all at once. Both only
-ever remove what this plugin downloaded and still has on disk; because deletion is local, both work with your RomM
-server offline.
+ever remove what Tender downloaded and still has on disk; because deletion is local, both work with your RomM server
+offline.
 
 The **Delete BIOS** button under the table takes all of them, and its label shows how many (e.g. "Delete BIOS (3)"). It
 is always there and greys out when there is nothing to remove.

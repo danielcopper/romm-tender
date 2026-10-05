@@ -73,8 +73,8 @@ observed on a device. An answer that names no directory — every not-establishe
 given one by a guess; each reader takes its refusal.
 
 When a game's answered directory moves — the user flipped one of RetroArch's sort flags, or anything else changed it —
-its files are followed per game the next time the plugin touches them — a sync, a write to its slots, a delete, or a
-read that counts them; when, and how, is
+its files are followed per game the next time Tender touches them — a sync, a write to its slots, a delete, or a read
+that counts them; when, and how, is
 [Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory).
 
 **Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a

@@ -52,14 +52,14 @@ The **Connections** section manages your RomM server connection.
   **Edit** to change it; the URL saves automatically.
 - **RomM Account** — shows **Signed in** once a token is stored, or **Not signed in** otherwise. Tap **Sign in** to open
   a one-time prompt. The prompt offers three sign-in methods, chosen from the **Sign-in method** dropdown:
-  - **Username & password** (default) — enter your RomM username and password once. The plugin exchanges them for a RomM
+  - **Username & password** (default) — enter your RomM username and password once. Tender exchanges them for a RomM
     Client API Token and stores only the token; your password is discarded after the token is minted and never saved. If
     your account cannot create API tokens, the status reports that.
   - **API token** — paste a Client API Token you created in RomM's web UI. This is one of the two paths for accounts
     that have no password to mint from, such as **OIDC / SSO logins**. See
     [Sign in with an API token (OIDC)](#sign-in-with-an-api-token-oidc) below.
   - **Pairing code** — the other, recommended OIDC path: instead of copying the token, enter the short-lived 8-character
-    code RomM shows when you **Pair** a token. The plugin fetches the token itself, so nothing is copied or pasted. See
+    code RomM shows when you **Pair** a token. Tender fetches the token itself, so nothing is copied or pasted. See
     [Sign in with an API token (OIDC)](#sign-in-with-an-api-token-oidc) below.
 
   Both the credentials and the pasted token are write-only — they are never pre-filled or shown back to you.
@@ -71,9 +71,9 @@ The **Connections** section manages your RomM server connection.
   **(none)**. Only needed when your server sits behind a proxy that authenticates requests itself — see
   [Custom headers for an authenticating proxy](#custom-headers-for-an-authenticating-proxy) below.
 - **Allow Insecure SSL** — shown only for `https://` URLs; skips certificate checks for a self-signed server. Anyone who
-  can intercept the connection can then read what the plugin sends — your RomM token, your password when you sign in
-  with it, and any custom headers — and use your account, so turn it on only on a network you trust. While it is on,
-  every start of the backend writes a warning to its log saying certificate verification is off.
+  can intercept the connection can then read what Tender sends — your RomM token, your password when you sign in with
+  it, and any custom headers — and use your account, so turn it on only on a network you trust. While it is on, every
+  start of the backend writes a warning to its log saying certificate verification is off.
 
 The plugin checks the connection for you — there is no manual "Test Connection" button. The **Connection** row on the
 plugin's main QAM panel shows the live status whenever you open it, and names the problem when it can't connect (for
@@ -267,7 +267,7 @@ picture.
 
 ## Log Level
 
-A dropdown in **Settings › Advanced**. Controls how much detail the plugin logs.
+A dropdown in **Settings › Advanced**. Controls how much detail Tender writes to its log.
 
 | Level              | Description                        |
 | ------------------ | ---------------------------------- |
