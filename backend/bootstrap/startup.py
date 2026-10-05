@@ -14,9 +14,9 @@ restart policy turns that into a loop.
 **The result is returned because one pair of steps has an edge between them.**
 ``report_missing_installs`` runs only after ``detect_retrodeck_path_change``
 has *succeeded*: the report reads the pending homes the detection writes into
-``kv_config``, and if the detection broke off, it reports every install under
-the home RetroDECK has just left as missing rather than as waiting for the
-move. No other pair of steps has such an edge.
+``kv_config``, and if the detection broke off, it reports the installs under
+the home RetroDECK has just left whose files are gone as missing rather than as
+waiting for the move. No other pair of steps has such an edge.
 """
 
 from __future__ import annotations

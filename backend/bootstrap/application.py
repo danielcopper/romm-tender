@@ -63,9 +63,7 @@ class Application:
         steps = StartupSteps(self._logger, report_failure)
         services = self.services
         steps.run("note_update_outcome", services.update_outcome_service.note_start)
-        # The report runs only after a SUCCESSFUL detection: it reads the
-        # pending homes the detection writes, and without them it reports every
-        # install under the home RetroDECK just left as missing.
+        # The one edge between steps; why it exists is bootstrap/startup.py's.
         if steps.run("detect_retrodeck_path_change", services.migration_service.detect_retrodeck_path_change):
             steps.run("report_missing_installs", services.startup_healing_service.report_missing_installs)
         steps.run("reconcile_orphaned_sync_runs", services.startup_healing_service.reconcile_orphaned_sync_runs)

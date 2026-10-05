@@ -3,9 +3,8 @@
 Owns the reconciliation steps that run after state is loaded and
 adapters are wired: reports the downloads whose files are not where their
 ``rom_installs`` row says, and transitions any ``running`` ``SyncRun`` left
-behind by a crash into ``interrupted``. The report deletes nothing: a moved
-folder, an unmounted drive and a deleted file look the same from here, so
-what happens to such a download is the user's call on its game page.
+behind by a crash into ``interrupted``. The report deletes nothing; why
+such a record stays is ``docs/architecture/database-design.md``'s.
 """
 
 from __future__ import annotations
@@ -31,14 +30,23 @@ if TYPE_CHECKING:
     )
 
 
+# How many paths one report line names before it gives only the count.
+_PATHS_LOGGED = 3
+
+
+def _first_paths(paths: Sequence[str]) -> str:
+    shown = paths[:_PATHS_LOGGED]
+    lead = "" if len(shown) == len(paths) else f"; the first {len(shown)}"
+    return f"{lead}: {', '.join(shown)}"
+
+
 @dataclass(frozen=True)
 class StartupHealingServiceConfig:
     """Frozen wiring bundle handed to ``StartupHealingService.__init__``.
 
-    Carries the runtime logger, the clock, the generic path-exists probe,
-    the path resolver that turns a
-    stored home marker into the directory it names, and the SQLite Unit-of-Work
-    factory (the transactional seam over the ``rom_installs``, ``sync_runs``,
+    Carries the runtime logger, the clock, the generic path-exists probe, the
+    path resolver that turns a stored home marker into the directory it names,
+    and the SQLite Unit-of-Work factory (the transactional seam over the ``rom_installs``, ``sync_runs``,
     and ``kv_config`` repositories — the last holding the pending-migration
     previous home marker). The shared ``relaunch_options`` seam builds each
     installed+bound ROM's full launch command (active core, selected disc) so
@@ -73,12 +81,14 @@ class StartupHealingService:
         self._rules = config.conflict_rules
 
     def report_missing_installs(self) -> None:
-        """Log every ``rom_installs`` row whose recorded file and folder are both missing.
+        """Log the ``rom_installs`` rows whose recorded file and folder are both missing.
 
-        Deletes nothing. An install under a pending migration home (the
-        previous home plus any additional hops, #1042) is reported as waiting
-        for that move rather than as missing, because RetroDECK has moved away
-        from those paths and the migration relocates the record.
+        Deletes nothing. One line for the missing downloads and one for those
+        waiting for a pending migration home (the previous home plus any
+        additional hops, #1042) — RetroDECK has moved away from those paths and
+        the migration relocates the record — each with the count and the first
+        :data:`_PATHS_LOGGED` paths, so a drive holding hundreds of downloads
+        costs two lines rather than hundreds.
         """
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
@@ -87,15 +97,21 @@ class StartupHealingService:
                 uow.kv_config.get("retrodeck_home_path_hops"),
             )
         pending_homes = [self._resolve_path(home) for home in stored_homes]
+        missing: list[str] = []
+        waiting: list[str] = []
         for install in installs:
             file_path = install.file_path
             rom_dir = install.rom_dir
             if (file_path and self._path_probe.exists(file_path)) or (rom_dir and self._path_probe.exists(rom_dir)):
                 continue
             if self._under_pending_home(file_path, rom_dir, pending_homes):
-                self._logger.info(f"Download of {install.rom_id} ({file_path}) waits for the pending RetroDECK move")
-                continue
-            self._logger.warning(f"Download of {install.rom_id} is missing: {rom_dir or file_path}")
+                waiting.append(rom_dir or file_path)
+            else:
+                missing.append(rom_dir or file_path)
+        if missing:
+            self._logger.warning(f"{len(missing)} download(s) missing on disk{_first_paths(missing)}")
+        if waiting:
+            self._logger.info(f"{len(waiting)} download(s) wait for the pending RetroDECK move{_first_paths(waiting)}")
 
     def _under_pending_home(self, file_path: str, rom_dir: str | None, pending_homes: Sequence[str]) -> bool:
         """Answer whether one install's recorded paths live under a pending home.

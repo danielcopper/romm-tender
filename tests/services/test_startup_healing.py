@@ -96,7 +96,7 @@ def _make_service(
 
 
 def _missing_reports(caplog: pytest.LogCaptureFixture) -> list[str]:
-    return [rec.message for rec in caplog.records if "is missing" in rec.message]
+    return [rec.message for rec in caplog.records if "missing on disk" in rec.message]
 
 
 def _waiting_reports(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -123,8 +123,7 @@ class TestReportMissingInstalls:
         assert uow.rom_installs.get(2) is not None
         assert uow.roms.get(1) is not None
         assert _missing_reports(caplog) == [
-            "Download of 1 is missing: /run/media/deck/Emulation/retrodeck/roms/n64/a.z64",
-            f"Download of 2 is missing: {rom_dir}",
+            f"2 download(s) missing on disk: /run/media/deck/Emulation/retrodeck/roms/n64/a.z64, {rom_dir}"
         ]
 
     def test_a_present_file_is_not_reported(self, logger, caplog):
@@ -164,7 +163,7 @@ class TestReportMissingInstalls:
         assert uow.rom_installs.get(1) is not None
         assert _missing_reports(caplog) == []
         assert _waiting_reports(caplog) == [
-            "Download of 1 (/old/retrodeck/roms/n64/zelda.z64) waits for the pending RetroDECK move"
+            "1 download(s) wait for the pending RetroDECK move: /old/retrodeck/roms/n64/zelda.z64"
         ]
 
     def test_an_install_under_a_pending_hop_home_waits_for_the_move(self, logger, caplog):
@@ -230,8 +229,22 @@ class TestReportMissingInstalls:
         with caplog.at_level(logging.INFO):
             service.report_missing_installs()
 
-        assert _missing_reports(caplog) == ["Download of 1 is missing: /foobar/x.z64"]
+        assert _missing_reports(caplog) == ["1 download(s) missing on disk: /foobar/x.z64"]
         assert uow.rom_installs.get(1) is not None
+
+    def test_many_missing_downloads_cost_one_line_naming_the_first_three(self, logger, caplog):
+        uow = FakeUnitOfWork()
+        for rom_id in range(1, 6):
+            _seed_install(uow, rom_id, file_path=f"/sd/roms/n64/game_{rom_id}.z64")
+        service = _make_service(logger=logger, uow=uow)
+
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert _missing_reports(caplog) == [
+            "5 download(s) missing on disk; the first 3: "
+            "/sd/roms/n64/game_1.z64, /sd/roms/n64/game_2.z64, /sd/roms/n64/game_3.z64"
+        ]
 
     def test_the_report_writes_nothing(self, logger):
         uow = FakeUnitOfWork()
