@@ -26,6 +26,7 @@ from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcess
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.system_time import FakeSleeper
 
+from lib.errors import Refused
 from services.game_process import (
     _GRACE_POLL_SECONDS,
     _GRACE_POLLS,
@@ -84,24 +85,21 @@ def _make_service(
 
 class TestNothingRunning:
     @pytest.mark.asyncio
-    async def test_returns_the_canonical_not_running_failure(self) -> None:
+    async def test_refuses_with_not_running(self) -> None:
         control = FakeGameProcessControlAdapter(pids=[])
 
-        result = await _make_service(control).stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await _make_service(control).stop_running_game(ROM_ID)
 
-        assert result["success"] is False
-        assert result["reason"] == "not_running"
-        assert isinstance(result["message"], str)
-        assert result["message"]
-        # Canonical failure shape only — never the forbidden legacy keys.
-        assert "error" not in result
-        assert "error_code" not in result
+        assert refused.value.reason == "not_running"
+        assert refused.value.message == "No running game was found to stop."
 
     @pytest.mark.asyncio
     async def test_signals_nothing_at_all(self) -> None:
         control = FakeGameProcessControlAdapter(pids=[])
 
-        await _make_service(control).stop_running_game(ROM_ID)
+        with pytest.raises(Refused):
+            await _make_service(control).stop_running_game(ROM_ID)
 
         assert control.stop_calls == []
         assert control.kill_calls == []
@@ -112,10 +110,11 @@ class TestNothingRunning:
         # mismatched id resolves to nothing on the fake.
         control = FakeGameProcessControlAdapter(pids=[101], app_id="org.videolan.VLC")
 
-        result = await _make_service(control).stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await _make_service(control).stop_running_game(ROM_ID)
 
         assert control.find_calls == [APP_ID]
-        assert result["reason"] == "not_running"
+        assert refused.value.reason == "not_running"
 
 
 class TestStopRequestAlone:
@@ -276,20 +275,19 @@ class TestNeverRepeatsTheStopRequest:
         first, second = await asyncio.gather(
             service.stop_running_game(ROM_ID),
             service.stop_running_game(ROM_ID),
+            return_exceptions=True,
         )
 
         # THE assertion: one stop request for that pid across BOTH calls.
         assert control.stop_calls == [101]
-        # The loser is refused with the canonical shape rather than silently
-        # no-oping, so the frontend can say something true about it.
-        outcomes = {first["success"], second["success"]}
-        assert outcomes == {True, False}
-        refused = first if first["success"] is False else second
-        assert refused["reason"] == "already_stopping"
-        assert isinstance(refused["message"], str)
-        assert refused["message"]
-        assert "error" not in refused
-        assert "error_code" not in refused
+        # The loser is refused rather than silently no-oping, so the frontend
+        # can say something true about it.
+        refusals = [outcome for outcome in (first, second) if isinstance(outcome, Refused)]
+        answers = [outcome for outcome in (first, second) if isinstance(outcome, dict)]
+        assert len(refusals) == 1
+        assert answers == [{"success": True, "stopped": 1, "force_killed": 1}]
+        assert refusals[0].reason == "already_stopping"
+        assert refusals[0].message == "The game is already being stopped."
         # The refusal never touched the process table at all.
         assert control.find_calls == [APP_ID]
 
@@ -423,9 +421,10 @@ class TestTargetsOnlyTheMatchedInstance:
             launch_path=FakeRomLaunchPathReader({ROM_ID: "/home/deck/retrodeck/roms/snes/Aladdin.zip"}),
         )
 
-        result = await service.stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
 
-        assert result["reason"] == "game_not_running"
+        assert refused.value.reason == "game_not_running"
         assert control.stop_calls == []
         assert control.kill_calls == []
 
@@ -438,10 +437,10 @@ class TestTargetsOnlyTheMatchedInstance:
         control.add_instance([101], "/home/deck/other/roms/psx/ours.chd")
         service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: self.OURS}))
 
-        result = await service.stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
 
-        assert result["success"] is False
-        assert result["reason"] == "game_not_running"
+        assert refused.value.reason == "game_not_running"
         assert control.stop_calls == []
         assert control.kill_calls == []
 
@@ -450,14 +449,11 @@ class TestTargetsOnlyTheMatchedInstance:
         control = self._two_instances()
         service = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: "/roms/gb/other.gb"}))
 
-        result = await service.stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
 
-        assert result["success"] is False
-        assert result["reason"] == "game_not_running"
-        assert isinstance(result["message"], str)
-        assert result["message"]
-        assert "error" not in result
-        assert "error_code" not in result
+        assert refused.value.reason == "game_not_running"
+        assert refused.value.message == "RetroDECK is running, but not this game — nothing was stopped."
         # Killing the wrong emulator is worse than refusing: nothing was signalled.
         assert control.stop_calls == []
         assert control.kill_calls == []
@@ -470,8 +466,13 @@ class TestTargetsOnlyTheMatchedInstance:
         matched_none = _make_service(control, launch_path=FakeRomLaunchPathReader({ROM_ID: "/roms/gb/other.gb"}))
         nothing_alive = _make_service(FakeGameProcessControlAdapter(pids=[]))
 
-        assert (await matched_none.stop_running_game(ROM_ID))["reason"] == "game_not_running"
-        assert (await nothing_alive.stop_running_game(ROM_ID))["reason"] == "not_running"
+        with pytest.raises(Refused) as unmatched:
+            await matched_none.stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as nothing:
+            await nothing_alive.stop_running_game(ROM_ID)
+
+        assert unmatched.value.reason == "game_not_running"
+        assert nothing.value.reason == "not_running"
 
     @pytest.mark.asyncio
     async def test_a_rom_with_no_resolvable_launch_path_signals_nothing(self) -> None:
@@ -481,9 +482,10 @@ class TestTargetsOnlyTheMatchedInstance:
         seam = FakeRomLaunchPathReader()
         service = _make_service(control, launch_path=seam)
 
-        result = await service.stop_running_game(ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
 
-        assert result["reason"] == "game_not_running"
+        assert refused.value.reason == "game_not_running"
         assert seam.calls == [ROM_ID]
         assert control.stop_calls == []
         assert control.kill_calls == []
@@ -506,7 +508,10 @@ class TestTargetsOnlyTheMatchedInstance:
         seam = FakeRomLaunchPathReader({ROM_ID: self.OURS})
         service = _make_service(FakeGameProcessControlAdapter(pids=[]), launch_path=seam)
 
-        assert (await service.stop_running_game(ROM_ID))["reason"] == "not_running"
+        with pytest.raises(Refused) as refused:
+            await service.stop_running_game(ROM_ID)
+
+        assert refused.value.reason == "not_running"
         assert seam.calls == []
 
 

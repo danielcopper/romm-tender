@@ -11,6 +11,7 @@ case would raise it.
 from __future__ import annotations
 
 import ast
+import asyncio
 import dataclasses
 import inspect
 import json
@@ -18,10 +19,13 @@ import logging
 import socket
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import MagicMock
 
 import pytest
 from _factories import _make_application, _make_services_bundle
 from bootstrap import ServicesBundle
+from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
+from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 
 from domain.refusal import DomainRefused
 from host import CallDispatcher, HostStatus
@@ -45,6 +49,7 @@ from lib.errors import (
 )
 from lib.partial_failure import PartialFailure
 from main import Endpoints
+from services.game_process import GameProcessService, GameProcessServiceConfig
 
 _MAIN_PY = Path(__file__).resolve().parents[1] / "backend" / "main.py"
 
@@ -310,3 +315,73 @@ class TestEveryEndpointKeepsItsKind:
     @pytest.mark.parametrize("route_name", ROUTES)
     def test_every_endpoint_is_the_translating_wrapper(self, route_name):
         assert hasattr(getattr(Endpoints, route_name), "__wrapped__")
+
+
+class _YieldingSleeper:
+    """A ``Sleeper`` that hands the loop over without waiting, so a second call lands inside the grace window."""
+
+    async def sleep(self, seconds: float) -> None:
+        await asyncio.sleep(0)
+
+
+def _dispatcher_over_game_process(control: FakeGameProcessControlAdapter) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose Stop Game is the real service over a fake process table."""
+    service = GameProcessService(
+        config=GameProcessServiceConfig(
+            game_process=control,
+            launch_path=FakeRomLaunchPathReader({42: DEFAULT_LAUNCH_PATH}),
+            sleeper=_YieldingSleeper(),
+            logger=LOGGER,
+            log_debug=MagicMock(),
+            flatpak_app_id="net.retrodeck.retrodeck",
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(game_process_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheStopGameRefusalsOnTheWire:
+    """The first service that raises its refusals answers the panel exactly as it did when it returned them."""
+
+    async def test_nothing_running(self):
+        message = json.loads(
+            await _dispatcher_over_game_process(FakeGameProcessControlAdapter(pids=[])).dispatch(
+                1, "stop_running_game", [42]
+            )
+        )
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "not_running",
+            "message": "No running game was found to stop.",
+        }
+
+    async def test_another_game_running(self):
+        control = FakeGameProcessControlAdapter()
+        control.add_instance([201], "/home/deck/retrodeck/roms/snes/someone-elses.sfc")
+
+        message = json.loads(await _dispatcher_over_game_process(control).dispatch(1, "stop_running_game", [42]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "game_not_running",
+            "message": "RetroDECK is running, but not this game — nothing was stopped.",
+        }
+
+    async def test_a_second_press_while_the_first_is_stopping(self):
+        control = FakeGameProcessControlAdapter(pids=[101])
+        control.survive_stop = {101}
+        dispatcher = _dispatcher_over_game_process(control)
+
+        first, second = await asyncio.gather(
+            dispatcher.dispatch(1, "stop_running_game", [42]),
+            dispatcher.dispatch(2, "stop_running_game", [42]),
+        )
+
+        assert json.loads(first)["result"] == {"success": True, "stopped": 1, "force_killed": 1}
+        assert json.loads(second)["result"] == {
+            "success": False,
+            "reason": "already_stopping",
+            "message": "The game is already being stopped.",
+        }
+        assert control.stop_calls == [101]

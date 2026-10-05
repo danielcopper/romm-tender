@@ -103,6 +103,7 @@ VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 # list only grows (module docstring, "Converted modules").
 CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
+    "backend/services/game_process.py",
 )
 
 # What the paths above are relative to — a name of its own, apart from

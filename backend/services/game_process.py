@@ -2,8 +2,8 @@
 
 Owns the stop-game policy: which of the app's live sandbox instances is the one
 the user pressed Stop on, the order its processes are asked to exit in, how long
-they get before force, and the endpoint response the frontend's Stop Game action
-reads. The signal mechanics sit behind the ``GameProcessControl`` Protocol, so
+they get before force, and what the frontend's Stop Game action is answered:
+the counts, or a raised refusal. The signal mechanics sit behind the ``GameProcessControl`` Protocol, so
 nothing here touches a syscall or a POSIX signal number.
 """
 
@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.game_instance import match_instance_for_launch_path
+from lib.errors import Refused
 
 if TYPE_CHECKING:
     import logging
@@ -73,9 +74,9 @@ class GameProcessService:
         Returns ``{"success": True, "stopped": int, "force_killed": int}`` once
         every process of that instance has been dealt with, where ``stopped``
         counts the processes that received the stop request and ``force_killed``
-        the subset that had to be forced. Three canonical failures:
-        ``not_running`` when the app has no live instance at all (the honest
-        answer when the frontend's running overlay has gone stale),
+        the subset that had to be forced. Raises ``Refused`` with one of three
+        reasons: ``not_running`` when the app has no live instance at all (the
+        honest answer when the frontend's running overlay has gone stale),
         ``game_not_running`` when it does but none of them is running this ROM,
         and ``already_stopping`` when a ladder is already in flight.
 
@@ -111,11 +112,7 @@ class GameProcessService:
         # rare convenience for a real risk.
         if self._stopping:
             self._log_debug("GameProcessService: stop refused — a stop is already in flight")
-            return {
-                "success": False,
-                "reason": "already_stopping",
-                "message": "The game is already being stopped.",
-            }
+            raise Refused("already_stopping", "The game is already being stopped.")
         self._stopping = True
         try:
             return await self._run_stop_ladder(rom_id)
@@ -133,19 +130,11 @@ class GameProcessService:
         instances = self._game_process.find_game_instances(self._flatpak_app_id)
         if not instances:
             self._log_debug(f"GameProcessService: no live {self._flatpak_app_id} instance to stop")
-            return {
-                "success": False,
-                "reason": "not_running",
-                "message": "No running game was found to stop.",
-            }
+            raise Refused("not_running", "No running game was found to stop.")
 
         pids = self._matched_pids(rom_id, instances)
         if pids is None:
-            return {
-                "success": False,
-                "reason": "game_not_running",
-                "message": "RetroDECK is running, but not this game — nothing was stopped.",
-            }
+            raise Refused("game_not_running", "RetroDECK is running, but not this game — nothing was stopped.")
 
         # ── The ladder: ONE stop request per process, grace window, then force ──
         #
