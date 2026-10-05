@@ -1569,8 +1569,12 @@ rejects a non-http(s) value before any network call. It then holds the candidate
 stored token in memory first so the version probe never carries the old server's bearer to the candidate host — and
 persists nothing until the mint succeeds. On any failure (probe unreachable, version too old, forbidden/error mint, no
 usable token, or a disk error) the in-memory auth state is rolled back to the previous working URL + token, and because
-disk was never touched the prior working credentials survive a failed sign-in. Only a successful mint commits
-`romm_url` + SSL flag + token + id + origin to disk in a single `save_settings()` call.
+disk was never touched the prior working credentials survive a failed sign-in. Each sign-in gives that state back in one
+block that ends where the new state is saved, so a bug or an interrupted call before the save restores it too, and
+nothing after a successful save does, which would leave memory and file disagreeing. A settings file that cannot be
+written refuses the sign-in with `save_failed` and the write's cause, the reason `save_server_url` answers with; any
+other exception from the write stays a transport error. Only a successful mint commits `romm_url` + SSL flag + token +
+id + origin to disk in a single `save_settings()` call.
 
 **The old-token DELETE is origin-guarded and provenance-guarded.** RomM scopes a Client API Token to the account, and
 re-auth deletes the device's previous token. That DELETE is only fired when the old token's stored origin matches the
@@ -1665,8 +1669,8 @@ registration) is inert until that sign-in, a stale device id from this path cann
 (`romm_api_token` / `romm_api_token_id` / `romm_api_token_origin` / `romm_api_token_source`) in the in-memory settings
 dict and persists them in a **single** `save_settings()` (the same atomic-write funnel `_persist_token` uses), keeping
 `romm_url` and the SSL flag so the user need not re-enter them. It mirrors the sign-in paths' persist discipline: the
-auth state is snapshotted first, and a failed save rolls the in-memory quad back to the snapshot and returns the
-canonical failure shape (via `error_response`), so a disk error never strands the user with a half-forgotten but
+auth state is snapshotted first, and a failed save rolls the in-memory quad back to the snapshot and refuses the
+sign-out with `save_failed` and the write's cause, so a disk error never strands the user with a half-forgotten but
 still-valid token. Only on a **successful** save does it drop the cached RomM server version (`set_version(None)`) so no
 stale value lingers. It is synchronous — no `run_in_executor`, no network — and idempotent (signing out when already
 signed out still returns success). It **never** issues the server-side token DELETE: a minted token deliberately lacks

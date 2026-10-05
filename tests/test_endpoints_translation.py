@@ -22,7 +22,7 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_application, _make_services_bundle
+from _factories import _make_application, _make_conflict_rules, _make_services_bundle
 from bootstrap import ServicesBundle
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
@@ -51,6 +51,7 @@ from lib.errors import (
 )
 from lib.partial_failure import PartialFailure
 from main import Endpoints
+from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 
 _MAIN_PY = Path(__file__).resolve().parents[1] / "backend" / "main.py"
@@ -527,3 +528,78 @@ class TestTheStopGameRefusalsOnTheWire:
             "message": "The game is already being stopped.",
         }
         assert control.stop_calls == [101]
+
+
+def _dispatcher_over_connection(romm_api: MagicMock, settings: dict[str, Any], persister: MagicMock) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose connection use cases are the real service over a RomM stand-in."""
+    service = ConnectionService(
+        config=ConnectionServiceConfig(
+            settings=settings,
+            romm_api=romm_api,
+            settings_persister=persister,
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            min_required_version=(5, 3, 0),
+            forget_device=MagicMock(),
+            clear_playtime_scope_notice=MagicMock(),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(connection_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+def _romm_running(version: str) -> MagicMock:
+    romm_api = MagicMock()
+    romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": version}}
+    romm_api.mint_client_token.return_value = {"id": 42, "raw_token": "rmm_minted"}
+    return romm_api
+
+
+class TestTheConnectionRefusalsOnTheWire:
+    """The connection refusals, raised by the real service, reach the wire with their reason, message and details."""
+
+    @pytest.mark.parametrize(
+        ("route_name", "args"),
+        [
+            ("test_connection", []),
+            ("connect_with_credentials", ["http://romm.local", "u", "p", False]),
+        ],
+    )
+    async def test_an_unsupported_version_carries_the_servers_version(self, route_name, args):
+        settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
+        dispatcher = _dispatcher_over_connection(_romm_running("4.5.0"), settings, MagicMock())
+
+        message = json.loads(await dispatcher.dispatch(1, route_name, args))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "version_error",
+            "message": (
+                "This plugin requires RomM 5.3.0 or newer. Your server is running 4.5.0. "
+                "Please update your RomM server to continue using this plugin."
+            ),
+            "romm_version": "4.5.0",
+        }
+
+    @pytest.mark.parametrize(
+        ("route_name", "args"),
+        [
+            ("connect_with_credentials", ["http://romm.local", "u", "p", False]),
+            ("sign_out", []),
+        ],
+    )
+    async def test_a_failed_settings_write_answers_save_failed_with_its_cause(self, route_name, args):
+        settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
+        persister = MagicMock()
+        persister.save_settings.side_effect = OSError(28, "No space left on device")
+        dispatcher = _dispatcher_over_connection(_romm_running("5.3.0"), settings, persister)
+
+        message = json.loads(await dispatcher.dispatch(1, route_name, args))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "save_failed",
+            "message": "Save failed: [Errno 28] No space left on device",
+        }
+        assert settings["romm_api_token"] == "rmm_token"

@@ -24,15 +24,18 @@ from typing import TYPE_CHECKING, Any
 from domain.identity import DISPLAY_NAME
 from domain.version import meets_min_version
 from lib.errors import (
+    AuthFailed,
+    NotConfigured,
     PairingCodeInvalidError,
     PairingCodeOwnerDisabledError,
     PairingCodeRateLimitedError,
     PairingCodeTokenGoneError,
+    Refused,
     RommAuthError,
     RommForbiddenError,
-    error_response,
+    ServerUnreachable,
+    VersionUnsupported,
 )
-from lib.list_result import ErrorCode
 from lib.url_host import is_origin_change, is_valid_server_url, normalize_origin, same_origin
 
 if TYPE_CHECKING:
@@ -70,8 +73,8 @@ _USER_TOKEN_REJECTED_MESSAGE = (
 
 # Pairing-code sign-in (``establish_paired_token``). The 60s single-use pairing
 # code is exchanged for a token over a public endpoint; each rejection carries a
-# distinct, actionable message. The rate-limit reason is a bespoke plain-string
-# slug (the server IS reachable — it is neither an auth nor a reachability fault).
+# distinct, actionable message. The rate-limit refusal has a reason of its own
+# (the server IS reachable — it is neither an auth nor a reachability fault).
 _ENTER_PAIRING_CODE_MESSAGE = "Enter the pairing code from RomM"
 _PAIRING_CODE_INVALID_MESSAGE = (
     "Pairing code is invalid or has expired — generate a new one in RomM and try again "
@@ -84,7 +87,7 @@ _PAIRING_OWNER_DISABLED_MESSAGE = (
     "This RomM account is disabled — ask your administrator to re-enable it, then try again."
 )
 _PAIRING_RATE_LIMITED_MESSAGE = "Too many attempts — wait a minute and generate a new code."
-_RATE_LIMITED_REASON = "rate_limited"
+_NO_USABLE_TOKEN_MESSAGE = "RomM did not return a usable token"
 
 # Sign-out (``sign_out``). Local-forget only — the plugin never deletes the
 # token on the server, so the copy tells the user it stays valid in RomM.
@@ -148,47 +151,26 @@ class ConnectionService:
         self._rules = config.conflict_rules
 
     async def test_connection(self) -> dict[str, Any]:
-        """Probe the configured server and return a frontend-shaped result dict.
+        """Probe the configured server and answer ``success`` with a ``message``.
 
-        The result dict always carries ``success`` and ``message``. On
-        failure, ``reason`` classifies the cause (``config_error`` when
-        the server URL is unset or no token has been minted yet,
-        :data:`ErrorCode.VERSION_ERROR`, or an
-        :func:`lib.errors.error_response` slug). On success or version
-        failure, ``romm_version`` carries the detected server version when
-        the heartbeat exposed one.
+        Raises ``NotConfigured`` when the server URL is unset or no token has
+        been minted yet, and ``VersionUnsupported`` (carrying ``romm_version``)
+        for a server below the minimum; a RomM error from the heartbeat or the
+        platform listing propagates as it is. On success ``romm_version``
+        carries the detected server version when the heartbeat exposed one.
         """
         async with self._rules.hold("test_connection", prune=True):
             return await self._test_connection()
 
     async def _test_connection(self) -> dict[str, Any]:
         if not self._settings.get("romm_url"):
-            return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
-
+            raise NotConfigured(_NO_SERVER_URL_MESSAGE)
         if not self._settings.get("romm_api_token"):
-            return {
-                "success": False,
-                "reason": "config_error",
-                "message": "Not signed in — sign in to RomM first",
-            }
+            raise NotConfigured("Not signed in — sign in to RomM first")
 
-        try:
-            version = await self._loop.run_in_executor(None, self._probe_version)
-        except Exception as e:
-            self._romm_api.set_version(None)
-            return error_response(e)
-
-        try:
-            await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        except Exception as e:
-            resp = error_response(e)
-            if resp["reason"] != ErrorCode.AUTH_FAILED.value:
-                resp["message"] = f"Server reachable but API request failed: {resp['message']}"
-            return resp
-
-        version_error = self._version_gate_error(version)
-        if version_error is not None:
-            return version_error
+        version = await self._probe_version_or_forget()
+        await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        self._refuse_unsupported_version(version)
 
         await self._backfill_user_id_best_effort()
         return self._success_result(version)
@@ -235,8 +217,11 @@ class ConnectionService:
         persisted. On a successful sign-in whose origin differs from the
         previous token's, the registered server device id is forgotten
         (best-effort) — it is bound to its minting origin and would otherwise
-        404 against the new server's negotiate. Returns the same ``success`` /
-        ``reason`` / ``message`` shape as :meth:`test_connection`.
+        404 against the new server's negotiate. Raises ``NotConfigured`` for a
+        missing or invalid URL, ``VersionUnsupported`` as :meth:`test_connection`
+        does, ``AuthFailed`` for a refused mint, ``ServerUnreachable`` when RomM
+        answers no usable token, and ``Refused`` with ``save_failed`` when the
+        settings file cannot be written; a RomM error propagates as it is.
         """
         async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
@@ -249,93 +234,78 @@ class ConnectionService:
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
         if not romm_url:
-            return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
+            raise NotConfigured(_NO_SERVER_URL_MESSAGE)
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
-            return {"success": False, "reason": "config_error", "message": _INVALID_URL_MESSAGE}
+            raise NotConfigured(_INVALID_URL_MESSAGE)
 
         snapshot = self._snapshot_auth_state()
         old_token_id = snapshot["romm_api_token_id"]
         old_token_origin = snapshot["romm_api_token_origin"]
         old_token_source = snapshot["romm_api_token_source"]
 
-        # Hold the candidate URL in memory only; clear the stored token so the
-        # version probe never carries the old server's bearer to this host (and
-        # the auth-header origin guard stays quiet during sign-in).
-        self._settings["romm_url"] = trimmed
-        if allow_insecure_ssl is not None:
-            self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
-        self._settings["romm_api_token"] = None
-        self._settings["romm_api_token_id"] = None
-        self._settings["romm_api_token_origin"] = None
-        # A new sign-in invalidates the stored identity — re-derived below from
-        # the freshly minted token, so it can never linger for a different user
-        # or a different server.
-        self._settings["romm_user_id"] = None
-
         try:
-            version = await self._loop.run_in_executor(None, self._probe_version)
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            self._romm_api.set_version(None)
-            return error_response(e)
+            # Hold the candidate URL in memory only; clear the stored token so the
+            # version probe never carries the old server's bearer to this host (and
+            # the auth-header origin guard stays quiet during sign-in).
+            self._settings["romm_url"] = trimmed
+            if allow_insecure_ssl is not None:
+                self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
+            self._settings["romm_api_token"] = None
+            self._settings["romm_api_token_id"] = None
+            self._settings["romm_api_token_origin"] = None
+            # A new sign-in invalidates the stored identity — re-derived below from
+            # the freshly minted token, so it can never linger for a different user
+            # or a different server.
+            self._settings["romm_user_id"] = None
 
-        version_error = self._version_gate_error(version)
-        if version_error is not None:
-            self._restore_auth_state(snapshot)
-            return version_error
+            version = await self._probe_version_or_forget()
+            self._refuse_unsupported_version(version)
 
-        # #1309: never DELETE a user-supplied token — it belongs to the user, not
-        # this device (and it has no stored id to delete by anyway).
-        # #1038: only replay the DELETE against the same server the old token
-        # was minted on. A different (or unknown) origin would delete an
-        # unrelated token on the new host, so skip it.
-        if old_token_source != "user" and old_token_id is not None:
-            if same_origin(old_token_origin, trimmed):
-                await self._delete_existing_token(username, password, old_token_id)
-            else:
-                self._logger.info(
-                    "Previous token was minted for a different/unknown server; "
-                    "skipping DELETE to avoid replaying it against the current server"
-                )
+            # #1309: never DELETE a user-supplied token — it belongs to the user, not
+            # this device (and it has no stored id to delete by anyway).
+            # #1038: only replay the DELETE against the same server the old token
+            # was minted on. A different (or unknown) origin would delete an
+            # unrelated token on the new host, so skip it.
+            if old_token_source != "user" and old_token_id is not None:
+                if same_origin(old_token_origin, trimmed):
+                    await self._delete_existing_token(username, password, old_token_id)
+                else:
+                    self._logger.info(
+                        "Previous token was minted for a different/unknown server; "
+                        "skipping DELETE to avoid replaying it against the current server"
+                    )
 
-        try:
-            minted = await self._loop.run_in_executor(None, self._mint, username, password)
-        except RommForbiddenError:
-            # 403 on token mint: same AUTH_FAILED slug as a 401, but a distinct
-            # message. RomM answers 403 indistinguishably for wrong credentials
-            # AND for an account that lacks token-creation permission (and a
-            # Cloudflare bot-fight 403 lands here too), so the message names both
-            # causes rather than asserting only the permission one.
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _FORBIDDEN_TOKEN_MESSAGE}
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            return error_response(e)
+            try:
+                minted = await self._loop.run_in_executor(None, self._mint, username, password)
+            except RommForbiddenError as e:
+                # 403 on token mint: the same auth_failed reason as a 401, but a
+                # distinct message. RomM answers 403 indistinguishably for wrong
+                # credentials AND for an account that lacks token-creation permission
+                # (and a Cloudflare bot-fight 403 lands here too), so the message
+                # names both causes rather than asserting only the permission one.
+                raise AuthFailed(_FORBIDDEN_TOKEN_MESSAGE) from e
 
-        raw_token = minted.get("raw_token")
-        token_id = minted.get("id")
-        if not raw_token or token_id is None:
-            self._restore_auth_state(snapshot)
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": "RomM did not return a usable token",
-            }
+            raw_token = minted.get("raw_token")
+            token_id = minted.get("id")
+            if not raw_token or token_id is None:
+                raise ServerUnreachable(_NO_USABLE_TOKEN_MESSAGE)
 
-        # Host-bind the minted token in memory so the identity probe
-        # authenticates, then stamp the user id — both ride the single atomic
-        # token-persist save below (the mint response carries only the token id,
-        # not the user id, so /api/users/me is the only source here).
-        self._settings["romm_api_token"] = raw_token
-        self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
-        await self._resolve_user_id_in_memory()
+            # Host-bind the minted token in memory so the identity probe
+            # authenticates, then stamp the user id — both ride the single atomic
+            # token-persist save below (the mint response carries only the token id,
+            # not the user id, so /api/users/me is the only source here).
+            self._settings["romm_api_token"] = raw_token
+            self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
+            await self._resolve_user_id_in_memory()
 
-        try:
-            self._persist_token(raw_token, token_id, origin=normalize_origin(trimmed), source="minted")
-        except Exception as e:
+            try:
+                self._persist_token(raw_token, token_id, origin=normalize_origin(trimmed), source="minted")
+            except OSError as e:
+                raise Refused("save_failed", f"Save failed: {e}") from e
+        except BaseException:
             self._restore_auth_state(snapshot)
-            return error_response(e)
+            raise
 
         await self._forget_device_on_origin_change(old_token_origin, trimmed)
         await self._clear_playtime_scope_notice_best_effort()
@@ -361,8 +331,9 @@ class ConnectionService:
         and the old server's bearer never leaks to the candidate host. The token
         is validated with an authenticated ``/api/users/me`` probe — a 401 means
         the token is invalid/revoked, a 403 means it authenticates but lacks a
-        required scope. The token value is never logged. Returns the same
-        ``success`` / ``reason`` / ``message`` shape as :meth:`test_connection`.
+        required scope. The token value is never logged. Refuses as
+        :meth:`establish_token` does, with ``AuthFailed`` for a token RomM
+        rejects.
         """
         async with self._rules.hold("connect_with_token", prune=True):
             return await self._establish_user_token(romm_url, token, allow_insecure_ssl)
@@ -374,54 +345,49 @@ class ConnectionService:
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
         if not romm_url:
-            return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
+            raise NotConfigured(_NO_SERVER_URL_MESSAGE)
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
-            return {"success": False, "reason": "config_error", "message": _INVALID_URL_MESSAGE}
+            raise NotConfigured(_INVALID_URL_MESSAGE)
         trimmed_token = token.strip()
         if not trimmed_token:
-            return {"success": False, "reason": "config_error", "message": "Enter your RomM API token"}
+            raise NotConfigured("Enter your RomM API token")
 
         snapshot = self._snapshot_auth_state()
         old_token_origin = snapshot["romm_api_token_origin"]
 
-        # Hold the candidate URL + pasted token in memory only; stamp the origin
-        # so the auth-header guard attaches this token (and not the old server's)
-        # to the validation probe. Nothing is persisted until validation passes.
-        self._settings["romm_url"] = trimmed
-        if allow_insecure_ssl is not None:
-            self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
-        self._settings["romm_api_token"] = trimmed_token
-        self._settings["romm_api_token_id"] = None
-        self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
-        self._settings["romm_api_token_source"] = "user"
-        # A new sign-in invalidates the stored identity — re-derived from the
-        # pasted token's /api/users/me validation probe below.
-        self._settings["romm_user_id"] = None
-
         try:
-            version = await self._loop.run_in_executor(None, self._probe_version)
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            self._romm_api.set_version(None)
-            # RomM answers the token-carrying probe with a 500 (a malformed token)
-            # or a 403 (a token-shaped but invalid/revoked one) instead of a clean
-            # 401, so a bad pasted token otherwise surfaces as a generic server
-            # error. The auth state is restored now (old token, or none), so a
-            # reachability probe that succeeds proves the server is up and the
-            # pasted token — not the server — is at fault.
-            if (await self.probe_reachability()).get("online"):
-                return {
-                    "success": False,
-                    "reason": ErrorCode.AUTH_FAILED.value,
-                    "message": _USER_TOKEN_REJECTED_MESSAGE,
-                }
-            return error_response(e)
+            # Hold the candidate URL + pasted token in memory only; stamp the origin
+            # so the auth-header guard attaches this token (and not the old server's)
+            # to the validation probe. Nothing is persisted until validation passes.
+            self._settings["romm_url"] = trimmed
+            if allow_insecure_ssl is not None:
+                self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
+            self._settings["romm_api_token"] = trimmed_token
+            self._settings["romm_api_token_id"] = None
+            self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
+            self._settings["romm_api_token_source"] = "user"
+            # A new sign-in invalidates the stored identity — re-derived from the
+            # pasted token's /api/users/me validation probe below.
+            self._settings["romm_user_id"] = None
 
-        version_error = self._version_gate_error(version)
-        if version_error is not None:
+            try:
+                version = await self._probe_version_or_forget()
+            except Exception as e:
+                # RomM answers the token-carrying probe with a 500 (a malformed token)
+                # or a 403 (a token-shaped but invalid/revoked one) instead of a clean
+                # 401, so a bad pasted token otherwise surfaces as a generic server
+                # error. The auth state is restored before the reachability probe (old
+                # token, or none), so a probe that succeeds proves the server is up and
+                # the pasted token — not the server — is at fault.
+                self._restore_auth_state(snapshot)
+                if (await self.probe_reachability()).get("online"):
+                    raise AuthFailed(_USER_TOKEN_REJECTED_MESSAGE) from e
+                raise
+            self._refuse_unsupported_version(version)
+        except BaseException:
             self._restore_auth_state(snapshot)
-            return version_error
+            raise
 
         return await self._validate_and_persist_user_token(trimmed_token, trimmed, old_token_origin, version, snapshot)
 
@@ -445,8 +411,9 @@ class ConnectionService:
         exchange (or the version probe before it). Each exchange rejection maps to
         a distinct, actionable message; the exchange is never auto-retried (a
         single-use code). The pairing code and the returned token are never
-        logged. Returns the same ``success`` / ``reason`` / ``message`` shape as
-        :meth:`test_connection`.
+        logged. Refuses as :meth:`establish_token` does, with ``AuthFailed`` for
+        a code RomM rejects and ``rate_limited`` when it turns away too many
+        exchange attempts.
         """
         async with self._rules.hold("connect_with_pairing_code", prune=True):
             return await self._establish_paired_token(romm_url, code, allow_insecure_ssl)
@@ -458,75 +425,58 @@ class ConnectionService:
         allow_insecure_ssl: bool | None = None,
     ) -> dict[str, Any]:
         if not romm_url:
-            return {"success": False, "reason": "config_error", "message": _NO_SERVER_URL_MESSAGE}
+            raise NotConfigured(_NO_SERVER_URL_MESSAGE)
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
-            return {"success": False, "reason": "config_error", "message": _INVALID_URL_MESSAGE}
+            raise NotConfigured(_INVALID_URL_MESSAGE)
         normalized_code = _normalize_pairing_code(code)
         if not normalized_code:
-            return {"success": False, "reason": "config_error", "message": _ENTER_PAIRING_CODE_MESSAGE}
+            raise NotConfigured(_ENTER_PAIRING_CODE_MESSAGE)
 
         snapshot = self._snapshot_auth_state()
         old_token_origin = snapshot["romm_api_token_origin"]
 
-        # Hold the candidate URL in memory; clear the token trio so the
-        # unauthenticated exchange (and the version probe before it) never carries
-        # an old server's bearer to the candidate host.
-        self._settings["romm_url"] = trimmed
-        if allow_insecure_ssl is not None:
-            self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
-        self._settings["romm_api_token"] = None
-        self._settings["romm_api_token_id"] = None
-        self._settings["romm_api_token_origin"] = None
-        # A new sign-in invalidates the stored identity — re-derived from the
-        # exchanged token's /api/users/me validation probe below.
-        self._settings["romm_user_id"] = None
-
         try:
-            version = await self._loop.run_in_executor(None, self._probe_version)
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            self._romm_api.set_version(None)
-            return error_response(e)
+            # Hold the candidate URL in memory; clear the token trio so the
+            # unauthenticated exchange (and the version probe before it) never carries
+            # an old server's bearer to the candidate host.
+            self._settings["romm_url"] = trimmed
+            if allow_insecure_ssl is not None:
+                self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
+            self._settings["romm_api_token"] = None
+            self._settings["romm_api_token_id"] = None
+            self._settings["romm_api_token_origin"] = None
+            # A new sign-in invalidates the stored identity — re-derived from the
+            # exchanged token's /api/users/me validation probe below.
+            self._settings["romm_user_id"] = None
 
-        version_error = self._version_gate_error(version)
-        if version_error is not None:
-            self._restore_auth_state(snapshot)
-            return version_error
+            version = await self._probe_version_or_forget()
+            self._refuse_unsupported_version(version)
 
-        try:
-            exchanged = await self._loop.run_in_executor(None, self._exchange, normalized_code)
-        except PairingCodeInvalidError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _PAIRING_CODE_INVALID_MESSAGE}
-        except PairingCodeTokenGoneError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _PAIRING_TOKEN_GONE_MESSAGE}
-        except PairingCodeOwnerDisabledError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _PAIRING_OWNER_DISABLED_MESSAGE}
-        except PairingCodeRateLimitedError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": _RATE_LIMITED_REASON, "message": _PAIRING_RATE_LIMITED_MESSAGE}
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            return error_response(e)
+            try:
+                exchanged = await self._loop.run_in_executor(None, self._exchange, normalized_code)
+            except PairingCodeInvalidError as e:
+                raise AuthFailed(_PAIRING_CODE_INVALID_MESSAGE) from e
+            except PairingCodeTokenGoneError as e:
+                raise AuthFailed(_PAIRING_TOKEN_GONE_MESSAGE) from e
+            except PairingCodeOwnerDisabledError as e:
+                raise AuthFailed(_PAIRING_OWNER_DISABLED_MESSAGE) from e
+            except PairingCodeRateLimitedError as e:
+                raise Refused("rate_limited", _PAIRING_RATE_LIMITED_MESSAGE) from e
 
-        raw_token = exchanged.get("raw_token")
-        if not raw_token:
-            self._restore_auth_state(snapshot)
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": "RomM did not return a usable token",
-            }
+            raw_token = exchanged.get("raw_token")
+            if not raw_token:
+                raise ServerUnreachable(_NO_USABLE_TOKEN_MESSAGE)
 
-        # Host-bind the freshly rotated token in memory, then run the exact same
-        # ``/api/users/me`` validation + persist tail as the pasted-token path.
-        self._settings["romm_api_token"] = raw_token
-        self._settings["romm_api_token_id"] = None
-        self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
-        self._settings["romm_api_token_source"] = "user"
+            # Host-bind the freshly rotated token in memory, then run the exact same
+            # ``/api/users/me`` validation + persist tail as the pasted-token path.
+            self._settings["romm_api_token"] = raw_token
+            self._settings["romm_api_token_id"] = None
+            self._settings["romm_api_token_origin"] = normalize_origin(trimmed)
+            self._settings["romm_api_token_source"] = "user"
+        except BaseException:
+            self._restore_auth_state(snapshot)
+            raise
 
         return await self._validate_and_persist_user_token(raw_token, trimmed, old_token_origin, version, snapshot)
 
@@ -549,31 +499,29 @@ class ConnectionService:
         means it lacks a required scope), persists the token with ``id = None``
         and ``"user"`` provenance, then fires the device-forget-on-origin-change
         and playtime-scope-notice clear. Rolls the in-memory auth state back to
-        *snapshot* on any failure; disk is untouched until validation passes. The
-        token value is never logged.
+        *snapshot* on any failure up to a successful save; disk is untouched until
+        validation passes. The token value is never logged.
         """
         try:
-            user_data = await self._loop.run_in_executor(None, self._romm_api.get_current_user)
-        except RommAuthError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _USER_TOKEN_INVALID_MESSAGE}
-        except RommForbiddenError:
-            self._restore_auth_state(snapshot)
-            return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": _USER_TOKEN_SCOPE_MESSAGE}
-        except Exception as e:
-            self._restore_auth_state(snapshot)
-            return error_response(e)
+            try:
+                user_data = await self._loop.run_in_executor(None, self._romm_api.get_current_user)
+            except RommAuthError as e:
+                raise AuthFailed(_USER_TOKEN_INVALID_MESSAGE) from e
+            except RommForbiddenError as e:
+                raise AuthFailed(_USER_TOKEN_SCOPE_MESSAGE) from e
 
-        # Stamp the user identity in memory so it rides the single atomic
-        # token-persist save (the validation probe already returned it — no
-        # second /api/users/me call).
-        self._set_user_id_in_memory(user_data)
+            # Stamp the user identity in memory so it rides the single atomic
+            # token-persist save (the validation probe already returned it — no
+            # second /api/users/me call).
+            self._set_user_id_in_memory(user_data)
 
-        try:
-            self._persist_token(raw_token, None, origin=normalize_origin(trimmed), source="user")
-        except Exception as e:
+            try:
+                self._persist_token(raw_token, None, origin=normalize_origin(trimmed), source="user")
+            except OSError as e:
+                raise Refused("save_failed", f"Save failed: {e}") from e
+        except BaseException:
             self._restore_auth_state(snapshot)
-            return error_response(e)
+            raise
 
         await self._forget_device_on_origin_change(old_token_origin, trimmed)
         await self._clear_playtime_scope_notice_best_effort()
@@ -733,35 +681,37 @@ class ConnectionService:
         keeping ``romm_url`` and the SSL flag so the user need not re-enter
         them. Mirrors the sign-in paths' persist discipline: the auth state is
         snapshotted first, and if the atomic save fails the in-memory state is
-        rolled back to *snapshot* and the canonical failure shape is returned,
-        so a disk error never strands the user with a half-forgotten but
-        still-valid token. Only on a successful save is the cached RomM server
-        version dropped (``set_version(None)``) so a stale value cannot linger.
-        No server-side token deletion ever happens: a plugin-minted token
-        deliberately lacks the ``me.write`` scope needed to delete it (that
-        would require re-entering the password), and a user-supplied token
-        belongs to the user, who manages it in RomM's web UI. Idempotent —
-        signing out when already signed out still succeeds and is harmless.
-        Returns the canonical success shape on success, the canonical failure
-        shape on a persist error.
+        rolled back to *snapshot* and the sign-out is refused with
+        ``save_failed``, so a disk error never strands the user with a
+        half-forgotten but still-valid token. Only on a successful save is the
+        cached RomM server version dropped (``set_version(None)``) so a stale
+        value cannot linger. No server-side token deletion ever happens: a
+        plugin-minted token deliberately lacks the ``me.write`` scope needed to
+        delete it (that would require re-entering the password), and a
+        user-supplied token belongs to the user, who manages it in RomM's web
+        UI. Idempotent — signing out when already signed out still succeeds and
+        is harmless.
         """
         async with self._rules.hold("sign_out", prune=True):
             return self._sign_out()
 
     def _sign_out(self) -> dict[str, Any]:
         snapshot = self._snapshot_auth_state()
-        self._settings["romm_api_token"] = None
-        self._settings["romm_api_token_id"] = None
-        self._settings["romm_api_token_origin"] = None
-        self._settings["romm_api_token_source"] = None
-        # Identity is forgotten alongside the token — the ``own`` owner scope has
-        # no basis without a signed-in user, and the next sign-in re-derives it.
-        self._settings["romm_user_id"] = None
         try:
-            self._settings_persister.save_settings()
-        except Exception as e:
+            self._settings["romm_api_token"] = None
+            self._settings["romm_api_token_id"] = None
+            self._settings["romm_api_token_origin"] = None
+            self._settings["romm_api_token_source"] = None
+            # Identity is forgotten alongside the token — the ``own`` owner scope has
+            # no basis without a signed-in user, and the next sign-in re-derives it.
+            self._settings["romm_user_id"] = None
+            try:
+                self._settings_persister.save_settings()
+            except OSError as e:
+                raise Refused("save_failed", f"Save failed: {e}") from e
+        except BaseException:
             self._restore_auth_state(snapshot)
-            return error_response(e)
+            raise
         self._romm_api.set_version(None)
         return {"success": True, "message": _SIGNED_OUT_MESSAGE}
 
@@ -829,24 +779,27 @@ class ConnectionService:
             self._logger.info(f"RomM server version: {version}")
         return version
 
-    def _version_gate_error(self, version: str | None) -> dict[str, Any] | None:
-        """Return a :data:`ErrorCode.VERSION_ERROR` dict when *version* is below the minimum.
+    async def _probe_version_or_forget(self) -> str | None:
+        """Probe the server's version; a failed probe drops the cached version before it propagates."""
+        try:
+            return await self._loop.run_in_executor(None, self._probe_version)
+        except Exception:
+            self._romm_api.set_version(None)
+            raise
+
+    def _refuse_unsupported_version(self, version: str | None) -> None:
+        """Raise ``VersionUnsupported``, carrying ``romm_version``, when *version* is below the minimum.
 
         ``development`` builds and an absent version bypass the gate.
         """
         if version and version != "development" and not meets_min_version(version, self._min_required_version):
             min_str = ".".join(str(v) for v in self._min_required_version)
-            return {
-                "success": False,
-                "reason": ErrorCode.VERSION_ERROR.value,
-                "message": (
-                    f"This plugin requires RomM {min_str} or newer. "
-                    f"Your server is running {version}. "
-                    "Please update your RomM server to continue using this plugin."
-                ),
-                "romm_version": version,
-            }
-        return None
+            raise VersionUnsupported(
+                f"This plugin requires RomM {min_str} or newer. "
+                f"Your server is running {version}. "
+                "Please update your RomM server to continue using this plugin.",
+                romm_version=version,
+            )
 
     @staticmethod
     def _success_result(version: str | None) -> dict[str, Any]:
