@@ -1,9 +1,11 @@
 import asyncio
 import functools
+import inspect
 import logging
 import os
 import sys
 from dataclasses import asdict
+from typing import Any
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
@@ -18,6 +20,7 @@ from bootstrap import Application, build_application
 
 from domain.app_directories import AppDirectories, resolve_directories
 from domain.identity import VERSION
+from domain.refusal import DomainRefused
 from domain.update_install import installer_environment
 from domain.update_release import UpdateSource, resolve_update_source
 from host import (
@@ -34,8 +37,71 @@ from host import (
     route,
     run_backend,
 )
+from lib.errors import Refused, RommApiError, classify_error
+from lib.partial_failure import PartialFailure
+
+# Only these become an answer. Anything else an endpoint raises is a bug and
+# reaches the panel as the host's transport error, never as a failure shape
+# (``.claude/rules/host.md``, rule 1) — which is why ``classify_error``'s
+# socket-error and catch-all branches are never reached from here.
+_TRANSLATED = (Refused, DomainRefused, RommApiError)
 
 
+def _failure_answer(exc: Refused | DomainRefused | RommApiError) -> dict[str, Any]:
+    """The wire's failure shape for an exception in :data:`_TRANSLATED`."""
+    if isinstance(exc, RommApiError):
+        reason, message = classify_error(exc)
+        return {"success": False, "reason": reason, "message": message}
+    return {**exc.details, "success": False, "reason": exc.reason, "message": exc.message}
+
+
+def _wire_answer(result: Any) -> Any:
+    """*result* as the wire carries it: a partial failure serialized, anything else as it is."""
+    if isinstance(result, PartialFailure):
+        return {**asdict(result), "success": False}
+    return result
+
+
+def _translated(method: Any) -> Any:
+    """*method* answering its refusals; a ``def`` stays a ``def`` and an ``async def`` a coroutine function.
+
+    ``functools.wraps`` carries the ``@route`` marker over, so the wrapper is
+    as reachable as the method it wraps.
+    """
+    if inspect.iscoroutinefunction(method):
+
+        @functools.wraps(method)
+        async def answer_later(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return _wire_answer(await method(*args, **kwargs))
+            except _TRANSLATED as exc:
+                return _failure_answer(exc)
+
+        return answer_later
+
+    @functools.wraps(method)
+    def answer_now(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return _wire_answer(method(*args, **kwargs))
+        except _TRANSLATED as exc:
+            return _failure_answer(exc)
+
+    return answer_now
+
+
+def _translating_refusals[C: type](cls: C) -> C:
+    """Wrap every public method of *cls* in :func:`_translated`.
+
+    Every public method of ``Endpoints`` is an endpoint, so this covers each
+    ``@route`` without asking the host for its marker.
+    """
+    for name, value in list(vars(cls).items()):
+        if not name.startswith("_") and inspect.isfunction(value):
+            setattr(cls, name, _translated(value))
+    return cls
+
+
+@_translating_refusals
 class Endpoints:
     """What the panel can call: one public method marked ``@route`` per endpoint.
 
@@ -43,6 +109,14 @@ class Endpoints:
     hands its answer back; the few that do more translate an argument or an
     answer for the wire and nothing else. ``get_host_status`` answers from the
     host's own record of this run, which no service holds.
+
+    A use case that raises its refusal leaves the wire's failure shape to this
+    class: every endpoint answers a raised ``Refused`` or
+    ``DomainRefused`` with ``{"success": False, "reason", "message"}`` and the
+    refusal's details beside them, a returned ``PartialFailure`` with that shape
+    and what was done, and a raised ``RommApiError`` with ``classify_error``'s
+    reason and message. Any other exception is not answered here; the host
+    reports it as a transport error.
     """
 
     def __init__(self, app: Application, host_status: HostStatus) -> None:
