@@ -113,12 +113,12 @@ class Endpoints:
     host's own record of this run, which no service holds.
 
     A use case that raises its refusal leaves the wire's failure shape to this
-    class: every endpoint answers a raised ``Refused`` or
-    ``DomainRefused`` with ``{"success": False, "reason", "message"}`` and the
-    refusal's details beside them, a returned ``PartialFailure`` with that shape
-    and what was done, and a raised ``RommApiError`` with ``classify_error``'s
-    reason and message. Any other exception is not answered here; the host
-    reports it as a transport error.
+    class: every endpoint answers a raised ``Refused`` or ``DomainRefused`` with
+    ``{"success": False, "reason", "message"}`` and the refusal's details beside
+    them, a returned ``PartialFailure`` with that shape and what was done, and a
+    raised ``RommApiError`` with ``classify_error``'s reason and message. Any
+    other exception is not answered here; the host reports it as a transport
+    error.
     """
 
     def __init__(self, app: Application, host_status: HostStatus) -> None:
