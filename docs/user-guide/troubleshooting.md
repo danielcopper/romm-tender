@@ -234,8 +234,8 @@ installer that stops each time, is worth reporting together with that output.
 
 ### "RomM Sync" is still installed
 
-**Symptom**: Decky lists two plugins — an older **RomM Sync** and **Tender**. Tender may also look brand new, with no
-server configured and no synced games.
+**Symptom**: Decky still lists an older **RomM Sync** plugin, and Tender may look brand new, with no server configured
+and no synced games.
 
 **Fix**: Nothing to fix, but do not remove the older plugin until you have checked one of your games. Your shortcuts may
 still start through a file inside that older plugin's folder; removing it before they have been repointed stops all of

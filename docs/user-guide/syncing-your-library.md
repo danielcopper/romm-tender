@@ -261,8 +261,8 @@ counts (in the preview and the completion toast) count **games**, not individual
 
 The version the shortcut points at (the **active version**) is chosen automatically: a version you have already
 installed wins, otherwise the shortcut follows the "SET DEFAULT" version you picked in RomM, otherwise Tender picks the
-best dump for you (see below). Switching versions from inside Tender is a later feature; for now the active version
-follows what is installed and RomM's default.
+best dump for you (see below). You can change it yourself from the game's page — see
+[Managing Games → Versions](managing-games.md#versions).
 
 **How Tender picks the best dump, and how the shortcut is named.** When nothing is installed and you haven't set a
 default in RomM, Tender ranks the dumps like a 1G1R (one-game-one-ROM) tool. A **finished release always beats a

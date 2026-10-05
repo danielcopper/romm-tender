@@ -69,7 +69,7 @@ appears with three choices:
 
 The migration covers three categories of files:
 
-- **ROMs** — All ROMs tracked in Tender's state (previously downloaded through it)
+- **ROMs** — All ROMs Tender tracks (the ones you downloaded through it)
 - **BIOS files** — Both files Tender downloaded and untracked files that one of your installed emulators asks for (e.g.
   files you placed manually that Tender recognizes)
 - **Save files** — Recursively scanned from the save directories, excluding hidden directories (like `.git` or `.tmp`)
