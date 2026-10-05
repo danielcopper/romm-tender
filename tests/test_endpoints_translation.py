@@ -5,7 +5,8 @@ so the transport half is the one the panel meets: a refusal arrives as a reply
 carrying ``{success: False, reason, message}``, a bug as the host's
 ``backend_exception`` error. The services are stand-ins that raise or answer
 what a case hands them, which puts the exception exactly where a use case would
-raise it; Stop Game's refusals run through the real service.
+raise it; Stop Game's refusals, the connection's and a partial bulk uninstall run
+through the real services.
 """
 
 from __future__ import annotations
@@ -24,10 +25,17 @@ from unittest.mock import MagicMock
 import pytest
 from _factories import _make_application, _make_conflict_rules, _make_services_bundle
 from bootstrap import ServicesBundle
+from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
+from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
+from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.system_time import FakeClock
 
 from domain.refusal import DomainRefused, NamedDomainRefused
+from domain.rom import Rom
+from domain.rom_install import RomInstall
 from host import CallDispatcher, HostStatus
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
@@ -53,6 +61,7 @@ from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 
 _MAIN_PY = Path(__file__).resolve().parents[1] / "backend" / "main.py"
 
@@ -603,3 +612,67 @@ class TestTheConnectionRefusalsOnTheWire:
             "message": "Save failed: [Errno 28] No space left on device",
         }
         assert settings["romm_api_token"] == "rmm_token"
+
+
+def _dispatcher_over_rom_removal(uow: FakeUnitOfWork, rom_files: FakeRomFileStore) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose ROM removal is the real service over a fake file store."""
+    service = RomRemovalService(
+        config=RomRemovalServiceConfig(
+            logger=LOGGER,
+            loop=asyncio.get_running_loop(),
+            clock=FakeClock(),
+            emit=FakeEventSink().emit,
+            rom_file_store=rom_files,
+            retrodeck_paths=FakeRetroDeckPaths(roms="/retrodeck/roms"),
+            download_queue_cleanup=None,
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(rom_removal_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheBulkUninstallOnTheWire:
+    """A bulk uninstall that removed only part of the ROMs answers ``uninstall_incomplete`` with what it did."""
+
+    async def test_a_partial_run_answers_its_counts_its_app_ids_and_its_lease(self):
+        uow = FakeUnitOfWork()
+        rom_files = FakeRomFileStore()
+        for rom_id in (1, 2, 3):
+            rom_path = f"/retrodeck/roms/n64/game_{rom_id}.z64"
+            rom_files.files[rom_path] = b"rom"
+            with uow:
+                uow.roms.save(
+                    Rom(
+                        rom_id=rom_id,
+                        platform_slug="n64",
+                        name=f"Game {rom_id}",
+                        fs_name=f"game_{rom_id}.z64",
+                        shortcut_app_id=1000 + rom_id,
+                        last_synced_at="2025-01-01T00:00:00",
+                    )
+                )
+                uow.rom_installs.save(
+                    RomInstall.mark_installed(
+                        rom_id=rom_id,
+                        file_path=rom_path,
+                        rom_dir=None,
+                        platform_slug="n64",
+                        system="n64",
+                        installed_at="2025-01-01T00:00:00",
+                    )
+                )
+        rom_files.remove_file_failures.add("/retrodeck/roms/n64/game_2.z64")
+
+        message = json.loads(await _dispatcher_over_rom_removal(uow, rom_files).dispatch(1, "uninstall_all_roms", []))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "uninstall_incomplete",
+            "message": "1 ROM could not be uninstalled",
+            "removed_count": 2,
+            "errors": [{"rom_id": "2", "error": "simulated remove_file failure: /retrodeck/roms/n64/game_2.z64"}],
+            "app_ids": [1001, 1003],
+            "prune_lease_token": "bulk_uninstall:1",
+        }

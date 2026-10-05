@@ -75,9 +75,9 @@ class SiblingSupersedeFn(Protocol):
 
     One downloaded version per shortcut binding, whichever route produced it —
     an adopted install is an install (ADR-0028), so adoption is held to the rule
-    the download path already enforces. Returns ``None`` when the group is clean
-    or every removal succeeded, and a canonical failure dict otherwise, which the
-    caller must treat as an abort: a half-applied supersede leaves two installed
+    the download path already enforces. Returns once the group is clean or every
+    removal succeeded, and raises the removal's refusal otherwise, which the
+    caller must let abort it: a half-applied supersede leaves two installed
     versions, the state the rule exists to prevent.
 
     Which siblings qualify is deliberately **not** part of this contract — the
@@ -85,7 +85,7 @@ class SiblingSupersedeFn(Protocol):
     shortcut" rule (ADR-0021 §5) has one implementation behind this seam.
     """
 
-    async def __call__(self, rom_id: int) -> dict[str, Any] | None: ...
+    async def __call__(self, rom_id: int) -> None: ...
 
 
 class SiblingSupersedeProvider(Protocol):
@@ -366,8 +366,9 @@ class InstalledRomRemoverFn(Protocol):
     Before downloading a version whose sibling group already has another version
     on disk, DownloadService strips that install through this seam — reusing the
     canonical file-deletion + ``rom_installs`` cleanup rather than duplicating it.
-    Returns the removal's ``{success, ...}`` shape; ``reason: "not_installed"`` is
-    an already-clean no-op, any other failure aborts the download.
+    Returns the removal's success answer and raises its refusal:
+    :class:`lib.errors.NotInstalled` is an already-clean no-op, any other
+    refusal aborts the download.
     """
 
     async def __call__(self, rom_id: int) -> dict[str, Any]: ...

@@ -550,9 +550,7 @@ class RomAdoptionService:
         # is a different thing at a different path — content the plugin
         # downloaded and can fetch again (ADR-0028). A removal failure aborts,
         # exactly as it does for a download, so the rule is never half-applied.
-        cleanup_failure = await self._sibling_supersede()(rom_id)
-        if cleanup_failure is not None:
-            return cleanup_failure
+        await self._sibling_supersede()(rom_id)
         return await self._loop.run_in_executor(None, self._adopt_io, rom_id, rom_detail, target)
 
     def _resolve_source(self, target: _Target, candidate_path) -> str | None:

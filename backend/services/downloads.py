@@ -31,7 +31,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from lib.errors import error_response
+from lib.errors import NotInstalled, Refused, error_response
 from lib.list_result import ErrorCode
 from lib.path_safety import PathTraversalError, coerce_safe_component, safe_join
 
@@ -233,7 +233,7 @@ class DownloadService:
             await self._retain_started_task(result, rom_id, "start_download")
             return result
 
-    async def supersede_sibling_installs(self, rom_id: int) -> dict[str, Any] | None:
+    async def supersede_sibling_installs(self, rom_id: int) -> None:
         """Strip any other installed version of ``rom_id``'s sibling group (#1298 T7).
 
         The single home of the supersede — ``_begin_download`` once its occupancy
@@ -246,28 +246,27 @@ class DownloadService:
         canonical ``RomRemovalService.remove_rom_unchecked`` (files + ``rom_installs``
         row; saves untouched per ADR-0007) rather than duplicating its deletion logic.
         Every attempt is logged with both rom ids so a failure is attributable (S7).
-        A removal that reports ``not_installed`` raced clean and is skipped; any
-        other failure is returned so the caller aborts with that shape. A superseded
+        A removal refused with :class:`NotInstalled` raced clean and is skipped; any
+        other refusal propagates so the caller aborts with it. A superseded
         sibling's *paused* queue entry is evicted so the queue stays coherent with
-        disk (S1). Returns ``None`` when the group is clean / all removals succeeded.
+        disk (S1).
         """
         sibling_ids = self._conflicting_sibling_install_ids(rom_id)
         if not sibling_ids:
-            return None
+            return
         remove_rom = self._rom_remover()
         for sibling_id in sibling_ids:
-            result = await remove_rom(sibling_id)
-            if result.get("success"):
-                self._logger.info(f"Superseding install of rom {sibling_id} (group of rom {rom_id})")
-                self._evict_if_paused(sibling_id)
-                continue
-            if result.get("reason") == "not_installed":
+            try:
+                await remove_rom(sibling_id)
+            except NotInstalled:
                 continue  # raced clean — nothing to supersede
-            self._logger.error(
-                f"Superseding install of rom {sibling_id} (group of rom {rom_id}) failed: {result.get('message')}"
-            )
-            return result
-        return None
+            except Refused as refused:
+                self._logger.error(
+                    f"Superseding install of rom {sibling_id} (group of rom {rom_id}) failed: {refused.message}"
+                )
+                raise
+            self._logger.info(f"Superseding install of rom {sibling_id} (group of rom {rom_id})")
+            self._evict_if_paused(sibling_id)
 
     def _evict_if_paused(self, rom_id: int) -> None:
         """Drop a superseded sibling's queue entry when it is paused (#1298 S1).
@@ -387,13 +386,10 @@ class DownloadService:
         # held (B1), so a second start_download during this await is rejected by
         # ``start_download``'s guard rather than racing past it.
         try:
-            cleanup_failure = await self.supersede_sibling_installs(rom_id)
+            await self.supersede_sibling_installs(rom_id)
         except Exception:
             self._download_in_progress.discard(rom_id)
             raise
-        if cleanup_failure is not None:
-            self._download_in_progress.discard(rom_id)
-            return cleanup_failure
 
         try:
             self._download_file_store.make_dirs(roms_dir)

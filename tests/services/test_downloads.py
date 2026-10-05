@@ -31,13 +31,14 @@ from domain.rom import Rom
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
+from lib.errors import NotInstalled, Refused
 from lib.list_result import ErrorCode
 from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig, _DownloadControl
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
-from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
+from services.rom_removal import RomRemovalService, RomRemovalServiceConfig, UninstallIncomplete
 
 
 def _seed_rom(uow: FakeUnitOfWork, rom_id: int, *, platform_slug: str = "n64") -> None:
@@ -916,10 +917,11 @@ class TestRemoveRom:
         assert 42 not in downloads.service._download_queue
 
     @pytest.mark.asyncio
-    async def test_returns_error_not_installed(self, downloads):
-        result = await downloads.removal.remove_rom(999)
-        assert result["success"] is False
-        assert "not installed" in result["message"].lower()
+    async def test_refuses_not_installed(self, downloads):
+        coro = downloads.removal.remove_rom(999)
+        with pytest.raises(NotInstalled) as refused:
+            await coro
+        assert refused.value.message == "ROM not installed"
 
 
 class TestUninstallAllRoms:
@@ -2909,11 +2911,13 @@ class TestPathTraversalDeleteRomFiles:
             rom_dir=str(evil_dir),
         )
 
-        result = await downloads.removal.remove_rom(99)
+        coro = downloads.removal.remove_rom(99)
+        with pytest.raises(Refused) as refused:
+            await coro
         # The evil dir/file should NOT be deleted
         assert evil_dir.exists()
         assert evil_file.exists()
-        assert result["success"] is False
+        assert refused.value.reason == "uninstall_failed"
         # Unsafe paths are failures: retain the record so the user can repair it.
         assert downloads.uow.rom_installs.get(99) is not None
 
@@ -2938,9 +2942,11 @@ class TestPathTraversalDeleteRomFiles:
             rom_dir=None,
         )
 
-        result = await downloads.removal.remove_rom(99)
+        coro = downloads.removal.remove_rom(99)
+        with pytest.raises(Refused) as refused:
+            await coro
         assert evil_file.exists()
-        assert result["success"] is False
+        assert refused.value.reason == "uninstall_failed"
         assert downloads.uow.rom_installs.get(99) is not None
 
 
@@ -3664,14 +3670,14 @@ class TestUninstallAllRomsMixedResults:
         _seed_install(downloads.uow, 2, file_path=str(bad_file), rom_dir=None, system="snes")
 
         result = await downloads.removal.uninstall_all_roms()
-        assert result["success"] is False
+        assert isinstance(result, UninstallIncomplete)
         # good_file should be deleted
         assert not good_file.exists()
         # bad_file should still exist (outside roms dir)
         assert bad_file.exists()
-        assert result["removed_count"] == 1
-        assert len(result["errors"]) == 1
-        assert result["errors"][0]["rom_id"] == "2"
+        assert result.removed_count == 1
+        assert len(result.errors) == 1
+        assert result.errors[0]["rom_id"] == "2"
         assert downloads.uow.rom_installs.get(1) is None
         assert downloads.uow.rom_installs.get(2) is not None
 
@@ -5678,7 +5684,7 @@ class TestSiblingSupersedeRemoval:
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         # A concurrent removal already cleaned it — not_installed is a no-op, not an abort.
-        remover = AsyncMock(return_value={"success": False, "reason": "not_installed", "message": "ROM not installed"})
+        remover = AsyncMock(side_effect=NotInstalled("ROM not installed"))
         downloads.service._rom_remover = lambda: remover
 
         result = await downloads.service.supersede_sibling_installs(1)
@@ -5687,17 +5693,19 @@ class TestSiblingSupersedeRemoval:
         remover.assert_awaited_once_with(2)
 
     @pytest.mark.asyncio
-    async def test_removal_failure_returns_failure_shape(self, downloads):
+    async def test_a_removal_refusal_propagates(self, downloads):
         from unittest.mock import AsyncMock
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        downloads.service._rom_remover = lambda: failing
+        boom = Refused("uninstall_failed", "boom")
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=boom)
 
-        result = await downloads.service.supersede_sibling_installs(1)
+        coro = downloads.service.supersede_sibling_installs(1)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
+        assert refused.value is boom
 
     @pytest.mark.asyncio
     async def test_clean_group_no_remover_call(self, downloads):
@@ -5732,13 +5740,15 @@ class TestSiblingSupersedeRemoval:
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        downloads.service._rom_remover = lambda: failing
+        boom = Refused("uninstall_failed", "boom")
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=boom)
         started = _stage_download_prologue(downloads)
 
-        result = await downloads.service.start_download(1)
+        coro = downloads.service.start_download(1)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
+        assert refused.value is boom
         assert started == []
 
     @pytest.mark.asyncio
@@ -5790,12 +5800,12 @@ class TestSiblingSupersedeRemoval:
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        downloads.service._rom_remover = lambda: failing
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=Refused("uninstall_failed", "boom"))
         _stage_download_prologue(downloads)
 
-        result = await downloads.service.start_download(1)
-        assert result["reason"] == ErrorCode.UNKNOWN.value
+        coro = downloads.service.start_download(1)
+        with pytest.raises(Refused):
+            await coro
         assert 1 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
@@ -5846,13 +5856,11 @@ class TestSiblingSupersedeRemoval:
 
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
-        failing = AsyncMock(
-            return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "delete blew up"}
-        )
-        downloads.service._rom_remover = lambda: failing
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=Refused("uninstall_failed", "delete blew up"))
 
-        with caplog.at_level(logging.INFO):
-            await downloads.service.supersede_sibling_installs(1)
+        coro = downloads.service.supersede_sibling_installs(1)
+        with caplog.at_level(logging.INFO), pytest.raises(Refused):
+            await coro
         assert any(
             "rom 2" in r.message
             and "rom 1" in r.message
@@ -5926,12 +5934,14 @@ class TestResumeSupersede:
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=None, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused"}
-        failing = AsyncMock(return_value={"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"})
-        downloads.service._rom_remover = lambda: failing
+        boom = Refused("uninstall_failed", "boom")
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=boom)
         started = _stage_download_prologue(downloads)
 
-        result = await downloads.service.resume_download(1)
-        assert result == {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "boom"}
+        coro = downloads.service.resume_download(1)
+        with pytest.raises(Refused) as refused:
+            await coro
+        assert refused.value is boom
         assert started == []
         assert 1 not in downloads.service._download_in_progress
 

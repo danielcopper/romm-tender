@@ -40,6 +40,7 @@ from domain.rom_candidates import CANDIDATE_LIMIT
 from domain.rom_install import RomInstall
 from domain.save_answer import build_save_answer, unestablished_answer
 from domain.savestate_location import NoSavestates, SavestateLocation
+from lib.errors import Refused
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 
@@ -186,10 +187,10 @@ class Harness:
         # savestates not sorted at all. Tests that care seed their own answer.
         self.save_locations = FakeSaveLocationReader(saves_root=_SAVES, states_root=_STATES)
         self.active_core = FakeActiveCoreResolver(default=(None, None))
-        # Records every rom_id the supersede was asked about, and answers with
-        # whatever a test has staged. Default: nothing to supersede.
+        # Records every rom_id the supersede was asked about, and raises whatever
+        # refusal a test has staged. Default: nothing to supersede.
         self.superseded: list[int] = []
-        self.supersede_result: dict[str, Any] | None = None
+        self.supersede_refusal: Refused | None = None
         # Which directories ES-DE lists as systems. A system no test staged
         # answers ``None`` — the source could not answer, which is not a denial,
         # so the search behaves exactly as it did before the check existed.
@@ -225,9 +226,10 @@ class Harness:
         self.events.append((event, payload))
         return True
 
-    async def _supersede(self, rom_id: int) -> dict[str, Any] | None:
+    async def _supersede(self, rom_id: int) -> None:
         self.superseded.append(rom_id)
-        return self.supersede_result
+        if self.supersede_refusal is not None:
+            raise self.supersede_refusal
 
     def seed_rom(self, *, app_id: int | None = 1042) -> None:
         with self.uow:
@@ -665,11 +667,13 @@ class TestAdopt:
         h.seed_rom()
         h.stage_detail(_single_file_detail())
         h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
-        h.supersede_result = {"success": False, "reason": "in_progress", "message": "boom"}
+        h.supersede_refusal = Refused("in_progress", "boom")
 
-        result = await h.service.adopt_existing_rom(_ROM_ID)
+        coro = h.service.adopt_existing_rom(_ROM_ID)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result == {"success": False, "reason": "in_progress", "message": "boom"}
+        assert refused.value is h.supersede_refusal
         assert h.uow.rom_installs.get(_ROM_ID) is None
         assert h.store.files["/roms/snes/Game.sfc"] == b"x" * 10
 

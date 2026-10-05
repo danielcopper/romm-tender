@@ -8,16 +8,17 @@ metadata all survive — only the on-disk files and the install record go.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from models.prune import InstalledContentRemoval
 
-from lib.list_result import ErrorCode
+from lib.errors import NotInstalled, Refused
+from lib.partial_failure import PartialFailure
 from lib.path_safety import is_safe_rom_path
 
 if TYPE_CHECKING:
-    import asyncio
     import logging
     from collections.abc import Callable
 
@@ -37,6 +38,20 @@ if TYPE_CHECKING:
 # Seconds between ``uninstall_progress`` frames while a multi-file removal runs.
 # The terminal frame is never throttled.
 _PROGRESS_INTERVAL_S = 0.5
+
+
+@dataclass(frozen=True)
+class UninstallIncomplete(PartialFailure):
+    """A bulk uninstall that removed only part of the installed ROMs.
+
+    ``app_ids`` are the bound shortcuts of the ROMs whose files were deleted,
+    and ``prune_lease_token`` the lease for resetting them, when there are any.
+    """
+
+    removed_count: int
+    errors: list[dict[str, str]]
+    app_ids: list[int]
+    prune_lease_token: str | None
 
 
 @dataclass(frozen=True)
@@ -253,8 +268,7 @@ class RomRemovalService:
         """
         async with self._rules.hold("remove_rom", update=True, migration=True, prune=True):
             result = await self.remove_rom_unchecked(rom_id)
-            if result.get("success"):
-                result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
+            result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
             return result
 
     async def remove_rom_unchecked(self, rom_id: int | str) -> dict[str, Any]:
@@ -269,30 +283,36 @@ class RomRemovalService:
         earlier press, or a bulk uninstall, which claims every ROM it is about
         to remove. The running one has renamed its source to a staging name, so
         a second attempt against it would report the source as vanished while
-        the removal it duplicates is still working.
+        the removal it duplicates is still working. A call cancelled while its
+        files are being deleted keeps that claim until the deletion ends.
+
+        Raises :class:`NotInstalled` for a ROM with nothing installed, and
+        ``uninstall_failed`` for what the file store raises by design; anything
+        else it raises is a bug.
         """
         rom_id_int = int(rom_id)
         with self._uow_factory() as uow:
             install = uow.rom_installs.get(rom_id_int)
         if install is None:
-            return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
+            raise NotInstalled("ROM not installed")
         if rom_id_int in self._removals_in_flight:
-            return {
-                "success": False,
-                "reason": "in_progress",
-                "message": "This ROM is already being uninstalled",
-            }
+            raise Refused("in_progress", "This ROM is already being uninstalled")
 
         self._removals_in_flight.add(rom_id_int)
         started = self._clock.monotonic()
         self._logger.info(f"Uninstall started: rom_id={rom_id_int}")
+        removal = self._loop.run_in_executor(None, self._remove_rom_io, rom_id_int, install)
         try:
-            await self._loop.run_in_executor(None, self._remove_rom_io, rom_id_int, install)
-        except Exception as e:
+            await asyncio.shield(removal)
+        except (OSError, ValueError, RuntimeError) as e:
             self._logger.error(f"Failed to delete ROM files after {self._elapsed(started)}: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "Failed to delete ROM files"}
+            raise Refused("uninstall_failed", "Failed to delete ROM files") from e
         finally:
-            self._removals_in_flight.discard(rom_id_int)
+            # A cancelled call leaves the thread deleting, so the claim goes when the thread ends.
+            if removal.done():
+                self._removals_in_flight.discard(rom_id_int)
+            else:
+                removal.add_done_callback(lambda _: self._removals_in_flight.discard(rom_id_int))
         self._logger.info(f"Uninstall completed: rom_id={rom_id_int} in {self._elapsed(started)}")
 
         if self._download_queue_cleanup is not None:
@@ -344,17 +364,18 @@ class RomRemovalService:
                     uow.roms.set_applied_launch_options(rom_id, rom.applied_launch_options)
         return count, errors, app_ids
 
-    async def uninstall_all_roms(self) -> dict[str, Any]:
+    async def uninstall_all_roms(self) -> dict[str, Any] | UninstallIncomplete:
         """Remove all installed ROMs: delete files and drop their install records.
 
-        Returns ``success`` (True only when every per-ROM deletion
-        succeeded), ``removed_count`` (number of ROMs whose files were
-        deleted), ``errors`` (one ``{"rom_id", "error"}`` entry per
-        failed deletion), and ``app_ids`` (the bound Steam ``shortcut_app_id``
-        of each ROM whose files were deleted) so the frontend can reset those
-        kept shortcuts' now-stale ``launch_options`` to the uninstalled
-        placeholder (#1146). Install records for partially-failed bulk runs
-        are left intact for the failing entries so the user can retry.
+        A run in which every per-ROM deletion succeeded answers ``success``,
+        ``removed_count`` (number of ROMs whose files were deleted), ``errors``
+        (empty) and ``app_ids`` (the bound Steam ``shortcut_app_id`` of each ROM
+        whose files were deleted) so the frontend can reset those kept
+        shortcuts' now-stale ``launch_options`` to the uninstalled placeholder
+        (#1146). A run in which any failed answers :class:`UninstallIncomplete`
+        with the same counts, one ``{"rom_id", "error"}`` entry per failed
+        deletion in ``errors``. Install records for the failing entries are
+        left intact so the user can retry.
 
         Claims every ROM it is about to remove before dispatching the worker, so
         a single uninstall of any of them is refused while this runs and this is
@@ -370,21 +391,29 @@ class RomRemovalService:
         method's own included, carries neither ``app_ids`` nor a lease.
         """
         async with self._rules.hold("uninstall_all_roms", update=True, migration=True, sync=True, prune=True):
-            result = await self._uninstall_all_roms()
-            if result.get("app_ids"):
-                result["prune_lease_token"] = await self._rules.acquire_lease("bulk_uninstall")
+            count, errors, app_ids = await self._uninstall_all_roms()
+            lease = await self._rules.acquire_lease("bulk_uninstall") if app_ids else None
+            if errors:
+                noun = "ROM" if len(errors) == 1 else "ROMs"
+                return UninstallIncomplete(
+                    reason="uninstall_incomplete",
+                    message=f"{len(errors)} {noun} could not be uninstalled",
+                    removed_count=count,
+                    errors=errors,
+                    app_ids=app_ids,
+                    prune_lease_token=lease,
+                )
+            result: dict[str, Any] = {"success": True, "removed_count": count, "errors": errors, "app_ids": app_ids}
+            if lease is not None:
+                result["prune_lease_token"] = lease
             return result
 
-    async def _uninstall_all_roms(self) -> dict[str, Any]:
+    async def _uninstall_all_roms(self) -> tuple[int, list[dict[str, str]], list[int]]:
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
         claimed = {install.rom_id for install in installs}
         if claimed & self._removals_in_flight:
-            return {
-                "success": False,
-                "reason": "in_progress",
-                "message": "A ROM is already being uninstalled",
-            }
+            raise Refused("in_progress", "A ROM is already being uninstalled")
 
         self._removals_in_flight |= claimed
         started = self._clock.monotonic()
@@ -398,9 +427,4 @@ class RomRemovalService:
         )
         if self._download_queue_cleanup is not None:
             self._download_queue_cleanup.clear()
-        return {
-            "success": len(errors) == 0,
-            "removed_count": count,
-            "errors": errors,
-            "app_ids": app_ids,
-        }
+        return count, errors, app_ids
