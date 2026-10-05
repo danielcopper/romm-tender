@@ -108,10 +108,17 @@ handed to `bootstrap()`, which derives none of them (`domain/app_directories.py`
 an installer resolved and wrote into the service unit — then the XDG variables, then built-in defaults; the back two
 rungs are for a start by hand.
 
+One folder is written outside the seven: the root of the [recovery bundles](#recovery-bundle), directly under the home
+directory, its name taken from one of [the identifier's homes](#display-name-tender-vs-identifier-romm-tender). It is
+not a root resolved from the environment, and it sits where it does because it is the one folder a user is meant to open
+by hand — a folder under `~/.local` is hidden in a file manager by default.
+
 - **config root** — user-intent configuration: the settings file and its siblings.
-- **data root** — what cannot be fetched again: the database, the single-instance lock beside it, and the legacy
-  `save_sync_state.json` the settings fold still reads. This list is the one inventory of that root; everywhere else
-  names it rather than repeating it.
+- **data root** — what cannot be fetched again: the database with its two WAL sidecars, the single-instance lock beside
+  it, the legacy `save_sync_state.json` the settings fold still reads, and the installer's two copies of the database
+  and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback by hand
+  replaces. Each is staged as `<name>.new` and the copy it replaces set aside as `<name>.prev`, which can outlast the
+  run. This list is the one inventory of that root; everywhere else names it rather than repeating it.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.
