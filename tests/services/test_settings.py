@@ -465,6 +465,7 @@ class TestSaveLogLevel:
     def test_invalid_level(self, service, settings, settings_persister):
         with pytest.raises(Refused) as refused:
             service.save_log_level("verbose")
+        assert refused.value.reason == "invalid_log_level"
         assert "Invalid log level" in refused.value.message
         assert "log_level" not in settings
         settings_persister.save_settings.assert_not_called()
@@ -759,6 +760,7 @@ class TestSaveSteamInputSetting:
     def test_invalid_mode(self, service, settings, settings_persister):
         with pytest.raises(Refused) as refused:
             service.save_steam_input_setting("turbo")
+        assert refused.value.reason == "invalid_mode"
         assert "turbo" in refused.value.message
         assert "steam_input_mode" not in settings
         settings_persister.save_settings.assert_not_called()
@@ -838,7 +840,7 @@ class TestApplySteamInputSetting:
             ),
         ],
     )
-    async def test_a_mode_that_was_not_applied_is_refused_with_why(
+    async def test_a_mode_that_was_not_applied_is_refused_saying_why(
         self, service, uow, steam_config, outcome, reason, message
     ):
         _seed_rom(uow, rom_id=1, app_id=1)
@@ -946,24 +948,28 @@ class TestUpdateWhitelistSettings:
     def test_disabled_defaults_not_list_rejected(self, service, settings_persister):
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings("not-a-list", [])
+        assert refused.value.reason == "invalid_whitelist"
         assert "disabled_defaults" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_custom_names_not_list_rejected(self, service, settings_persister):
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings([], "not-a-list")
+        assert refused.value.reason == "invalid_whitelist"
         assert "custom_names" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_disabled_defaults_with_non_string_rejected(self, service, settings_persister):
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings([1, 2], [])
+        assert refused.value.reason == "invalid_whitelist"
         assert "disabled_defaults" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
     def test_custom_names_with_non_string_rejected(self, service, settings_persister):
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings([], ["ok", 42])
+        assert refused.value.reason == "invalid_whitelist"
         assert "custom_names" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
@@ -997,6 +1003,7 @@ class TestWhitelistSettings:
         """Rejects non-list disabled_defaults."""
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings("not-a-list", [])
+        assert refused.value.reason == "invalid_whitelist"
         assert "disabled_defaults" in refused.value.message
 
     @pytest.mark.asyncio
@@ -1004,6 +1011,7 @@ class TestWhitelistSettings:
         """Rejects non-list custom_names."""
         with pytest.raises(Refused) as refused:
             service.update_whitelist_settings([], "not-a-list")
+        assert refused.value.reason == "invalid_whitelist"
         assert "custom_names" in refused.value.message
 
     @pytest.mark.asyncio
@@ -1011,10 +1019,12 @@ class TestWhitelistSettings:
         """Rejects lists containing non-string items."""
         with pytest.raises(Refused) as refused_dd:
             service.update_whitelist_settings([1, 2], [])
+        assert refused_dd.value.reason == "invalid_whitelist"
         assert "disabled_defaults" in refused_dd.value.message
 
         with pytest.raises(Refused) as refused_cn:
             service.update_whitelist_settings([], ["valid", 42])
+        assert refused_cn.value.reason == "invalid_whitelist"
         assert "custom_names" in refused_cn.value.message
 
     @pytest.mark.asyncio
@@ -1061,7 +1071,7 @@ class TestSetCollectionOwnerScope:
         assert settings["collection_owner_scope"] == scope
         settings_persister.save_settings.assert_called_once_with()
 
-    def test_invalid_scope_rejected_with_canonical_failure(self, service, settings, settings_persister):
+    def test_an_invalid_scope_is_refused_without_writing(self, service, settings, settings_persister):
         with pytest.raises(Refused) as refused:
             service.set_collection_owner_scope("everyone")
         assert refused.value.reason == "invalid_scope"
@@ -1085,7 +1095,7 @@ class TestSetCollectionNamingMode:
         assert settings["collection_naming_mode"] == mode
         settings_persister.save_settings.assert_called_once_with()
 
-    def test_invalid_mode_rejected_with_canonical_failure(self, service, settings, settings_persister):
+    def test_an_invalid_mode_is_refused_without_writing(self, service, settings, settings_persister):
         with pytest.raises(Refused) as refused:
             service.set_collection_naming_mode("fancy")
         assert refused.value.reason == "invalid_mode"

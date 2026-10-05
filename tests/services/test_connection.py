@@ -143,7 +143,7 @@ class TestTestConnectionHappyPath:
 
 
 class TestTestConnectionBadPath:
-    def test_missing_url_returns_config_error(self, event_loop, romm_api, logger):
+    def test_missing_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         settings = {"romm_url": ""}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
@@ -151,14 +151,14 @@ class TestTestConnectionBadPath:
         assert (refused.value.message, refused.value.details) == ("No server URL configured", {})
         romm_api.heartbeat.assert_not_called()
 
-    def test_unset_url_key_returns_config_error(self, event_loop, romm_api, logger):
+    def test_unset_url_key_is_refused_with_config_error(self, event_loop, romm_api, logger):
         """``romm_url`` absent from settings dict → config_error."""
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured):
             event_loop.run_until_complete(service.test_connection())
 
-    def test_no_token_returns_config_error_without_probing(self, event_loop, romm_api, logger):
+    def test_no_token_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger):
         """A configured URL but no minted token short-circuits before any network
         call — an unauthenticated scoped probe is never fired (#928)."""
         settings = {"romm_url": "http://romm.local"}
@@ -891,7 +891,7 @@ class TestEstablishTokenProvenance:
 
 
 class TestEstablishTokenBadPath:
-    def test_empty_url_returns_config_error(self, event_loop, romm_api, logger):
+    def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_token("", "u", "p"))
@@ -899,7 +899,7 @@ class TestEstablishTokenBadPath:
         romm_api.mint_client_token.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
-    def test_invalid_url_returns_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
+    def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         """A scheme-less / non-http(s) / hostless URL is rejected before any network call (#1015)."""
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
@@ -917,14 +917,14 @@ class TestEstablishTokenBadPath:
         assert settings["romm_url"] == "http://romm.local"
         assert settings["romm_api_token_origin"] == "http://romm.local"
 
-    def test_unreachable_returns_connection_error_no_mint(self, event_loop, romm_api, logger):
+    def test_an_unreachable_server_propagates_and_mints_nothing(self, event_loop, romm_api, logger):
         romm_api.heartbeat.side_effect = RommConnectionError("refused")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(RommConnectionError):
             event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
         romm_api.mint_client_token.assert_not_called()
 
-    def test_version_too_old_returns_version_error_no_mint(self, event_loop, romm_api, logger):
+    def test_version_too_old_is_refused_with_version_error_no_mint(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(VersionUnsupported) as refused:
@@ -932,7 +932,7 @@ class TestEstablishTokenBadPath:
         assert refused.value.reason == "version_error"
         romm_api.mint_client_token.assert_not_called()
 
-    def test_forbidden_mint_returns_actionable_message(self, event_loop, romm_api, logger):
+    def test_forbidden_mint_is_refused_with_actionable_message(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.side_effect = RommForbiddenError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(AuthFailed) as refused:
@@ -943,20 +943,20 @@ class TestEstablishTokenBadPath:
         assert "username and password" in refused.value.message
         assert "create API tokens" in refused.value.message
 
-    def test_auth_error_mint_returns_auth_error(self, event_loop, romm_api, logger):
+    def test_a_401_on_the_mint_propagates(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.side_effect = RommAuthError("401")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(RommAuthError):
             event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
 
-    def test_missing_raw_token_returns_api_error(self, event_loop, romm_api, logger):
+    def test_a_mint_answer_without_a_raw_token_is_refused_as_server_unreachable(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.return_value = {"id": 42}  # no raw_token
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(ServerUnreachable) as refused:
             event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
         assert refused.value.reason == "server_unreachable"
 
-    def test_missing_id_returns_api_error(self, event_loop, romm_api, logger):
+    def test_a_mint_answer_without_an_id_is_refused_as_server_unreachable(self, event_loop, romm_api, logger):
         romm_api.mint_client_token.return_value = {"raw_token": "rmm_x"}  # no id
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(ServerUnreachable) as refused:
@@ -1094,7 +1094,7 @@ class TestEstablishUserTokenHappyPath:
 
 
 class TestEstablishUserTokenBadPath:
-    def test_empty_url_returns_config_error(self, event_loop, romm_api, logger):
+    def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_user_token("", "rmm_x"))
@@ -1102,7 +1102,7 @@ class TestEstablishUserTokenBadPath:
         romm_api.heartbeat.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
-    def test_invalid_url_returns_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
+    def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_user_token(bad_url, "rmm_x"))
@@ -1111,7 +1111,7 @@ class TestEstablishUserTokenBadPath:
         romm_api.get_current_user.assert_not_called()
 
     @pytest.mark.parametrize("blank_token", ["", "   ", "\t\n"])
-    def test_blank_token_returns_config_error_without_probing(self, event_loop, romm_api, logger, blank_token):
+    def test_blank_token_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, blank_token):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_user_token("http://romm.local", blank_token))
@@ -1119,7 +1119,7 @@ class TestEstablishUserTokenBadPath:
         romm_api.heartbeat.assert_not_called()
         romm_api.get_current_user.assert_not_called()
 
-    def test_unreachable_server_returns_error_no_validation(self, event_loop, romm_api, logger):
+    def test_an_unreachable_server_propagates_and_validates_nothing(self, event_loop, romm_api, logger):
         # A genuinely unreachable server fails BOTH the version probe and the
         # post-restore reachability re-probe (#1564), so the generic
         # server-unreachable error surfaces rather than the token-rejected one.
@@ -1130,7 +1130,7 @@ class TestEstablishUserTokenBadPath:
             event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_x"))
         romm_api.get_current_user.assert_not_called()
 
-    def test_version_gate_failure_returns_version_error_no_validation(self, event_loop, romm_api, logger):
+    def test_version_gate_failure_is_refused_with_version_error_no_validation(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(VersionUnsupported) as refused:
@@ -1138,7 +1138,7 @@ class TestEstablishUserTokenBadPath:
         assert refused.value.reason == "version_error"
         romm_api.get_current_user.assert_not_called()
 
-    def test_invalid_token_401_returns_auth_failed(self, event_loop, romm_api, logger, settings_persister):
+    def test_invalid_token_401_is_refused_with_auth_failed(self, event_loop, romm_api, logger, settings_persister):
         romm_api.get_current_user.side_effect = RommAuthError("401")
         service = _make_service(
             settings={},
@@ -1153,7 +1153,7 @@ class TestEstablishUserTokenBadPath:
         assert "invalid or has been revoked" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
-    def test_scope_403_returns_actionable_scope_message(self, event_loop, romm_api, logger):
+    def test_scope_403_is_refused_with_actionable_scope_message(self, event_loop, romm_api, logger):
         romm_api.get_current_user.side_effect = RommForbiddenError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(AuthFailed) as refused:
@@ -1161,7 +1161,7 @@ class TestEstablishUserTokenBadPath:
         assert refused.value.reason == "auth_failed"
         assert "scopes" in refused.value.message
 
-    def test_generic_validation_error_returns_error_response(self, event_loop, romm_api, logger):
+    def test_a_server_error_from_the_validation_propagates(self, event_loop, romm_api, logger):
         romm_api.get_current_user.side_effect = RommServerError("boom", status_code=500)
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(RommServerError):
@@ -1195,10 +1195,12 @@ class TestEstablishUserTokenProbeRejection:
     than a clean 401, so a bad pasted token otherwise surfaces as a generic
     server error. A probe failure is disambiguated by a post-restore
     reachability re-probe: a reachable server proves the pasted token — not the
-    server — is at fault, so the token-rejected auth failure is returned instead
+    server — is at fault, so the token-rejected auth failure is raised instead
     of the misleading generic server error."""
 
-    def test_bad_token_reachable_server_returns_token_rejected(self, event_loop, romm_api, logger, settings_persister):
+    def test_bad_token_reachable_server_is_refused_with_token_rejected(
+        self, event_loop, romm_api, logger, settings_persister
+    ):
         """Probe fails with a 500 but the reachability re-probe reaches the
         server → the pasted token is rejected, and the old state is restored."""
         # The token-carrying version probe raises RomM's 500-for-a-bad-token.
@@ -1225,7 +1227,7 @@ class TestEstablishUserTokenProbeRejection:
         assert settings["romm_api_token_origin"] == "https://old.server"
         settings_persister.save_settings.assert_not_called()
 
-    def test_probe_fails_and_server_unreachable_returns_real_error(
+    def test_probe_fails_and_server_unreachable_propagates_the_probe_error(
         self, event_loop, romm_api, logger, settings_persister
     ):
         """Probe fails AND the reachability re-probe also fails → the genuine
@@ -1668,7 +1670,7 @@ class TestEstablishPairedTokenHappyPath:
 
 
 class TestEstablishPairedTokenBadPath:
-    def test_empty_url_returns_config_error(self, event_loop, romm_api, logger):
+    def test_empty_url_is_refused_with_config_error(self, event_loop, romm_api, logger):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_paired_token("", "ABCD2345"))
@@ -1676,7 +1678,7 @@ class TestEstablishPairedTokenBadPath:
         romm_api.heartbeat.assert_not_called()
 
     @pytest.mark.parametrize("bad_url", ["romm.local", "ftp://romm.local", "   ", "https://"])
-    def test_invalid_url_returns_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
+    def test_invalid_url_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, bad_url):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_paired_token(bad_url, "ABCD2345"))
@@ -1685,7 +1687,7 @@ class TestEstablishPairedTokenBadPath:
         romm_api.exchange_pairing_code.assert_not_called()
 
     @pytest.mark.parametrize("blank_code", ["", "   ", "\t\n", "-", "- -"])
-    def test_blank_code_returns_config_error_without_probing(self, event_loop, romm_api, logger, blank_code):
+    def test_blank_code_is_refused_with_config_error_without_probing(self, event_loop, romm_api, logger, blank_code):
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(NotConfigured) as refused:
             event_loop.run_until_complete(service.establish_paired_token("http://romm.local", blank_code))
@@ -1693,14 +1695,14 @@ class TestEstablishPairedTokenBadPath:
         romm_api.heartbeat.assert_not_called()
         romm_api.exchange_pairing_code.assert_not_called()
 
-    def test_unreachable_server_returns_error_no_exchange(self, event_loop, romm_api, logger):
+    def test_an_unreachable_server_propagates_and_exchanges_nothing(self, event_loop, romm_api, logger):
         romm_api.heartbeat.side_effect = RommConnectionError("refused")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(RommConnectionError):
             event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
         romm_api.exchange_pairing_code.assert_not_called()
 
-    def test_version_gate_failure_returns_version_error_no_exchange(self, event_loop, romm_api, logger):
+    def test_version_gate_failure_is_refused_with_version_error_no_exchange(self, event_loop, romm_api, logger):
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(VersionUnsupported) as refused:
@@ -1708,7 +1710,7 @@ class TestEstablishPairedTokenBadPath:
         assert refused.value.reason == "version_error"
         romm_api.exchange_pairing_code.assert_not_called()
 
-    def test_invalid_code_returns_auth_failed(self, event_loop, romm_api, logger, settings_persister):
+    def test_invalid_code_is_refused_with_auth_failed(self, event_loop, romm_api, logger, settings_persister):
         romm_api.exchange_pairing_code.side_effect = PairingCodeInvalidError("404")
         service = _make_service(
             settings={},
@@ -1725,7 +1727,7 @@ class TestEstablishPairedTokenBadPath:
         romm_api.get_current_user.assert_not_called()
         settings_persister.save_settings.assert_not_called()
 
-    def test_token_gone_returns_auth_failed_with_own_message(self, event_loop, romm_api, logger):
+    def test_token_gone_is_refused_with_auth_failed_with_own_message(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeTokenGoneError("404")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(AuthFailed) as refused:
@@ -1733,7 +1735,7 @@ class TestEstablishPairedTokenBadPath:
         assert refused.value.reason == "auth_failed"
         assert "no longer exists" in refused.value.message
 
-    def test_owner_disabled_returns_auth_failed_with_own_message(self, event_loop, romm_api, logger):
+    def test_owner_disabled_is_refused_with_auth_failed_with_own_message(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeOwnerDisabledError("403")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(AuthFailed) as refused:
@@ -1741,7 +1743,7 @@ class TestEstablishPairedTokenBadPath:
         assert refused.value.reason == "auth_failed"
         assert "disabled" in refused.value.message
 
-    def test_rate_limited_returns_rate_limited_reason(self, event_loop, romm_api, logger):
+    def test_rate_limited_is_refused_with_rate_limited_reason(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = PairingCodeRateLimitedError("429")
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(Refused) as refused:
@@ -1749,13 +1751,15 @@ class TestEstablishPairedTokenBadPath:
         assert refused.value.reason == "rate_limited"
         assert "Too many attempts" in refused.value.message
 
-    def test_transport_failure_during_exchange_returns_error_response(self, event_loop, romm_api, logger):
+    def test_a_server_error_during_the_exchange_propagates(self, event_loop, romm_api, logger):
         romm_api.exchange_pairing_code.side_effect = RommServerError("boom", status_code=500)
         service = _make_service(settings={}, romm_api=romm_api, loop=event_loop, logger=logger)
         with pytest.raises(RommServerError):
             event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
 
-    def test_missing_raw_token_returns_error(self, event_loop, romm_api, logger, settings_persister):
+    def test_an_exchange_answer_without_a_raw_token_is_refused_as_server_unreachable(
+        self, event_loop, romm_api, logger, settings_persister
+    ):
         romm_api.exchange_pairing_code.return_value = {"id": 1}  # no raw_token
         service = _make_service(
             settings={},
@@ -1770,7 +1774,9 @@ class TestEstablishPairedTokenBadPath:
         assert "did not return a usable token" in refused.value.message
         settings_persister.save_settings.assert_not_called()
 
-    def test_users_me_401_after_exchange_returns_auth_failed(self, event_loop, romm_api, logger, settings_persister):
+    def test_users_me_401_after_exchange_is_refused_with_auth_failed(
+        self, event_loop, romm_api, logger, settings_persister
+    ):
         # The exchanged token still runs through the shared /users/me validation:
         # a 401 there rejects it just like a pasted token.
         romm_api.get_current_user.side_effect = RommAuthError("401")
@@ -2219,7 +2225,7 @@ def _signed_in_settings() -> dict[str, Any]:
     return {**_working_settings(), "romm_api_token_source": "minted", "romm_user_id": 5}
 
 
-class TestASignInGivesItsStateBackOnAnyFailure:
+class TestASignInOrSignOutGivesItsStateBackOnAnyFailure:
     """Every failure before the save gives the previous auth state back, a bug and an interrupt included."""
 
     @pytest.mark.parametrize(
