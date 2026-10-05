@@ -193,6 +193,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
   // the reads and the romm_data_changed fold for all of them (#993).
   const detail = useGameDetail(appId);
+  const fileMissing = detail.fileMissingAt !== null;
   const [playtimeInfo, setPlaytimeInfo] = useState<PlaytimeState>({
     lastPlayed: initialLastPlayed,
     restoredLastPlayed: null,
@@ -863,15 +864,19 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <MenuItem key="delete-saves" tone="destructive" onClick={handleDeleteSaves}>
           Delete Local Saves
         </MenuItem>
-        <MenuItem
-          key="uninstall"
-          tone="destructive"
-          onClick={() => {
-            detach(handleUninstall());
-          }}
-        >
-          Uninstall
-        </MenuItem>
+        {/* A download whose file is missing is removed by the play button's
+            "Forget this download" instead: there is nothing to delete. */}
+        {fileMissing ? null : (
+          <MenuItem
+            key="uninstall"
+            tone="destructive"
+            onClick={() => {
+              detach(handleUninstall());
+            }}
+          >
+            Uninstall
+          </MenuItem>
+        )}
       </Menu>,
       getEventTarget(e),
     );
@@ -1047,8 +1052,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     >
       {/* Play button on the left */}
       <CustomPlayButton appId={appId} />
-      {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865) */}
-      <DiscSelector appId={appId} />
+      {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
+          nothing for a download whose discs are missing */}
+      {fileMissing ? null : <DiscSelector appId={appId} />}
       {/* Version picker for multi-version sibling groups — renders nothing otherwise (#1297) */}
       <VersionPicker appId={appId} />
       {/* Info items row */}
@@ -1078,8 +1084,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
           <FaGamepad size={18} color="#553e98" />
         </DialogButton>
-        {/* Core selection button (only when multiple emulators to choose between) */}
-        {detail.emulators.length > 1 ? (
+        {/* Core selection button (only when multiple emulators to choose between,
+            and not for a download whose file is missing) */}
+        {detail.emulators.length > 1 && !fileMissing ? (
           <DialogButton
             key="core-btn"
             className="romm-gear-btn"

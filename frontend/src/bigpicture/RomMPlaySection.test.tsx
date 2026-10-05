@@ -3717,6 +3717,86 @@ describe("RomMPlaySection", () => {
   // N. Context menus structure (RomM / Core / Steam)
   // ------------------------------------------------------------------
 
+  describe("a download whose file is missing (#2242)", () => {
+    const MISSING = "/run/media/deck/SD/retrodeck/roms/psx/FF7";
+    const twoEmulators = (): ReturnType<typeof playSectionUtils.extractCoreInfo> => ({
+      activeCoreLabel: "Snes9x",
+      activeCoreIsDefault: true,
+      emulatorDataAvailable: true,
+      emulators: [
+        {
+          label: "Snes9x",
+          kind: "libretro",
+          core_so: "snes9x.so",
+          emulator: "snes9x.so",
+          is_default: true,
+          bakeable: true,
+          reason: null,
+        },
+        {
+          label: "BlastEm",
+          kind: "libretro",
+          core_so: "blastem.so",
+          emulator: "blastem.so",
+          is_default: false,
+          bakeable: true,
+          reason: null,
+        },
+      ],
+      platformCoreLabel: null,
+      hasGameOverride: false,
+    });
+
+    const renderWith = async (fileMissingAt: string | null) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        installed: true,
+        platform_slug: "snes",
+        file_missing_at: fileMissingAt,
+      });
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue(twoEmulators());
+      vi.mocked(backend.getDiscSelection).mockReset();
+      vi.mocked(backend.getDiscSelection).mockResolvedValue({
+        multi_disc: true,
+        discs: [
+          { filename: "ff7 (Disc 1).cue", label: "Disc 1", index: 1 },
+          { filename: "ff7 (Disc 2).cue", label: "Disc 2", index: 2 },
+        ],
+        selected: null,
+        default: { kind: "m3u", label: "All discs (m3u)", filename: "ff7.m3u" },
+      });
+      const utils = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      return utils;
+    };
+
+    const labels = (items: MenuItemElement[]) => items.map((item) => item.props.children);
+    // This file's DialogButton stub keeps only `title`, and the disc picker's
+    // trigger is the one button in the row without one (the play button is
+    // stubbed, every gear and the version picker carry a title).
+    const discPickers = (container: HTMLElement) =>
+      [...container.querySelectorAll("button")].filter((button) => !button.title);
+
+    it("offers no Uninstall, no emulator picker and no disc picker while the file is missing", async () => {
+      const { container } = await renderWith(MISSING);
+
+      expect(labels(await openRomMMenuAndGetItems(testAppId))).not.toContain("Uninstall");
+      expect(container.querySelector('button[title="Emulator Core"]')).toBeNull();
+      expect(discPickers(container)).toHaveLength(0);
+    });
+
+    it("offers all three while the file is there", async () => {
+      const { container } = await renderWith(null);
+
+      expect(labels(await openRomMMenuAndGetItems(testAppId))).toContain("Uninstall");
+      expect(container.querySelector('button[title="Emulator Core"]')).not.toBeNull();
+      await waitFor(() => {
+        expect(discPickers(container)).toHaveLength(1);
+      });
+    });
+  });
+
   describe("context menus", () => {
     it("showRomMMenu yields 6 MenuItems + 1 separator (Refresh artwork/metadata/saves/bios + delete-saves + uninstall)", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({

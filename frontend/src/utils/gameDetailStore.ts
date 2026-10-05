@@ -64,6 +64,8 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   romName: string;
   platformSlug: string;
   installed: boolean;
+  /** The path an install record names whose file and folder are both gone, else `null`. */
+  fileMissingAt: string | null;
   /** Server-reported ROM size in bytes, or `null` when unknown. */
   fsSizeBytes: number | null;
   saveSyncEnabled: boolean;
@@ -89,6 +91,7 @@ const DEFAULT_STATE: GameDetailState = {
   romName: "",
   platformSlug: "",
   installed: false,
+  fileMissingAt: null,
   fsSizeBytes: null,
   saveSyncEnabled: false,
   saveStatus: null,
@@ -299,6 +302,7 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
       romName: cached.rom_name || "",
       platformSlug: cached.platform_slug || "",
       installed: cached.installed ?? false,
+      fileMissingAt: cached.file_missing_at ?? null,
       fsSizeBytes: cached.fs_size_bytes ?? null,
       saveSyncEnabled: cached.save_sync_enabled ?? false,
       saveSyncStatus,
