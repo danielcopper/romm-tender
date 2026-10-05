@@ -236,7 +236,7 @@ locally with `mise run docs`.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
 - **`instanceof` against a DOM global is false in QAM code**: the panel's code runs in the **SharedJSContext** window
-  while the QAM panel's nodes belong to the QAM view's own document — two realms, confirmed live (the two documents do
+  while the nodes it renders belong to the QAM view's own document — two realms, confirmed live (the two documents do
   not share a URL, and neither can see the other's elements). What is **measured** is the `instanceof`: such a test is
   false for **every** node such code will ever see, so a guard written that way rejects everything and the feature is
   simply inert. Whether a constructor that takes the node as an argument — `new ResizeObserver(...)`,

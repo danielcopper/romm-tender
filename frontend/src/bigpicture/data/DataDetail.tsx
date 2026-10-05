@@ -354,8 +354,8 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
     <>
       <Muted>
         Everything in your Steam library that neither Steam nor Tender installed — emulators, launchers, browsers, games
-        you added by hand. Your RomM games are not counted here; they are the Tender&apos;s shortcuts row. The whitelist
-        below protects what you keep; everything else is what the button removes.
+        you added by hand. Your RomM games are not counted here; they are counted under Tender&apos;s shortcuts. The
+        whitelist below protects what you keep; everything else is what the button removes.
       </Muted>
       <Figures>{figures()}</Figures>
       {state.unidentifiedCount > 0 && (

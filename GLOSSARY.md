@@ -142,10 +142,10 @@ directly under the home directory, its name built from `PACKAGE_NAME` (see
 environment, and it sits where it does because it is the one folder a user is meant to open in a file manager — a folder
 under `~/.local` is hidden there by default.
 
-_Avoid_: **Decky-assigned directory** — those were named after the plugin's own folder, which is what made the data move
-on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin directory, install
-directory. "XDG directory" is now only half wrong — the XDG variables ARE read, as the ladder's second rung, but they
-are not where the answer comes from on an installed system.
+_Avoid_: **Decky-assigned directory** — those were named after the folder Decky Loader installed Tender into, which is
+what made the data move on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin
+directory, install directory. "XDG directory" is now only half wrong — the XDG variables ARE read, as the ladder's
+second rung, but they are not where the answer comes from on an installed system.
 
 ### Standalone bundle / coexistence bundle / React bootstrap
 

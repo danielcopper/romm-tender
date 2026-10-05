@@ -383,7 +383,7 @@ Format: **invariant** — tier — enforced by.
   `BiosChecker` has one method, so there is no cheap cached twin to reach for — and an absence is exactly what a future
   change restores without noticing. Re-adding a stored answer would look like a performance win and would put a previous
   page open's requirement on this page
-- **The plugin attaches a configured custom header to a RomM-origin request and to no other request it issues, and never
+- **Tender attaches a configured custom header to a RomM-origin request and to no other request it issues, and never
   over a header the adapter sets itself** — test + prompt-only — `tests/domain/test_custom_headers.py` pins the
   validation in both directions (every reserved name case-insensitively, a CRLF in a value, and what the persisted
   reading skips), and `tests/adapters/romm/test_http.py::TestCustomProxyHeaders` pins the three attachment points, the
@@ -865,8 +865,8 @@ Format: **invariant** — tier — enforced by.
   oldest version it can be updated from directly
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem
-  probe covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
+- **A firmware row's presence comes from the resolver wherever the resolver declared it; Tender's own filesystem probe
+  covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point and states the boundary: the probe answers for a library file with no placement in the
   platform's catalogue (no emulator the resolver read declares it), for a placement whose location the plugin cannot
   honour, and for the already-there check before a download (the batch and the per-row fetch). Everything else reads the
