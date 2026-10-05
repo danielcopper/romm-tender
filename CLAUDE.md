@@ -454,6 +454,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `DB_FILENAME` to be string literals (a transform over `PACKAGE_NAME` fails too); the reverse fold through an aliased
   import and the third home, the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The four homes are listed in
   `backend/domain/identity.py`'s module docstring
+- **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
+  with its reason** — check — `frontend/eslint.config.js` (`no-restricted-syntax` over every identifier in every file
+  ESLint lints, tests and config files included; exceptions `NAMES_NOT_ABOUT_TENDER`), kept live by
+  `frontend/src/eslintNoPluginNames.test.ts`, and `tests/domain/test_identity.py::TestNoNameMisnamesTender` (every name
+  in the Python syntax tree of `backend/` less `_vendor/` and `native/`, `tests/` and `scripts/`; exceptions
+  `_NAMES_NOT_ABOUT_TENDER`, an entry nothing carries any more failing too). Unseen by both: string literals (the
+  `"plugin_version"` manifest key stays), comments and docstrings, shell, file names, a name built at run time, and an
+  excepted name put to a new use for Tender
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`

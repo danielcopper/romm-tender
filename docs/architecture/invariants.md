@@ -200,6 +200,27 @@ Format: **invariant** — tier — enforced by.
   same class, parses `bootstrap/adapters.py` and fails unless `DB_FILENAME` is a string literal, so
   `f"{PACKAGE_NAME}.db"`, which reproduces today's value exactly, fails too. The rule is also stated at `APP_DIR_NAME`
   and at `DB_FILENAME` themselves, because a diff that folds either opens neither the docstring nor this file
+- **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
+  with its reason** — check — Tender stopped being a Decky Loader plugin when the backend began hosting itself, and a
+  name that still says "plugin" teaches its reader the old model: that something loads Tender and owns its life cycle,
+  and that Decky's shapes (`definePlugin`, a plugin folder) are the ones to reach for (GLOSSARY.md → What Tender is,
+  which names the words to use instead). The frontend half is a `no-restricted-syntax` entry in
+  `frontend/eslint.config.js` over every `Identifier`, `JSXIdentifier` and `PrivateIdentifier` whose name contains the
+  word in any case — variables, functions, types, parameters, object keys, JSX attribute names — in every file ESLint
+  lints, tests and config files included. `frontend/src/eslintNoPluginNames.test.ts` lints known-bad fixtures through
+  the real config and fails if the rule stops reporting any of them. The backend half is
+  `tests/domain/test_identity.py::TestNoNameMisnamesTender`, which walks the syntax tree of every Python module under
+  `backend/` (less the vendored `_vendor/` and `native/`), `tests/` and `scripts/` and fails on any name a module binds
+  or reads that carries the word: a name, an attribute, a parameter, a keyword argument, a function or class, an import
+  or its alias, an exception or pattern capture, a `global` or `nonlocal`. Each half has its own list of exceptions —
+  `NAMES_NOT_ABOUT_TENDER` beside the rule and `_NAMES_NOT_ABOUT_TENDER` beside the test — for names that carry the word
+  because they name someone else's plugin (`DeckyPluginLoader`, `plugins` in the rollup and ESLint configs, rollup's
+  `extraPlugins`, the two install tests about a Decky plugin), each with its reason; an exception is matched as a whole
+  name, and the Python one fails on an entry no module carries any more. **Neither half reads prose**: a string literal
+  is not a name, so the `"plugin_version"` key a recovery bundle's manifest carries stays, and a vitest title, a comment
+  or a docstring that calls Tender a plugin passes both, as does a shell script, a file name, a name built at run time
+  (`getattr`, a computed key), and an excepted name put to a new use for Tender; a Python type parameter
+  (`def f[Plugin]()`) passes the backend half
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by
