@@ -174,6 +174,25 @@ class TestSaveServerUrl:
         )
         assert refused.value.__cause__ is cause
 
+    @pytest.mark.parametrize(
+        "previous",
+        [
+            pytest.param({"romm_url": "http://old.local", "romm_allow_insecure_ssl": False}, id="both-set"),
+            pytest.param({"romm_url": "http://old.local"}, id="no-ssl-flag"),
+            pytest.param({}, id="neither-set"),
+        ],
+    )
+    async def test_a_failed_settings_write_gives_the_previous_url_back(
+        self, service, settings, settings_persister, previous
+    ):
+        settings.update(previous)
+        settings_persister.save_settings.side_effect = OSError("disk full")
+
+        with pytest.raises(Refused, match=r"^Save failed: disk full$"):
+            await service.save_server_url("https://new.local", True)
+
+        assert settings == previous
+
     async def test_a_write_that_fails_with_a_bug_is_not_refused(self, service, settings_persister):
         settings_persister.save_settings.side_effect = TypeError("Object of type set is not JSON serializable")
         with pytest.raises(TypeError):

@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 _MASK_PLACEHOLDER = "••••"
 _VALID_LOG_LEVELS = ("debug", "info", "warn", "error")
 _VALID_STEAM_INPUT_MODES = ("default", "force_on", "force_off")
+_SERVER_URL_KEYS = ("romm_url", "romm_allow_insecure_ssl")
 
 # The level names the frontend sends against the stdlib level each record is
 # stamped with. Written out rather than resolved through ``logging`` by name:
@@ -152,9 +153,11 @@ class SettingsService:
 
         Refuses a blank or non-http(s) URL with ``NotConfigured`` without
         writing anything, and a settings file that cannot be written with
-        ``save_failed`` and its cause. Credentials and tokens are never touched here — minting and
-        storing the Client API Token is ``ConnectionService``'s job.
-        ``allow_insecure_ssl=None`` leaves the SSL flag unchanged.
+        ``save_failed`` and its cause, giving the previous URL and SSL flag
+        back to the live settings so memory and file agree. Credentials and
+        tokens are never touched here — minting and storing the Client API
+        Token is ``ConnectionService``'s job. ``allow_insecure_ssl=None`` leaves
+        the SSL flag unchanged.
 
         This path deliberately does not re-stamp the stored token's origin, so
         pointing the URL at a different origin leaves the token's origin
@@ -169,12 +172,18 @@ class SettingsService:
         trimmed = romm_url.strip()
         if not is_valid_server_url(trimmed):
             raise NotConfigured("Enter a valid http(s):// server URL")
+        previous = {key: self._settings[key] for key in _SERVER_URL_KEYS if key in self._settings}
         self._settings["romm_url"] = trimmed
         if allow_insecure_ssl is not None:
             self._settings["romm_allow_insecure_ssl"] = bool(allow_insecure_ssl)
         try:
             self._settings_persister.save_settings()
         except OSError as e:
+            for key in _SERVER_URL_KEYS:
+                if key in previous:
+                    self._settings[key] = previous[key]
+                else:
+                    self._settings.pop(key, None)
             self._logger.error(f"Failed to save settings: {e}")
             raise Refused("save_failed", f"Save failed: {e}") from e
         return {"success": True, "message": "Settings saved"}
