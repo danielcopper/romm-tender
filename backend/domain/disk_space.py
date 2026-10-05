@@ -59,7 +59,7 @@ def disk_space_verdict(
 
     A ROM whose size the server did not state (*file_size* of 0) always fits:
     there is nothing to weigh, and refusing on an absent number would be a claim
-    the plugin cannot make.
+    Tender cannot make.
     """
     needed = max((file_size * 2 if multi_file else file_size) + _HEADROOM_BYTES - already_on_disk, 0)
     available = free_space - reserved_bytes

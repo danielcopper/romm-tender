@@ -12,9 +12,9 @@ resolver does not, and they are two different kinds of question:
   shortcut that dies in ~0.4 s, so the option is downgraded to ``needs_setup``
   before it can become the system default (ADR-0020).
 - **Which path does the folder-boot bake exec inside the sandbox?** A question
-  about this plugin's own launcher: a game that boots from a directory cannot go
+  about Tender's own launcher: a game that boots from a directory cannot go
   through RetroDECK's ``run_game.sh`` at all, so the bake needs the emulator's
-  own component launcher (ADR-0019). Nothing but this plugin asks it.
+  own component launcher (ADR-0019). Nothing but Tender asks it.
 
 Both probes prefer ``linux/`` over ``unix/`` within a root, which is ES-DE's own
 per-flavor layout. Which root comes first is

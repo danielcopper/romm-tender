@@ -4,7 +4,7 @@
 -- Issue #1539 (collection-kind rename: internal 'user' -> 'standard')
 -- =============================================================================
 --
--- The plugin's internal name for RomM's ownership-carrying first collection kind
+-- Tender's internal name for RomM's ownership-carrying first collection kind
 -- was 'user' (a misnomer — RomM's own UI calls it "Standard"). The rename makes
 -- reads and writes key collection completion stamps on collection_kind='standard'
 -- (domain/collection_sync_state.py). Existing collection_sync_state rows written

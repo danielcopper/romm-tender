@@ -1,6 +1,6 @@
 """CoreService — RetroArch core selection and overrides per platform/ROM.
 
-Owns the plugin's two core-selection deviations: the per-platform core (the
+Owns Tender's two core-selection deviations: the per-platform core (the
 ``settings.json`` ``platform_cores`` map) and the per-game emulator override (the
 ``roms.emulator_override`` pin). Enumerating the cores available for a platform —
 by slug, or for a ROM with its per-game pin layered on top — toggling the

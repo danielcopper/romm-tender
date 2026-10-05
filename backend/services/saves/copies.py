@@ -48,8 +48,8 @@ class SaveCopyServiceConfig:
     over the SQLite repositories), the peer save sub-services consumed during
     orchestration (sync_engine, rom_info, and the shared :class:`DeviceRegistry`
     that owns the server device id), the core resolver used to stamp the upload
-    emulator tag, the Protocol-typed RomM adapter and retry strategy, the plugin
-    event loop, the standard-library logger, and the ``DebugLogger`` seam.
+    emulator tag, the Protocol-typed RomM adapter and retry strategy, the
+    backend's event loop, the standard-library logger, and the ``DebugLogger`` seam.
     """
 
     settings: dict[str, Any]

@@ -218,7 +218,7 @@ def is_launchable_target(file_path: str, rom_dir: str | None, supported_extensio
     - **A folder-boot layout** (:data:`FOLDER_BOOT_MARKERS`) — the baked target
       is the game *directory*, not the nested ``EBOOT.BIN`` that
       ``file_path`` records (ES-DE spells the directory case ``.ps3dir``). The
-      marker match is positive evidence that the plugin recognised the layout,
+      marker match is positive evidence that Tender recognised the layout,
       so no extension is examined.
 
     Everything else is decided by the recorded launch file's extension. A

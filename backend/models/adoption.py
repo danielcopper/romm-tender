@@ -40,7 +40,7 @@ class ExistingContent(TypedDict):
     listings simply leave out what is neither file, directory nor link; this
     describes one named path, and something that is there must never be reported
     as nothing — that is how a download came to replace a symlink in silence.
-    ``None`` says "occupied, by something this plugin has no word for", which is
+    ``None`` says "occupied, by something Tender has no word for", which is
     a refusal to describe rather than a fourth kind.
     """
 

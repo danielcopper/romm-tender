@@ -1,6 +1,6 @@
 """RomMetadata — cached RomM game metadata with a staleness signal.
 
-The descriptive metadata the plugin caches per ROM (summary, genres, companies,
+The descriptive metadata Tender caches per ROM (summary, genres, companies,
 ratings, derived Steam categories) plus ``cached_at``, the Unix time it was
 cached, which a reader measures its age against. Regenerated independently of
 library sync — staleness, not a schedule, prompts a refresh. References its Rom

@@ -107,8 +107,8 @@ class DownloadServiceConfig:
     seams, the SQLite Unit-of-Work factory, and path providers
     DownloadService needs at construction time. ``install_recorder`` is the
     shared writer of the ``rom_installs`` row and the shortcut bake behind it;
-    ``target_gate`` is the pre-flight that refuses to write over content the
-    plugin did not put there (ADR-0028). ``conflict_rules`` are what a start or
+    ``target_gate`` is the pre-flight that refuses to write over content
+    Tender did not put there (ADR-0028). ``conflict_rules`` are what a start or
     resume checks at its entry, and what a download's task and its
     ``download_complete`` lease are held through.
     """

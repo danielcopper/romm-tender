@@ -1,9 +1,9 @@
-"""What the plugin already knows about the library, read back out of the local database.
+"""What Tender already knows about the library, read back out of the local database.
 
 The sync run needs two kinds of knowledge before it can decide anything: what
 RomM currently holds, and what this device recorded last time. The first is
 :class:`~services.library.fetcher.LibraryFetcher`'s — it reads outward, over
-HTTP. This module is its inward pair: every method here reads the plugin's own
+HTTP. This module is its inward pair: every method here reads Tender's own
 SQLite, and nothing here talks to RomM. That split is the reason the two exist
 separately, so a method that would have to ask the server does not belong here
 however well it fits the sentence below.

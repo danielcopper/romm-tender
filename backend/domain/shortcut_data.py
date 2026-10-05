@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 from domain.sibling_group import compute_sibling_group_key
 from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
-# RetroDECK's flatpak application id — the single source of the string across the
-# plugin. Its plain ``flatpak run <app>`` form is the emulator invocation prefix
+# RetroDECK's flatpak application id — the single source of the string across
+# Tender. Its plain ``flatpak run <app>`` form is the emulator invocation prefix
 # the launch command wraps the resolved ROM path with; the folder-boot ``direct``
 # form threads a ``--command=<launcher>`` between the ``flatpak run`` verb and the
 # app id (see :func:`resolve_emulator_invocation`). It is also the identity the
@@ -40,7 +40,7 @@ _RETROARCH_CORES_DIR = "/var/config/retroarch/cores"
 class EmulatorInvocation:
     """What a ROM launches with — a libretro core, a standalone emulator, or a direct sandbox launch.
 
-    The plugin resolves one of these per ROM and bakes it into the shortcut's
+    Tender resolves one of these per ROM and bakes it into the shortcut's
     ``launch_options`` via :func:`resolve_emulator_invocation`. The payload
     carried depends on ``kind``:
 

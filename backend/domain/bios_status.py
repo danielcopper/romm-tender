@@ -422,7 +422,7 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool) -> bool 
     Everything else is ``downloaded``, which for a declared file the resolver
     placed under this root is the resolver's own reading at the destination it
     will be opened from. Where the declaration carries no ``relative_path`` the
-    destination is one this plugin cannot honour, so the resolver read somewhere
+    destination is one Tender cannot honour, so the resolver read somewhere
     else and ``FirmwareDemand.is_downloaded`` answers with its own look at the
     path assembled here instead.
     """
@@ -567,7 +567,7 @@ def classify_system_image(
     verdict** — the name invites the second reading and does not carry it. For a
     declared file it is ``FirmwareDemand.is_downloaded``, which answers from the
     resolver's ``placement.present`` wherever the resolver placed the file under
-    this root and from the plugin's own look at the destination where the
+    this root and from Tender's own look at the destination where the
     declaration carries no ``relative_path`` — the boundary between the two is
     drawn at ``FirmwareDemand.is_downloaded`` itself, and is stated there. For a
     folder declaration it is the verdict on what the folder HOLDS, and may be

@@ -62,7 +62,7 @@ _FORBIDDEN_TOKEN_MESSAGE = (
 # Pasted-token validation (``establish_user_token``): a 401 means the token
 # string itself is wrong or was revoked; a 403 means the token authenticates
 # but lacks a scope the validation probe needs (``me.read`` — see the docs for
-# the full scope list the plugin requires).
+# the full scope list Tender requires).
 _USER_TOKEN_INVALID_MESSAGE = "The API token is invalid or has been revoked. Create a new token in RomM and try again."
 _USER_TOKEN_SCOPE_MESSAGE = (
     "The API token is missing required permissions (scopes). "
@@ -91,7 +91,7 @@ _PAIRING_OWNER_DISABLED_MESSAGE = (
 _PAIRING_RATE_LIMITED_MESSAGE = "Too many attempts — wait a minute and generate a new code."
 _NO_USABLE_TOKEN_MESSAGE = "RomM did not return a usable token"
 
-# Sign-out (``sign_out``). Local-forget only — the plugin never deletes the
+# Sign-out (``sign_out``). Local-forget only — Tender never deletes the
 # token on the server, so the copy tells the user it stays valid in RomM.
 _SIGNED_OUT_MESSAGE = (
     "Signed out. The token is still valid in RomM — revoke it there (Settings → API Tokens) if you no longer want it."
@@ -101,7 +101,7 @@ _SIGNED_OUT_MESSAGE = (
 def _normalize_pairing_code(code: str) -> str:
     """Normalize a pairing code the way RomM does: drop all whitespace and ``-``, then uppercase.
 
-    RomM's exchange endpoint strips ``-`` and uppercases; the plugin additionally
+    RomM's exchange endpoint strips ``-`` and uppercases; Tender additionally
     removes any whitespace the user pasted (leading, trailing, or embedded). So
     ``"ab-cd ef23"`` normalizes to ``"ABCDEF23"``.
     """
@@ -408,7 +408,7 @@ class ConnectionService:
 
         The zero-typing sign-in for OIDC accounts: instead of pasting a token, the
         user generates a 60-second pairing code in RomM's web UI and enters it
-        here; the plugin exchanges it for the token over a public endpoint.
+        here; Tender exchanges it for the token over a public endpoint.
         Structurally mirrors :meth:`establish_user_token` (validate URL → probe
         version → gate → obtain the credential → validate via ``/api/users/me`` →
         persist on success only, rolling the in-memory auth state back on any
@@ -646,7 +646,7 @@ class ConnectionService:
         When the settings carry a legacy ``romm_user`` / ``romm_pass``
         pair and no token yet, mint a token from those credentials, then
         wipe the credentials. Any failure leaves the credentials intact
-        and the plugin inert — there is no Basic-auth fallback. Never
+        and Tender inert — there is no Basic-auth fallback. Never
         raises; never logs the token or password.
         """
         if self._settings.get("romm_api_token"):
@@ -693,7 +693,7 @@ class ConnectionService:
         half-forgotten but still-valid token. Only on a successful save is the
         cached RomM server version dropped (``set_version(None)``) so a stale
         value cannot linger. No server-side token deletion ever happens: a
-        plugin-minted token deliberately lacks the ``me.write`` scope needed to
+        token Tender minted deliberately lacks the ``me.write`` scope needed to
         delete it (that would require re-entering the password), and a
         user-supplied token belongs to the user, who manages it in RomM's web
         UI. Idempotent — signing out when already signed out still succeeds and

@@ -1,4 +1,4 @@
-"""RomAdoptionService — ROM content the plugin finds rather than fetches.
+"""RomAdoptionService — ROM content Tender finds rather than fetches.
 
 Owns the four answers the adopt dialog needs about the content a download would
 otherwise write: whether something is already at the path, whether the same game
@@ -94,7 +94,7 @@ _VERIFY_MESSAGES = {
 }
 
 # The other two ways a check can end without a verdict, both reached only once
-# the server HAS published digests: bytes the plugin could not read, and a
+# the server HAS published digests: bytes Tender could not read, and a
 # number it cannot attribute to anything inside the archive it covers.
 _UNCONFIRMED_MESSAGES = {
     "unread": "Some of this game's files could not be read, so they cannot be confirmed",
@@ -350,9 +350,9 @@ class RomAdoptionService:
     def _is_own_install(self, rom_detail: dict[str, Any], checked_path: str) -> bool:
         """Whether *checked_path* is already this ROM's recorded install.
 
-        A re-download of a ROM the plugin installed itself finds its own files in
-        the way. Those are not content to ask about — the install record is the
-        plugin's claim on them, the same authority ``installed`` and Uninstall
+        A re-download of a ROM Tender installed itself finds its own files in
+        the way. Those are not content to ask about — the install record is
+        Tender's claim on them, the same authority ``installed`` and Uninstall
         act on — so the download proceeds and replaces them as it always has.
         The dialog exists for content **no** row accounts for (ADR-0028).
         """
@@ -547,7 +547,7 @@ class RomAdoptionService:
         # At most one installed version per shortcut binding (#1298), whichever
         # route produced it. The dialog's promise not to delete covers the
         # content the USER placed, at this ROM's own path; a superseded sibling
-        # is a different thing at a different path — content the plugin
+        # is a different thing at a different path — content Tender
         # downloaded and can fetch again (ADR-0028). A removal failure aborts,
         # exactly as it does for a download, so the rule is never half-applied.
         cleanup_failure = await self._sibling_supersede()(rom_id)
@@ -722,7 +722,7 @@ class RomAdoptionService:
         ``mismatch`` (naming what differed), ``unverifiable`` (the server holds
         no checksums, which is neither), ``missing`` and ``error`` are five
         outcomes, and collapsing "the server cannot confirm this" onto either
-        verdict would be a claim the plugin cannot make. Only ever runs on the
+        verdict would be a claim Tender cannot make. Only ever runs on the
         user's request — the dialog opens on cheap evidence and never waits for
         this.
         """
@@ -874,7 +874,7 @@ class RomAdoptionService:
         method, or a container damaged since it was listed — leaves the entry
         unconfirmed, which the verdict reports as "cannot confirm". Accusing the
         content of differing on bytes that were never read would be the stronger
-        claim and the plugin has not earned it.
+        claim and Tender has not earned it.
         """
         if not request.member:
             return self._download_file_store.checksum(path, request.algorithm, report)

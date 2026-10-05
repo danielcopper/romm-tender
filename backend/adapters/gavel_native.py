@@ -28,7 +28,7 @@ non-``NULL``), never by the ``has_*`` flags — a file that exists but could not
 measured is a real case the decision must keep apart from a missing one.
 
 There is no fallback: if the library cannot load, :class:`GavelNativeLoadError`
-propagates so bootstrap aborts and the plugin stays inert — the same
+propagates so bootstrap aborts and Tender stays inert — the same
 "fatal until the environment is fixed" posture as the SQLite migration gate.
 Nothing in-tree stands in for the core; :mod:`domain.sync_action` holds only the
 vocabulary the answer comes back in.

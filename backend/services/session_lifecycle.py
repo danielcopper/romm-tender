@@ -175,7 +175,7 @@ def _benign_skip() -> SessionFinalizeSyncResult:
     """The verdict of a post-exit sync that correctly did nothing, with no failure toast.
 
     Either the saves are written beside the game file (#239), or this game's
-    emulator keeps no per-game save set the plugin can carry (#1858). Nothing
+    emulator keeps no per-game save set Tender can carry (#1858). Nothing
     went wrong, and toasting on every exit of a PS2 or MAME game would be pure
     noise.
     """

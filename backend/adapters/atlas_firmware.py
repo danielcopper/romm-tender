@@ -119,7 +119,7 @@ _DECLARATION_PACKAGED = "packaged"
 # The keys a caveat names an emulator under. Three, because the resolver states
 # the owner in whichever vocabulary the finding came from: ``core_so`` the core
 # file, ``token`` a packaged card's token, and ``core`` the libretro SHORT name
-# (``pcsx2``), which is none of this plugin's identities — so a row is matched
+# (``pcsx2``), which is none of Tender's identities — so a row is matched
 # against its core's short name as well (:func:`_names_of`). A caveat naming
 # any of them belongs to that emulator and to no other row.
 _ATTRIBUTION_KEYS = ("core_so", "token", "core")
@@ -201,8 +201,8 @@ def _installation(user_home: str, log_debug: Callable[[str], None]) -> Any | Non
     """The installation every question here is put to, or ``None`` where there is none.
 
     Detection returns the arrangements it found highest-priority first and never
-    picks a winner itself; the plugin is a RetroDECK plugin, and RetroDECK leads
-    that order where it is present.
+    picks a winner itself; Tender launches every game through RetroDECK, and
+    RetroDECK leads that order where it is present.
     """
     installations = detect(user_home)
     if not installations:
@@ -217,7 +217,7 @@ def _unresolved() -> FirmwareCatalogue:
 
 
 def _catalogue(answer: Any) -> FirmwareCatalogue:
-    """One resolver answer in the plugin's own vocabulary."""
+    """One resolver answer in Tender's own vocabulary."""
     if answer.root is None:
         return FirmwareCatalogue(
             placements=(),
@@ -402,7 +402,7 @@ def _declared_location(requirement: Any, root: str) -> str | None:
     first belongs here. ``declared`` is the string the emulator spelled and the
     name it will open; ``path`` is where that lands once the kernel has followed
     every symlink, which is what says whether the destination is inside the root
-    the plugin owns. Reconstructing the declaration from ``path`` instead —
+    Tender owns. Reconstructing the declaration from ``path`` instead —
     ``relpath(path, root)`` — agrees with it only while no link re-roots the
     way: RetroDECK points ``<bios>/pcsx2/bios`` back at ``<bios>``, so LRPS2's
     ``pcsx2/bios`` collapses onto the root and comes back as ``.``.

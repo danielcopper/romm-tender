@@ -1,6 +1,6 @@
 """TypedDicts describing dict-shaped records crossing service boundaries.
 
-The plugin's relational state lives in SQLite after the cutover (#784);
+Tender's relational state lives in SQLite after the cutover (#784);
 nothing here is loaded from on-disk JSON. These TypedDicts are checked
 shapes still consumed by services that read/return those records
 (``ShortcutRegistryEntry``, ``InstalledRomEntry``, ``MetadataCacheEntry``)

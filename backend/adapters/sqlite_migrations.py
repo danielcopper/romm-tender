@@ -1,4 +1,4 @@
-"""SQLite schema migration runner — applies numbered DDL to the plugin database.
+"""SQLite schema migration runner — applies numbered DDL to Tender's database.
 
 Anything that creates the SQLite database or advances its schema at startup
 belongs here. The runner discovers ``NNN_*.sql`` files under ``db/migrations/``

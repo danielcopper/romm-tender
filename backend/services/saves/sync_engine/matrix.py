@@ -869,7 +869,7 @@ class MatrixExecutor:
         # so without this it would look server-only, and the matrix would
         # download it over a local file it never looked at. Two shapes reach
         # here: a configuration file the rule says is never carried (a Saturn
-        # ``.smpc`` this plugin uploaded before the resolver decided the role),
+        # ``.smpc`` Tender uploaded before the resolver decided the role),
         # and a save whose extension this emulator no longer writes at all. The
         # server copy is left exactly as it is; deleting it is not this cut's
         # business, and it is the only copy of something a user may want back.
@@ -959,7 +959,7 @@ class MatrixExecutor:
         # its one result to say which ROM was passed over, and the per-ROM entry
         # points have already named the skip.
         if answer_dir is None:
-            self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set this plugin syncs, skipping")
+            self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set Tender syncs, skipping")
             return 0, 0, [], []
         saves_dir = answer_dir
 

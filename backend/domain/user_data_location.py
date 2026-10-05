@@ -1,4 +1,4 @@
-"""Where the plugin's user data lives.
+"""Where Tender's user data lives.
 
 Contract: the name every directory this program derives for itself carries, two
 roots composed out of a home directory, and the two ways the launcher's path is

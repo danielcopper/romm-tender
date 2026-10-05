@@ -1,4 +1,4 @@
-"""Removing the BIOS files the plugin itself downloaded — and only those.
+"""Removing the BIOS files Tender itself downloaded — and only those.
 
 Authority to delete comes from having placed the file, and a ``downloaded_bios``
 record is the only evidence of that, so the records are this module's whole
@@ -47,7 +47,7 @@ class PlatformBiosDeleterConfig:
 
 
 class PlatformBiosDeleter:
-    """The Delete BIOS action — the plugin's own downloads for one platform."""
+    """The Delete BIOS action — Tender's own downloads for one platform."""
 
     def __init__(self, *, config: PlatformBiosDeleterConfig) -> None:
         self._listing = config.listing
@@ -57,7 +57,7 @@ class PlatformBiosDeleter:
         self._logger = config.logger
 
     def _delete_recorded_io(self, platform_slug, selects=None) -> tuple[int, list[str]]:
-        """Remove the plugin's own downloads for *platform_slug*, filtered by *selects*.
+        """Remove Tender's own downloads for *platform_slug*, filtered by *selects*.
 
         The one removal loop, and deliberately the only one: three buttons reach
         it — the platform's Delete BIOS, a file row's Delete, a declared folder's
@@ -72,7 +72,7 @@ class PlatformBiosDeleter:
 
         The download records are the whole input: a ``downloaded_bios`` row is
         written in the download path and nowhere else, so it is the only
-        evidence the plugin put the file there — and having put it there is what
+        evidence Tender put the file there — and having put it there is what
         authorises removing it. A status row's ``downloaded`` proves nothing of
         the sort: it is ``os.path.exists``, equally true of firmware RetroDECK
         ships with its own components (``dolphin-emu/Sys/codehandler.bin`` is
@@ -89,7 +89,7 @@ class PlatformBiosDeleter:
         the resolver later declare a subdirectory for it and the recomputed path
         names whatever now sits there instead, which for ``codehandler.bin`` is
         RetroDECK's own copy. Unlinking the recorded path can reach nothing but
-        what the plugin wrote.
+        what Tender wrote.
 
         ``on_server`` is deliberately not part of the test. It describes what
         the library holds *now*, not who wrote the file: a firmware file removed
@@ -99,7 +99,7 @@ class PlatformBiosDeleter:
 
         *selects* is a predicate over records this platform already owns, so
         the worst a wrong one can do is act on that whole set — never on a file
-        the plugin did not place. ``None`` selects all of them, which is the
+        Tender did not place. ``None`` selects all of them, which is the
         platform-wide button; the folder button guards its own degenerate path
         so that "a folder's files" cannot quietly become "the platform's".
 
@@ -131,7 +131,7 @@ class PlatformBiosDeleter:
         return deleted, errors
 
     def _recorded_bios_files(self, platform_slug) -> list[BiosFile]:
-        """The plugin's own download records for *platform_slug*.
+        """Tender's own download records for *platform_slug*.
 
         The BIOS rows are keyed by the firmware-directory slug stored at download
         time, which may differ from the platform slug (e.g. ``psx`` → ``ps``), so
@@ -158,7 +158,7 @@ class PlatformBiosDeleter:
                 uow.bios_files.delete(slug, file_name)
 
     async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any]:
-        """Delete the BIOS files the plugin downloaded inside *folder_path*.
+        """Delete the BIOS files Tender downloaded inside *folder_path*.
 
         The folder row's twin of :meth:`delete_bios_file`, and the same
         :meth:`_delete_recorded_io` again under a containment predicate. A
@@ -199,11 +199,11 @@ class PlatformBiosDeleter:
         return {"success": True, "deleted_count": deleted, "message": f"Deleted {deleted} BIOS file(s)"}
 
     async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any]:
-        """Delete one BIOS file the plugin downloaded, by name.
+        """Delete one BIOS file Tender downloaded, by name.
 
         The per-row twin of :meth:`delete_platform_bios`, running the same
         :meth:`_delete_recorded_io` under a name predicate rather than a copy of
-        it: a ``downloaded_bios`` record is the only evidence the plugin placed
+        it: a ``downloaded_bios`` record is the only evidence Tender placed
         the file, and a row with no record removes nothing and says so. A caller
         cannot widen this into a presence-based delete by passing a different
         name.
@@ -225,9 +225,9 @@ class PlatformBiosDeleter:
         return {"success": True, "deleted_count": deleted, "message": f"Deleted {file_name}"}
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any]:
-        """Delete the BIOS files the plugin downloaded for a platform.
+        """Delete the BIOS files Tender downloaded for a platform.
 
-        Scoped to the plugin's own downloads, never to everything sitting in the
+        Scoped to Tender's own downloads, never to everything sitting in the
         platform's BIOS locations — see :meth:`_delete_recorded_io`. The
         download records are the only input: a status listing would re-introduce
         the library as a gate, and our own download is deletable long after RomM

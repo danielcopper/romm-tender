@@ -31,9 +31,9 @@ DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server
 # (#1625). Never collapse it onto ``server_unreachable``.
 SAVE_SYNC_BUSY_REASON = "sync_busy"
 SAVE_SYNC_BUSY = "Another save sync is still running"
-# A save the plugin could otherwise sync sits beside the content file
+# A save Tender could otherwise sync sits beside the content file
 # (``SaveAnswer.in_content_directory``; RetroArch's ``savefiles_in_content_dir``
-# is the usual cause), outside what the plugin syncs. Neutral phrasing that
+# is the usual cause), outside what Tender syncs. Neutral phrasing that
 # names no emulator — the frontend treats this as a benign skip.
 SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: saves are written to the game's content directory."
 # ``reason`` slug on the sync-gate failure shape; the frontend routes on this to
@@ -41,7 +41,7 @@ SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: saves are written to the g
 # source of truth is ``domain.save_answer`` — re-exported here so the saves
 # service code keeps importing it from its own message module.
 SAVE_SYNC_IN_CONTENT_DIR_REASON = SAVE_SYNC_CONTENT_DIR_REASON
-# The emulator's save is not a per-game file set this plugin can carry — a
+# The emulator's save is not a per-game file set Tender can carry — a
 # shared card, a save inside the game file, a name with a hole in it, or a shape
 # nobody has established. Like the content-dir slug above this is a benign skip
 # and not an error, and the single source of truth is ``domain.save_answer``.

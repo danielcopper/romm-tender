@@ -190,7 +190,7 @@ class SaveDirectoryFollower:
         **A move is not a sync.** The answer may refuse to say what a save
         consists of, but the files are already on the user's disk and the move
         only relocates them — leaving one behind where the emulator will not
-        look is worse than moving one this plugin would never upload. So:
+        look is worse than moving one Tender would never upload. So:
 
         - The answer names files: carry exactly those, configuration included.
           Moving a Saturn ``.bkr`` and leaving its ``.smpc`` behind would split

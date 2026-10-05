@@ -1,6 +1,6 @@
 """External system client Protocols.
 
-Domain-oriented interfaces for the HTTP and IPC surfaces the plugin
+Domain-oriented interfaces for the HTTP and IPC surfaces Tender
 talks to: RomM's REST API, SteamGridDB's REST API, GitHub's releases
 API, and the Steam client's local IPC. Each Protocol declares the semantic operations
 services need; concrete implementations live in adapters and own the
@@ -74,10 +74,10 @@ class RommDeviceApi(Protocol):
     def update_device(self, device_id: str, **fields) -> dict[str, Any]:
         """Update a registered device's metadata on the RomM server.
 
-        Currently the plugin only sends ``client_version`` via the reconciliation
+        Currently Tender only sends ``client_version`` via the reconciliation
         loop; the server accepts additional fields per its OpenAPI schema (name,
         platform, client, ip_address, mac_address, hostname, sync_enabled) but
-        they are not exercised by this plugin.
+        they are not exercised by Tender.
         """
         ...
 
@@ -287,7 +287,7 @@ class RommRomReader(Protocol):
         The fallback for a RomM-local cover asset that 404s (#1450): *url* is
         the ROM's absolute ``url_cover`` (SteamGridDB / IGDB / …). Fetched
         WITHOUT the RomM bearer — the host-bound token must never reach a
-        third-party origin — with the plugin ``User-Agent`` and spaces
+        third-party origin — with Tender's ``User-Agent`` and spaces
         URL-encoded.
         """
         ...

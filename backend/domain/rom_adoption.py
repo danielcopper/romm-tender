@@ -1,4 +1,4 @@
-"""What the plugin may conclude about ROM content already sitting on disk.
+"""What Tender may conclude about ROM content already sitting on disk.
 
 Owns the two judgements adoption rests on: how a collision at the path a
 download would write to is described to the user, and whether the bytes on disk
@@ -26,7 +26,7 @@ _DIGEST_PREFERENCE: tuple[tuple[str, str], ...] = (("md5", "md5_hash"), ("crc32"
 _TARGET_OCCUPIED = "target_occupied"
 
 # How each kind is named in the one-line message. The kindless case is deliberately
-# vague: the plugin has looked and has no word for what is there, and guessing one
+# vague: Tender has looked and has no word for what is there, and guessing one
 # would be the same invention that let a named pipe be offered as a game.
 _A_KIND: dict[Kind | None, str] = {
     FILE: "A file",
@@ -38,8 +38,8 @@ _A_KIND: dict[Kind | None, str] = {
 # The extensions RomM reads as archives, so its digest for such a file describes
 # the content inside rather than the container's own bytes (``ARCHIVE_READERS``
 # in its ``roms_handler``, plus the plain compressors its older whole-file
-# hasher decompressed). Matched on the name because that is the only thing the
-# plugin knows before opening anything — and the name at the target path is the
+# hasher decompressed). Matched on the name because that is the only thing
+# Tender knows before opening anything — and the name at the target path is the
 # server's own.
 _ARCHIVE_SUFFIXES: tuple[str, ...] = (
     ".zip",
@@ -138,7 +138,7 @@ class ServerFile:
         """The path this entry is matched by: ROM-relative where derivable, else the bare name.
 
         Falling back to the bare name is weaker — it finds the file wherever it
-        sits in the tree — but it is what the plugin can honestly assert when the
+        sits in the tree — but it is what Tender can honestly assert when the
         server did not say where the file belongs, and it is the behaviour every
         entry had before ``file_path`` was read.
         """
@@ -300,7 +300,7 @@ def sizes_agree(existing_size: int, incoming_size: int) -> bool | None:
     """Whether the bytes on disk and the bytes the server would send match.
 
     ``None`` when the server stated no size — the comparison cannot be made, and
-    reporting it as a mismatch would read as evidence the plugin does not have.
+    reporting it as a mismatch would read as evidence Tender does not have.
     """
     if not incoming_size:
         return None
@@ -391,8 +391,8 @@ def compare_manifest(
     key, which is what tells two same-named files in different subdirectories
     apart.
 
-    Files present on disk but absent from *manifest* are **not** differences: the
-    plugin's own multi-file installs carry a generated ``.m3u`` and a healed
+    Files present on disk but absent from *manifest* are **not** differences:
+    Tender's own multi-file installs carry a generated ``.m3u`` and a healed
     ``PS3_DISC.SFB`` that the server never listed, and a user's dump may carry a
     readme. The check is one-directional — everything the server states must be
     there and must match.
@@ -418,7 +418,7 @@ def _single_difference(entry: ServerFile, found: LocalFile) -> FileDifference | 
     Everything but a set of stated archive members has at most one finding, and
     which comparison is available depends on what is on disk. An archive that
     could not be opened falls through to ``None`` on purpose: the server's digest
-    speaks for content this plugin cannot produce, so there is nothing to compare
+    speaks for content Tender cannot produce, so there is nothing to compare
     and nothing to allege.
     """
     if found.members is not None:
@@ -608,7 +608,7 @@ def unpacked_member(entry: ServerFile, local_size: int) -> ServerMember | None:
     the archive would be. It can only be compared against a **single**-member
     archive — a composite over several members has no counterpart in one file —
     and only when the sizes agree, which is what tells an unpacked member apart
-    from an archive format this plugin cannot open. Comparing those bytes to a
+    from an archive format Tender cannot open. Comparing those bytes to a
     member's digest anyway would report a mismatch on content that is correct,
     which is the failure this whole comparison exists to avoid.
     """
@@ -656,7 +656,7 @@ def unconfirmed_reason(manifest: tuple[ServerFile, ...], local: dict[str, LocalF
     """Why a comparison that found no difference still cannot confirm anything.
 
     ``"whole_archive"`` when what stopped it was an archive the server published
-    one digest for and this plugin cannot attribute to any single thing inside
+    one digest for and Tender cannot attribute to any single thing inside
     it — nothing failed, the number simply cannot be interpreted. ``"unread"``
     for every other way of coming up short, all of which are a read that did not
     happen. The first unconfirmed entry decides, which is the only entry there is

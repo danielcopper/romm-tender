@@ -107,7 +107,7 @@ class CoverArtFileStore(Protocol):
     """Filesystem seam for cover-art file operations.
 
     Owns the raw POSIX calls ArtworkService uses to manage cover art across the
-    plugin-owned per-ROM cover cache and the shared Steam grid directory: the
+    Tender's own per-ROM cover cache and the shared Steam grid directory: the
     per-ROM cache is downloaded/seeded into, ``copy_file`` publishes the active
     version's cache cover onto the Steam grid as ``{app_id}p.png``, and the read
     seams back the base64 queries and orphan pruning. Path construction,
@@ -220,7 +220,7 @@ class DownloadFileStore(Protocol):
         The Download click's read of the platform directory, which ranks what it
         finds and so needs each entry's size and mtime. It stays on the top level
         deliberately: a single multi-file install can hold tens of thousands of
-        files, and a user's own subfolders are their filing, not the plugin's. A
+        files, and a user's own subfolders are their filing, not Tender's. A
         directory entry therefore reports size 0 — its recursive total is not
         something this read pays for. Idempotent on a missing directory (returns
         ``()``).
@@ -781,7 +781,7 @@ class SgdbArtworkCache(Protocol):
 
 
 class RecoveryBundleStore(Protocol):
-    """Build and seal verified recovery bundles under the plugin recovery root."""
+    """Build and seal verified recovery bundles under Tender's recovery root."""
 
     def root(self) -> str: ...
     def free_bytes(self) -> int: ...

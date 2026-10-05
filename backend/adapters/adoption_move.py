@@ -170,7 +170,7 @@ class AdoptionMoveAdapter:
         *leftovers* are links a staging attempt made and could not take back.
         Each one occupies a target this pass needs, so it is named in the
         refusal rather than surfacing as an unexplained "something is already
-        there" about a file the plugin itself put down.
+        there" about a file Tender itself put down.
         """
         stray = _describe_leftovers(leftovers)
         done: list[tuple[str, str]] = []

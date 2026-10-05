@@ -1,6 +1,6 @@
-"""Rom — the library entry for one ROM the plugin tracks locally.
+"""Rom — the library entry for one ROM Tender tracks locally.
 
-Identity, the Steam-shortcut binding, and the external-service ids the plugin
+Identity, the Steam-shortcut binding, and the external-service ids Tender
 resolves for a ROM. Created/updated atomically when a ROM is synced from RomM.
 ``platform_slug`` is a denormalized RomM slug, not a reference to a local
 Platform aggregate (none exists — see ADR-0003); the platform's display name is
@@ -19,7 +19,7 @@ _EMPTY_VERSION_METADATA = VersionMetadata()
 
 @cosmic_aggregate
 class Rom:
-    """One ROM as the plugin tracks it locally (identity + shortcut binding).
+    """One ROM as Tender tracks it locally (identity + shortcut binding).
 
     ``sibling_group_key`` and the version dimensions (``regions`` / ``languages``
     / ``revision`` / ``tags`` / ``is_main_sibling``), plus ``fs_size_bytes`` (the

@@ -225,7 +225,7 @@ class ShortcutRemovalService:
         """Unbind every bound ROM whose ``shortcut_app_id`` is absent from the live set.
 
         *live_app_ids* is the set of appIds the frontend's scan of Steam's live
-        shortcut store could not rule out: every shortcut whose exe is the plugin
+        shortcut store could not rule out: every shortcut whose exe is Tender's
         launcher, plus every entry Steam did not answer for in time. Each
         bound ROM (``shortcut_app_id`` not NULL) whose appId is **not** in that
         set lost its Steam shortcut out-of-band — unbind it (ADR-0007: clear the

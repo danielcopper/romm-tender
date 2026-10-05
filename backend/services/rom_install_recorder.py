@@ -6,7 +6,7 @@ resolved from the ROM's persisted core and disc pick, and the applied-state memo
 the next sync's delta apply reads back.
 
 Both routes to an installed ROM go through here — a completed download and an
-adoption of content the plugin did not download — so the row and the launch
+adoption of content Tender did not download — so the row and the launch
 command an adoption produces are derived by exactly the rules a download's are
 (ADR-0028), not by a second implementation free to drift.
 

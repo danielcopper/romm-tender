@@ -1,7 +1,7 @@
 """Cover-art filename logic for the Steam grid and the per-ROM cover cache.
 
 Pure naming logic for the filename conventions ArtworkService reads and
-writes: the per-ROM ``{rom_id}.png`` cache name (in the plugin-owned cover
+writes: the per-ROM ``{rom_id}.png`` cache name (in Tender's own cover
 cache, keyed by RomM ID so every version of a sibling group keeps its own
 cover), the final ``{app_id}p.png`` name Steam reads as the active shortcut's
 portrait cover, the ``.tmp`` sidecar every write lands in before its atomic
@@ -27,7 +27,7 @@ _GRID_IMAGE_EXTENSIONS = ("png", "jpg", "jpeg")
 _GRID_IMAGE_RE = re.compile(r"^(\d+)(?:p|_hero|_logo|_icon)?\.(?:png|jpg|jpeg)$", re.ASCII)
 
 # Steam assigns non-Steam shortcut appIds with the high bit set: on-device
-# inspection of 68 live plugin-created shortcuts found them uniformly spread
+# inspection of 68 live shortcuts Tender created found them uniformly spread
 # across [0x80000000, 0xFFFFFFFF] (random assignment at creation — see
 # docs/architecture/steam-non-steam-shortcuts.md §App IDs and Artwork), and
 # the signed-int32 form shortcuts.vdf records is negative for exactly this
@@ -89,7 +89,7 @@ def cache_filename(rom_id: int | str) -> str:
     """Return the per-ROM cover cache filename, keyed by RomM ID.
 
     The cache is the source of truth for a ROM's cover: it lives in the
-    plugin-owned cover-cache directory (never the shared Steam grid dir), so
+    Tender's own cover-cache directory (never the shared Steam grid dir), so
     every version of a sibling group keeps its own file rather than overwriting
     the group's single ``{app_id}p.png``.
     """
@@ -102,7 +102,7 @@ COVER_META_SUFFIX = ".cover-meta.json"
 def cover_meta_filename(rom_id: int | str) -> str:
     """Return the per-ROM cover-validator sidecar filename, keyed by RomM ID.
 
-    Sits beside the ``{rom_id}.png`` cache file in the plugin-owned cover cache
+    Sits beside the ``{rom_id}.png`` cache file in Tender's own cover cache
     and holds the HTTP validators (``ETag`` / ``Last-Modified``) of the cached
     bytes, so a later sync can revalidate with a conditional request instead of
     re-downloading when only the ``?ts=`` cache-buster changed (#1454). The

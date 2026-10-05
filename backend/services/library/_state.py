@@ -69,7 +69,7 @@ class CollectionMembership:
     Steam's collection namespace is by-name: the reporter groups same-named
     memberships and UNIONs their resolved appIds into the one
     ``RomM: [<name>] (host)`` Steam collection (RomM permits same-named collections
-    across kinds/users, so the plugin merges rather than owner-filters, #1503).
+    across kinds/users, so Tender merges rather than owner-filters, #1503).
 
     ``kind`` (``"standard"`` / ``"smart"`` / ``"virtual"``) and — for the virtual
     kind — ``virtual_type`` (``"franchise"`` / ``"collection"``) ride here too so
@@ -282,8 +282,8 @@ class LibrarySyncStateBox:
 
     # ── Run lifecycle — the only writers of sync_state / current_sync_id ──
     #
-    # These four methods are the sole mutators of the run-lifecycle pair. The
-    # plugin runs on a single event loop, so a method body that reads then
+    # These four methods are the sole mutators of the run-lifecycle pair.
+    # The backend runs on a single event loop, so a method body that reads then
     # writes ``sync_state`` without awaiting in between is a true atomic
     # compare-and-swap — nothing else can observe or change the pair mid-update.
 
@@ -335,7 +335,7 @@ class LibrarySyncStateBox:
         a no-op and can never null a freshly-started run. Returns ``True`` when
         it reset. The progress snapshot goes back to the idle default with it,
         so ``get_sync_status`` answers a finished run the way it answers a
-        plugin that has never run — see :attr:`sync_progress`.
+        backend that has never run one — see :attr:`sync_progress`.
         """
         if str(run_id) != str(self.current_sync_id):
             return False

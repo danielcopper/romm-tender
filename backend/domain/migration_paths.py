@@ -1,10 +1,10 @@
 """Pure logic for the RetroDECK pending-home set — change detection and remap.
 
 A RetroDECK home change is "pending" until the user migrates or dismisses.
-When the user changes the home again *before* migrating, the plugin must
+When the user changes the home again *before* migrating, Tender must
 remember **every** home it has left behind, not just the most recent one, or
 files stranded under an intermediate home are lost (#1042). The pending set is
-the ordered list ``[oldest, …, newest]`` of homes that may still hold plugin
+the ordered list ``[oldest, …, newest]`` of homes that may still hold Tender's
 files; the live home is never a member.
 
 Anything that decides how that set transitions on a home change, or maps a

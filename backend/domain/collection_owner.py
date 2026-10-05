@@ -13,7 +13,7 @@ Two invariants make the scope safe and non-breaking:
   ``VirtualCollection`` model carries no ``user_id`` column and returns them
   identically to every user — so they are always own and always survive the
   ``own`` scope.
-* **Unknown identity hides nothing.** When the plugin does not yet know its own
+* **Unknown identity hides nothing.** When Tender does not yet know its own
   user id (never fetched / offline), the sync treats every collection as own,
   so the ``own`` scope drops nothing rather than dropping against the wrong
   identity. The listing says the same thing differently: it answers ``None``

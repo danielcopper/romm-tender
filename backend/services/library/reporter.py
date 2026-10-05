@@ -943,7 +943,7 @@ class SyncReporter:
         bound-shortcut count in ``roms``.
 
         The last two are what makes the panel's resume offer honest, and
-        they are two facts rather than one because this plugin keeps **two** kinds
+        they are two facts rather than one because Tender keeps **two** kinds
         of durable progress. A **completion stamp** makes the next run pass over a
         whole platform or collection at fetch time; a **recorded launch command**
         makes it pass over one game at apply time. Both survive a stopped run and

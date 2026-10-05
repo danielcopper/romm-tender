@@ -17,9 +17,9 @@ here as an injected callable. Nothing in ``services/`` learns which arrangement
 answered; offering more than one is #918's, and until then the wiring hands over
 "the first detected", which is atlas's own order with RetroDECK at its head.
 
-**Its entry order is the EFFECTIVE one, and this plugin wants the declared one.**
+**Its entry order is the EFFECTIVE one, and Tender wants the declared one.**
 A gamelist ``<altemulator>`` or a system-level ``<alternativeEmulator>`` promotes
-an entry to the front of the answer, and the plugin keeps the gamelist off every
+an entry to the front of the answer, and Tender keeps the gamelist off every
 launch path (ADR-0012). The shipped position survives promotion as
 ``declared_index``, so ordering by it recovers exactly the order ES-DE's own file
 declares — which is what ADR-0020's "first safely-bakeable command in document
@@ -70,7 +70,7 @@ if TYPE_CHECKING:
 
     from domain.shortcut_data import EmulatorInvocation
 
-# The codes on which this plugin declines to answer from a catalogue. The first
+# The codes on which Tender declines to answer from a catalogue. The first
 # four are the resolver's own "nobody could answer" family: the arrangement ships
 # none, atlas has not established where it keeps one, the one it has could not be
 # read, or part of it sits where atlas does not open. Only their absence makes an
@@ -78,12 +78,12 @@ if TYPE_CHECKING:
 # this frontend knows no emulator for this system" — and that is the one empty
 # the picker may render as an empty list.
 #
-# ``catalogue-invalid`` is the plugin's own addition, and it reads the same
+# ``catalogue-invalid`` is Tender's own addition, and it reads the same
 # answer differently from the resolver on purpose. It means a catalogue file
 # ES-DE refuses its whole load on — one that does not parse, or one carrying no
 # document-level ``<systemList>`` — so ES-DE runs with no systems at all, and
-# atlas states that truthfully as an empty enumeration. Taken at face value the
-# plugin would report "this frontend knows no emulator" for every platform, and
+# atlas states that truthfully as an empty enumeration. Taken at face value
+# Tender would report "this frontend knows no emulator" for every platform, and
 # ``is_known_system`` would answer a positive False that the candidate search
 # reads as a denial. What the user actually has is one typo in one file, most
 # likely their own ``custom_systems/es_systems.xml`` — a file the deleted parser
@@ -121,9 +121,9 @@ def first_detected_installation(user_home: str) -> Any:
 
     Detection returns what it found in probe order — RetroDECK, EmuDeck, an
     unclaimed bare RetroArch flatpak, a bare native RetroArch — and never picks a
-    winner. This plugin is a RetroDECK plugin, and RetroDECK leads that order
-    where it is present, so "the first" is the RetroDECK answer wherever there is
-    one. Offering the others is #918.
+    winner. Tender launches every game through RetroDECK, and RetroDECK leads
+    that order where it is present, so "the first" is the RetroDECK answer
+    wherever there is one. Offering the others is #918.
     """
     installations = detect(user_home)
     return installations[0] if installations else None
@@ -177,7 +177,7 @@ class AtlasCatalogueAdapter:
     call-shaped system questions (:class:`services.protocols.SystemM3uSupportFn`,
     ``SystemSupportedExtensionsFn``, ``SystemKnownFn``) as bound methods.
 
-    Resolution is system-layer only; the plugin-owned per-platform and per-game
+    Resolution is system-layer only; Tender's own per-platform and per-game
     selections are layered on top by
     :class:`services.active_core_resolver.ActiveCoreResolver`, not here — and
     ES-DE's own selections are ignored, which is what ``_declared_order`` is for.
@@ -231,7 +231,7 @@ class AtlasCatalogueAdapter:
 
         Reads the resolver's own ``kind``, not the bake classifier's: whether a
         command loads a core is a fact about the command, where bakeability is a
-        fact about this plugin's ``-e`` override. A libretro command the plugin
+        fact about Tender's ``-e`` override. A libretro command Tender
         cannot bake still names the core the BIOS filter is about.
 
         **Carried, and currently read by nothing in production.** The firmware
@@ -257,7 +257,7 @@ class AtlasCatalogueAdapter:
         The first *safely-bakeable* entry in declared order
         (:func:`domain.emulator_commands.select_default_option`) rendered into an
         :class:`EmulatorInvocation` — a libretro core or a standalone emulator,
-        whichever the catalogue declares first that the plugin can bake. Returns
+        whichever the catalogue declares first that Tender can bake. Returns
         ``None`` when nothing is bakeable (or the catalogue could not be read);
         the caller bakes the plain RetroDECK launch and lets RetroDECK resolve the
         emulator itself.
@@ -407,7 +407,7 @@ class AtlasCatalogueAdapter:
         """The catalogue's answer for *system_name*, cached, or ``None`` with nothing to ask.
 
         Asked without a content path: a per-game ``<altemulator>`` would promote
-        an entry the plugin ignores anyway (ADR-0012), and the answer is the
+        an entry Tender ignores anyway (ADR-0012), and the answer is the
         system's rather than one game's.
         """
         installation = self._installation_handle()

@@ -1,6 +1,6 @@
 """Which emulator an atlas answer is about — the one place that decides.
 
-The resolver answers two questions this plugin joins: which emulators launch a
+The resolver answers two questions Tender joins: which emulators launch a
 system (a catalogue entry) and what each of them wants (a firmware core). Both
 answers state the emulator under ``emulator``, in the spelling its launch command
 uses — ``dolphin_libretro.so`` for a libretro entry, ``DOLPHIN`` for the

@@ -1,6 +1,6 @@
 """ArtworkService — cover art download, per-ROM cache, grid publish, cleanup.
 
-Cover art is downloaded per RomM ID into the plugin-owned per-ROM cover cache
+Cover art is downloaded per RomM ID into Tender's own per-ROM cover cache
 (``{rom_id}.png``), the single source of truth for a ROM's cover. The active
 version of a sibling group is *published* onto the shared Steam grid as
 ``{app_id}p.png`` (a copy, so every sibling keeps its own cache file, ADR-0021).
@@ -105,7 +105,7 @@ class ArtworkServiceConfig:
 
     Holds the Protocol-typed adapters, runtime infrastructure, the read seam
     ArtworkService uses to consult the in-flight sync's pending cover paths, and
-    ``cover_cache_dir`` — the plugin-owned per-ROM cover cache directory (built
+    ``cover_cache_dir`` — Tender's own per-ROM cover cache directory (built
     in bootstrap, never the shared Steam grid dir) — and the ``ConflictRules`` a
     use case an endpoint calls checks at its entry, under that endpoint's name.
     """
@@ -669,7 +669,7 @@ class ArtworkService:
 
         Sweeps the FULL grid-image set for the removed shortcut's appId —
         portrait/wide/hero/logo/icon across png/jpg/jpeg — not just the
-        ``{app_id}p.png`` the plugin itself writes: Steam (or the user) may
+        ``{app_id}p.png`` Tender itself writes: Steam (or the user) may
         have saved companion art beside the portrait, and a removed shortcut
         must not leave any of it behind.
         """
