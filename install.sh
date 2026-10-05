@@ -85,7 +85,7 @@ fi
 # backend/bootstrap/adapters.py, SETTINGS_FILENAME in
 # backend/adapters/persistence.py), and tests/scripts/test_install_sh.py holds
 # the spellings equal.
-DATABASE="romm_sync.db"
+DATABASE="romm-tender.db"
 DATABASE_FILES=("$DATABASE" "$DATABASE-wal" "$DATABASE-shm")
 SETTINGS="settings.json"
 BACKUP="$DATA/update-backup"

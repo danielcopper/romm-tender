@@ -181,21 +181,25 @@ Format: **invariant** — tier — enforced by.
   directory this process's code sits in — which decides whether this is the installed program an update may replace.
   `AppDirectories.code_dir` cannot answer that, because the ladder has already folded "set" and "fell back to where the
   code sits" into one value; the function derives no directory
-- **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only — the
-  three homes and the question each answers are enumerated in `backend/domain/identity.py`'s module docstring.
-  `APP_DIR_NAME` and `PACKAGE_NAME` spell the same string today, so `APP_DIR_NAME = PACKAGE_NAME` reproduces every
-  current path exactly and every value comparison stays green — the two are still equal after the fold, which is what
-  makes it invisible; the cost arrives at the next package rename, which then moves every user's library on the
-  following start with nothing failing and nothing said.
-  `tests/domain/test_identity.py::TestTheIdentifierStaysInTwoPlaces` therefore asks the module what it ASSIGNS rather
-  than what it resolves to: it parses `user_data_location.py` and fails unless `APP_DIR_NAME` is a string literal, which
-  is the one answer that cannot be another constant's — a fold through a transform (`PACKAGE_NAME.lower()`) is a call
-  node and fails too. The reverse fold, `PACKAGE_NAME = APP_DIR_NAME`, is caught by asserting `domain.identity` has no
-  `APP_DIR_NAME` attribute, and **that half is the weaker one**: importing it under an alias evades it. The THIRD home
-  is unchecked entirely — `SESSION_BREADCRUMB_KEY` is frontend TypeScript and no test on either side relates it to the
-  other two. The rule is also stated at `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring
-  nor this file
+- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`), and the database's file
+  name `DB_FILENAME` (`bootstrap/adapters.py`) from neither** — test + prompt-only — the four homes and the question
+  each answers are enumerated in `backend/domain/identity.py`'s module docstring. `APP_DIR_NAME` and `PACKAGE_NAME`
+  spell the same string today, so `APP_DIR_NAME = PACKAGE_NAME` reproduces every current path exactly and every value
+  comparison stays green — the two are still equal after the fold, which is what makes it invisible; the cost arrives at
+  the next package rename, which then moves every user's library on the following start with nothing failing and nothing
+  said. `tests/domain/test_identity.py::TestTheIdentifierStaysInSeparatePlaces` therefore asks the module what it
+  ASSIGNS rather than what it resolves to: it parses `user_data_location.py` and fails unless `APP_DIR_NAME` is a string
+  literal, which is the one answer that cannot be another constant's — a fold through a transform
+  (`PACKAGE_NAME.lower()`) is a call node and fails too. The reverse fold, `PACKAGE_NAME = APP_DIR_NAME`, is caught by
+  asserting `domain.identity` has no `APP_DIR_NAME` attribute, and **that half is the weaker one**: importing it under
+  an alias evades it. The THIRD home is unchecked entirely — `SESSION_BREADCRUMB_KEY` is frontend TypeScript and no test
+  on either side relates it to the other three. The FOURTH home, `DB_FILENAME`, is a name over persisted state as
+  `APP_DIR_NAME` is: derived from either of the first two, a rename would start every user on an empty database and
+  leave the library under a name nothing opens. `test_db_filename_is_its_own_literal_rather_than_a_derived_name`, in the
+  same class, parses `bootstrap/adapters.py` and fails unless `DB_FILENAME` is a string literal, so
+  `f"{PACKAGE_NAME}.db"`, which reproduces today's value exactly, fails too. The rule is also stated at `APP_DIR_NAME`
+  and at `DB_FILENAME` themselves, because a diff that folds either opens neither the docstring nor this file
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

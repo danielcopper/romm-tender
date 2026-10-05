@@ -250,11 +250,11 @@ order:
 1. The tarball is unpacked beside the install and checked, before anything running is touched.
 2. The new version gets its pre-install check: the installer runs `$PYTHON -B <staged tree>/backend/check.py` under
    `timeout`, with a two-minute limit. The check imports `main.py` with everything it imports, loads the native library
-   and builds the application — the database and settings migrations included — on copies of `romm_sync.db` (taken with
-   SQLite's backup API, since the running version may be writing it), of a `save_sync_state.json` older settings still
-   fold in, and of `settings.json`. It builds the application and never starts it, so it takes no lock, binds no port,
-   writes no port note, logs to its own output rather than to `backend.log`, and reaches neither Steam nor the network.
-   Its code root is the staged tree; the other five `TENDER_*` roots and `XDG_RUNTIME_DIR` point into the run's
+   and builds the application — the database and settings migrations included — on copies of `romm-tender.db` (taken
+   with SQLite's backup API, since the running version may be writing it), of a `save_sync_state.json` older settings
+   still fold in, and of `settings.json`. It builds the application and never starts it, so it takes no lock, binds no
+   port, writes no port note, logs to its own output rather than to `backend.log`, and reaches neither Steam nor the
+   network. Its code root is the staged tree; the other five `TENDER_*` roots and `XDG_RUNTIME_DIR` point into the run's
    temporary directory, and the check refuses to build where one of them already holds something. It ends one of four
    ways:
    - The application was built, and the update goes on.
@@ -271,11 +271,12 @@ order:
    - The live data could not be copied: `could not try the new version: your data could not be copied` and
      `nothing was changed`, and no record, for the same reason.
 
-   A first install gets the same check before its tree is put in place, and a refusal there writes no record and no
-   unit. A release from before the check has no `backend/check.py`: it is installed without one, and the run says
-   `this version has no pre-install check`.
+   A first install gets the same check before its tree is put in place — coming from 0.33, where the database is still
+   `romm_sync.db`, it copies that file under its own name, and the build renames the copy as a start would — and a
+   refusal there writes no record and no unit. A release from before the check has no `backend/check.py`: it is
+   installed without one, and the run says `this version has no pre-install check`.
 3. The unit is stopped.
-4. `romm_sync.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
+4. `romm-tender.db` with its `-wal` and `-shm` files, `settings.json` and the unit file are copied to
    `~/.local/share/romm-tender/update-backup/` — exactly the ones that exist, replacing the previous backup — beside a
    `backed-up-at` file holding when, as one line of ISO-8601 UTC, and a `data-of-version` file holding the version of
    the tree installed at the time, as one line. Plain copies are whole only because the unit is stopped. The copy is

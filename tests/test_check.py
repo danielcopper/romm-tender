@@ -25,6 +25,9 @@ from adapters.sqlite_migrations import apply_migrations
 
 _CHECK = Path(__file__).resolve().parents[1] / "backend" / "check.py"
 
+_DATABASE = "romm-tender.db"
+_OLD_DATABASE = "romm_sync.db"
+
 _ROOTS = (
     "TENDER_CODE_DIR",
     "TENDER_CONFIG_DIR",
@@ -49,17 +52,17 @@ class _Machine:
         self.check = tmp_path / "check"
         self.code = Path(__file__).resolve().parents[1]
 
-    def lay_out(self) -> None:
+    def lay_out(self, database: str = _DATABASE) -> None:
         """The data a running install has: a migrated database, settings, a log, a cover, the launcher."""
         self.live_data.mkdir(parents=True)
-        apply_migrations(str(self.live_data / "romm_sync.db"))
-        db = sqlite3.connect(self.live_data / "romm_sync.db")
+        apply_migrations(str(self.live_data / database))
+        db = sqlite3.connect(self.live_data / database)
         with db:
             db.execute("CREATE TABLE marker (note TEXT)")
             db.execute("INSERT INTO marker VALUES ('in the file')")
         db.close()
         # Closed by the last connection, so nothing holds it open: no WAL, no index.
-        assert sorted(path.name for path in self.live_data.iterdir()) == ["romm_sync.db"]
+        assert sorted(path.name for path in self.live_data.iterdir()) == [database]
         self.live_config.mkdir(parents=True)
         (self.live_config / "settings.json").write_text('{"version": 13, "log_level": "warn"}\n', encoding="utf-8")
         self.live_state.mkdir(parents=True)
@@ -150,7 +153,7 @@ class TestItBuildsOnCopies:
         result = machine.run()
 
         assert result.returncode == 0, result.stderr
-        copy = sqlite3.connect(machine.check / "data" / "romm_sync.db")
+        copy = sqlite3.connect(machine.check / "data" / _DATABASE)
         try:
             assert copy.execute("SELECT note FROM marker").fetchall() == [("in the file",)]
             assert copy.execute("PRAGMA user_version").fetchone()[0] > 0
@@ -225,7 +228,7 @@ class TestADatabaseHeldOpen:
 
     def test_what_its_wal_holds_is_in_the_copy_and_the_live_files_keep_their_bytes(self, machine):
         """The WAL index is left out of the byte comparison: every reader writes its read marks there."""
-        live = sqlite3.connect(machine.live_data / "romm_sync.db")
+        live = sqlite3.connect(machine.live_data / _DATABASE)
         try:
             live.execute("PRAGMA wal_autocheckpoint=0")
             live.execute("INSERT INTO marker VALUES ('only in the wal')")
@@ -240,7 +243,7 @@ class TestADatabaseHeldOpen:
             assert {name: (machine.live_data / name).read_bytes() for name in before} == before
         finally:
             live.close()
-        copy = sqlite3.connect(machine.check / "data" / "romm_sync.db")
+        copy = sqlite3.connect(machine.check / "data" / _DATABASE)
         try:
             assert copy.execute("SELECT note FROM marker ORDER BY rowid").fetchall() == [
                 ("in the file",),
@@ -250,11 +253,75 @@ class TestADatabaseHeldOpen:
             copy.close()
 
 
+class TestAnInstallFromBeforeTheRename:
+    """The live database still has its old name, and a commit only its WAL holds — as a backend that died leaves it."""
+
+    @pytest.fixture
+    def machine(self, home: Path, tmp_path: Path) -> _Machine:
+        laid_out = _Machine(home, tmp_path)
+        laid_out.lay_out(_OLD_DATABASE)
+        script = (
+            "import os, sqlite3\n"
+            f"db = sqlite3.connect({str(laid_out.live_data / _OLD_DATABASE)!r}, isolation_level=None)\n"
+            "db.execute(\"INSERT INTO marker VALUES ('only in the wal')\")\n"
+            "os._exit(0)\n"
+        )
+        subprocess.run([sys.executable, "-c", script], check=True)
+        assert sorted(path.name for path in laid_out.live_data.iterdir()) == [
+            _OLD_DATABASE,
+            f"{_OLD_DATABASE}-shm",
+            f"{_OLD_DATABASE}-wal",
+        ]
+        return laid_out
+
+    def test_the_library_is_what_the_check_renames_and_migrates(self, machine):
+        result = machine.run()
+
+        assert result.returncode == 0, result.stderr
+        assert sorted(path.name for path in (machine.check / "data").iterdir() if "romm" in path.name) == [_DATABASE]
+        copy = sqlite3.connect(machine.check / "data" / _DATABASE)
+        try:
+            assert copy.execute("SELECT note FROM marker ORDER BY rowid").fetchall() == [
+                ("in the file",),
+                ("only in the wal",),
+            ]
+            assert copy.execute("PRAGMA user_version").fetchone()[0] > 0
+        finally:
+            copy.close()
+
+    def test_the_live_install_keeps_its_old_name_and_its_bytes(self, machine):
+        """The WAL index is left out of the byte comparison: every reader writes its read marks there."""
+        before = {
+            name: entry
+            for name, entry in machine.snapshot()["home"].items()
+            if not name.endswith(f"{_OLD_DATABASE}-shm")
+        }
+
+        result = machine.run()
+
+        assert result.returncode == 0, result.stderr
+        after = machine.snapshot()["home"]
+        assert sorted(after) == sorted([*before, f".local/share/romm-tender/{_OLD_DATABASE}-shm"])
+        assert {name: after[name] for name in before} == before
+
+    def test_an_old_file_sqlite_cannot_open_answers_two_and_nothing_is_built(self, tmp_path, home):
+        machine = _Machine(home, tmp_path)
+        machine.lay_out(_OLD_DATABASE)
+        (machine.live_data / _OLD_DATABASE).write_bytes(b"not a database, and long enough to have a header" * 4)
+        before = machine.snapshot()
+
+        result = machine.run()
+
+        assert result.returncode == check.NOT_TRIED
+        assert "check: the live data could not be copied" in result.stderr
+        assert machine.snapshot() == before
+
+
 class TestAVersionThatCannotBeBuilt:
     def test_a_migration_that_fails_on_the_copy_answers_one_with_the_traceback(self, machine):
         """A table in the user's database that the first migration also creates: the build stops there."""
-        (machine.live_data / "romm_sync.db").unlink()
-        db = sqlite3.connect(machine.live_data / "romm_sync.db")
+        (machine.live_data / _DATABASE).unlink()
+        db = sqlite3.connect(machine.live_data / _DATABASE)
         with db:
             db.execute("CREATE TABLE roms (clashes TEXT)")
         db.close()
@@ -319,7 +386,7 @@ class TestACheckNotTried:
     """What says nothing about the version answers two, and nothing is built."""
 
     def test_live_data_that_cannot_be_copied_answers_two(self, machine):
-        (machine.live_data / "romm_sync.db").write_bytes(b"not a database, and long enough to have a header" * 4)
+        (machine.live_data / _DATABASE).write_bytes(b"not a database, and long enough to have a header" * 4)
         before = machine.snapshot()
 
         result = machine.run()

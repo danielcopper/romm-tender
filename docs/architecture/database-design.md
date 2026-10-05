@@ -391,16 +391,41 @@ full per-connection PRAGMA set for runtime Unit-of-Work connections is applied b
 `busy_timeout=5000`, `temp_store=MEMORY`, with `isolation_level=None` so the UoW drives `BEGIN`/`COMMIT`/`ROLLBACK`
 explicitly.
 
-**Database location.** The database is `romm_sync.db` in this program's own data root — `~/.local/share/romm-tender/` by
-default — reached through `bootstrap()`'s `directories.data_dir` and never composed at a call site. It used to live in a
-directory a plugin loader derived from the delivered folder's name, so a release that renamed the folder moved the
+**Database location.** The database is `romm-tender.db` in this program's own data root — `~/.local/share/romm-tender/`
+by default — reached through `bootstrap()`'s `directories.data_dir` and never composed at a call site. It used to live
+in a directory a plugin loader derived from the delivered folder's name, so a release that renamed the folder moved the
 database with it; where the directories are is now resolved once from the environment and handed in, so no name can move
 it again. The ladder is on [Backend Architecture → Where user data lives](backend-architecture.md#where-user-data-lives)
 ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)).
 
 The live path reads and writes it; DB-init is hard-failing (a migration failure aborts startup rather than degrading
-silently) so a corrupt or unmigratable database never serves stale reads. Nothing moves the file any more, so the schema
-runner opens the one path the entry point resolved and there is no ordering left to get wrong.
+silently) so a corrupt or unmigratable database never serves stale reads.
+
+**The old name.** Up to 0.33 the file was `romm_sync.db`, the name it had before the program was called Tender. On every
+start, before the schema runner opens anything, `bootstrap()` hands both paths to `adapters/database_rename.py`, which
+moves a `romm_sync.db` with no `romm-tender.db` beside it. It first opens the old file under its own name, reads from it
+and closes it: the last connection to close, once it has read the database, folds the WAL into the file and removes
+`-wal` and `-shm` — which SQLite finds by the database's own name — so only the main file is left to rename. A
+connection that reads nothing leaves both behind. The rename is one atomic step, so an interruption leaves one complete
+database under one of the two names, and it never replaces an existing name (`renameat2` with `RENAME_NOREPLACE`), so a
+`romm-tender.db` that appeared meanwhile is never overwritten.
+
+Two things about where it runs are deliberate. It runs before the schema runner, which would otherwise create an empty
+`romm-tender.db` beside the library. And it runs in `bootstrap()` rather than the entry point, so on a start it runs
+under the single-instance lock: a second backend refused a moment later cannot have renamed the file under the running
+one.
+
+- Both names there: the backend starts on `romm-tender.db`, leaves `romm_sync.db` exactly as it is, and logs a warning
+  naming both. Nothing is deleted.
+- An old file SQLite cannot open, or one whose WAL survives the close because it is open elsewhere or cannot be written:
+  nothing is renamed, the error is logged, and the start fails, as a database the schema runner cannot open fails it. It
+  never starts on an empty `romm-tender.db` beside a library it could not move.
+- Only the exact name moves; a copy made by hand such as `romm_sync.db.backup-<date>` stays where it is.
+
+The step stays in every later release, as every one-time step does ([invariants](invariants.md)): with no old file it
+does nothing, so keeping it costs nothing, and someone going from 0.33 straight to a later version still gets it. The
+pre-install check builds on a copy taken under whichever name a start would open, so it renames the copy as a start
+would ([Running an installed one](../contributing/development.md#running-an-installed-one)).
 
 ### Adding a migration past v1
 

@@ -82,20 +82,22 @@ and `PLUGIN_NAME` in `frontend/src/utils/toast.ts`. Inside a user-facing **sente
 interpolating a constant into prose costs readability and buys nothing. A **heading** is not a sentence: a headline and
 the rule under it are one thing, so the headline is interpolated and the underline derived from its length.
 
-The identifier has **three** homes, separate because they answer three questions that must stay free to disagree:
+The identifier has **four** homes, separate because they answer four questions that must stay free to disagree:
 
 - `APP_DIR_NAME` (`domain/user_data_location.py`) — the name every directory the program derives for itself carries.
 - `PACKAGE_NAME` (`domain/identity.py`) — the recovery root and the `User-Agent`, both through bootstrap, and nothing
   else.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
+- `DB_FILENAME` (`bootstrap/adapters.py`) — the name of the database file in the data root, so a rename that no start-up
+  step moves the file for leaves every user's library under a name nothing opens.
 
 Two homes have gone rather than moved, and both for the same reason. The folder a release unpacked into was Decky's
 question, asked because Decky derived its four per-plugin directories from it
 ([ADR-0035](docs/adr/0035-the-release-builds-no-decky-artifact.md)). The folder EARLIER releases unpacked into was the
 other half of the same story — what a start-up migration searched, which is a search nothing performs any more
 ([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)). Hosting the backend ourselves derives nothing: the directories
-come from the environment, so neither question has an asker left. Why the three stay apart is argued once, in
+come from the environment, so neither question has an asker left. Why the four stay apart is argued once, in
 `backend/domain/identity.py`'s module docstring.
 
 _Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
@@ -113,8 +115,9 @@ rungs are for a start by hand.
   it, the legacy `save_sync_state.json` the settings fold still reads, and the installer's two copies of the database
   and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback by hand
   replaces, each of which can have a `.new` or `.prev` sibling beside it — and, on a machine updated from an install
-  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take. This
-  list is the one complete inventory of that root; the user guide names only what a user meets there.
+  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take — and,
+  where a start found the database under both names, the `romm_sync.db` it left as it was. This list is the one complete
+  inventory of that root; the user guide names only what a user meets there.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.

@@ -25,8 +25,8 @@ and the fourth says which servers it will talk to at all.
   ``bootstrap/``. Several documents restate the number for humans, and
   ``scripts/check_romm_min_version.py`` holds each of them to this line.
 
-The identifier — ``romm-tender`` — is kept in three separate places rather than
-one, because it answers three questions that have to stay free to disagree:
+The identifier — ``romm-tender`` — is kept in four separate places rather than
+one, because it answers four questions that have to stay free to disagree:
 
 - ``domain.user_data_location.APP_DIR_NAME`` says where the user's own data
   lives. That answer may never follow a manifest, and now may just as little
@@ -42,6 +42,11 @@ one, because it answers three questions that have to stay free to disagree:
   It is a key over persisted state, so it follows nothing either: a rename is a
   migration nothing can perform, and every row written under the old key is
   simply orphaned.
+- ``bootstrap/adapters.py``'s ``DB_FILENAME`` names the file in the data root
+  that holds the user's library. It is a name over persisted state too, so it
+  follows neither of the first two: derived from either, a rename of the
+  package or of the directories would start every user on an empty database
+  and leave the library under a name nothing opens any more.
 
 Fold any two together and one question's answer starts deciding another's, in
 whichever direction the fold happened to point — and each of those failures is
@@ -52,8 +57,8 @@ the next reload.
 **Several constants in one module is not a fold.** They are different values,
 so no edit to one can reproduce another by accident. The identically
 SPELT pair is :data:`PACKAGE_NAME` against ``APP_DIR_NAME``, and that pair is
-exactly the one still standing in two modules — which is the whole of the rule
-above. What this module replaced was a manifest read, not a separation:
+exactly the one still standing in two modules. What this module replaced was a
+manifest read, not a separation:
 ``package.json`` used to supply the name and the version at boot, so a file the
 frontend's package manager owns decided what a server was told about the
 backend.

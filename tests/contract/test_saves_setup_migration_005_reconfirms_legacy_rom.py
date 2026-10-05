@@ -21,7 +21,7 @@ from ._seed import enable_save_sync, seed_save_state
 
 def _db_path(harness) -> str:
     """The real SQLite database the harness's services read/write."""
-    return os.path.join(harness.data_dir, "romm_sync.db")
+    return os.path.join(harness.data_dir, "romm-tender.db")
 
 
 def _rewind_to_v4(db_path: str) -> None:

@@ -4,6 +4,9 @@ import asyncio
 import logging
 import os
 import pathlib
+import sqlite3
+import subprocess
+import sys
 from dataclasses import fields
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -306,8 +309,54 @@ class TestTheCacheRootAndTheDataRootStayApart:
 
         _bootstrap_for(tmp_path)
 
-        assert (pathlib.Path(directories.data_dir) / "romm_sync.db").exists()
-        assert not (pathlib.Path(directories.cache_dir) / "romm_sync.db").exists()
+        assert (pathlib.Path(directories.data_dir) / "romm-tender.db").exists()
+        assert not (pathlib.Path(directories.cache_dir) / "romm-tender.db").exists()
+
+
+class TestBootstrapRenamesTheOldDatabase:
+    """A data root that still holds the database under its old name starts on it under the current one."""
+
+    @staticmethod
+    def _old_database_with_a_hot_wal(tmp_path) -> pathlib.Path:
+        """The old database as a process that died after a commit leaves it: the commit only in ``-wal``."""
+        data = tmp_path / "data"
+        data.mkdir()
+        script = (
+            "import os, sqlite3\n"
+            f"db = sqlite3.connect({str(data / 'romm_sync.db')!r}, isolation_level=None)\n"
+            "db.execute('PRAGMA journal_mode=WAL')\n"
+            "db.execute('CREATE TABLE marker (note TEXT)')\n"
+            "db.execute(\"INSERT INTO marker VALUES ('the library')\")\n"
+            "os._exit(0)\n"
+        )
+        subprocess.run([sys.executable, "-c", script], check=True)
+        assert sorted(path.name for path in data.iterdir()) == ["romm_sync.db", "romm_sync.db-shm", "romm_sync.db-wal"]
+        return data
+
+    def test_the_library_is_intact_under_the_current_name(self, tmp_path):
+        data = self._old_database_with_a_hot_wal(tmp_path)
+
+        _bootstrap_for(tmp_path)
+
+        assert not any(path.name.startswith("romm_sync.db") for path in data.iterdir())
+        db = sqlite3.connect(data / "romm-tender.db")
+        try:
+            assert db.execute("SELECT note FROM marker").fetchall() == [("the library",)]
+            assert db.execute("PRAGMA user_version").fetchone()[0] > 0
+        finally:
+            db.close()
+
+    def test_an_old_file_sqlite_cannot_open_fails_the_start_and_no_empty_library_takes_its_place(self, tmp_path):
+        data = tmp_path / "data"
+        data.mkdir()
+        content = b"not a database, and long enough to have a header" * 4
+        (data / "romm_sync.db").write_bytes(content)
+
+        with pytest.raises(sqlite3.DatabaseError):
+            _bootstrap_for(tmp_path)
+
+        assert sorted(path.name for path in data.iterdir()) == ["romm_sync.db"]
+        assert (data / "romm_sync.db").read_bytes() == content
 
 
 class TestBootstrapInstallsTheLauncher:
