@@ -1569,12 +1569,11 @@ rejects a non-http(s) value before any network call. It then holds the candidate
 stored token in memory first so the version probe never carries the old server's bearer to the candidate host — and
 persists nothing until the mint succeeds. On any failure (probe unreachable, version too old, forbidden/error mint, no
 usable token, or a disk error) the in-memory auth state is rolled back to the previous working URL + token, and because
-disk was never touched the prior working credentials survive a failed sign-in. Each sign-in gives that state back in one
-block that ends where the new state is saved, so a bug or an interrupted call before the save restores it too, and
-nothing after a successful save does, which would leave memory and file disagreeing. A settings file that cannot be
-written refuses the sign-in with `save_failed` and the write's cause, the reason `save_server_url` answers with; any
-other exception from the write stays a transport error. Only a successful mint commits `romm_url` + SSL flag + token +
-id + origin to disk in a single `save_settings()` call.
+disk was never touched the prior working credentials survive a failed sign-in. Only a successful mint commits
+`romm_url` + SSL flag + token + id + origin to disk in a single `save_settings()` call. Every step of a sign-in up to
+that save gives the previous state back when it fails, a bug or an interrupted call included, and nothing after a
+successful save does, which would leave memory and file disagreeing. A settings file that cannot be written refuses the
+sign-in with `save_failed` and the write's cause; any other exception from the write stays a transport error.
 
 **The old-token DELETE is origin-guarded and provenance-guarded.** RomM scopes a Client API Token to the account, and
 re-auth deletes the device's previous token. That DELETE is only fired when the old token's stored origin matches the

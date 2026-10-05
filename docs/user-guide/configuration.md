@@ -243,9 +243,9 @@ Nothing is changed for any shortcut in that case:
 
 | The line under the button says                             | What happened                                                            |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Not applied — no Steam user was found on this device       | Steam's `userdata` folder holds no user folder                           |
+| Not applied — no Steam user was found on this device       | No Steam user folder was found under Steam's `userdata`                  |
 | Not applied — Steam's localconfig.vdf was not found        | That Steam user has no `config/localconfig.vdf` yet                      |
-| Not applied — Steam's localconfig.vdf could not be read    | The file is there but is not a VDF file Tender can parse                 |
+| Not applied — Steam's localconfig.vdf could not be read    | The file is there but could not be opened or parsed                      |
 | Not applied — Steam's localconfig.vdf could not be written | Writing the changed file failed, for example on a full or read-only disk |
 
 <!-- Screenshot: Steam Input Mode dropdown with the three options -->

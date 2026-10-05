@@ -17,16 +17,16 @@ class SteamInputApply(StrEnum):
     """The outcome of one attempt to apply a Steam Input mode."""
 
     APPLIED = "applied"
-    """Every shortcut named now carries the mode, written or already so. Nothing to change counts as applied."""
+    """Every shortcut named now carries the mode, whether it was written now or already so."""
 
     NO_STEAM_USER = "no_steam_user"
-    """Steam's ``userdata`` directory holds no user to write for. Nothing was written."""
+    """No Steam user folder was found under Steam's ``userdata``. Nothing was written."""
 
     NO_LOCALCONFIG = "no_localconfig"
     """The Steam user has no ``config/localconfig.vdf``. Nothing was written."""
 
     UNREADABLE = "unreadable"
-    """``localconfig.vdf`` could not be read or parsed. Nothing was written."""
+    """``localconfig.vdf`` is there but could not be opened or parsed. Nothing was written."""
 
     WRITE_FAILED = "write_failed"
     """The mode needed writing and the new ``localconfig.vdf`` could not be written."""

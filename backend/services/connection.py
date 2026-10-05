@@ -9,8 +9,8 @@ pairing code for a token (the same OIDC path without pasting), and
 ``migrate_legacy_credentials`` upgrades a
 stored-password install to a token on startup. Pure I/O happens through the ``RommConnectionApi``
 Protocol and disk writes through the ``SettingsPersister`` Protocol; this
-service composes that I/O with the response-shape contract the frontend
-depends on. The minimum version is injected — ``MIN_ROMM_VERSION`` in
+service composes that I/O into the results the frontend reads and the
+refusals it raises. The minimum version is injected — ``MIN_ROMM_VERSION`` in
 ``domain/identity.py``, passed in by bootstrap — so this service remains a
 pure orchestration layer.
 """
@@ -219,9 +219,10 @@ class ConnectionService:
         (best-effort) — it is bound to its minting origin and would otherwise
         404 against the new server's negotiate. Raises ``NotConfigured`` for a
         missing or invalid URL, ``VersionUnsupported`` as :meth:`test_connection`
-        does, ``AuthFailed`` for a refused mint, ``ServerUnreachable`` when RomM
-        answers no usable token, and ``Refused`` with ``save_failed`` when the
-        settings file cannot be written; a RomM error propagates as it is.
+        does, ``AuthFailed`` when RomM answers the mint with a 403,
+        ``ServerUnreachable`` when RomM answers no usable token, and ``Refused``
+        with ``save_failed`` when the settings file cannot be written; a RomM
+        error propagates as it is.
         """
         async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
@@ -331,9 +332,12 @@ class ConnectionService:
         and the old server's bearer never leaks to the candidate host. The token
         is validated with an authenticated ``/api/users/me`` probe — a 401 means
         the token is invalid/revoked, a 403 means it authenticates but lacks a
-        required scope. The token value is never logged. Refuses as
-        :meth:`establish_token` does, with ``AuthFailed`` for a token RomM
-        rejects.
+        required scope. The token value is never logged. Raises
+        ``NotConfigured`` for a missing or invalid URL or a blank token,
+        ``VersionUnsupported`` and ``save_failed`` as :meth:`establish_token`
+        does, and ``AuthFailed`` for a token RomM rejects, including a version
+        probe that fails while the server answers; any other RomM error
+        propagates as it is.
         """
         async with self._rules.hold("connect_with_token", prune=True):
             return await self._establish_user_token(romm_url, token, allow_insecure_ssl)
@@ -377,9 +381,10 @@ class ConnectionService:
                 # RomM answers the token-carrying probe with a 500 (a malformed token)
                 # or a 403 (a token-shaped but invalid/revoked one) instead of a clean
                 # 401, so a bad pasted token otherwise surfaces as a generic server
-                # error. The auth state is restored before the reachability probe (old
-                # token, or none), so a probe that succeeds proves the server is up and
-                # the pasted token — not the server — is at fault.
+                # error. The previous auth state, its URL included, is given back before
+                # the reachability probe, so the probe asks whether the PREVIOUS server
+                # is up, not the one just entered; when it answers, the pasted token is
+                # taken to be at fault.
                 self._restore_auth_state(snapshot)
                 if (await self.probe_reachability()).get("online"):
                     raise AuthFailed(_USER_TOKEN_REJECTED_MESSAGE) from e

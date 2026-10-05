@@ -312,8 +312,8 @@ config file.
 **Symptom**: Under **Settings › Controller**, tapping **Apply to All Shortcuts** shows a line starting with "Not
 applied".
 
-**Fix**: The Steam Input mode could not be written into Steam's `localconfig.vdf`, and no shortcut was changed. What
-each line means is listed under [Steam Input Mode](configuration.md#steam-input-mode).
+**What happened**: The Steam Input mode could not be written into Steam's `localconfig.vdf`. What each line means is
+listed under [Steam Input Mode](configuration.md#steam-input-mode).
 
 ## Saves Not Syncing
 

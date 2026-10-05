@@ -265,7 +265,7 @@ class NamedRefused(Refused):
 
 
 class NotConfigured(NamedRefused):
-    """Nothing to connect with: no server URL, no valid one, no credential, or a login for another server."""
+    """Nothing to connect with: no server URL, no valid one, or no credential."""
 
     reason = "config_error"
 

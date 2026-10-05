@@ -205,7 +205,7 @@ class SettingsService:
         stored = stored_custom_headers(self._settings.get("romm_custom_headers"))
         resolved = resolve_custom_headers(headers, stored)
         if isinstance(resolved, HeaderRefusal):
-            # A ``HeaderProblem`` value rather than a literal: every value of that StrEnum is one.
+            # The reason is a ``HeaderProblem`` value, not a literal here; that StrEnum's values are the literals.
             raise Refused(resolved.problem.value, _header_refusal_message(resolved))
         self._settings["romm_custom_headers"] = [{"name": h.name, "value": h.value} for h in resolved]
         self._settings_persister.save_settings()
@@ -329,9 +329,9 @@ class SettingsService:
     async def apply_steam_input_setting(self) -> dict[str, Any]:
         """Apply the current Steam Input mode to every bound ROM shortcut.
 
-        Raises ``Refused`` when Steam's ``localconfig.vdf`` was not written, its
-        reason naming why: no Steam user, no such file, a file that would not
-        read, or a write that failed. The panel shows the message.
+        Raises ``Refused`` when the mode could not be written into Steam's
+        ``localconfig.vdf``, its reason naming why: no Steam user, no such file,
+        a file that could not be read or parsed, or a write that failed.
         """
         async with self._rules.hold("apply_steam_input_setting", prune=True):
             return self._apply_steam_input_setting()
