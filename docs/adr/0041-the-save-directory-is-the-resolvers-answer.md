@@ -1,9 +1,16 @@
+---
+status: accepted
+decided: 2026-09-25
+updated: 2026-10-05
+amended-by: [0042]
+---
+
 # The save directory is the resolver's answer, and a moved one is followed per game
 
-## Status
+## Scope
 
-Accepted. Completes [ADR-0034](0034-a-save-is-answered-by-the-emulator-that-writes-it.md) for the directory: that
-decision took the NAMES of a save from the emulator and left where they sit to this repo's own path math.
+Completes [ADR-0034](0034-a-save-is-answered-by-the-emulator-that-writes-it.md) for the directory: that decision took
+the NAMES of a save from the emulator and left where they sit to this repo's own path math.
 
 ## Context
 
@@ -90,3 +97,10 @@ saves catches anyway. The one-time pass pays that once, to fill the record in.
   written for games that never were. It hangs off `roms` rather than the install, so it survives an uninstall and a
   re-download.
 - **3DO and Neo Geo saves are now looked for where their cores write**; that has not yet been observed on a device.
+
+## Amendment — the path the resolver is asked with, and where backups live
+
+Under [ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md) the resolver is asked
+with exactly the path Tender starts the game with, which for a download is its path in Tender's library. Backups taken
+before an overwrite move from the emulator's save folder into Tender's own data folder. A save still lives where the
+emulator writes it; Tender keeps no save folder of its own.

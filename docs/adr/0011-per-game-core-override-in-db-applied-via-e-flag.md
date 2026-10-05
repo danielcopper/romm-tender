@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-06-08
+updated: 2026-10-05
+amended-by: [0042]
+---
+
 # Per-game emulator/core override lives in the plugin DB and is applied via RetroDECK's `-e` flag; we read external config but never write it
 
-## Status
+## Scope
 
-Accepted, **partially superseded by [ADR-0012](0012-plugin-owns-core-selection-always-e-no-gamelist.md):** §2
+**Partially superseded by [ADR-0012](0012-plugin-owns-core-selection-always-e-no-gamelist.md):** §2
 (`-e`-only-for-overrides) is reversed to always `-e`, §4 (the one remaining system-level gamelist write is kept) is
 reversed to all gamelist read and write dropped, and §3 is refined (the precedence chain loses its gamelist
 `<alternativeEmulator>` layer and gains a per-platform `settings.json` layer). The body below is preserved as design
@@ -163,3 +170,11 @@ section), [ADR-0007](0007-rom-retention-identity-anchor.md) (`roms` as the ident
 [ADR-0010](0010-normalize-romm-slug-to-retrodeck-system.md) (platform→`system` normalization feeding the resolver),
 [Core and Emulator Selection](../architecture/core-emulator-selection.md) (the resolver, bake sites, and read seam in
 detail).
+
+## Amendment — the override is applied by Tender's own start, and one configuration write stays
+
+[ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md) has Tender start every
+emulator itself with the command emu-atlas gives, so an override is no longer applied through RetroDECK's `-e` flag; it
+is stored with its emulator source and display label and applied by Tender's own start. "We read external config but
+never write it" holds with one stated exception: the RetroArch `input_driver` fix, run only from its button and after
+confirmation.

@@ -1,11 +1,17 @@
+---
+status: accepted
+decided: 2026-08-12
+updated: 2026-10-05
+amended-by: [0042]
+---
+
 # An adopted install is an install, deletion authority included — the proof sits at adoption time
 
-## Status
+## Scope
 
-Accepted. Records the decisions behind [#260](https://github.com/danielcopper/decky-romm-sync/issues/260) (adopt an
-existing ROM file instead of re-downloading), which [#1680](https://github.com/danielcopper/decky-romm-sync/issues/1680)
-surfaced from the field: a new install with ROMs copied in by hand, where the game detail offered Download and never
-Play.
+Records the decisions behind [#260](https://github.com/danielcopper/decky-romm-sync/issues/260) (adopt an existing ROM
+file instead of re-downloading), which [#1680](https://github.com/danielcopper/decky-romm-sync/issues/1680) surfaced
+from the field: a new install with ROMs copied in by hand, where the game detail offered Download and never Play.
 
 ## Context
 
@@ -412,3 +418,12 @@ left the silent merge — and the uninstall that deletes the user's unrelated fi
 - [ADR-0027](0027-claim-discipline-follows-the-recovery-bundle.md) — the claim discipline a removal applies to the files
   an adopted row points at
 - [GLOSSARY.md](../../GLOSSARY.md) — **Adopt**, **Adopted install**, **Adoption candidate**
+
+## Amendment — a file the user placed is recognised, not adopted into deletion authority
+
+Under [ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md), a game file the user
+placed in an emulator source is recognised and started where it lies, and its record carries the origin "recognised".
+Tender never deletes, moves or renames such a file, nor its saves; uninstalling it removes only Tender's record and
+shortcut. Tender's own downloads live in its library and keep full deletion authority there. A symlink stays an unusable
+namesake unless it is Tender's own: a link that points at a library file Tender records, which Tender removes without
+following it.

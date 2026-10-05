@@ -1,8 +1,15 @@
+---
+status: accepted
+decided: 2026-09-07
+updated: 2026-10-05
+amended-by: [0042]
+---
+
 # The live `es_systems.xml` stays the sole source; the vendored resolver is what reads it
 
-## Status
+## Scope
 
-Accepted. **Refines [ADR-0020](0020-live-es-systems-emulator-resolution.md):** the source is unchanged — ES-DE's live
+**Refines [ADR-0020](0020-live-es-systems-emulator-resolution.md):** the source is unchanged — ES-DE's live
 `es_systems.xml`, no snapshot — and so is the rule that picks the default, but the reader is no longer the plugin's own
 parser. `adapters/es_de_config.py` and its `CoreResolver` are deleted; the vendored
 [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver answers through `adapters/atlas_catalogue.py`.
@@ -184,3 +191,11 @@ never read as a launch input), [ADR-0019](0019-folder-as-launch-target.md) (the 
 the sandbox launcher), [Core and Emulator Selection](../architecture/core-emulator-selection.md) (the resolver,
 precedence, classifier and picker in detail), [Config Source Parsers](../architecture/config-source-parsers.md) (which
 file each reader owns).
+
+## Amendment — every emulator source, and the launch command from the resolver
+
+[ADR-0042](0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md) replaces "the first detected
+installation" with every emulator source the resolver detects, each asked through its common interface, and replaces
+ADR-0020's bake classifier and `es_find_rules.xml` probe with the launch command the resolver gives. The default
+emulator is the first enabled source in the user's source order that offers one for the system, and within it that
+source's own default.

@@ -499,6 +499,25 @@ that refusal names the served shape, while a `link` is unusable on its own terms
 suggest the other shape would have taken it. _Avoid_: mismatched candidate, unusable candidate — the whole point is that
 it is not one.
 
+### Library
+
+Tender's own store of downloaded game files, at a place the user chooses. Nothing in it is moved except at the user's
+request. It reaches a frontend only through **frontend links**
+([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)). _Avoid_: ROM
+folder (that is an emulator source's), collection (a RomM concept).
+
+### Frontend link
+
+An absolute symlink Tender places in an emulator source's ROM folder for a system, pointing at a game in the **library**
+— at its file, or at its whole folder for a multi-file game. It is Tender's own exactly when it points at a library file
+Tender records; only such a link is ever removed by Tender. One switch per frontend decides whether it gets links.
+
+### Origin: downloaded / recognised
+
+Where a game's file came from. **Downloaded**: Tender fetched it into its library, and Tender may move or delete it.
+**Recognised**: the user placed it in an emulator source; Tender starts it where it lies and never deletes, moves or
+renames it, nor its saves.
+
 ### Normalized name
 
 A ROM filename reduced to the game it denotes: extension removed, bracketed groups `(...)` / `[...]` dropped with their
@@ -550,6 +569,28 @@ Three distinct notions in core selection, kept separate because they have differ
   both `LRPS2` and `PCSX2`, so a label names a launch row and two rows can be one emulator — and it is not `core_so`,
   which no standalone emulator has. Absent where the resolver could not identify the emulator behind a row, and nothing
   may be scoped to it then.
+
+### Emulator source
+
+Where Tender gets an emulator from: RetroDECK, EmuDeck, a RetroArch without a frontend, or a standalone emulator.
+emu-atlas calls it an installation; Tender does not, because "install" already names Tender's own installation and a
+downloaded game (`RomInstall`). Each source is asked through emu-atlas's common interface, has a switch in the settings,
+and has a place in the **emulator source order**
+([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)). _Avoid_:
+installation, arrangement, frontend (a RetroArch without a frontend is a source too).
+
+### Emulator source order
+
+The order in which emulator sources supply a platform's default emulator — RetroDECK → EmuDeck → RetroArch → standalone
+unless the user changes it. The first enabled source that offers an emulator for the system gives the default, and
+within it the source's own default. A missing BIOS does not change it.
+
+### Not supported vs not established
+
+Two different absences of an answer. **Not supported**: emu-atlas has no knowledge for this at all (an emulator it has
+no card for, a kind of source it does not know). **Not established**: it knows the question but could not answer it on
+this machine (a file it could not read, a setting it does not interpret). Both are said, never guessed past; neither is
+"no".
 
 ### Wanted (firmware): needed / optional / not needed / unknown
 
@@ -732,6 +773,11 @@ It is a progress bar over a set the user can finish, not a readiness claim, whic
 **row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is
 precisely what a verdict is not. Both surfaces render it behind the readiness sentence as `(1/20 RomM library files)`,
 naming its set because the sentence in front counts another (`docs/architecture/qam-panel.md`, BIOS files).
+
+### Firmware store
+
+Tender's own store of BIOS files, each held once and reaching each emulator source through a link at the place emu-atlas
+names ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-and-keeps-its-own-store.md)).
 
 ### Safely-bakeable
 
