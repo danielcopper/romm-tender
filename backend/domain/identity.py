@@ -57,8 +57,8 @@ the next reload.
 **Several constants in one module is not a fold.** They are different values,
 so no edit to one can reproduce another by accident. The identically
 SPELT pair is :data:`PACKAGE_NAME` against ``APP_DIR_NAME``, and that pair is
-exactly the one still standing in two modules — which is the whole of the rule
-above. What this module replaced was a manifest read, not a separation:
+exactly the one still standing in two modules. What this module replaced was a
+manifest read, not a separation:
 ``package.json`` used to supply the name and the version at boot, so a file the
 frontend's package manager owns decided what a server was told about the
 backend.

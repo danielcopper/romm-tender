@@ -132,16 +132,17 @@ if TYPE_CHECKING:
 
 # Filename of the SQLite database under the data root, created by the schema
 # migration runner at startup. A literal of its own, never derived from
-# ``domain/identity.py``'s ``PACKAGE_NAME`` or ``APP_DIR_NAME``, both of which
-# happen to spell its stem: it names the file every user's library is in, so a
-# rename of either would move that library on the next start, with nothing
-# failing and nothing said. ``domain/identity.py`` carries the rest of that
-# split. ``install.sh`` spells it again, and its tests hold the two equal.
+# ``PACKAGE_NAME`` (``domain/identity.py``) or ``APP_DIR_NAME``
+# (``domain/user_data_location.py``), both of which spell its stem: derived from
+# either, a rename of that one would start every user on an empty database and
+# leave the library under a name nothing opens, with nothing failing and nothing
+# said. ``domain/identity.py`` carries the rest of that split. ``install.sh``
+# spells it again, and its tests hold the two equal.
 DB_FILENAME = "romm-tender.db"
 
 # What the database was called before the program was Tender. A start renames a
-# file by this name to DB_FILENAME, and the pre-install check copies it where
-# no file by that name exists yet.
+# file by this name to DB_FILENAME, and the pre-install check copies it where no
+# DB_FILENAME exists yet.
 LEGACY_DB_FILENAME = "romm_sync.db"
 
 
