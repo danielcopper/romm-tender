@@ -463,6 +463,17 @@ Unlaunchable is always a **proven** verdict, never the absence of one: an unread
 a pre-migration row all read as launchable. The foil is a **folder-boot** install, whose `file_path` extension is
 irrelevant because the baked target is the game directory.
 
+### Missing download / forget a download
+
+A `rom_installs` row whose recorded file and folder are both absent. The row stays: a deleted file, a moved ROM folder
+and an unmounted drive look the same from here, so the start-up step only logs it, and the game page says
+`File missing
+at <path>` (`file_missing_at` on the cached game detail, naming `rom_dir` when set, else `file_path`).
+**Forget** (`forget_download`, "Forget this download") is the uninstall without the deletion — the row dropped and `""`
+recorded through the uninstall's writer of `applied_launch_options` — and is refused (`file_present`) while the file or
+folder is there. "Download again" is an ordinary download, which replaces the row only once it completes. _Avoid_: stale
+install, prune — nothing removes the row on its own.
+
 ### Adopt
 
 To take something already present into Tender's records without having produced it. The object varies — a local save

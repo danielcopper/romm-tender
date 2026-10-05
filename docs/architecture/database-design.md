@@ -36,10 +36,10 @@ Each vertical landed in turn:
   session list into `rom_playtime` — the summed total (`reconcile_total`), the row count (`reconcile_session_count`) and
   the newest end time (`reconcile_last_played`), each a monotonic `max()` clamp — so a fresh device restores
   `session_count` and `last_played` alongside `total_seconds`, not the total alone (ADR-0018, #903).
-- **rom-removal + startup-healing** — `RomRemovalService.remove_rom`/`uninstall_all_roms` and
-  `StartupHealingService.prune_stale_installed_roms` read and delete `rom_installs` through the Unit of Work; an
-  uninstall (or stale prune) deletes only the on-disk files and the `rom_installs` row, never the `roms` identity row,
-  playtime, saves, or metadata
+- **rom-removal + startup-healing** — `RomRemovalService.remove_rom`/`forget_download`/`uninstall_all_roms` read and
+  delete `rom_installs` through the Unit of Work, and `StartupHealingService.report_missing_installs` reads it and
+  deletes nothing; an uninstall deletes only the on-disk files and the `rom_installs` row, a forget only the row, and
+  neither touches the `roms` identity row, playtime, saves, or metadata
   ([ADR-0007](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0007-rom-retention-identity-anchor.md)).
 - **read-consumers** — `GameDetailService` resolves the ROM, install record, cached save state, cached metadata, and
   platform-name cache in one read Unit of Work (the has-saves badge reads `rom_save_sync_states`, the platform display
@@ -272,6 +272,11 @@ maps 1:1 onto these tables.
 | `platform_sync_state`       | `PlatformSyncState`              | `platform_slug`                    | a platform fully synced                  |
 | `collection_sync_state`     | `CollectionSyncState`            | `(collection_id, collection_kind)` | a standard/smart collection fully synced |
 | `kv_config`                 | misc singleton scalars           | `key`                              | per key                                  |
+
+A `rom_installs` row records a download, not that its file is still on disk. A file that went missing — deleted, its
+folder moved, its drive not mounted — leaves the row in place: start-up only logs it, and the game page names the
+missing path and leaves the row to the user's **Download again** (replaced through the download-complete writer once the
+new download lands) or **Forget this download** (dropped through the uninstall's writer, no file touched).
 
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
@@ -750,15 +755,15 @@ complete. Every slice migrated:
 - the **playtime** slice (`PlaytimeService` records sessions into `rom_playtime` + the `rom_playtime_sessions` outbox
   and reconciles the cross-device total, session count, and last-played timestamp through RomM's native
   `/api/play-sessions` ingest — session-end fold+enqueue+flush, pull-only reconcile-on-view, ADR-0018 / #903).
-- the **rom-removal + startup-healing** slice (`RomRemovalService` and
-  `StartupHealingService.prune_stale_installed_roms` read/delete `rom_installs` through the UoW).
+- the **rom-removal + startup-healing** slice (`RomRemovalService` reads/deletes and
+  `StartupHealingService.report_missing_installs` reads `rom_installs` through the UoW).
 - the **read-consumers** slice (`GameDetailService`/`AchievementsService`/`SettingsService` read the synced-shortcut
   registry, install record, save state, and `ra_id` from SQLite).
 - the **migration** slice — `MigrationService` reads the RetroDECK-home change-detection markers from `kv_config`
   (Bucket 2 per
   [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md))
   and relocates installed-ROM file paths through `uow.rom_installs.relocate`;
-  `StartupHealingService.prune_stale_installed_roms` reads the pending-migration home from `kv_config`.
+  `StartupHealingService.report_missing_installs` reads the pending-migration home from `kv_config`.
 
 With every consumer moved over, the teardown completed: the dead persisters, the `RegistryStoreAdapter` /
 `MetadataCacheStoreAdapter` JSON stores, `domain/save_state.py` (`SaveSyncState`), and the in-memory state dicts

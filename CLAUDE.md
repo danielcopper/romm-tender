@@ -753,7 +753,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   cannot be made refuses it — while the automatic one discards only what a version never seen to answer wrote
   (`tests/scripts/test_install_sh.py`, `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file
   Tender does not read (older than version 13, or without a usable version) is written over with the defaults and takes
-  neither leg: 1.0.0 is a breaking release, and everything it held can be entered again
+  neither leg: 1.0.0 is a breaking release, and everything it held can be entered again. An install record whose file is
+  missing is removed only on the user's press — Uninstall, or "Forget this download", which deletes no file and refuses
+  while the file or folder exists; the start-up step only reports it
+  (`tests/services/test_startup_healing.py::TestReportMissingInstalls`, `tests/contract/test_missing_download.py`)
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios`, `::TestDeleteOneBiosFile` and
@@ -799,7 +802,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   excluded from the sync UPSERT; the only sanctioned reset is Force Full Sync's clear-to-NULL** — test + prompt-only —
   each writer site carries a value-exact test; new launch-options write paths are prompt-only — mechanize via a
   `set_applied_launch_options` / `record_applied_launch_options` call-site audit. Download- and adopt-complete share one
-  code site, `RomInstallRecorder.do_record_applied_launch_options`
+  code site, `RomInstallRecorder.do_record_applied_launch_options`; the uninstall site,
+  `RomRemovalService._drop_install_record`, also serves "Forget this download" (`forget_download`), which is not a
+  seventh
 - **An abandoned-chunk stash's whole-unit apply staging (`pending_sync` / `pending_all_roms` / `pending_cover_sources`)
   is never mutated while the stash is pending (box IDLE) — every run-entry path passes `try_begin_run`, which clears the
   stash before any staging write** — prompt-only — mechanize via a staging-writer call-site audit
