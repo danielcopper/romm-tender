@@ -6,6 +6,7 @@ from lib.errors import (
     AuthFailed,
     NamedRefused,
     NotConfigured,
+    NotInstalled,
     RommApiError,
     RommAuthError,
     RommConflictError,
@@ -387,6 +388,7 @@ class TestTheNamedRefusals:
             (AuthFailed, "auth_failed"),
             (ServerUnreachable, "server_unreachable"),
             (VersionUnsupported, "version_error"),
+            (NotInstalled, "not_installed"),
         ],
     )
     def test_each_carries_its_reason(self, named, reason):

@@ -288,6 +288,12 @@ class VersionUnsupported(NamedRefused):
     reason = "version_error"
 
 
+class NotInstalled(NamedRefused):
+    """The ROM has no installed content on this device."""
+
+    reason = "not_installed"
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 
