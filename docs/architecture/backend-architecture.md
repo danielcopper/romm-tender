@@ -88,11 +88,12 @@ to: a raised `Refused` (`lib/errors.py`) or `DomainRefused` (`domain/refusal.py`
 (`lib/partial_failure.py`), the result of work that stopped partway, answers the same shape with what was done; and a
 raised `RommApiError` answers `classify_error`'s reason and message. Nothing else is caught there: any other exception,
 a raw `ConnectionError` or `OSError` included, is still a `backend_exception`. A translated RomM error is logged as one
-warning line, its type and message without a stack; a refusal is a decision and is not logged. A `def` endpoint stays a
-`def`, and an awaitable it hands back is translated when the dispatcher awaits it. The conflict rules refuse this way
-too: `hold` and `hold_start` raise the refusal of the first rule that holds, so the use case's block does not run
-(GLOSSARY.md → Conflict rules). Services not yet converted still return the failure dict, and both forms reach the panel
-identically.
+line, its type and message without a stack: at info when `classify_error` answers it `server_unreachable`, because an
+offline handheld is an expected state, and at warning otherwise. A refusal is a decision and is not logged. A `def`
+endpoint stays a `def`, and an awaitable it hands back is translated when the dispatcher awaits it. The conflict rules
+refuse this way too: `hold` and `hold_start` raise the refusal of the first rule that holds, so the use case's block
+does not run (GLOSSARY.md → Conflict rules). Services not yet converted still return the failure dict, and both forms
+reach the panel identically.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the

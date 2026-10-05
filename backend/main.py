@@ -38,6 +38,7 @@ from host import (
     run_backend,
 )
 from lib.errors import Refused, RommApiError, classify_error
+from lib.list_result import ErrorCode
 from lib.partial_failure import PartialFailure
 
 # No catch-all: it would show a programming error as a sentence about the
@@ -54,8 +55,9 @@ _logger = logging.getLogger(__name__)
 def _failure_answer(endpoint: str, exc: Refused | DomainRefused | RommApiError) -> dict[str, Any]:
     """The wire's failure shape for an exception in :data:`_TRANSLATED`; a refusal is a decision, not an error."""
     if isinstance(exc, RommApiError):
-        _logger.warning(f"{endpoint}: answered {type(exc).__name__}: {exc}")
         reason, message = classify_error(exc)
+        level = logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
+        _logger.log(level, f"{endpoint}: answered {type(exc).__name__}: {exc}")
         return {"success": False, "reason": reason, "message": message}
     return {**exc.details, "success": False, "reason": exc.reason, "message": exc.message}
 

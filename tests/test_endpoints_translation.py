@@ -415,17 +415,36 @@ def _records_from_the_entrypoint(caplog: pytest.LogCaptureFixture) -> list[loggi
 
 class TestWhatTheEntrypointLogs:
     @pytest.mark.parametrize("route_name", [_A_SYNC_ROUTE, _AN_ASYNC_ROUTE])
-    async def test_a_translated_romm_error_is_one_warning_line_without_a_stack(self, route_name, caplog):
+    @pytest.mark.parametrize(
+        ("exc", "level"),
+        [
+            pytest.param(RommNotFoundError("rom 7 is gone"), logging.WARNING, id="not-found"),
+            pytest.param(RommAuthError("rom 7 is gone"), logging.WARNING, id="auth-failed"),
+            pytest.param(RommConnectionError("rom 7 is gone"), logging.INFO, id="server-unreachable"),
+            pytest.param(RommServerError("rom 7 is gone", status_code=502), logging.INFO, id="server-error"),
+        ],
+    )
+    async def test_a_translated_romm_error_is_one_line_without_a_stack(self, route_name, exc, level, caplog):
         caplog.set_level(logging.DEBUG)
 
-        await _call(_dispatcher_raising(RommNotFoundError("rom 7 is gone")), route_name)
+        await _call(_dispatcher_raising(exc), route_name)
 
         records = _records_from_the_entrypoint(caplog)
         assert [(record.levelno, record.getMessage()) for record in records] == [
-            (logging.WARNING, f"{route_name}: answered RommNotFoundError: rom 7 is gone")
+            (level, f"{route_name}: answered {type(exc).__name__}: rom 7 is gone")
         ]
         assert records[0].exc_info is None
         assert records[0].stack_info is None
+
+    async def test_only_an_unreachable_verdict_is_logged_below_warning(self, caplog):
+        caplog.set_level(logging.DEBUG)
+
+        cases = [case.values for case in _ROMM_API_ERRORS]
+        for exc, _reason in cases:
+            await _call(_dispatcher_raising(exc), _AN_ASYNC_ROUTE)
+
+        levels = [record.levelno for record in _records_from_the_entrypoint(caplog)]
+        assert levels == [logging.INFO if reason == "server_unreachable" else logging.WARNING for _exc, reason in cases]
 
     @pytest.mark.parametrize(
         "refusal",
