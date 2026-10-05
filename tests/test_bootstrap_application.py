@@ -22,13 +22,13 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger("test_bootstrap_application")
 
-# Every repair in the order it runs. ``prune_stale_installed_roms`` runs only
+# Every repair in the order it runs. ``report_missing_installs`` runs only
 # after ``detect_retrodeck_path_change`` succeeded; ``record_save_directories``
 # and ``run_due_update_checks`` start a background task rather than performing it.
 _REPAIRS = [
     "note_update_outcome",
     "detect_retrodeck_path_change",
-    "prune_stale_installed_roms",
+    "report_missing_installs",
     "reconcile_orphaned_sync_runs",
     "prune_orphaned_artwork_cache",
     "prune_orphaned_staging_artwork",
@@ -98,7 +98,7 @@ class _Recorded:
                 shutdown=self._async_step("migration_service.shutdown"),
             ),
             startup_healing_service=MagicMock(
-                prune_stale_installed_roms=self._step("prune_stale_installed_roms"),
+                report_missing_installs=self._step("report_missing_installs"),
                 reconcile_orphaned_sync_runs=self._step("reconcile_orphaned_sync_runs"),
             ),
             sgdb_service=MagicMock(prune_orphaned_artwork_cache=self._step("prune_orphaned_artwork_cache")),
@@ -176,11 +176,11 @@ class TestTheStartUpRepairs:
         assert recorded.calls == _REPAIRS
         await asyncio.wait_for(app.shutdown(), 5)
 
-    async def test_the_prune_is_skipped_when_the_detection_fails(self):
-        """The prune reads the pending homes the detection writes.
+    async def test_the_report_is_skipped_when_the_detection_fails(self):
+        """The report reads the pending homes the detection writes.
 
-        Without them it deletes the row of every install under the home
-        RetroDECK just left whose files are no longer there.
+        Without them it reports every install under the home RetroDECK just
+        left as missing rather than as waiting for the move.
         """
         recorded = _Recorded(failing=frozenset({"detect_retrodeck_path_change"}))
         failures: list[str] = []
@@ -189,7 +189,7 @@ class TestTheStartUpRepairs:
         app.run_startup_repairs(failures.append)
 
         assert failures == ["detect_retrodeck_path_change"]
-        assert recorded.calls == [name for name in _REPAIRS if name != "prune_stale_installed_roms"]
+        assert recorded.calls == [name for name in _REPAIRS if name != "report_missing_installs"]
         await asyncio.wait_for(app.shutdown(), 5)
 
     async def test_the_backfill_is_started_without_holding_start_up(self):

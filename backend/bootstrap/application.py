@@ -63,11 +63,11 @@ class Application:
         steps = StartupSteps(self._logger, report_failure)
         services = self.services
         steps.run("note_update_outcome", services.update_outcome_service.note_start)
-        # The prune may run only after a SUCCESSFUL detection: it reads the
-        # pending homes the detection writes, and without them it takes every
-        # install under the home RetroDECK just left for orphaned.
+        # The report runs only after a SUCCESSFUL detection: it reads the
+        # pending homes the detection writes, and without them it reports every
+        # install under the home RetroDECK just left as missing.
         if steps.run("detect_retrodeck_path_change", services.migration_service.detect_retrodeck_path_change):
-            steps.run("prune_stale_installed_roms", services.startup_healing_service.prune_stale_installed_roms)
+            steps.run("report_missing_installs", services.startup_healing_service.report_missing_installs)
         steps.run("reconcile_orphaned_sync_runs", services.startup_healing_service.reconcile_orphaned_sync_runs)
         # No save-sync orphan prune: roms rows are permanent identity anchors
         # and saves/playtime survive a ROM leaving RomM (ADR-0007).

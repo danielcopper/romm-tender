@@ -1,12 +1,11 @@
 """StartupHealingService — startup-time state reconciliation.
 
 Owns the reconciliation steps that run after state is loaded and
-adapters are wired: drops ``rom_installs`` rows that no longer reflect
-what's on disk, and transitions any ``running`` ``SyncRun`` left behind
-by a crash into ``interrupted``. The install prune is skipped when the
-RetroDECK home is missing on disk (boot-time SD-card mount race) so
-legitimate installs on a card that hasn't finished mounting don't get
-wiped on the next reload.
+adapters are wired: reports the downloads whose files are not where their
+``rom_installs`` row says, and transitions any ``running`` ``SyncRun`` left
+behind by a crash into ``interrupted``. The report deletes nothing: a moved
+folder, an unmounted drive and a deleted file look the same from here, so
+what happens to such a download is the user's call on its game page.
 """
 
 from __future__ import annotations
@@ -28,7 +27,6 @@ if TYPE_CHECKING:
         PathExistsReader,
         RelaunchOptionsReader,
         ResolvedPathFn,
-        RetroDeckPaths,
         UnitOfWorkFactory,
     )
 
@@ -37,8 +35,8 @@ if TYPE_CHECKING:
 class StartupHealingServiceConfig:
     """Frozen wiring bundle handed to ``StartupHealingService.__init__``.
 
-    Carries the runtime logger, the clock, the bundled RetroDECK paths
-    provider, the generic path-exists probe, the path resolver that turns a
+    Carries the runtime logger, the clock, the generic path-exists probe,
+    the path resolver that turns a
     stored home marker into the directory it names, and the SQLite Unit-of-Work
     factory (the transactional seam over the ``rom_installs``, ``sync_runs``,
     and ``kv_config`` repositories — the last holding the pending-migration
@@ -53,7 +51,6 @@ class StartupHealingServiceConfig:
 
     logger: logging.Logger
     clock: Clock
-    retrodeck_paths: RetroDeckPaths
     path_probe: PathExistsReader
     resolve_path: ResolvedPathFn
     uow_factory: UnitOfWorkFactory
@@ -63,12 +60,11 @@ class StartupHealingServiceConfig:
 
 
 class StartupHealingService:
-    """Reconciles persisted ``rom_installs`` against disk and heals orphaned ``SyncRun``s."""
+    """Reports ``rom_installs`` rows missing on disk and heals orphaned ``SyncRun``s."""
 
     def __init__(self, *, config: StartupHealingServiceConfig) -> None:
         self._logger = config.logger
         self._clock = config.clock
-        self._retrodeck_paths = config.retrodeck_paths
         self._path_probe = config.path_probe
         self._resolve_path = config.resolve_path
         self._uow_factory = config.uow_factory
@@ -76,24 +72,14 @@ class StartupHealingService:
         self._loop = config.loop
         self._rules = config.conflict_rules
 
-    def prune_stale_installed_roms(self) -> None:
-        """Remove ``rom_installs`` rows whose files no longer exist on disk.
+    def report_missing_installs(self) -> None:
+        """Log every ``rom_installs`` row whose recorded file and folder are both missing.
 
-        Skipped when the RetroDECK home is not yet available on disk —
-        almost always a boot-time SD-card-mount race; the next backend
-        start, with the filesystem ready, will run the prune normally.
-        Installs living under any pending migration home (the previous
-        home plus any additional hops, #1042) are also preserved because
-        RetroDECK has moved away from those paths but the user hasn't
-        migrated yet, so the records must survive until they do.
+        Deletes nothing. An install under a pending migration home (the
+        previous home plus any additional hops, #1042) is reported as waiting
+        for that move rather than as missing, because RetroDECK has moved away
+        from those paths and the migration relocates the record.
         """
-        retrodeck_home = self._retrodeck_paths.retrodeck_home()
-        if not retrodeck_home or not self._path_probe.exists(retrodeck_home):
-            self._logger.info(
-                f"Skipping installed_roms prune: retrodeck home unavailable ({retrodeck_home or 'unset'})"
-            )
-            return
-
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
             stored_homes = pending_homes_from_kv(
@@ -101,22 +87,15 @@ class StartupHealingService:
                 uow.kv_config.get("retrodeck_home_path_hops"),
             )
         pending_homes = [self._resolve_path(home) for home in stored_homes]
-        stale: list[int] = []
         for install in installs:
             file_path = install.file_path
             rom_dir = install.rom_dir
-            if self._under_pending_home(file_path, rom_dir, pending_homes):
-                self._logger.info(f"Skipping prune of {install.rom_id} ({file_path}): pending migration")
-                continue
             if (file_path and self._path_probe.exists(file_path)) or (rom_dir and self._path_probe.exists(rom_dir)):
                 continue
-            self._logger.info(f"Pruned stale installed_roms entry: {install.rom_id} ({file_path})")
-            stale.append(install.rom_id)
-
-        if stale:
-            with self._uow_factory() as uow:
-                for rom_id in stale:
-                    uow.rom_installs.delete(rom_id)
+            if self._under_pending_home(file_path, rom_dir, pending_homes):
+                self._logger.info(f"Download of {install.rom_id} ({file_path}) waits for the pending RetroDECK move")
+                continue
+            self._logger.warning(f"Download of {install.rom_id} is missing: {rom_dir or file_path}")
 
     def _under_pending_home(self, file_path: str, rom_dir: str | None, pending_homes: Sequence[str]) -> bool:
         """Answer whether one install's recorded paths live under a pending home.
@@ -127,13 +106,14 @@ class StartupHealingService:
         relocated carries whatever spelling the home had when it ran
         (``remap_under_current`` joins that home verbatim), and a marker written
         before the roots were resolved carries the other spelling again (#1838).
-        A match that misses prunes a record whose files are still on disk, so
-        the question has to be about directories rather than strings.
+        A match that misses reports an install the move will relocate as
+        missing, so the question has to be about directories rather than
+        strings.
 
         Resolving the recorded path is safe here in a way it is not in the
-        deletion guards: this decides what to KEEP and authorizes nothing. The
-        loop already probes each path's existence, so it is no new class of
-        cost.
+        deletion guards: this decides what a log line says and authorizes
+        nothing. The loop already probes each path's existence, so it is no new
+        class of cost.
         """
         return is_pending_migration_path(
             self._resolve_path(file_path) if file_path else file_path,

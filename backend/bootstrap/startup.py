@@ -12,12 +12,11 @@ unhandled failure in an artwork sweep ends the process, and a service manager's
 restart policy turns that into a loop.
 
 **The result is returned because one pair of steps has an edge between them.**
-``prune_stale_installed_roms`` may run only after ``detect_retrodeck_path_change``
-has *succeeded*: the prune reads the pending homes the detection writes into
-``kv_config``, and if the detection broke off, the prune takes every install
-under the home RetroDECK has just left for orphaned and deletes its rows. The
-guard the prune carries covers "the home is missing", not "the detection
-failed". No other pair of steps has such an edge.
+``report_missing_installs`` runs only after ``detect_retrodeck_path_change``
+has *succeeded*: the report reads the pending homes the detection writes into
+``kv_config``, and if the detection broke off, it reports every install under
+the home RetroDECK has just left as missing rather than as waiting for the
+move. No other pair of steps has such an edge.
 """
 
 from __future__ import annotations

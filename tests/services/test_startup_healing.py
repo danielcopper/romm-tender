@@ -16,7 +16,6 @@ from _factories import (
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_resolved_path import FakeResolvedPath
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
@@ -28,8 +27,6 @@ from services.startup_healing import StartupHealingService, StartupHealingServic
 
 if TYPE_CHECKING:
     from lib.prune_conflicts import PruneConflicts
-
-_RETRODECK_HOME = "/run/media/deck/Emulation/retrodeck"
 
 
 @pytest.fixture
@@ -76,7 +73,6 @@ def _seed_install(
 def _make_service(
     *,
     logger: logging.Logger,
-    retrodeck_home: str = _RETRODECK_HOME,
     path_probe: FakePathExistsReader | None = None,
     resolve_path: FakeResolvedPath | None = None,
     uow: FakeUnitOfWork | None = None,
@@ -84,12 +80,11 @@ def _make_service(
     relaunch_options: FakeRelaunchOptionsResolver | None = None,
     prune_conflicts: PruneConflicts | None = None,
 ) -> StartupHealingService:
-    probe = path_probe if path_probe is not None else FakePathExistsReader(paths={retrodeck_home})
+    probe = path_probe if path_probe is not None else FakePathExistsReader()
     return StartupHealingService(
         config=StartupHealingServiceConfig(
             logger=logger,
             clock=clock if clock is not None else FakeClock(),
-            retrodeck_paths=FakeRetroDeckPaths(home=retrodeck_home),
             path_probe=probe,
             resolve_path=resolve_path if resolve_path is not None else FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(uow) if uow is not None else FakeUnitOfWorkFactory(),
@@ -100,177 +95,154 @@ def _make_service(
     )
 
 
-class TestPruneStaleInstalledRoms:
-    def test_skip_when_retrodeck_home_missing_on_disk(self, logger, caplog):
-        """Guard: retrodeck home not present on disk → skip prune, log info, no UoW write."""
+def _missing_reports(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [rec.message for rec in caplog.records if "is missing" in rec.message]
+
+
+def _waiting_reports(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [rec.message for rec in caplog.records if "pending RetroDECK move" in rec.message]
+
+
+class TestReportMissingInstalls:
+    def test_missing_files_delete_no_row(self, logger, caplog):
+        """A moved ROM folder or an unmounted drive leaves every install record in place.
+
+        Nothing on disk here — not the files, not RetroDECK's home — and the
+        report still deletes nothing: the user decides on the game page.
+        """
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/run/media/deck/Emulation/retrodeck/roms/n64/a.z64")
-        # path_probe knows nothing — retrodeck home not on disk.
-        service = _make_service(
-            logger=logger,
-            path_probe=FakePathExistsReader(),
-            uow=uow,
-        )
-        with caplog.at_level(logging.INFO):
-            service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-        assert any("retrodeck home unavailable" in rec.message for rec in caplog.records)
-
-    def test_skip_when_retrodeck_home_unset(self, logger):
-        """Empty retrodeck_home (first-run) → skip prune."""
-        uow = FakeUnitOfWork()
-        _seed_install(uow, 1, file_path="/somewhere/a.z64")
-        service = _make_service(
-            logger=logger,
-            retrodeck_home="",
-            path_probe=FakePathExistsReader(),
-            uow=uow,
-        )
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-
-    def test_prune_missing_file_path(self, logger):
-        uow = FakeUnitOfWork()
-        _seed_install(uow, 1, file_path="/nonexistent/game.z64")
+        rom_dir = "/run/media/deck/Emulation/retrodeck/roms/psx/FF7"
+        _seed_install(uow, 2, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir)
         service = _make_service(logger=logger, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is None
-        assert uow.committed is True
 
-    def test_preserve_existing_file_path(self, logger):
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert uow.rom_installs.get(1) is not None
+        assert uow.rom_installs.get(2) is not None
+        assert uow.roms.get(1) is not None
+        assert _missing_reports(caplog) == [
+            "Download of 1 is missing: /run/media/deck/Emulation/retrodeck/roms/n64/a.z64",
+            f"Download of 2 is missing: {rom_dir}",
+        ]
+
+    def test_a_present_file_is_not_reported(self, logger, caplog):
         uow = FakeUnitOfWork()
         rom_file = "/run/media/deck/Emulation/retrodeck/roms/n64/game.z64"
         _seed_install(uow, 1, file_path=rom_file)
-        probe = FakePathExistsReader(paths={_RETRODECK_HOME, rom_file})
-        service = _make_service(logger=logger, path_probe=probe, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
+        service = _make_service(logger=logger, path_probe=FakePathExistsReader(paths={rom_file}), uow=uow)
 
-    def test_preserve_via_rom_dir_fallback(self, logger):
-        """file_path missing but rom_dir exists → record preserved (PSX multi-file fallback)."""
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert uow.rom_installs.get(1) is not None
+        assert _missing_reports(caplog) == []
+
+    def test_a_present_rom_dir_is_not_reported(self, logger, caplog):
+        """file_path missing but rom_dir exists → not missing (PSX multi-file fallback)."""
         uow = FakeUnitOfWork()
         rom_dir = "/run/media/deck/Emulation/retrodeck/roms/psx/FF7"
-        _seed_install(uow, 1, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir)  # file gone
-        probe = FakePathExistsReader(paths={_RETRODECK_HOME, rom_dir})
-        service = _make_service(logger=logger, path_probe=probe, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
+        _seed_install(uow, 1, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir)
+        service = _make_service(logger=logger, path_probe=FakePathExistsReader(paths={rom_dir}), uow=uow)
 
-    def test_preserve_pending_migration_entry(self, logger, caplog):
-        """Install under pending migration's previous home → preserved with info log."""
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert _missing_reports(caplog) == []
+
+    def test_an_install_under_the_pending_home_waits_for_the_move(self, logger, caplog):
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/old/retrodeck/roms/n64/zelda.z64")
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/old/retrodeck")
         service = _make_service(logger=logger, uow=uow)
+
         with caplog.at_level(logging.INFO):
-            service.prune_stale_installed_roms()
+            service.report_missing_installs()
+
         assert uow.rom_installs.get(1) is not None
-        assert any("Skipping prune" in rec.message and "/old/retrodeck" in rec.message for rec in caplog.records)
+        assert _missing_reports(caplog) == []
+        assert _waiting_reports(caplog) == [
+            "Download of 1 (/old/retrodeck/roms/n64/zelda.z64) waits for the pending RetroDECK move"
+        ]
 
-    def test_preserve_pending_migration_hop_entry(self, logger, caplog):
-        """Install under a pending-migration HOP home (not just the previous one) → preserved (#1042).
-
-        A→B→C chained before migrating leaves ``_previous=A`` and ``_hops=[B]``;
-        an install still recorded under B must survive the prune until migration.
-        """
+    def test_an_install_under_a_pending_hop_home_waits_for_the_move(self, logger, caplog):
+        """A→B→C chained before migrating leaves ``_previous=A`` and ``_hops=[B]`` (#1042)."""
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/hop/retrodeck/roms/n64/zelda.z64")
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/old/retrodeck")
             uow.kv_config.set("retrodeck_home_path_hops", json.dumps(["/hop/retrodeck"]))
         service = _make_service(logger=logger, uow=uow)
-        with caplog.at_level(logging.INFO):
-            service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-        assert any("Skipping prune" in rec.message and "/hop/retrodeck" in rec.message for rec in caplog.records)
 
-    def test_preserve_entry_under_a_pending_home_spelled_through_a_symlink(self, logger, caplog):
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert _missing_reports(caplog) == []
+        assert len(_waiting_reports(caplog)) == 1
+
+    def test_a_pending_home_spelled_through_a_symlink_still_matches(self, logger, caplog):
         """#1838: the marker and the install path name one directory two ways.
 
         A pending home recorded before the RetroDECK roots were resolved is
         spelled ``/home/...``, while every install under it was recorded through
-        ``safe_join`` as ``/var/home/...``. The prefix match never fires across
-        the two, and the install this rule exists to protect is pruned instead.
+        ``safe_join`` as ``/var/home/...``.
         """
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/var/home/player/old-retrodeck/roms/n64/zelda.z64")
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/home/player/old-retrodeck")
         service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
+
         with caplog.at_level(logging.INFO):
-            service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-        assert any("Skipping prune" in rec.message for rec in caplog.records)
+            service.report_missing_installs()
 
-    def test_preserve_entry_a_migration_recorded_under_the_other_spelling(self, logger, caplog):
-        """A row an older migration relocated carries the home's spelling of the day.
+        assert _missing_reports(caplog) == []
+        assert len(_waiting_reports(caplog)) == 1
 
-        ``remap_under_current`` joins the home the migration ran under verbatim,
+    def test_a_row_recorded_under_the_other_spelling_still_matches(self, logger, caplog):
+        """``remap_under_current`` joins the home the migration ran under verbatim,
         so such a row is not resolved the way a ``safe_join`` download is — here
-        the marker is the resolved one and the row is not. Resolving only the
-        marker would miss it and prune a record whose files are still on disk.
+        the marker is the resolved one and the row is not.
         """
-        uow = FakeUnitOfWork()
-        _seed_install(uow, 1, file_path="/home/player/old-retrodeck/roms/n64/zelda.z64")
-        with uow:
-            uow.kv_config.set("retrodeck_home_path_previous", "/var/home/player/old-retrodeck")
-        service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
-        with caplog.at_level(logging.INFO):
-            service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-        assert any("Skipping prune" in rec.message for rec in caplog.records)
-
-    def test_preserve_rom_dir_entry_recorded_under_the_other_spelling(self, logger):
-        """The same for a folder-backed ROM, whose ``rom_dir`` is the matched path."""
         uow = FakeUnitOfWork()
         rom_dir = "/home/player/old-retrodeck/roms/psx/FF7"
         _seed_install(uow, 1, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir)
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/var/home/player/old-retrodeck")
         service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
 
-    def test_no_prune_does_not_write(self, logger):
-        """When no record is pruned, no write UoW is opened."""
-        uow = FakeUnitOfWork()
-        # Empty rom_installs — nothing to prune.
-        service = _make_service(logger=logger, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.save_count == 0
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
 
-    def test_mixed_prune_some_preserve_others(self, logger):
-        uow = FakeUnitOfWork()
-        existing = "/run/media/deck/Emulation/retrodeck/roms/n64/keep.z64"
-        _seed_install(uow, 1, file_path=existing)
-        _seed_install(uow, 2, file_path="/gone/dead.z64")
-        probe = FakePathExistsReader(paths={_RETRODECK_HOME, existing})
-        service = _make_service(logger=logger, path_probe=probe, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is not None
-        assert uow.rom_installs.get(2) is None
-        assert uow.committed is True
+        assert _missing_reports(caplog) == []
+        assert len(_waiting_reports(caplog)) == 1
 
-    def test_prefix_false_match_not_preserved(self, logger):
-        """``pending_home="/foo"`` does NOT preserve ``/foobar/x``."""
+    def test_a_prefix_that_is_not_a_parent_is_reported_missing(self, logger, caplog):
+        """``pending_home="/foo"`` does NOT cover ``/foobar/x``."""
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/foobar/x.z64")
         with uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/foo")
         service = _make_service(logger=logger, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is None
-        assert uow.committed is True
 
-    def test_pruned_record_drops_only_install_keeps_roms_row(self, logger):
-        """RETENTION (ADR-0007): a stale prune drops the ``rom_installs`` row, never the ``roms`` identity row."""
+        with caplog.at_level(logging.INFO):
+            service.report_missing_installs()
+
+        assert _missing_reports(caplog) == ["Download of 1 is missing: /foobar/x.z64"]
+        assert uow.rom_installs.get(1) is not None
+
+    def test_the_report_writes_nothing(self, logger):
         uow = FakeUnitOfWork()
         _seed_install(uow, 1, file_path="/gone/dead.z64")
+        saves_after_seeding = uow.rom_installs.save_count
         service = _make_service(logger=logger, uow=uow)
-        service.prune_stale_installed_roms()
-        assert uow.rom_installs.get(1) is None
-        assert uow.roms.get(1) is not None
+
+        service.report_missing_installs()
+
+        assert uow.rom_installs.save_count == saves_after_seeding
+        assert list(uow.rom_installs.iter_all()) != []
 
 
 class TestReconcileOrphanedSyncRuns:

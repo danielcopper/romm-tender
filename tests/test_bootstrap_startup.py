@@ -76,29 +76,29 @@ class TestAStepThatFails:
 
 
 class TestTheOneEdgeBetweenSteps:
-    """``prune_stale_installed_roms`` runs only after a SUCCESSFUL detection.
+    """``report_missing_installs`` runs only after a SUCCESSFUL detection.
 
-    The prune reads the pending homes the detection writes; if the detection
-    broke off, every install under the home RetroDECK just left looks orphaned
-    and its rows are deleted.
+    The report reads the pending homes the detection writes; if the detection
+    broke off, every install under the home RetroDECK just left is reported as
+    missing rather than as waiting for the move.
     """
 
-    def test_a_failed_detection_answers_false_so_the_prune_can_be_skipped(self, steps):
+    def test_a_failed_detection_answers_false_so_the_report_can_be_skipped(self, steps):
         def detection():
             raise RuntimeError("detection broke")
 
-        pruned = []
+        reported = []
         if steps.run("detect_retrodeck_path_change", detection):
-            steps.run("prune_stale_installed_roms", lambda: pruned.append(True))
+            steps.run("report_missing_installs", lambda: reported.append(True))
 
-        assert pruned == []
+        assert reported == []
 
-    def test_a_successful_detection_lets_the_prune_run(self, steps):
-        pruned = []
+    def test_a_successful_detection_lets_the_report_run(self, steps):
+        reported = []
         if steps.run("detect_retrodeck_path_change", lambda: None):
-            steps.run("prune_stale_installed_roms", lambda: pruned.append(True))
+            steps.run("report_missing_installs", lambda: reported.append(True))
 
-        assert pruned == [True]
+        assert reported == [True]
 
 
 class TestABaseExceptionIsNotSwallowed:
