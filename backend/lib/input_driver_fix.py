@@ -20,7 +20,10 @@ class InputDriverFix(StrEnum):
     """``input_driver`` was ``x`` and now reads ``sdl2``."""
 
     NOTHING_TO_FIX = "nothing_to_fix"
-    """No RetroArch config was found, or the one found does not use ``x``. Nothing was written."""
+    """No RetroArch config sets ``input_driver``, or the first one that does is not ``x``. Nothing was written."""
 
     WRITE_FAILED = "write_failed"
-    """The value needed changing and the write failed; the config is left as it was."""
+    """The value needed changing and the repair failed, reading the config or writing its replacement.
+
+    The config is left as it was.
+    """

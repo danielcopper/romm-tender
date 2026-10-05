@@ -349,13 +349,13 @@ class SettingsService:
         """Repair a problematic RetroArch ``input_driver`` value (``x`` -> ``sdl2``).
 
         Raises ``Refused`` with ``nothing_to_fix`` when no config uses ``x``, and
-        with ``unknown`` when the write failed; the panel shows the message.
+        with ``unknown`` when the repair failed; the panel shows the message.
         """
         outcome = self._steam_config.fix_retroarch_input_driver()
         if outcome is InputDriverFix.NOTHING_TO_FIX:
             raise Refused("nothing_to_fix", "No fix needed")
         if outcome is InputDriverFix.WRITE_FAILED:
-            raise Refused(ErrorCode.UNKNOWN, "Operation failed")
+            raise Refused("unknown", "Operation failed")
         return {"success": True, "message": "Changed input_driver to sdl2"}
 
     # ── Whitelist (non-Steam shortcut removal) ──────────────────────────
