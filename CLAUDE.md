@@ -447,12 +447,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
   second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
   variable was SET, which `AppDirectories.code_dir` has already erased
-- **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only —
-  `tests/domain/test_identity.py::TestTheIdentifierStaysInTwoPlaces`, which requires `APP_DIR_NAME` to be a string
-  literal (a transform over `PACKAGE_NAME` fails too); the reverse fold through an aliased import and the third home,
-  the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The three homes are listed in `backend/domain/identity.py`'s
-  module docstring
+- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`), and the database's file
+  name `DB_FILENAME` (`bootstrap/adapters.py`) from neither** — test + prompt-only —
+  `tests/domain/test_identity.py::TestTheIdentifierStaysInSeparatePlaces`, which requires `APP_DIR_NAME` and
+  `DB_FILENAME` to be string literals (a transform over `PACKAGE_NAME` fails too); the reverse fold through an aliased
+  import and the third home, the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The four homes are listed in
+  `backend/domain/identity.py`'s module docstring
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
