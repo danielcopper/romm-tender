@@ -1025,9 +1025,9 @@ and they are asked in this order:
 4. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
    **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
-The first named rule that holds raises its refusal, so the use case's work does not run, and a refused call holds
-nothing. A cleanup's exclusive start is asked before all four. A use case asks its endpoint's rules at its entry, so the
-endpoint only calls it.
+The first named rule that holds refuses the call before its work runs, and a refused call holds nothing. A cleanup's
+exclusive start is asked before all four. A use case asks its endpoint's rules at its entry, so the endpoint only calls
+it.
 
 **`<verb>_unchecked`** — the service method an endpoint calls, without that endpoint's rules, for a peer service that
 calls it from inside a call that has already answered for its own. _Avoid_: **`do_<verb>`** for it — that names a
