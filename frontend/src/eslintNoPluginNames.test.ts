@@ -11,9 +11,12 @@
  */
 
 import { ESLint } from "eslint";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import tseslint from "typescript-eslint";
+
+import { NAMES_NOT_ABOUT_TENDER } from "../eslint.config.js";
 
 const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
 
@@ -72,5 +75,26 @@ describe("no name calls Tender a plugin", () => {
   it("leaves string literals alone", async () => {
     const source = "export const manifest = { 'plugin_version': 1, title: 'a plugin made up' };\n";
     expect(await reportedLines("src/utils/__eslint_fixtures__/names.ts", source)).toEqual([]);
+  });
+
+  // An exception nothing carries any more would let the next name of that
+  // spelling through unread. Read as text, so a comment that still carries the
+  // word keeps an exception alive; the list itself is left out of the reading.
+  it("lets through only names this package still carries", () => {
+    const roots = ["src", "scripts", "eslint-rules"];
+    const files = [
+      ...fs.readdirSync(process.cwd()),
+      ...roots.flatMap((root) =>
+        fs.readdirSync(root, { recursive: true, encoding: "utf8" }).map((file) => path.join(root, file)),
+      ),
+    ].filter((file) => /\.(?:ts|tsx|js|mjs|cjs)$/.test(file));
+    const text = files
+      .map((file) => fs.readFileSync(path.join(process.cwd(), file), "utf8"))
+      .join("\n")
+      .replace(/export const NAMES_NOT_ABOUT_TENDER = \[[\s\S]*?\];/, "");
+
+    const unused = NAMES_NOT_ABOUT_TENDER.filter((name) => !new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(text));
+
+    expect(unused).toEqual([]);
   });
 }, 60_000);

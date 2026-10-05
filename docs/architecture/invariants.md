@@ -211,16 +211,17 @@ Format: **invariant** — tier — enforced by.
   the real config and fails if the rule stops reporting any of them. The backend half is
   `tests/domain/test_identity.py::TestNoNameMisnamesTender`, which walks the syntax tree of every Python module under
   `backend/` (less the vendored `_vendor/` and `native/`), `tests/` and `scripts/` and fails on any name a module binds
-  or reads that carries the word: a name, an attribute, a parameter, a keyword argument, a function or class, an import
-  or its alias, an exception or pattern capture, a `global` or `nonlocal`. Each half has its own list of exceptions —
-  `NAMES_NOT_ABOUT_TENDER` beside the rule and `_NAMES_NOT_ABOUT_TENDER` beside the test — for names that carry the word
-  because they name someone else's plugin (`DeckyPluginLoader`, `plugins` in the rollup and ESLint configs, rollup's
-  `extraPlugins`, the two install tests about a Decky plugin), each with its reason; an exception is matched as a whole
-  name, and the Python one fails on an entry no module carries any more. **Neither half reads prose**: a string literal
-  is not a name, so the `"plugin_version"` key a recovery bundle's manifest carries stays, and a vitest title, a comment
-  or a docstring that calls Tender a plugin passes both, as does a shell script, a file name, a name built at run time
-  (`getattr`, a computed key), and an excepted name put to a new use for Tender; a Python type parameter
-  (`def f[Plugin]()`) passes the backend half
+  or reads that carries the word: a name, an attribute, a parameter, a keyword argument, a function or class, an import,
+  its alias or the module a `from` import names, a type parameter, an exception or pattern capture, a class pattern's
+  keyword, a `global` or `nonlocal`. Each half has its own list of exceptions — `NAMES_NOT_ABOUT_TENDER` beside the rule
+  and `_NAMES_NOT_ABOUT_TENDER` beside the test — for names that carry the word because they name someone else's plugin
+  (`DeckyPluginLoader`, `plugins` in the rollup and ESLint configs, `extraPlugins` in `rollup.config.js`, the two
+  install tests about a Decky plugin), each with its reason; an exception is matched as a whole name, and either list
+  fails on an entry nothing carries any more. **Neither half reads prose**: a string literal is not a name, so the
+  `"plugin_version"` key a recovery bundle's manifest carries stays, and a vitest title, a comment or a docstring that
+  calls Tender a plugin passes both, as does a shell script, a file name, a name built at run time (`getattr`, a
+  computed key), and an excepted name put to a new use for Tender; a Python string annotation (`x: "Settings"`) passes
+  the backend half
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

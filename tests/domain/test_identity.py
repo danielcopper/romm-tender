@@ -28,7 +28,10 @@ def _module_level_assignments(path: Path, name: str) -> list[ast.Assign]:
 
 
 def _names_in(tree: ast.AST) -> list[tuple[int, str]]:
-    """Every name *tree* binds or reads, with its line — the names a reader takes for the code's own words."""
+    """Every name *tree* binds, reads, declares or imports, with its line — the names a reader takes for the code's own.
+
+    A string annotation (``x: "Settings"``) is a string to the tree and is not among them.
+    """
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         line = getattr(node, "lineno", 0)
@@ -42,6 +45,12 @@ def _names_in(tree: ast.AST) -> list[tuple[int, str]]:
             found.append((line, node.name))
         elif isinstance(node, ast.alias):
             found.extend((line, name) for name in (node.name, node.asname) if name is not None)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            found.append((line, node.module))
+        elif isinstance(node, (ast.TypeVar, ast.ParamSpec, ast.TypeVarTuple)):
+            found.append((line, node.name))
+        elif isinstance(node, ast.MatchClass):
+            found.extend((line, name) for name in node.kwd_attrs)
         elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name is not None:
             found.append((line, node.name))
         elif isinstance(node, ast.MatchMapping) and node.rest is not None:
@@ -217,10 +226,9 @@ class TestNoNameMisnamesTender:
     Read from the syntax tree, so what is looked at is names alone. A string
     literal is not one — the ``"plugin_version"`` key a recovery bundle's
     manifest carries stays — and neither is a comment or a docstring, which are
-    prose and need a reader. Not seen either: a shell script, a module's file
-    name or the dotted path a ``from`` import names, a type parameter
-    (``def f[Plugin]()``), and a name built at run time
-    (``getattr(obj, "plugin_" + suffix)``).
+    prose and need a reader, and so is a string annotation (``x: "Settings"``).
+    Not seen either: a shell script, a module's file name, and a name built at
+    run time (``getattr(obj, "plugin_" + suffix)``).
     """
 
     def test_no_python_module_has_one(self):
@@ -268,6 +276,12 @@ class TestNoNameMisnamesTender:
             pytest.param("match x:\n    case {**plugin_rest}:\n        pass\n", id="a mapping pattern's rest"),
             pytest.param("def f():\n    global PLUGIN\n", id="a global declaration"),
             pytest.param("def f():\n    nonlocal plugin\n", id="a nonlocal declaration"),
+            pytest.param("from plugin_loader import x\n", id="the module a from-import names"),
+            pytest.param("from a.plugin import b\n", id="a dotted from-import path"),
+            pytest.param("def f[PluginT](): ...\n", id="a type parameter"),
+            pytest.param("def f[**PluginP](): ...\n", id="a parameter specification"),
+            pytest.param("def f[*PluginTs](): ...\n", id="a type variable tuple"),
+            pytest.param("match x:\n    case Foo(plugin_version=v):\n        pass\n", id="a class pattern's keyword"),
         ],
     )
     def test_it_finds_a_name_in_every_position(self, source):

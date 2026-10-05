@@ -12,7 +12,7 @@ import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
 // Names that carry "plugin" because they name someone else's plugin, and must
 // keep the word. Each lets through its whole name, wherever it appears, and
 // never a longer name containing it.
-const NAMES_NOT_ABOUT_TENDER = [
+export const NAMES_NOT_ABOUT_TENDER = [
   // Decky Loader's own window global, read to name the loader's version.
   "DeckyPluginLoader",
   // The config key rollup and ESLint each read their plugins from, and
@@ -230,7 +230,9 @@ export default tseslint.config(
   // Tender is not a plugin, and no name in this package says it is — every file
   // ESLint lints, tests and config files included. What it reads is the names
   // themselves: a string literal (a test title, a `"plugin_version"` key) and a
-  // comment are prose, out of its sight.
+  // comment are prose, out of its sight. A later block that sets
+  // `no-restricted-syntax` for some files replaces these options there rather
+  // than adding to them, so such a block repeats this entry.
   {
     rules: {
       "no-restricted-syntax": [
