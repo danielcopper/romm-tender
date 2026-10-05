@@ -52,11 +52,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _failure_answer(endpoint: str, exc: Refused | DomainRefused | RommApiError) -> dict[str, Any]:
-    """The wire's failure shape for an exception in :data:`_TRANSLATED`.
-
-    A RomM error is logged as one warning line, without its stack; a refusal is
-    a decision rather than an error, and is not logged here.
-    """
+    """The wire's failure shape for an exception in :data:`_TRANSLATED`; a refusal is a decision, not an error."""
     if isinstance(exc, RommApiError):
         _logger.warning(f"{endpoint}: answered {type(exc).__name__}: {exc}")
         reason, message = classify_error(exc)

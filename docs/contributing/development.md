@@ -426,9 +426,9 @@ or carrying a stale entry — keeping the hand-maintained `modules` list self-he
 
 `mise run lint` (and CI) also runs `scripts/check_failure_shape.py --check`, which fails if any `success: False` return
 in `services/` is missing the canonical `reason` + `message` keys or carries the forbidden `error` / `error_code` key —
-collapsing the failure-shape dialects onto one vocabulary (the two documented carve-outs are pattern-exempt), and on any
-failure shape built in a module on its `CONVERTED_MODULES` list (`docs/architecture/backend-architecture.md`, §4). Run
-it without `--check` for a report-mode inventory.
+collapsing the failure-shape dialects onto one vocabulary (the two documented carve-outs are pattern-exempt), and on a
+failure dict literal, an `error_response` call or a refusal helper's spread in a module on its `CONVERTED_MODULES` list
+(`docs/architecture/backend-architecture.md`, §4). Run it without `--check` for a report-mode inventory.
 
 `mise run lint` (and CI) also runs `scripts/check_endpoint_parity.py`, which pins the frontend↔backend endpoint surface
 to one source of truth: it derives the frontend names + arities from every `endpoint<[Args], Return>("name")` in

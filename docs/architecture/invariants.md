@@ -11,13 +11,14 @@ is the one to correct.
 Format: **invariant** — tier — enforced by.
 
 - **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`); a module on `CONVERTED_MODULES`
-  builds no failure shape — a service there raises its refusal, which `Endpoints` answers; anything else an endpoint
-  raises stays a transport error** — check + test + prompt-only — `scripts/check_failure_shape.py --check` (returned
-  dicts in `services/`, and every literal, `error_response` call or refusal-helper spread in a listed module),
-  `tests/test_endpoints_translation.py` (on every route, a raised `Refused` / `DomainRefused` and a `RommApiError`
-  answer that shape, a returned `PartialFailure` is serialized into it, and any other exception stays
-  `backend_exception`). Prompt-only: no entry is ever taken off `CONVERTED_MODULES`, and a further type joins
-  `main._TRANSLATED` only by decision
+  builds no failure shape — a service there raises its refusal, which `Endpoints` answers; anything an endpoint raises
+  but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
+  `scripts/check_failure_shape.py --check` (returned dicts in `services/`, and every literal, `error_response` call or
+  refusal-helper spread in a listed module), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
+  `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def` and one `async def`
+  route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every
+  route is the translating wrapper). Prompt-only: no entry is ever taken off `CONVERTED_MODULES`, and a further type
+  joins `main._TRANSLATED` only by decision
 - **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
   bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
   exception through `classify_error`, or peel the 404 off with a sibling `except RommNotFoundError` where the verdict is
