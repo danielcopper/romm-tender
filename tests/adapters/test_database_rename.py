@@ -100,9 +100,10 @@ class TestTheOldNameCannotBeMoved:
     def test_a_file_sqlite_cannot_open_is_renamed_nowhere_and_the_start_fails(self, tmp_path, logger, caplog):
         content = b"not a database, and long enough to have a header" * 4
         (tmp_path / _LEGACY).write_bytes(content)
+        adapter = _make(tmp_path, logger)
 
         with caplog.at_level(logging.INFO, logger=logger.name), pytest.raises(sqlite3.DatabaseError):
-            _make(tmp_path, logger).rename()
+            adapter.rename()
 
         assert _names(tmp_path) == [_LEGACY]
         assert (tmp_path / _LEGACY).read_bytes() == content
@@ -115,9 +116,10 @@ class TestTheOldNameCannotBeMoved:
         holder = sqlite3.connect(tmp_path / _LEGACY)
         try:
             holder.execute("SELECT count(*) FROM marker").fetchone()
+            adapter = _make(tmp_path, logger)
 
             with pytest.raises(DatabaseNotFoldedError):
-                _make(tmp_path, logger).rename()
+                adapter.rename()
 
             assert _names(tmp_path) == [_LEGACY, f"{_LEGACY}-shm", f"{_LEGACY}-wal"]
         finally:
@@ -133,9 +135,10 @@ class TestTheOldNameCannotBeMoved:
             raise OSError(errno.EXDEV, "Invalid cross-device link")
 
         monkeypatch.setattr(database_rename, "rename_noreplace_at", refuse)
+        adapter = _make(tmp_path, logger)
 
         with pytest.raises(OSError, match="cross-device"):
-            _make(tmp_path, logger).rename()
+            adapter.rename()
 
         assert _names(tmp_path) == [_LEGACY]
         assert _notes(tmp_path / _LEGACY) == ["in the wal"]
