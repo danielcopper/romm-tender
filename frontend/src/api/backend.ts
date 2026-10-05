@@ -241,6 +241,13 @@ export interface CachedGameDetail extends BiosAnswer {
    * of yet — which is why this value is sent back on the press.
    */
   adoption_candidate_present?: boolean;
+  /**
+   * For an installed ROM whose recorded file and folder are both gone, the path
+   * the install record names (the folder for a folder-backed download); `null`
+   * otherwise. The page then offers "Download again" and "Forget this download"
+   * instead of Play.
+   */
+  file_missing_at?: string | null;
 }
 
 // get_cached_game_detail wiring lives in utils/cachedGameDetailStore.ts so the
