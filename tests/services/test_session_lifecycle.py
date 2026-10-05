@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 
+from lib.conflict_rules import migration_refused, update_refused
 from services.session_lifecycle import (
     SessionFinalizeMigration,
     SessionFinalizeResult,
@@ -628,6 +629,38 @@ class TestFinalizeSyncToasts:
         assert result.sync.failure_toast == "Failed to sync saves after exit"
         # The exception text must never leak into the failure toast body.
         assert "Authentication failed" not in result.sync.failure_toast
+
+    @pytest.mark.parametrize(
+        ("refused", "toast"),
+        [
+            (update_refused, "Tender is installing an update and will restart in a moment."),
+            (migration_refused, "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."),
+        ],
+    )
+    def test_a_refusal_the_sync_raises_is_toasted_with_its_own_message(self, event_loop, logger, refused, toast):
+        """The engine's own update and migration guards raise; the toast names the refusal, not a failed sync."""
+        post = FakePostExitSync(side_effect=refused(synced=0))
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync == SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=0,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=toast,
+            conflicts_toast=None,
+        )
 
     def test_direction_counts_non_int_treated_as_zero(self, event_loop, logger):
         """``uploaded`` / ``downloaded`` not ints (None, str) → treated as 0 → no toast."""

@@ -20,7 +20,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import RommConnectionError, RommNotFoundError
+from lib.errors import Refused, RommConnectionError, RommNotFoundError
 from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
 from tests.services.saves._helpers import (
@@ -458,14 +458,14 @@ class TestRetroDeckMigrationBlocksSaveSync:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        result = await svc.pre_launch_sync(42)
+        with pytest.raises(Refused) as refused:
+            await svc.pre_launch_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
-            "synced": 0,
-        }
+        assert (refused.value.reason, refused.value.message) == (
+            "blocked_by_migration",
+            "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+        )
+        assert refused.value.details == {"synced": 0}
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_skips_when_retrodeck_migration_pending(self, tmp_path):
@@ -475,14 +475,14 @@ class TestRetroDeckMigrationBlocksSaveSync:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"data")
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(Refused) as refused:
+            await svc.post_exit_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
-            "synced": 0,
-        }
+        assert (refused.value.reason, refused.value.message) == (
+            "blocked_by_migration",
+            "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+        )
+        assert refused.value.details == {"synced": 0}
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_respects_migration_block_via_its_conflict_rules(self, tmp_path):

@@ -20,8 +20,8 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer
-from lib.conflict_rules import migration_refusal, update_refusal
 from lib.errors import (
+    Refused,
     RommApiError,
     RommAuthError,
     RommConnectionError,
@@ -56,6 +56,10 @@ from tests.services.saves._helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+_UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
+_MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 
 
 def _corrupt_zip_bytes() -> bytes:
@@ -636,11 +640,11 @@ class TestMigrationPendingGuards:
     post_exit_sync. Neither is the first check a pending migration meets:
     ``SaveService.pre_launch_sync`` checks the migration rule at its entry, and
     post_exit_sync has no endpoint — SessionLifecycleService asks about the
-    migration before it calls it. These guards answer a caller that reaches the
+    migration before it calls it. These guards refuse a caller that reaches the
     engine without either."""
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_blocked_when_migration_pending(self, tmp_path):
+    async def test_pre_launch_sync_is_refused_when_migration_pending(self, tmp_path):
         """pre_launch_sync must short-circuit with the ``blocked_by_migration`` refusal."""
         svc, fake = make_service(
             tmp_path,
@@ -651,19 +655,16 @@ class TestMigrationPendingGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        result = await svc.pre_launch_sync(42)
+        with pytest.raises(Refused) as refused:
+            await svc.pre_launch_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
-            "synced": 0,
-        }
+        assert (refused.value.reason, refused.value.message) == ("blocked_by_migration", _MIGRATION_MESSAGE)
+        assert refused.value.details == {"synced": 0}
         # No upload/download initiated — the guard fired before sync ran.
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_blocked_when_migration_pending(self, tmp_path):
+    async def test_post_exit_sync_is_refused_when_migration_pending(self, tmp_path):
         """post_exit_sync must short-circuit with the ``blocked_by_migration`` refusal."""
         svc, fake = make_service(
             tmp_path,
@@ -674,14 +675,11 @@ class TestMigrationPendingGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(Refused) as refused:
+            await svc.post_exit_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": "blocked_by_migration",
-            "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
-            "synced": 0,
-        }
+        assert (refused.value.reason, refused.value.message) == ("blocked_by_migration", _MIGRATION_MESSAGE)
+        assert refused.value.details == {"synced": 0}
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
 
@@ -699,7 +697,11 @@ class TestUpdateInProgressGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        assert await getattr(svc, entry)(42) == {**update_refusal(), "synced": 0}
+        with pytest.raises(Refused) as refused:
+            await getattr(svc, entry)(42)
+
+        assert (refused.value.reason, refused.value.message) == ("blocked_by_update", _UPDATE_MESSAGE)
+        assert refused.value.details == {"synced": 0}
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -712,7 +714,10 @@ class TestUpdateInProgressGuards:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        assert (await getattr(svc, entry)(42))["reason"] == "blocked_by_update"
+        with pytest.raises(Refused) as refused:
+            await getattr(svc, entry)(42)
+
+        assert refused.value.reason == "blocked_by_update"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -726,7 +731,11 @@ class TestUpdateInProgressGuards:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        assert await getattr(svc, entry)(*args) == {**update_refusal(), "synced": 0, **extra}
+        with pytest.raises(Refused) as refused:
+            await getattr(svc, entry)(*args)
+
+        assert (refused.value.reason, refused.value.message) == ("blocked_by_update", _UPDATE_MESSAGE)
+        assert refused.value.details == {"synced": 0, **extra}
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -822,7 +831,11 @@ class TestTheEnginesMigrationRefusalIsTheSharedOne:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        assert await getattr(svc, entry)(42) == {**migration_refusal(), "synced": 0}
+        with pytest.raises(Refused) as refused:
+            await getattr(svc, entry)(42)
+
+        assert (refused.value.reason, refused.value.message) == ("blocked_by_migration", _MIGRATION_MESSAGE)
+        assert refused.value.details == {"synced": 0}
 
 
 class TestPostExitServerOfflineGuard:

@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from lib.conflict_rules import migration_refusal, update_refusal
+from lib.conflict_rules import migration_refused, update_refused
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._messages import (
@@ -782,9 +782,9 @@ class SyncEngine:
                 # case's entry or carries a guard of its own; this one is
                 # pre_launch_sync's. The update rule is backstopped the same way.
                 if self._is_update_in_progress():
-                    return {**update_refusal(), "synced": 0}
+                    raise update_refused(synced=0)
                 if self._is_retrodeck_migration_pending():
-                    return {**migration_refusal(), "synced": 0}
+                    raise migration_refused(synced=0)
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
@@ -857,14 +857,14 @@ class SyncEngine:
             async with self._device_gate.bounded_run(max_wait=POST_EXIT_GATE_TIMEOUT), self.rom_lock(rom_id):
                 # Defense in depth: post_exit_sync has no endpoint;
                 # SessionLifecycleService checks the migration before calling it,
-                # and this guard answers a caller that reaches the engine without
+                # and this guard refuses a caller that reaches the engine without
                 # that check. The same holds for an update being installed.
                 if self._is_update_in_progress():
                     self._logger.info("post_exit_sync skipped: an update is being installed")
-                    return {**update_refusal(), "synced": 0}
+                    raise update_refused(synced=0)
                 if self._is_retrodeck_migration_pending():
                     self._logger.info("post_exit_sync skipped: retrodeck migration pending")
-                    return {**migration_refusal(), "synced": 0}
+                    raise migration_refused(synced=0)
 
                 if not sync_after_exit(self._settings):
                     self._logger.info("post_exit_sync skipped: sync_after_exit disabled")
@@ -954,7 +954,7 @@ class SyncEngine:
                 # conflicts makes a press wait from then on; a caller that
                 # reached the engine some other way is refused here.
                 if self._is_update_in_progress():
-                    return {**update_refusal(), "synced": 0}
+                    raise update_refused(synced=0)
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
@@ -1063,7 +1063,7 @@ class SyncEngine:
             async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
                 # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
-                    return {**update_refusal(), "synced": 0, "conflicts": 0}
+                    raise update_refused(synced=0, conflicts=0)
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure

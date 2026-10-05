@@ -11,6 +11,8 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused
+
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -21,6 +23,16 @@ _UPDATE_MESSAGE = "Tender is installing an update and will restart in a moment."
 _MIGRATION_MESSAGE = "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss."
 _SYNC_MESSAGE = "A library sync is in progress — wait for it to finish or cancel it first."
 _PRUNE_ACTIVE_MESSAGE = "A removed-game cleanup is in progress; wait for it to finish before changing local game data."
+
+
+def update_refused(**details: Any) -> Refused:
+    """The refusal of a use case while an update of this program is being installed, *details* beside it."""
+    return Refused("blocked_by_update", _UPDATE_MESSAGE, **details)
+
+
+def migration_refused(**details: Any) -> Refused:
+    """The refusal of a use case while a RetroDECK migration is pending, *details* beside it."""
+    return Refused("blocked_by_migration", _MIGRATION_MESSAGE, **details)
 
 
 def update_refusal() -> dict[str, Any]:

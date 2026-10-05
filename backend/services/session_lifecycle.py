@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
+from lib.errors import Refused
 
 if TYPE_CHECKING:
     import logging
@@ -315,7 +316,9 @@ class SessionLifecycleService:
         the post-exit sync does not run, the log says which held it off, and
         the verdict is the failed-sync one; for an update its toast says so.
         The ``finalize_game_session`` use case checks neither rule, so this is
-        the first check either meets on the way to that sync.
+        the first check either meets on the way to that sync. A refusal the
+        sync raises is toasted from its reason and message, as a returned
+        failure is.
         """
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
@@ -324,6 +327,20 @@ class SessionLifecycleService:
 
         try:
             result = await self._post_exit_sync.post_exit_sync(rom_id)
+        except Refused as refusal:
+            raw_synced = refusal.details.get("synced")
+            return SessionFinalizeSyncResult(
+                offline=False,
+                success=False,
+                synced=raw_synced if isinstance(raw_synced, int) else None,
+                uploaded=0,
+                downloaded=0,
+                conflicts=[],
+                failure_toast=_render_failure_toast(
+                    offline=False, success=False, message=refusal.message, reason=refusal.reason
+                ),
+                conflicts_toast=None,
+            )
         except Exception as e:
             self._logger.warning(f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {e}")
             # No classified message on this path: the sync raised rather than
