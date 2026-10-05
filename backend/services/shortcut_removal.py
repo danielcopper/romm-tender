@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.platform_names import decode_platform_names
-from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
     import asyncio
@@ -109,17 +108,7 @@ class ShortcutRemovalService:
         ``prune_lease_token`` for the frontend's Steam writes.
         """
         async with self._rules.hold("remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True):
-            try:
-                result = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
-            except Exception as e:
-                self._logger.error(f"Failed to get platform shortcuts: {e}")
-                return {
-                    "success": False,
-                    "reason": ErrorCode.UNKNOWN.value,
-                    "message": f"Failed: {e}",
-                    "app_ids": [],
-                    "rom_ids": [],
-                }
+            result = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
             return await self._with_removal_lease(result)
 
     async def _with_removal_lease(self, result: dict[str, Any]) -> dict[str, Any]:
@@ -280,15 +269,7 @@ class ShortcutRemovalService:
         readable), never on a scan it could not perform.
         """
         async with self._rules.hold("reconcile_shortcuts", prune=True):
-            try:
-                unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)
-            except Exception as e:
-                self._logger.error(f"Failed to reconcile live shortcuts: {e}")
-                return {
-                    "success": False,
-                    "reason": ErrorCode.UNKNOWN.value,
-                    "message": f"Reconcile failed: {e}",
-                }
+            unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)
         if unbound:
             self._logger.info(f"Reconcile: unbound {unbound} stale Steam shortcut(s)")
         return {"success": True, "unbound_count": unbound, "message": f"Unbound {unbound} stale shortcut(s)"}

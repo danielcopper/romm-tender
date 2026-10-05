@@ -109,12 +109,15 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
     "backend/lib/conflict_rules.py",
     "backend/services/connection.py",
+    "backend/services/downloads.py",
     "backend/services/firmware/service.py",
     "backend/services/game_process.py",
     "backend/services/library/service.py",
     "backend/services/relaunch_options_resolver.py",
+    "backend/services/rom_removal.py",
     "backend/services/session_lifecycle.py",
     "backend/services/settings.py",
+    "backend/services/shortcut_removal.py",
     "backend/services/startup_healing.py",
 )
 

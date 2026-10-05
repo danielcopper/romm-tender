@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sqlite3
 from unittest.mock import MagicMock
 
 import pytest
@@ -221,17 +222,15 @@ class TestRemovePlatformShortcuts:
             assert uow.roms.get(10).shortcut_app_id == 1001
 
     @pytest.mark.asyncio
-    async def test_handles_exception(self, svc):
-        """Exception while resolving the platform set returns the canonical failure shape."""
+    async def test_a_failed_database_read_is_not_answered(self, svc):
+        """Nothing but the database can fail the read, and a failed database is a bug, not a refusal."""
         mock_loop = MagicMock()
-        mock_loop.run_in_executor = MagicMock(side_effect=Exception("boom"))
+        mock_loop.run_in_executor = MagicMock(side_effect=sqlite3.OperationalError("database is locked"))
         svc._loop = mock_loop
 
-        result = await svc.remove_platform_shortcuts("n64")
-        assert result["success"] is False
-        assert "boom" in result["message"]
-        assert result["app_ids"] == []
-        assert result["rom_ids"] == []
+        coro = svc.remove_platform_shortcuts("n64")
+        with pytest.raises(sqlite3.OperationalError):
+            await coro
 
 
 # ── TestReportRemovalResults ──────────────────────────────────────────────────
@@ -396,17 +395,15 @@ class TestReconcileLiveShortcuts:
         assert result["unbound_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_handles_exception(self, svc):
-        """An executor failure returns the canonical failure shape."""
+    async def test_a_failed_database_write_is_not_answered(self, svc):
+        """Nothing but the database can fail the reconcile, and a failed database is a bug, not a refusal."""
         mock_loop = MagicMock()
-        mock_loop.run_in_executor = MagicMock(side_effect=Exception("boom"))
+        mock_loop.run_in_executor = MagicMock(side_effect=sqlite3.OperationalError("database is locked"))
         svc._loop = mock_loop
 
-        result = await svc.reconcile_live_shortcuts([100])
-        assert result["success"] is False
-        assert result["reason"]
-        assert "boom" in result["message"]
-        assert "unbound_count" not in result
+        coro = svc.reconcile_live_shortcuts([100])
+        with pytest.raises(sqlite3.OperationalError):
+            await coro
 
 
 # ── TestRemovalCleansUpArtwork ────────────────────────────────────────────────
@@ -727,10 +724,10 @@ class TestTheRemovalLease:
 
         svc._remove_platform_shortcuts_io = _raise
 
-        result = await svc.remove_platform_shortcuts("n64")
+        coro = svc.remove_platform_shortcuts("n64")
+        with pytest.raises(RuntimeError):
+            await coro
 
-        assert result["success"] is False
-        assert "prune_lease_token" not in result
         assert prune_conflicts.conflicting_operations == 0
 
     async def test_a_refused_removal_carries_none(self, svc, uow, prune_conflicts):
