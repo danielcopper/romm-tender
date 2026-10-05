@@ -1773,7 +1773,8 @@ class TestForgetDownload:
         assert result == {
             "success": False,
             "reason": "file_present",
-            "message": f"The download is still at {rom_path}. Uninstall it instead.",
+            "message": f"The recorded download exists: {rom_path}",
+            "path": rom_path,
         }
         assert uow.rom_installs.get(42) is not None
         assert rom_path in rom_files.files
@@ -1791,7 +1792,7 @@ class TestForgetDownload:
         result = await service.forget_download(42)
 
         assert result["reason"] == "file_present"
-        assert rom_dir in result["message"]
+        assert result["path"] == rom_dir
         assert uow.rom_installs.get(42) is not None
 
     async def test_a_rom_with_no_record_is_not_installed(self, service, prune_conflicts):
@@ -1816,7 +1817,11 @@ class TestForgetDownload:
         result = await service.remove_rom(42)
 
         assert result["success"] is True
-        assert forgotten["reason"] == "in_progress"
+        assert forgotten == {
+            "success": False,
+            "reason": "in_progress",
+            "message": "This ROM is already being uninstalled or forgotten",
+        }
 
     async def test_it_evicts_the_download_queue_entry(self, service, uow, rom_files, queue_cleanup):
         _seed_missing_download(uow, 42)

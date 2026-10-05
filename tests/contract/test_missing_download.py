@@ -86,7 +86,8 @@ async def test_forget_is_refused_while_the_file_is_there(harness):
     assert result == {
         "success": False,
         "reason": "file_present",
-        "message": f"The download is still at {file_path}. Uninstall it instead.",
+        "message": f"The recorded download exists: {file_path}",
+        "path": file_path,
     }
     assert os.path.exists(file_path)
     with harness.uow_factory() as uow:
