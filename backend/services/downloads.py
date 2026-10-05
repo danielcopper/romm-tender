@@ -31,8 +31,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from lib.errors import NotInstalled, Refused, error_response
-from lib.list_result import ErrorCode
+from lib.errors import NotInstalled, Refused
 from lib.path_safety import PathTraversalError, coerce_safe_component, safe_join
 
 if TYPE_CHECKING:
@@ -57,8 +56,8 @@ if TYPE_CHECKING:
     )
 
 _DOWNLOAD_QUEUE_MAX_TERMINAL = 50
-# One wording for every way a download fails to get off the ground: the user
-# reads the same sentence whichever step raised.
+# One wording for a disk that cannot be prepared: the user reads the same
+# sentence whichever step that touches it raised.
 _START_FAILED_MESSAGE = "Failed to start download"
 # Said twice for a single refusal — once to the frontend as a failure frame,
 # once to the caller as the refusal itself — so the two cannot drift apart.
@@ -223,7 +222,7 @@ class DownloadService:
         async with self._rules.hold("start_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
             if rom_id in self._download_in_progress:
-                return {"success": False, "reason": "already_downloading", "message": "Already downloading"}
+                raise Refused("already_downloading", "Already downloading")
             # The page's report rides with the user's answers because the gate reads
             # them together, but it is added apart from them to keep the difference
             # visible: the two above are choices the user made, this one is not.
@@ -315,26 +314,29 @@ class DownloadService:
         and control token registered. On ``resume=True`` the disk pre-flight discounts the bytes already on the existing
         ``.tmp`` and ``_do_download`` appends rather than restarts. The ``already_downloading`` guard stays with
         ``start_download``; ``resume_download`` validates the paused entry before calling here.
+
+        Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
+        download, a cancelled start included, so the ROM is never stuck "Already downloading". Of what the steps
+        raise, only a disk that cannot be prepared (``OSError``) is refused here, with ``download_start_failed``;
+        a RomM error and a refusal pass on unchanged.
         """
         self._download_in_progress.add(rom_id)
         try:
-            rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-        except Exception as e:
+            return await self._start_claimed_download(
+                rom_id, resume=resume, replace_existing=replace_existing, **answer
+            )
+        except BaseException:
             self._download_in_progress.discard(rom_id)
-            self._logger.error(f"Failed to fetch ROM {rom_id}: {e}")
-            return error_response(e)
+            raise
+
+    async def _start_claimed_download(self, rom_id, *, resume: bool, replace_existing: bool, **answer):
+        """:meth:`_begin_download` once the ROM's in-progress claim is held."""
+        rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
 
         platform_slug = rom_detail.get("platform_slug", "")
         platform_fs_slug = rom_detail.get("platform_fs_slug")
         system = self._resolve_system(platform_slug, platform_fs_slug)
 
-        # Path building, the occupancy gate, directory creation and the disk
-        # pre-flight can all raise (SD card unmounted → OSError; ``roms_path()``
-        # returning None → TypeError in the join). Any raise across the three
-        # blocks below must release the in-progress flag so the ROM isn't stuck
-        # "Already downloading" until a backend restart (#1048). The explicit
-        # early-return guards inside still ``return`` (not raise) and discard the
-        # flag themselves; a ``return`` does not trip the except.
         try:
             roms_path = self._retrodeck_paths.roms_path()
             try:
@@ -343,12 +345,11 @@ class DownloadService:
                 # so a slug like "../../etc" cannot create or write outside roms.
                 roms_dir = safe_join(roms_path, system)
             except PathTraversalError as e:
-                self._download_in_progress.discard(rom_id)
                 self._logger.error(f"Rejected download for ROM {rom_id}: unsafe platform slug {system!r}: {e}")
                 name = rom_detail.get("name", "")
                 platform = rom_detail.get("platform_name", platform_slug)
                 await self._emit("download_failed", failed_frame(rom_id, name, platform, _UNSAFE_PATH_MESSAGE))
-                return {"success": False, "reason": "path_traversal", "message": _UNSAFE_PATH_MESSAGE}
+                raise Refused("path_traversal", _UNSAFE_PATH_MESSAGE) from e
             file_name = self._safe_local_file_name(rom_detail)
             file_size = rom_detail.get("fs_size_bytes", 0)
             target_path = os.path.join(roms_dir, file_name)
@@ -364,13 +365,12 @@ class DownloadService:
             occupied = await self._target_gate(
                 rom_detail, checked_path, replace=replace_existing, resume=resume, **answer
             )
-            if occupied is not None:
-                self._download_in_progress.discard(rom_id)
-                return occupied
-        except Exception as e:
-            self._download_in_progress.discard(rom_id)
+        except OSError as e:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": _START_FAILED_MESSAGE}
+            raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
+        if occupied is not None:
+            self._download_in_progress.discard(rom_id)
+            return occupied
 
         # At most one downloaded version per shortcut binding (#1298): strip a
         # sibling install bound to this shortcut (or unbound) before this one
@@ -385,11 +385,7 @@ class DownloadService:
         # same-size swap on a nearly full card. The in-progress claim is already
         # held (B1), so a second start_download during this await is rejected by
         # ``start_download``'s guard rather than racing past it.
-        try:
-            await self.supersede_sibling_installs(rom_id)
-        except Exception:
-            self._download_in_progress.discard(rom_id)
-            raise
+        await self.supersede_sibling_installs(rom_id)
 
         try:
             self._download_file_store.make_dirs(roms_dir)
@@ -400,17 +396,14 @@ class DownloadService:
                 multi_file=is_multi_file_download(rom_detail),
                 already_on_disk=self._partial_tmp_size(target_path, rom_detail) if resume else 0,
             )
-            if not verdict.fits:
-                self._download_in_progress.discard(rom_id)
-                return {
-                    "success": False,
-                    "reason": "insufficient_space",
-                    "message": f"Not enough disk space ({verdict.free_mb}MB free, need {verdict.needed_mb}MB)",
-                }
-        except Exception as e:
-            self._download_in_progress.discard(rom_id)
+        except OSError as e:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": _START_FAILED_MESSAGE}
+            raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
+        if not verdict.fits:
+            raise Refused(
+                "insufficient_space",
+                f"Not enough disk space ({verdict.free_mb}MB free, need {verdict.needed_mb}MB)",
+            )
 
         rom_name = rom_detail.get("name", file_name)
         platform_name = rom_detail.get("platform_name", platform_slug)
@@ -423,14 +416,9 @@ class DownloadService:
         # re-download installs a fresh token, leaving the zombie's callback bound
         # to the cancelled one (#144).
         control = _DownloadControl()
-        try:
-            task = self._loop.create_task(
-                self._do_download(rom_id, rom_detail, target_path, system, file_name, control, resume=resume)
-            )
-        except Exception as e:
-            self._download_in_progress.discard(rom_id)
-            self._logger.error(f"Failed to start download task for ROM {rom_id}: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": _START_FAILED_MESSAGE}
+        task = self._loop.create_task(
+            self._do_download(rom_id, rom_detail, target_path, system, file_name, control, resume=resume)
+        )
 
         self._download_queue[rom_id] = {
             "rom_id": rom_id,
@@ -1177,8 +1165,8 @@ class DownloadService:
         ``_cancel_paused_download`` deletes the partial, emits the same terminal
         ``cancelled`` frame, and evicts the entry.
 
-        A cancel that can act on neither (no task AND no paused entry) keeps the
-        canonical failure shape so the frontend can surface it.
+        A cancel that can act on neither (no task AND no paused entry) is refused
+        with ``no_active_download`` so the frontend can surface it.
         """
         rom_id = int(rom_id)
         task = self._download_tasks.get(rom_id)
@@ -1192,7 +1180,7 @@ class DownloadService:
         if entry is not None and entry.get("status") == "paused":
             self._cancel_paused_download(rom_id, entry)
             return {"success": True, "message": "Download cancelled"}
-        return {"success": False, "reason": "no_active_download", "message": "No active download for this ROM"}
+        raise Refused("no_active_download", "No active download for this ROM")
 
     def _cancel_paused_download(self, rom_id: int, entry: dict[str, Any]) -> None:
         """Cancel a paused (task-less) download: delete its partial, notify, evict.
@@ -1226,7 +1214,7 @@ class DownloadService:
         rom_id = int(rom_id)
         task = self._download_tasks.get(rom_id)
         if not task:
-            return {"success": False, "reason": "no_active_download", "message": "No active download for this ROM"}
+            raise Refused("no_active_download", "No active download for this ROM")
         token = self._control_tokens.get(rom_id)
         if token is not None:
             token.paused = True  # stop the executor transfer thread, keeping the .tmp (#144)
@@ -1236,8 +1224,8 @@ class DownloadService:
     async def resume_download(self, rom_id):
         """Resume a previously paused download from its partial ``.tmp``.
 
-        Requires a queue entry in status "paused"; otherwise returns the
-        ``not_paused`` failure shape. A switch may have moved the group's shortcut
+        Requires a queue entry in status "paused"; otherwise refuses with
+        ``not_paused``. A switch may have moved the group's shortcut
         binding to a sibling while this download was paused (#1298 S1): if another
         member now owns the shortcut, this target is stale — the resume is refused
         (``superseded``) and its queue entry dropped rather than re-downloading a
@@ -1261,10 +1249,10 @@ class DownloadService:
             rom_id = int(rom_id)
             entry = self._download_queue.get(rom_id)
             if entry is None or entry.get("status") != "paused":
-                return {"success": False, "reason": "not_paused", "message": "No paused download for this ROM"}
+                raise Refused("not_paused", "No paused download for this ROM")
             if self._resume_target_superseded(rom_id):
                 self.evict(rom_id)
-                return {"success": False, "reason": "superseded", "message": "Another version is now active"}
+                raise Refused("superseded", "Another version is now active")
             replace_existing = bool(entry.get("_replace_existing"))
             result = await self._begin_download(rom_id, resume=True, replace_existing=replace_existing)
             await self._retain_started_task(result, rom_id, "resume_download")
