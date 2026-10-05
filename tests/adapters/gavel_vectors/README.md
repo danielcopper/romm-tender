@@ -12,9 +12,9 @@ These JSON files are vendored verbatim from [danielcopper/romm-gavel](https://gi
   - `named-cases.json` — curated cases across every branch of the decision table (each carries a `rationale`).
 
 They are the normative conformance vectors for the save-sync decisions — gavel is the client companion contract for RomM
-Device Sync, itself extracted from this plugin. Both decisions are made by the vendored core and nowhere else, so every
-vector runs against the binary the plugin actually ships, and this tier is what proves it still conforms to the
-published contract.
+Device Sync, itself extracted from Tender. Both decisions are made by the vendored core and nowhere else, so every
+vector runs against the binary Tender actually ships, and this tier is what proves it still conforms to the published
+contract.
 
 ## Updating
 

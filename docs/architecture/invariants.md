@@ -543,10 +543,10 @@ Format: **invariant** — tier — enforced by.
   window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet
   and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`,
   and `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
-  there: its update dot reads stores that are module state of the plugin's own window, and subscribes to them from the
-  tree through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game
-  page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
-  switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
+  there: its update dot reads stores that are module state of Tender's own window, and subscribes to them from the tree
+  through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game page's
+  and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop switch and
+  then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts` pins the half
   that is decidable without Steam: the factory predicate in both directions, that two matching factories answer as no
@@ -584,7 +584,7 @@ Format: **invariant** — tier — enforced by.
   adapter's per-system cache is what a second one hits; `get_emulator_options` additionally globs each **bakeable
   standalone** option's emulator install through the find rules on **every** call, uncached so a component installed
   mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for `es_find_rules.xml` and re-stats it before
-  it may use the parse cache), `SystemResolver` (parses the plugin's **own** bundled `config.json`, not RetroDECK's
+  it may use the parse cache), `SystemResolver` (parses Tender's **own** bundled `config.json`, not RetroDECK's
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache),
   `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the reference
@@ -950,8 +950,8 @@ Format: **invariant** — tier — enforced by.
   is the library's inventory for the platform, a different set again, and reading the two as one is how the wrong ratio
   gets written. Each fold fails its own way and all of them silently. Fold it into the counts and the page states a
   ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" — a truthiness test, a
-  `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a console nobody has looked
-  at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The demand comes from the
+  `!= "runs-without-firmware"` bucket, a default — and Tender claims an all-clear over a console nobody has looked at,
+  which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The demand comes from the
   table and the presence from our rows, and `requirements_met` is not consulted at all** — weigh the two against each
   other and you have made the misreading that field exists to prevent, because ignorance there is always `None` and a
   `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a DIFFERENT required file
@@ -1160,11 +1160,11 @@ Format: **invariant** — tier — enforced by.
   download but what we put inside one is still ours — and two records naming one path are one unlink, the platform
   count's own rule read one layer in. That is a wire field a page reads to decide whether to offer a delete, so deriving
   it from `downloaded` — the same substitution as below, one layer out — puts the button on `codehandler.bin`;
-  `TestGetFirmwareStatusDeletableCount` pins the row's answer for a file the plugin did not place. **Three buttons now
-  reach one removal loop** (`PlatformBiosDeleter._delete_recorded_io`, under a record predicate per button): a second
-  copy of that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical
-  stands behind any of this.** A delete path looping a status list on `downloaded` alone would go green — which is
-  exactly the shape this one had when it destroyed that file
+  `TestGetFirmwareStatusDeletableCount` pins the row's answer for a file Tender did not place. **Three buttons now reach
+  one removal loop** (`PlatformBiosDeleter._delete_recorded_io`, under a record predicate per button): a second copy of
+  that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
+  any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
+  this one had when it destroyed that file
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit

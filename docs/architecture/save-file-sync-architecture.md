@@ -5,7 +5,7 @@
 Tender provides bidirectional save file synchronization between RetroDECK and a self-hosted RomM server. Saves are
 uploaded after play sessions and downloaded before game launch, enabling seamless multi-device play.
 
-The scope is **a per-game set of save files that this plugin can carry**. Which files those are is not a property of the
+The scope is **a per-game set of save files that Tender can carry**. Which files those are is not a property of the
 platform and never was: it belongs to the **emulator** that opens the game, and it is read live off the machine by the
 vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver through `adapters/atlas_saves.py`. Services see
 a `domain.save_answer.SaveAnswer` and never a resolver type.
@@ -15,7 +15,7 @@ see [Save sync coverage](save-sync-coverage.md), which owns the states and the r
 syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
 extensions.
 
-The plugin used to hold its own per-system extension table (`domain/save_extensions.py`, retired). It was written from a
+Tender used to hold its own per-system extension table (`domain/save_extensions.py`, retired). It was written from a
 one-pass desk audit and it was wrong in both directions: it searched forever for an Amiga `.nvr` that no core writes,
 and it never knew about the version digit in 3DO's `<stem>.0.srm`. Neither failure was visible — the search simply found
 nothing.
@@ -23,7 +23,7 @@ nothing.
 ## RomM Save API
 
 Requires RomM >= 5.3.0 (release or higher core). Pre-releases at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) rank
-below `5.3.0` and are rejected; a higher core with a suffix (`5.3.1-beta`) passes. The plugin rejects servers below the
+below `5.3.0` and are rejected; a higher core with a suffix (`5.3.1-beta`) passes. Tender rejects servers below the
 floor with `reason: "version_error"`.
 
 | Endpoint                                                 | Method | Notes                                                                                                                                                                                                                                                                                                  |
@@ -70,7 +70,7 @@ the negotiate inventory param. See
   zipped multi-file save (eliminates the download-and-hash slow path)
 - `device_syncs` — array of per-device sync records: `device_id`, `device_name`, `is_current`, `last_synced_at`
 
-The plugin reproduces this `content_hash` byte-for-byte so a save's local and server hashes agree and sync converges:
+Tender reproduces this `content_hash` byte-for-byte so a save's local and server hashes agree and sync converges:
 single-file MD5 via `SaveFileStore.checksum_md5`, and the zip per-entry scheme via `SaveFileStore.content_hash` →
 `domain.save_hash.combine_zip_entry_hashes` (sorted `name:md5(entry)` lines joined by `\n`, then MD5'd; dispatch is by
 `zipfile.is_zipfile`, a content sniff, not the extension). A file that `is_zipfile` accepts but that cannot actually be
@@ -88,12 +88,12 @@ baseline working. This hash reproduction is what the sync decision needs
 byte-identical to that server save?" — is answered by a two-route disjunction, used at matrix rows 6d / 11a and in the
 409 backstop:
 
-- **Provenance (primary).** At each sync boundary the plugin stores the server's own `content_hash` alongside the local
+- **Provenance (primary).** At each sync boundary Tender stores the server's own `content_hash` alongside the local
   baseline, in `FileSyncState.last_sync_server_hash` (the `rom_save_files.last_sync_server_hash` column, added by
   migration 017). While the local file is unchanged since that baseline (`local_hash == last_sync_hash`), identity is
   proven by `last_sync_server_hash == server.content_hash` — two hashes RomM itself produced, so this route holds even
-  if the plugin's local hashing ever drifts from the server's. This is the robustness the issue buys: identity no longer
-  depends on the plugin's reimplementation staying byte-for-byte identical to RomM's scheme.
+  if Tender's local hashing ever drifts from the server's. This is the robustness the issue buys: identity no longer
+  depends on Tender's reimplementation staying byte-for-byte identical to RomM's scheme.
 - **Parity (fallback).** A file with **no sync history on this device** (fresh reinstall, copied SD card, second device)
   has no stored server hash, so identity falls back to the direct `local_hash == server.content_hash` comparison — kept
   correct by the hash reproduction above (#1457). Branch 5's no-baseline slice and true fresh installs can only ever use
@@ -301,7 +301,7 @@ deleted after the lock is released.
 - **`switch_slot` and `delete_slot` reject the legacy bucket too** — not just `confirm_slot_choice`. An empty /
   whitespace / `None` slot name returns `{success: false, reason: "invalid_slot_name", …}` before any lock or I/O, so a
   ROM can never be switched _into_ legacy mode through the slot switcher, and the slot-less bucket — a manual upload or
-  an older web player's save — can never be torn down from the plugin
+  an older web player's save — can never be torn down from Tender
   ([#1478](https://github.com/danielcopper/romm-tender/issues/1478)). The SAVES-tab UI matches this: it no longer offers
   a "Use Legacy Mode?" action, and the legacy bucket's panel is **fully read-only** — its saves stay listable and
   expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is also visually **demoted**:
@@ -428,10 +428,10 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
 
 ## Device Registration
 
-Each machine running the plugin registers as a device with the RomM server. This allows RomM to track which device
-uploaded each save.
+Each machine running Tender registers as a device with the RomM server. This allows RomM to track which device uploaded
+each save.
 
-1. On first use with save sync enabled, the plugin calls `POST /api/devices` with the friendly device label (`name`),
+1. On first use with save sync enabled, Tender calls `POST /api/devices` with the friendly device label (`name`),
    platform, client info, and the contents of `/etc/machine-id` as the `hostname` fingerprint
 2. Server returns a `device_id` (UUID). Registration writes it to `kv_config["device_id"]` **first** — the `device_id`
    is the authoritative "registered" signal — then writes the device label to `settings.json` as a **best-effort** step
@@ -453,11 +453,11 @@ instead of minting a duplicate (`allow_existing` defaults true). The `name` fiel
 stable fingerprint every local-state wipe (the SQLite reinstall path) would create a fresh duplicate device on each
 reinstall.
 
-The plugin sends `/etc/machine-id` as the RomM `hostname`: it is machine-derived (survives a reinstall), unique per
-device (two Steam Decks stay distinct), and stable. The real OS hostname is deliberately **not** sent — two stock Steam
-Decks both report `steamdeck`, so a `hostname` + `platform` fingerprint built from the OS hostname would collide them
-into one server device. The friendly OS hostname remains the display-only `name`. When `/etc/machine-id` is unreadable
-the `hostname` field is omitted entirely, degrading to no-fingerprint behaviour rather than sending a colliding value.
+Tender sends `/etc/machine-id` as the RomM `hostname`: it is machine-derived (survives a reinstall), unique per device
+(two Steam Decks stay distinct), and stable. The real OS hostname is deliberately **not** sent — two stock Steam Decks
+both report `steamdeck`, so a `hostname` + `platform` fingerprint built from the OS hostname would collide them into one
+server device. The friendly OS hostname remains the display-only `name`. When `/etc/machine-id` is unreadable the
+`hostname` field is omitted entirely, degrading to no-fingerprint behaviour rather than sending a colliding value.
 
 ### RomM account requirement
 
@@ -802,8 +802,8 @@ Before save sync can operate for a game, the user must choose which slot to trac
 ## Save File Discovery
 
 Where a game's save lives and what it consists of are one answer, read live per ROM from the emulator that would launch
-it — the save answer (`RomInfoService.save_answer`, over `SaveLocationReader`). The plugin computes no save directory of
-its own: a sync, a probe, the adoption rename and the directory follow below all use the one that answer names. The
+it — the save answer (`RomInfoService.save_answer`, over `SaveLocationReader`). Tender computes no save directory of its
+own: a sync, a probe, the adoption rename and the directory follow below all use the one that answer names. The
 RetroDECK home migration is the exception — it walks the old home's saves root file by file.
 
 ### Where the save directory comes from
@@ -811,11 +811,11 @@ RetroDECK home migration is the exception — it walks the old home's saves root
 The vendored resolver reads the machine the way the emulator does: RetroDECK's `retrodeck.json` for the roots,
 RetroArch's own configuration for where saves go below them, and the core's recorded behaviour for what it writes. So
 RetroArch's two sort settings — `sort_savefiles_by_content_enable` (group under the content's folder, RetroDECK's
-default) and `sort_savefiles_enable` (group under the core's name) — are part of the answer rather than settings the
-plugin reads, and so is a core that keeps its saves in a folder of its own — the resolver answers
-`saves/3do/opera/per_game` for 3DO's Opera and `saves/neogeo/fbneo` for Neo Geo's FinalBurn Neo, which has not yet been
-observed on a device. The answer's `directory` is the one the emulator opens; `backing_directory` is where a link
-resolves to and answers identity questions only.
+default) and `sort_savefiles_enable` (group under the core's name) — are part of the answer rather than settings Tender
+reads, and so is a core that keeps its saves in a folder of its own — the resolver answers `saves/3do/opera/per_game`
+for 3DO's Opera and `saves/neogeo/fbneo` for Neo Geo's FinalBurn Neo, which has not yet been observed on a device. The
+answer's `directory` is the one the emulator opens; `backing_directory` is where a link resolves to and answers identity
+questions only.
 
 A sorted directory RetroArch has not created yet comes back with the `sorted-dir-missing` caveat and a
 `fallback_directory`, the unsorted root RetroArch falls back to (the rule and its source are at `SORTED_DIR_MISSING` in
@@ -833,15 +833,15 @@ An answer anchored in the directory of the ROM itself says so through its `root_
 **Write Saves to Content Directory** is the usual cause, not the only one: RetroArch reaches the same root through
 `systemfiles_in_content_dir` too, and a core's own recorded behaviour can anchor it there whatever RetroArch is set to —
 EasyRPG writes its save slots beside the game's files. Where the answer names a per-game file set a sync could otherwise
-carry, the plugin keeps save sync off for that ROM — syncing saves beside the content is a separate decision this one
-does not make. Every other answer anchored there (a save **inside** the content file — PUAE on an `.adf`, Hatari on a
-`.st` — writes discarded, nothing named) is not this case: `SaveAnswer.in_content_directory` reads the syncable rule
-itself, so such an answer gets its own save-shape refusal and its own explanation on the status read. The single-ROM
-sync entry points return the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still
-launches, no error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves
-beside its content, returns the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read
-no ROM at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order)
-that launches with a RetroArch core, and returns the skip where that one saves beside its content; with no such ROM it
+carry, Tender keeps save sync off for that ROM — syncing saves beside the content is a separate decision this one does
+not make. Every other answer anchored there (a save **inside** the content file — PUAE on an `.adf`, Hatari on a `.st` —
+writes discarded, nothing named) is not this case: `SaveAnswer.in_content_directory` reads the syncable rule itself, so
+such an answer gets its own save-shape refusal and its own explanation on the status read. The single-ROM sync entry
+points return the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches, no
+error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves beside its
+content, returns the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read no ROM at
+all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order) that
+launches with a RetroArch core, and returns the skip where that one saves beside its content; with no such ROM it
 reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, slot-choice migration, copy
 to slot) refuse with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so
 the game-detail play section shows a banner saying the saves are written beside the game file, and naming RetroArch's
@@ -875,8 +875,8 @@ The per-state picture, and which systems land where on a stock RetroDECK, is in
 ## Following a Moved Save Directory
 
 RetroArch does not move existing saves when its sort settings change, so after a change the files sit where the old
-answer put them and the emulator looks elsewhere. The plugin follows them per game, by comparison rather than by
-computing where the old directory was ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md)).
+answer put them and the emulator looks elsewhere. Tender follows them per game, by comparison rather than by computing
+where the old directory was ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md)).
 
 **The record.** Each ROM's `AnsweredSaveDirectory` (`answered_save_directories`, keyed by `rom_id`) holds the directory
 the resolver last answered for its save. It is compared with today's answer and read as the source of the move below; it
@@ -890,7 +890,7 @@ live reading the caller already took, before the caller looks at any local file:
 - by the four sync paths — `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, and the whole-library sweep's per-ROM
   step for a ROM whose slot is confirmed — after the gates each checks first (save sync switched off; a pending
   RetroDECK home migration; `post_exit_sync`'s own setting; the sweep's device check and its confirmed-slot filter) and
-  before the refusal that reads the same answer, so a game whose save the plugin cannot sync is still followed;
+  before the refusal that reads the same answer, so a game whose save Tender cannot sync is still followed;
 - by the five write paths — `switch_slot`, `rollback_to_version`, `copy_save_to_slot`, `confirm_slot_choice` with
   migration, and `resolve_sync_conflict` — so that, for one, `switch_slot`'s pending-changes guard looks where the files
   are after a sort flip;
@@ -997,7 +997,7 @@ navigation between the buttons uses `Focusable` with `flow-children="right"` for
 
 ## Server Capabilities
 
-The capabilities system (`get_server_capabilities` endpoint) has been removed. Every RomM the plugin accepts has device
+The capabilities system (`get_server_capabilities` endpoint) has been removed. Every RomM Tender accepts has device
 sync, version history, slot deletion and device management, so all of them are unconditionally available. The frontend
 no longer fetches or checks capability flags.
 
@@ -1156,7 +1156,7 @@ a version history. Per-file rollback would revert one component and leave the si
 incoherent save.
 
 Until grouped save-states with atomic set rollback land
-([#908](https://github.com/danielcopper/romm-tender/issues/908)), the plugin **detects multi-file slots and suppresses
+([#908](https://github.com/danielcopper/romm-tender/issues/908)), Tender **detects multi-file slots and suppresses
 version history + rollback** for them:
 
 - `get_save_status` carries `multi_file: bool`, `component_files: list[str]` (the N filenames, sorted), and
@@ -1284,8 +1284,8 @@ bucket is excluded as a target (it stays a read-only source).
 
 ## RomM Save Sync API Behaviour
 
-The plugin depends on several RomM v4.8.1 behaviours that are not obvious from the OpenAPI schema and were discovered
-while implementing the rewrite. They drive design decisions throughout the sync layer.
+Tender depends on several RomM v4.8.1 behaviours that are not obvious from the OpenAPI schema and were discovered while
+implementing the rewrite. They drive design decisions throughout the sync layer.
 
 ### `is_current` is computed, not stored
 
@@ -1303,10 +1303,10 @@ the freshly created row is already "current" (equality counts as current). Only 
 `save.updated_at` past our stored `last_synced_at`, flips us to `is_current = false`.
 
 This has a concrete consequence for the sync algorithm: the "no entry for our device on the picked save" branch of
-`compute_sync_action` (matrix rows 6a/6b) is unreachable in real plugin operation, because
-`SyncEngine.do_sync_rom_saves` always calls `list_saves` (which triggers the upsert) before passing the data to the
-algorithm. By the time the algorithm runs, our device entry exists on every server save. The branch is retained as
-defensive code and is exercised by the cases in `tests/adapters/test_gavel_native_decision_table.py`.
+`compute_sync_action` (matrix rows 6a/6b) is unreachable when Tender really runs, because `SyncEngine.do_sync_rom_saves`
+always calls `list_saves` (which triggers the upsert) before passing the data to the algorithm. By the time the
+algorithm runs, our device entry exists on every server save. The branch is retained as defensive code and is exercised
+by the cases in `tests/adapters/test_gavel_native_decision_table.py`.
 
 ### The `add_save` POST 409-gate
 
@@ -1323,8 +1323,8 @@ if device_id and slot and not overwrite:
 
 Two branches raise: a device whose `last_synced_at` is behind the slot's newest `updated_at` (stale), **and** a device
 that has **never** synced the slot (`sync is None`). The second branch is easy to miss — a brand-new device POSTing into
-a slot that already has saves gets a 409, not a silent second version. The plugin relies on this as the server-side
-backstop for its automatic-upload conflict path (see
+a slot that already has saves gets a 409, not a silent second version. Tender relies on this as the server-side backstop
+for its automatic-upload conflict path (see
 [Upload-time conflicts (the 409 backstop)](#upload-time-conflicts-the-409-backstop)); an explicit `keep_local` sets
 `overwrite=true`, which skips the gate entirely.
 
@@ -1749,7 +1749,7 @@ The `reconcile_playtime` result also carries the restored `last_played` (ISO-860
 Steam synthesizes the latter to "now" after a device cutover / fresh device, so the restored cross-device timestamp is
 the truthful one. When `last_played` is `null` (the server has no session for the ROM yet, or the reconcile ran
 local-only) the display falls back to Steam's value, so there is no regression before any server data exists. This is
-display-only — the plugin does not write the restored value back into Steam's `rt_last_time_played` (#1294).
+display-only — Tender does not write the restored value back into Steam's `rt_last_time_played` (#1294).
 
 ## Save-Sync State — the `RomSaveSyncState` aggregate
 
@@ -1850,7 +1850,7 @@ next sync as long as the underlying state still produces a conflict row (12b, 6c
 ### Legacy field migration
 
 The per-file schema migrations that the old JSON aggregate ran at load time are moot: SQLite starts empty and no JSON
-state is imported into it (this is a beta plugin — the library re-syncs from RomM). There is no on-disk aggregate to
+state is imported into it (Tender is in beta — the library re-syncs from RomM). There is no on-disk aggregate to
 rebuild, so the old `active_core` → `last_synced_core` rename and the `dismissed_newer_save_id` strip no longer happen.
 
 The one surviving legacy read is a single one-time settings fold at bootstrap. `fold_legacy_save_sync_settings`
@@ -1883,7 +1883,7 @@ threw / the appids found.
 
 **It answers membership, never identity.** The list is the store's private running-appid array mapped through the app
 store with unloaded overviews dropped, so its head is not even reliably Steam's own `MainRunningApp` — the two diverge
-during exactly the post-launch window this plugin cares about. The order it does carry is "most recently foregrounded"
+during exactly the post-launch window Tender cares about. The order it does carry is "most recently foregrounded"
 (`SetRunningApp` removes and unshifts), while the reconciler that notices a newly-launched process appends it at the
 tail. So the head is never the app that just started, and nothing reads it to identify one: the session manager takes
 the starting app's id from the lifetime notification's own `unAppID` (#1624 — it previously waited 500ms and read the
@@ -1955,7 +1955,7 @@ begins between the button rendering Play and the user pressing it; they ask the 
 #### Stop Game
 
 Beside Resume sits a chevron whose menu holds one destructive action: **Stop Game**. It confirms first (one line: any
-progress since the last in-game save may be lost — the plugin promises nothing about the save, because it cannot), then
+progress since the last in-game save may be lost — Tender promises nothing about the save, because it cannot), then
 calls the `stop_running_game(rom_id)` backend endpoint.
 
 **Steam cannot terminate these games.** The shortcut execs `flatpak run net.retrodeck.retrodeck`; flatpak's D-Bus portal
@@ -1969,8 +1969,8 @@ names the app (`name=<app id>`), the sibling `bwrapinfo.json` carries the instan
 so the emulator is reached before the shell wrappers whose exit would tear it down mid-write; `bwrap` processes are
 descended through but never signalled (killing the sandbox scaffolding collapses it under the emulator instead of
 letting it flush). Every read is fail-soft — a pid that vanishes mid-scan is a normal race and is skipped, never fatal.
-Nothing shells out: direct `/proc` reads and `os.kill` only, all as the plugin's own uid, so no `flatpak kill`
-subprocess and no elevation.
+Nothing shells out: direct `/proc` reads and `os.kill` only, all as Tender's own uid, so no `flatpak kill` subprocess
+and no elevation.
 
 **One app id, several live instances — and only one of them is the game.** RetroDECK is a single flatpak app, so a
 second game launched from another shortcut, or ES-DE opened on its own, is another live instance of the _same_ app id.
@@ -2108,13 +2108,13 @@ modal, no `.romm-backup`: playtime is additive, so none of the save-sync machine
 
 ### Migration off the note
 
-Before ADR-0018 the plugin stored playtime in a RomM user note (`romm-sync:playtime` =
-`{"seconds", "updated", "device"}`). That note is **retired**: the plugin no longer reads or writes it, and migration
-`006` drops the now-readerless `rom_playtime.note_id` column. Native accumulation starts fresh at the cutover (option B1
-— no backfill of the historical total); the local total keeps showing the true historical value via `max()` until
-server-side accumulation overtakes it. Existing `romm-sync:playtime` notes are left in place on the server — orphaned
-but harmless (no reader remains) — rather than mass-deleted; a release note tells users they may delete them, and an
-optional Settings cleanup action can be added later. A backfill of the historical total is deferred to #868.
+Before ADR-0018 Tender stored playtime in a RomM user note (`romm-sync:playtime` = `{"seconds", "updated", "device"}`).
+That note is **retired**: Tender no longer reads or writes it, and migration `006` drops the now-readerless
+`rom_playtime.note_id` column. Native accumulation starts fresh at the cutover (option B1 — no backfill of the
+historical total); the local total keeps showing the true historical value via `max()` until server-side accumulation
+overtakes it. Existing `romm-sync:playtime` notes are left in place on the server — orphaned but harmless (no reader
+remains) — rather than mass-deleted; a release note tells users they may delete them, and an optional Settings cleanup
+action can be added later. A backfill of the historical total is deferred to #868.
 
 ## Known Limitations
 
@@ -2129,10 +2129,10 @@ saves". Offering to switch a core off its shared card is separate work, tracked 
 ### No aggregate playtime field in RomM (yet)
 
 RomM (read at 5.3.0) stores raw play-session rows and renders `last_played`, but exposes **no aggregate playtime
-number** and has no frontend playtime surface — it sums sessions internally only to rank recommendations. The plugin's
-local `Playtime` total is therefore still the display read-model; the native store is forward-compatible with a future
-RomM playtime UI (#903). Under the no-backfill cutover (option B1) the server under-reports the true historical total
-until it re-accumulates — `max()` protects the local display; a synthetic-session backfill is deferred to #868. See
+number** and has no frontend playtime surface — it sums sessions internally only to rank recommendations. Tender's local
+`Playtime` total is therefore still the display read-model; the native store is forward-compatible with a future RomM
+playtime UI (#903). Under the no-backfill cutover (option B1) the server under-reports the true historical total until
+it re-accumulates — `max()` protects the local display; a synthetic-session backfill is deferred to #868. See
 [Native play-session ingest (ADR-0018)](#native-play-session-ingest-adr-0018) above.
 
 ### Emulator save states not synced
@@ -2146,11 +2146,10 @@ Copying a single save from one slot into another is supported via the per-save *
 [Copy a save to another slot](#copy-a-save-to-another-slot)) — the target slot becomes the ROM's active slot and the
 source save is preserved. What is _not_ supported is a bulk **move** of a whole slot's contents (delete-from-source
 semantics): users copy individual saves, then delete the source slot from the server if they want it gone. The legacy
-(slot-less) bucket is a read-only copy _source_ — it cannot be a copy target, and cannot be deleted from the plugin
-(#1478).
+(slot-less) bucket is a read-only copy _source_ — it cannot be a copy target, and cannot be deleted from Tender (#1478).
 
 ### Cross-device save browsing limited
 
-While `device_syncs` per save shows which devices have synced, the plugin cannot filter or browse saves by a specific
-other device. This is an API limitation — `GET /api/saves?device_id=X` only populates `device_syncs` for device X, not
-for arbitrary devices.
+While `device_syncs` per save shows which devices have synced, Tender cannot filter or browse saves by a specific other
+device. This is an API limitation — `GET /api/saves?device_id=X` only populates `device_syncs` for device X, not for
+arbitrary devices.

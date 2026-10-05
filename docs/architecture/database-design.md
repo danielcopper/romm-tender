@@ -447,10 +447,10 @@ which stamps `user_version = 2`.
 
 `003_unique_shortcut_app_id.sql` (`user_version = 3`) adds the partial unique index `idx_roms_shortcut_app_id` so one
 Steam appId is bound to at most one ROM (`#1036`). Because an existing database may already hold a duplicate-appId
-collision (an older plugin version, or a server switch / re-import that re-bound a shortcut's appId onto a new `rom_id`
-without unbinding the old row), the migration first **de-dups** — keeping the binding on the newest `MAX(rom_id)` per
-appId and unbinding (`NULL`, never delete — ADR-0007) the older colliding siblings — so the index can build cleanly on
-upgrade.
+collision (an older version of Tender, or a server switch / re-import that re-bound a shortcut's appId onto a new
+`rom_id` without unbinding the old row), the migration first **de-dups** — keeping the binding on the newest
+`MAX(rom_id)` per appId and unbinding (`NULL`, never delete — ADR-0007) the older colliding siblings — so the index can
+build cleanly on upgrade.
 
 `004_add_selected_disc.sql` (`user_version = 4`) adds the nullable `selected_disc TEXT` column to `roms` for the
 per-game disc picker — a single `ALTER TABLE roms ADD COLUMN selected_disc TEXT;` with no backfill. It is the second
@@ -635,8 +635,8 @@ via `set_fs_size_bytes`. `NULL` = unknown (a pre-migration row, or a wholesale-s
 frontend treats it as "size unknown, hide it".
 
 `022_rename_collection_kind_user_to_standard.sql` (`user_version = 22`) is a **data migration**, not a schema change:
-`UPDATE collection_sync_state SET collection_kind = 'standard' WHERE collection_kind = 'user'`. The plugin's internal
-name for RomM's ownership-carrying first collection kind was renamed `user → standard`
+`UPDATE collection_sync_state SET collection_kind = 'standard' WHERE collection_kind = 'user'`. Tender's internal name
+for RomM's ownership-carrying first collection kind was renamed `user → standard`
 ([#1539](https://github.com/danielcopper/romm-tender/issues/1539)), so reads and writes now key completion stamps on
 `collection_kind = 'standard'`. Existing stamps written before the rename carry `'user'` and would otherwise strand —
 never matched, so their standard collections full-fetch once — so this rewrites them in place. A plain `UPDATE` is safe:

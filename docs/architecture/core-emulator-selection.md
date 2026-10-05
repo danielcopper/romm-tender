@@ -5,17 +5,17 @@
 A RomM game launches through RetroDECK on some **emulator** — most often a **RetroArch libretro core**, but for a few
 platforms (PS2, PS3, …) a **standalone emulator** (PCSX2, RPCS3) that ES-DE lists as the working default. Most games use
 their platform's default emulator, but the user can pin a different core for a single game (a **per-game** emulator
-override) or for a whole platform (a **per-platform** emulator override). This page documents how the plugin decides
-which emulator a game uses, where that decision is stored, and how it is applied at launch.
+override) or for a whole platform (a **per-platform** emulator override). This page documents how Tender decides which
+emulator a game uses, where that decision is stored, and how it is applied at launch.
 
-The central rule: **the read-path core equals the launched core.** Whatever core the plugin reports for a game — in the
+The central rule: **the read-path core equals the launched core.** Whatever core Tender reports for a game — in the
 BIOS-requirement filter, the save-directory name, the save-sync core tag, the core-change warning, the game-detail badge
 — is the exact core that game will launch on. A single resolver guarantees that, and the launch command is baked from
-the same resolved emulator. The plugin **owns emulator selection end to end**: it reads RetroDECK/ES-DE configuration
-for the default emulator, but its own launches never depend on ES-DE's `gamelist.xml` — it neither reads nor writes that
+the same resolved emulator. Tender **owns emulator selection end to end**: it reads RetroDECK/ES-DE configuration for
+the default emulator, but its own launches never depend on ES-DE's `gamelist.xml` — it neither reads nor writes that
 file. The **live `es_systems.xml` is the sole source** for the system-layer default and the picker's emulator list;
 there is no bundled snapshot (the curated `core_defaults.json` and its generator were deleted in #1210). What **reads**
-that file is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.py` — the plugin's own parser is gone
+that file is the vendored emu-atlas resolver, through `adapters/atlas_catalogue.py` — Tender's own parser is gone
 (#1840). See
 [ADR-0011](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0011-per-game-core-override-in-db-applied-via-e-flag.md)
 (the per-game DB override + `-e`),
@@ -40,10 +40,9 @@ of two payloads:
   emulator (PS2 → PCSX2, PS3 → RPCS3, GameCube/Wii → Dolphin, PSP → PPSSPP, …) launches on that emulator instead of a
   deprecated/absent libretro core.
 
-Both kinds are first-class throughout: the **system default** may be either (whichever ES-DE lists first that the plugin
-can bake), and the per-game / per-platform picker lists both — so a pin may name a standalone emulator OR a libretro
-core (#1210). A pin is stored as the emulator **LABEL** and resolved through the same classified option list at use
-time.
+Both kinds are first-class throughout: the **system default** may be either (whichever ES-DE lists first that Tender can
+bake), and the per-game / per-platform picker lists both — so a pin may name a standalone emulator OR a libretro core
+(#1210). A pin is stored as the emulator **LABEL** and resolved through the same classified option list at use time.
 
 A standalone emulator has **no** libretro `.so`, so the read-path projection reports `core_so = None` and every
 `.so`-space consumer degrades exactly as it does for an unconfigured platform (see
@@ -51,18 +50,18 @@ A standalone emulator has **no** libretro `.so`, so the read-path projection rep
 
 ## The two override scopes
 
-The plugin owns two **deviations** from the RetroDECK default core. Each stores only the deviation as a core LABEL;
-absence means "follow the default."
+Tender owns two **deviations** from the RetroDECK default core. Each stores only the deviation as a core LABEL; absence
+means "follow the default."
 
-| Scope            | Stored where                                             | Applies to              | Written by                     |
-| ---------------- | -------------------------------------------------------- | ----------------------- | ------------------------------ |
-| **Per-game**     | Plugin DB — `roms.emulator_override` (nullable LABEL)    | one ROM (by `rom_id`)   | the plugin (`pin`/`clear`)     |
-| **Per-platform** | `settings.json` — `platform_cores` map (`{slug: label}`) | every ROM on a platform | the plugin (`set_system_core`) |
+| Scope            | Stored where                                                  | Applies to              | Written by                 |
+| ---------------- | ------------------------------------------------------------- | ----------------------- | -------------------------- |
+| **Per-game**     | Tender's database — `roms.emulator_override` (nullable LABEL) | one ROM (by `rom_id`)   | Tender (`pin`/`clear`)     |
+| **Per-platform** | `settings.json` — `platform_cores` map (`{slug: label}`)      | every ROM on a platform | Tender (`set_system_core`) |
 
-Both overrides are the plugin's own state and live in the plugin's own stores. Neither is written into ES-DE's
-`gamelist.xml` — the plugin **never writes that file**. It still **reads** the RetroDECK/ES-DE configuration it does not
-own (the live `es_systems.xml` — the system default emulator and the full classified command list the picker offers),
-but the per-game and per-platform deviations are layered on top of that read by the plugin itself.
+Both overrides are Tender's own state and live in Tender's own stores. Neither is written into ES-DE's `gamelist.xml` —
+Tender **never writes that file**. It still **reads** the RetroDECK/ES-DE configuration it does not own (the live
+`es_systems.xml` — the system default emulator and the full classified command list the picker offers), but the per-game
+and per-platform deviations are layered on top of that read by Tender itself.
 
 ## Storage: the per-game override is a LABEL on the `Rom` aggregate
 
@@ -76,13 +75,12 @@ core **LABEL** the user picked (e.g. `"Beetle PSX HW"`), exactly as ES-DE displa
   `Rom.clear_emulator_override()`. Only `pin`/`clear` ever write the column; it is **excluded from the sync UPSERT `SET`
   clause**, so a re-sync never wipes a user's pin.
 
-The plugin stores the **deviation** (the LABEL, or `NULL`), not a resolved core. The default and system layers are owned
-by RetroDECK/ES-DE and change externally — a RetroDECK update can ship a new default emulator — so a stored resolved
-value would go stale. Storing only the deviation keeps the plugin authoritative over exactly the slice it owns and
-re-resolves the rest live. The LABEL is turned into an `EmulatorInvocation` (a libretro `.so` **or** a standalone
-command) through the live-`es_systems.xml` classified option list at use time
-(`domain.emulator_commands.label_to_invocation`) — so a per-game pin may name a standalone emulator, not only a libretro
-core (#1210).
+Tender stores the **deviation** (the LABEL, or `NULL`), not a resolved core. The default and system layers are owned by
+RetroDECK/ES-DE and change externally — a RetroDECK update can ship a new default emulator — so a stored resolved value
+would go stale. Storing only the deviation keeps Tender authoritative over exactly the slice it owns and re-resolves the
+rest live. The LABEL is turned into an `EmulatorInvocation` (a libretro `.so` **or** a standalone command) through the
+live-`es_systems.xml` classified option list at use time (`domain.emulator_commands.label_to_invocation`) — so a
+per-game pin may name a standalone emulator, not only a libretro core (#1210).
 
 ## Storage: the per-platform core is a LABEL in `settings.json`
 
@@ -96,7 +94,7 @@ It is an
 **bucket-1** value: a flat, user-set, relationship-free intent toggle. So it lives in `settings.json`, **not** SQLite,
 and there is **no `Platform` aggregate** — consistent with the `platform_slug`-is-denormalized stance. The map starts
 empty: there is no seed and no import from any previously-set ES-DE gamelist core (see
-[No migration](#no-migration-re-apply-once)). The plugin reads it through the `PlatformCoreReader` Protocol
+[No migration](#no-migration-re-apply-once)). Tender reads it through the `PlatformCoreReader` Protocol
 (`PlatformCoreReaderAdapter` in `adapters/persistence.py`), which holds the **live** settings dict so a fan-out after a
 write resolves the freshly-written value rather than a stale snapshot.
 
@@ -150,7 +148,7 @@ command in the live `es_systems.xml` document order** (see
 (PCSX2, RPCS3, Dolphin, …) or libretro. **Only** the live file decides it — no bundled snapshot — and **no gamelist
 selection ever moves it**: the resolver reads the gamelist and states which entry a per-game `<altemulator>` or a
 system-level `<alternativeEmulator>` promotes, and the adapter discards that by sorting on the shipped position, so the
-gamelist stays off every plugin launch path. When nothing is bakeable, or the catalogue cannot be read, it returns
+gamelist stays off every launch Tender bakes. When nothing is bakeable, or the catalogue cannot be read, it returns
 `None` and the caller bakes the plain RetroDECK launch.
 
 ### Standalone-emulator selection: first safely-bakeable
@@ -159,7 +157,7 @@ Selection is **data-derived from the live `es_systems.xml` alone** — there is 
 `domain/emulator_commands.py` classifies each of a system's ES-DE `<command>` entries into an `EmulatorOption` (`label`,
 `kind`, `core_so`, `command`, `status`, `reason`), and `select_default_option` returns **the first `bakeable` command in
 document order**. ES-DE already lists a system's emulators in preference order, so ES-DE's own preference picks the
-default — no plugin curation, no per-system table.
+default — no curation of Tender's own, no per-system table.
 
 **Document order is recovered, not taken.** The resolver states its entries in _effective_ order, where a gamelist
 promotion may put a later entry first, and carries each entry's shipped position as `declared_index`. The adapter sorts
@@ -171,7 +169,7 @@ nor "index 0 exists" is assumed. An entry with **no** declared position sorts la
 enumeration for a catalogue-less arrangement, and such an entry carries an empty command, which rule 3 below reads as
 `no_rom_target`.
 
-A command is `bakeable` only when it is a real emulator invocation the plugin can carry verbatim into a Steam shortcut's
+A command is `bakeable` only when it is a real emulator invocation Tender can carry verbatim into a Steam shortcut's
 `-e`. `classify_command` applies these rules in order, first match wins:
 
 1. contains `%INJECT%` → `needs_setup` (`"inject"`) — needs ES-DE to generate a sidecar first (Vita3K, Xemu);
@@ -221,8 +219,8 @@ marked, and `needs_setup` / `unbakeable` entries are disabled with their reason.
 [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) — including the 27 default flips this selection rule
 produces relative to the old first-libretro default.
 
-Adding a new standalone system needs **no plugin change** — the moment a RetroDECK update lists its emulator in
-`es_systems.xml` in preference order, the plugin's default follows.
+Adding a new standalone system needs **no change to Tender** — the moment a RetroDECK update lists its emulator in
+`es_systems.xml` in preference order, Tender's default follows.
 
 **Every per-game core read consumer draws from this one seam**, so the launch core cannot diverge from any derived
 value:
@@ -264,20 +262,19 @@ and renders the invocation:
 `%EMULATOR_*%` and `%ROM%` stay as ES-DE placeholders — RetroDECK's `run_game.sh` resolves and single-quotes them at
 launch, so a ROM path with spaces or parens is handled. For the libretro form, only the in-sandbox cores directory
 (`/var/config/retroarch/cores`) is baked literally; ES-DE's `%CORE_RETROARCH%` variable is **not** expanded through
-`-e`, so the plugin bakes the resolved path itself (a standalone command carries no `%CORE_RETROARCH%`, so it bakes
-as-is). The `-e` flag makes RetroDECK skip its gamelist lookup entirely, which is why a baked emulator applies for any
-filename (see
-[Why the plugin always bakes the core, never the gamelist](#why-the-plugin-always-bakes-the-core-never-the-gamelist)).
+`-e`, so Tender bakes the resolved path itself (a standalone command carries no `%CORE_RETROARCH%`, so it bakes as-is).
+The `-e` flag makes RetroDECK skip its gamelist lookup entirely, which is why a baked emulator applies for any filename
+(see [Why Tender always bakes the core, never the gamelist](#why-tender-always-bakes-the-core-never-the-gamelist)).
 
 **Always `-e`.** Per
 [ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md),
 every installed ROM bakes its **full resolved active emulator** through `-e` — the per-game pin, the per-platform core,
 the es_systems libretro default, or a standalone emulator, whichever the resolver returns. The plain `flatpak run`
 launch is **not** the "no override" case any more; it is reserved for the single fallback where the resolver yields
-`None` (a platform with no resolvable default at all). Baking the default for every ROM is what lets the plugin own
-launch selection completely: a launch that is _not_ `-e` would let RetroDECK consult the gamelist, re-coupling the
-plugin to ES-DE's state. The cost is that a RetroDECK update changing a platform's default core needs a **Force Full
-Sync** to re-bake — see [A frozen default needs a Force Full Sync](#a-frozen-default-needs-a-force-full-sync).
+`None` (a platform with no resolvable default at all). Baking the default for every ROM is what lets Tender own launch
+selection completely: a launch that is _not_ `-e` would let RetroDECK consult the gamelist, re-coupling Tender to
+ES-DE's state. The cost is that a RetroDECK update changing a platform's default core needs a **Force Full Sync** to
+re-bake — see [A frozen default needs a Force Full Sync](#a-frozen-default-needs-a-force-full-sync).
 
 ### The three bake sites
 
@@ -321,9 +318,9 @@ absolute path and never a disc index.
   **excluded from the sync UPSERT `SET` clause** — the same `_SYNC_COLUMNS` tuple that omits `emulator_override` omits
   `selected_disc` — so a re-sync never wipes the pick.
 
-The plugin stores the **basename** because the absolute path changes across uninstall/reinstall and home migration (a
-stored path would go stale) and a positional index would silently re-point if a disc file were added, removed, or
-renamed. The basename re-resolves to the same disc whenever it is present and cleanly registers as **stale** (→ default
+Tender stores the **basename** because the absolute path changes across uninstall/reinstall and home migration (a stored
+path would go stale) and a positional index would silently re-point if a disc file were added, removed, or renamed. The
+basename re-resolves to the same disc whenever it is present and cleanly registers as **stale** (→ default
 
 - WARNING) when it is not.
 
@@ -450,10 +447,10 @@ The frontend CPU-button menu on the game detail page drives two backend endpoint
   `launch_options` (the `-e` override form) + the bound `app_id` for an installed ROM.
 - **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
   `NULL`, then re-resolves the ROM's **full active core** through `ActiveCoreResolver` and bakes _that_ — the
-  per-platform core or es_systems default, in `-e` form, **not** an unconditional plain launch. Because the plugin
-  always bakes `-e`, "follow the default" still means baking a concrete core; the plain launch appears only when the
-  platform resolves to `(None, None)`. There is no separate "Reset" item — selecting the default-marked entry is the
-  clear path; any other entry pins that core.
+  per-platform core or es_systems default, in `-e` form, **not** an unconditional plain launch. Because Tender always
+  bakes `-e`, "follow the default" still means baking a concrete core; the plain launch appears only when the platform
+  resolves to `(None, None)`. There is no separate "Reset" item — selecting the default-marked entry is the clear path;
+  any other entry pins that core.
 
 For an installed + bound ROM the response carries `launch_options` + `app_id`; the frontend then **awaits
 `setLaunchOptionsConfirmed`** (the fire-then-poll `AppDetails` confirm from
@@ -522,32 +519,32 @@ still need to name the libretro core itself; it is not a second answer to "which
 `active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
 pick, which is the degradation this swap removed.
 
-## Why the plugin always bakes the core, never the gamelist
+## Why Tender always bakes the core, never the gamelist
 
 ES-DE stores core choices in `gamelist.xml` — a per-game `<altemulator>` element and a system-level
-`<alternativeEmulator>`. The plugin does **not** use that file for its own launches at all (it neither reads nor writes
-it), for reasons grounded in on-device testing:
+`<alternativeEmulator>`. Tender does **not** use that file for its own launches at all (it neither reads nor writes it),
+for reasons grounded in on-device testing:
 
-1. **RetroDECK's gamelist lookup is metacharacter-fragile.** When the plugin's Steam shortcut launches a ROM with a
-   plain `flatpak run` command, RetroDECK's `run_game.sh` matches the ROM path against the gamelist using an **awk `~`
+1. **RetroDECK's gamelist lookup is metacharacter-fragile.** When Tender's Steam shortcut launches a ROM with a plain
+   `flatpak run` command, RetroDECK's `run_game.sh` matches the ROM path against the gamelist using an **awk `~`
    regex**. Any regex metacharacter in the filename (`(USA)`, `(Disc 1)`, `[!]`, …) breaks the match, and the per-game
    `<altemulator>` is silently dropped. This is upstream bug
    [#210](https://github.com/danielcopper/romm-tender/issues/210) /
    [RetroDECK#1358](https://github.com/RetroDECK/RetroDECK/issues/1358). (ES-DE's _own_ UI resolves `<altemulator>`
    itself and bypasses the awk — which is why a core choice can look like it works when launched from ES-DE but not from
-   the plugin's shortcut.)
+   Tender's shortcut.)
 2. **`-e` bypasses the lookup.** RetroDECK's `-e` flag sets the emulator invocation directly and skips the gamelist awk
-   block, so the baked core applies regardless of filename. The plugin bakes the resolved core into `-e` for **every**
+   block, so the baked core applies regardless of filename. Tender bakes the resolved core into `-e` for **every**
    installed ROM and is no longer coupled to either the awk bug or ES-DE's folder-collapse display quirks.
-3. **A plain launch re-couples the plugin to ES-DE.** A non-`-e` launch lets RetroDECK consult the gamelist itself, so a
-   core a user set inside ES-DE's UI would silently affect the plugin's launch — diverging from the BIOS badge, the
-   per-core save path, and the core-change warning that all follow the plugin's resolver. Baking `-e` for every ROM
+3. **A plain launch re-couples Tender to ES-DE.** A non-`-e` launch lets RetroDECK consult the gamelist itself, so a
+   core a user set inside ES-DE's UI would silently affect Tender's launch — diverging from the BIOS badge, the per-core
+   save path, and the core-change warning that all follow Tender's resolver. Baking `-e` for every ROM
    ([ADR-0012](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0012-plugin-owns-core-selection-always-e-no-gamelist.md))
-   closes that path: the plugin owns core selection end to end, and an ES-DE-set core never reaches a plugin launch.
+   closes that path: Tender owns core selection end to end, and an ES-DE-set core never reaches a launch Tender bakes.
 
 Writing the gamelist is dropped for the same ownership reason: `gamelist.xml` is ES-DE's strict-parser-hostile,
-multi-root-tolerant file, and the per-platform deviation that once lived there now lives in the plugin's own
-`settings.json`. There is **no gamelist write** on any plugin path.
+multi-root-tolerant file, and the per-platform deviation that once lived there now lives in Tender's own
+`settings.json`. There is **no gamelist write** anywhere in Tender.
 
 ### No migration, re-apply once
 
@@ -556,7 +553,7 @@ imported (per
 [ADR-0011](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0011-per-game-core-override-in-db-applied-via-e-flag.md)),
 and a per-platform core previously set as a system-level `<alternativeEmulator>` is **not** imported into
 `platform_cores` either — `platform_cores` starts empty. This is by design: a gamelist-import path would revive the
-multi-root-XML parse failures and folder-collapse ambiguity the plugin-owned model was chosen to avoid. Re-apply any
+multi-root-XML parse failures and folder-collapse ambiguity the model Tender owns was chosen to avoid. Re-apply any
 per-platform core once through the platform detail's Change core button and it sticks from then on.
 
 ### A frozen default needs a Force Full Sync
@@ -564,7 +561,7 @@ per-platform core once through the platform detail's Change core button and it s
 Because the es_systems default is baked literally into every shortcut, a RetroDECK update that ships a **new default
 core for a platform** does **not** take effect on a normal sync — a normal sync skips platforms whose ROM set is
 unchanged, so the previously-baked default survives. A **Force Full Sync** re-bakes every shortcut and picks up the new
-default. A core the user sets through the plugin (per-game pin or per-platform picker) re-bakes immediately, so only an
+default. A core the user sets through Tender (per-game pin or per-platform picker) re-bakes immediately, so only an
 externally-changed RetroDECK default carries this caveat.
 
 ## RetroDECK is the V1 target

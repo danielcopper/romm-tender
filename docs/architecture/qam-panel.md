@@ -1,11 +1,11 @@
 # QAM panel
 
-The Quick Access Menu panel is the plugin's own surface inside Steam's QAM, behind **Tender's own entry in the tab
-strip** — beside Decky Loader's where Decky is running, and on its own where it is not. It opens on **Main** and reaches
-every other page from there. Steam renders the QAM 348 px wide; a page of this plugin can widen it to 854 px — the width
-Steam's own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages
-exist, which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is
-a Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
+The Quick Access Menu panel is Tender's own surface inside Steam's QAM, behind **Tender's own entry in the tab strip** —
+beside Decky Loader's where Decky is running, and on its own where it is not. It opens on **Main** and reaches every
+other page from there. Steam renders the QAM 348 px wide; a page of Tender can widen it to 854 px — the width Steam's
+own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages exist,
+which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is a
+Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
 **Game-detail store** (GLOSSARY.md).
 
 The structure below is the target decided in [#1809](https://github.com/danielcopper/romm-tender/issues/1809) and
@@ -47,13 +47,13 @@ that draw the menu — the browser view Gaming Mode uses and the embedded one �
 they hand back. Decky Loader patches the same two renderers, and the two compose: `afterPatch` chains handlers rather
 than replacing them.
 
-**The entry's heading is an element carrying Steam's own heading class** (`quickAccessMenuClasses.Title`), with the
-plugin's name inside it, rather than the name as a string. That is a measurement and not a preference: in the running
-Quick Access document, Steam's own tabs head their panels with an element carrying that class, drawn at 22 px / weight
-700, while a bare string lands as a plain text node in the panel container at body size, 16 px / weight 400 — which is
-what the entry shipped with. Without the class map the start-up check has already refused the panel, so the heading
-stands over the start-up failure page, and it is drawn unstyled rather than not at all. The panel's content carries no
-heading of its own: Steam draws the tab's, and a second would be two.
+**The entry's heading is an element carrying Steam's own heading class** (`quickAccessMenuClasses.Title`), with Tender's
+name inside it, rather than the name as a string. That is a measurement and not a preference: in the running Quick
+Access document, Steam's own tabs head their panels with an element carrying that class, drawn at 22 px / weight 700,
+while a bare string lands as a plain text node in the panel container at body size, 16 px / weight 400 — which is what
+the entry shipped with. Without the class map the start-up check has already refused the panel, so the heading stands
+over the start-up failure page, and it is drawn unstyled rather than not at all. The panel's content carries no heading
+of its own: Steam draws the tab's, and a second would be two.
 
 **Nothing in this path touches Decky.** Not `window.__TABS_HOOK_INSTANCE`, whose `deinit()` Decky's own constructor
 calls on whatever it finds there; and not its `add()` either — Decky's render counts its `decky`-marked entries against
@@ -81,8 +81,8 @@ each is a way to get this wrong:
 - The entry is added again to whatever array the pass is handed, and the entry's own marker is what keeps a second pass
   over an array it is already in from adding a second one.
 - Anything bound to the menu's own window is bound from inside the menu's React tree, so the remount re-binds it. The
-  entry itself binds nothing there — the glyph's update dot reads stores that are module state of the plugin's own
-  window, and subscribes to them from the tree through `useSyncExternalStore` — but a page the panel mounts does:
+  entry itself binds nothing there — the glyph's update dot reads stores that are module state of Tender's own window,
+  and subscribes to them from the tree through `useSyncExternalStore` — but a page the panel mounts does:
   `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners,
   `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads the view
   per event and retains nothing. Each of the four sits inside an effect or an event handler of a component the menu
@@ -147,8 +147,8 @@ its release was not yet seen — `updateDotVersion` over the card's own answer, 
 of them can disagree with the card (§ Notices and homes). At rest it does not move either. When its release is seen it
 plays its one **fade**: it grows to 2.2 times its size about its own centre and fades out over 450 ms, ease-out, then is
 taken out. That is one CSS transition of `transform` and `opacity`, set on the dot only for the fade, so a dot at rest
-carries none. The fade is inline style on the element the glyph renders and its end a timer of the plugin's own window,
-so nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The boundary), so a store
+carries none. The fade is inline style on the element the glyph renders and its end a timer of Tender's own window, so
+nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The boundary), so a store
 state the answer cannot be worked out from draws no dot rather than throwing; with every store as it starts — the
 start-up failure page's case — there is none. Its size and place on the strip, and how the fade looks there, are device
 questions; nothing in the suite can see them.
@@ -203,13 +203,13 @@ How a page gets wide, measured on the device rather than read from documentation
   `transform: translateX(506px)`, so 348 px stay visible. Steam's `Expanded` class sets `translateX(0)`. Its class names
   are hashed and there is no `ViewPlaceholder` to match on any more, so the container is found by geometry: absolutely
   positioned, a transform set, at least 800 × 400. The class follows one MobX observable on the FriendsUI store, which
-  listens for `message` events on the SharedJSContext window — the window plugin code runs in. A wide page posts
+  listens for `message` events on the SharedJSContext window — the window the panel's code runs in. A wide page posts
   `{ message: "QamFriendsExpanded" }` to `window` on mount and `{ message: "QamFriendsHidden" }` when it lets go. The
   target origin is always `window.origin`, which addresses the message to that window and always matches it. A
   well-formed target origin that does not match is checked at delivery and the message is discarded in silence, so a
   literal one would leave the panel simply never widening.
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
-  stylesheet whose `:has()` rule lifts the cap for a marker class on the plugin's own subtree. Class names come from
+  stylesheet whose `:has()` rule lifts the cap for a marker class on Tender's own subtree. Class names come from
   `quickAccessMenuClasses`, which can be `undefined`; `[id^="quickaccess_content_"]` is the fallback selector. Steam
   builds that id from the key of whichever entry rendered the page, so the prefix is matched and never the whole id —
   what a string key produces has not been measured. `TabGroupPanel` sits on that same element, measured under Decky's
@@ -238,13 +238,13 @@ there is nothing to read a document's visibility off. It is asked through `utils
 copy of `@decky/ui`'s hook, because upstream's throws on that reading instead of answering — why a copy rather than a
 guard at the call site is written out at that module, along with what else it changes besides the guard.
 
-Steam moves the same flag on its own, in both directions, and neither is a bug in the plugin. `OpenQuickAccessMenu`
-clears it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under
-the plugin's own `ActiveTab` observer; and the Friends tab's list expands it from `onFocusWithin`, so Friends goes wide
-the moment gamepad focus enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are
-in `chunk~2dcc5aaf7.js` in Steam's own bundle, where the receiver is also visible: `OnMessage` on the FriendsUI store
-sets `m_bQamFriendsExpanded` from exactly the two messages the plugin sends, and Steam's own senders post with the
-literal `"https://steamloopback.host"` — which is what `window.origin` is in the SharedJSContext.
+Steam moves the same flag on its own, in both directions, and neither is a bug in Tender. `OpenQuickAccessMenu` clears
+it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under Tender's
+own `ActiveTab` observer; and the Friends tab's list expands it from `onFocusWithin`, so Friends goes wide the moment
+gamepad focus enters it. A Friends panel that widens after a wide page closed is Steam doing that. Both are in
+`chunk~2dcc5aaf7.js` in Steam's own bundle, where the receiver is also visible: `OnMessage` on the FriendsUI store sets
+`m_bQamFriendsExpanded` from exactly the two messages Tender sends, and Steam's own senders post with the literal
+`"https://steamloopback.host"` — which is what `window.origin` is in the SharedJSContext.
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
@@ -295,7 +295,7 @@ different amount is already handled — and it holds because the overhang is the
 than anything derived from what we put inside. It was checked at several body heights in two panel geometries.
 
 **If it ever stops holding, this is what it looks like.** A wrapper pinned to a height of its own — a future Decky or
-Steam nesting the plugin differently — would not follow our body up: growing the body would overflow the wrapper instead
+Steam nesting the panel differently — would not follow our body up: growing the body would overflow the wrapper instead
 of the wrapper's parent, the margin would cancel nothing that was in the way, and the panel would scroll again, which
 the reader meets as the Back row leaving the top. The check is one reading: the lowest ancestor bottom in the chain
 should equal the body's own with the margin applied, and sit an overhang below it without.
@@ -532,8 +532,8 @@ start-up check does not let a panel reach (`Tabs` costs the panel).
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
 wide page, so the frame places entry focus in the body by the rule above, and on its list that is the first row.
-Whatever the rule, the root it searches is the plugin's own content and nothing above it — under Decky, its panel title
-and the back arrow beside it are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s
+Whatever the rule, the root it searches is Tender's own content and nothing above it — under Decky, its panel title and
+the back arrow beside it are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s
 `ancestorOverhang` measures); behind Tender's own entry there is no such chrome at all, because Steam's tab group
 renders the panel directly — so no rule here could reach anyone else's. The declaration, the finder, the shared set of
 shapes and the `.focus()` + `gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than
@@ -705,15 +705,15 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 
 ### Notices and homes
 
-A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
-plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
+A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in
+Tender stays a card without a jump, with Dismiss where the condition has a sensible end.
 
 | Condition                                                      | On Main                                                                                               | Home                                                                                                                              |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Settings were reset                                            | text, backup path, Dismiss                                                                            | none — the card is the whole of it                                                                                                |
 | Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                                                                   | Settings › Connections, where the accounts are                                                                                    |
-| RetroDECK paths missing or unreadable                          | warning card, no action                                                                               | none — the fix is outside the plugin                                                                                              |
-| Steam answers for no notifications                             | warning card, no action                                                                               | none — the fix is outside the plugin                                                                                              |
+| RetroDECK paths missing or unreadable                          | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
+| Steam answers for no notifications                             | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
 | RetroArch `input_driver` is wrong                              | text, **Open Controller**                                                                             | Settings › Controller, which holds the Fix button                                                                                 |
 | Sync paused on the session budget                              | text, **Open Sync**                                                                                   | Sync, which holds Restart Steam now and Resume                                                                                    |
 | An update was rolled back, or refused by its pre-install check | both versions, where the reason is, **Open Updates**, Dismiss — and a toast, once                     | Settings › Updates, which states the same fact whether or not the card was dismissed, and shows what the installer said           |
@@ -1303,8 +1303,8 @@ it, for the focused platform:
 
   - **Options exist, none bakeable, and the fallback can run** — the plain RetroDECK launch is baked and RetroDECK
     resolves the emulator itself. The clause reads `RetroDECK decides` in the muted colour and the line under it says
-    the plugin cannot pin one; neither promises a launch, because what the fallback then finds is between RetroDECK and
-    the machine.
+    Tender cannot pin one; neither promises a launch, because what the fallback then finds is between RetroDECK and the
+    machine.
   - **Options exist, none bakeable, and the fallback is not installed** — the same unpinnable state, with the opposite
     outcome. `run_game.sh` takes `command[1]` for the system when no alternate emulator is set and `options_to_payload`
     keeps ES-DE's document order, so `emulators[0]` **is** that command; when its own `reason` is `not_installed`, the
@@ -1322,7 +1322,7 @@ it, for the focused platform:
     reads `command[1]` for the system, finds nothing, and exits 1 (`libexec/run_game.sh`). The clause reads
     `no emulator` in **red** and the line says the games will not launch, because they will not.
 
-  The chip is disabled for all three, never withheld. Printing "Default" for any of them said the plugin had chosen;
+  The chip is disabled for all three, never withheld. Printing "Default" for any of them said Tender had chosen;
   printing `no emulator` for all three said the games would not start where they do. Both were wrong, in opposite
   directions, and the middle state is why the split is three rather than two: it is unpinnable like the first and does
   not start like the last.
@@ -1405,7 +1405,7 @@ it, for the focused platform:
   counts another one and the numbers cannot say which is which:
   `The one file DuckStation requires is in place (1/20 RomM library files)` states three correct numbers over three
   sets, and the words are the only thing that tells them apart. The pair is the library's inventory for the platform —
-  what it holds, and how many of those the plugin found at their destination (GLOSSARY.md → Library inventory) — and the
+  what it holds, and how many of those Tender found at their destination (GLOSSARY.md → Library inventory) — and the
   tail names no axis of its own deliberately: the ratio form carries that, and each candidate word for the numerator was
   worse than none. Two of them are already on the screen under this sentence and stand for something else there —
   `present` is the row marks and `on disk` the column beside them, both the row's own verdict rather than this pair —
@@ -1770,7 +1770,7 @@ collection on adds, because several new versions of one game become one shortcut
 user name on standard and smart collections, which is what the Owner column shows. `get_collections` forwards both —
 `in_steam_count` on all three kinds, absent when Tender could not read its own record, and `owner_username` on standard
 and smart, `null` where the listing lacks the field — and the member ids do not cross the wire. It costs the four RomM
-requests `get_collections` makes — one each for standard and smart, and one for each of the two virtual types the plugin
+requests `get_collections` makes — one each for standard and smart, and one for each of the two virtual types Tender
 syncs — and one read of Tender's own database after them.
 
 **Those two columns are why a kind is the pane and a collection a row.** A pane per collection would show the owner and
@@ -1825,7 +1825,7 @@ its own save directory the next time Tender touches its saves — and Updates is
 
 | Section       | Holds                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                            |
+| Connections   | the services Tender talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                                |
 | Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                     |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
@@ -1836,7 +1836,7 @@ The registered devices are the one thing on the page with more than two facts pe
 Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from
 is [device-list-layouts.html](../assets/device-list-layouts.html).
 
-**RetroAchievements is not here, and Connections is still its home.** The plugin has no RetroAchievements account and no
+**RetroAchievements is not here, and Connections is still its home.** Tender has no RetroAchievements account and no
 sign-in for it — building one is #1627, which also left the badge's home open between the game page, the retired System
 page and global settings. The section holds the two services that exist rather than a placeholder for the one that does
 not.
@@ -2004,7 +2004,7 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit | Remove all shortcuts                            |
 | Installed ROMs        | one count per install — two kept versions count twice           | Uninstall all ROM files                         |
 | Grid images           | `scan` until asked — then how many are orphaned                 | Remove the orphaned images                      |
-| Other non-Steam games | Steam's own store less this plugin's entries                    | the whitelist, the removal, the RetroDECK guard |
+| Other non-Steam games | Steam's own store less Tender's entries                         | the whitelist, the removal, the RetroDECK guard |
 | Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
 | Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
 
@@ -2021,7 +2021,7 @@ a RomM round trip for the other. Grid images and Gone from RomM therefore read `
 answer until something makes it wrong, because a stale number is worse than no number. A finished cleanup puts Gone from
 RomM back to `scan`. Grid images goes back to `scan` after any removal of shortcuts from this page — Tender's shortcuts
 once the backend has accepted, other non-Steam games, and a finished Gone from RomM cleanup — because each can leave
-images the scan did not count: a Tender shortcut the plugin had no record of, or one whose removal report did not
+images the scan did not count: a shortcut Tender created but had no record of, or one whose removal report did not
 complete (that report is what deletes a bound shortcut's images), a foreign entry whose art nothing here deletes, or a
 cleanup run without recovery, which leaves its shortcuts' images in place. A grid-image removal re-derives its
 candidates rather than taking the scan's, and answers how many it found beside how many it removed; the row reads `0`
@@ -2035,15 +2035,15 @@ so the scanned count stands. The grid removal holds the page's busy state like t
 — the search kind of text input, not the value kind that opens a modal ([Text input](#text-input)).
 
 **Two rows would overlap if either were read naively, and the one that gives way is the foreign one.** Tender's
-shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report this plugin's own
-library a second time, under a heading saying _Other_ — and its removal would take that library with it, since the
-whitelist protects by NAME and a synced library carries game names. So the foreign row is Steam's store **less what this
-plugin created**, told apart by what a shortcut launches rather than by what it is called, and the foreign row never
-removes ours: row 1 is where they go wholesale, the Gone-from-RomM cleanup takes the individual vanished ones, and a
-platform's own removal in Library takes a platform's. That reading is a per-shortcut sweep rather than a field: it takes
-time, so the row shows a spinner until it lands, and **what it cannot establish it never offers** — neither a store it
-could not read at all, nor an entry whose own reading did not arrive. The pane says which of the two happened. An
-unproven entry left alone is a row that under-reports; an unproven entry offered is a library deleted.
+shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report Tender's own library a
+second time, under a heading saying _Other_ — and its removal would take that library with it, since the whitelist
+protects by NAME and a synced library carries game names. So the foreign row is Steam's store **less what Tender
+created**, told apart by what a shortcut launches rather than by what it is called, and the foreign row never removes
+ours: row 1 is where they go wholesale, the Gone-from-RomM cleanup takes the individual vanished ones, and a platform's
+own removal in Library takes a platform's. That reading is a per-shortcut sweep rather than a field: it takes time, so
+the row shows a spinner until it lands, and **what it cannot establish it never offers** — neither a store it could not
+read at all, nor an entry whose own reading did not arrive. The pane says which of the two happened. An unproven entry
+left alone is a row that under-reports; an unproven entry offered is a library deleted.
 
 **The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
 (#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is

@@ -65,12 +65,12 @@ established", never a guess.
 ### The directory is the emulator's too
 
 The answer names the files AND the directory they sit in, and a sync, a probe, the adoption rename and the directory
-follow use that directory — the plugin computes none of its own. Where RetroArch sorts saves into subfolders, the
-resolver reproduces RetroArch's own path rule, so the sorting is part of the answer rather than a setting the plugin
-reads. A core that keeps its saves in a folder of its own is answered so, and the plugin now looks where the answer
-points: `saves/3do/opera/per_game` for 3DO's Opera and `saves/neogeo/fbneo` for Neo Geo's FinalBurn Neo — not yet
-observed on a device. An answer that names no directory — every not-established shape but `directory_known` — is never
-given one by a guess; each reader takes its refusal.
+follow use that directory — Tender computes none of its own. Where RetroArch sorts saves into subfolders, the resolver
+reproduces RetroArch's own path rule, so the sorting is part of the answer rather than a setting Tender reads. A core
+that keeps its saves in a folder of its own is answered so, and Tender now looks where the answer points:
+`saves/3do/opera/per_game` for 3DO's Opera and `saves/neogeo/fbneo` for Neo Geo's FinalBurn Neo — not yet observed on a
+device. An answer that names no directory — every not-established shape but `directory_known` — is never given one by a
+guess; each reader takes its refusal.
 
 When a game's answered directory moves — the user flipped one of RetroArch's sort flags, or anything else changed it —
 its files are followed per game the next time Tender touches them — a sync, a write to its slots, a delete, or a read
@@ -95,7 +95,7 @@ removes.
 
 ## The five save states
 
-The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the
+The answer classifies every ROM into **exactly one** of five states. Only the first is a save Tender can carry; the
 other four are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no
 sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
 failure — the same shape the `savefiles_in_content_dir` skip returns. A refusing answer that names a directory outside
@@ -111,14 +111,14 @@ the content's own is still recorded and followed when that directory moves, beca
 | **not established**    | Nobody established what this emulator writes, or the names in a known folder. | MAME, PSP, ScummVM, unaudited cores |
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
-Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way the plugin cannot complete the
-path, which is what the state is about.
+Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way Tender cannot complete the path,
+which is what the state is about.
 
 **The last state has three shapes and they are kept apart**, because they are three different sentences to a reader.
 `nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is known and
 the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be wrong.
 `not_asked` — no question reached the resolver: no emulator resolved for this ROM, no installation or catalogue entry to
-ask, or no content name to ask with. The status read reports a save the plugin could otherwise sync, sitting beside the
+ask, or no content name to ask with. The status read reports a save Tender could otherwise sync, sitting beside the
 content, the same way, since no sync runs there. The emulator is not implicated, and saying it is would be wrong too.
 
 **Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the

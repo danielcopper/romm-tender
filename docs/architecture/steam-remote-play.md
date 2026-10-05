@@ -2,8 +2,8 @@
 
 ## What Users See
 
-When a user runs the plugin on one machine (e.g. Steam Deck) and has another machine logged into the same Steam account
-on the same LAN (e.g. Bazzite HTPC), they may notice:
+When a user runs Tender on one machine (e.g. Steam Deck) and has another machine logged into the same Steam account on
+the same LAN (e.g. Bazzite HTPC), they may notice:
 
 1. **Shortcuts appearing on other devices** — all non-Steam shortcuts from the source machine show up on the remote
    client
@@ -87,7 +87,7 @@ The only options are:
 
 ## Detection APIs
 
-The plugin can distinguish local shortcuts from remote phantom shortcuts using these Steam frontend APIs:
+Tender can distinguish local shortcuts from remote phantom shortcuts using these Steam frontend APIs:
 
 ### `collectionStore.localGamesCollection`
 
@@ -120,7 +120,7 @@ A shortcut from a remote machine will have a `per_client_data` entry with a diff
 Returns only the local machine's `per_client_data` entry. If this is `undefined` or empty for a shortcut, it likely
 originates from a remote client.
 
-## What the Plugin Does
+## What Tender Does
 
 ### Machine-Scoped Collections
 
@@ -147,11 +147,11 @@ button instead of "Play", which clearly communicates that the game is available 
 
 The bulk shortcut removals — **Remove all shortcuts** on Data Management and a platform's removal in Library › Platforms
 — use the **synced-ROM registry (the `roms` SQLite table)**, which is local-only. These operations can only affect
-shortcuts created by the plugin on the current machine. Remote streaming phantoms cannot be removed this way — and even
-if they could, they would reappear immediately since they're ephemeral entries from the live TCP connection.
+shortcuts created by Tender on the current machine. Remote streaming phantoms cannot be removed this way — and even if
+they could, they would reappear immediately since they're ephemeral entries from the live TCP connection.
 
-Data Management's **Other non-Steam games** row lists the non-Steam apps visible to the current client that this plugin
-did not create, remote phantoms included. Removing a phantom has no lasting effect — it reappears as long as the source
+Data Management's **Other non-Steam games** row lists the non-Steam apps visible to the current client that Tender did
+not create, remote phantoms included. Removing a phantom has no lasting effect — it reappears as long as the source
 device is online.
 
 ## What Can't Be Controlled
@@ -166,8 +166,7 @@ device is online.
 ### Issue #8791: Name Collision
 
 When both the source and remote machine have a non-Steam shortcut with the same name, Steam may display incorrect
-metadata (mixing fields from both entries). This can occur when both machines run the plugin and sync the same RomM
-library.
+metadata (mixing fields from both entries). This can occur when both machines run Tender and sync the same RomM library.
 
 ### Issue #12315: "Stream" Button Regression
 

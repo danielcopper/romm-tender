@@ -173,7 +173,7 @@ With [mise shell completions](https://mise.jdx.dev/installing-mise.html#shells) 
 
 ## Display scale: the dev loop lies about height
 
-The windowed Big Picture renders the plugin's real UI, but **not at the Deck's real size**. Measured on-device:
+The windowed Big Picture renders Tender's real UI, but **not at the Deck's real size**. Measured on-device:
 
 | Configuration                                     | Big Picture window               | QuickAccess (QAM) panel |
 | ------------------------------------------------- | -------------------------------- | ----------------------- |
@@ -371,7 +371,7 @@ Validate a panel at 1.5 (the device) and at 2.4 (the worst case) before calling 
 With `~/.steam/steam/.cef-enable-remote-debugging` present, Steam exposes the CEF DevTools protocol on
 <http://localhost:8080>:
 
-- The **SharedJSContext** target is where all plugin JS runs — console output and JS debugging live here.
+- The **SharedJSContext** target is where all the panel's code runs — console output and JS debugging live here.
 - The **Steam Big Picture Mode** target is the rendered UI — element inspection and live CSS editing.
 
 The backend drives the same protocol on the same port, so a DevTools window open on `SharedJSContext` and the injector
@@ -402,7 +402,7 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   don't want Steam capturing your desktop mid-development anyway, and this removes the dialog for good. Ticking the
   portal's _"enable restore"_ box instead only hides the dialog: it pins whichever source you picked, so if you pick a
   single monitor the capture stays on it even after `dev:bpm <other-display>` opens Big Picture elsewhere.
-- **The QAM Performance tab is non-functional in desktop BPM** (it needs gamescope). Irrelevant for this plugin's UI.
+- **The QAM Performance tab is non-functional in desktop BPM** (it needs gamescope). Irrelevant for Tender's UI.
 - **Re-verify the loop after a Steam update.** Nothing in this repo's toolchain runs against a real Steam, so a change
   to how Steam names its targets or builds its renderer is only ever found on a device.
 - **Big Picture comes up at the wrong size** — a `dev:ui-scale` run was hard-killed and left Steam on a forced scale (it
