@@ -160,9 +160,9 @@ backend_start() {
             data="$(unit_value TENDER_DATA_DIR)"
             config="$(unit_value TENDER_CONFIG_DIR)"
             mkdir -p "$data" "$config"
-            printf 'migrated by %s\\n' "$version" >> "$data/romm_sync.db"
-            printf 'wal of %s\\n' "$version" > "$data/romm_sync.db-wal"
-            printf 'shm of %s\\n' "$version" > "$data/romm_sync.db-shm"
+            printf 'migrated by %s\\n' "$version" >> "$data/romm-tender.db"
+            printf 'wal of %s\\n' "$version" > "$data/romm-tender.db-wal"
+            printf 'shm of %s\\n' "$version" > "$data/romm-tender.db-shm"
             printf '{"written_by": "%s"}\\n' "$version" > "$config/settings.json"
             [ -z "${STUB_UNREADABLE_BACKUP:-}" ] || chmod 000 "$data/update-backup/settings.json"
             if [ -n "${STUB_UNWRITABLE_STATE:-}" ]; then
@@ -1483,15 +1483,15 @@ def _seed_data(machine: Install) -> dict[Path, bytes]:
     """
     machine.data.mkdir(parents=True, exist_ok=True)
     machine.config.mkdir(parents=True, exist_ok=True)
-    (machine.data / "romm_sync.db").write_bytes(b"the database before the update\n")
-    (machine.data / "romm_sync.db-wal").write_bytes(b"its write-ahead log\n")
+    (machine.data / "romm-tender.db").write_bytes(b"the database before the update\n")
+    (machine.data / "romm-tender.db-wal").write_bytes(b"its write-ahead log\n")
     (machine.config / "settings.json").write_text('{"version": 13}\n', encoding="utf-8")
     machine.unit.write_text(machine.unit.read_text(encoding="utf-8") + "# a line of the user's own\n", encoding="utf-8")
     return {
         path: path.read_bytes()
         for path in (
-            machine.data / "romm_sync.db",
-            machine.data / "romm_sync.db-wal",
+            machine.data / "romm-tender.db",
+            machine.data / "romm-tender.db-wal",
             machine.config / "settings.json",
             machine.unit,
         )
@@ -1520,7 +1520,7 @@ class TestAnUpdateThatStarts:
         assert _tree_version(machine.code) == _NEW
         assert _tree_version(machine.old) == _VERSION
         assert machine.backend_events()[-1] == f"start {_NEW}"
-        assert (machine.data / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
+        assert (machine.data / "romm-tender.db").read_bytes() == before[machine.data / "romm-tender.db"]
         assert not machine.failure_record.exists()
         assert "Done in" in result.stdout
 
@@ -1534,14 +1534,14 @@ class TestAnUpdateThatStarts:
         assert sorted(entry.name for entry in machine.backup.iterdir()) == [
             "backed-up-at",
             "data-of-version",
+            "romm-tender.db",
+            "romm-tender.db-wal",
             "romm-tender.service",
-            "romm_sync.db",
-            "romm_sync.db-wal",
             "settings.json",
         ]
         assert (machine.backup / "data-of-version").read_text(encoding="utf-8") == f"{_VERSION}\n"
-        assert (machine.backup / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
-        assert (machine.backup / "romm_sync.db-wal").read_bytes() == before[machine.data / "romm_sync.db-wal"]
+        assert (machine.backup / "romm-tender.db").read_bytes() == before[machine.data / "romm-tender.db"]
+        assert (machine.backup / "romm-tender.db-wal").read_bytes() == before[machine.data / "romm-tender.db-wal"]
         assert (machine.backup / "settings.json").read_bytes() == before[machine.config / "settings.json"]
         assert (machine.backup / "romm-tender.service").read_bytes() == before[machine.unit]
 
@@ -1784,13 +1784,13 @@ class TestAnUpdateThatDoesNotStart:
 
         for path, content in before.items():
             assert path.read_bytes() == content, path
-        assert not (machine.data / "romm_sync.db-shm").exists()
+        assert not (machine.data / "romm-tender.db-shm").exists()
 
     def test_a_file_that_was_not_there_before_is_not_there_after(self, machine):
         """A WAL the backup does not hold is taken away, and the database is the one it held."""
         _installed(machine)
         before = _seed_data(machine)
-        (machine.data / "romm_sync.db-wal").unlink()
+        (machine.data / "romm-tender.db-wal").unlink()
 
         machine.run(
             "--from",
@@ -1800,8 +1800,8 @@ class TestAnUpdateThatDoesNotStart:
             STUB_BROKEN_VERSIONS=_NEW,
         )
 
-        assert not (machine.data / "romm_sync.db-wal").exists()
-        assert (machine.data / "romm_sync.db").read_bytes() == before[machine.data / "romm_sync.db"]
+        assert not (machine.data / "romm-tender.db-wal").exists()
+        assert (machine.data / "romm-tender.db").read_bytes() == before[machine.data / "romm-tender.db"]
 
     def test_it_says_so_plainly_and_exits_non_zero(self, machine):
         _before, result = self._failed(machine)
@@ -1937,7 +1937,7 @@ class TestAnUpdateThatDoesNotStart:
         )
 
         assert result.returncode == 1
-        assert not (machine.data / "romm_sync.db").exists()
+        assert not (machine.data / "romm-tender.db").exists()
         assert not (machine.config / "settings.json").exists()
 
     def test_a_backend_that_answers_as_another_version_is_rolled_back(self, machine):
@@ -2468,8 +2468,8 @@ class TestRollingBackByHand:
         _installed(machine)
         before = _seed_data(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
-        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
-        (machine.data / "romm_sync.db-shm").write_bytes(b"its index\n")
+        (machine.data / "romm-tender.db").write_bytes(b"what the new version made of it\n")
+        (machine.data / "romm-tender.db-shm").write_bytes(b"its index\n")
 
         result = machine.run("--rollback", STUB_BACKEND="up")
 
@@ -2478,7 +2478,7 @@ class TestRollingBackByHand:
         assert not machine.old.exists()
         for path, content in before.items():
             assert path.read_bytes() == content, path
-        assert not (machine.data / "romm_sync.db-shm").exists()
+        assert not (machine.data / "romm-tender.db-shm").exists()
         assert machine.backend_events()[-1] == f"start {_VERSION}"
         assert "[ok] Service      romm-tender.service running on" in result.stdout
 
@@ -2488,13 +2488,13 @@ class TestRollingBackByHand:
         _seed_data(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
         replaced = {
-            "romm_sync.db": b"what the new version made of it\n",
-            "romm_sync.db-shm": b"its index\n",
+            "romm-tender.db": b"what the new version made of it\n",
+            "romm-tender.db-shm": b"its index\n",
             "settings.json": b'{"version": 14}\n',
         }
-        (machine.data / "romm_sync.db").write_bytes(replaced["romm_sync.db"])
-        (machine.data / "romm_sync.db-wal").unlink()
-        (machine.data / "romm_sync.db-shm").write_bytes(replaced["romm_sync.db-shm"])
+        (machine.data / "romm-tender.db").write_bytes(replaced["romm-tender.db"])
+        (machine.data / "romm-tender.db-wal").unlink()
+        (machine.data / "romm-tender.db-shm").write_bytes(replaced["romm-tender.db-shm"])
         (machine.config / "settings.json").write_bytes(replaced["settings.json"])
 
         result = machine.run("--rollback", STUB_BACKEND="up")
@@ -2542,7 +2542,7 @@ class TestRollingBackByHand:
         """It lasts until the next rollback by hand, however many updates come between."""
         _installed(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
-        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        (machine.data / "romm-tender.db").write_bytes(b"what the new version made of it\n")
         machine.run("--rollback", STUB_BACKEND="up")
         copy = machine.data / "rollback-backup"
         kept = {entry.name: entry.read_bytes() for entry in copy.iterdir()}
@@ -2682,7 +2682,7 @@ class TestRollingBackByHand:
         _installed(machine)
         before = _seed_data(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
-        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        (machine.data / "romm-tender.db").write_bytes(b"what the new version made of it\n")
         aside = Path(f"{machine.backup}.prev")
         machine.backup.rename(aside)
 
@@ -2792,7 +2792,7 @@ class TestAnUpdateThatSkipsARelease:
         assert (machine.cache / "artwork" / "b.png").read_text(encoding="utf-8") == "artwork"
         assert not (machine.data / "covers").exists()
         assert "1 cover and 1 artwork file moved to the cache" in result.stdout
-        for path in (machine.data / "romm_sync.db", machine.config / "settings.json"):
+        for path in (machine.data / "romm-tender.db", machine.config / "settings.json"):
             assert path.read_bytes() == before[path], path
 
 
@@ -3037,13 +3037,15 @@ class TestUninstall:
     def test_it_keeps_the_copy_a_rollback_by_hand_made(self, machine):
         _installed(machine)
         machine.run("--from", str(_build_tarball(machine.tmp_path, _NEW)), "--yes", STUB_BACKEND="up")
-        (machine.data / "romm_sync.db").write_bytes(b"what the new version made of it\n")
+        (machine.data / "romm-tender.db").write_bytes(b"what the new version made of it\n")
         machine.run("--rollback", STUB_BACKEND="up")
 
         result = machine.run("--uninstall")
 
         assert result.returncode == 0, result.stderr
-        assert (machine.data / "rollback-backup" / "romm_sync.db").read_bytes() == b"what the new version made of it\n"
+        assert (
+            machine.data / "rollback-backup" / "romm-tender.db"
+        ).read_bytes() == b"what the new version made of it\n"
 
     def test_it_leaves_the_library_the_settings_and_the_launcher(self, machine):
         self._installed(machine)
@@ -3347,6 +3349,17 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
 
         assert f'DATABASE="{DB_FILENAME}"' in script
         assert f'SETTINGS="{SETTINGS_FILENAME}"' in script
+
+    def test_the_database_s_old_name_is_not_the_installer_s_to_know(self):
+        """The backend renames the old file when it starts, so no update or rollback meets that name.
+
+        Every one runs between two versions that know the current name: coming
+        from the Decky plugin is a first install, which backs nothing up and
+        rolls nothing back.
+        """
+        from bootstrap.adapters import LEGACY_DB_FILENAME
+
+        assert LEGACY_DB_FILENAME not in _INSTALL.read_text(encoding="utf-8")
 
     def test_the_port_note_matches_the_backend(self):
         from host.single_instance import PORT_FILENAME

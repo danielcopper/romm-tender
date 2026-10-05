@@ -8,7 +8,19 @@ from pathlib import Path
 from domain.identity import DISPLAY_NAME, PACKAGE_NAME, VERSION
 from domain.user_data_location import APP_DIR_NAME
 
-_USER_DATA_LOCATION = Path(__file__).resolve().parents[2] / "backend" / "domain" / "user_data_location.py"
+_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+_USER_DATA_LOCATION = _BACKEND / "domain" / "user_data_location.py"
+_BOOTSTRAP_ADAPTERS = _BACKEND / "bootstrap" / "adapters.py"
+
+
+def _module_level_assignments(path: Path, name: str) -> list[ast.Assign]:
+    """Every module-level assignment to *name* in the module at *path*, read from its syntax tree."""
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    return [
+        node
+        for node in module.body
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
+    ]
 
 
 class TestTheDisplayName:
@@ -50,19 +62,21 @@ class TestTheDisplayName:
         assert DISPLAY_NAME != APP_DIR_NAME
 
 
-class TestTheIdentifierStaysInTwoPlaces:
-    """``PACKAGE_NAME`` and ``APP_DIR_NAME`` spell one string and answer two questions.
+class TestTheIdentifierStaysInSeparatePlaces:
+    """``PACKAGE_NAME`` and ``APP_DIR_NAME`` spell one string and answer two questions; ``DB_FILENAME`` a third.
 
     ``PACKAGE_NAME`` names the package a server is told about and the recovery
     folder a bundle is written into; ``APP_DIR_NAME`` names the directories the
-    user's own library lives in. The first is free to be renamed with the
-    package. The second is not: a rename moves every user's library on the next
-    start, with nothing failing and nothing said.
+    user's own library lives in, and ``DB_FILENAME`` the file it is in there.
+    The first is free to be renamed with the package. The other two are not: a
+    rename moves every user's library on the next start, or leaves it under a
+    name nothing opens, with nothing failing and nothing said.
 
-    They spell the same string today, which is what makes the fold invisible.
-    A value comparison cannot see it — after ``APP_DIR_NAME = PACKAGE_NAME``
-    the two are still equal and every such assertion stays green — so what is
-    asserted here is that ``user_data_location`` states its own literal.
+    The first two spell the same string today, and the third carries it as its
+    stem, which is what makes a fold invisible. A value comparison cannot see it
+    — after ``APP_DIR_NAME = PACKAGE_NAME`` the two are still equal and every
+    such assertion stays green — so what is asserted here is that each of the
+    two names over persisted state is its own literal.
     """
 
     def test_they_spell_the_same_string_today(self):
@@ -76,13 +90,7 @@ class TestTheIdentifierStaysInTwoPlaces:
         assertion: the module is asked what it ASSIGNS, not what it resolves to.
         A string literal is the one answer that cannot be another constant's.
         """
-        module = ast.parse(_USER_DATA_LOCATION.read_text(encoding="utf-8"))
-        assignments = [
-            node
-            for node in module.body
-            if isinstance(node, ast.Assign)
-            and any(isinstance(t, ast.Name) and t.id == "APP_DIR_NAME" for t in node.targets)
-        ]
+        assignments = _module_level_assignments(_USER_DATA_LOCATION, "APP_DIR_NAME")
 
         assert len(assignments) == 1, "APP_DIR_NAME is assigned exactly once, at module level"
         assert isinstance(assignments[0].value, ast.Constant), (
@@ -90,6 +98,22 @@ class TestTheIdentifierStaysInTwoPlaces:
             "makes a package rename move every user's library, silently"
         )
         assert assignments[0].value.value == APP_DIR_NAME
+
+    def test_db_filename_is_its_own_literal_rather_than_a_derived_name(self):
+        """``DB_FILENAME = f"{PACKAGE_NAME}.db"`` must fail here, for the reason ``APP_DIR_NAME``'s test gives.
+
+        It reproduces today's value exactly, so only the syntax tree can tell.
+        """
+        from bootstrap.adapters import DB_FILENAME
+
+        assignments = _module_level_assignments(_BOOTSTRAP_ADAPTERS, "DB_FILENAME")
+
+        assert len(assignments) == 1, "DB_FILENAME is assigned exactly once, at module level"
+        assert isinstance(assignments[0].value, ast.Constant), (
+            "DB_FILENAME must be a literal of its own — deriving it from PACKAGE_NAME or APP_DIR_NAME "
+            "makes a rename of either start every user on an empty database, silently"
+        )
+        assert assignments[0].value.value == DB_FILENAME == "romm-tender.db"
 
     def test_the_identity_module_does_not_import_the_directory_name(self):
         """The fold read the other way round — ``PACKAGE_NAME = APP_DIR_NAME``.

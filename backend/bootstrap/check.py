@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from adapters.live_data_copy import copy_database, copy_file
 from adapters.persistence import SAVE_SYNC_STATE_FILENAME, SETTINGS_FILENAME
 
-from .adapters import DB_FILENAME
+from .adapters import DB_FILENAME, LEGACY_DB_FILENAME
 
 if TYPE_CHECKING:
     import logging
@@ -32,8 +32,13 @@ def copy_live_data(*, data_from: str, config_from: str, directories: AppDirector
     version still have the save-sync state beside them to fold in — and the
     build then starts from what is there, as a start would. Raises what the
     copy raises for a file that is there and cannot be read.
+
+    The database copied is the one a start would open — the current name where
+    a file has it, the old name otherwise — under the name it has, so the build
+    renames the copy as a start renames the original.
     """
-    if copy_database(os.path.join(data_from, DB_FILENAME), os.path.join(directories.data_dir, DB_FILENAME)):
+    database = DB_FILENAME if os.path.isfile(os.path.join(data_from, DB_FILENAME)) else LEGACY_DB_FILENAME
+    if copy_database(os.path.join(data_from, database), os.path.join(directories.data_dir, database)):
         logger.info(f"check: copied the database from {data_from}")
     if copy_file(
         os.path.join(data_from, SAVE_SYNC_STATE_FILENAME), os.path.join(directories.data_dir, SAVE_SYNC_STATE_FILENAME)

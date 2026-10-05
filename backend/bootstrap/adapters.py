@@ -26,6 +26,7 @@ from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_insta
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
+from adapters.database_rename import DatabaseRenameAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
 from adapters.es_find_rules import EsFindRulesAdapter
@@ -130,10 +131,18 @@ if TYPE_CHECKING:
     )
 
 # Filename of the SQLite database under the data root, created by the schema
-# migration runner at startup. It has one reader, in this module; the name is
-# public because it was once asked of a second install's directory too, and
-# leaving it importable costs nothing.
-DB_FILENAME = "romm_sync.db"
+# migration runner at startup. A literal of its own, never derived from
+# ``domain/identity.py``'s ``PACKAGE_NAME`` or ``APP_DIR_NAME``, both of which
+# happen to spell its stem: it names the file every user's library is in, so a
+# rename of either would move that library on the next start, with nothing
+# failing and nothing said. ``domain/identity.py`` carries the rest of that
+# split. ``install.sh`` spells it again, and its tests hold the two equal.
+DB_FILENAME = "romm-tender.db"
+
+# What the database was called before the program was Tender. A start renames a
+# file by this name to DB_FILENAME, and the pre-install check copies it where
+# no file by that name exists yet.
+LEGACY_DB_FILENAME = "romm_sync.db"
 
 
 @dataclass(frozen=True)
@@ -333,13 +342,24 @@ def bootstrap(
         at_home=launcher_at_home,
     )
 
+    # The database is moved from its old name before anything opens it under the
+    # current one: the migration runner would otherwise create an empty database
+    # beside the user's library. Here rather than in the entry point because
+    # this runs under the single-instance lock — a second backend refused a
+    # moment later must not have renamed the file under the running one.
+    db_path = os.path.join(directories.data_dir, DB_FILENAME)
+    DatabaseRenameAdapter(
+        legacy=os.path.join(directories.data_dir, LEGACY_DB_FILENAME),
+        current=db_path,
+        logger=logger,
+    ).rename()
+
     # Bring the on-disk SQLite schema up to date before any service is wired —
     # the composition root owns startup infra. Post-cutover (#784) SQLite is the
     # sole persistence backend: there is no JSON fallback, so a failed or
     # unopenable database is fatal. Log the cause, then re-raise so bootstrap
     # aborts and the plugin stays inert — matching the RomM-minimum-version
     # gate's "inert until the environment is fixed" posture.
-    db_path = os.path.join(directories.data_dir, DB_FILENAME)
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)
     except Exception:
