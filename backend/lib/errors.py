@@ -264,6 +264,30 @@ class NamedRefused(Refused):
         super().__init__(type(self).reason, message, **details)
 
 
+class NotConfigured(NamedRefused):
+    """Nothing to connect with: no server URL, no valid one, no credential, or a login for another server."""
+
+    reason = "config_error"
+
+
+class AuthFailed(NamedRefused):
+    """The server answered and would not accept the credential."""
+
+    reason = "auth_failed"
+
+
+class ServerUnreachable(NamedRefused):
+    """The server could not be reached, or did not answer in a usable way."""
+
+    reason = "server_unreachable"
+
+
+class VersionUnsupported(NamedRefused):
+    """The server runs a RomM older than the minimum this program accepts."""
+
+    reason = "version_error"
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 

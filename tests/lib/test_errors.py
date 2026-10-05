@@ -3,6 +3,9 @@ import socket
 import pytest
 
 from lib.errors import (
+    AuthFailed,
+    NamedRefused,
+    NotConfigured,
     RommApiError,
     RommAuthError,
     RommConflictError,
@@ -14,7 +17,9 @@ from lib.errors import (
     RommSyncDisabledError,
     RommTimeoutError,
     RommUnsupportedError,
+    ServerUnreachable,
     TokenHostMismatchError,
+    VersionUnsupported,
     classify_error,
     error_response,
 )
@@ -370,3 +375,22 @@ class TestErrorResponse:
         assert "different server" in resp["message"]
         assert "error" not in resp
         assert "error_code" not in resp
+
+
+class TestTheNamedRefusals:
+    """Each reason the panel branches on has a class of its own, and that class answers with it."""
+
+    @pytest.mark.parametrize(
+        ("named", "reason"),
+        [
+            (NotConfigured, "config_error"),
+            (AuthFailed, "auth_failed"),
+            (ServerUnreachable, "server_unreachable"),
+            (VersionUnsupported, "version_error"),
+        ],
+    )
+    def test_each_carries_its_reason(self, named, reason):
+        refused = named("Not now.", romm_version="4.5.0")
+
+        assert isinstance(refused, NamedRefused)
+        assert (refused.reason, refused.message, refused.details) == (reason, "Not now.", {"romm_version": "4.5.0"})
