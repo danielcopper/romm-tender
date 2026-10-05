@@ -17,6 +17,7 @@ from domain.sgdb_artwork import to_unsigned_app_id
 from domain.shortcut_data import RETRODECK_APP_ID
 from lib.errors import SteamGridDirMissingError
 from lib.input_driver_fix import InputDriverFix
+from lib.steam_input_apply import SteamInputApply
 
 if TYPE_CHECKING:
     import logging
@@ -169,42 +170,32 @@ class SteamConfigAdapter:
 
     # -- Steam Input config ---------------------------------------------------
 
-    def set_steam_input_config(self, app_ids: list[int], mode: str = "default") -> None:
-        """Set UseSteamControllerConfig for given app_ids in localconfig.vdf.
+    def set_steam_input_config(self, app_ids: list[int], mode: str = "default") -> SteamInputApply:
+        """Set UseSteamControllerConfig for given app_ids in localconfig.vdf, and say what came of it.
 
         mode: "default" (remove key / "1"), "force_on" ("2"), "force_off" ("0")
         """
-        loaded = self._load_localconfig()
-        if loaded[0] is None:
-            return
-        data, localconfig_path = loaded
-
-        apps = self._navigate_to_apps_section(data, create=mode != "default")
-        if apps is None:
-            return
-
-        changed = self._apply_steam_input_mode(apps, app_ids, mode)
-        if changed:
-            self._write_localconfig(data, localconfig_path, mode, len(app_ids))
-
-    def _load_localconfig(self) -> tuple[dict[str, Any], str] | tuple[None, None]:
-        """Load and parse localconfig.vdf. Returns (data, path) or (None, None)."""
         user_dir = self.find_steam_user_dir()
         if not user_dir:
             self._logger.warning("Cannot find Steam user dir, skipping Steam Input config")
-            return None, None
+            return SteamInputApply.NO_STEAM_USER
 
         path = os.path.join(user_dir, "config", "localconfig.vdf")
         if not os.path.exists(path):
             self._logger.warning(f"localconfig.vdf not found at {path}")
-            return None, None
+            return SteamInputApply.NO_LOCALCONFIG
 
         try:
             with open(path, encoding="utf-8") as f:
-                return vdf.load(f), path
+                data = vdf.load(f)
         except Exception as e:
             self._logger.error(f"Failed to parse localconfig.vdf: {e}")
-            return None, None
+            return SteamInputApply.UNREADABLE
+
+        apps = self._navigate_to_apps_section(data, create=mode != "default")
+        if apps is None or not self._apply_steam_input_mode(apps, app_ids, mode):
+            return SteamInputApply.APPLIED
+        return self._write_localconfig(data, path, mode, len(app_ids))
 
     def _navigate_to_apps_section(self, data: dict[str, Any], *, create: bool) -> dict[str, Any] | None:
         """Navigate to UserLocalConfigStore.Apps, optionally creating missing keys."""
@@ -237,16 +228,20 @@ class SteamConfigAdapter:
                 changed = True
         return changed
 
-    def _write_localconfig(self, data: dict[str, Any], path: str, mode: str, count: int) -> None:
-        """Atomically write localconfig.vdf back to disk."""
+    def _write_localconfig(self, data: dict[str, Any], path: str, mode: str, count: int) -> SteamInputApply:
+        """Atomically write localconfig.vdf back to disk; a failure leaves the original untouched."""
+        tmp_path = path + ".tmp"
         try:
-            tmp_path = path + ".tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 vdf.dump(data, f, pretty=True)
             os.replace(tmp_path, path)
-            self._logger.info(f"Steam Input mode '{mode}' applied for {count} app(s)")
         except Exception as e:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(tmp_path)
             self._logger.error(f"Failed to write localconfig.vdf: {e}")
+            return SteamInputApply.WRITE_FAILED
+        self._logger.info(f"Steam Input mode '{mode}' applied for {count} app(s)")
+        return SteamInputApply.APPLIED
 
     # -- RetroArch input driver check -----------------------------------------
 

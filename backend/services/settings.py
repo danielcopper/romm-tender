@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never
 
 from domain.custom_headers import (
     HeaderProblem,
@@ -27,7 +27,7 @@ from domain.custom_headers import (
 from domain.sibling_resolution import AUTO_REGION
 from lib.errors import Refused
 from lib.input_driver_fix import InputDriverFix
-from lib.list_result import ErrorCode
+from lib.steam_input_apply import SteamInputApply
 from lib.url_host import is_valid_server_url
 
 if TYPE_CHECKING:
@@ -320,7 +320,12 @@ class SettingsService:
         return {"success": True}
 
     async def apply_steam_input_setting(self) -> dict[str, Any]:
-        """Apply the current Steam Input mode to every bound ROM shortcut."""
+        """Apply the current Steam Input mode to every bound ROM shortcut.
+
+        Raises ``Refused`` when Steam's ``localconfig.vdf`` was not written, its
+        reason naming why: no Steam user, no such file, a file that would not
+        read, or a write that failed. The panel shows the message.
+        """
         async with self._rules.hold("apply_steam_input_setting", prune=True):
             return self._apply_steam_input_setting()
 
@@ -330,12 +335,18 @@ class SettingsService:
             app_ids = [rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None]
         if not app_ids:
             return {"success": True, "message": "No shortcuts to update"}
-        try:
-            self._steam_config.set_steam_input_config(app_ids, mode=mode)
+        outcome = self._steam_config.set_steam_input_config(app_ids, mode=mode)
+        if outcome is SteamInputApply.APPLIED:
             return {"success": True, "message": f"Steam Input set to '{mode}' for {len(app_ids)} shortcuts"}
-        except Exception as e:
-            self._logger.error(f"Failed to apply Steam Input setting: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": "Operation failed"}
+        if outcome is SteamInputApply.NO_STEAM_USER:
+            raise Refused("steam_user_not_found", "Not applied — no Steam user was found on this device")
+        if outcome is SteamInputApply.NO_LOCALCONFIG:
+            raise Refused("steam_config_not_found", "Not applied — Steam's localconfig.vdf was not found")
+        if outcome is SteamInputApply.UNREADABLE:
+            raise Refused("steam_config_unreadable", "Not applied — Steam's localconfig.vdf could not be read")
+        if outcome is SteamInputApply.WRITE_FAILED:
+            raise Refused("steam_config_write_failed", "Not applied — Steam's localconfig.vdf could not be written")
+        assert_never(outcome)
 
     # ── RetroArch input driver ──────────────────────────────────────────
 
