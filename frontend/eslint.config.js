@@ -9,6 +9,19 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
 
+// Names that carry "plugin" because they name someone else's plugin, and must
+// keep the word. Each lets through its whole name, wherever it appears, and
+// never a longer name containing it.
+const NAMES_NOT_ABOUT_TENDER = [
+  // Decky Loader's own window global, read to name the loader's version.
+  "DeckyPluginLoader",
+  // The config key rollup and ESLint each read their plugins from, and
+  // rollup.config.js's list of the rollup plugins every bundle is built with.
+  "plugins",
+  // rollup.config.js's rollup plugins one bundle is built with beside those.
+  "extraPlugins",
+];
+
 export default tseslint.config(
   // ESLint's root is this package, so the only gitignored trees it can reach are
   // this package's own: its `node_modules` and the coverage report Vitest writes
@@ -212,6 +225,22 @@ export default tseslint.config(
     rules: {
       // Anonymous mock components are fine — they don't appear in real render trees.
       "react/display-name": "off",
+    },
+  },
+  // Tender is not a plugin, and no name in this package says it is — every file
+  // ESLint lints, tests and config files included. What it reads is the names
+  // themselves: a string literal (a test title, a `"plugin_version"` key) and a
+  // comment are prose, out of its sight.
+  {
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...["Identifier", "JSXIdentifier", "PrivateIdentifier"].map((type) => ({
+          selector: `${type}[name=/plugin/i]${NAMES_NOT_ABOUT_TENDER.map((name) => `:not([name="${name}"])`).join("")}`,
+          message:
+            "Tender is not a plugin: name this after what it is (the panel, the backend, Tender). A third-party name that must keep the word goes on NAMES_NOT_ABOUT_TENDER in eslint.config.js, with its reason.",
+        })),
+      ],
     },
   },
   // Must stay LAST: turns off ESLint rules that conflict with Prettier formatting
