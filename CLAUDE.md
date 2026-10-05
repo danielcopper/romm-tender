@@ -66,7 +66,8 @@ than editing, so the entries below lead with what goes wrong unnoticed. Read the
 new code in it.
 
 - `services.md` — a new service takes **one `config: XxxServiceConfig` kwarg** (frozen, all deps inside); debug logging
-  is the injected `DebugLogger`. Neither is checked.
+  is the injected `DebugLogger`. Neither is checked. A converted module refuses by raising `Refused`, checked only for
+  modules on the shape check's list.
 - `python-conventions.md` — Protocol suffixes by shape, `do_<verb>` vs. `_<verb>_io`, docstrings stating the contract
   rather than the behavior, and when a subfolder is justified. **No mechanical check exists for any of it.**
 - `adapters-domain.md` — adapters own I/O, domain is pure, aggregate mutations are verb-named after the event
@@ -205,10 +206,11 @@ locally with `mise run docs`.
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **An endpoint is what `@route` marks**, `def` or `async def` alike: a caller can reach exactly the public methods on
   `Endpoints` that carry it, and `async` has no bearing on that. `@route` goes topmost, above any other decorator — the
-  one placement `scripts/check_endpoint_parity.py` accepts. Nothing flags a missing or stray `@route` on a public method
-  as such: the gate sees either only as a name the frontend's `endpoint("name")` declarations disagree with, so those
-  declarations are the one judge of what should be reachable. The dispatcher's reading is held equal to the gate's by
-  `tests/host/test_dispatch.py`.
+  one placement `scripts/check_endpoint_parity.py` accepts. A public method on `Endpoints` must carry `@route`:
+  `main.py` wraps every public method in the refusal translation on that premise, and
+  `tests/test_endpoints_translation.py` fails on one without it. A stray `@route` is seen only by the gate, as a name
+  the frontend's `endpoint("name")` declarations disagree with, so those declarations are the one judge of what should
+  be reachable. The dispatcher's reading is held equal to the gate's by `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
@@ -362,8 +364,14 @@ Format: **invariant** — tier — enforced by. Each entry here is the binding s
 entry — why the rule exists, what breaks without it, and where it lives — is on
 [docs/architecture/invariants.md](docs/architecture/invariants.md), in the same order.
 
-- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`)** — check —
-  `scripts/check_failure_shape.py --check`
+- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`); a module on `CONVERTED_MODULES`
+  builds no failure shape — a service there raises its refusal, which `Endpoints` answers; anything else an endpoint
+  raises stays a transport error** — check + test + prompt-only — `scripts/check_failure_shape.py --check` (returned
+  dicts in `services/`, and every literal, `error_response` call or refusal-helper spread in a listed module),
+  `tests/test_endpoints_translation.py` (on every route, a raised `Refused` / `DomainRefused` and a `RommApiError`
+  answer that shape, a returned `PartialFailure` is serialized into it, and any other exception stays
+  `backend_exception`). Prompt-only: no entry is ever taken off `CONVERTED_MODULES`, and a further type joins
+  `main._TRANSLATED` only by decision
 - **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
   bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
   exception through `classify_error`, or peel the 404 off with a sibling `except RommNotFoundError` where the verdict is

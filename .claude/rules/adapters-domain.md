@@ -17,7 +17,9 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
 **Adapters**: `[CP]` Own all I/O. Never import from `services/`. Implement Protocols defined in `services/protocols/`.
 
 **Domain**: `[CP]` Pure compute only. No I/O, no state mutation, no service or adapter imports. Anything stateless and
-I/O-free currently in a service belongs here.
+I/O-free currently in a service belongs here. `[ours]` A refusal a domain rule decides is raised as `DomainRefused`
+(`domain/refusal.py`), or a `NamedDomainRefused` subclass that declares only `reason`; a broken invariant stays
+`ValueError` and its kind.
 
 ## Aggregates
 

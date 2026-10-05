@@ -34,6 +34,13 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
   bare-param ctors, no mixed ctors.
 - `[ours]` **Debug logging: inject the `DebugLogger` Protocol.** No per-service `_log_debug` that re-reads settings at
   call time, and no reaching for a module-level logger to bypass log-level filtering — a service is handed its logger.
+- `[ours]` **A converted module refuses by raising, never by returning the failure shape** — `Refused`
+  (`lib/errors.py`), with the reason a literal at the raise site, or a `NamedRefused` subclass that declares only
+  `reason = "…"`; a domain rule raises `DomainRefused` or a `NamedDomainRefused` subclass (`domain/refusal.py`). Work
+  that stopped partway returns a `PartialFailure` (`lib/partial_failure.py`) subclass that carries what was done.
+  `scripts/check_failure_shape.py --check` fails on a failure shape built in a module on its `CONVERTED_MODULES` list by
+  a dict literal, an `error_response` call or a refusal helper's spread; a module not on it may still return the dict.
+  An entry never leaves that list, and nothing checks that.
 - `[ours]` God-class signal: services > ~1000 LOC — decompose into sub-services with constructor injection
   (`services/saves/` is the reference). Enforced by `scripts/check_module_size.py`: a new module may not cross the
   threshold at all, and the modules that predate the gate are pinned at their exact size and may not grow. A pin goes up

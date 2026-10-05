@@ -81,14 +81,16 @@ keeping the two apart is prose and review. Reachable methods are exactly the end
 methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
 is the one `scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
-**A refusal can be raised, and the entrypoint answers it.** Every endpoint on `Endpoints` is wrapped once (in `main.py`,
-not per method, so `@route` stays the first decorator): a raised `Refused` (`lib/errors.py`) or `DomainRefused`
-(`domain/refusal.py`) answers `{success: False, reason, message}` with the refusal's details beside them; a returned
-`PartialFailure` (`lib/partial_failure.py`), the result of work that stopped partway, answers the same shape with what
-was done; and a raised `RommApiError` answers `classify_error`'s reason and message. Nothing else is caught there: any
-other exception, a raw `ConnectionError` or `OSError` included, is still a `backend_exception`, and a further type is
-added only by decision, one type at a time. A `def` endpoint stays a `def`. Services not yet converted still return the
-failure dict, and both forms reach the panel identically.
+**A refusal can be raised, and the entrypoint answers it.** Every endpoint on `Endpoints` is wrapped once, by a class
+decorator in `main.py`, so no endpoint carries a second decorator and a new one is wrapped without anyone remembering
+to: a raised `Refused` (`lib/errors.py`) or `DomainRefused` (`domain/refusal.py`) answers
+`{success: False, reason, message}` with the refusal's details beside them; a returned `PartialFailure`
+(`lib/partial_failure.py`), the result of work that stopped partway, answers the same shape with what was done; and a
+raised `RommApiError` answers `classify_error`'s reason and message. Nothing else is caught there: any other exception,
+a raw `ConnectionError` or `OSError` included, is still a `backend_exception`. A translated RomM error is logged as one
+warning line, its type and message without a stack; a refusal is a decision and is not logged. A `def` endpoint stays a
+`def`, and an awaitable it hands back is translated when the dispatcher awaits it. Services not yet converted still
+return the failure dict, and both forms reach the panel identically.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
@@ -2627,7 +2629,7 @@ from the other layers.
 | `main.py`            | `run()` and `build_backend()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint)       |
 | `check.py`           | `check()`, the pre-install check's entry: builds the `Application` on copies of the live data and runs none of it |
 | `bootstrap/`         | Composition root — `build_application()` composes `bootstrap()` and `wire_services()` into an `Application`       |
-| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `classify_error`)                                                            |
+| `lib/errors.py`      | Exception hierarchy (`RommApiError`, `Refused`, `classify_error`)                                                 |
 | `lib/list_result.py` | `ErrorCode` and the canonical endpoint failure shape                                                              |
 
 ## Where user data lives
@@ -2914,10 +2916,11 @@ carrying an additive `server_query_failed` / `recommended_action` flag) are patt
 the report-mode inventory grouped by classification. The routing slugs come from `lib.list_result.ErrorCode` (the Lean
 enum) plus bespoke plain-string reasons for non-server-reachability guards.
 
-The gate also carries `CONVERTED_MODULES`, the modules that raise their refusals instead of answering them. In those
-(anywhere under `backend/`, adapters included) `--check` fails on any dict literal with a falsy `success`, any
-`error_response(...)` call and a `**spread` of a refusal helper, and on a listed path that no longer exists. The list
-only grows; the script's docstring names what it cannot see.
+The gate also carries `CONVERTED_MODULES`, the modules that build no failure shape at all: a service there raises its
+refusal and `Endpoints` answers it, and an adapter there reports an outcome its service decides on. In those (anywhere
+under `backend/`, adapters included) `--check` fails on any dict literal with a falsy `success`, any
+`error_response(...)` call and a `**spread` of a refusal helper, and on a listed path that no longer exists or does not
+parse. The list only grows; the script's docstring names what it cannot see.
 
 ### 5. Enforced: underscore prefix
 

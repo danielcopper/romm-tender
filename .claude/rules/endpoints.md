@@ -7,10 +7,12 @@ paths:
 # Endpoint response shapes `[ours]`
 
 Endpoints returning a plain `dict` that can fail use `{success: False, reason: ErrorCode | str, message: str}`. Both
-`reason` and `message` are **required**. Reuse `lib.list_result.ErrorCode` for coarse categories; bespoke guards
-(`config_error`, `sync_disabled`, `not_installed`, …) stay plain-string reasons. Transport failures collapse onto
-`SERVER_UNREACHABLE`; 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct `message`). The legacy `error_code`
-key and a second `error` key are **forbidden**. Enforced by `scripts/check_failure_shape.py --check`.
+`reason` and `message` are **required**. Reuse `lib.list_result.ErrorCode` for coarse categories, and spell the slug as
+a string literal where a refusal is raised (`Refused("unknown", …)`), so a check that reads reasons off raise sites can
+read it; bespoke guards (`config_error`, `sync_disabled`, `not_installed`, …) stay plain-string reasons. Transport
+failures collapse onto `SERVER_UNREACHABLE`; 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct `message`).
+The legacy `error_code` key and a second `error` key are **forbidden**. Enforced by
+`scripts/check_failure_shape.py --check`.
 
 Two carve-outs (pattern-exempt in the gate):
 
@@ -22,13 +24,10 @@ Two carve-outs (pattern-exempt in the gate):
 
 Full convention paragraph: the `lib/list_result.py` module docstring.
 
-**A service may raise its refusal instead of answering it** — `Refused` (`lib/errors.py`) from the service layer,
-`DomainRefused` (`domain/refusal.py`) from a domain rule, with the reason a literal at the raise site — and return a
-`PartialFailure` (`lib/partial_failure.py`) for work that stopped partway. `Endpoints` translates all three into the
-shape above, and a raised `RommApiError` into `classify_error`'s reason and message; it catches nothing else, so a bug
-stays a transport error (`.claude/rules/host.md`, rule 1). A failure dict stays valid in a module not yet converted. A
-converted module is listed in `CONVERTED_MODULES` in `scripts/check_failure_shape.py`, which then fails on any failure
-shape built in it; the list only grows.
+**`Endpoints` answers a refusal its use case raises.** Every public method is wrapped once in `main.py`, so an endpoint
+body never catches `Refused`, `DomainRefused` or `RommApiError` to build the shape above itself, and anything else stays
+a transport error (`.claude/rules/host.md`, rule 1). What is translated, and why nothing else is:
+`docs/architecture/backend-architecture.md`, "A refusal can be raised".
 
 Two adjacent rules that bite when adding or changing an endpoint:
 
@@ -37,8 +36,9 @@ Two adjacent rules that bite when adding or changing an endpoint:
   endpoint's: the use case it calls checks them (GLOSSARY.md → Conflict rules), which is why a use case that checks any
   is `async`. `host.dispatch.route_names` resolves the set off the loaded class, `scripts/check_endpoint_parity.py`
   derives the same set from the source (and fails on a `@route` below another decorator or on an underscored name), and
-  `tests/host/test_dispatch.py` asserts the two are equal. A method without `@route` is not reachable at all, and one
-  with it is reachable whether or not that was intended; the parity check below is what notices either.
+  `tests/host/test_dispatch.py` asserts the two are equal. A public method must carry `@route`: the refusal translation
+  wraps every public method, and `tests/test_endpoints_translation.py` fails on one without it. A method with `@route`
+  is reachable whether or not that was intended; the parity check below is what notices that.
 - **Frontend↔backend parity** (name + arity) is enforced by `scripts/check_endpoint_parity.py`, which derives the
   frontend surface from every `endpoint<[Args], Return>("name")` in `frontend/src/**/*.ts`. A rename lands on both sides
   or not at all.
