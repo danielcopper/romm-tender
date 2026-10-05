@@ -391,9 +391,9 @@ class GroupFinalizer:
             artifact_outcome = await self._loop.run_in_executor(
                 None, self._prune_artifacts.remove, sorted(plan.delete_ids), claims
             )
-            self._record_outcome(artifact_outcome, "plugin_artifacts", ledger)
+            self._record_outcome(artifact_outcome, "cache_files", ledger)
             if not artifact_outcome.get("success"):
-                raise RuntimeError(artifact_outcome.get("message", "Plugin artifact cleanup failed"))
+                raise RuntimeError(artifact_outcome.get("message", "Cache cleanup failed"))
             if committed_action == "remove_shortcut" and plan.app_id is not None and handle is not None:
                 await self._remove_steam_state(plan.app_id, handle, ledger)
         except Exception as exc:

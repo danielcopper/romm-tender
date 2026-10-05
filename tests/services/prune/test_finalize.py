@@ -216,7 +216,7 @@ class TestCascade:
         assert result["status"] == "removed"
         assert result["removed_rom_ids"] == [1]
         assert fixture.order == ["quarantine", "installed_content", "artifacts", "validate_absences"]
-        assert ledger.mutations == ["installed_rom_content", "plugin_artifacts", "database_rows"]
+        assert ledger.mutations == ["installed_rom_content", "cache_files", "database_rows"]
         with fixture.uow:
             row = fixture.uow.roms.get(1)
         assert row is None

@@ -578,7 +578,7 @@ async def test_unbound_confirmed_404_row_is_deleted_after_final_reprobes(harness
     complete = await _finish(harness)
     assert harness.uow.roms.get(1) is None
     assert complete["removed_rom_ids"] == [1]
-    assert complete["results"][0]["mutations"] == ["plugin_artifacts", "database_rows"]
+    assert complete["results"][0]["mutations"] == ["cache_files", "database_rows"]
     # Three re-proof rounds, and because no candidate answered live in any of
     # them, each round also asks one control whether the endpoint answers at all.
     # One extra request per round — never per candidate.
@@ -2325,7 +2325,7 @@ async def test_post_filesystem_database_exception_preserves_actual_mutation_ledg
     result = complete["results"][0]
     assert result["status"] == "partial"
     assert result["reason"] == "unknown"
-    assert result["mutations"] == ["installed_rom_content", "plugin_artifacts", "database_rows_ambiguous"]
+    assert result["mutations"] == ["installed_rom_content", "cache_files", "database_rows_ambiguous"]
     assert harness.uow.roms.get(1) is not None
 
 
@@ -2357,7 +2357,7 @@ async def test_partial_adapter_outcomes_enter_actual_and_ambiguous_mutation_ledg
                 "message": "artifact parent fsync failed",
             },
         )
-        category = "plugin_artifacts"
+        category = "cache_files"
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
 
