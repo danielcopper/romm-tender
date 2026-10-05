@@ -4,7 +4,7 @@
  *
  * The levers themselves are Steam internals that happy-dom cannot show: no
  * FriendsUI store listens for the message, and no 300 px cap exists to lift. What
- * IS pinnable is everything the plugin owns — which message goes out, to which
+ * IS pinnable is everything Tender owns — which message goes out, to which
  * target origin, which selector the injected rule is written against, and that
  * every exit path posts the hide message and drops the stylesheet.
  *
@@ -160,7 +160,7 @@ describe("useWideQamPanel", () => {
 
   it("injects the rule into the page's own document, not the one the panel's code runs in", async () => {
     const mod = await loadQamExpansion(PROBE_CLASSES);
-    // Plugin JS runs in the SharedJSContext document; the QAM panel and the wide
+    // The panel's code runs in the SharedJSContext document; the QAM panel and the wide
     // page's root live in a rendered-UI document. A rule injected into the
     // ambient one would leave the panel expanded and its content still capped,
     // with nothing to show for it.

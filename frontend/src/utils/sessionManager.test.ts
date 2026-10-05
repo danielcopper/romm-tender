@@ -51,7 +51,7 @@ const ROM_ID = 7;
 // A second RomM shortcut — the concurrent-games case from #1621.
 const OTHER_APP_ID = 200;
 const OTHER_ROM_ID = 9;
-// An app the plugin does not own: a regular Steam game or a foreign shortcut.
+// An app Tender does not own: a regular Steam game or a foreign shortcut.
 const UNRELATED_APP_ID = 4242;
 
 const IDLE_FINALIZE = {
@@ -174,7 +174,7 @@ function stubLifecycleSteamClient(): void {
 // combinations that are awkward to stage through the running-app store.
 describe("planAdoption — the reload reconcile matrix", () => {
   // The map binds APP_ID → ROM_ID and OTHER_APP_ID → OTHER_ROM_ID; anything else
-  // is a foreign app the plugin does not own.
+  // is a foreign app Tender does not own.
   const resolveRomId = (appId: number): number | null =>
     ({ [APP_ID]: ROM_ID, [OTHER_APP_ID]: OTHER_ROM_ID })[appId] ?? null;
   const NOW = 9_000;

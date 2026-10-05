@@ -1,7 +1,7 @@
 /**
  * Editor for the extra HTTP headers sent to the RomM server, for a server behind
  * an authenticating reverse proxy (Pangolin, Cloudflare Access, Authelia,
- * Authentik forward-auth) that rejects the plugin's requests before RomM ever
+ * Authentik forward-auth) that rejects Tender's requests before RomM ever
  * sees them.
  *
  * A stored header arrives with its NAME only — a value is a proxy credential and

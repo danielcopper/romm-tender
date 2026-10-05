@@ -46,7 +46,7 @@ const QUICK_ACCESS_TREE_ID = "QuickAccess-NA";
  * three readings that reach no window: no navigation trees at all, trees with
  * none of them the menu's, and the menu's own tree with no root mounted on it.
  *
- * Plugin code runs in a different window, and a mounted node of the menu's own
+ * The panel's code runs in a different window, and a mounted node of the menu's own
  * would answer this through its `ownerDocument`. The hook has no such node at
  * its first render: the caller's ref is still empty when the initialiser runs,
  * so the trees are the only handle available at the moment the question is put.

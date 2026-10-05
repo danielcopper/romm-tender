@@ -207,7 +207,7 @@ export function placeEntryFocus(root: ParentNode, findStop: (root: ParentNode) =
  *
  * **Nothing here is asked of a module global**, neither the document nor the
  * window: every question goes to a node this page holds — `root.contains`, the
- * event's own target, `isConnected`. Plugin code runs in the SharedJSContext
+ * event's own target, `isConnected`. The panel's code runs in the SharedJSContext
  * window while these nodes belong to the QAM view's own document, so a
  * `document.activeElement` read here would answer about the wrong document, and
  * no test in this repo could see it: happy-dom has one realm.

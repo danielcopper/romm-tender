@@ -150,8 +150,8 @@ export const SessionBudgetBanner: FC<SessionBudgetBannerProps> = ({
 
   const liveReadingSuffix = rssKb != null ? ` (${formatGb(rssKb)})` : "";
   // How far the paused run got. The counts come from the backend — which keeps
-  // running across the Steam restart the banner asks for — but a plugin/backend
-  // reload wipes them (in-memory, by design). Then, and whenever the total is
+  // running across the Steam restart the banner asks for — but a backend
+  // restart wipes them (in-memory, by design). Then, and whenever the total is
   // unknown or zero, the sentence is dropped entirely rather than rendered with
   // placeholders or zeros.
   //

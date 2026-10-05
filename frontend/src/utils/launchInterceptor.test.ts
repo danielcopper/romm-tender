@@ -864,7 +864,7 @@ describe("launchInterceptor — full funnel watcher", () => {
   // #1152 — the watcher's relaunch path re-confirms launch_options just before
   // RunGame, mirroring the Play-button funnel via the shared
   // `reconfirmLaunchOptions` helper. Null/rejected responses remain best-effort;
-  // a timeout or stale plugin admission aborts the relaunch.
+  // a timeout or stale admission aborts the relaunch.
   // ---------------------------------------------------------------------------
   describe("relaunch launch_options re-confirm (#1152)", () => {
     const RELAUNCH_COMMAND = 'flatpak run net.retrodeck.retrodeck "/roms/snes/g.rom"';
@@ -1151,7 +1151,7 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
 
     it("preLaunchSync: save_shape_unsupported → success, so a shared-card game never nags on launch", async () => {
-      // #1858: the emulator keeps no per-game save set this plugin can carry.
+      // #1858: the emulator keeps no per-game save set Tender can carry.
       // Nothing went wrong and the game still launches, so treating it as a
       // failure would put the fallback confirm on every PS2 or MAME launch.
       const ops = await captureOps();

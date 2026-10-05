@@ -8,7 +8,7 @@ interface VersionErrorCardProps {
 }
 
 /**
- * Polished error card shown when server version is below plugin minimum.
+ * Polished error card shown when server version is below Tender's minimum.
  *
  * It replaces whatever page it is shown on, and carries nothing beside the card
  * itself. It used to carry a second warning about an older plugin install; that

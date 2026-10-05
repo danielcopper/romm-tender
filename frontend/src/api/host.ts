@@ -58,7 +58,7 @@ export interface ToastNotification {
   dismiss: () => void;
 }
 
-/** Raises toasts under the plugin's name. */
+/** Raises toasts under Tender's name. */
 export interface Toaster {
   toast(toast: ToastData): ToastNotification;
 }

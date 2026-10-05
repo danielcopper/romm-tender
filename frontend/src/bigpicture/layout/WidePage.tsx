@@ -119,7 +119,7 @@ interface BodyFit {
  * What the Back chip reads: the button's own glyph and the word.
  *
  * The glyph is Steam's, drawn for whatever controller is connected, so the chip
- * names the same button the footer legend does rather than a letter this plugin
+ * names the same button the footer legend does rather than a letter Tender
  * picked. Where the probe misses, the chevron the chip carried before it takes
  * over — a chip that says Back and no glyph is still true, and a hand-drawn B
  * would be wrong for a PlayStation pad.
@@ -213,7 +213,7 @@ function ancestorOverhang(body: HTMLElement, scroller: HTMLElement): number {
 /**
  * The space left below `body` inside whatever scrolls it — the height a wide
  * page gets to work with, because Steam's tabbed page fills its parent rather
- * than growing and nothing in the QAM chain hands the plugin's panel a height —
+ * than growing and nothing in the QAM chain hands Tender's panel a height —
  * paired with the pull-up that makes room for it.
  *
  * The height is the whole of the scroller below the body's own top, and no
@@ -311,7 +311,7 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
       setFit((previous) => (previous?.height === next.height && previous.overhang === next.overhang ? previous : next));
     };
     measure();
-    // The view's own constructor, not the module's: plugin code runs in the
+    // The view's own constructor, not the module's: the panel's code runs in the
     // SharedJSContext window and these nodes are the QAM's.
     const observer = new view.ResizeObserver(measure);
     observer.observe(body.ownerDocument.documentElement);

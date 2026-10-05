@@ -634,7 +634,7 @@ function downloadLabel(
  * core will look for is the one that is missing.
  *
  * **The delete's condition is `deletable_count` and nothing else.** That field
- * says how many of the plugin's own downloads a delete here would take, which
+ * says how many of Tender's own downloads a delete here would take, which
  * is the whole authority; `downloaded` is `os.path.exists` and is equally true
  * of `dolphin-emu/Sys/codehandler.bin`, which RetroDECK ships, no library can
  * hand back, and which sits one row above a real download on the GameCube pane.
@@ -796,7 +796,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
       {/* The route the summary above cannot name: nothing here could say which
           files this system wants, so the reader has to be told that placing one
           by hand still works. The line used to open "BIOS management is not
-          supported for this system yet", which is a claim about the plugin and
+          supported for this system yet", which is a claim about Tender and
           not what the state means: install an emulator that declares firmware
           for this platform and the pane answers, with nothing changed here. */}
       {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
@@ -822,7 +822,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           focus stop, so the row stays walkable.
 
           Delete is local-only (no server needed). Its number is the backend's
-          `deletable_count` — the plugin's own download records that are still on
+          `deletable_count` — Tender's own download records that are still on
           disk, which is exactly what the delete unlinks. The library ratio
           counts a different set and was wrong here in both directions,
           including hiding the button over downloads RomM had stopped listing. */}

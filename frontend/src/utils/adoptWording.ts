@@ -81,7 +81,7 @@ export function nounFor(occupied: TargetOccupiedResult): string {
  * numbers `stat` returned describe the game at all. Only a file or a directory
  * is: a symlink's size and mtime are the link's own — when it was pointed
  * somewhere, not when the game was last touched — and a kindless entry's belong
- * to something the plugin has no word for.
+ * to something Tender has no word for.
  *
  * Everything under "On this device" is read as being about this game's copy, so
  * a measurement that is not gets left out rather than qualified. Half that
@@ -195,7 +195,7 @@ export const VERIFY_UNREACHABLE_MESSAGE = "Couldn't reach the server to check th
  * What the second confirmation promises will be destroyed. Three sentences,
  * because three different things are: a file or folder may be the user's own
  * dump and is gone for good, a shortcut is one line of filesystem bookkeeping
- * whose target survives, and a kindless entry is something the plugin can only
+ * whose target survives, and a kindless entry is something Tender can only
  * say it is removing.
  */
 export function replaceWarning(occupied: TargetOccupiedResult, candidate: boolean): string {

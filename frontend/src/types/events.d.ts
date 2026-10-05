@@ -1,5 +1,5 @@
 /**
- * Typed surface for the plugin's custom DOM events. Augments WindowEventMap
+ * Typed surface for Tender's custom DOM events. Augments WindowEventMap
  * so addEventListener/dispatchEvent calls infer the right CustomEvent shape
  * without per-call `as CustomEvent<X>` casts.
  *

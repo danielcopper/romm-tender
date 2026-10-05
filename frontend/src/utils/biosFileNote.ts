@@ -123,7 +123,7 @@ const PATH_INACCESSIBLE = "firmware-path-inaccessible";
  * A satisfied folder lists what it holds, in the resolver's own words — those
  * are the core's own option labels, and the core needs exactly one of them, so
  * they carry no per-image required/optional marking and no mark for which one
- * will be loaded (that is a core option this plugin does not read).
+ * will be loaded (that is a core option Tender does not read).
  *
  * There is deliberately no branch for `firmware-search-unverified`, the code for
  * a folder whose candidates were never hashed. The backend asks the folder
@@ -172,7 +172,7 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *   note says what was established rather than what was not.
  * - **`unread`** — the bytes were asked for and did not come back. This is the
  *   one the old single sentence was right about, and it is a statement about the
- *   PLUGIN's read rather than about the emulator's: that this process could not
+ *   BACKEND's read rather than about the emulator's: that this process could not
  *   read the file is no evidence the launch cannot.
  * - **`refused`** — the emulator will not open the file at all, on its size,
  *   before reading a byte. It arrives with the verdict already `false`, so the

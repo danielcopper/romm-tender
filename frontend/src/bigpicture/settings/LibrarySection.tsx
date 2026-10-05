@@ -1,7 +1,7 @@
 /**
  * Set-and-forget preferences about what the library looks like once it is IN
  * Steam: the preferred-region dropdown (ADR-0021 §3, which region wins when a
- * game has several dumps and the plugin must pick one to bind + name the
+ * game has several dumps and Tender must pick one to bind + name the
  * shortcut after), the collection platform-groups toggle and the naming mode.
  * Pure renderer: parent owns every value and the save/confirm flow.
  *

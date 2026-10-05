@@ -1117,7 +1117,7 @@ describe("Library › Platforms", () => {
     it("says no emulator, in red, when ES-DE lists none at all", async () => {
       // The one case where RetroDECK's own fallback fails too: it reads
       // `command[1]` for the system, finds nothing, and exits 1. Reachable for a
-      // platform in neither the plugin's map nor `es_systems.xml` — `ps5`,
+      // platform in neither Tender's map nor `es_systems.xml` — `ps5`,
       // `vic-20` and four others on this machine.
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo({ emulators: [], active_core_label: null }));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -3133,7 +3133,7 @@ describe("Library › Platforms", () => {
 
       expect(container.textContent).toContain("Requirement unknown");
       // The machine fact, then what the reader can do about it — and no claim
-      // that the plugin is the limitation, which it is not: an emulator that
+      // that Tender is the limitation, which it is not: an emulator that
       // declares firmware for this platform makes the pane answer by itself.
       // With no pick to name (this payload carries no `active_core_label`) the
       // sentence names the role, and claims nothing about the other emulators

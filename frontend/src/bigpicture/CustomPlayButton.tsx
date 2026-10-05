@@ -606,7 +606,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
 
     // Benign skip: either the saves are written beside the game file (#239), or
-    // this game's emulator keeps no per-game save file set the plugin can carry
+    // this game's emulator keeps no per-game save file set Tender can carry
     // (#1858). NOT a failure — proceed to launch silently (no toast, no
     // fallback-launch confirm). Both are standing facts about the machine, so a
     // confirm on every single launch would be pure noise. The content-dir case

@@ -1,5 +1,5 @@
 /**
- * The two levers that widen the plugin's Quick Access Menu panel from 348 px to
+ * The two levers that widen Tender's Quick Access Menu panel from 348 px to
  * 854 px, and the paths that clear them again.
  *
  * Steam ships no API for either. Both are internals with no compatibility
@@ -105,7 +105,7 @@ ${TAB_PANEL_SELECTOR}:has(.${WIDE_ROOT_CLASS}) > * { max-width: none; }
 `;
 
 // The stylesheet a wide page has up, held by reference rather than looked up by
-// id: it lives in the page's own document, and plugin code runs in a different
+// id: it lives in the page's own document, and the panel's code runs in a different
 // one, so the ambient `document` cannot reach it.
 //
 // One reference for the module, which holds only while at most one wide page is
@@ -118,7 +118,7 @@ let injectedStyle: HTMLStyleElement | null = null;
 
 /**
  * Drive Steam's Friends-tab expansion. The FriendsUI store listens for `message`
- * events on the window plugin code runs in and flips one MobX observable, which
+ * events on the window the panel's code runs in and flips one MobX observable, which
  * carries the `Expanded` class that un-shifts the QAM's placeholder.
  *
  * The target origin is `window.origin`: it addresses the message to the one
@@ -132,7 +132,7 @@ export function setQamExpanded(expanded: boolean): void {
 }
 
 /**
- * Give the panel's width back, if this plugin ever took it. A no-op otherwise:
+ * Give the panel's width back, if Tender ever took it. A no-op otherwise:
  * the flag is Steam's own and global, so posting the hide message unasked would
  * retract a Friends panel the user opened.
  */

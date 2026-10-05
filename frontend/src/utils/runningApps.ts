@@ -10,8 +10,8 @@
  * The list is a MEMBERSHIP set, not a launch order. The store maps its private
  * running-appid array through the app store and DROPS entries whose overview has
  * not loaded yet, so the head of `RunningApps` is not even reliably Steam's own
- * `MainRunningApp` — the two diverge exactly during the post-launch window this
- * plugin cares about. And the ordering it does carry is "most recently
+ * `MainRunningApp` — the two diverge exactly during the post-launch window
+ * Tender cares about. And the ordering it does carry is "most recently
  * FOREGROUNDED" (`SetRunningApp` removes and unshifts), while the reconciler that
  * notices a newly-launched process APPENDS it at the tail. The head is therefore
  * never a way to identify the app that just started — use the appid the lifetime

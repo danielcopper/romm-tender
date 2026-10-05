@@ -1,5 +1,5 @@
 /**
- * The shared shell for the plugin's inline-validating prompt modals (ConnectModal,
+ * The shared shell for Tender's inline-validating prompt modals (ConnectModal,
  * SgdbApiKeyModal): a bare {@link ModalRoot} carrying a title, the caller's field
  * content, an inline error line above the footer, and a footer with a primary
  * submit button plus a Cancel button. Owns only the shell chrome and its style

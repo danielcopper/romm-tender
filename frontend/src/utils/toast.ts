@@ -8,10 +8,10 @@ import type { ReactNode } from "react";
 export const DISPLAY_NAME = "Tender";
 
 /**
- * Raise a toast under the plugin's name.
+ * Raise a toast under Tender's name.
  *
  * *options* passes through to `toaster.toast` and may override the title, which
- * no call site currently needs: every notice comes from the same plugin, so a
+ * no call site currently needs: every notice comes from Tender, so a
  * second sender would only make the user work out that they are the same thing.
  */
 export function showToast(body: ReactNode, options?: Partial<Omit<ToastData, "body">>): ToastNotification {

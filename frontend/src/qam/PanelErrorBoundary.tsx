@@ -68,7 +68,7 @@ export class PanelErrorBoundary extends Component<PanelErrorBoundaryProps, Panel
    * over. **A `key` here would be inert**, which is why there is none — it would
    * read as the mechanism while React had already done the work.
    *
-   * It does NOT re-evaluate the bundle, and it does not re-run the plugin
+   * It does NOT re-evaluate the bundle, and it does not re-run the panel
    * factory. Re-evaluating is the injector's (`backend/host/inject/`) and
    * nothing in this tree can ask for it; re-running the factory would install a
    * second copy of every listener and patch it registers, which are

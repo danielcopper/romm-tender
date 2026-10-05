@@ -1,7 +1,7 @@
 /**
  * RetroDECK file migration types — the pending-migration status and the result
  * shape returned after running a migration. Anything that describes a
- * migration handshake between the plugin and the user lives here.
+ * migration handshake between Tender and the user lives here.
  */
 
 export interface MigrationStatus {

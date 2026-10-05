@@ -1476,7 +1476,7 @@ export const deletePlatformBios = endpoint<[string], { success: boolean; deleted
 );
 /** One row's Delete button — the per-file twin of `deletePlatformBios`, sharing
  *  its authorisation rather than restating it. Addressed by file name, and a
- *  name the plugin holds no download record for removes nothing: the record is
+ *  name Tender holds no download record for removes nothing: the record is
  *  the only evidence we placed the file, and it is the record's own path that is
  *  unlinked. Offer it only where the row says `deletable`. */
 export const deleteBiosFile = endpoint<[string, string], { success: boolean; deleted_count: number; message: string }>(
