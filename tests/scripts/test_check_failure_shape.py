@@ -312,7 +312,7 @@ class TestMainEntryPoint:
 
 _CONVERTED_SOURCE = """\
 from lib.errors import error_response
-from lib.conflict_rules import update_refusal
+from lib.example import busy_refusal
 
 
 def refuse():
@@ -325,7 +325,7 @@ def translate(exc):
 
 
 def spread():
-    return {**update_refusal(), "synced": 0}
+    return {**busy_refusal(), "synced": 0}
 """
 
 
@@ -350,7 +350,7 @@ class TestConvertedModules:
         out = capsys.readouterr().out
         assert "backend/adapters/mod.py:6  a failure dict literal" in out
         assert "backend/adapters/mod.py:11  a call to error_response()" in out
-        assert "backend/adapters/mod.py:15  a spread of update_refusal()" in out
+        assert "backend/adapters/mod.py:15  a spread of busy_refusal()" in out
 
     def test_the_same_module_off_the_list_passes(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
