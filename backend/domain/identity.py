@@ -42,8 +42,8 @@ one, because it answers four questions that have to stay free to disagree:
   It is a key over persisted state, so it follows nothing either: a rename is a
   migration nothing can perform, and every row written under the old key is
   simply orphaned.
-- ``bootstrap/adapters.py``'s ``DB_FILENAME`` names the file the user's library
-  is in under the data root. It is a name over persisted state too, so it
+- ``bootstrap/adapters.py``'s ``DB_FILENAME`` names the file in the data root
+  that holds the user's library. It is a name over persisted state too, so it
   follows neither of the first two: derived from either, a rename of the
   package or of the directories would start every user on an empty database
   and leave the library under a name nothing opens any more.

@@ -131,7 +131,7 @@ if TYPE_CHECKING:
     )
 
 # Filename of the SQLite database under the data root, created by the schema
-# migration runner at startup. A literal of its own, never derived from
+# migration runner at startup where no database exists yet. A literal of its own, never derived from
 # ``PACKAGE_NAME`` (``domain/identity.py``) or ``APP_DIR_NAME``
 # (``domain/user_data_location.py``), both of which spell its stem: derived from
 # either, a rename of that one would start every user on an empty database and
@@ -345,9 +345,10 @@ def bootstrap(
 
     # The database is moved from its old name before anything opens it under the
     # current one: the migration runner would otherwise create an empty database
-    # beside the user's library. Here rather than in the entry point because
-    # this runs under the single-instance lock — a second backend refused a
-    # moment later must not have renamed the file under the running one.
+    # beside the user's library. Here rather than in the entry point because on
+    # a start this runs under the single-instance lock — a second backend
+    # refused a moment later must not have renamed the file under the running
+    # one.
     db_path = os.path.join(directories.data_dir, DB_FILENAME)
     DatabaseRenameAdapter(
         legacy=os.path.join(directories.data_dir, LEGACY_DB_FILENAME),
@@ -356,10 +357,10 @@ def bootstrap(
     ).rename()
 
     # Bring the on-disk SQLite schema up to date before any service is wired —
-    # the composition root owns startup infra. Post-cutover (#784) SQLite is the
-    # sole persistence backend: there is no JSON fallback, so a failed or
-    # unopenable database is fatal. Log the cause, then re-raise so bootstrap
-    # aborts and the plugin stays inert — matching the RomM-minimum-version
+    # the composition root owns startup infra. SQLite is the sole persistence
+    # backend: there is no JSON fallback, so a failed or unopenable database is
+    # fatal. Log the cause, then re-raise so bootstrap aborts and the backend
+    # does not start — matching the RomM-minimum-version
     # gate's "inert until the environment is fixed" posture.
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)

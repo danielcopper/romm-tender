@@ -196,10 +196,10 @@ Format: **invariant** — tier — enforced by.
   an alias evades it. The THIRD home is unchecked entirely — `SESSION_BREADCRUMB_KEY` is frontend TypeScript and no test
   on either side relates it to the other three. The FOURTH home, `DB_FILENAME`, is a name over persisted state as
   `APP_DIR_NAME` is: derived from either of the first two, a rename would start every user on an empty database and
-  leave the library under a name nothing opens. The same test parses `bootstrap/adapters.py` and fails unless
-  `DB_FILENAME` is a string literal, so `f"{PACKAGE_NAME}.db"`, which reproduces today's value exactly, fails too. The
-  rule is also stated at `APP_DIR_NAME` and at `DB_FILENAME` themselves, because a diff that folds either opens neither
-  the docstring nor this file
+  leave the library under a name nothing opens. `test_db_filename_is_its_own_literal_rather_than_a_derived_name`, in the
+  same class, parses `bootstrap/adapters.py` and fails unless `DB_FILENAME` is a string literal, so
+  `f"{PACKAGE_NAME}.db"`, which reproduces today's value exactly, fails too. The rule is also stated at `APP_DIR_NAME`
+  and at `DB_FILENAME` themselves, because a diff that folds either opens neither the docstring nor this file
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

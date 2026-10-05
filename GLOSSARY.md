@@ -89,8 +89,8 @@ The identifier has **four** homes, separate because they answer four questions t
   else.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
-- `DB_FILENAME` (`bootstrap/adapters.py`) — the database's file name under the data root, `romm-tender.db`, so a rename
-  starts every user on an empty database.
+- `DB_FILENAME` (`bootstrap/adapters.py`) — the name of the database file in the data root, so a rename that no start-up
+  step moves the file for leaves every user's library under a name nothing opens.
 
 Two homes have gone rather than moved, and both for the same reason. The folder a release unpacked into was Decky's
 question, asked because Decky derived its four per-plugin directories from it
@@ -115,8 +115,9 @@ rungs are for a start by hand.
   it, the legacy `save_sync_state.json` the settings fold still reads, and the installer's two copies of the database
   and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback by hand
   replaces, each of which can have a `.new` or `.prev` sibling beside it — and, on a machine updated from an install
-  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take. This
-  list is the one complete inventory of that root; the user guide names only what a user meets there.
+  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take — and,
+  where a start found the database under both names, the `romm_sync.db` it left as it was. This list is the one complete
+  inventory of that root; the user guide names only what a user meets there.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.

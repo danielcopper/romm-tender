@@ -47,11 +47,11 @@ class DatabaseRenameAdapter:
 
         With no old file there is nothing to do. With both there, the current
         one is the database and the old one is left exactly as it is, which the
-        log says. Otherwise the old database is opened and closed once under its
-        own name — the close folds its write-ahead log into it and removes the
-        log and its index — and then the one file left is renamed, never over
-        an existing name: an interruption leaves one complete database under one
-        of the two names.
+        log says. Otherwise the old database is opened under its own name, read
+        and closed — that close folds its write-ahead log into it and removes
+        the log and its index (see ``_fold``) — and then the one file left is
+        renamed in one atomic step, so an interruption leaves one complete
+        database under one of the two names, and never over an existing name.
 
         Raises what SQLite raises for an old file it cannot open,
         :class:`DatabaseNotFoldedError` where something beside it survived the
@@ -86,8 +86,8 @@ class DatabaseRenameAdapter:
     def _fold(self) -> None:
         """Open the old database, read it, and close it, so that only the main file is left.
 
-        A connection that reads nothing never touches the file, so the read is
-        what makes SQLite recover the log; the close of the last connection is
+        A connection that reads nothing never looks at the log, so the read is
+        what makes SQLite recover it; the close of the last connection is
         what checkpoints it and removes it. ``mode=rw`` opens without creating.
         """
         connection = sqlite3.connect(f"{Path(self._legacy).absolute().as_uri()}?mode=rw", uri=True)
@@ -97,7 +97,9 @@ class DatabaseRenameAdapter:
             connection.close()
         left = [self._legacy + suffix for suffix in _SIDECAR_SUFFIXES if os.path.lexists(self._legacy + suffix)]
         if left:
-            raise DatabaseNotFoldedError(f"{', '.join(left)} still there after the fold; something else has it open")
+            raise DatabaseNotFoldedError(
+                f"{', '.join(left)} still there after the fold: it is open elsewhere or cannot be written"
+            )
 
     def _rename_file(self) -> None:
         """Rename the old file onto the current name, refusing where the current name exists.

@@ -3351,7 +3351,7 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
         assert f'SETTINGS="{SETTINGS_FILENAME}"' in script
 
     def test_the_database_s_old_name_is_not_the_installer_s_to_know(self):
-        """The backend renames the old file when it starts, so no update or rollback meets that name.
+        """No update or rollback meets the old name.
 
         Every one runs between two versions that know the current name: coming
         from the Decky plugin is a first install, which backs nothing up and
