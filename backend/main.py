@@ -48,10 +48,19 @@ from lib.partial_failure import PartialFailure
 # from here; a further type joins this tuple only by decision.
 _TRANSLATED = (Refused, DomainRefused, RommApiError)
 
+# A module logger rather than one handed in: the root logger's handlers, the
+# file handler's redaction among them, apply to it as to every other line.
+_logger = logging.getLogger(__name__)
 
-def _failure_answer(exc: Refused | DomainRefused | RommApiError) -> dict[str, Any]:
-    """The wire's failure shape for an exception in :data:`_TRANSLATED`."""
+
+def _failure_answer(endpoint: str, exc: Refused | DomainRefused | RommApiError) -> dict[str, Any]:
+    """The wire's failure shape for an exception in :data:`_TRANSLATED`.
+
+    A RomM error is logged as one warning line, without its stack; a refusal is
+    a decision rather than an error, and is not logged here.
+    """
     if isinstance(exc, RommApiError):
+        _logger.warning(f"{endpoint}: answered {type(exc).__name__}: {exc}")
         reason, message = classify_error(exc)
         return {"success": False, "reason": reason, "message": message}
     return {**exc.details, "success": False, "reason": exc.reason, "message": exc.message}
@@ -70,23 +79,31 @@ def _translated(method: Any) -> Any:
     ``functools.wraps`` carries the ``@route`` marker over, so the wrapper is
     as reachable as the method it wraps.
     """
+    name = method.__name__
+
+    async def awaited(answer: Any) -> Any:
+        try:
+            return _wire_answer(await answer)
+        except _TRANSLATED as exc:
+            return _failure_answer(name, exc)
+
     if inspect.iscoroutinefunction(method):
 
         @functools.wraps(method)
         async def answer_later(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return _wire_answer(await method(*args, **kwargs))
-            except _TRANSLATED as exc:
-                return _failure_answer(exc)
+            return await awaited(method(*args, **kwargs))
 
         return answer_later
 
     @functools.wraps(method)
     def answer_now(*args: Any, **kwargs: Any) -> Any:
         try:
-            return _wire_answer(method(*args, **kwargs))
+            answer = method(*args, **kwargs)
         except _TRANSLATED as exc:
-            return _failure_answer(exc)
+            return _failure_answer(name, exc)
+        # The dispatcher awaits whatever is awaitable, so a ``def`` may hand back
+        # an awaitable; it is translated when it is awaited, not here.
+        return awaited(answer) if inspect.isawaitable(answer) else _wire_answer(answer)
 
     return answer_now
 
@@ -94,8 +111,10 @@ def _translated(method: Any) -> Any:
 def _translating_refusals[C: type](cls: C) -> C:
     """Wrap every public method of *cls* in :func:`_translated`.
 
-    Every public method of ``Endpoints`` is an endpoint, so this covers each
-    ``@route`` without asking the host for its marker.
+    Every ``@route`` is a public method (``route_names`` reads no other), so
+    wrapping every public function of *cls* covers each one without asking the
+    host for its marker; a public method without the marker is wrapped too, and
+    stays unreachable.
     """
     for name, value in list(vars(cls).items()):
         if not name.startswith("_") and inspect.isfunction(value):

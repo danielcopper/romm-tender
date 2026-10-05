@@ -3,9 +3,9 @@
 Each call goes through the real ``CallDispatcher`` over the real ``Endpoints``,
 so the transport half is the one the panel meets: a refusal arrives as a reply
 carrying ``{success: False, reason, message}``, a bug as the host's
-``backend_exception`` error. The services are stand-ins whose every method
-raises what a case hands them, which puts the exception exactly where a use
-case would raise it.
+``backend_exception`` error. The services are stand-ins that raise or answer
+what a case hands them, which puts the exception exactly where a use case would
+raise it; Stop Game's refusals run through the real service.
 """
 
 from __future__ import annotations
@@ -27,11 +27,12 @@ from bootstrap import ServicesBundle
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 
-from domain.refusal import DomainRefused
+from domain.refusal import DomainRefused, NamedDomainRefused
 from host import CallDispatcher, HostStatus
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
 from lib.errors import (
+    NamedRefused,
     PairingCodeInvalidError,
     Refused,
     RommAuthError,
@@ -90,6 +91,19 @@ class _AnsweringService:
             return self._result
 
         return _answer_later if self._awaitable else _answer_now
+
+
+class _AwaitableService:
+    """A service whose every method hands back a fresh awaitable from *make*, as a ``def`` endpoint may pass on."""
+
+    def __init__(self, make: Any) -> None:
+        self._make = make
+
+    def __getattr__(self, name: str) -> Any:
+        def _hand_back(*_args: Any, **_kwargs: Any) -> Any:
+            return self._make()
+
+        return _hand_back
 
 
 class _RaisingHostStatus:
@@ -182,15 +196,31 @@ class TestARefusalIsAnAnswerOnEveryRoute:
 
 class TestTheRefusalItself:
     async def test_a_named_subclass_answers_with_its_class_attribute(self):
-        class SyncActive(Refused):
+        class SyncActive(NamedRefused):
             reason = "sync_active"
-
-            def __init__(self, message: str) -> None:
-                super().__init__(self.reason, message)
 
         message = await _call(_dispatcher_raising(SyncActive("A sync is running.")), _AN_ASYNC_ROUTE)
 
         assert message["result"] == {"success": False, "reason": "sync_active", "message": "A sync is running."}
+
+    @pytest.mark.parametrize("named_base", [NamedRefused, NamedDomainRefused])
+    def test_a_named_refusal_raised_with_only_a_message_carries_its_class_reason(self, named_base):
+        named = type("TargetOccupied", (named_base,), {"reason": "target_occupied"})
+
+        refusal = named("That name is taken.", collisions=["a.sav"])
+
+        assert (refusal.reason, refusal.message, refusal.details) == (
+            "target_occupied",
+            "That name is taken.",
+            {"collisions": ["a.sav"]},
+        )
+
+    @pytest.mark.parametrize("named_base", [NamedRefused, NamedDomainRefused])
+    def test_a_named_refusal_cannot_be_raised_under_another_reason(self, named_base):
+        named = type("TargetOccupied", (named_base,), {"reason": "target_occupied"})
+
+        with pytest.raises(TypeError):
+            named("another_reason", "That name is taken.")
 
     @pytest.mark.parametrize("refusal_type", [Refused, DomainRefused])
     async def test_a_detail_named_success_cannot_turn_a_refusal_into_a_success(self, refusal_type):
@@ -314,7 +344,99 @@ class TestEveryEndpointKeepsItsKind:
 
     @pytest.mark.parametrize("route_name", ROUTES)
     def test_every_endpoint_is_the_translating_wrapper(self, route_name):
-        assert hasattr(getattr(Endpoints, route_name), "__wrapped__")
+        # The code's own name: ``functools.wraps`` copies ``__qualname__`` from the endpoint, not this.
+        assert getattr(Endpoints, route_name).__code__.co_qualname.startswith("_translated.<locals>.")
+
+
+async def _raise_later(exc: BaseException) -> Any:
+    raise exc
+
+
+async def _answer_later(result: Any) -> Any:
+    return result
+
+
+def _dispatcher_handing_back(make: Any) -> CallDispatcher:
+    endpoints = Endpoints(_make_application(_every_service(_AwaitableService(make))), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestADefEndpointHandingBackAnAwaitable:
+    """The dispatcher awaits whatever a ``def`` endpoint returns; what it awaits is translated too."""
+
+    def test_the_route_these_cases_use_is_a_def(self):
+        assert not inspect.iscoroutinefunction(getattr(Endpoints, _A_SYNC_ROUTE))
+
+    async def test_a_refusal_raised_when_awaited_arrives_as_the_failure_shape(self):
+        dispatcher = _dispatcher_handing_back(lambda: _raise_later(Refused("not_now", "Not now.", count=1)))
+
+        message = await _call(dispatcher, _A_SYNC_ROUTE)
+
+        assert message["result"] == {"success": False, "reason": "not_now", "message": "Not now.", "count": 1}
+
+    async def test_a_romm_error_raised_when_awaited_arrives_with_classify_errors_reason(self):
+        dispatcher = _dispatcher_handing_back(lambda: _raise_later(RommNotFoundError("gone")))
+
+        message = await _call(dispatcher, _A_SYNC_ROUTE)
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "not_found",
+            "message": classify_error(RommNotFoundError("gone"))[1],
+        }
+
+    async def test_a_partial_failure_answered_when_awaited_is_serialized(self):
+        result = _DeletedSome(reason="unknown", message="Some files could not be deleted.", deleted_count=2)
+
+        message = await _call(_dispatcher_handing_back(lambda: _answer_later(result)), _A_SYNC_ROUTE)
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "unknown",
+            "message": "Some files could not be deleted.",
+            "deleted_count": 2,
+        }
+
+    async def test_any_other_answer_passes_through(self):
+        message = await _call(_dispatcher_handing_back(lambda: _answer_later({"success": True})), _A_SYNC_ROUTE)
+
+        assert message["result"] == {"success": True}
+
+    async def test_a_bug_raised_when_awaited_is_still_a_transport_error(self):
+        message = await _call(_dispatcher_handing_back(lambda: _raise_later(RuntimeError("a bug"))), _A_SYNC_ROUTE)
+
+        assert message["type"] == TYPE_ERROR
+        assert message["reason"] == REASON_BACKEND_EXCEPTION
+
+
+def _records_from_the_entrypoint(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [record for record in caplog.records if record.name == Endpoints.__module__]
+
+
+class TestWhatTheEntrypointLogs:
+    @pytest.mark.parametrize("route_name", [_A_SYNC_ROUTE, _AN_ASYNC_ROUTE])
+    async def test_a_translated_romm_error_is_one_warning_line_without_a_stack(self, route_name, caplog):
+        caplog.set_level(logging.DEBUG)
+
+        await _call(_dispatcher_raising(RommNotFoundError("rom 7 is gone")), route_name)
+
+        records = _records_from_the_entrypoint(caplog)
+        assert [(record.levelno, record.getMessage()) for record in records] == [
+            (logging.WARNING, f"{route_name}: answered RommNotFoundError: rom 7 is gone")
+        ]
+        assert records[0].exc_info is None
+        assert records[0].stack_info is None
+
+    @pytest.mark.parametrize(
+        "refusal",
+        [Refused("not_now", "Not now."), DomainRefused("target_occupied", "That name is taken.")],
+    )
+    async def test_a_refusal_is_not_logged(self, refusal, caplog):
+        caplog.set_level(logging.DEBUG)
+
+        await _call(_dispatcher_raising(refusal), _AN_ASYNC_ROUTE)
+
+        assert _records_from_the_entrypoint(caplog) == []
 
 
 class _YieldingSleeper:
@@ -341,7 +463,7 @@ def _dispatcher_over_game_process(control: FakeGameProcessControlAdapter) -> Cal
 
 
 class TestTheStopGameRefusalsOnTheWire:
-    """The first service that raises its refusals answers the panel exactly as it did when it returned them."""
+    """Stop Game's three refusals, raised by the real service, reach the wire with their exact reason and message."""
 
     async def test_nothing_running(self):
         message = json.loads(

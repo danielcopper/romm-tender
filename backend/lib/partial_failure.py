@@ -3,13 +3,13 @@
 Contract: the typed answer of an operation that stopped partway, carrying a
 ``reason`` and a ``message`` like a refusal and, beside them, what it did
 before it stopped. It is a result rather than a raised ``lib.errors.Refused``
-because an exception would discard the record of what was done, which the
-panel shows and a backend caller reads.
+because what was done is part of the answer: a backend caller reads it as
+typed fields, where a refusal's details are untyped and reached only by
+catching.
 
-A subclass declares what was done as its own fields. The entrypoint
-(``main.Endpoints``) serializes the result into the wire's
-``{"success": False, "reason", "message", **fields}`` answer; a service
-returning it never builds that dict itself.
+A subclass declares what was done as its own fields; ``main.Endpoints``
+serializes the result, and a service returning it never builds the failure
+dict itself.
 """
 
 from __future__ import annotations

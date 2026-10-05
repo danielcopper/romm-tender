@@ -14,13 +14,7 @@ from typing import Any
 
 
 class DomainRefused(Exception):
-    """An operation a domain rule refuses; ``reason`` is a literal at the raise site.
-
-    The first argument, or the class attribute of a named subclass, which
-    passes its own ``reason`` on. ``details`` are written beside ``reason`` and
-    ``message`` on the wire. A broken invariant is not a refusal: it raises
-    ``ValueError`` and its kind.
-    """
+    """An operation a domain rule refuses; the contract is ``lib.errors.Refused``'s, whose docstring states it."""
 
     reason: str
 
@@ -29,3 +23,10 @@ class DomainRefused(Exception):
         self.reason = reason
         self.message = message
         self.details = details
+
+
+class NamedDomainRefused(DomainRefused):
+    """A domain refusal named for its reason; the same contract as ``lib.errors.NamedRefused``."""
+
+    def __init__(self, message: str, **details: Any) -> None:
+        super().__init__(type(self).reason, message, **details)
