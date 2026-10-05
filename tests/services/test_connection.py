@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
 from fakes.running_loop import running_loop
 
 from lib.errors import (
@@ -2234,9 +2234,9 @@ class TestConflictRulesAtTheUseCase:
             conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
         )
 
-        result = event_loop.run_until_complete(getattr(service, use_case)(*args))
+        with _refused_by_conflict_rule("prune_active"):
+            event_loop.run_until_complete(getattr(service, use_case)(*args))
 
-        assert result["reason"] == "prune_active"
         assert settings == before
         settings_persister.save_settings.assert_not_called()
         romm_api.heartbeat.assert_not_called()

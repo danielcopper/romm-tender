@@ -24,7 +24,7 @@ from domain.playtime import Playtime
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
-from lib.errors import OperationAbortedError, RommConnectionError, RommNotFoundError
+from lib.errors import OperationAbortedError, Refused, RommConnectionError, RommNotFoundError
 from lib.prune_conflicts import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import cancellation_state
@@ -908,10 +908,11 @@ async def test_a_held_lease_refuses_the_start_before_it_consumes_the_preview(har
     preview = await _preview(harness)
     token = await harness.conflicts.acquire_lease("launch_reconfirm")
 
-    started = await _start(harness, preview["preview_id"])
+    with pytest.raises(Refused) as refused:
+        await _start(harness, preview["preview_id"])
 
-    assert started["reason"] == "operation_active"
-    assert "checking a game's launch settings" in started["message"]
+    assert refused.value.reason == "operation_active"
+    assert "checking a game's launch settings" in refused.value.message
     assert harness.conflicts.cleanup_running is False
     await harness.conflicts.release_lease(token)
     assert (await _start(harness, preview["preview_id"]))["success"] is True
@@ -1393,7 +1394,9 @@ async def test_a_completion_that_needs_publication_is_leased_while_the_run_claim
     assert complete["prune_lease_token"].startswith("prune_complete:")
     assert harness.conflicts.cleanup_running is False
     assert harness.conflicts.conflicting_operations == 1
-    assert (await _start(harness, "no-such-preview"))["reason"] == "operation_active"
+    with pytest.raises(Refused) as refused:
+        await _start(harness, "no-such-preview")
+    assert refused.value.reason == "operation_active"
     await harness.conflicts.release_lease(complete["prune_lease_token"])
     assert harness.conflicts.conflicting_operations == 0
     assert (await _start(harness, "no-such-preview"))["reason"] == "stale_preview"

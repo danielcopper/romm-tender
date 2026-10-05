@@ -66,7 +66,7 @@ class RomRemovalService:
     """Handles physical deletion of installed ROM files and ``rom_installs`` cleanup.
 
     A use case an endpoint calls checks its conflict rules at its entry, under
-    that endpoint's name, and answers the canonical refusal when one holds; a
+    that endpoint's name, and raises the rule's refusal when one holds; a
     peer service that calls one calls its ``<verb>_unchecked`` twin instead
     (GLOSSARY.md → Conflict rules).
     """
@@ -248,9 +248,7 @@ class RomRemovalService:
         removal that succeeded carries a ``rom_uninstall`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
-        async with self._rules.hold("remove_rom", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("remove_rom", update=True, migration=True, prune=True):
             result = await self.remove_rom_unchecked(rom_id)
             if result.get("success"):
                 result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
@@ -368,11 +366,7 @@ class RomRemovalService:
         gone whether or not every other deletion succeeded. A refusal, this
         method's own included, carries neither ``app_ids`` nor a lease.
         """
-        async with self._rules.hold(
-            "uninstall_all_roms", update=True, migration=True, sync=True, prune=True
-        ) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("uninstall_all_roms", update=True, migration=True, sync=True, prune=True):
             result = await self._uninstall_all_roms()
             if result.get("app_ids"):
                 result["prune_lease_token"] = await self._rules.acquire_lease("bulk_uninstall")

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from lib.conflict_rules import ConflictRuleSet
+from lib.errors import Refused
 from lib.prune_conflicts import _LEASE_SECONDS, PruneConflicts
 
 
@@ -41,7 +42,10 @@ def _conflicts() -> tuple[PruneConflicts, _RecordingLogger, list[str]]:
 
 
 class _Endpoints:
-    """Two use cases over one prune conflicts record, each checking its rule the way a service does."""
+    """Two use cases over one prune conflicts record, each checking its rule the way a service does.
+
+    Each answers a raised refusal the way ``main.Endpoints`` does, so a test reads the answer the panel would.
+    """
 
     def __init__(self, conflicts: PruneConflicts) -> None:
         self._prune_conflicts = conflicts
@@ -54,20 +58,26 @@ class _Endpoints:
         self.called = False
 
     async def mutate(self) -> dict[str, Any]:
-        async with self._rules.hold("mutate", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
-            self.called = True
-            return {"success": True}
+        try:
+            async with self._rules.hold("mutate", prune=True):
+                self.called = True
+                return {"success": True}
+        except Refused as refused:
+            return _answer(refused)
 
     async def start_prune(self) -> dict[str, Any]:
-        async with self._rules.hold_start("start_prune") as refusal:
-            if refusal is not None:
-                return refusal
-            return await self._start()
+        try:
+            async with self._rules.hold_start("start_prune"):
+                return await self._start()
+        except Refused as refused:
+            return _answer(refused)
 
     async def _start(self) -> dict[str, Any]:
         return {"success": True}
+
+
+def _answer(refused: Refused) -> dict[str, Any]:
+    return {"success": False, "reason": refused.reason, "message": refused.message}
 
 
 def _endpoints() -> tuple[_Endpoints, PruneConflicts, _RecordingLogger, list[str]]:
@@ -151,8 +161,7 @@ async def test_prune_start_refuses_operation_that_entered_before_it() -> None:
 
     class Endpoints(_Endpoints):
         async def slow_mutation(self):
-            async with self._rules.hold("slow_mutation", prune=True) as refusal:
-                assert refusal is None
+            async with self._rules.hold("slow_mutation", prune=True):
                 entered.set()
                 await release.wait()
                 return {"success": True}
@@ -329,8 +338,7 @@ async def test_refusal_names_a_blocking_endpoint_registration() -> None:
 
     class Endpoints(_Endpoints):
         async def set_game_core(self):
-            async with self._rules.hold("set_game_core", prune=True) as refusal:
-                assert refusal is None
+            async with self._rules.hold("set_game_core", prune=True):
                 entered.set()
                 await release.wait()
                 return {"success": True}
@@ -420,8 +428,7 @@ async def test_disowning_leaves_endpoint_registrations_and_run_claims_alone() ->
 
     class Endpoints(_Endpoints):
         async def set_game_core(self):
-            async with self._rules.hold("set_game_core", prune=True) as refusal:
-                assert refusal is None
+            async with self._rules.hold("set_game_core", prune=True):
                 entered.set()
                 await release.wait()
                 return {"success": True}

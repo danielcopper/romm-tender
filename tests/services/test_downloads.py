@@ -9,7 +9,12 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -6074,9 +6079,9 @@ class TestAStartedDownloadHoldsAnOperation:
             prune_conflicts=downloads.prune_conflicts, migration_pending=migration_pending
         )
 
-        result = await getattr(service, call)(42)
+        with _refused_by_conflict_rule(reason):
+            await getattr(service, call)(42)
 
-        assert result["reason"] == reason
         assert begun == []
         assert downloads.prune_conflicts.conflicting_operations == 0
 

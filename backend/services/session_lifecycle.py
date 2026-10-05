@@ -217,8 +217,8 @@ class SessionLifecycleService:
         """Run the four end-of-session steps and return the combined verdict.
 
         Checks the ``finalize_game_session`` endpoint's conflict rules at its
-        entry and answers the canonical refusal dict when one holds, in place of
-        a verdict (GLOSSARY.md → Conflict rules).
+        entry and raises the rule's refusal when one holds, in place of a
+        verdict (GLOSSARY.md → Conflict rules).
 
         Parameters
         ----------
@@ -237,9 +237,7 @@ class SessionLifecycleService:
             ``romm_data_changed`` event dispatch. ``migration`` carries
             the RetroDECK home migration's status payload.
         """
-        async with self._rules.hold("finalize_game_session", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("finalize_game_session", prune=True):
             total_seconds = await self._record_playtime(rom_id)
             self._schedule_achievement_sync(rom_id)
             sync_result = await self._build_sync_result(rom_id)

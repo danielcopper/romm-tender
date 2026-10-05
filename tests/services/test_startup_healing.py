@@ -7,7 +7,12 @@ import logging
 from typing import TYPE_CHECKING
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_resolved_path import FakeResolvedPath
@@ -396,8 +401,8 @@ class TestTheInstalledReconcileLease:
         relaunch_options = FakeRelaunchOptionsResolver(items=[_ITEM])
         service = _make_service(logger=logger, relaunch_options=relaunch_options, prune_conflicts=prune_conflicts)
 
-        result = await service.get_installed_relaunch_options()
+        with _refused_by_conflict_rule("prune_active"):
+            await service.get_installed_relaunch_options()
 
-        assert result["reason"] == "prune_active"
         assert relaunch_options.calls == 0
         assert prune_conflicts.conflicting_operations == 0

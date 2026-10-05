@@ -5,36 +5,23 @@ from typing import Any
 
 import pytest
 
-from lib.conflict_rules import (
-    ConflictRuleSet,
-    migration_refusal,
-    operation_active_refusal,
-    prune_active_refusal,
-    sync_refusal,
-    update_refusal,
-)
+from lib.conflict_rules import ConflictRuleSet, migration_refused, update_refused
+from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
 
-_UPDATE_REFUSAL = {
-    "success": False,
-    "reason": "blocked_by_update",
-    "message": "Tender is installing an update and will restart in a moment.",
-}
-_MIGRATION_REFUSAL = {
-    "success": False,
-    "reason": "blocked_by_migration",
-    "message": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
-}
-_SYNC_REFUSAL = {
-    "success": False,
-    "reason": "sync_active",
-    "message": "A library sync is in progress — wait for it to finish or cancel it first.",
-}
-_PRUNE_REFUSAL = {
-    "success": False,
-    "reason": "prune_active",
-    "message": "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
-}
+# A refusal as ``_said`` reads it: reason, message and details.
+_UPDATE_REFUSAL = ("blocked_by_update", "Tender is installing an update and will restart in a moment.", {})
+_MIGRATION_REFUSAL = (
+    "blocked_by_migration",
+    "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+    {},
+)
+_SYNC_REFUSAL = ("sync_active", "A library sync is in progress — wait for it to finish or cancel it first.", {})
+_PRUNE_REFUSAL = (
+    "prune_active",
+    "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+    {},
+)
 
 
 class _RecordingLogger:
@@ -76,31 +63,41 @@ class _Rules:
         )
 
 
-async def _refusal(rules: ConflictRuleSet, **named: bool) -> dict[str, Any] | None:
-    async with rules.hold("the_endpoint", **named) as refusal:
-        return refusal
+async def _refusal(rules: ConflictRuleSet, **named: bool) -> Refused | None:
+    """What ``hold`` raises for *named*, or ``None`` when it ran the block; a refused block never runs."""
+    ran = False
+    try:
+        async with rules.hold("the_endpoint", **named):
+            ran = True
+    except Refused as refused:
+        assert ran is False
+        return refused
+    assert ran is True
+    return None
+
+
+def _said(refused: Refused | None) -> tuple[str, str, dict[str, Any]] | None:
+    """*refused* as reason, message and details; a conflict refusal is a plain ``Refused``, never a named one."""
+    if refused is None:
+        return None
+    assert type(refused) is Refused
+    return (refused.reason, refused.message, refused.details)
 
 
 # ── The refusals ─────────────────────────────────────────────────────────────
 
 
-def test_each_refusal_is_the_canonical_failure_shape():
-    assert update_refusal() == _UPDATE_REFUSAL
-    assert migration_refusal() == _MIGRATION_REFUSAL
-    assert sync_refusal() == _SYNC_REFUSAL
-    assert prune_active_refusal() == _PRUNE_REFUSAL
-    assert operation_active_refusal("held by someone") == {
-        "success": False,
-        "reason": "operation_active",
-        "message": "held by someone",
-    }
+def test_the_update_and_the_migration_refusal_carry_the_details_they_are_given():
+    """The sync engine raises both with its counts beside them."""
+    assert _said(update_refused(synced=0)) == (*_UPDATE_REFUSAL[:2], {"synced": 0})
+    assert _said(migration_refused(synced=0, conflicts=0)) == (*_MIGRATION_REFUSAL[:2], {"synced": 0, "conflicts": 0})
 
 
 # ── Each rule on its own ─────────────────────────────────────────────────────
 
 
 async def test_an_update_in_progress_refuses_a_use_case_that_names_the_update_rule():
-    assert await _refusal(_Rules(update=True).rules, update=True) == _UPDATE_REFUSAL
+    assert _said(await _refusal(_Rules(update=True).rules, update=True)) == _UPDATE_REFUSAL
 
 
 async def test_an_update_in_progress_does_not_refuse_a_use_case_that_names_only_the_migration_rule():
@@ -111,15 +108,15 @@ async def test_an_update_in_progress_does_not_refuse_a_use_case_that_names_only_
 
 
 async def test_a_pending_migration_refuses_a_use_case_that_names_the_migration_rule():
-    assert await _refusal(_Rules(migration=True).rules, migration=True) == _MIGRATION_REFUSAL
+    assert _said(await _refusal(_Rules(migration=True).rules, migration=True)) == _MIGRATION_REFUSAL
 
 
 async def test_a_sync_in_flight_refuses_a_use_case_that_names_the_sync_rule():
-    assert await _refusal(_Rules(sync=True).rules, sync=True) == _SYNC_REFUSAL
+    assert _said(await _refusal(_Rules(sync=True).rules, sync=True)) == _SYNC_REFUSAL
 
 
 async def test_a_running_cleanup_refuses_a_use_case_that_names_the_prune_rule():
-    assert await _refusal(_Rules(cleanup=True).rules, prune=True) == _PRUNE_REFUSAL
+    assert _said(await _refusal(_Rules(cleanup=True).rules, prune=True)) == _PRUNE_REFUSAL
 
 
 async def test_no_condition_holding_lets_the_block_run():
@@ -137,13 +134,15 @@ async def test_a_condition_the_use_case_does_not_name_is_never_asked():
     assert rules.conflicts.conflicting_operations == 0
 
 
-async def test_each_refusal_is_a_fresh_dict():
+async def test_each_refusal_is_a_fresh_exception():
     rules = _Rules(migration=True).rules
-    first = await _refusal(rules, migration=True)
-    assert first is not None
-    first["message"] = "changed by a caller"
 
-    assert await _refusal(rules, migration=True) == _MIGRATION_REFUSAL
+    first = await _refusal(rules, migration=True)
+    second = await _refusal(rules, migration=True)
+
+    assert first is not None
+    assert second is not first
+    assert _said(second) == _MIGRATION_REFUSAL
 
 
 # ── The order they are asked in ──────────────────────────────────────────────
@@ -154,7 +153,7 @@ async def test_an_update_in_progress_answers_before_every_other_rule():
 
     refusal = await _refusal(rules.rules, update=True, migration=True, sync=True, prune=True)
 
-    assert refusal == _UPDATE_REFUSAL
+    assert _said(refusal) == _UPDATE_REFUSAL
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
 
@@ -162,14 +161,14 @@ async def test_an_update_in_progress_answers_before_every_other_rule():
 async def test_a_pending_migration_answers_before_a_sync_in_flight_and_a_running_cleanup():
     rules = _Rules(migration=True, sync=True, cleanup=True)
 
-    assert await _refusal(rules.rules, migration=True, sync=True, prune=True) == _MIGRATION_REFUSAL
+    assert _said(await _refusal(rules.rules, migration=True, sync=True, prune=True)) == _MIGRATION_REFUSAL
     assert rules.sync.asked == 0
 
 
 async def test_a_sync_in_flight_answers_before_a_running_cleanup():
     rules = _Rules(sync=True, cleanup=True)
 
-    assert await _refusal(rules.rules, migration=True, sync=True, prune=True) == _SYNC_REFUSAL
+    assert _said(await _refusal(rules.rules, migration=True, sync=True, prune=True)) == _SYNC_REFUSAL
 
 
 # ── What a call holds, and for how long ──────────────────────────────────────
@@ -195,8 +194,7 @@ async def test_a_refused_call_registers_nothing(condition, named):
 async def test_the_prune_rule_holds_an_operation_named_after_the_endpoint_for_the_whole_block():
     rules = _Rules()
 
-    async with rules.rules.hold("the_endpoint", prune=True) as refusal:
-        assert refusal is None
+    async with rules.rules.hold("the_endpoint", prune=True):
         assert rules.conflicts.conflicting_operations == 1
         assert await rules.conflicts.reserve_start("start_prune") is not None
         assert "the_endpoint (operation" in rules.logger.info_lines[-1]
@@ -208,20 +206,13 @@ async def test_an_update_pressed_while_the_operation_waited_to_register_refuses_
     """The first ask passed; the press came while the registration waited for the prune conflicts' lock."""
     rules = _Rules()
     await rules.conflicts._lock.acquire()
-    entered: list[dict[str, Any] | None] = []
-
-    async def use_case() -> None:
-        async with rules.rules.hold("the_endpoint", update=True, prune=True) as refusal:
-            entered.append(refusal)
-
-    waiting = asyncio.ensure_future(use_case())
+    waiting = asyncio.ensure_future(_refusal(rules.rules, update=True, prune=True))
     await asyncio.sleep(0)
     assert rules.update.asked == 1
     rules.update.holds = True
     rules.conflicts._lock.release()
-    await waiting
 
-    assert entered == [_UPDATE_REFUSAL]
+    assert _said(await waiting) == _UPDATE_REFUSAL
     assert rules.conflicts.conflicting_operations == 0
 
 
@@ -242,8 +233,7 @@ async def test_the_operation_is_released_when_the_block_raises():
 async def test_a_block_without_the_prune_rule_holds_nothing():
     rules = _Rules()
 
-    async with rules.rules.hold("the_endpoint", migration=True, sync=True) as refusal:
-        assert refusal is None
+    async with rules.rules.hold("the_endpoint", migration=True, sync=True):
         assert rules.conflicts.conflicting_operations == 0
 
 
@@ -347,9 +337,17 @@ async def test_an_event_under_a_lease_checks_no_rule():
 # ── A cleanup's exclusive start ──────────────────────────────────────────────
 
 
-async def _start_refusal(rules: ConflictRuleSet, **named: bool) -> dict[str, Any] | None:
-    async with rules.hold_start("start_prune", **named) as refusal:
-        return refusal
+async def _start_refusal(rules: ConflictRuleSet, **named: bool) -> Refused | None:
+    """What ``hold_start`` raises for *named*, or ``None`` when it ran the block; a refused block never runs."""
+    ran = False
+    try:
+        async with rules.hold_start("start_prune", **named):
+            ran = True
+    except Refused as refused:
+        assert ran is False
+        return refused
+    assert ran is True
+    return None
 
 
 async def test_a_held_operation_refuses_the_start_naming_its_holder():
@@ -358,14 +356,14 @@ async def test_a_held_operation_refuses_the_start_naming_its_holder():
 
     refusal = await _start_refusal(rules.rules, migration=True, sync=True)
 
-    assert refusal == {
-        "success": False,
-        "reason": "operation_active",
-        "message": (
+    assert _said(refusal) == (
+        "operation_active",
+        (
             "Another local-data operation is in progress (checking a game's launch settings); wait for it to "
             "finish before starting cleanup."
         ),
-    }
+        {},
+    )
     assert rules.conflicts.cleanup_running is False
 
 
@@ -376,7 +374,7 @@ async def test_the_reservation_is_asked_before_the_migration_and_the_sync_rule()
     refusal = await _start_refusal(rules.rules, migration=True, sync=True)
 
     assert refusal is not None
-    assert refusal["reason"] == "operation_active"
+    assert refusal.reason == "operation_active"
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
 
@@ -405,28 +403,28 @@ async def test_the_rules_are_asked_while_the_reservation_is_held():
 async def test_an_update_in_progress_answers_the_start_before_a_pending_migration():
     rules = _Rules(update=True, migration=True)
 
-    assert await _start_refusal(rules.rules, update=True, migration=True, sync=True) == _UPDATE_REFUSAL
+    assert _said(await _start_refusal(rules.rules, update=True, migration=True, sync=True)) == _UPDATE_REFUSAL
     assert rules.migration.asked == 0
 
 
 async def test_a_pending_migration_answers_the_start_before_a_sync_in_flight():
     rules = _Rules(migration=True, sync=True)
 
-    assert await _start_refusal(rules.rules, migration=True, sync=True) == _MIGRATION_REFUSAL
+    assert _said(await _start_refusal(rules.rules, migration=True, sync=True)) == _MIGRATION_REFUSAL
     assert rules.sync.asked == 0
 
 
 async def test_a_sync_in_flight_refuses_the_start():
-    assert await _start_refusal(_Rules(sync=True).rules, migration=True, sync=True) == _SYNC_REFUSAL
+    assert _said(await _start_refusal(_Rules(sync=True).rules, migration=True, sync=True)) == _SYNC_REFUSAL
 
 
 @pytest.mark.parametrize("condition", [{"update": True}, {"migration": True}, {"sync": True}])
-async def test_a_refused_start_gives_its_reservation_back_before_it_answers(condition):
+async def test_a_refused_start_gives_its_reservation_back_before_it_raises(condition):
     rules = _Rules(**condition)
 
-    async with rules.rules.hold_start("start_prune", update=True, migration=True, sync=True) as refusal:
-        assert refusal is not None
-        assert rules.conflicts.cleanup_running is False
+    with pytest.raises(Refused):
+        async with rules.rules.hold_start("start_prune", update=True, migration=True, sync=True):
+            pass
 
     assert rules.conflicts.cleanup_running is False
     assert await _refusal(rules.rules, prune=True) is None
@@ -435,10 +433,9 @@ async def test_a_refused_start_gives_its_reservation_back_before_it_answers(cond
 async def test_the_start_holds_its_reservation_for_the_whole_block():
     rules = _Rules()
 
-    async with rules.rules.hold_start("start_prune", migration=True, sync=True) as refusal:
-        assert refusal is None
+    async with rules.rules.hold_start("start_prune", migration=True, sync=True):
         assert rules.conflicts.cleanup_running is True
-        assert await _refusal(rules.rules, prune=True) == _PRUNE_REFUSAL
+        assert _said(await _refusal(rules.rules, prune=True)) == _PRUNE_REFUSAL
 
     assert rules.conflicts.cleanup_running is False
 

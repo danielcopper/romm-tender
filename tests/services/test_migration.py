@@ -7,7 +7,12 @@ from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
@@ -2014,9 +2019,9 @@ class TestTheMigrationsConflictRules:
         self._stage_one_relocation(migration, tmp_path)
         migration.prune_conflicts.register_run("held-run")
 
-        result = await migration.service.migrate_retrodeck_files()
+        with _refused_by_conflict_rule("prune_active"):
+            await migration.service.migrate_retrodeck_files()
 
-        assert result["reason"] == "prune_active"
         assert os.path.exists(os.path.join(str(tmp_path / "old"), "roms", "n64", "zelda.z64"))
         assert migration.service._emit.calls == []
         assert migration.prune_conflicts.conflicting_operations == 0

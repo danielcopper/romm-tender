@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _factories import _make_conflict_rules
+from _factories import _make_conflict_rules, _refused_by_conflict_rule
 from fakes.fake_core_info_provider import (
     FakeCoreInfoProvider,
     FakeSandboxLauncher,
@@ -3516,10 +3516,12 @@ class TestWhetherADownloadIsInFlight:
         seen: list[bool] = []
         fw._rules = _make_conflict_rules(update_in_progress=True)
 
-        with patch.object(fw._downloads, "download_all_firmware", side_effect=lambda *_a: seen.append(True)):
-            result = await fw.download_all_firmware("dc")
+        with (
+            patch.object(fw._downloads, "download_all_firmware", side_effect=lambda *_a: seen.append(True)),
+            _refused_by_conflict_rule("blocked_by_update"),
+        ):
+            await fw.download_all_firmware("dc")
 
-        assert result["reason"] == "blocked_by_update"
         assert seen == []
 
 
@@ -5854,7 +5856,7 @@ class TestAPendingMigrationRefusesEveryDownloadAndDelete:
         reached = AsyncMock()
         monkeypatch.setattr(getattr(service, sub_service), method, reached)
 
-        refusal = await getattr(service, method)(*args)
+        with _refused_by_conflict_rule("blocked_by_migration"):
+            await getattr(service, method)(*args)
 
-        assert refusal["reason"] == "blocked_by_migration"
         reached.assert_not_awaited()

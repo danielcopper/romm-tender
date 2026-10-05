@@ -5,7 +5,12 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
@@ -732,10 +737,9 @@ class TestTheRemovalLease:
         _seed_rom(uow, 10, app_id=1001)
         prune_conflicts.register_run("held-run")
 
-        result = await svc.remove_all_shortcuts()
+        with _refused_by_conflict_rule("prune_active"):
+            await svc.remove_all_shortcuts()
 
-        assert result["reason"] == "prune_active"
-        assert "prune_lease_token" not in result
         assert prune_conflicts.conflicting_operations == 0
 
     async def test_reporting_the_results_releases_the_lease(self, svc, uow, prune_conflicts):

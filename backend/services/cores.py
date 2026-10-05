@@ -77,7 +77,7 @@ class CoreService:
     """RetroArch core override reads and writes — per-platform (settings) + per-game (DB).
 
     Each write checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds
+    endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -252,9 +252,7 @@ class CoreService:
         write error, fan-out error) returns
         ``{"success": False, "reason": ..., "message": ...}``.
         """
-        async with self._rules.hold("set_system_core", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("set_system_core", update=True, migration=True, prune=True):
             try:
                 rebake_items = await self._loop.run_in_executor(
                     None,
@@ -288,9 +286,7 @@ class CoreService:
         next download). A live update carries a ``game_core`` lease in
         ``prune_lease_token`` for the frontend's write.
         """
-        async with self._rules.hold("set_game_core", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("set_game_core", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._set_game_core_io, rom_id, label)
             await self._lease_live_update(result)
             return result
@@ -375,9 +371,7 @@ class CoreService:
         update carries a ``game_core`` lease in ``prune_lease_token`` for the
         frontend's write.
         """
-        async with self._rules.hold("clear_game_core", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("clear_game_core", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
             await self._lease_live_update(result)
             return result

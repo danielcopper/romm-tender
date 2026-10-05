@@ -88,7 +88,7 @@ class MigrationService:
     """Handles RetroDECK path change detection and file migration.
 
     The migration checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds
+    endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -696,9 +696,7 @@ class MigrationService:
                 replace existing destination files, "skip" to keep existing files
                 and just update state paths.
         """
-        async with self._rules.hold("migrate_retrodeck_files", update=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("migrate_retrodeck_files", update=True, prune=True):
             return await self._migrate_retrodeck_files(conflict_strategy)
 
     async def _migrate_retrodeck_files(self, conflict_strategy=None):

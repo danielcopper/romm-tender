@@ -137,7 +137,7 @@ class DownloadService:
     """ROM download engine: downloads and queue management.
 
     A start and a resume check their endpoint's conflict rules at their entry,
-    under that endpoint's name, and answer the canonical refusal when one holds
+    under that endpoint's name, and raise the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -220,9 +220,7 @@ class DownloadService:
         Checked against the ``start_download`` endpoint's conflict rules first.
         A started download's task holds an operation until it ends.
         """
-        async with self._rules.hold("start_download", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("start_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
             if rom_id in self._download_in_progress:
                 return {"success": False, "reason": "already_downloading", "message": "Already downloading"}
@@ -1263,9 +1261,7 @@ class DownloadService:
         Checked against the ``resume_download`` endpoint's conflict rules first.
         A resumed download's task holds an operation until it ends.
         """
-        async with self._rules.hold("resume_download", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("resume_download", update=True, migration=True, prune=True):
             rom_id = int(rom_id)
             entry = self._download_queue.get(rom_id)
             if entry is None or entry.get("status") != "paused":

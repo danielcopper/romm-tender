@@ -8,6 +8,7 @@ from dataclasses import fields
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from bootstrap import (
     AdapterBundle,
     BootstrapResult,
@@ -57,7 +58,7 @@ from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
-from lib.conflict_rules import sync_refusal
+from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -710,11 +711,13 @@ class TestWireServices:
         result = wire_services(self._make_config(deps))
         rules = result.save_sync_service._rules
 
-        async with rules.hold("probe", sync=True) as refusal:
-            assert refusal is None
+        async with rules.hold("probe", sync=True):
+            pass
         assert result.sync_service._box.try_begin_run("held-sync-run", kind=SyncRunKind.APPLY)
-        async with rules.hold("probe", sync=True) as refusal:
-            assert refusal == sync_refusal()
+        with pytest.raises(Refused) as refused:
+            async with rules.hold("probe", sync=True):
+                pass
+        assert refused.value.reason == "sync_active"
         deps["loop"].close()
 
     def test_save_service_receives_is_retrodeck_migration_pending(self, tmp_path):

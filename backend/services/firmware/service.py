@@ -72,7 +72,7 @@ class FirmwareService:
     """BIOS/firmware management: what is wanted, what is here, downloads, deletion.
 
     Each download and delete an endpoint calls checks that endpoint's conflict
-    rules here, under its name, and answers the canonical refusal when one
+    rules here, under its name, and raises the rule's refusal when one
     holds (GLOSSARY.md → Conflict rules); the sub-services check none.
     """
 
@@ -186,45 +186,33 @@ class FirmwareService:
 
     async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
         """Download all firmware the library holds for a platform."""
-        async with self._rules.hold("download_all_firmware", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("download_all_firmware", update=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_all_firmware(platform_slug)
 
     async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
         """Download the one firmware file the library holds for a platform under that name."""
-        async with self._rules.hold("download_platform_firmware_file", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("download_platform_firmware_file", update=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_platform_firmware_file(platform_slug, file_name)
 
     async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
         """Download only the firmware the platform's launching core will not run without."""
-        async with self._rules.hold("download_required_firmware", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("download_required_firmware", update=True, migration=True):
             with self._downloads.downloading():
                 return await self._downloads.download_required_firmware(platform_slug)
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any]:
         """Delete the BIOS files the plugin downloaded for a platform."""
-        async with self._rules.hold("delete_platform_bios", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("delete_platform_bios", update=True, migration=True):
             return await self._deletion.delete_platform_bios(platform_slug)
 
     async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any]:
         """Delete one BIOS file the plugin downloaded for a platform."""
-        async with self._rules.hold("delete_bios_file", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("delete_bios_file", update=True, migration=True):
             return await self._deletion.delete_bios_file(platform_slug, file_name)
 
     async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any]:
         """Delete the BIOS files the plugin downloaded inside a declared folder."""
-        async with self._rules.hold("delete_bios_folder", update=True, migration=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("delete_bios_folder", update=True, migration=True):
             return await self._deletion.delete_bios_folder(platform_slug, folder_path)

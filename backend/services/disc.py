@@ -63,7 +63,7 @@ class DiscService:
     """Disc-picker reads (``get_disc_selection``) and writes (``select_disc``).
 
     The write checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds
+    endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -135,9 +135,7 @@ class DiscService:
         the live Steam shortcut, plus the now-effective ``selected`` value, and a
         ``disc_selection`` lease in ``prune_lease_token`` for that write.
         """
-        async with self._rules.hold("select_disc", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("select_disc", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
             if result.get("success") and result.get("launch_options") is not None:
                 result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")

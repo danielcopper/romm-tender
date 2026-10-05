@@ -7,7 +7,12 @@ import contextlib
 import logging
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -437,9 +442,9 @@ class TestTheDiscSelectionLease:
             prune_conflicts.register_run("held-run")
         service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
 
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+        with _refused_by_conflict_rule(reason):
+            event_loop.run_until_complete(service.select_disc(1, _DISC2))
 
-        assert result["reason"] == reason
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
         assert prune_conflicts.conflicting_operations == 0

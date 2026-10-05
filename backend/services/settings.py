@@ -113,8 +113,8 @@ class SettingsService:
     """User-facing settings reads/writes, masking, and frontend-log routing.
 
     The server-URL, custom-header and Steam Input writes check their endpoint's
-    conflict rules at their entry, under that endpoint's name, and answer the
-    canonical refusal when one holds (GLOSSARY.md → Conflict rules).
+    conflict rules at their entry, under that endpoint's name, and raise the
+    rule's refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     LOG_LEVELS: ClassVar[dict[str, int]] = {"debug": 0, "info": 1, "warn": 2, "error": 3}
@@ -161,9 +161,7 @@ class SettingsService:
         ``config_error`` until the user signs in again (the intended #1039
         behavior for the no-sign-in URL-change path).
         """
-        async with self._rules.hold("save_server_url", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("save_server_url", prune=True):
             return self._save_server_url(romm_url, allow_insecure_ssl)
 
     def _save_server_url(self, romm_url: str, allow_insecure_ssl: bool | None = None) -> dict[str, Any]:
@@ -190,9 +188,7 @@ class SettingsService:
         be echoed back. The whole list is refused on the first problem, and the
         refusal names the offending header, never its value.
         """
-        async with self._rules.hold("save_custom_headers", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("save_custom_headers", prune=True):
             return self._save_custom_headers(headers)
 
     def _save_custom_headers(self, headers: object) -> dict[str, Any]:
@@ -325,9 +321,7 @@ class SettingsService:
 
     async def apply_steam_input_setting(self) -> dict[str, Any]:
         """Apply the current Steam Input mode to every bound ROM shortcut."""
-        async with self._rules.hold("apply_steam_input_setting", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("apply_steam_input_setting", prune=True):
             return self._apply_steam_input_setting()
 
     def _apply_steam_input_setting(self) -> dict[str, Any]:

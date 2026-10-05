@@ -18,7 +18,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -483,9 +488,9 @@ class TestTheAdoptionLease:
             h.prune_conflicts.register_run("held-run")
         h.service._rules = _make_conflict_rules(prune_conflicts=h.prune_conflicts, migration_pending=migration_pending)
 
-        result = await h.service.adopt_existing_rom(_ROM_ID)
+        with _refused_by_conflict_rule(reason):
+            await h.service.adopt_existing_rom(_ROM_ID)
 
-        assert result["reason"] == reason
         assert h.uow.rom_installs.get(_ROM_ID) is None
         assert h.prune_conflicts.conflicting_operations == 0
 

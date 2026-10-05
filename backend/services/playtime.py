@@ -123,8 +123,8 @@ class PlaytimeService:
     """Playtime tracking: record sessions, flush the outbox, and reconcile with RomM.
 
     :meth:`record_session_start` and :meth:`reconcile_playtime` check their
-    conflict rules at their entry, under their endpoint's name, and answer the
-    canonical refusal when one holds (GLOSSARY.md → Conflict rules).
+    conflict rules at their entry, under their endpoint's name, and raise the
+    rule's refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: PlaytimeServiceConfig) -> None:
@@ -164,9 +164,7 @@ class PlaytimeService:
         next launch. The flush is detached — the launch is never held up on the
         round trip — and holds an operation until it ends.
         """
-        async with self._rules.hold("record_session_start", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("record_session_start", prune=True):
             result = self._record_session_start(rom_id)
             flush = self._loop.create_task(self.flush_pending_sessions())
             self._flush_tasks.add(flush)
@@ -812,9 +810,7 @@ class PlaytimeService:
         executor (the SQLite connection has thread affinity). Checks the
         ``reconcile_playtime`` endpoint's conflict rules first.
         """
-        async with self._rules.hold("reconcile_playtime", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("reconcile_playtime", prune=True):
             return await self._loop.run_in_executor(None, self._reconcile_playtime_io, int(rom_id))
 
     def _reconcile_playtime_io(self, rom_id: int) -> dict[str, Any]:

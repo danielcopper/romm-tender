@@ -175,9 +175,7 @@ class StartupHealingService:
         short read UoW it closes before resolving the core and disc, so the
         nested resolver UoW never deadlocks (#1154).
         """
-        async with self._rules.hold("get_installed_relaunch_options", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("get_installed_relaunch_options", prune=True):
             items = await self._loop.run_in_executor(None, self._relaunch_options.installed_relaunch_items)
             token = await self._rules.acquire_lease("installed_reconcile") if items else None
             return {"success": True, "items": items, "prune_lease_token": token}

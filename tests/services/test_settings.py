@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
@@ -101,9 +101,9 @@ class TestConflictRulesAtTheUseCase:
         prune_conflicts.register_run("held-run")
         before = dict(settings)
 
-        result = await getattr(service, use_case)(*args)
+        with _refused_by_conflict_rule("prune_active"):
+            await getattr(service, use_case)(*args)
 
-        assert result["reason"] == "prune_active"
         assert settings == before
         settings_persister.save_settings.assert_not_called()
         steam_config.set_steam_input_config.assert_not_called()

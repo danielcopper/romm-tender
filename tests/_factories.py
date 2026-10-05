@@ -12,8 +12,10 @@ Import as ``from _factories import _make_retry`` — ``tests/`` is on the path
 via the root conftest, the same way ``fakes/`` is reached.
 """
 
+import contextlib
 import dataclasses
 import logging
+from collections.abc import Iterator
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -22,7 +24,17 @@ from bootstrap import Application, ServicesBundle
 from fakes.running_loop import running_loop
 
 from lib.conflict_rules import ConflictRuleSet
+from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
+
+# How the conflict rules word the refusal of each rule (``lib/conflict_rules.py``).
+# A cleanup's refused start, ``operation_active``, names its holder instead.
+_CONFLICT_REFUSAL_MESSAGES = {
+    "blocked_by_update": "Tender is installing an update and will restart in a moment.",
+    "blocked_by_migration": "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+    "sync_active": "A library sync is in progress — wait for it to finish or cancel it first.",
+    "prune_active": "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+}
 
 
 def _no_retry(fn, *a, **kw):
@@ -72,6 +84,15 @@ def _make_conflict_rules(
         migration_pending=lambda: migration_pending,
         sync_in_flight=lambda: sync_in_flight,
     )
+
+
+@contextlib.contextmanager
+def _refused_by_conflict_rule(reason: str) -> Iterator[None]:
+    """Expect the block to raise the conflict rules' refusal *reason*: its own message, and nothing beside it."""
+    with pytest.raises(Refused) as refused:
+        yield
+    assert (refused.value.reason, refused.value.message) == (reason, _CONFLICT_REFUSAL_MESSAGES[reason])
+    assert refused.value.details == {}
 
 
 def _make_services_bundle(**services: Any) -> ServicesBundle:

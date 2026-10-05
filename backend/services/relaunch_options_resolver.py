@@ -165,16 +165,14 @@ class RelaunchOptionsResolver:
         return self._resolve_item(*pair) if pair is not None else None
 
     async def get_rom_relaunch_options(self, rom_id: int | str) -> dict[str, Any] | None:
-        """Answer the ``get_rom_relaunch_options`` endpoint: one lease-bearing relaunch item, a refusal, or ``None``.
+        """Answer the ``get_rom_relaunch_options`` endpoint: one lease-bearing relaunch item, or ``None``.
 
         :meth:`relaunch_item_for_rom` off the loop thread, under the endpoint's
         conflict rules. An item carries ``success: True`` and a
         ``launch_reconfirm`` lease in ``prune_lease_token`` for the frontend's
         Steam write; ``None`` takes no lease.
         """
-        async with self._rules.hold("get_rom_relaunch_options", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("get_rom_relaunch_options", prune=True):
             item = await self._loop.run_in_executor(None, self.relaunch_item_for_rom, int(rom_id))
             if item is not None:
                 item["success"] = True

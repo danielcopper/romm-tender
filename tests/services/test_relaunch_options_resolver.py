@@ -14,7 +14,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -418,8 +423,7 @@ async def test_a_running_cleanup_refuses_the_reconfirm():
     prune_conflicts.register_run("held-run")
     resolver = _make_resolver(uow=uow, prune_conflicts=prune_conflicts)
 
-    result = await resolver.get_rom_relaunch_options(1)
+    with _refused_by_conflict_rule("prune_active"):
+        await resolver.get_rom_relaunch_options(1)
 
-    assert result is not None
-    assert result["reason"] == "prune_active"
     assert prune_conflicts.conflicting_operations == 0

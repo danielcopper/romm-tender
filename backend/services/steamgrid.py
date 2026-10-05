@@ -77,7 +77,7 @@ class SteamGridService:
 
     The artwork fetch, the icon save, the resolution and the manual pick check
     their endpoint's conflict rules at their entry, under that endpoint's name,
-    and answer the canonical refusal when one holds (GLOSSARY.md → Conflict rules).
+    and raise the rule's refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: SteamGridServiceConfig) -> None:
@@ -226,9 +226,7 @@ class SteamGridService:
         - ``{"decision": "needs_pick", "candidates": [...]}`` — nothing
           resolved automatically; offer a manual name-search picker.
         """
-        async with self._rules.hold("get_sgdb_resolution", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("get_sgdb_resolution", prune=True):
             return await self._get_sgdb_resolution(rom_id)
 
     async def _get_sgdb_resolution(self, rom_id):
@@ -318,9 +316,7 @@ class SteamGridService:
         the picker, giving the user a free re-pick. The previously
         applied art stays visible until replaced.
         """
-        async with self._rules.hold("apply_sgdb_game_id", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("apply_sgdb_game_id", prune=True):
             return await self._apply_sgdb_game_id(rom_id, sgdb_id)
 
     async def _apply_sgdb_game_id(self, rom_id, sgdb_id):
@@ -356,9 +352,7 @@ class SteamGridService:
         An answer that carries an image also carries an ``sgdb_artwork`` lease
         in ``prune_lease_token`` for the frontend's Steam write.
         """
-        async with self._rules.hold("get_sgdb_artwork_base64", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("get_sgdb_artwork_base64", prune=True):
             result = await self._get_sgdb_artwork_base64(rom_id, asset_type_num)
             if result.get("base64") is not None:
                 result["prune_lease_token"] = await self._rules.acquire_lease("sgdb_artwork")
@@ -503,9 +497,7 @@ class SteamGridService:
         point the shortcut at it via ``SteamClient.Apps.SetShortcutIcon``;
         failures use the canonical ``{success, reason, message}`` shape.
         """
-        async with self._rules.hold("save_shortcut_icon", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("save_shortcut_icon", prune=True):
             return await self._save_shortcut_icon(app_id, icon_base64)
 
     async def _save_shortcut_icon(self, app_id, icon_base64):

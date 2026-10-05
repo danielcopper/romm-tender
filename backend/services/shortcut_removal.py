@@ -67,7 +67,7 @@ class ShortcutRemovalService:
     """Resolves shortcut removal sets and unbinds the affected ROMs in SQLite.
 
     A use case an endpoint calls checks its conflict rules at its entry, under
-    that endpoint's name, and answers the canonical refusal when one holds
+    that endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -91,11 +91,7 @@ class ShortcutRemovalService:
         ``shortcut_removal`` lease in ``prune_lease_token`` for the frontend's
         Steam writes.
         """
-        async with self._rules.hold(
-            "remove_all_shortcuts", update=True, migration=True, sync=True, prune=True
-        ) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("remove_all_shortcuts", update=True, migration=True, sync=True, prune=True):
             with self._uow_factory() as uow:
                 roms = list(uow.roms.iter_all())
             app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
@@ -112,11 +108,7 @@ class ShortcutRemovalService:
         shortcut to remove, the answer carries a ``shortcut_removal`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
-        async with self._rules.hold(
-            "remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True
-        ) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True):
             try:
                 result = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
             except Exception as e:
@@ -219,9 +211,7 @@ class ShortcutRemovalService:
         call that sends no token releases nothing. A refused call releases
         nothing either.
         """
-        async with self._rules.hold("report_removal_results", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("report_removal_results", prune=True):
             try:
                 await self._loop.run_in_executor(None, self._report_removal_results_io, removed_rom_ids)
                 return {"success": True, "message": f"Removed {len(removed_rom_ids)} shortcuts"}
@@ -289,9 +279,7 @@ class ShortcutRemovalService:
         MUST only call this when its scan actually ran (Steam's store was
         readable), never on a scan it could not perform.
         """
-        async with self._rules.hold("reconcile_shortcuts", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("reconcile_shortcuts", prune=True):
             try:
                 unbound = await self._loop.run_in_executor(None, self._reconcile_live_shortcuts_io, live_app_ids)
             except Exception as e:

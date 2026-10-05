@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _make_retry
+from _factories import _make_conflict_rules, _make_prune_conflicts, _make_retry, _refused_by_conflict_rule
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -176,9 +176,9 @@ class TestTheSessionStartFlush:
         svc, _, uow = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts))
         _seed_rom(uow, 7)
 
-        result = await svc.record_session_start(7)
+        with _refused_by_conflict_rule("prune_active"):
+            await svc.record_session_start(7)
 
-        assert result["reason"] == "prune_active"
         assert uow.playtime.get(7) is None
         assert svc._flush_tasks == set()
         assert prune_conflicts.conflicting_operations == 0
@@ -191,9 +191,9 @@ class TestReconcilePlaytimeRules:
         svc, fake, uow = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts))
         _seed_rom(uow, 7)
 
-        result = await svc.reconcile_playtime(7)
+        with _refused_by_conflict_rule("prune_active"):
+            await svc.reconcile_playtime(7)
 
-        assert result["reason"] == "prune_active"
         assert fake.call_log == []
 
 

@@ -186,12 +186,10 @@ class PruneService:
     async def get_prune_preview(self, request: object) -> dict[str, Any]:
         """Create or page an ephemeral local-only candidate preview.
 
-        Checks its endpoint's conflict rules at its entry and answers the
-        canonical refusal when one holds (GLOSSARY.md → Conflict rules).
+        Checks its endpoint's conflict rules at its entry and raises the
+        rule's refusal when one holds (GLOSSARY.md → Conflict rules).
         """
-        async with self._rules.hold("get_prune_preview", update=True, migration=True, sync=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("get_prune_preview", update=True, migration=True, sync=True):
             return await self._get_prune_preview(request)
 
     async def _get_prune_preview(self, request: object) -> dict[str, Any]:
@@ -265,14 +263,12 @@ class PruneService:
         """Atomically consume a preview and start one explicit cleanup run.
 
         The whole start runs under the cleanup's exclusive reservation, taken
-        before the update, migration and sync rules are asked, and answers their
-        canonical refusal when one holds (GLOSSARY.md → Conflict rules, Prune
+        before the update, migration and sync rules are asked, and raises their
+        refusal when one holds (GLOSSARY.md → Conflict rules, Prune
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.
         """
-        async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True):
             return await self._start_prune(request)
 
     async def _start_prune(self, request: object) -> dict[str, Any]:

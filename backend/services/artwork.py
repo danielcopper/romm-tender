@@ -125,7 +125,7 @@ class ArtworkService:
     """Manages artwork downloading, caching, grid publishing, and cleanup.
 
     A use case an endpoint calls checks its conflict rules at its entry, under
-    that endpoint's name, and answers the canonical refusal when one holds
+    that endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules). The library sync's own cover work reaches
     this service through ``ArtworkManager`` and checks no rule.
     """
@@ -766,12 +766,10 @@ class ArtworkService:
         for a group version that has no local ``roms`` row (the picker lists
         not-yet-synced siblings). Every failure — server unreachable, no cover,
         read error — returns ``{"base64": None}`` silently; a data endpoint, not
-        a ``{success, reason, message}`` result, except for the refusal of a call
-        made while a cleanup is running. Never re-downloads a cached cover.
+        a ``{success, reason, message}`` result, except that a call made while a
+        cleanup is running is refused. Never re-downloads a cached cover.
         """
-        async with self._rules.hold("fetch_cover_base64", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("fetch_cover_base64", prune=True):
             rom_id = int(rom_id)
             cache_path = self._cache_path(rom_id)
             if self._cover_art_file_store.exists(cache_path):
@@ -816,9 +814,7 @@ class ArtworkService:
         the canonical ``{success, reason, message}`` failure shape on every
         failure branch — see ``lib/list_result.py``.
         """
-        async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
             app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
             if app_id is None:
                 return {
@@ -1029,11 +1025,7 @@ class ArtworkService:
         from the one the dry run answered; any shortfall of ``removed_count``
         below it is candidates whose unlink failed, which are still on disk.
         """
-        async with self._rules.hold(
-            "cleanup_orphaned_grid_images", update=True, migration=True, sync=True, prune=True
-        ) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("cleanup_orphaned_grid_images", update=True, migration=True, sync=True, prune=True):
             grid = self._steam_config.grid_dir()
             if not grid or not self._cover_art_file_store.is_dir(grid):
                 return {

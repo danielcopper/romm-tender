@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -444,10 +449,9 @@ class TestConflictRulesAtTheUseCase:
     async def test_a_running_cleanup_refuses_the_use_case(self, steamgrid, use_case, args):
         steamgrid.prune_conflicts.register_run("held-run")
 
-        result = await getattr(steamgrid.service, use_case)(*args)
+        with _refused_by_conflict_rule("prune_active"):
+            await getattr(steamgrid.service, use_case)(*args)
 
-        assert result["reason"] == "prune_active"
-        assert "prune_lease_token" not in result
         assert steamgrid.prune_conflicts.conflicting_operations == 0
 
 

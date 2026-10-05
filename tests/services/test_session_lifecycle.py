@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts
+from _factories import _make_conflict_rules, _make_prune_conflicts, _refused_by_conflict_rule
 
 from lib.conflict_rules import migration_refused, update_refused
 from services.session_lifecycle import (
@@ -1229,10 +1229,9 @@ class TestTheFinalizesRules:
         )
         service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts)
 
-        refusal = await service.finalize(7)
+        with _refused_by_conflict_rule("prune_active"):
+            await service.finalize(7)
 
-        assert isinstance(refusal, dict)
-        assert refusal["reason"] == "prune_active"
         assert playtime_recorder.calls == []
         assert post_exit_sync.calls == []
         assert service._background_tasks == set()

@@ -7,7 +7,12 @@ import shutil
 import sys
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
@@ -1397,10 +1402,9 @@ class TestTheRemoveRomLease:
         rom_path = _seed_installed_file(uow, rom_files, 42)
         prune_conflicts.register_run("held-run")
 
-        result = await service.remove_rom(42)
+        with _refused_by_conflict_rule("prune_active"):
+            await service.remove_rom(42)
 
-        assert result["reason"] == "prune_active"
-        assert "prune_lease_token" not in result
         assert rom_path in rom_files.files
         assert prune_conflicts.conflicting_operations == 0
 
@@ -1506,10 +1510,8 @@ class TestTheBulkUninstallLease:
             prune_conflicts=prune_conflicts, migration_pending=migration_pending, sync_in_flight=sync_in_flight
         )
 
-        result = await service.uninstall_all_roms()
+        with _refused_by_conflict_rule(reason):
+            await service.uninstall_all_roms()
 
-        assert result["reason"] == reason
-        assert "app_ids" not in result
-        assert "prune_lease_token" not in result
         assert rom_path in rom_files.files
         assert prune_conflicts.conflicting_operations == 0

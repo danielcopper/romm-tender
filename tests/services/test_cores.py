@@ -7,7 +7,12 @@ import logging
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -953,8 +958,8 @@ class TestTheCoreWriteLeases:
             prune_conflicts.register_run("held-run")
         service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
 
-        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+        with _refused_by_conflict_rule(reason):
+            event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
 
-        assert result["reason"] == reason
         assert uow.roms.get(42).emulator_override is None
         assert prune_conflicts.conflicting_operations == 0

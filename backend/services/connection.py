@@ -133,7 +133,7 @@ class ConnectionService:
 
     The connection test, the three sign-ins and the sign-out each check their
     endpoint's conflict rules at their entry, under that endpoint's name, and
-    answer the canonical refusal when one holds (GLOSSARY.md → Conflict rules).
+    raise the rule's refusal when one holds (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: ConnectionServiceConfig) -> None:
@@ -158,9 +158,7 @@ class ConnectionService:
         failure, ``romm_version`` carries the detected server version when
         the heartbeat exposed one.
         """
-        async with self._rules.hold("test_connection", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("test_connection", prune=True):
             return await self._test_connection()
 
     async def _test_connection(self) -> dict[str, Any]:
@@ -240,9 +238,7 @@ class ConnectionService:
         404 against the new server's negotiate. Returns the same ``success`` /
         ``reason`` / ``message`` shape as :meth:`test_connection`.
         """
-        async with self._rules.hold("connect_with_credentials", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("connect_with_credentials", prune=True):
             return await self._establish_token(romm_url, username, password, allow_insecure_ssl)
 
     async def _establish_token(
@@ -368,9 +364,7 @@ class ConnectionService:
         required scope. The token value is never logged. Returns the same
         ``success`` / ``reason`` / ``message`` shape as :meth:`test_connection`.
         """
-        async with self._rules.hold("connect_with_token", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("connect_with_token", prune=True):
             return await self._establish_user_token(romm_url, token, allow_insecure_ssl)
 
     async def _establish_user_token(
@@ -454,9 +448,7 @@ class ConnectionService:
         logged. Returns the same ``success`` / ``reason`` / ``message`` shape as
         :meth:`test_connection`.
         """
-        async with self._rules.hold("connect_with_pairing_code", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("connect_with_pairing_code", prune=True):
             return await self._establish_paired_token(romm_url, code, allow_insecure_ssl)
 
     async def _establish_paired_token(
@@ -753,9 +745,7 @@ class ConnectionService:
         Returns the canonical success shape on success, the canonical failure
         shape on a persist error.
         """
-        async with self._rules.hold("sign_out", prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("sign_out", prune=True):
             return self._sign_out()
 
     def _sign_out(self) -> dict[str, Any]:

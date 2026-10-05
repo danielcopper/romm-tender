@@ -181,7 +181,7 @@ class RomAdoptionService:
     """Collision detection, candidate search, content verification, and adoption of on-disk ROMs.
 
     An adoption checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds
+    endpoint's name, and raises the rule's refusal when one holds
     (GLOSSARY.md → Conflict rules).
     """
 
@@ -484,9 +484,7 @@ class RomAdoptionService:
         write to, so its lease would hold off every cleanup until it expired. A
         download's ``download_complete`` is leased on the same condition.
         """
-        async with self._rules.hold("adopt_existing_rom", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("adopt_existing_rom", update=True, migration=True, prune=True):
             result = await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)
             if result.get("success") and result.get("app_id") is not None:
                 result["prune_lease_token"] = await self._rules.acquire_lease("adopt_existing_rom")

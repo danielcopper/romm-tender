@@ -143,7 +143,7 @@ class VersionSwitchService:
     """Version-picker reads (``get_version_list``) and writes (``switch_version``).
 
     The write checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and answers the canonical refusal when one holds; the
+    endpoint's name, and raises the rule's refusal when one holds; the
     removed-game cleanup, which switches from inside its own run, calls
     ``switch_version_unchecked`` instead (GLOSSARY.md → Conflict rules).
     """
@@ -551,9 +551,7 @@ class VersionSwitchService:
         switch that succeeded carries a ``version_switch`` lease in
         ``prune_lease_token`` for the frontend's Steam write.
         """
-        async with self._rules.hold("switch_version", update=True, migration=True, prune=True) as refusal:
-            if refusal is not None:
-                return refusal
+        async with self._rules.hold("switch_version", update=True, migration=True, prune=True):
             result = await self.switch_version_unchecked(app_id, target_rom_id, allow_stranded)
             if result.get("success"):
                 result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")

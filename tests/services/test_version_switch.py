@@ -8,7 +8,12 @@ import threading
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules, _make_prune_conflicts, _record_operations_at_lease
+from _factories import (
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _record_operations_at_lease,
+    _refused_by_conflict_rule,
+)
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -1295,9 +1300,9 @@ class TestTheVersionSwitchLease:
             prune_conflicts.register_run("held-run")
         service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
+        with _refused_by_conflict_rule(reason):
+            _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        assert result["reason"] == reason
         assert uow.roms.get(1).shortcut_app_id == _APP_ID
         assert uow.roms.get(2).shortcut_app_id is None
         assert prune_conflicts.conflicting_operations == 0
