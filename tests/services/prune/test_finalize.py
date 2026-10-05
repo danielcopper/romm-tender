@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from models.prune import InstalledContentRemoval
 
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
@@ -79,9 +80,9 @@ class _FakeArtifacts:
 class _FakeInstalledRemover:
     def __init__(self, calls: list[str]) -> None:
         self._calls = calls
-        self.result: dict[str, Any] = {"success": True, "changed": True, "ambiguous": False}
+        self.result = InstalledContentRemoval(changed=True, ambiguous=False)
 
-    def __call__(self, rom_id, claims) -> dict[str, Any]:
+    def __call__(self, rom_id, claims) -> InstalledContentRemoval:
         self._calls.append("installed_content")
         return self.result
 
@@ -344,7 +345,7 @@ class TestCascadeStopsPartway:
     async def test_a_failed_content_removal_stops_before_the_artifacts(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.installed.result = {"success": False, "message": "busy", "changed": False, "ambiguous": False}
+        fixture.installed.result = InstalledContentRemoval(changed=False, ambiguous=False, failure="busy")
 
         result = await _finish(fixture, rows)
 
@@ -354,7 +355,7 @@ class TestCascadeStopsPartway:
     async def test_a_not_installed_rom_is_not_a_removal_failure(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.installed.result = {"success": False, "reason": "not_installed", "changed": False, "ambiguous": False}
+        fixture.installed.result = InstalledContentRemoval(changed=False, ambiguous=False)
 
         assert (await _finish(fixture, rows))["status"] == "removed"
 
@@ -384,12 +385,23 @@ class TestCascadeStopsPartway:
     async def test_an_ambiguous_mutation_is_recorded_as_such(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.installed.result = {"success": True, "changed": True, "ambiguous": True}
+        fixture.installed.result = InstalledContentRemoval(changed=True, ambiguous=True)
         ledger = MutationLedger(rows)
 
         await _finish(fixture, rows, ledger=ledger)
 
         assert ledger.ambiguous_mutations == ["installed_rom_content"]
+
+    async def test_a_removal_that_stopped_ambiguously_is_retained_and_reported_ambiguous(self):
+        rows = [_rom(1)]
+        fixture = Fixture(rows, {1: "vanished"})
+        fixture.installed.result = InstalledContentRemoval(changed=False, ambiguous=True, failure="stopped")
+
+        result = await _finish(fixture, rows)
+
+        assert (result["status"], result["reason"]) == ("partial", "rom_removal_failed")
+        assert result["ambiguous_mutations"] == ["installed_rom_content"]
+        assert fixture.order == ["quarantine", "installed_content"]
 
 
 @pytest.mark.parametrize("status", ["live", "uncertain"])

@@ -16,7 +16,7 @@ from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
-from models.prune import SealedSourceClaims
+from models.prune import InstalledContentRemoval, SealedSourceClaims
 
 from domain.fetch_generation import count_rows_for_skip, prune_candidate_ids
 from domain.platform_sync_state import PlatformSyncState
@@ -204,7 +204,7 @@ class FakeInstalledFilesRemover:
         self.entered = threading.Event()
         self.release = threading.Event()
 
-    def __call__(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> dict[str, Any]:
+    def __call__(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> InstalledContentRemoval:
         del claims
         self.removed.append(rom_id)
         if rom_id in self.block_ids:
@@ -212,10 +212,10 @@ class FakeInstalledFilesRemover:
             if not self.release.wait(timeout=5):
                 raise TimeoutError("test did not release installed-file removal")
         if rom_id in self.installed_ids:
-            return {"success": True, "changed": True, "message": "removed"}
+            return InstalledContentRemoval(changed=True, ambiguous=False)
         if rom_id in self.failure_ids:
-            return {"success": False, "reason": "unknown", "message": "delete failed"}
-        return {"success": False, "reason": "not_installed", "message": "not installed"}
+            return InstalledContentRemoval(changed=False, ambiguous=False, failure="delete failed")
+        return InstalledContentRemoval(changed=False, ambiguous=False)
 
 
 class EventSink:

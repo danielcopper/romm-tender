@@ -369,13 +369,12 @@ class GroupFinalizer:
         """Delete each row's installed ROM files; a ROM that was never installed is fine."""
         for rom_id in sorted(delete_ids):
             removal = await self._loop.run_in_executor(None, self._remove_installed_files, rom_id, claims)
-            if removal.get("changed") and "installed_rom_content" not in ledger.mutations:
+            if removal.changed and "installed_rom_content" not in ledger.mutations:
                 ledger.mutations.append("installed_rom_content")
-            if removal.get("ambiguous") and "installed_rom_content" not in ledger.ambiguous_mutations:
+            if removal.ambiguous and "installed_rom_content" not in ledger.ambiguous_mutations:
                 ledger.ambiguous_mutations.append("installed_rom_content")
-            if removal.get("success") or removal.get("reason") == "not_installed":
-                continue
-            return "rom_removal_failed", removal.get("message", "ROM removal failed.")
+            if removal.failure is not None:
+                return "rom_removal_failed", removal.failure
         return None
 
     async def _remove_artifacts(

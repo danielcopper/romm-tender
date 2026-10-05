@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from models.prune import InstalledContentRemoval
+
 from lib.list_result import ErrorCode
 from lib.path_safety import is_safe_rom_path
 
@@ -196,26 +198,27 @@ class RomRemovalService:
         """Render the time since *started* for a log line."""
         return f"{self._clock.monotonic() - started:.1f}s"
 
-    def delete_rom_files(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> dict[str, Any]:
-        """Delete only installed content, leaving every database row untouched."""
+    def delete_rom_files(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> InstalledContentRemoval:
+        """Delete only installed content, leaving every database row untouched.
+
+        Answers what the removal came to and never refuses: a ROM with nothing
+        installed is a removal that changed nothing. A removal that raised is
+        ambiguous, because it may have deleted files before it stopped.
+        """
         with self._uow_factory() as uow:
             install = uow.rom_installs.get(int(rom_id))
         if install is None:
-            return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
+            return InstalledContentRemoval(changed=False, ambiguous=False)
         try:
             outcome = self._delete_rom_files(install, claims)
         except Exception as exc:
             self._logger.error(f"Failed to delete ROM files: {exc}")
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "message": str(exc),
-                "changed": False,
-                "ambiguous": False,
-            }
-        if not outcome["success"]:
-            return {"reason": ErrorCode.UNKNOWN.value, **outcome}
-        return dict(outcome)
+            return InstalledContentRemoval(changed=False, ambiguous=True, failure=str(exc))
+        return InstalledContentRemoval(
+            changed=outcome["changed"],
+            ambiguous=outcome["ambiguous"],
+            failure=None if outcome["success"] else outcome["message"],
+        )
 
     def _remove_rom_io(self, rom_id: int, install: RomInstall) -> None:
         """Sync helper for remove_rom — file deletion (outside UoW) then row delete in a short write UoW.

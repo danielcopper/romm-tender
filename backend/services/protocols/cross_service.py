@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
-    from models.prune import SourceClaim
+    from models.prune import InstalledContentRemoval, SourceClaim
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -374,9 +374,13 @@ class InstalledRomRemoverFn(Protocol):
 
 
 class InstalledRomFilesRemoverFn(Protocol):
-    """Filesystem-only installed-ROM removal consumed by explicit prune."""
+    """Filesystem-only installed-ROM removal consumed by explicit prune.
 
-    def __call__(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> dict[str, Any]: ...
+    Answers what the removal came to and never raises a refusal; a ROM with
+    nothing installed is a removal that changed nothing.
+    """
+
+    def __call__(self, rom_id: int, claims: dict[str, SourceClaim] | None = None) -> InstalledContentRemoval: ...
 
 
 class VersionSwitcherFn(Protocol):

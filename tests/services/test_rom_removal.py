@@ -21,6 +21,8 @@ from fakes.system_time import FakeClock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from models.prune import InstalledContentRemoval
+
 from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.rom_files import RomFileAdapter
 from domain.prune import BundleReadmeContext
@@ -203,9 +205,25 @@ class TestDeleteRomFiles:
 
         result = service.delete_rom_files(7)
 
-        assert result["success"] is True
+        assert result.failure is None
         assert uow.roms.get(7) is not None
         assert uow.rom_installs.get(7) is not None
+
+    def test_a_rom_with_nothing_installed_is_a_removal_that_changed_nothing(self, service):
+        assert service.delete_rom_files(7) == InstalledContentRemoval(changed=False, ambiguous=False)
+
+    def test_a_removal_that_raised_is_ambiguous(self, service, uow, rom_files):
+        """Files may already be gone when the removal stops, so it never answers that nothing changed."""
+        rom_dir = f"{_ROMS_BASE}/psx/FF7"
+        rom_files.files[f"{rom_dir}/disc1.bin"] = b"\x00" * 100
+        rom_files.remove_tree_failures.add(rom_dir)
+        _seed_install(uow, _make_install(7, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir, system="psx"))
+
+        result = service.delete_rom_files(7)
+
+        assert result == InstalledContentRemoval(
+            changed=False, ambiguous=True, failure=f"simulated remove_tree failure: {rom_dir}"
+        )
 
     def test_refuses_file_outside_roms_dir(self, service, rom_files):
         evil = "/evil/important.txt"
@@ -281,8 +299,8 @@ class TestDeleteRomFiles:
 
         result = real_service.delete_rom_files(1, claims)
 
-        assert result["success"] is False
-        assert "identity changed" in result["message"]
+        assert result.failure is not None
+        assert "identity changed" in result.failure
         assert rom_path.read_bytes() == b"replacement"
 
     def test_preopened_rom_writer_prevents_installed_file_deletion(self, tmp_path, logger):
@@ -311,8 +329,8 @@ class TestDeleteRomFiles:
         finally:
             os.close(writer)
 
-        assert result["success"] is False
-        assert "active writer" in result["message"]
+        assert result.failure is not None
+        assert "active writer" in result.failure
         assert rom_path.read_bytes() == b"installed"
 
     def test_selected_directory_child_change_is_retained_at_mutation_time(self, tmp_path, logger):
@@ -354,8 +372,8 @@ class TestDeleteRomFiles:
 
         result = real_service.delete_rom_files(1, claims)
 
-        assert result["success"] is False
-        assert "subtree changed" in result["message"]
+        assert result.failure is not None
+        assert "subtree changed" in result.failure
         assert child.read_bytes() == b"replacement"
 
     @pytest.mark.parametrize("claims", [None, {}], ids=["no-bundle", "bundle-without-this-source"])
@@ -399,8 +417,8 @@ class TestDeleteRomFiles:
 
         result = real_service.delete_rom_files(1, claims)
 
-        assert result["success"] is False
-        assert "identity changed" in result["message"]
+        assert result.failure is not None
+        assert "identity changed" in result.failure
         assert (rom_dir / "disc.bin").read_bytes() == b"replacement"
 
     @pytest.mark.parametrize("multi_file", [False, True], ids=["single-file", "rom-dir"])
@@ -446,8 +464,8 @@ class TestDeleteRomFiles:
 
         result = real_service.delete_rom_files(1)
 
-        assert result["success"] is True, result["message"]
-        assert result["changed"] is True
+        assert result.failure is None, result.failure
+        assert result.changed is True
         assert not rom_path.exists()
         # The shared per-system directory is never the thing removed.
         assert system.is_dir()
@@ -1140,8 +1158,8 @@ class TestInterruptedStagingRecovery:
         # A run that sealed a bundle but captured no installed ROM content.
         result = service.delete_rom_files(1, {})
 
-        assert result["success"] is True
-        assert result["changed"] is False
+        assert result.failure is None
+        assert result.changed is False
         assert staged.is_dir()
 
     def test_a_cleanup_run_with_no_bundle_adopts_debris_like_an_uninstall(self, tmp_path, logger):
@@ -1162,8 +1180,8 @@ class TestInterruptedStagingRecovery:
 
         result = service.delete_rom_files(1)
 
-        assert result["success"] is True
-        assert result["changed"] is True
+        assert result.failure is None
+        assert result.changed is True
         assert not staged.exists()
 
 

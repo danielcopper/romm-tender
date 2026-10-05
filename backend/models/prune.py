@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import NotRequired, TypedDict
 
 
@@ -65,6 +66,20 @@ class MutationOutcome(TypedDict):
     changed: bool
     ambiguous: bool
     message: str
+
+
+@dataclass(frozen=True)
+class InstalledContentRemoval:
+    """What removing one ROM's installed content came to.
+
+    ``failure`` is ``None`` for a removal that finished and says why it stopped
+    otherwise. ``ambiguous`` means ``changed`` cannot be trusted: files may be
+    gone whatever ``changed`` says.
+    """
+
+    changed: bool
+    ambiguous: bool
+    failure: str | None = None
 
 
 class SteamRecoverySnapshot(TypedDict):
