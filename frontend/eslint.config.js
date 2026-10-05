@@ -12,7 +12,7 @@ import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
 // Names that carry "plugin" because they name someone else's plugin, and must
 // keep the word. Each lets through its whole name, wherever it appears, and
 // never a longer name containing it.
-export const NAMES_NOT_ABOUT_TENDER = [
+const NAMES_NOT_ABOUT_TENDER = [
   // Decky Loader's own window global, read to name the loader's version.
   "DeckyPluginLoader",
   // The config key rollup and ESLint each read their plugins from, and

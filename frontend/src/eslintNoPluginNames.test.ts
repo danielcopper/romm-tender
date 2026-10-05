@@ -16,8 +16,6 @@ import path from "node:path";
 import process from "node:process";
 import tseslint from "typescript-eslint";
 
-import { NAMES_NOT_ABOUT_TENDER } from "../eslint.config.js";
-
 const eslint = new ESLint({ cwd: process.cwd(), overrideConfig: tseslint.configs.disableTypeChecked });
 
 /** The lines `no-restricted-syntax` reports for `source` linted as the file at `relative` in this package. */
@@ -78,9 +76,13 @@ describe("no name calls Tender a plugin", () => {
   });
 
   // An exception nothing carries any more would let the next name of that
-  // spelling through unread. Read as text, so a comment that still carries the
-  // word keeps an exception alive; the list itself is left out of the reading.
+  // spelling through unread. Read as text — the list from the config's own
+  // source, the package without that list — so a comment that still carries the
+  // word keeps an exception alive.
   it("lets through only names this package still carries", () => {
+    const list = /const NAMES_NOT_ABOUT_TENDER = \[([\s\S]*?)\];/;
+    const config = fs.readFileSync("eslint.config.js", "utf8");
+    const excepted = [...(list.exec(config)?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
     const roots = ["src", "scripts", "eslint-rules"];
     const files = [
       ...fs.readdirSync(process.cwd()),
@@ -91,10 +93,11 @@ describe("no name calls Tender a plugin", () => {
     const text = files
       .map((file) => fs.readFileSync(path.join(process.cwd(), file), "utf8"))
       .join("\n")
-      .replace(/export const NAMES_NOT_ABOUT_TENDER = \[[\s\S]*?\];/, "");
+      .replace(list, "");
 
-    const unused = NAMES_NOT_ABOUT_TENDER.filter((name) => !new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(text));
+    const unused = excepted.filter((name) => !new RegExp(`(?<![\\w$])${name}(?![\\w$])`).test(text));
 
+    expect(excepted).not.toEqual([]);
     expect(unused).toEqual([]);
   });
 }, 60_000);
