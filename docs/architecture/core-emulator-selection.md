@@ -553,8 +553,9 @@ imported (per
 [ADR-0011](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0011-per-game-core-override-in-db-applied-via-e-flag.md)),
 and a per-platform core previously set as a system-level `<alternativeEmulator>` is **not** imported into
 `platform_cores` either — `platform_cores` starts empty. This is by design: a gamelist-import path would revive the
-multi-root-XML parse failures and folder-collapse ambiguity the model Tender owns was chosen to avoid. Re-apply any
-per-platform core once through the platform detail's Change core button and it sticks from then on.
+multi-root-XML parse failures and folder-collapse ambiguity that the model in which Tender owns core selection was
+chosen to avoid. Re-apply any per-platform core once through the platform detail's Change core button and it sticks from
+then on.
 
 ### A frozen default needs a Force Full Sync
 

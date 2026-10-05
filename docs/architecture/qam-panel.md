@@ -2,10 +2,10 @@
 
 The Quick Access Menu panel is Tender's own surface inside Steam's QAM, behind **Tender's own entry in the tab strip** —
 beside Decky Loader's where Decky is running, and on its own where it is not. It opens on **Main** and reaches every
-other page from there. Steam renders the QAM 348 px wide; a page of Tender can widen it to 854 px — the width Steam's
-own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages exist,
-which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is a
-Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
+other page from there. Steam renders the QAM 348 px wide; one of Tender's pages can widen it to 854 px — the width
+Steam's own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages
+exist, which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is
+a Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
 **Game-detail store** (GLOSSARY.md).
 
 The structure below is the target decided in [#1809](https://github.com/danielcopper/romm-tender/issues/1809) and
@@ -81,8 +81,8 @@ each is a way to get this wrong:
 - The entry is added again to whatever array the pass is handed, and the entry's own marker is what keeps a second pass
   over an array it is already in from adding a second one.
 - Anything bound to the menu's own window is bound from inside the menu's React tree, so the remount re-binds it. The
-  entry itself binds nothing there — the glyph's update dot reads stores that are module state of Tender's own window,
-  and subscribes to them from the tree through `useSyncExternalStore` — but a page the panel mounts does:
+  entry itself binds nothing there — the glyph's update dot reads stores that are module state of the window the panel's
+  code runs in, and subscribes to them from the tree through `useSyncExternalStore` — but a page the panel mounts does:
   `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners,
   `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads the view
   per event and retains nothing. Each of the four sits inside an effect or an event handler of a component the menu
@@ -147,11 +147,11 @@ its release was not yet seen — `updateDotVersion` over the card's own answer, 
 of them can disagree with the card (§ Notices and homes). At rest it does not move either. When its release is seen it
 plays its one **fade**: it grows to 2.2 times its size about its own centre and fades out over 450 ms, ease-out, then is
 taken out. That is one CSS transition of `transform` and `opacity`, set on the dot only for the fade, so a dot at rest
-carries none. The fade is inline style on the element the glyph renders and its end a timer of Tender's own window, so
-nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The boundary), so a store
-state the answer cannot be worked out from draws no dot rather than throwing; with every store as it starts — the
-start-up failure page's case — there is none. Its size and place on the strip, and how the fade looks there, are device
-questions; nothing in the suite can see them.
+carries none. The fade is inline style on the element the glyph renders and its end a timer of the window the panel's
+code runs in, so nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The
+boundary), so a store state the answer cannot be worked out from draws no dot rather than throwing; with every store as
+it starts — the start-up failure page's case — there is none. Its size and place on the strip, and how the fade looks
+there, are device questions; nothing in the suite can see them.
 
 Two things about the glyph are unmeasured, and neither is guessed at:
 
@@ -209,7 +209,7 @@ How a page gets wide, measured on the device rather than read from documentation
   well-formed target origin that does not match is checked at delivery and the message is discarded in silence, so a
   literal one would leave the panel simply never widening.
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
-  stylesheet whose `:has()` rule lifts the cap for a marker class on Tender's own subtree. Class names come from
+  stylesheet whose `:has()` rule lifts the cap for a marker class on the panel's own subtree. Class names come from
   `quickAccessMenuClasses`, which can be `undefined`; `[id^="quickaccess_content_"]` is the fallback selector. Steam
   builds that id from the key of whichever entry rendered the page, so the prefix is matched and never the whole id —
   what a string key produces has not been measured. `TabGroupPanel` sits on that same element, measured under Decky's
@@ -532,8 +532,8 @@ start-up check does not let a panel reach (`Tabs` costs the panel).
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
 wide page, so the frame places entry focus in the body by the rule above, and on its list that is the first row.
-Whatever the rule, the root it searches is Tender's own content and nothing above it — under Decky, its panel title and
-the back arrow beside it are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s
+Whatever the rule, the root it searches is the panel's own content and nothing above it — under Decky, its panel title
+and the back arrow beside it are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s
 `ancestorOverhang` measures); behind Tender's own entry there is no such chrome at all, because Steam's tab group
 renders the panel directly — so no rule here could reach anyone else's. The declaration, the finder, the shared set of
 shapes and the `.focus()` + `gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than

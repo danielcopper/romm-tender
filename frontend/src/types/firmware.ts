@@ -425,7 +425,7 @@ export interface BiosFileStatus extends FirmwareVerdict {
   cores?: Record<string, { required: boolean; one_of?: OneOfMembership | null }>;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
-   *  It still counts as missing — it just cannot be fetched from Tender. */
+   *  It still counts as missing — Tender just cannot fetch it. */
   on_server?: boolean;
   /** The distribution whose own copy is sitting at the destination, as the
    *  resolver writes that distribution's name — printed verbatim, never mapped

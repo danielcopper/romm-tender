@@ -35,9 +35,10 @@
  * 3. **Anything bound to the menu's own window is bound from inside the menu's
  *    React tree**, so the remount re-binds it. Nothing in this module binds
  *    anything there, and neither does the glyph — the stores its update dot
- *    reads are module state of Tender's own window, not the menu's, and it
- *    subscribes to them from the tree, through `useSyncExternalStore`; what
- *    does bind there is inside effects of the pages the panel mounts. A
+ *    reads are module state of the window the panel's code runs in, not the
+ *    menu's, and it subscribes to them from the tree, through
+ *    `useSyncExternalStore`; what does bind there is inside effects of the
+ *    pages the panel mounts. A
  *    listener attached here at module scope would be attached to a view that is
  *    already gone by the second remount.
  */

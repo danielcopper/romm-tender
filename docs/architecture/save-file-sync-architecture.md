@@ -997,9 +997,9 @@ navigation between the buttons uses `Focusable` with `flow-children="right"` for
 
 ## Server Capabilities
 
-The capabilities system (`get_server_capabilities` endpoint) has been removed. Every RomM Tender accepts has device
-sync, version history, slot deletion and device management, so all of them are unconditionally available. The frontend
-no longer fetches or checks capability flags.
+The capabilities system (`get_server_capabilities` endpoint) has been removed. Every RomM version Tender accepts has
+device sync, version history, slot deletion and device management, so all of them are unconditionally available. The
+frontend no longer fetches or checks capability flags.
 
 ## Conflict Resolution
 
@@ -1303,7 +1303,7 @@ the freshly created row is already "current" (equality counts as current). Only 
 `save.updated_at` past our stored `last_synced_at`, flips us to `is_current = false`.
 
 This has a concrete consequence for the sync algorithm: the "no entry for our device on the picked save" branch of
-`compute_sync_action` (matrix rows 6a/6b) is unreachable when Tender really runs, because `SyncEngine.do_sync_rom_saves`
+`compute_sync_action` (matrix rows 6a/6b) is unreachable in real operation, because `SyncEngine.do_sync_rom_saves`
 always calls `list_saves` (which triggers the upsert) before passing the data to the algorithm. By the time the
 algorithm runs, our device entry exists on every server save. The branch is retained as defensive code and is exercised
 by the cases in `tests/adapters/test_gavel_native_decision_table.py`.
@@ -1850,8 +1850,9 @@ next sync as long as the underlying state still produces a conflict row (12b, 6c
 ### Legacy field migration
 
 The per-file schema migrations that the old JSON aggregate ran at load time are moot: SQLite starts empty and no JSON
-state is imported into it (Tender is in beta — the library re-syncs from RomM). There is no on-disk aggregate to
-rebuild, so the old `active_core` → `last_synced_core` rename and the `dismissed_newer_save_id` strip no longer happen.
+state is imported into it (Tender was in beta at the cutover — the library re-syncs from RomM). There is no on-disk
+aggregate to rebuild, so the old `active_core` → `last_synced_core` rename and the `dismissed_newer_save_id` strip no
+longer happen.
 
 The one surviving legacy read is a single one-time settings fold at bootstrap. `fold_legacy_save_sync_settings`
 (`backend/domain/state_migrations.py`) lifts the old `settings` block (the save-sync feature toggles) plus `device_name`
