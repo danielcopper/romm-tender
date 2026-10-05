@@ -516,7 +516,10 @@ page. If the drive or folder comes back, the game is playable again as it was.
   stays as it was; a cancelled or failed download leaves it showing **File missing** again.
 - **Forget this download** is an uninstall without the deletion: the game becomes not downloaded and its shortcut's
   launch command is cleared, as after an uninstall, and no file is touched. It is refused while the file or folder is in
-  fact there — use **Uninstall** for that.
+  fact there: the drive or folder came back, so reopen the game page to play it.
+
+While the file is missing, the page's RomM menu offers no **Uninstall** — there is nothing to delete — and the disc and
+emulator pickers are hidden.
 
 ## Removing a Platform from Steam
 
