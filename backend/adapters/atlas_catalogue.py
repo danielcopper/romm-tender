@@ -330,7 +330,7 @@ class AtlasCatalogueAdapter:
             return None
         return system_name in answer.systems
 
-    def get_supported_extensions(self, system_name: str) -> frozenset[str]:
+    def get_supported_extensions(self, system_name: str, *, reading: SourcesReading | None = None) -> frozenset[str]:
         """Return the extensions the catalogue accepts for *system_name* (lowercased).
 
         Reads the same per-system declaration ES-DE consults, so a caller can
@@ -341,7 +341,7 @@ class AtlasCatalogueAdapter:
         the catalogue could not be read (default-safe: the caller falls back to
         the full disc set).
         """
-        placement = self._rom_location(system_name, self._sources.read())
+        placement = self._rom_location(system_name, self._reading(reading))
         if placement is None:
             return frozenset()
         return frozenset(token.lower() for token in placement.extensions)

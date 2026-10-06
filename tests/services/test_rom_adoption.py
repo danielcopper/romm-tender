@@ -175,7 +175,9 @@ class Harness:
                 logger=logging.getLogger("test_rom_adoption"),
                 clock=self.clock,
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
-                system_extensions=lambda system_name: self.system_extensions.get(system_name, frozenset()),
+                system_extensions=lambda system_name, reading=None: self.system_extensions.get(
+                    system_name, frozenset()
+                ),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=FakeDiscResolver(),
             ),
@@ -207,7 +209,9 @@ class Harness:
                 retrodeck_paths=self.paths,
                 install_recorder=self.recorder,
                 m3u_support=lambda system_name: self.m3u_supported,
-                system_extensions=lambda system_name: self.system_extensions.get(system_name, frozenset()),
+                system_extensions=lambda system_name, reading=None: self.system_extensions.get(
+                    system_name, frozenset()
+                ),
                 save_locations=self.save_locations,
                 active_core=self.active_core,
                 system_known=lambda system_name: self.known_systems.get(system_name),

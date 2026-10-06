@@ -24,15 +24,19 @@ import asyncio
 import logging
 
 import pytest
+from _vendor.atlas.installations import RomPlacement
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
+from adapters.atlas_catalogue import AtlasCatalogueAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.disc_selection import Disc
 from domain.rom import Rom
 from domain.rom_install import RomInstall
+from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
 
 _ROM_DIR = "/roms/psx/game-1"
 _DISC1 = "Game (Disc 1).cue"
@@ -116,20 +120,20 @@ class TestLibrarySyncBakeSite:
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2)
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_scan_installed_paths() == {1: _DISC2_PATH}
+        assert resolver.do_scan_installed_paths(FakeEmulatorSources().read()) == {1: _DISC2_PATH}
 
     def test_read_installed_paths_honors_pin(self, disc_resolver):
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2)
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_read_installed_paths({1}) == {1: _DISC2_PATH}
+        assert resolver.do_read_installed_paths({1}, FakeEmulatorSources().read()) == {1: _DISC2_PATH}
 
     def test_scan_installed_paths_unpinned_defaults_to_disc_1(self, disc_resolver):
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=None)
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
         # file_path is disc 1 (not an m3u) → default resolves to disc 1.
-        assert resolver.do_scan_installed_paths() == {1: _DISC1_PATH}
+        assert resolver.do_scan_installed_paths(FakeEmulatorSources().read()) == {1: _DISC1_PATH}
 
     def test_scan_installed_paths_maps_an_unlaunchable_install_to_the_empty_path(self, disc_resolver):
         # The ROM stays IN the map — it IS downloaded, and collapse_sibling_groups
@@ -138,13 +142,116 @@ class TestLibrarySyncBakeSite:
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, launchable=False)
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_scan_installed_paths() == {1: ""}
+        assert resolver.do_scan_installed_paths(FakeEmulatorSources().read()) == {1: ""}
 
     def test_read_installed_paths_maps_an_unlaunchable_install_to_the_empty_path(self, disc_resolver):
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, launchable=False)
         resolver = self._launch_resolver(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
-        assert resolver.do_read_installed_paths({1}) == {1: ""}
+        assert resolver.do_read_installed_paths({1}, FakeEmulatorSources().read()) == {1: ""}
+
+
+class _CountingInstallation:
+    """A detected RetroDECK answering every system's accept-list, counting how often it was asked."""
+
+    kind = "retrodeck"
+
+    def __init__(self) -> None:
+        self.placement_calls: list[str] = []
+
+    def rom_location(self, system: str) -> RomPlacement:
+        self.placement_calls.append(system)
+        return RomPlacement(dir=f"/roms/{system}", extensions=(".cue", ".chd"))
+
+
+def _seed_folder_install(uow: FakeUnitOfWork, *, rom_id: int, system: str) -> None:
+    rom_dir = f"/roms/{system}/game-{rom_id}"
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=rom_id,
+                platform_slug=system,
+                name=f"rom-{rom_id}",
+                fs_name=f"rom-{rom_id}",
+                shortcut_app_id=100 + rom_id,
+                last_synced_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+        uow.rom_installs.save(
+            RomInstall(
+                rom_id=rom_id,
+                file_path=f"{rom_dir}/Game (Disc 1).cue",
+                rom_dir=rom_dir,
+                platform_slug=system,
+                system=system,
+                installed_at="2026-01-01T00:00:00+00:00",
+            )
+        )
+
+
+class TestARunAsksTheAcceptListOncePerSystem:
+    """Every folder-backed install of a run is enumerated through the run's one reading (#2188 D4)."""
+
+    @staticmethod
+    def _rig() -> tuple[ShortcutLaunchResolver, EmulatorSourcesAdapter, _CountingInstallation]:
+        from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
+        from services.library.shortcut_launch_resolver import ShortcutLaunchResolverConfig
+
+        installation = _CountingInstallation()
+        sources = EmulatorSourcesAdapter(
+            user_home="/home/deck",
+            settings={},
+            log_debug=lambda msg: None,
+            detect_installations=lambda home, machine: [installation],
+            machine=object(),
+        )
+        catalogue = AtlasCatalogueAdapter(
+            sources=sources, emulator_installed=lambda command: True, log_debug=lambda msg: None
+        )
+        uow = FakeUnitOfWork()
+        for rom_id, system in ((1, "psx"), (2, "psx"), (3, "psx"), (4, "saturn")):
+            _seed_folder_install(uow, rom_id=rom_id, system=system)
+        disc_resolver = DiscLaunchResolver(
+            config=DiscLaunchResolverConfig(
+                list_files=lambda directory: [f"{directory}/Game (Disc 1).cue", f"{directory}/Game (Disc 2).cue"],
+                system_extensions=catalogue.get_supported_extensions,
+                logger=logging.getLogger("test_disc_bake_sites"),
+            )
+        )
+        resolver = ShortcutLaunchResolver(
+            config=ShortcutLaunchResolverConfig(
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                active_core=FakeActiveCoreResolver(default=(None, None)),
+                disc_resolver=disc_resolver,
+                emulator_sources=sources,
+            )
+        )
+        return resolver, sources, installation
+
+    def test_a_preview_scan_asks_each_system_once(self):
+        resolver, _sources, installation = self._rig()
+
+        paths = resolver.do_scan_installed_paths(resolver.do_read_sources())
+
+        assert set(paths) == {1, 2, 3, 4}
+        assert sorted(installation.placement_calls) == ["psx", "saturn"]
+
+    def test_the_units_of_one_run_share_the_reading(self):
+        resolver, _sources, installation = self._rig()
+        reading = resolver.do_read_sources()
+
+        resolver.do_read_installed_paths({1, 2}, reading)
+        resolver.do_read_installed_paths({3, 4}, reading)
+
+        assert sorted(installation.placement_calls) == ["psx", "saturn"]
+
+    def test_two_runs_ask_again(self):
+        resolver, _sources, installation = self._rig()
+
+        resolver.do_read_installed_paths({1, 2, 3}, resolver.do_read_sources())
+        resolver.do_read_installed_paths({1, 2, 3}, resolver.do_read_sources())
+
+        assert installation.placement_calls == ["psx", "psx"]
 
 
 # ── install-recorder bake site ───────────────────────────────────────────
@@ -161,7 +268,7 @@ class TestInstallRecorderBakeSite:
                 logger=logging.getLogger("test_disc_bake"),
                 clock=FakeClock(),
                 uow_factory=uow_factory,
-                system_extensions=lambda system_name: frozenset(),
+                system_extensions=lambda system_name, reading=None: frozenset(),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=disc_resolver,
             )

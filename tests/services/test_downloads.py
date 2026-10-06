@@ -174,7 +174,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             uow_factory=FakeUnitOfWorkFactory(uow),
             # Empty ("ES-DE could not answer"), which the launch-target check
             # reads as launchable, so it accepts every install.
-            system_extensions=lambda system_name: frozenset(),
+            system_extensions=lambda system_name, reading=None: frozenset(),
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
         ),
@@ -189,7 +189,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             adoption_move=AdoptionMoveAdapter(),
             quarantine_save=lambda saves_dir, filename: False,
             m3u_support=lambda system_name: harness.m3u_supported,
-            system_extensions=lambda system_name: frozenset(),
+            system_extensions=lambda system_name, reading=None: frozenset(),
             # ``None`` is "es_systems.xml could not answer", which the search
             # reads as permission to proceed — the behaviour these tests predate.
             system_known=lambda system_name: None,

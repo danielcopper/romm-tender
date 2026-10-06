@@ -294,10 +294,10 @@ class SyncOrchestrator:
                     progress_total_steps=total_units,
                 )
 
-            installed_paths = await self._loop.run_in_executor(
-                None, self._shortcut_launch_resolver.do_scan_installed_paths
-            )
             sources = await self._loop.run_in_executor(None, self._shortcut_launch_resolver.do_read_sources)
+            installed_paths = await self._loop.run_in_executor(
+                None, self._shortcut_launch_resolver.do_scan_installed_paths, sources
+            )
             core_overrides = await self._loop.run_in_executor(
                 None, self._shortcut_launch_resolver.do_build_core_overrides, all_roms, sources
             )
@@ -1012,7 +1012,7 @@ class SyncOrchestrator:
         # full launch command; uninstalled ROMs get an empty placeholder until
         # they are downloaded.
         installed_paths = await self._loop.run_in_executor(
-            None, self._shortcut_launch_resolver.do_read_installed_paths, {rom["id"] for rom in unit_roms}
+            None, self._shortcut_launch_resolver.do_read_installed_paths, {rom["id"] for rom in unit_roms}, sources
         )
         core_overrides = await self._loop.run_in_executor(
             None, self._shortcut_launch_resolver.do_build_core_overrides, unit_roms, sources

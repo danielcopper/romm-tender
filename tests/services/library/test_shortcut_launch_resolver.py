@@ -12,6 +12,7 @@ that belongs to this module rather than to the disc pin: neither of them may
 hold a Unit of Work open across the resolver's directory listing.
 """
 
+from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.uow_open_probe import record_uow_open
 
 from domain.shortcut_data import EmulatorInvocation
@@ -91,7 +92,7 @@ class TestInstallPathReadsCloseTheUnitOfWorkFirst:
         resolver = library.sync._shortcut_launch_resolver
         open_at_resolve = record_uow_open(library.uow, resolver._disc_resolver, "resolve_for_install")
 
-        paths = resolver.do_scan_installed_paths()
+        paths = resolver.do_scan_installed_paths(FakeEmulatorSources().read())
 
         assert set(paths) == {10, 11}
         assert open_at_resolve == [False, False]
@@ -102,7 +103,7 @@ class TestInstallPathReadsCloseTheUnitOfWorkFirst:
         resolver = library.sync._shortcut_launch_resolver
         open_at_resolve = record_uow_open(library.uow, resolver._disc_resolver, "resolve_for_install")
 
-        paths = resolver.do_read_installed_paths({10, 11})
+        paths = resolver.do_read_installed_paths({10, 11}, FakeEmulatorSources().read())
 
         assert set(paths) == {10, 11}
         assert open_at_resolve == [False, False]

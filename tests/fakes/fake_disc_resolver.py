@@ -18,6 +18,7 @@ from domain.disc_selection import resolve_launch_path
 
 if TYPE_CHECKING:
     from domain.disc_selection import Disc
+    from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
 
 
@@ -32,18 +33,21 @@ class FakeDiscResolver:
     a pin resolves to the matching disc's path. An install the system cannot
     launch (``launchable is False``) resolves to ``""`` before any disc work, as
     the real resolver does. ``calls`` records each ``(rom_dir, selected_disc)``
-    resolve so consumer tests can assert the seam was queried with the right pin.
+    resolve so consumer tests can assert the seam was queried with the right pin,
+    and ``readings`` the reading each enumeration was handed.
     """
 
     def __init__(self) -> None:
         self._by_rom_dir: dict[str | None, list[Disc]] = {}
         self.calls: list[tuple[str | None, str | None]] = []
+        self.readings: list[SourcesReading | None] = []
 
     def set_discs(self, rom_dir: str, discs: list[Disc]) -> None:
         """Seed the enumerated disc list for installs whose ``rom_dir`` matches."""
         self._by_rom_dir[rom_dir] = discs
 
-    def enumerate_discs(self, install: RomInstall) -> list[Disc]:
+    def enumerate_discs(self, install: RomInstall, *, reading: SourcesReading | None = None) -> list[Disc]:
+        self.readings.append(reading)
         if install.rom_dir is None:
             return []
         return list(self._by_rom_dir.get(install.rom_dir, []))
@@ -55,5 +59,7 @@ class FakeDiscResolver:
         path, _stale = resolve_launch_path(install.file_path, discs, selected_disc)
         return path
 
-    def resolve_for_install(self, install: RomInstall, selected_disc: str | None) -> str:
-        return self.resolve_bake_path(install, self.enumerate_discs(install), selected_disc)
+    def resolve_for_install(
+        self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
+    ) -> str:
+        return self.resolve_bake_path(install, self.enumerate_discs(install, reading=reading), selected_disc)

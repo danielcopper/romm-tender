@@ -29,6 +29,7 @@ from domain.rom_files import folder_boot_root
 if TYPE_CHECKING:
     import logging
 
+    from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
     from services.protocols import (
         DirectoryFileListerFn,
@@ -60,7 +61,7 @@ class DiscLaunchResolver:
         self._system_extensions = config.system_extensions
         self._logger = config.logger
 
-    def enumerate_discs(self, install: RomInstall) -> list[Disc]:
+    def enumerate_discs(self, install: RomInstall, *, reading: SourcesReading | None = None) -> list[Disc]:
         """Enumerate the launchable discs in *install*'s directory, in disc order.
 
         A single-file ROM (``rom_dir is None``) owns no folder and can hold no
@@ -68,12 +69,14 @@ class DiscLaunchResolver:
         scanned recursively; the live ES-DE accept-list for its system is
         intersected with the disc-image set so a disc the emulator cannot launch
         is never listed (falling back to the full disc set when ES-DE is
-        unavailable). Pure file listing — no mutation.
+        unavailable). Pure file listing — no mutation. *reading* is a run's one
+        reading of the emulator sources; a call without one asks the accept-list
+        fresh.
         """
         if install.rom_dir is None:
             return []
         files = self._list_files(install.rom_dir)
-        supported = self._system_extensions(install.system)
+        supported = self._system_extensions(install.system, reading=reading)
         # An empty accept-list means ES-DE could not answer; fall back to the
         # full disc set (pass None) rather than intersecting to nothing.
         return enumerate_discs(files, supported or None)
@@ -117,7 +120,9 @@ class DiscLaunchResolver:
         root = folder_boot_root(path, install.rom_dir)
         return root or path
 
-    def resolve_for_install(self, install: RomInstall, selected_disc: str | None) -> str:
+    def resolve_for_install(
+        self, install: RomInstall, selected_disc: str | None, *, reading: SourcesReading | None = None
+    ) -> str:
         """Enumerate *install* and resolve the launch-bake path in one call.
 
         The bake-site convenience wrapper: enumerate the discs, then resolve the
@@ -125,5 +130,5 @@ class DiscLaunchResolver:
         followed by :meth:`resolve_bake_path`; callers that also need the disc
         list (the picker) call the two halves directly to avoid re-scanning.
         """
-        discs = self.enumerate_discs(install)
+        discs = self.enumerate_discs(install, reading=reading)
         return self.resolve_bake_path(install, discs, selected_disc)

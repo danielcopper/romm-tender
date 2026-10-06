@@ -33,8 +33,10 @@ class FakeSystemExtensions:
 
     def __init__(self, by_system: dict[str, frozenset[str]] | None = None) -> None:
         self.by_system = by_system if by_system is not None else {}
+        self.readings: list[object] = []
 
-    def __call__(self, system_name: str) -> frozenset[str]:
+    def __call__(self, system_name: str, *, reading: object = None) -> frozenset[str]:
+        self.readings.append(reading)
         return self.by_system.get(system_name, frozenset())
 
 

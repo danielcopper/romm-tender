@@ -260,13 +260,13 @@ def _retire_between_transactions(uow: FakeUnitOfWork, disc_resolver: FakeDiscRes
     """
     enumerate_discs = disc_resolver.enumerate_discs
 
-    def retiring(install):
+    def retiring(install, *, reading=None):
         with uow:
             if drop_rom:
                 uow.roms.delete(rom_id)
             else:
                 uow.rom_installs.delete(rom_id)
-        return enumerate_discs(install)
+        return enumerate_discs(install, reading=reading)
 
     disc_resolver.enumerate_discs = retiring
 
@@ -280,8 +280,8 @@ def _relocate_between_transactions(uow: FakeUnitOfWork, disc_resolver: FakeDiscR
     """
     enumerate_discs = disc_resolver.enumerate_discs
 
-    def relocating(install):
-        discs = enumerate_discs(install)
+    def relocating(install, *, reading=None):
+        discs = enumerate_discs(install, reading=reading)
         with uow:
             _seed_install(uow, rom_id=rom_id, rom_dir=rom_dir)
         return discs
@@ -298,8 +298,8 @@ def _unfold_install_between_transactions(uow: FakeUnitOfWork, disc_resolver: Fak
     """
     enumerate_discs = disc_resolver.enumerate_discs
 
-    def unfolding(install):
-        discs = enumerate_discs(install)
+    def unfolding(install, *, reading=None):
+        discs = enumerate_discs(install, reading=reading)
         with uow:
             _seed_install(uow, rom_id=rom_id, rom_dir=None)
         return discs

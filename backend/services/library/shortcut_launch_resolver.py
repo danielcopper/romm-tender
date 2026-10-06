@@ -111,7 +111,7 @@ class ShortcutLaunchResolver:
                 resolved[rom["id"]] = emulator
         return resolved
 
-    def do_scan_installed_paths(self) -> dict[int, str]:
+    def do_scan_installed_paths(self, reading: SourcesReading) -> dict[int, str]:
         """Read ``{rom_id: bake_path}`` for the whole installed library in one scan.
 
         Used by the preview path, which already operates over every ROM in the
@@ -122,6 +122,8 @@ class ShortcutLaunchResolver:
         when the install has no launch target. Only ROMs with a current install
         record appear in the map; a ROM not downloaded is absent, and both cases
         reach :func:`build_shortcuts_data` as the same empty launch command.
+        *reading* is the run's one reading of the emulator sources, which every
+        folder-backed install's accept-list is asked through.
         """
         pending: list[tuple[RomInstall, str | None]] = []
         with self._uow_factory() as uow:
@@ -129,11 +131,11 @@ class ShortcutLaunchResolver:
                 rom = uow.roms.get(install.rom_id)
                 pending.append((install, rom.selected_disc if rom is not None else None))
         return {
-            install.rom_id: self._disc_resolver.resolve_for_install(install, selected_disc)
+            install.rom_id: self._disc_resolver.resolve_for_install(install, selected_disc, reading=reading)
             for install, selected_disc in pending
         }
 
-    def do_read_installed_paths(self, rom_ids: set[int]) -> dict[int, str]:
+    def do_read_installed_paths(self, rom_ids: set[int], reading: SourcesReading) -> dict[int, str]:
         """Read ``{rom_id: bake_path}`` for *rom_ids* via targeted point-lookups.
 
         Used by the per-unit apply path: scanning the whole ``rom_installs``
@@ -143,7 +145,8 @@ class ShortcutLaunchResolver:
         pin against its install directory (a single-disc ROM resolves to its own
         ``file_path``, unchanged), or ``""`` when the install has no launch
         target. A ROM with no install record is absent; both cases reach
-        :func:`build_shortcuts_data` as the same empty launch command.
+        :func:`build_shortcuts_data` as the same empty launch command. *reading*
+        is the run's one reading of the emulator sources, as above.
         """
         pending: list[tuple[RomInstall, str | None]] = []
         with self._uow_factory() as uow:
@@ -154,6 +157,6 @@ class ShortcutLaunchResolver:
                 rom = uow.roms.get(rom_id)
                 pending.append((install, rom.selected_disc if rom is not None else None))
         return {
-            install.rom_id: self._disc_resolver.resolve_for_install(install, selected_disc)
+            install.rom_id: self._disc_resolver.resolve_for_install(install, selected_disc, reading=reading)
             for install, selected_disc in pending
         }

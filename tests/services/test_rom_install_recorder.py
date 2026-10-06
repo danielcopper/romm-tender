@@ -44,7 +44,9 @@ class _Harness:
                 logger=logging.getLogger("test_rom_install_recorder"),
                 clock=FakeClock(),
                 uow_factory=FakeUnitOfWorkFactory(self._uow),
-                system_extensions=lambda system_name: self._system_extensions.get(system_name, frozenset()),
+                system_extensions=lambda system_name, reading=None: self._system_extensions.get(
+                    system_name, frozenset()
+                ),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=FakeDiscResolver(),
             ),
@@ -154,7 +156,9 @@ class TestRecordInstallLaunchTarget:
         resolver = DiscLaunchResolver(
             config=DiscLaunchResolverConfig(
                 list_files=lambda directory: [eboot] if directory == rom_dir else [],
-                system_extensions=lambda system_name: harness._system_extensions.get(system_name, frozenset()),
+                system_extensions=lambda system_name, reading=None: harness._system_extensions.get(
+                    system_name, frozenset()
+                ),
                 logger=logging.getLogger("test_rom_install_recorder"),
             ),
         )
