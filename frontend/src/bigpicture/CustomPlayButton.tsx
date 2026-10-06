@@ -1227,13 +1227,14 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   const handleForget = async () => {
-    if (!romId || missingPath === null || forgetPendingRef.current) return;
+    if (!romId || missingPath === null) return;
     const rid = romId;
     // The play row's note names no path, so the question does: what is
     // forgotten is the record of a file at that place.
     if (!(await showForgetDownloadModal(romName, missingPath))) return;
     // Claimed only once confirmed, so an abandoned confirmation leaves nothing
-    // pending; checked again because a second confirmation can land meanwhile.
+    // pending, and checked here because a second confirmation can land while
+    // the first forget runs.
     if (forgetPendingRef.current) return;
     forgetPendingRef.current = true;
     setForgetPending(true);
