@@ -188,22 +188,21 @@ export interface SourceBanner {
 
 /**
  * Main's banners about the emulator sources, in the sources' order: one where
- * none is detected, one per banner finding of a switched-on source (a
- * switched-off source's findings stay on its card), and one where the source
- * that answers is one Tender cannot start games through.
+ * none is detected, one per banner finding of a switched-on source, and one per
+ * switched-on source Tender cannot start games through, whether or not it is
+ * the one that answers. A switched-off source says either only on its card.
  */
 export function mainSourceBanners(listing: EmulatorSourcesListing): SourceBanner[] {
   if (listing.sources.length === 0) return [{ key: "no-source", text: NO_SOURCE_BANNER }];
-  const findings = listing.sources
-    .filter((source) => source.enabled)
-    .flatMap((source) =>
-      source.findings
-        .map((finding, index) => ({ finding, key: `${source.kind}:${index}` }))
-        .filter(({ finding }) => findingIsBanner(finding))
-        .map(({ finding, key }) => ({ key, text: findingSentence(source.kind, finding) })),
-    );
-  const answering = listing.sources.find((source) => source.kind === listing.answering);
-  return answering && !answering.starts_games
-    ? [...findings, { key: `cannot-start:${answering.kind}`, text: cannotStartSentence(answering.kind) }]
-    : findings;
+  const switchedOn = listing.sources.filter((source) => source.enabled);
+  const findings = switchedOn.flatMap((source) =>
+    source.findings
+      .map((finding, index) => ({ finding, key: `${source.kind}:${index}` }))
+      .filter(({ finding }) => findingIsBanner(finding))
+      .map(({ finding, key }) => ({ key, text: findingSentence(source.kind, finding) })),
+  );
+  const cannotStart = switchedOn
+    .filter((source) => !source.starts_games)
+    .map((source) => ({ key: `cannot-start:${source.kind}`, text: cannotStartSentence(source.kind) }));
+  return [...findings, ...cannotStart];
 }

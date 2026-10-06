@@ -303,6 +303,7 @@ describe("mainSourceBanners", () => {
       "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
+      "Tender cannot start games through EmuDeck yet.",
     ]);
   });
 
@@ -312,12 +313,12 @@ describe("mainSourceBanners", () => {
     expect(cannotStartSentence("emudeck")).toBe("Tender cannot start games through EmuDeck yet.");
   });
 
-  it("says nothing about starting games while RetroDECK answers beside EmuDeck", () => {
+  it("says Tender cannot start games through EmuDeck while RetroDECK answers beside it", () => {
     const listing = {
       answering: "retrodeck",
       sources: [source({}), source({ kind: "emudeck", starts_games: false })],
     };
-    expect(texts(listing)).toEqual([]);
+    expect(texts(listing)).toEqual(["Tender cannot start games through EmuDeck yet."]);
   });
 
   it("keeps a switched-off source's findings off Main", () => {

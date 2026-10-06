@@ -3213,6 +3213,32 @@ describe("MainPage", () => {
       expect(await findByText("Tender cannot start games through EmuDeck yet.")).toBeInTheDocument();
     });
 
+    it("says Tender cannot start games through EmuDeck while RetroDECK answers beside it", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          HEALTHY_RETRODECK,
+          { ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(await findByText("Tender cannot start games through EmuDeck yet.")).toBeInTheDocument();
+    });
+
+    it("leaves a switched-off EmuDeck's cannot-start line to its card", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          HEALTHY_RETRODECK,
+          { ...HEALTHY_RETRODECK, kind: "emudeck", enabled: false, starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByText(/cannot start games/)).toBeNull();
+    });
+
     it("keeps a switched-off source's finding off Main", async () => {
       vi.mocked(backend.getEmulatorSources).mockResolvedValue({
         sources: [
