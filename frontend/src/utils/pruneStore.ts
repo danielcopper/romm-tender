@@ -7,29 +7,23 @@ export interface PruneProgress {
   rom_ids: number[];
   rom_count?: number;
   name: string;
-  name_truncated?: boolean;
   bundle_path?: string;
-  bundle_path_truncated?: boolean;
 }
 
 export interface PruneGroupResult {
   group_id: string;
-  group_id_truncated?: boolean;
   /** The game's display name — what a result line leads with. */
   name?: string;
-  name_truncated?: boolean;
   rom_ids: number[];
   rom_count?: number;
   status: "removed" | "repointed" | "partial" | "failed" | "skipped";
   reason?: string;
   message: string;
-  message_truncated?: boolean;
   removed_rom_ids?: number[];
   removed_count?: number;
   app_id?: number;
   removed_app_id?: number;
   bundle_path?: string;
-  bundle_path_truncated?: boolean;
   committed_action?: "repoint_shortcut" | "remove_shortcut";
   action_ambiguous?: boolean;
   mutations?: string[];
@@ -37,7 +31,6 @@ export interface PruneGroupResult {
   warnings?: string[];
   warning_count?: number;
   warnings_omitted?: boolean;
-  warnings_truncated?: boolean;
   target_rom_id?: number;
 }
 
@@ -58,7 +51,6 @@ export interface PruneComplete {
   results: PruneGroupResult[];
   reason?: string;
   message?: string;
-  message_truncated?: boolean;
 }
 
 type Listener = () => void;
