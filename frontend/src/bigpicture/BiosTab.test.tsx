@@ -16,6 +16,8 @@ const coreInfo: CoreInfo = {
   platform_core_label: null,
   has_game_override: false,
   emulator_data_available: true,
+  emulator_data_reason: null,
+  emulator_source: { kind: "retrodeck", starts_games: true },
   emulators: [
     {
       label: "Snes9x",
@@ -858,6 +860,8 @@ describe("BiosTab", () => {
       platform_core_label: null,
       has_game_override: false,
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators,
     });
 
@@ -1113,6 +1117,8 @@ describe("BiosTab", () => {
       platform_core_label: null,
       has_game_override: false,
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [libretroEmu("mednafen_psx_libretro", "Beetle PSX", true)],
     };
     const option = (file_name: string, region: string, here: boolean): BiosFileStatus => ({

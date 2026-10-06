@@ -113,6 +113,8 @@ const coreInfo: CoreInfo = {
   platform_core_label: null,
   has_game_override: false,
   emulator_data_available: true,
+  emulator_data_reason: null,
+  emulator_source: { kind: "retrodeck", starts_games: true },
   emulators: [
     {
       label: "Snes9x",
@@ -135,6 +137,8 @@ const laterCoreInfo: CoreInfo = {
   platform_core_label: null,
   has_game_override: false,
   emulator_data_available: true,
+  emulator_data_reason: null,
+  emulator_source: { kind: "retrodeck", starts_games: true },
   emulators: [
     {
       label: "Genesis Plus GX",

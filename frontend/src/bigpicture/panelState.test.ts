@@ -135,6 +135,8 @@ describe("core info shared with the play row's load", () => {
     platform_core_label: null,
     has_game_override: false,
     emulator_data_available: true,
+    emulator_data_reason: null,
+    emulator_source: { kind: "retrodeck", starts_games: true },
     emulators: [],
   };
 

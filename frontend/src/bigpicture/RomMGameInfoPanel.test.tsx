@@ -261,6 +261,8 @@ describe("RomMGameInfoPanel", () => {
     // decoupled from BIOS status. Default: no cores. Tests opt into shapes.
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [],
       active_core: null,
       active_core_label: null,
@@ -1561,6 +1563,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "FROM_CORE_CHANGED",
@@ -1672,6 +1676,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "INITIAL_CORE",
@@ -2819,6 +2825,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -2883,6 +2891,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -2958,6 +2968,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -3033,6 +3045,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -3521,6 +3535,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "MyCore",
@@ -4576,6 +4592,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label,
@@ -4822,6 +4840,8 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [],
       });
 

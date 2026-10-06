@@ -1,7 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, within } from "@testing-library/react";
-import { EmulatorSourcesSection, SOURCES_READING, SOURCES_UNREAD } from "./EmulatorSourcesSection";
+import { EmulatorSourcesSection } from "./EmulatorSourcesSection";
+import { SOURCES_READING, SOURCES_UNREAD } from "../../utils/emulatorSourceWording";
 import type { EmulatorSource, EmulatorSourcesListing } from "../../types";
 
 const RETRODECK: EmulatorSource = {
@@ -27,6 +28,20 @@ function renderSection(listing: EmulatorSourcesListing | null | undefined, busy 
   const onMove = vi.fn();
   const view = render(<EmulatorSourcesSection listing={listing} busy={busy} onSwitch={onSwitch} onMove={onMove} />);
   return { ...view, onSwitch, onMove };
+}
+
+/**
+ * Press *button* the way the device does: Steam reports a press on a disabled
+ * control, where the browser (and React, which drops a click on an element
+ * whose `disabled` prop is set) does not. So the button's own `onClick` prop is
+ * called directly, off the props React keeps on the element.
+ */
+function pressAsTheDeviceDoes(button: HTMLButtonElement): void {
+  const propsKey = Object.keys(button).find((key) => key.startsWith("__reactProps"));
+  const props = (propsKey ? (button as unknown as Record<string, unknown>)[propsKey] : undefined) as
+    { onClick?: () => void } | undefined;
+  if (props?.onClick === undefined) throw new Error("the button carries no onClick prop");
+  props.onClick();
 }
 
 function buttons(container: HTMLElement, text: string): HTMLButtonElement[] {
@@ -93,6 +108,32 @@ describe("EmulatorSourcesSection", () => {
       ["emudeck", "up"],
       ["retrodeck", "down"],
     ]);
+  });
+
+  it("ignores a press on a dead end button, which the device still reports", () => {
+    const { container, onMove } = renderSection(BOTH);
+
+    pressAsTheDeviceDoes(buttons(container, "Move up")[0]!);
+    pressAsTheDeviceDoes(buttons(container, "Move down")[1]!);
+
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("ignores a press on a move button while a change is in flight, as the device reports it", () => {
+    const { container, onMove } = renderSection(BOTH, true);
+
+    pressAsTheDeviceDoes(buttons(container, "Move up")[1]!);
+    pressAsTheDeviceDoes(buttons(container, "Move down")[0]!);
+
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("passes a press on a live move button through", () => {
+    const { container, onMove } = renderSection(BOTH);
+
+    pressAsTheDeviceDoes(buttons(container, "Move up")[1]!);
+
+    expect(onMove).toHaveBeenCalledWith("emudeck", "up");
   });
 
   it("takes no press while a change is in flight", () => {

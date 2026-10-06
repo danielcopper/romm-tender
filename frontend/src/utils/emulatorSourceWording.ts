@@ -102,8 +102,14 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
   }
 }
 
-/** Main's banner while no emulator source is detected. */
+/** Main's banner, and the settings section's line, while no emulator source is detected. */
 export const NO_SOURCE_BANNER = "No emulator source was found.";
+
+/** The settings section's line while its listing has not answered yet. */
+export const SOURCES_READING = "Reading the emulator sources…";
+
+/** The settings section's line where its listing could not be read. */
+export const SOURCES_UNREAD = "Could not read the emulator sources. Reopen the page to try again.";
 
 /** The row of, and Main's banner for, a source Tender cannot start games through. */
 export function cannotStartSentence(kind: string): string {
@@ -118,17 +124,15 @@ export function sealedCatalogueSentence(kind: string): string {
 /**
  * Why a platform page or an emulator menu has no emulator list to offer, from
  * the answer's `reason` and its answering `source`. Never "no emulator": every
- * one of these is a list that could not be established.
+ * one of these is a list that could not be established. An answer with no
+ * source is one no source answered, whatever its reason says, so it reads as
+ * no source found.
  */
-export function emulatorDataReasonSentence(
-  reason: EmulatorDataReason | null | undefined,
-  source: AnsweringSource | null | undefined,
-): string {
-  if (reason === "no_source") {
+export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, source: AnsweringSource | null): string {
+  if (reason === "switched_off") return "Every emulator source is switched off in Settings → Emulator sources.";
+  if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }
-  if (reason === "switched_off") return "Every emulator source is switched off in Settings → Emulator sources.";
-  if (source === null || source === undefined) return "The emulator list is not established.";
   if (reason === "catalogue_invalid") {
     return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
   }
@@ -139,23 +143,41 @@ export function emulatorDataReasonSentence(
 /** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
 export function sourceRowLines(source: EmulatorSource): string[] {
   const health = source.findings.map((finding) => findingSentence(source.kind, finding));
+  const quiet =
+    source.catalogue === "read"
+      ? "No problems found."
+      : `${sourceName(source.kind)}'s emulator list is not established.`;
   return [
-    ...(health.length > 0 ? health : ["No problems found."]),
+    ...(health.length > 0 ? health : [quiet]),
     ...(source.catalogue === "sealed" ? [sealedCatalogueSentence(source.kind)] : []),
     ...(source.starts_games ? [] : [cannotStartSentence(source.kind)]),
   ];
 }
 
+/** One banner on Main: its sentence, and a key no other banner of the same listing has. */
+export interface SourceBanner {
+  key: string;
+  text: string;
+}
+
 /**
  * Main's banners about the emulator sources, in the sources' order: one where
- * none is detected, one per health finding that is a banner, and one where the
- * source that answers is one Tender cannot start games through.
+ * none is detected, one per banner finding of a switched-on source (a
+ * switched-off source's findings stay in its row), and one where the source
+ * that answers is one Tender cannot start games through.
  */
-export function mainSourceBanners(listing: EmulatorSourcesListing): string[] {
-  if (listing.sources.length === 0) return [NO_SOURCE_BANNER];
-  const findings = listing.sources.flatMap((source) =>
-    source.findings.filter(findingIsBanner).map((finding) => findingSentence(source.kind, finding)),
-  );
+export function mainSourceBanners(listing: EmulatorSourcesListing): SourceBanner[] {
+  if (listing.sources.length === 0) return [{ key: "no-source", text: NO_SOURCE_BANNER }];
+  const findings = listing.sources
+    .filter((source) => source.enabled)
+    .flatMap((source) =>
+      source.findings
+        .map((finding, index) => ({ finding, key: `${source.kind}:${index}` }))
+        .filter(({ finding }) => findingIsBanner(finding))
+        .map(({ finding, key }) => ({ key, text: findingSentence(source.kind, finding) })),
+    );
   const answering = listing.sources.find((source) => source.kind === listing.answering);
-  return answering && !answering.starts_games ? [...findings, cannotStartSentence(answering.kind)] : findings;
+  return answering && !answering.starts_games
+    ? [...findings, { key: `cannot-start:${answering.kind}`, text: cannotStartSentence(answering.kind) }]
+    : findings;
 }

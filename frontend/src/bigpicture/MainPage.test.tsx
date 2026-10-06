@@ -3192,6 +3192,25 @@ describe("MainPage", () => {
       expect(await findByText("Tender cannot start games through EmuDeck yet.")).toBeInTheDocument();
     });
 
+    it("keeps a switched-off source's finding off Main", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          HEALTHY_RETRODECK,
+          {
+            ...HEALTHY_RETRODECK,
+            kind: "emudeck",
+            enabled: false,
+            starts_games: false,
+            findings: [{ code: "root-missing", data: { path: "/sd/Emulation" } }],
+          },
+        ],
+        answering: "retrodeck",
+      });
+      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByText(/its folder \/sd\/Emulation does not exist/)).toBeNull();
+    });
+
     it("says no emulator source was found where none is detected", async () => {
       vi.mocked(backend.getEmulatorSources).mockResolvedValue({ sources: [], answering: null });
       const { findByText } = render(<MainPage onNavigate={vi.fn()} />);

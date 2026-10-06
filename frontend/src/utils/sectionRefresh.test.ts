@@ -8,7 +8,7 @@ import {
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { libretroEmu } from "../test-utils/coreFixtures";
-import type { EmulatorOption } from "../types";
+import type { AnsweringSource, EmulatorDataReason, EmulatorOption } from "../types";
 
 interface BiosState {
   biosNeeded: boolean;
@@ -22,6 +22,8 @@ interface CoreState {
   activeCoreIsDefault: boolean;
   emulators: EmulatorOption[];
   emulatorDataAvailable: boolean;
+  emulatorDataReason: EmulatorDataReason | null;
+  emulatorSource: AnsweringSource | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
   unrelated: string;
@@ -203,6 +205,8 @@ describe("refreshCoreInfoInBackground", () => {
       platform_core_label: null,
       has_game_override: false,
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [
         libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
         libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
@@ -222,6 +226,8 @@ describe("refreshCoreInfoInBackground", () => {
       activeCoreIsDefault: true,
       emulators: [],
       emulatorDataAvailable: true,
+      emulatorDataReason: null,
+      emulatorSource: { kind: "retrodeck", starts_games: true },
       platformCoreLabel: null,
       hasGameOverride: false,
       unrelated: "keep",
@@ -240,6 +246,8 @@ describe("refreshCoreInfoInBackground", () => {
       platform_core_label: null,
       has_game_override: false,
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [],
     });
     const setter = vi.fn();
@@ -265,6 +273,8 @@ describe("refreshCoreInfoInBackground", () => {
       platform_core_label: null,
       has_game_override: false,
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [],
     });
     await flushMicrotasks();

@@ -34,8 +34,8 @@ export interface EmulatorMenuConfig {
   /** False where the answering emulator source gives no emulator list — the menu
    *  says why, from the two fields below, instead of showing an empty list. */
   emulatorDataAvailable: boolean;
-  emulatorDataReason?: EmulatorDataReason | null | undefined;
-  emulatorSource?: AnsweringSource | null | undefined;
+  emulatorDataReason: EmulatorDataReason | null;
+  emulatorSource: AnsweringSource | null;
   /** The active emulator's label — marked with a checkmark. */
   activeLabel: string | null;
   /** The per-platform override label — marked "(system)". Null in the platform

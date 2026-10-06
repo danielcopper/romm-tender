@@ -335,6 +335,8 @@ describe("RomMPlaySection", () => {
       activeCoreLabel: null,
       activeCoreIsDefault: true,
       emulatorDataAvailable: true,
+      emulatorDataReason: null,
+      emulatorSource: { kind: "retrodeck", starts_games: true },
       emulators: [],
       platformCoreLabel: null,
       hasGameOverride: false,
@@ -347,6 +349,8 @@ describe("RomMPlaySection", () => {
       if (cancelled()) return;
       const coreFields = playSectionUtils.extractCoreInfo({
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [],
         active_core: null,
         active_core_label: null,
@@ -365,6 +369,8 @@ describe("RomMPlaySection", () => {
     // Default core-info path — empty cores. Tests opt into specific shapes.
     vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
       emulator_data_available: true,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
       emulators: [],
       active_core: null,
       active_core_label: null,
@@ -2027,6 +2033,8 @@ describe("RomMPlaySection", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -2096,6 +2104,8 @@ describe("RomMPlaySection", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3249,6 +3259,8 @@ describe("RomMPlaySection", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3274,6 +3286,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "Snes9x",
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3516,6 +3530,8 @@ describe("RomMPlaySection", () => {
         platform_core_label: null,
         has_game_override: true,
         emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3543,6 +3559,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "BlastEm",
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3723,6 +3741,8 @@ describe("RomMPlaySection", () => {
       activeCoreLabel: "Snes9x",
       activeCoreIsDefault: true,
       emulatorDataAvailable: true,
+      emulatorDataReason: null,
+      emulatorSource: { kind: "retrodeck", starts_games: true },
       emulators: [
         {
           label: "Snes9x",
@@ -3845,6 +3865,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "Snes9x",
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3887,6 +3909,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "BlastEm",
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3927,6 +3951,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "Snes9x",
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3965,6 +3991,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "BlastEm",
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -3999,6 +4027,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "BlastEm",
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -4037,6 +4067,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "BlastEm",
         activeCoreIsDefault: false,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "Snes9x",
@@ -4283,6 +4315,8 @@ describe("RomMPlaySection", () => {
         activeCoreLabel: "OnlyOne",
         activeCoreIsDefault: true,
         emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
         emulators: [
           {
             label: "OnlyOne",

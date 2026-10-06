@@ -584,14 +584,13 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     );
   };
 
-  const readEmulatorSources = async () => {
-    try {
-      setEmulatorSources(await getEmulatorSources());
-    } catch (e) {
+  /** The listing, or `null` where it could not be read — the one read both the
+   *  page's mount and a refused change go through. */
+  const fetchEmulatorSources = (): Promise<EmulatorSourcesListing | null> =>
+    getEmulatorSources().catch((e: unknown) => {
       logError(`Failed to read the emulator sources: ${e}`);
-      setEmulatorSources(null);
-    }
-  };
+      return null;
+    });
 
   /** A switch or a move, whose answer is the listing as it now stands. A refusal
    *  means the sources changed under the page (a source went away), so the
@@ -603,25 +602,20 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       const answer = await write();
       if (isEndpointFailure(answer)) {
         logError(`An emulator source change was refused: ${answer.reason}`);
-        await readEmulatorSources();
+        setEmulatorSources(await fetchEmulatorSources());
       } else {
         setEmulatorSources(answer);
       }
     } catch (e) {
       logError(`Failed to change the emulator sources: ${e}`);
-      await readEmulatorSources();
+      setEmulatorSources(await fetchEmulatorSources());
     } finally {
       setSourcesBusy(false);
     }
   };
 
   useEffect(() => {
-    getEmulatorSources()
-      .then(setEmulatorSources)
-      .catch((e) => {
-        logError(`Failed to read the emulator sources: ${e}`);
-        setEmulatorSources(null);
-      });
+    detach(fetchEmulatorSources().then(setEmulatorSources));
   }, []);
 
   const renderSection = (id: SettingsSection): ReactNode => {

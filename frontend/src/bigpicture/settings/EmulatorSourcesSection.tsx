@@ -8,12 +8,13 @@
 import { FC, Fragment } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
 import type { EmulatorSourceDirection, EmulatorSourcesListing } from "../../types";
-import { NO_SOURCE_BANNER, sourceName, sourceRowLines } from "../../utils/emulatorSourceWording";
-
-/** Shown while the listing has not answered yet. */
-export const SOURCES_READING = "Reading the emulator sources…";
-/** Shown where the listing could not be read. */
-export const SOURCES_UNREAD = "Could not read the emulator sources. Reopen the page to try again.";
+import {
+  NO_SOURCE_BANNER,
+  SOURCES_READING,
+  SOURCES_UNREAD,
+  sourceName,
+  sourceRowLines,
+} from "../../utils/emulatorSourceWording";
 
 interface EmulatorSourcesSectionProps {
   /** `undefined` while the read is in flight, `null` where it failed. */

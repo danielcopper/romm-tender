@@ -71,6 +71,8 @@ const VBA = {
 const GBA_CORE_INFO: CoreInfo = {
   emulators: [MGBA],
   emulator_data_available: true,
+  emulator_data_reason: null,
+  emulator_source: { kind: "retrodeck", starts_games: true },
   active_core: MGBA.emulator,
   active_core_label: MGBA.label,
   platform_core_label: null,
@@ -81,6 +83,8 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
   return {
     emulators: [MGBA, VBA],
     emulator_data_available: true,
+    emulator_data_reason: null,
+    emulator_source: { kind: "retrodeck", starts_games: true },
     active_core_label: "mGBA",
     ...overrides,
   };

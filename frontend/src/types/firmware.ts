@@ -279,12 +279,10 @@ export interface EmulatorOption {
 export interface CoreInfo {
   emulators: EmulatorOption[];
   emulator_data_available: boolean;
-  /** Why `emulators` could not be given; `null` while it is available. The
-   *  backend always sends both fields; they are optional so a fixture written
-   *  before them still type-checks, and an absent one reads as `null`. */
-  emulator_data_reason?: EmulatorDataReason | null;
+  /** Why `emulators` could not be given; `null` while it is available. */
+  emulator_data_reason: EmulatorDataReason | null;
   /** The source the answer came from; `null` where no source answers. */
-  emulator_source?: AnsweringSource | null;
+  emulator_source: AnsweringSource | null;
   /** The IDENTITY of the emulator this ROM launches with — the same spelling the
    *  picker rows carry in {@link EmulatorOption.emulator} and the same one a
    *  firmware row's `cores` map is keyed on, so the BIOS tab can highlight the
@@ -321,8 +319,8 @@ export interface SystemCoreInfo {
   emulators: EmulatorOption[];
   emulator_data_available: boolean;
   /** As on {@link CoreInfo}. */
-  emulator_data_reason?: EmulatorDataReason | null;
-  emulator_source?: AnsweringSource | null;
+  emulator_data_reason: EmulatorDataReason | null;
+  emulator_source: AnsweringSource | null;
   active_core_label: string | null;
 }
 

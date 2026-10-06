@@ -24,7 +24,7 @@ import { fetchPlaytimeScopeState, usePlaytimeScopeState } from "../utils/playtim
 import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
-import { mainSourceBanners } from "../utils/emulatorSourceWording";
+import { mainSourceBanners, type SourceBanner } from "../utils/emulatorSourceWording";
 import { NOTIFICATIONS_UNAVAILABLE_NOTICE, notificationsUnavailable } from "../utils/notificationsHealth";
 import { VersionErrorCard } from "./VersionErrorCard";
 import { useVersionError } from "../utils/connectionState";
@@ -364,7 +364,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // deadline passes — never read during render.
   const [previewNowMs, setPreviewNowMs] = useState<number | null>(null);
   const [retroarchWarning, setRetroarchWarning] = useState<{ warning: boolean; current?: string } | null>(null);
-  const [sourceBanners, setSourceBanners] = useState<string[]>([]);
+  const [sourceBanners, setSourceBanners] = useState<SourceBanner[]>([]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const playtimeScope = usePlaytimeScopeState();
@@ -585,12 +585,12 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
           "Status" title would cost a row and buy nothing. */}
       <PanelSection>
         {sourceBanners.map((banner) => (
-          <PanelSectionRow key={banner}>
+          <PanelSectionRow key={banner.key}>
             {/* WarningCard is shared with the game-detail context, so it carries no
                 focus contract of its own. This QAM-only wrapper's no-op activation
                 makes the notice itself a stop for focus-driven scrolling. */}
             <Focusable onActivate={() => {}}>
-              <WarningCard title={banner} compact />
+              <WarningCard title={banner.text} compact />
             </Focusable>
           </PanelSectionRow>
         ))}

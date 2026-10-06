@@ -37,6 +37,8 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
   return {
     emulators: [libretroEmu("mgba_libretro", "mGBA", true), libretroEmu("vbam_libretro", "VBA-M")],
     emulatorDataAvailable: true,
+    emulatorDataReason: null,
+    emulatorSource: { kind: "retrodeck", starts_games: true },
     activeLabel: null,
     platformCoreLabel: null,
     onPick: vi.fn(),
