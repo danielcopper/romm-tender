@@ -324,10 +324,11 @@ class RomRemovalService:
         command.
 
         Raises :class:`NotInstalled` for a ROM with no install record, and
-        ``in_progress`` while another removal holds the ROM. Refused with
+        ``in_progress`` while another removal holds the ROM, and refused with
         ``file_present``, the ``path`` found in its details, while the recorded
-        folder or file exists, and with ``unknown`` when the record could not be
-        dropped.
+        folder or file exists. It removes no file, so it has no failure of its
+        own to refuse: anything the record drop raises, a database error
+        included, propagates.
         """
         async with self._rules.hold("forget_download", update=True, migration=True, prune=True):
             result = await self._forget_download(int(rom_id))
@@ -338,11 +339,7 @@ class RomRemovalService:
         install = self._admit_removal(rom_id, "This ROM is already being uninstalled or forgotten")
         forget = self._loop.run_in_executor(None, self._forget_download_io, rom_id, install)
         async with self._removal_claim(rom_id, "Forget download", "forget_download", forget) as started:
-            try:
-                present = await asyncio.shield(forget)
-            except Exception as e:
-                self._logger.error(f"Failed to forget the download after {self._elapsed(started)}: {e}")
-                raise Refused("unknown", "Failed to forget the download") from e
+            present = await asyncio.shield(forget)
         if present is not None:
             self._logger.info(f"Forget download refused: rom_id={rom_id}: {present} exists")
             raise Refused("file_present", f"The recorded download exists: {present}", path=present)

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import shutil
+import sqlite3
 import sys
 import threading
 
@@ -1867,16 +1868,16 @@ class TestForgetDownload:
 
         def fail_once(rom_id):
             monkeypatch.setattr(service, "_drop_install_record", original)
-            raise RuntimeError("database is locked")
+            raise sqlite3.OperationalError("database is locked")
 
         monkeypatch.setattr(service, "_drop_install_record", fail_once)
         forget = service.forget_download(42)
-        with pytest.raises(Refused) as failed:
+        with pytest.raises(sqlite3.OperationalError):
             await forget
         removed = await service.remove_rom(42)
 
-        assert failed.value.reason == "unknown"
         assert removed["success"] is True
+        assert uow.rom_installs.get(42) is None
 
     async def test_it_evicts_the_download_queue_entry(self, service, uow, rom_files, queue_cleanup):
         _seed_missing_download(uow, 42)
@@ -1913,21 +1914,23 @@ class TestForgetDownload:
         assert uow.rom_installs.get(42) is not None
         assert prune_conflicts.conflicting_operations == 0
 
-    async def test_a_failed_write_refuses_it_and_carries_no_lease(
+    async def test_a_failed_write_propagates_and_carries_no_lease(
         self, service, uow, rom_files, prune_conflicts, monkeypatch
     ):
+        """No file is removed, so there is no failure of its own to refuse: a database error propagates."""
         _seed_missing_download(uow, 42)
 
         def fail(_rom_id):
-            raise RuntimeError("database is locked")
+            raise sqlite3.OperationalError("database is locked")
 
         monkeypatch.setattr(service, "_drop_install_record", fail)
         forget = service.forget_download(42)
-        with pytest.raises(Refused) as refused:
+        with pytest.raises(sqlite3.OperationalError, match="database is locked"):
             await forget
 
-        assert (refused.value.reason, refused.value.message) == ("unknown", "Failed to forget the download")
         assert prune_conflicts.conflicting_operations == 0
+        assert service._removals_in_flight == set()
+        assert uow.rom_installs.get(42) is not None
 
     async def test_a_cancelled_forget_keeps_refusing_a_removal_until_its_record_is_dropped(
         self, service, uow, rom_files, prune_conflicts
