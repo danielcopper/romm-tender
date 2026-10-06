@@ -203,7 +203,6 @@ describe("sourceRowLines", () => {
 
   it("says EmuDeck's list cannot be read and Tender cannot start games through it", () => {
     expect(sourceRowLines(source({ kind: "emudeck", starts_games: false, catalogue: "sealed" }))).toEqual([
-      "EmuDeck's emulator list is not established.",
       "EmuDeck's emulator list cannot be read yet.",
       "Tender cannot start games through EmuDeck yet.",
     ]);

@@ -143,12 +143,15 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
 /** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
 export function sourceRowLines(source: EmulatorSource): string[] {
   const health = source.findings.map((finding) => findingSentence(source.kind, finding));
-  const quiet =
-    source.catalogue === "read"
-      ? "No problems found."
-      : `${sourceName(source.kind)}'s emulator list is not established.`;
+  // A sealed catalogue has a sentence of its own below, which stands in for
+  // the "not established" line.
+  const quiet: Record<EmulatorSource["catalogue"], string[]> = {
+    read: ["No problems found."],
+    sealed: [],
+    unavailable: [`${sourceName(source.kind)}'s emulator list is not established.`],
+  };
   return [
-    ...(health.length > 0 ? health : [quiet]),
+    ...(health.length > 0 ? health : quiet[source.catalogue]),
     ...(source.catalogue === "sealed" ? [sealedCatalogueSentence(source.kind)] : []),
     ...(source.starts_games ? [] : [cannotStartSentence(source.kind)]),
   ];

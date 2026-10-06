@@ -285,7 +285,7 @@ keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own 
 - the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
   would show is then only a default;
 - what its health says, one line per problem; with none, **No problems found.** — or, where Tender could not read the
-  source's emulator list, **_Source_'s emulator list is not established.**;
+  source's emulator list and no line below says why, **_Source_'s emulator list is not established.**;
 - **EmuDeck's emulator list cannot be read yet.** for EmuDeck, whose list Tender cannot read yet;
 - **Tender cannot start games through _source_ yet.** for every source but RetroDECK — every game still starts through
   RetroDECK;

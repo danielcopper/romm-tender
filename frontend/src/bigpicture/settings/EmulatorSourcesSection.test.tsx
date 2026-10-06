@@ -66,6 +66,7 @@ describe("EmulatorSourcesSection", () => {
 
     expect(lines).toHaveTextContent("EmuDeck's emulator list cannot be read yet.");
     expect(lines).toHaveTextContent("Tender cannot start games through EmuDeck yet.");
+    expect(lines).not.toHaveTextContent("not established");
     expect(getByTestId("source-lines-retrodeck")).not.toHaveTextContent("cannot start games");
   });
 
