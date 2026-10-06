@@ -493,8 +493,8 @@ class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
         [
             ({"version": 12, "romm_url": "https://romm.example"}, "version 12"),
             ({"romm_url": "https://romm.example"}, "no version"),
-            ({"version": "13", "romm_url": "https://romm.example"}, 'version "13"'),
-            ({"version": None, "romm_url": "https://romm.example"}, "version null"),
+            ({"version": "13", "romm_url": "https://romm.example"}, "version is a JSON string"),
+            ({"version": None, "romm_url": "https://romm.example"}, "version is a JSON null"),
             ([], "array"),
         ],
         ids=["version-12", "no-version", "version-string", "version-null", "not-an-object"],
