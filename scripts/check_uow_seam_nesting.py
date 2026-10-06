@@ -199,11 +199,11 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # ES-DE's catalogue for the entry, the emulator's own configuration for
         # the granularity, and the save root for the directory, on EVERY call:
         # this seam caches no answer at all, because a remembered granularity
-        # would have Tender carry a shared card as one game's save. It is the
-        # most expensive entry in this list: a full read of the machine per call,
-        # and the first ask about a core also runs that core's probe. It is a method on an object-shaped
-        # Protocol, so the method name is what a consumer writes and there is no
-        # attribute to list beside it.
+        # would have Tender carry a shared card as one game's save: a full read
+        # of the machine per call, and the first ask about a core also runs that
+        # core's probe. It is a method on an object-shaped Protocol, so the
+        # method name is what a consumer writes and there is no attribute to
+        # list beside it.
         "resolve_save_answer",
         # SaveLocationReader's savestate question — the same catalogue entry,
         # asked where it keeps one game's savestates. The same live reading of
@@ -261,15 +261,15 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the same reason.
         "_platform_firmware_resolver",
         "_firmware_resolver",
-        # SystemSupportedExtensionsFn / SystemKnownFn (services/protocols/paths.py)
-        # — two more questions to ES-DE's catalogue, answered by the same
-        # resolver, and asked afresh the same way, as the CoreInfoProvider reads
-        # above. Both Protocols are call-shaped, and unlike SystemResolver
-        # there is no method name a service could write beside the attribute: the
-        # implementations (AtlasCatalogueAdapter.get_supported_extensions /
-        # .is_known_system) are on no Protocol a service holds. So the attribute
-        # is all there is, and it is matchable because each of these means one
-        # thing in the tree.
+        # SystemSupportedExtensionsFn / SystemKnownFn
+        # (services/protocols/paths.py) — two more questions to ES-DE's
+        # catalogue, answered by the same resolver, and kept the same way, as
+        # the CoreInfoProvider reads above. Both Protocols are call-shaped, and
+        # unlike SystemResolver there is no method name a service could write
+        # beside the attribute: the implementations
+        # (AtlasCatalogueAdapter.get_supported_extensions / .is_known_system)
+        # are on no Protocol a service holds. So the attribute is all there is,
+        # and it is matchable because each of these means one thing in the tree.
         "_system_extensions",
         "_system_known",
         # MigrationFileStore.realpath (services/protocols/files.py) — one lstat

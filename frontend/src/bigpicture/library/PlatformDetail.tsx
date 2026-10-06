@@ -474,8 +474,9 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
  *
  * `notice` is for the branches that are not "nothing to switch" but a problem
  * with the platform or the install — a failed read, no emulator list from the
- * answering source, no emulator at all. Those keep their line, because a greyed chip would hide a failure
- * behind a hover the Deck's controller has no way to perform.
+ * answering source, no emulator at all. Those keep their line, because a greyed
+ * chip would hide a failure behind a hover the Deck's controller has no way to
+ * perform.
  */
 type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
 
@@ -968,11 +969,11 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   const activeLabel = core ? core.active_core_label : null;
   // Everything the clause says rests on the emulator list having been READ.
   // `get_emulator_options` answers `available: false` with an EMPTY list when
-  // `es_systems.xml` cannot be read at all, so a clause keyed on the list's
-  // length alone said "no emulator" in red over a state where nothing was
-  // established — the definite failure claim this pane keeps having to remove,
-  // and beside a sentence saying why the list was not established. One premise, named
-  // once, so the two readings below cannot drift apart.
+  // the answering source gives no emulator list, so a clause keyed on the
+  // list's length alone said "no emulator" in red over a state where nothing
+  // was established — the definite failure claim this pane keeps having to
+  // remove, and beside a sentence saying why the list was not established. One
+  // premise, named once, so the two readings below cannot drift apart.
   // S6582 is raised on the declaration line, so its NOSONAR must sit there; prettier-ignore keeps
   // the formatter from wrapping the trailing comment onto its own line, which would unsuppress it.
   // prettier-ignore

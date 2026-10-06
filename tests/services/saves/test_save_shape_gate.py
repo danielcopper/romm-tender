@@ -188,7 +188,7 @@ class TestOneSyncTakesOneReadingOfTheMachine:
     The entry point reads the answer to decide whether to refuse at all, before
     its heartbeat, so a refusing ROM never reaches the network. It then hands
     that same reading to the sync. Reading twice would be correct and would cost
-    a second 170 ms of machine I/O on every launch and every exit.
+    a second full read of the machine on every launch and every exit.
 
     "Ask live" is a rule about OPERATIONS: the user changes a core option
     between one sync and the next, not between two layers of the same one.

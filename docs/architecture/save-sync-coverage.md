@@ -77,10 +77,11 @@ its files are followed per game the next time Tender touches them — a sync, a 
 that counts them; when, and how, is
 [Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory).
 
-**Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a
-status read each take one, whether or not the ROM's slot is confirmed: the sync's entry gate reads the answer to decide
-whether to refuse at all, and hands that same reading both to the matrix and to the negotiate session's inventory rather
-than letting either take a second. "Ask live" is a rule about operations, not about layers.
+**Cost.** A live reading is a full read of the machine per ROM, and the first ask about a core also runs that core's
+probe. A single-ROM sync and a status read each take one, whether or not the ROM's slot is confirmed: the sync's entry
+gate reads the answer to decide whether to refuse at all, and hands that same reading both to the matrix and to the
+negotiate session's inventory rather than letting either take a second. "Ask live" is a rule about operations, not about
+layers.
 
 The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
 begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run
@@ -89,9 +90,8 @@ map of them across the loop, which is a cache in everything but name on the one 
 afterwards; the sweep is a background operation and pays the second reading instead.
 
 The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
-platform, so four installed games is well under a second and fifty is several. Nothing is cached: the correctness rule
-is that every sync path asks live, and the count exists so the number the button offers equals the number the delete
-removes.
+platform, so their cost grows with the platform's installed games. Nothing is cached: the correctness rule is that every
+sync path asks live, and the count exists so the number the button offers equals the number the delete removes.
 
 ## The five save states
 

@@ -83,12 +83,13 @@ class AtlasSaveLocationAdapter:
     ) -> SaveAnswer:
         """What *emulator_label* saves for the game at *content_path*, and whether it may be synced.
 
-        *emulator_label* is the emulator Tender resolved for this ROM;
-        ``None`` means it resolved none, so there is no entry to ask. That, no
-        answering source, a refused catalogue, and a catalogue no longer
-        offering the label are all ``not_asked`` — the question never reached the resolver, so none of them
-        is a statement about the emulator. An entry that declines and a resolver
-        that raises WERE asked, so both are ``nothing_established``.
+        *emulator_label* is the emulator Tender resolved for this ROM; ``None``
+        means it resolved none, so there is no entry to ask. That, no answering
+        source, a refused catalogue, and a catalogue no longer offering the
+        label are all ``not_asked`` — the question never reached the resolver,
+        so none of them is a statement about the emulator. An entry that
+        declines and a resolver that raises WERE asked, so both are
+        ``nothing_established``.
 
         *content_installed* is the caller's own statement about *content_path*:
         ``False`` where it is the path a ROM WOULD occupy rather than a file on

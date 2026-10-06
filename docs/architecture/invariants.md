@@ -250,11 +250,16 @@ Format: **invariant** — tier — enforced by.
 - **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
-  `tests/adapters/test_emulator_sources.py::TestOnlyTheHolderDetects` (no other backend module imports `detect`). An
-  adapter that detected on its own would pick its own source — the old "first detected" — and would build a fresh
-  machine, so every save question would run its core's probe again. Unseen by the test: a detection reached through
-  `getattr`, and an installation class built by hand. Prompt-only: no adapter keeps a handle or an answer past the
-  reading it came through (a panel call's per question, a run's for the run)
+  `tests/adapters/test_emulator_sources.py::TestOnlyTheHolderDetects` (no other backend module imports `detect`,
+  `RealMachine` or an installation class from the resolver, imports the resolver's package as a module, or reads one of
+  those names off it) and, for the last clause,
+  `tests/domain/test_emulator_sources.py::TestAnsweringSource::test_retrodeck_answers_even_when_another_source_is_first_in_the_order`
+  and
+  `tests/adapters/test_atlas_saves.py::TestWhichSourceAnswers::test_retrodeck_answers_with_emudeck_first_in_the_order`.
+  An adapter that detected on its own would pick its own source — the old "first detected" — and would build a fresh
+  machine, so every save question would run its core's probe again. Unseen by the scan: a name reached through `getattr`
+  or `importlib`. Prompt-only: no adapter keeps a handle or an answer past the reading it came through (a panel call's
+  per question, a run's for the run)
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -595,20 +600,20 @@ Format: **invariant** — tier — enforced by.
   uncached so a component installed mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for
   `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemResolver` (parses Tender's **own**
   bundled `config.json`, not RetroDECK's `retrodeck.json`, and does no network work despite living on the RomM HTTP
-  adapter), `SystemSupportedExtensionsFn` / `SystemKnownFn` (two more questions to the same catalogue, each asked
-  afresh), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the
-  reference machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the
-  service reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the
-  entry is a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O —
-  `grid_dir()` is called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and
-  `services/library/reporter.py`, and `check_retroarch_input_driver()` from `services/settings.py` — those are unlisted,
-  and their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators
-  want WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
-  64-318 ms per system on the reference machine) and its whole-machine sibling `FirmwareResolver`, the save answer —
-  `resolve_save_answer` and the saves package's own `save_answer` wrapper, a full read of the machine per ROM (the first
-  ask about a core also runs that core's probe), which makes it the most expensive entry in the list — the savestate
-  question put to the same catalogue entry (`resolve_savestate_location`) and the seam's detection question
-  (`installation_detected`, which detects the emulator sources afresh), the two path resolvers —
+  adapter), `SystemSupportedExtensionsFn` / `SystemKnownFn` (two more questions to the same catalogue, asked afresh from
+  the panel and once per reading within a run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole
+  `shortcuts.vdf` — 315 KB and 828 entries on the reference machine — for the one-time shortcut relocation. **Listing it
+  changes nothing at its only call site**: the service reaches it through `run_in_executor` as a bound method, which is
+  this checker's documented blind spot, so the entry is a statement of the rule rather than an enforcement of it. It is
+  also not the store's only real I/O — `grid_dir()` is called from `services/artwork.py` (six sites),
+  `services/shortcut_removal.py` and `services/library/reporter.py`, and `check_retroarch_input_driver()` from
+  `services/settings.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
+  `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it opens each candidate
+  in a declared folder and reads it the way the emulator does — 64-318 ms per system on the reference machine) and its
+  whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the saves package's own
+  `save_answer` wrapper, a full read of the machine per ROM (the first ask about a core also runs that core's probe) —
+  the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the seam's detection
+  question (`installation_detected`, which detects the emulator sources afresh), the two path resolvers —
   `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
   marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
   so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters

@@ -11,7 +11,7 @@ Path getters are best-effort and never raise: a missing, unreadable, or
 malformed ``retrodeck.json`` falls back to ``<user_home>/retrodeck/*``.
 On an SD-card install that fallback root is wrong, so the silent
 fallback is paired with :meth:`RetroDeckPathsAdapter.config_health`,
-which says when that happened. Nothing reads it any more: the panel's
+which says when that happened. Nothing reads it: the panel's
 health notices come from the resolver's findings per emulator source.
 
 Every root is symlink-resolved, whichever of the two sources answered.

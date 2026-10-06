@@ -16,9 +16,9 @@ class RetroDeckConfigHealth(StrEnum):
     """How trustworthy the resolved RetroDECK roots are right now.
 
     The path getters are always best-effort and never raise; this enum
-    says when the resolved roots are likely wrong. Nothing reads it any
-    more: the panel's health notices come from the resolver's findings
-    per emulator source.
+    says when the resolved roots are likely wrong. Nothing reads it: the
+    panel's health notices come from the resolver's findings per emulator
+    source.
     """
 
     OK = "ok"

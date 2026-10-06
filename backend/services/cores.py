@@ -122,8 +122,9 @@ class CoreService:
         answering emulator source gives no emulator list, so the menu can say so
         instead of showing an empty list; ``emulator_data_reason`` says why and
         ``emulator_source`` names the answering source
-        (:meth:`services.protocols.CoreInfoProvider.get_emulator_options`). When ``rom_id`` is unknown
-        the emulator list is empty and the active emulator is ``(None, None)``.
+        (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`).
+        When ``rom_id`` is unknown the emulator list is empty and the active
+        emulator is ``(None, None)``.
         """
         return await self._loop.run_in_executor(None, self._platform_core_info_io, rom_id)
 

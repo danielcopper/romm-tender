@@ -171,10 +171,10 @@ class SaveLocationReader(Protocol):
     Implementations never raise and never guess. Every way the question cannot
     be put — no emulator resolved, no emulator source answering, a refused
     catalogue, the catalogue not offering the label, the entry declining, the
-    reader failing — comes back as a
-    :class:`domain.save_answer.SaveAnswer` in the ``unestablished`` state, which
-    refuses the sync. The one thing an implementation may never do is answer
-    "nothing to sync", which a caller reads as a green light.
+    reader failing — comes back as a :class:`domain.save_answer.SaveAnswer` in
+    the ``unestablished`` state, which refuses the sync. The one thing an
+    implementation may never do is answer "nothing to sync", which a caller
+    reads as a green light.
 
     Every call is a live reading. A remembered granularity is the failure this
     seam exists to avoid: the user changes a core's options in the emulator's

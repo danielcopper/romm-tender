@@ -1059,7 +1059,7 @@ class TestDegradation:
         assert catalogue.caveats == ("firmware-root-unstated",)
 
     def test_an_answer_beside_a_sealed_catalogue_is_not_established(self, monkeypatch, traces):
-        """EmuDeck's overlay entries are an incomplete list; its firmware answer built on them says so (D21)."""
+        """EmuDeck's overlay entries are an incomplete list; its firmware answer built on them says so (#2188 D21)."""
         sealed = Caveat(code=CAVEAT_EMULATOR_CATALOGUE_SEALED, message="the catalogue is sealed")
         answer = _answer(_core(requirements=(_requirement(file_name="overlay.bin"),)), caveats=(sealed,))
         _detect(monkeypatch, _detecting(_Installation(answer, kind="emudeck")))

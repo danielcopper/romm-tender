@@ -315,9 +315,9 @@ file read — and tracks the last load outcome so it can distinguish `absent` fr
 conflate them). The `root_missing` disk probe (`os.path.isdir`) only runs when the config read OK; it never runs for
 `absent`.
 
-Nothing reads it any more. The panel's health notices come from the resolver's own health findings, per emulator source
-and worded per finding code (`get_emulator_sources`; [qam-panel.md](qam-panel.md#notices-and-homes)); the RetroDECK
-health card that read `config_health` is gone, and this adapter goes with the change that removes Tender's own reader of
+Nothing reads it. The panel's health notices come from the resolver's own health findings, per emulator source and
+worded per finding code (`get_emulator_sources`; [qam-panel.md](qam-panel.md#notices-and-homes)); the RetroDECK health
+card that read `config_health` is gone, and this adapter goes with the change that removes Tender's own reader of
 `retrodeck.json`.
 
 ## Known consumer gaps
