@@ -57,6 +57,11 @@ class SourcesReading(Protocol):
     """
 
     @property
+    def sources(self) -> tuple[ArrangedSource, ...]:
+        """Every detected source, in the user's order."""
+        ...
+
+    @property
     def answering(self) -> ArrangedSource | None:
         """The source a game's questions go to, or ``None`` where none answers."""
         ...
