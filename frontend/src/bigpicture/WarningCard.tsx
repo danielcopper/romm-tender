@@ -3,7 +3,8 @@ import { FaExclamationTriangle } from "react-icons/fa";
 
 interface WarningCardProps {
   title: string;
-  message: string;
+  /** Left out where the title says all there is to say. */
+  message?: string;
   /** Compact mode for narrow contexts (QAM panel). */
   compact?: boolean;
 }
@@ -36,16 +37,18 @@ export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = fa
       >
         {title}
       </div>
-      <div
-        style={{
-          fontSize: compact ? "12px" : "14px",
-          color: "rgba(255, 255, 255, 0.75)",
-          maxWidth: compact ? "100%" : "680px",
-          lineHeight: 1.5,
-        }}
-      >
-        {message}
-      </div>
+      {message && (
+        <div
+          style={{
+            fontSize: compact ? "12px" : "14px",
+            color: "rgba(255, 255, 255, 0.75)",
+            maxWidth: compact ? "100%" : "680px",
+            lineHeight: 1.5,
+          }}
+        >
+          {message}
+        </div>
+      )}
     </div>
   );
 };

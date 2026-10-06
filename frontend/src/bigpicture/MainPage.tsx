@@ -6,7 +6,7 @@ import {
   getSettings,
   refreshMigrationState,
   getSyncStatus,
-  getRetroDeckStatus,
+  getEmulatorSources,
   logError,
 } from "../api/backend";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
@@ -24,7 +24,7 @@ import { fetchPlaytimeScopeState, usePlaytimeScopeState } from "../utils/playtim
 import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
-import { retroDeckBanner, type RetroDeckBanner } from "../utils/retrodeckHealth";
+import { mainSourceBanners } from "../utils/emulatorSourceWording";
 import { NOTIFICATIONS_UNAVAILABLE_NOTICE, notificationsUnavailable } from "../utils/notificationsHealth";
 import { VersionErrorCard } from "./VersionErrorCard";
 import { useVersionError } from "../utils/connectionState";
@@ -364,7 +364,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // deadline passes — never read during render.
   const [previewNowMs, setPreviewNowMs] = useState<number | null>(null);
   const [retroarchWarning, setRetroarchWarning] = useState<{ warning: boolean; current?: string } | null>(null);
-  const [retrodeckBanner, setRetrodeckBanner] = useState<RetroDeckBanner | null>(null);
+  const [sourceBanners, setSourceBanners] = useState<string[]>([]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const playtimeScope = usePlaytimeScopeState();
@@ -432,12 +432,12 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       })
       .catch((e) => logError(`Failed to load settings: ${e}`));
 
-    // RetroDECK path-resolution health — warn the user when the resolved roots
-    // are likely wrong (retrodeck.json unreadable, or its home missing on
-    // disk). "ok"/"absent" stay quiet (banner cleared to null).
-    getRetroDeckStatus()
-      .then((s) => setRetrodeckBanner(retroDeckBanner(s.status, s)))
-      .catch((e) => logError(`Failed to query RetroDECK status: ${e}`));
+    // The emulator sources' health findings, each a banner of its own, and the
+    // two notices about the sources as a whole (none found, or one Tender
+    // cannot start games through answering).
+    getEmulatorSources()
+      .then((listing) => setSourceBanners(mainSourceBanners(listing)))
+      .catch((e) => logError(`Failed to read the emulator sources: ${e}`));
 
     // The backend holds a computed preview for 30 minutes, but this panel's copy
     // of it dies with the render — leaving the main page for a submenu used to
@@ -584,16 +584,16 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
           panel — a hairline is what separates one block from the next, so a
           "Status" title would cost a row and buy nothing. */}
       <PanelSection>
-        {retrodeckBanner && (
-          <PanelSectionRow>
+        {sourceBanners.map((banner) => (
+          <PanelSectionRow key={banner}>
             {/* WarningCard is shared with the game-detail context, so it carries no
                 focus contract of its own. This QAM-only wrapper's no-op activation
                 makes the notice itself a stop for focus-driven scrolling. */}
             <Focusable onActivate={() => {}}>
-              <WarningCard title={retrodeckBanner.title} message={retrodeckBanner.message} compact />
+              <WarningCard title={banner} compact />
             </Focusable>
           </PanelSectionRow>
-        )}
+        ))}
         {notificationsUnavailable() && (
           <PanelSectionRow>
             <Focusable onActivate={() => {}}>

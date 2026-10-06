@@ -108,6 +108,8 @@ const DEFAULT_STATE: GameDetailState = {
   activeCoreIsDefault: true,
   emulators: [],
   emulatorDataAvailable: true,
+  emulatorDataReason: null,
+  emulatorSource: null,
   platformCoreLabel: null,
   hasGameOverride: false,
 };

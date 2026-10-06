@@ -24,6 +24,7 @@ import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
+import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
@@ -472,8 +473,8 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
  * tooltip costs none and keeps the header's shape constant across panes.
  *
  * `notice` is for the branches that are not "nothing to switch" but a problem
- * with the platform or the install — a failed read, no RetroDECK, no emulator
- * at all. Those keep their line, because a greyed chip would hide a failure
+ * with the platform or the install — a failed read, no emulator list from the
+ * answering source, no emulator at all. Those keep their line, because a greyed chip would hide a failure
  * behind a hover the Deck's controller has no way to perform.
  */
 type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
@@ -485,7 +486,7 @@ function coreOffer(core: CoreAnswer): CoreOffer {
     return { kind: "blocked", reason: failed, notice: failed };
   }
   if (!core.emulator_data_available) {
-    const absent = "RetroDECK was not found, so there is no emulator list to choose from.";
+    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source);
     return { kind: "blocked", reason: absent, notice: absent };
   }
   // An EMPTY menu first, because it is the one case where the fallback fails
@@ -970,7 +971,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // `es_systems.xml` cannot be read at all, so a clause keyed on the list's
   // length alone said "no emulator" in red over a state where nothing was
   // established — the definite failure claim this pane keeps having to remove,
-  // and beside a sentence saying RetroDECK was not found. One premise, named
+  // and beside a sentence saying why the list was not established. One premise, named
   // once, so the two readings below cannot drift apart.
   // S6582 is raised on the declaration line, so its NOSONAR must sit there; prettier-ignore keeps
   // the formatter from wrapping the trailing comment onto its own line, which would unsuppress it.
@@ -1034,6 +1035,8 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
               buildEmulatorMenu({
                 emulators: offer.core.emulators,
                 emulatorDataAvailable: offer.core.emulator_data_available,
+                emulatorDataReason: offer.core.emulator_data_reason,
+                emulatorSource: offer.core.emulator_source,
                 activeLabel: offer.core.active_core_label,
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.

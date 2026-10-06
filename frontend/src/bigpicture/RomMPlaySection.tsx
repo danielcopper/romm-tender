@@ -808,6 +808,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       buildEmulatorMenu({
         emulators: detail.emulators,
         emulatorDataAvailable: detail.emulatorDataAvailable,
+        emulatorDataReason: detail.emulatorDataReason,
+        emulatorSource: detail.emulatorSource,
         activeLabel: detail.activeCoreLabel,
         platformCoreLabel: detail.platformCoreLabel,
         followSystem: {

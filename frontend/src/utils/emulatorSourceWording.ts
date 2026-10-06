@@ -1,5 +1,6 @@
 /**
- * What an emulator source is called and how each of its health findings reads.
+ * What an emulator source is called, how each of its health findings reads, and
+ * what the pages say where the answering source gives no emulator list.
  *
  * The resolver gives a kind, never a name, and a finding's stable `code` plus
  * the facts in its `data`, never words a reader is meant to see — so every
@@ -10,7 +11,13 @@
  * silently dropped.
  */
 
-import type { SourceHealthFinding } from "../types/emulatorSources";
+import type {
+  AnsweringSource,
+  EmulatorDataReason,
+  EmulatorSource,
+  EmulatorSourcesListing,
+  SourceHealthFinding,
+} from "../types/emulatorSources";
 
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["retrodeck", "RetroDECK"],
@@ -93,4 +100,62 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
     default:
       return null;
   }
+}
+
+/** Main's banner while no emulator source is detected. */
+export const NO_SOURCE_BANNER = "No emulator source was found.";
+
+/** The row of, and Main's banner for, a source Tender cannot start games through. */
+export function cannotStartSentence(kind: string): string {
+  return `Tender cannot start games through ${sourceName(kind)} yet.`;
+}
+
+/** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
+export function sealedCatalogueSentence(kind: string): string {
+  return `${sourceName(kind)}'s emulator list cannot be read yet.`;
+}
+
+/**
+ * Why a platform page or an emulator menu has no emulator list to offer, from
+ * the answer's `reason` and its answering `source`. Never "no emulator": every
+ * one of these is a list that could not be established.
+ */
+export function emulatorDataReasonSentence(
+  reason: EmulatorDataReason | null | undefined,
+  source: AnsweringSource | null | undefined,
+): string {
+  if (reason === "no_source") {
+    return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
+  }
+  if (reason === "switched_off") return "Every emulator source is switched off in Settings → Emulator sources.";
+  if (source === null || source === undefined) return "The emulator list is not established.";
+  if (reason === "catalogue_invalid") {
+    return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
+  }
+  if (reason === "sealed") return sealedCatalogueSentence(source.kind);
+  return `${sourceName(source.kind)}'s emulator list is not established.`;
+}
+
+/** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
+export function sourceRowLines(source: EmulatorSource): string[] {
+  const health = source.findings.map((finding) => findingSentence(source.kind, finding));
+  return [
+    ...(health.length > 0 ? health : ["No problems found."]),
+    ...(source.catalogue === "sealed" ? [sealedCatalogueSentence(source.kind)] : []),
+    ...(source.starts_games ? [] : [cannotStartSentence(source.kind)]),
+  ];
+}
+
+/**
+ * Main's banners about the emulator sources, in the sources' order: one where
+ * none is detected, one per health finding that is a banner, and one where the
+ * source that answers is one Tender cannot start games through.
+ */
+export function mainSourceBanners(listing: EmulatorSourcesListing): string[] {
+  if (listing.sources.length === 0) return [NO_SOURCE_BANNER];
+  const findings = listing.sources.flatMap((source) =>
+    source.findings.filter(findingIsBanner).map((finding) => findingSentence(source.kind, finding)),
+  );
+  const answering = listing.sources.find((source) => source.kind === listing.answering);
+  return answering && !answering.starts_games ? [...findings, cannotStartSentence(answering.kind)] : findings;
 }

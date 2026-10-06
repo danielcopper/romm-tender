@@ -59,12 +59,26 @@ describe("reasonCopy", () => {
 });
 
 describe("buildEmulatorMenu", () => {
-  it("renders a single disabled notice when emulator data is unavailable", () => {
-    const menu = buildEmulatorMenu(baseConfig({ emulators: [], emulatorDataAvailable: false }));
+  it("renders a single disabled notice saying why when emulator data is unavailable", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "sealed",
+        emulatorSource: { kind: "emudeck", starts_games: false },
+      }),
+    );
     const its = items(menu);
     expect(its).toHaveLength(1);
     expect(its[0]!.disabled).toBe(true);
-    expect(its[0]!.text).toBe("Emulator list unavailable — RetroDECK installation not found");
+    expect(its[0]!.text).toBe("EmuDeck's emulator list cannot be read yet.");
+  });
+
+  it("says every source is switched off when that is why there is no list", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({ emulators: [], emulatorDataAvailable: false, emulatorDataReason: "switched_off" }),
+    );
+    expect(items(menu)[0]!.text).toBe("Every emulator source is switched off in Settings → Emulator sources.");
   });
 
   it("marks the default emulator and dispatches its label on pick", () => {

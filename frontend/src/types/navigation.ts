@@ -20,6 +20,7 @@ export const SETTINGS_SECTIONS = [
   "save-sync",
   "controller",
   "steam-library",
+  "emulator-sources",
   "updates",
   "advanced",
 ] as const;

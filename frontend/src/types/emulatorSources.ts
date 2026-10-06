@@ -33,6 +33,8 @@ export interface EmulatorSource {
 /** The answer of `get_emulator_sources` and of the two writes beside it. */
 export interface EmulatorSourcesListing {
   sources: EmulatorSource[];
+  /** The kind of the source a game's questions go to; `null` where none answers. */
+  answering: string | null;
 }
 
 export type EmulatorSourceDirection = "up" | "down";

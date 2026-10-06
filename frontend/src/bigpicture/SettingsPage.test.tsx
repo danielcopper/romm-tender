@@ -12,7 +12,7 @@ import { createElement, type ComponentProps, type ReactElement } from "react";
 import { SettingsPage } from "./SettingsPage";
 import * as backend from "../api/backend";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
-import type { RegisteredDevice, SettingsSection } from "../types";
+import type { EmulatorSourcesListing, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
 import { pendingEdits } from "./settings/TextInputModal";
@@ -34,6 +34,7 @@ import type { ControllerSection } from "./settings/ControllerSection";
 import type { AdvancedSection } from "./settings/AdvancedSection";
 import type { UpdatesSection } from "./settings/UpdatesSection";
 import type { LibrarySection } from "./settings/LibrarySection";
+import type { EmulatorSourcesSection } from "./settings/EmulatorSourcesSection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
 type ConnectionProps = ComponentProps<typeof ConnectionSection>;
@@ -44,6 +45,7 @@ type ControllerProps = ComponentProps<typeof ControllerSection>;
 type AdvancedProps = ComponentProps<typeof AdvancedSection>;
 type UpdatesProps = ComponentProps<typeof UpdatesSection>;
 type LibraryProps = ComponentProps<typeof LibrarySection>;
+type EmulatorSourcesProps = ComponentProps<typeof EmulatorSourcesSection>;
 
 // Captured props arrays — reset in beforeEach. Each child mock pushes the
 // props it was called with so tests can inspect handler wiring + state
@@ -56,6 +58,7 @@ const capturedController: ControllerProps[] = [];
 const capturedAdvanced: AdvancedProps[] = [];
 const capturedUpdates: UpdatesProps[] = [];
 const capturedLibrary: LibraryProps[] = [];
+const capturedSources: EmulatorSourcesProps[] = [];
 
 vi.mock("./settings/ConnectionSection", () => ({
   ConnectionSection: (p: ConnectionProps) => {
@@ -91,6 +94,12 @@ vi.mock("./settings/AdvancedSection", () => ({
   AdvancedSection: (p: AdvancedProps) => {
     capturedAdvanced.push(p);
     return createElement("div", { "data-testid": "advanced-section" });
+  },
+}));
+vi.mock("./settings/EmulatorSourcesSection", () => ({
+  EmulatorSourcesSection: (p: EmulatorSourcesProps) => {
+    capturedSources.push(p);
+    return createElement("div", { "data-testid": "emulator-sources-section" });
   },
 }));
 vi.mock("./settings/UpdatesSection", () => ({
@@ -223,6 +232,14 @@ function lastConfirmModalProps<T = Record<string, unknown>>(): T | null {
 // here rather than every test re-stating it.
 let openOn: SettingsSection = "connections";
 
+const TWO_SOURCES: EmulatorSourcesListing = {
+  answering: "retrodeck",
+  sources: [
+    { kind: "retrodeck", enabled: true, starts_games: true, root: "/rd", findings: [], catalogue: "read" },
+    { kind: "emudeck", enabled: true, starts_games: false, root: "/ed", findings: [], catalogue: "sealed" },
+  ],
+};
+
 const renderPage = () => render(<SettingsPage onBack={vi.fn()} section={openOn} />);
 
 describe("SettingsPage", () => {
@@ -238,12 +255,14 @@ describe("SettingsPage", () => {
     capturedUpdates.length = 0;
     resetUpdateNoticeStoreForTests();
     capturedLibrary.length = 0;
+    capturedSources.length = 0;
     for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
       delete pendingEdits[k];
     }
     // Defaults — many tests override per case.
     vi.mocked(backend.getSettings).mockResolvedValue(defaultSettings());
     vi.mocked(backend.getKnownRegions).mockResolvedValue([]);
+    vi.mocked(backend.getEmulatorSources).mockResolvedValue(TWO_SOURCES);
     vi.mocked(showPreferredRegionModal).mockResolvedValue(true);
     vi.mocked(backend.getSaveSyncSettings).mockResolvedValue(defaultSaveSyncSettings());
     vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices: [] });
@@ -1796,11 +1815,19 @@ describe("SettingsPage", () => {
   });
 
   describe("the section list", () => {
-    it("shows exactly the six sections, in order", async () => {
+    it("shows exactly the seven sections, in order", async () => {
       const { getAllByTestId } = renderPage();
       await flushAsync();
       const labels = getAllByTestId("field").map((el) => el.textContent);
-      expect(labels).toEqual(["Connections", "Save Sync", "Controller", "Steam Library", "Updates", "Advanced"]);
+      expect(labels).toEqual([
+        "Connections",
+        "Save Sync",
+        "Controller",
+        "Steam Library",
+        "Emulator sources",
+        "Updates",
+        "Advanced",
+      ]);
     });
 
     it("opens on the section a navigation names", async () => {
@@ -1872,6 +1899,7 @@ describe("SettingsPage", () => {
       ["save-sync", "savesync-section"],
       ["controller", "controller-section"],
       ["steam-library", "library-section"],
+      ["emulator-sources", "emulator-sources-section"],
       ["advanced", "advanced-section"],
     ] as const)("reaches every section's content: %s", async (section, testId) => {
       const { getByTestId, queryByTestId } = renderPage();
@@ -2163,6 +2191,98 @@ describe("SettingsPage", () => {
       pass(SEEN_AFTER_MS * 5);
 
       expect(backend.markUpdateAvailableSeen).not.toHaveBeenCalled();
+    });
+  });
+  describe("emulator sources", () => {
+    beforeEach(() => {
+      openOn = "emulator-sources";
+    });
+
+    const last = () => capturedSources[capturedSources.length - 1]!;
+
+    it("hands the section the listing it read", async () => {
+      renderPage();
+      await flushAsync();
+      expect(last().listing).toEqual(TWO_SOURCES);
+      expect(last().busy).toBe(false);
+    });
+
+    it("hands the section a failed read as null and logs it", async () => {
+      vi.mocked(backend.getEmulatorSources).mockRejectedValue(new Error("boom"));
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      renderPage();
+      await flushAsync();
+      expect(last().listing).toBeNull();
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read the emulator sources"));
+    });
+
+    it("switches a source and shows the listing the switch answered", async () => {
+      const switched = {
+        ...TWO_SOURCES,
+        sources: [TWO_SOURCES.sources[0]!, { ...TWO_SOURCES.sources[1]!, enabled: false }],
+      };
+      vi.mocked(backend.setEmulatorSourceEnabled).mockResolvedValue(switched);
+      renderPage();
+      await flushAsync();
+
+      act(() => last().onSwitch("emudeck", false));
+      await flushAsync();
+
+      expect(backend.setEmulatorSourceEnabled).toHaveBeenCalledWith("emudeck", false);
+      expect(last().listing).toEqual(switched);
+    });
+
+    it("moves a source and shows the listing the move answered", async () => {
+      const moved = { ...TWO_SOURCES, sources: [TWO_SOURCES.sources[1]!, TWO_SOURCES.sources[0]!] };
+      vi.mocked(backend.moveEmulatorSource).mockResolvedValue(moved);
+      renderPage();
+      await flushAsync();
+
+      act(() => last().onMove("emudeck", "up"));
+      await flushAsync();
+
+      expect(backend.moveEmulatorSource).toHaveBeenCalledWith("emudeck", "up");
+      expect(last().listing).toEqual(moved);
+    });
+
+    it("reads the sources again where a change was refused", async () => {
+      vi.mocked(backend.moveEmulatorSource).mockResolvedValue({
+        success: false,
+        reason: "unknown_source",
+        message: "gone",
+      });
+      const onlyRetrodeck = { answering: "retrodeck", sources: [TWO_SOURCES.sources[0]!] };
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      renderPage();
+      await flushAsync();
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue(onlyRetrodeck);
+
+      act(() => last().onMove("emudeck", "up"));
+      await flushAsync();
+
+      expect(last().listing).toEqual(onlyRetrodeck);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("unknown_source"));
+    });
+
+    it("takes no second change while one is in flight", async () => {
+      let answer: (value: EmulatorSourcesListing) => void = () => {};
+      vi.mocked(backend.setEmulatorSourceEnabled).mockReturnValue(
+        new Promise<EmulatorSourcesListing>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      renderPage();
+      await flushAsync();
+
+      act(() => last().onSwitch("emudeck", false));
+      await flushAsync();
+      expect(last().busy).toBe(true);
+      act(() => last().onSwitch("retrodeck", false));
+      await flushAsync();
+
+      expect(backend.setEmulatorSourceEnabled).toHaveBeenCalledTimes(1);
+      await act(async () => answer(TWO_SOURCES));
+      expect(last().busy).toBe(false);
     });
   });
 });

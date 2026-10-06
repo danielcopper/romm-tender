@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { findingIsBanner, findingSentence, sourceName } from "./emulatorSourceWording";
+import type { EmulatorSource } from "../types/emulatorSources";
+import {
+  NO_SOURCE_BANNER,
+  cannotStartSentence,
+  emulatorDataReasonSentence,
+  findingIsBanner,
+  findingSentence,
+  mainSourceBanners,
+  sourceName,
+  sourceRowLines,
+} from "./emulatorSourceWording";
 
 const REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
 
@@ -132,5 +142,134 @@ describe("findingIsBanner", () => {
 
   it("keeps a content tree that does not reach its emulator out of the banners", () => {
     expect(findingIsBanner({ code: "content-tree-unwired", data: {} })).toBe(false);
+  });
+});
+
+const RETRODECK = { kind: "retrodeck", starts_games: true };
+const EMUDECK = { kind: "emudeck", starts_games: false };
+
+describe("emulatorDataReasonSentence", () => {
+  it.each([
+    ["no_source", null, "No emulator source was found, so Tender cannot tell which emulators this platform offers."],
+    ["switched_off", null, "Every emulator source is switched off in Settings → Emulator sources."],
+    [
+      "catalogue_invalid",
+      RETRODECK,
+      "RetroDECK: ES-DE's systems file is broken, so its emulators are not established.",
+    ],
+    ["unavailable", RETRODECK, "RetroDECK's emulator list is not established."],
+    ["sealed", EMUDECK, "EmuDeck's emulator list cannot be read yet."],
+  ] as const)("words %s", (reason, source, sentence) => {
+    expect(emulatorDataReasonSentence(reason, source)).toBe(sentence);
+  });
+
+  it("never says there is no emulator", () => {
+    for (const reason of ["no_source", "switched_off", "catalogue_invalid", "unavailable", "sealed"] as const) {
+      expect(emulatorDataReasonSentence(reason, RETRODECK)).not.toMatch(/no emulator\b(?! source)/i);
+    }
+  });
+
+  it("names a source of a kind it does not know by its kind", () => {
+    expect(emulatorDataReasonSentence("unavailable", { kind: "standalone_x", starts_games: false })).toBe(
+      "standalone_x's emulator list is not established.",
+    );
+  });
+
+  it("says the list is not established where an answer names no reason and no source", () => {
+    expect(emulatorDataReasonSentence(undefined, undefined)).toBe("The emulator list is not established.");
+  });
+});
+
+function source(overrides: Partial<EmulatorSource>): EmulatorSource {
+  return {
+    kind: "retrodeck",
+    enabled: true,
+    starts_games: true,
+    root: "/rd",
+    findings: [],
+    catalogue: "read",
+    ...overrides,
+  };
+}
+
+describe("sourceRowLines", () => {
+  it("says a healthy source RetroDECK starts games through has no problems", () => {
+    expect(sourceRowLines(source({}))).toEqual(["No problems found."]);
+  });
+
+  it("says EmuDeck's list cannot be read and Tender cannot start games through it", () => {
+    expect(sourceRowLines(source({ kind: "emudeck", starts_games: false, catalogue: "sealed" }))).toEqual([
+      "No problems found.",
+      "EmuDeck's emulator list cannot be read yet.",
+      "Tender cannot start games through EmuDeck yet.",
+    ]);
+  });
+
+  it("words every finding, the one kept out of the banners too", () => {
+    const unwired = {
+      code: "content-tree-unwired",
+      data: { hub: "/rd/mods", path: "/emu/mods", problem: "missing" },
+    };
+    expect(sourceRowLines(source({ findings: [{ code: "root-missing", data: { path: "/sd" } }, unwired] }))).toEqual([
+      "RetroDECK: its folder /sd does not exist. If it is on an SD card or another drive, insert it.",
+      "RetroDECK: texture packs or mods in /rd/mods do not reach the emulator, because /emu/mods is missing. " +
+        "Resetting that emulator in RetroDECK fixes it.",
+    ]);
+  });
+
+  it("says a RetroArch without a frontend cannot start games", () => {
+    expect(
+      sourceRowLines(source({ kind: "bare_retroarch_native", starts_games: false, catalogue: "unavailable" })),
+    ).toEqual(["No problems found.", "Tender cannot start games through RetroArch (native) yet."]);
+  });
+});
+
+describe("mainSourceBanners", () => {
+  it("says no source was found where none is detected", () => {
+    expect(mainSourceBanners({ sources: [], answering: null })).toEqual([NO_SOURCE_BANNER]);
+    expect(NO_SOURCE_BANNER).toBe("No emulator source was found.");
+  });
+
+  it("puts every banner finding of every source on Main, and not the unwired content tree", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [
+        source({
+          findings: [
+            { code: "marker-invalid", data: { path: "/rd.json" } },
+            { code: "content-tree-unwired", data: { hub: "/h", path: "/p", problem: "missing" } },
+          ],
+        }),
+        source({
+          kind: "emudeck",
+          starts_games: false,
+          findings: [{ code: "companion-config-missing", data: { path: "/ra.cfg" } }],
+        }),
+      ],
+    };
+    expect(mainSourceBanners(listing)).toEqual([
+      "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+        "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
+      "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
+    ]);
+  });
+
+  it("says Tender cannot start games through the answering source where that is the case", () => {
+    const listing = { answering: "emudeck", sources: [source({ kind: "emudeck", starts_games: false })] };
+    expect(mainSourceBanners(listing)).toEqual([cannotStartSentence("emudeck")]);
+    expect(cannotStartSentence("emudeck")).toBe("Tender cannot start games through EmuDeck yet.");
+  });
+
+  it("says nothing about starting games while RetroDECK answers beside EmuDeck", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [source({}), source({ kind: "emudeck", starts_games: false })],
+    };
+    expect(mainSourceBanners(listing)).toEqual([]);
+  });
+
+  it("says nothing about starting games where every source is switched off", () => {
+    const listing = { answering: null, sources: [source({ kind: "emudeck", enabled: false, starts_games: false })] };
+    expect(mainSourceBanners(listing)).toEqual([]);
   });
 });

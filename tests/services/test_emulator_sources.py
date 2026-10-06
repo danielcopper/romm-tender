@@ -96,12 +96,19 @@ class TestTheListing:
                     "findings": [],
                     "catalogue": "sealed",
                 },
-            ]
+            ],
+            "answering": "retrodeck",
         }
 
     @pytest.mark.asyncio
     async def test_nothing_detected_lists_nothing(self):
-        assert await _Rig().service.get_emulator_sources() == {"sources": []}
+        assert await _Rig().service.get_emulator_sources() == {"sources": [], "answering": None}
+
+    @pytest.mark.asyncio
+    async def test_with_retrodeck_switched_off_emudeck_answers(self, both):
+        listing = await both.service.set_emulator_source_enabled("retrodeck", False)
+
+        assert listing["answering"] == "emudeck"
 
 
 class TestTheSwitch:

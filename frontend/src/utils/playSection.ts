@@ -8,7 +8,14 @@
  */
 
 import type { BiosAnswer } from "../api/backend";
-import type { CoreInfo, EmulatorOption, SaveStatus, SaveSyncDisplay } from "../types";
+import type {
+  AnsweringSource,
+  CoreInfo,
+  EmulatorDataReason,
+  EmulatorOption,
+  SaveStatus,
+  SaveSyncDisplay,
+} from "../types";
 import { hasAnySaveConflict } from "./saveStatus";
 import { formatTimeAgo } from "./formatters";
 
@@ -51,6 +58,9 @@ export interface CoreInfoFields {
   activeCoreIsDefault: boolean;
   emulators: EmulatorOption[];
   emulatorDataAvailable: boolean;
+  /** Why there is no emulator list, and which source answered; see {@link CoreInfo}. */
+  emulatorDataReason?: EmulatorDataReason | null;
+  emulatorSource?: AnsweringSource | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
 }
@@ -163,6 +173,8 @@ export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
     activeCoreIsDefault,
     emulators,
     emulatorDataAvailable: coreInfo.emulator_data_available,
+    emulatorDataReason: coreInfo.emulator_data_reason ?? null,
+    emulatorSource: coreInfo.emulator_source ?? null,
     platformCoreLabel: coreInfo.platform_core_label ?? null,
     hasGameOverride: coreInfo.has_game_override,
   };

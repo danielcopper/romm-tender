@@ -14,7 +14,8 @@ async def test_the_listing_names_a_detected_retrodeck(harness):
 
     result = await harness.endpoints.get_emulator_sources()
 
-    assert set(result) == {"sources"}
+    assert set(result) == {"sources", "answering"}
+    assert result["answering"] == "retrodeck"
     (source,) = result["sources"]
     assert set(source) == {"kind", "enabled", "starts_games", "root", "findings", "catalogue"}
     assert (source["kind"], source["enabled"], source["starts_games"], source["catalogue"]) == (
@@ -26,7 +27,7 @@ async def test_the_listing_names_a_detected_retrodeck(harness):
 
 
 async def test_nothing_detected_lists_nothing(harness):
-    assert await harness.endpoints.get_emulator_sources() == {"sources": []}
+    assert await harness.endpoints.get_emulator_sources() == {"sources": [], "answering": None}
 
 
 async def test_switching_the_source_off_takes_its_emulators_away_and_on_brings_them_back(harness):

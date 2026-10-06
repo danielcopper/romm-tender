@@ -13,7 +13,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.emulator_sources import ORDER_SETTING, SWITCHED_OFF_SETTING, move_source, stored_kinds, switch_source
+from domain.emulator_sources import (
+    ORDER_SETTING,
+    SWITCHED_OFF_SETTING,
+    ArrangedSource,
+    answering_source,
+    move_source,
+    stored_kinds,
+    switch_source,
+)
 from lib.errors import Refused
 
 if TYPE_CHECKING:
@@ -55,11 +63,13 @@ class EmulatorSourcesService:
     async def get_emulator_sources(self) -> dict[str, Any]:
         """Every detected source, in the user's order, as the settings list shows it.
 
-        ``{"sources": [...]}``, each ``{"kind", "enabled", "starts_games",
-        "root", "findings", "catalogue"}``: ``root`` is the folder shown under
-        the name, ``None`` where it is a default; ``findings`` the health
-        findings as ``{"code", "data"}``; ``catalogue`` ``read``, ``sealed`` or
-        ``unavailable``. An empty list where nothing is detected.
+        ``{"sources": [...], "answering"}``, each source ``{"kind", "enabled",
+        "starts_games", "root", "findings", "catalogue"}``: ``root`` is the
+        folder shown under the name, ``None`` where it is a default; ``findings``
+        the health findings as ``{"code", "data"}``; ``catalogue`` ``read``,
+        ``sealed`` or ``unavailable``. ``answering`` is the kind of the source a
+        game's questions go to, ``None`` where none answers. An empty list where
+        nothing is detected.
         """
         return await self._loop.run_in_executor(None, self._listing_io)
 
@@ -84,7 +94,14 @@ class EmulatorSourcesService:
         return await self._loop.run_in_executor(None, self._move_io, kind, offset)
 
     def _listing_io(self) -> dict[str, Any]:
-        return {"sources": [_report_payload(report) for report in self._sources.describe()]}
+        reports = self._sources.describe()
+        answering = answering_source(
+            tuple(ArrangedSource(kind=r.kind, enabled=r.enabled, starts_games=r.starts_games) for r in reports)
+        )
+        return {
+            "sources": [_report_payload(report) for report in reports],
+            "answering": answering.kind if answering is not None else None,
+        }
 
     def _detected_kinds(self) -> tuple[str, ...]:
         return tuple(source.kind for source in self._sources.read().sources)

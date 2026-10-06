@@ -68,6 +68,7 @@ import {
   setNotificationsUnavailable,
 } from "../utils/notificationsHealth";
 import type {
+  EmulatorSource,
   MigrationStatus,
   SyncStats,
   SyncStatusAnswer,
@@ -292,6 +293,16 @@ function fieldLabels(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('[data-testid="field-label"]')).map((n) => n.textContent);
 }
 
+/** One healthy RetroDECK, answering — the sources a test starts from unless it names others. */
+const HEALTHY_RETRODECK: EmulatorSource = {
+  kind: "retrodeck",
+  enabled: true,
+  starts_games: true,
+  root: "/run/media/deck/Emulation/retrodeck",
+  findings: [],
+  catalogue: "read",
+};
+
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -404,11 +415,7 @@ describe("MainPage", () => {
       total: 0,
       message: "",
     });
-    vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
-      status: "ok",
-      config_path: "/cfg/retrodeck.json",
-      resolved_home: "/home/deck/retrodeck",
-    });
+    vi.mocked(backend.getEmulatorSources).mockResolvedValue({ sources: [HEALTHY_RETRODECK], answering: "retrodeck" });
     vi.mocked(backend.cancelSync).mockResolvedValue({
       success: true,
       message: "Cancelled",
@@ -3133,68 +3140,72 @@ describe("MainPage", () => {
   // ===========================================================================
   // O. Skip Preview toggle
   // ===========================================================================
-  describe("RetroDECK config-health banner", () => {
-    it("shows the unreadable banner when status is 'unreadable'", async () => {
-      vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
-        status: "unreadable",
-        config_path: "/cfg/retrodeck.json",
-        resolved_home: "/home/deck/retrodeck",
+  describe("emulator source banners", () => {
+    it("shows no banner while a healthy RetroDECK answers", async () => {
+      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByText(/emulator source|cannot start games|settings file/)).toBeNull();
+    });
+
+    it("names a malformed retrodeck.json in a banner of its own", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          { ...HEALTHY_RETRODECK, root: null, findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] },
+        ],
+        answering: "retrodeck",
       });
       const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(await findByText("RetroDECK configuration unreadable")).toBeInTheDocument();
-      expect(await findByText(/syncs and downloads may target the wrong location/)).toBeInTheDocument();
-      // Probed config path is surfaced.
-      expect(await findByText(/\/cfg\/retrodeck\.json/)).toBeInTheDocument();
+      expect(
+        await findByText(
+          "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+            "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
+        ),
+      ).toBeInTheDocument();
     });
 
-    it("shows the root-missing banner when status is 'root_missing'", async () => {
-      vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
-        status: "root_missing",
-        config_path: "/cfg/retrodeck.json",
-        resolved_home: "/run/media/sdcard/retrodeck",
+    it("names a broken custom systems file with its source, file and reason", async () => {
+      const path = "/rd/ES-DE/custom_systems/es_systems.xml";
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          { ...HEALTHY_RETRODECK, findings: [{ code: "catalogue-invalid", data: { path, problem: "parse-error" } }] },
+        ],
+        answering: "retrodeck",
       });
       const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(await findByText("RetroDECK library not found")).toBeInTheDocument();
-      expect(await findByText(/make sure the card is inserted/)).toBeInTheDocument();
-      // Resolved home is surfaced.
-      expect(await findByText(/\/run\/media\/sdcard\/retrodeck/)).toBeInTheDocument();
+      expect(
+        await findByText(
+          `RetroDECK: ES-DE's systems file ${path} does not parse as XML. ` +
+            "ES-DE shows no systems until it is fixed, and Tender cannot tell which emulators RetroDECK offers.",
+        ),
+      ).toBeInTheDocument();
     });
 
-    it("renders no banner when status is 'ok'", async () => {
-      vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
-        status: "ok",
-        config_path: "/cfg/retrodeck.json",
-        resolved_home: "/home/deck/retrodeck",
+    it("says Tender cannot start games yet where only EmuDeck is installed", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [{ ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" }],
+        answering: "emudeck",
       });
-      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(queryByText("RetroDECK configuration unreadable")).toBeNull();
-      expect(queryByText("RetroDECK library not found")).toBeNull();
+      expect(await findByText("Tender cannot start games through EmuDeck yet.")).toBeInTheDocument();
     });
 
-    it("renders no banner when status is 'absent' (fresh-install case)", async () => {
-      vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
-        status: "absent",
-        config_path: "/cfg/retrodeck.json",
-        resolved_home: "/home/deck/retrodeck",
-      });
-      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+    it("says no emulator source was found where none is detected", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({ sources: [], answering: null });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(queryByText("RetroDECK configuration unreadable")).toBeNull();
-      expect(queryByText("RetroDECK library not found")).toBeNull();
+      expect(await findByText("No emulator source was found.")).toBeInTheDocument();
     });
 
-    it("leaves the banner cleared when getRetroDeckStatus rejects", async () => {
-      vi.mocked(backend.getRetroDeckStatus).mockRejectedValue(new Error("boom"));
+    it("shows no source banner and logs when the listing cannot be read", async () => {
+      vi.mocked(backend.getEmulatorSources).mockRejectedValue(new Error("boom"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      // No banner, and the rejection is logged (non-vacuous .catch assertion).
-      expect(queryByText("RetroDECK configuration unreadable")).toBeNull();
-      expect(queryByText("RetroDECK library not found")).toBeNull();
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to query RetroDECK status"));
+      expect(queryByText("No emulator source was found.")).toBeNull();
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read the emulator sources"));
     });
   });
 

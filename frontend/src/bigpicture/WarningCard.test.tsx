@@ -10,6 +10,13 @@ describe("WarningCard", () => {
     expect(screen.getByText("Something happened")).toBeInTheDocument();
   });
 
+  it("renders a title alone without an empty message line", () => {
+    const { container } = render(<WarningCard title="Only a title" />);
+    const root = container.firstChild as HTMLElement;
+    expect(screen.getByText("Only a title")).toBeInTheDocument();
+    expect(root.children).toHaveLength(2);
+  });
+
   it("applies compact padding when compact=true", () => {
     const { container } = render(<WarningCard title="t" message="m" compact />);
     const root = container.firstChild as HTMLElement;

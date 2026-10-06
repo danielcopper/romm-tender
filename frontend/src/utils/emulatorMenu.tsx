@@ -11,7 +11,8 @@
 
 import type { ReactNode } from "react";
 import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
-import type { EmulatorOption } from "../types";
+import type { AnsweringSource, EmulatorDataReason, EmulatorOption } from "../types";
+import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
 export function reasonCopy(reason: string | null): string {
@@ -30,8 +31,11 @@ export function reasonCopy(reason: string | null): string {
 
 export interface EmulatorMenuConfig {
   emulators: EmulatorOption[];
-  /** False when es_systems.xml can't be read — the menu says so instead of showing an empty list. */
+  /** False where the answering emulator source gives no emulator list — the menu
+   *  says why, from the two fields below, instead of showing an empty list. */
   emulatorDataAvailable: boolean;
+  emulatorDataReason?: EmulatorDataReason | null | undefined;
+  emulatorSource?: AnsweringSource | null | undefined;
   /** The active emulator's label — marked with a checkmark. */
   activeLabel: string | null;
   /** The per-platform override label — marked "(system)". Null in the platform
@@ -68,7 +72,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     return (
       <Menu label="Emulator">
         <MenuItem key="unavailable" disabled={true}>
-          Emulator list unavailable — RetroDECK installation not found
+          {emulatorDataReasonSentence(config.emulatorDataReason, config.emulatorSource)}
         </MenuItem>
       </Menu>
     );

@@ -1,5 +1,5 @@
 /**
- * The Settings page: six sections on the left, the focused section's controls
+ * The Settings page: seven sections on the left, the focused section's controls
  * on the right.
  *
  * Every section's state and every handler lives here rather than in the section
@@ -37,6 +37,11 @@ import {
   ensureDeviceRegistered,
   listDevices,
   logError,
+  getEmulatorSources,
+  setEmulatorSourceEnabled,
+  moveEmulatorSource,
+  isEndpointFailure,
+  type EmulatorSourceRefusal,
 } from "../api/backend";
 import type {
   RegisteredDevice,
@@ -45,6 +50,8 @@ import type {
   SaveSyncSettings as SaveSyncSettingsType,
   RetroArchInputCheck,
   SettingsSection,
+  EmulatorSourceDirection,
+  EmulatorSourcesListing,
 } from "../types";
 import { SETTINGS_SECTIONS } from "../types";
 import { detach } from "../utils/detach";
@@ -68,6 +75,7 @@ import { RegisteredDevicesSection } from "./settings/RegisteredDevicesSection";
 import { ControllerSection } from "./settings/ControllerSection";
 import { AdvancedSection } from "./settings/AdvancedSection";
 import { UpdatesSection } from "./settings/UpdatesSection";
+import { EmulatorSourcesSection } from "./settings/EmulatorSourcesSection";
 import { WithUpdateDot } from "./UpdateDot";
 import { LibrarySection, AUTO_REGION, DEFAULT_REGION_LABEL } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
@@ -96,6 +104,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   "save-sync": "Save Sync",
   controller: "Controller",
   "steam-library": "Steam Library",
+  "emulator-sources": "Emulator sources",
   updates: "Updates",
   advanced: "Advanced",
 };
@@ -170,6 +179,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [platformGroups, setPlatformGroups] = useState(false);
   // Steam-collection naming mode (#1539): "merge" (default) or "by_label".
   const [namingMode, setNamingMode] = useState<CollectionNamingMode>("merge");
+
+  // Emulator sources: `undefined` until the listing answers, `null` where it failed.
+  const [emulatorSources, setEmulatorSources] = useState<EmulatorSourcesListing | null | undefined>(undefined);
+  const [sourcesBusy, setSourcesBusy] = useState(false);
 
   useEffect(() => {
     getSettings()
@@ -571,6 +584,46 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     );
   };
 
+  const readEmulatorSources = async () => {
+    try {
+      setEmulatorSources(await getEmulatorSources());
+    } catch (e) {
+      logError(`Failed to read the emulator sources: ${e}`);
+      setEmulatorSources(null);
+    }
+  };
+
+  /** A switch or a move, whose answer is the listing as it now stands. A refusal
+   *  means the sources changed under the page (a source went away), so the
+   *  page reads them again rather than keep a row that no longer exists. */
+  const writeEmulatorSources = async (write: () => Promise<EmulatorSourcesListing | EmulatorSourceRefusal>) => {
+    if (sourcesBusy) return;
+    setSourcesBusy(true);
+    try {
+      const answer = await write();
+      if (isEndpointFailure(answer)) {
+        logError(`An emulator source change was refused: ${answer.reason}`);
+        await readEmulatorSources();
+      } else {
+        setEmulatorSources(answer);
+      }
+    } catch (e) {
+      logError(`Failed to change the emulator sources: ${e}`);
+      await readEmulatorSources();
+    } finally {
+      setSourcesBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    getEmulatorSources()
+      .then(setEmulatorSources)
+      .catch((e) => {
+        logError(`Failed to read the emulator sources: ${e}`);
+        setEmulatorSources(null);
+      });
+  }, []);
+
   const renderSection = (id: SettingsSection): ReactNode => {
     switch (id) {
       case "connections":
@@ -652,6 +705,19 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
             onPlatformGroupsChange={handlePlatformGroupsChange}
             namingMode={namingMode}
             onNamingModeChange={handleNamingModeChange}
+          />
+        );
+      case "emulator-sources":
+        return (
+          <EmulatorSourcesSection
+            listing={emulatorSources}
+            busy={sourcesBusy}
+            onSwitch={(kind, enabled) => {
+              detach(writeEmulatorSources(() => setEmulatorSourceEnabled(kind, enabled)));
+            }}
+            onMove={(kind, direction: EmulatorSourceDirection) => {
+              detach(writeEmulatorSources(() => moveEmulatorSource(kind, direction)));
+            }}
           />
         );
       case "updates":
