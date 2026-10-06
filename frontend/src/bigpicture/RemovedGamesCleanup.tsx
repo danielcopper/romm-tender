@@ -612,6 +612,10 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   const [cancelRequestedFor, setCancelRequestedFor] = useState<string | null>(null);
   const [runStarted, setRunStarted] = useState(false);
   const [status, setStatus] = useState("");
+  const clearListRefusal = useCallback(
+    () => setStatus((current) => (current === listRefusal.current ? "" : current)),
+    [],
+  );
   const [repoint, setRepoint] = useState(true);
   const [removeRows, setRemoveRows] = useState(true);
   const [removeDeadGames, setRemoveDeadGames] = useState(true);
@@ -703,14 +707,14 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           },
           fail: (message, loaded) => {
             setPageLoadError(message);
-            setStatus((current) => (current === listRefusal.current ? "" : current));
+            clearListRefusal();
             logWarn(`[prune] Preview page at offset ${loaded} of ${initial.total ?? 0} failed: ${message}`);
           },
-          allArrived: () => setStatus((current) => (current === listRefusal.current ? "" : current)),
+          allArrived: clearListRefusal,
         }),
       );
     },
-    [initial.preview_id, initial.total, scope, romId],
+    [initial.preview_id, initial.total, scope, romId, clearListRefusal],
   );
 
   useEffect(() => {
@@ -723,7 +727,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
 
   const retryPageLoad = (): void => {
     setPageLoadError(null);
-    setStatus((current) => (current === listRefusal.current ? "" : current));
+    clearListRefusal();
     startPageLoad(items.length);
   };
 

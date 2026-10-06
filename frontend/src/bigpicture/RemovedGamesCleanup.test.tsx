@@ -531,6 +531,26 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline");
   });
 
+  it("keeps a status that is not about the list when a page fails", async () => {
+    const second = pendingPage();
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockReturnValueOnce(second.promise)
+      .mockRejectedValueOnce(new Error("offline"));
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(2));
+    fireEvent.click(modal.getByRole("button", { name: "Refresh free space" }));
+    await waitFor(() =>
+      expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline"),
+    );
+
+    await act(async () => second.reject(new Error("offline")));
+
+    expect(modal.container.textContent).toContain("The list stopped loading at 1 of 2 entries.");
+    expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline");
+  });
+
   it("keeps a status that is not about the list when Retry is pressed", async () => {
     const retried = pendingPage();
     vi.mocked(backend.getPrunePreview)

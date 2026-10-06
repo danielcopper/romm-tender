@@ -42,7 +42,8 @@ export { HostTransportError } from "./hostSocket";
  * What a toast carries.
  *
  * Four fields, because four are passed: `title` and `body` by `showToast`,
- * `subtext` by the cleanup summary, `duration` by the launch prompts.
+ * `subtext` by a call site whose detail must stay readable, `duration` by one
+ * that needs its own time on screen.
  */
 export interface ToastData {
   title: ReactNode;
