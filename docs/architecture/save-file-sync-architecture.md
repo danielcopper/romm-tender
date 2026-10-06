@@ -1854,11 +1854,9 @@ state is imported into it (Tender was in beta at the cutover — the library re-
 aggregate to rebuild, so the old `active_core` → `last_synced_core` rename and the `dismissed_newer_save_id` strip no
 longer happen.
 
-The one surviving legacy read is a single one-time settings fold at bootstrap. `fold_legacy_save_sync_settings`
-(`backend/domain/state_migrations.py`) lifts the old `settings` block (the save-sync feature toggles) plus `device_name`
-out of any pre-existing `save_sync_state.json` and folds them into `settings.json` — the `settings.json` v3 → v4 schema
-bump. After that fold, `save_sync_state.json` is never read or written again; the file is not a persistence store
-anymore.
+Nothing reads or writes `save_sync_state.json` any more. The save-sync feature toggles and `device_name` it once held
+live in `settings.json`, and a settings file from before they moved there is older than any version this release reads
+(see [Backend Architecture — PersistenceAdapter notes](backend-architecture.md#persistenceadapter-notes)).
 
 ## Session Detection
 

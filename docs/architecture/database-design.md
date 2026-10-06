@@ -642,9 +642,8 @@ for RomM's ownership-carrying first collection kind was renamed `user → standa
 never matched, so their standard collections full-fetch once — so this rewrites them in place. A plain `UPDATE` is safe:
 the composite primary key is `(collection_id, collection_kind)` and no `'standard'`-kind row can exist before this
 migration (the app only ever wrote `'user'` / `'smart'`), so the rewrite can never collide with an existing
-`('<id>', 'standard')` row. On a fresh install the table is empty and this is a no-op. The paired `settings.json`
-`enabled_collections` bucket rename (`user → standard`) is the separate schema migration **v12 → v13** in
-`domain/state_migrations.py`.
+`('<id>', 'standard')` row. On a fresh install the table is empty and this is a no-op. The `settings.json`
+`enabled_collections` bucket carries the name `standard` in every settings file this release reads (version 13 on).
 
 `023_add_rom_install_launchable.sql` (`user_version = 23`) adds `rom_installs.launchable INTEGER NOT NULL DEFAULT 1` —
 whether the system can act on the install's `file_path` at all

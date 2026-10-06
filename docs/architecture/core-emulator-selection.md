@@ -84,10 +84,10 @@ per-game pin may name a standalone emulator, not only a libretro core (#1210).
 
 ## Storage: the per-platform core is a LABEL in `settings.json`
 
-The per-platform core lives in a `platform_cores` map in `settings.json` — `{platform_slug: core_label}` — added at
-settings schema version 7 (a `setdefault("platform_cores", {})` migration; `adapters/persistence.py` +
-`domain/state_migrations.py`). It holds the same kind of value as the per-game pin: the core **LABEL**, never a resolved
-`.so`. An **absent key** means "no per-platform deviation — follow the es_systems default for this platform."
+The per-platform core lives in a `platform_cores` map in `settings.json` — `{platform_slug: core_label}`, an empty map
+by default (`DEFAULT_SETTINGS` in `adapters/persistence.py`). It holds the same kind of value as the per-game pin: the
+core **LABEL**, never a resolved `.so`. An **absent key** means "no per-platform deviation — follow the es_systems
+default for this platform."
 
 It is an
 [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md)

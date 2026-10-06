@@ -115,12 +115,12 @@ rungs are for a start by hand.
 
 - **config root** — user-intent configuration: the settings file and its siblings.
 - **data root** — what cannot be fetched again: the database with its two WAL sidecars, the single-instance lock beside
-  it, the legacy `save_sync_state.json` the settings fold still reads, and the installer's two copies of the database
-  and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback by hand
-  replaces, each of which can have a `.new` or `.prev` sibling beside it — and, on a machine updated from an install
-  that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take — and,
-  where a start found the database under both names, the `romm_sync.db` it left as it was. This list is the one complete
-  inventory of that root; the user guide names only what a user meets there.
+  it, a `save_sync_state.json` a release before 0.20 may have left, which nothing reads, and the installer's two copies
+  of the database and settings — `update-backup/`, which every update replaces, and `rollback-backup/`, which a rollback
+  by hand replaces, each of which can have a `.new` or `.prev` sibling beside it — and, on a machine updated from an
+  install that kept covers there, a `covers/` or `artwork/` holding the files the move into the cache root did not take
+  — and, where a start found the database under both names, the `romm_sync.db` it left as it was. This list is the one
+  complete inventory of that root; the user guide names only what a user meets there.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.
@@ -329,8 +329,7 @@ picks the store:
    **SQLite aggregates**.
 
 `device_id` now lives in the `kv_config` table; bucket-3 save state lives in SQLite aggregates. `save_sync_state.json`
-is a dead store — never written, read exactly once at bootstrap for the one-time legacy settings fold. As of #822 it no
-longer held the save-sync toggles or `device_name` (those moved to `settings.json`, settings schema v4).
+is a dead store — nothing reads or writes it, and one an older release left in the data root stays there untouched.
 
 ### Cutover
 

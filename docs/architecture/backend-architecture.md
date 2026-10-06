@@ -19,14 +19,14 @@ shutdown. `main.py` owns the process entry (`run()` and `build_backend()`) and t
 logic, and it reads no arguments. The pre-install check is an entry of its own, `check.py` beside it, which the
 installer runs on a version it has unpacked and not yet put in place — a file rather than a flag on `main.py`, because a
 version whose `main.py` predated the flag would ignore it and start a whole backend. It logs to stderr only, copies the
-live database, the save-sync state and the settings (`bootstrap/check.py`, the database through SQLite's backup API)
-under roots of its own, then imports `main.py` — whose start sits behind `__main__`, so importing it starts nothing —
-and calls `build_application()`, and nothing else: no lock, no port, no `backend.log`, no start-up repair, no network.
-Its exit status is its answer: 0 when the `Application` was built; 1 when it was not, or `main.py` did not import, with
-the traceback on stderr, which is also what Python itself answers for a module that does not import; and 2 when the
-check was not tried — arguments it cannot read, a root it may not build under, or live data it could not copy. It
-refuses to build unless the code root is its own tree and every other root, the runtime directory among them, is absent
-or empty. What the installer does with each answer:
+live database and the settings (`bootstrap/check.py`, the database through SQLite's backup API) under roots of its own,
+then imports `main.py` — whose start sits behind `__main__`, so importing it starts nothing — and calls
+`build_application()`, and nothing else: no lock, no port, no `backend.log`, no start-up repair, no network. Its exit
+status is its answer: 0 when the `Application` was built; 1 when it was not, or `main.py` did not import, with the
+traceback on stderr, which is also what Python itself answers for a module that does not import; and 2 when the check
+was not tried — arguments it cannot read, a root it may not build under, or live data it could not copy. It refuses to
+build unless the code root is its own tree and every other root, the runtime directory among them, is absent or empty.
+What the installer does with each answer:
 [Running an installed one](../contributing/development.md#running-an-installed-one).
 
 ```python
@@ -125,7 +125,6 @@ lock (with a short retry window)   ← beside the database, which is what it pro
   → schema migration + start-up routines
   → bind the port (27737, then the next free)
   → write the port file
-  → migrate_legacy_credentials     ← the only start-up step with network I/O
 ```
 
 So "the port file is there" means "the backend is ready", and there is no readiness flag for a call to wait on. A second
@@ -136,9 +135,8 @@ holds the port. The port file is a hint; connecting to it is the proof.
 them all, in one order, and reports each failure to the recorder it is handed. One edge binds two of them:
 `prune_stale_installed_roms` runs only after `detect_retrodeck_path_change` **succeeded**, because the prune reads the
 pending homes the detection writes. `build_application` runs none of them; the entry point runs them after building and
-before the port is bound. The network step (`Application.open_network`) and the shutdown (`Application.shutdown`) reach
-the host only on the `BackendBuild` the build answers with; a build that failed answers none, and the host shuts nothing
-down.
+before the port is bound. The shutdown (`Application.shutdown`) reaches the host only on the `BackendBuild` the build
+answers with; a build that failed answers none, and the host shuts nothing down.
 
 ## Dependency Diagram
 
@@ -841,12 +839,8 @@ under the one `virtual` bucket. Which types a sync fetches, and what a failed on
 `get_collections`, is under "A listing that fails stops the run" below. Because the type is baked into the base64 id,
 ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
 stamp-exclusion, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per
-type. On disk the enabled-collections bucket was renamed `franchise → virtual` by the lossless `settings.json` migration
-**v10 → v11** (`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket key while preserving every enabled
-id, so a previously-enabled franchise collection stays enabled and no re-login is required. (The historical v2 → v3
-split still produces the `franchise` bucket; the v10 → v11 step renames it afterwards, so that frozen step is
-untouched.) The ownership-carrying bucket was likewise renamed `user → standard` by the lossless `settings.json`
-migration **v12 → v13** (`domain/state_migrations._migrate_v12_to_v13`, same merge-into-existing semantics), and old
+type. On disk `enabled_collections` holds the three buckets `standard`, `smart` and `virtual`, the shape every
+`settings.json` from version 13 on has. The ownership-carrying bucket was once called `user`: old
 `collection_sync_state` completion stamps keyed `collection_kind = 'user'` are rewritten to `'standard'` by SQLite
 migration **022** so an unchanged standard collection still takes the incremental skip across the upgrade (#1539).
 
@@ -1587,10 +1581,8 @@ to DELETE by anyway — the source check states the intent). The DELETE uses Bas
 unaffected by the cleared bearer.
 
 **A token's provenance is recorded in `romm_api_token_source`.** The value is `"minted"` for a token Tender minted from
-a username/password (`establish_token` and the startup `migrate_legacy_credentials`) and `"user"` for a token the user
-pasted (`establish_user_token`). It is part of the snapshot/restore auth-state set, so a failed sign-in rolls it back
-with the rest of the auth state. Settings migration `v9 → v10` seeds it — `"minted"` when a token already exists (a
-pre-v10 install could only hold minted tokens), else `None`.
+a username/password (`establish_token`) and `"user"` for a token the user pasted (`establish_user_token`). It is part of
+the snapshot/restore auth-state set, so a failed sign-in rolls it back with the rest of the auth state.
 
 **Pasted-token sign-in (`establish_user_token`) — the OIDC path.** OIDC / SSO accounts have no password to mint from, so
 the user creates a Client API Token in RomM's web UI and pastes it. `establish_user_token` mirrors `establish_token`'s
@@ -2038,7 +2030,7 @@ through a seam. Selected adapters:
 | `bounded_run.py`                                                           | `run_bounded` — a short command run to its end for `journal.py` and `transient_unit.py`, output decoded as UTF-8 with bad bytes replaced; on a timeout the command is killed and waited for at most two seconds more, where `subprocess.run` would wait without a bound                                                                                                                                                                    |
 | `sgdb_artwork_cache.py`                                                    | `SgdbArtworkCacheAdapter` — on-disk SGDB artwork cache                                                                                                                                                                                                                                                                                                                                                                                     |
 | `cover_art_file_store.py`                                                  | `CoverArtFileStoreAdapter` — RomM cover art I/O across the per-ROM cover cache and the Steam grid dir (download, `copy_file` publish/seed, read, prune)                                                                                                                                                                                                                                                                                    |
-| `persistence.py`                                                           | `PersistenceAdapter` + per-domain persister adapters — `settings.json` read/write plus the one-time legacy `save_sync_state.json` read that feeds the bootstrap settings fold                                                                                                                                                                                                                                                              |
+| `persistence.py`                                                           | `PersistenceAdapter` + per-domain persister adapters — `settings.json` read/write                                                                                                                                                                                                                                                                                                                                                          |
 | `repositories/`                                                            | `SqliteUnitOfWork` + per-aggregate repository adapters — SQLite I/O (the live persistence path; see [Database Design](database-design.md))                                                                                                                                                                                                                                                                                                 |
 | `sqlite_migrations.py`                                                     | `apply_migrations` — schema migration runner (`db/migrations/NNN_*.sql`, `PRAGMA user_version`)                                                                                                                                                                                                                                                                                                                                            |
 | `download_file.py`                                                         | `DownloadFileAdapter` — download filesystem                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -2191,8 +2183,12 @@ status.
 
 - **File locking**: write methods acquire an exclusive `fcntl.flock` before touching the file, preventing concurrent
   writes from corrupting state.
-- **Schema versioning**: every state file written includes a `version` field. On read, a mismatch causes the file to be
-  treated as absent (cache discarded, state reset to defaults) rather than loading incompatible data.
+- **Schema versioning**: `settings.json` carries a `version` field. A file this release does not read is not converted:
+  one older than `OLDEST_SETTINGS_VERSION` (13, the version every release from 0.30.0 on writes), one whose `version` is
+  missing or not a whole number, and one that is not a JSON object (`domain/state_migrations.unreadable_settings`). The
+  adapter logs a warning naming what it found and returns the defaults, which the start's save writes over the file — no
+  backup and no notice, because everything such a file held can be entered again. A file it reads goes through
+  `migrate_settings`, which holds no step yet; the next schema version adds the first.
 - **Crash-safe atomic writes**: `settings.json` is written with the durable write-tmp → `fsync(tmp)` → `os.replace()` →
   `fsync(dir)` recipe. The temp file's bytes are forced to disk **before** the rename, and the directory entry the
   rename creates is forced to disk **after** it. This closes the power-loss window on the Steam Deck's ext4: without the
@@ -2616,7 +2612,7 @@ and `models` included). Aggregate roots and the enforcement that keeps them hone
 | `steam_categories.py`                                        | Steam collection name computation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `sgdb_artwork.py`                                            | SGDB asset-type/endpoint maps and `to_signed_app_id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `installed_roms.py` / `rom_files.py`                         | installed-ROM detection, M3U generation, launch-file detection                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `state_migrations.py`                                        | `migrate_settings` (`settings.json`) + `fold_legacy_save_sync_settings` (one-time legacy `save_sync_state.json` fold)                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `state_migrations.py`                                        | `unreadable_settings` (which `settings.json` files are read) + `migrate_settings` (the version ladder)                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `sync_state.py`                                              | `SyncState` enum (idle, running, cancelling)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `emulator_tag.py` / `version.py`                             | emulator-tag formatting, version parsing, core-change detection                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `identity.py`                                                | `DISPLAY_NAME` — Tender's name where a person reads it: the RomM token label, the registered-device client, and the headline of each of the two files opened by hand (a recovery bundle's README and the recovery root's). The identifier `romm-tender` is deliberately not here and not in one place; which name a new string takes is GLOSSARY.md's "Display name vs identifier" entry; why its four homes stay apart is this module's docstring                                                                                 |
@@ -2746,13 +2742,12 @@ write `from bootstrap import …` and never deep-import a submodule:
 
 1. **`adapters.py`** — owns `bootstrap()`, which is **told** where the directories are, and where releases are asked
    for, rather than deriving them, then builds every adapter, applies the SQLite schema migrations, and loads + migrates
-   `settings.json` (folding in the one-time legacy `save_sync_state.json` settings) so the settings persister binds the
-   live mutable `settings` dict at construction. Returns a typed `BootstrapResult` carrying four bundles (`adapters`,
-   `stores`, `callbacks`, `runtime_adapters`), `directories` — the `AppDirectories` this run was handed, seven fields —
-   `launcher`, where the shortcut launcher lives in the bin root and whether this start got it there, and `user_agent`,
-   `<package name>/<version>` composed once from the constants in `domain/identity.py`: the outgoing User-Agent, which
-   is also the identity the host answers under. The bundle dataclasses are defined here too — they are the vocabulary
-   the second half consumes.
+   `settings.json` so the settings persister binds the live mutable `settings` dict at construction. Returns a typed
+   `BootstrapResult` carrying four bundles (`adapters`, `stores`, `callbacks`, `runtime_adapters`), `directories` — the
+   `AppDirectories` this run was handed, seven fields — `launcher`, where the shortcut launcher lives in the bin root
+   and whether this start got it there, and `user_agent`, `<package name>/<version>` composed once from the constants in
+   `domain/identity.py`: the outgoing User-Agent, which is also the identity the host answers under. The bundle
+   dataclasses are defined here too — they are the vocabulary the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
    `min_required_version`, `directories`, `launcher` and `update_source`, and constructs every service, injecting each
@@ -2764,9 +2759,9 @@ write `from bootstrap import …` and never deep-import a submodule:
    entry point hands it, passes `MIN_ROMM_VERSION` from `domain/identity.py` as `min_required_version`, calls
    `wire_services()`, and answers an `Application` holding the `ServicesBundle` as one field (`services`). It runs
    nothing. The `Application` runs the start-up repairs (`run_startup_repairs`, which also starts the two background
-   tasks it holds — the save-directory backfill and the running release check), `open_network()` and `shutdown()` — each
-   when the entry point calls it. Its constructor takes a ready `ServicesBundle`, which is the seam the contract harness
-   uses: it swaps adapters between `bootstrap()` and `wire_services()` and constructs the `Application` itself.
+   tasks it holds — the save-directory backfill and the running release check) and `shutdown()` — each when the entry
+   point calls it. Its constructor takes a ready `ServicesBundle`, which is the seam the contract harness uses: it swaps
+   adapters between `bootstrap()` and `wire_services()` and constructs the `Application` itself.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then
 `build_application()` composes the runtime bundle (event loop, the event sink's emit, the host's reading of Steam) and
