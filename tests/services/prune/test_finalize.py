@@ -11,7 +11,7 @@ from typing import Any, cast
 import pytest
 from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from models.prune import InstalledContentRemoval
+from models.prune import InstalledContentRemoval, SaveQuarantine
 
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
@@ -44,7 +44,7 @@ class _FakeSaveCoordinator:
         # Per-request answers, keyed by the sorted ids asked about, so a test can
         # widen ownership for the delete set alone.
         self.by_request: dict[tuple[int, ...], dict[str, Any]] = {}
-        self.quarantine_result: dict[str, Any] = {"success": True, "moved": [], "ambiguous": False}
+        self.quarantine_result = SaveQuarantine(moved=[], ambiguous=False)
         self.absences_valid = True
         self.calls: list[str] = []
 
@@ -55,7 +55,7 @@ class _FakeSaveCoordinator:
     async def lock_prune_roms(self, rom_ids: list[int]):
         yield
 
-    def quarantine_prune_saves(self, files, claims=None) -> dict[str, Any]:
+    def quarantine_prune_saves(self, files, claims=None) -> SaveQuarantine:
         self.calls.append("quarantine")
         return self.quarantine_result
 
@@ -311,12 +311,7 @@ class TestCascadeStopsPartway:
     async def test_a_failed_quarantine_never_reaches_the_content_removal(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.saves.quarantine_result = {
-            "success": False,
-            "message": "a save reappeared",
-            "moved": [],
-            "ambiguous": False,
-        }
+        fixture.saves.quarantine_result = SaveQuarantine(moved=[], ambiguous=False, failure="a save reappeared")
 
         result = await _finish(fixture, rows)
 
@@ -329,18 +324,31 @@ class TestCascadeStopsPartway:
     async def test_a_quarantine_that_moved_files_before_failing_is_partial(self):
         rows = [_rom(1)]
         fixture = Fixture(rows, {1: "vanished"})
-        fixture.saves.quarantine_result = {
-            "success": False,
-            "message": "stopped halfway",
-            "moved": ["/saves/gba/g.srm"],
-            "ambiguous": False,
-        }
+        fixture.saves.quarantine_result = SaveQuarantine(
+            moved=["/saves/gba/g.srm"], ambiguous=False, failure="stopped halfway"
+        )
         ledger = MutationLedger(rows)
 
         result = await _finish(fixture, rows, ledger=ledger)
 
         assert result["status"] == "partial"
         assert ledger.mutations == ["save_quarantine"]
+
+    @pytest.mark.parametrize("ambiguous", [True, False])
+    async def test_a_quarantine_that_moved_files_before_failing_carries_its_ambiguity(self, ambiguous):
+        rows = [_rom(1)]
+        fixture = Fixture(rows, {1: "vanished"})
+        fixture.saves.quarantine_result = SaveQuarantine(
+            moved=["/saves/gba/g.srm"], ambiguous=ambiguous, failure="parent fsync failed"
+        )
+        ledger = MutationLedger(rows)
+
+        result = await _finish(fixture, rows, ledger=ledger)
+
+        assert result["reason"] == "save_quarantine_failed"
+        assert result["message"] == "parent fsync failed"
+        assert ledger.mutations == ["save_quarantine"]
+        assert ledger.ambiguous_mutations == (["save_quarantine"] if ambiguous else [])
 
     async def test_a_failed_content_removal_stops_before_the_artifacts(self):
         rows = [_rom(1)]

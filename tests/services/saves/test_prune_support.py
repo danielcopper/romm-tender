@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from models.prune import SaveQuarantine
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from tests.services.saves._helpers import (
@@ -114,7 +115,7 @@ class TestPruneSaveInventory:
 
         result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result == {"success": True, "moved": [], "ambiguous": False}
+        assert result == SaveQuarantine(moved=[], ambiguous=False)
         assert shared.read_bytes() == b"live progress"
 
     def test_uninstalled_row_with_a_different_content_name_stays_exclusive(self, tmp_path):
@@ -138,8 +139,8 @@ class TestPruneSaveInventory:
 
         result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result["success"] is True
-        assert result["moved"] == [str(owned)]
+        assert result.failure is None
+        assert result.moved == [str(owned)]
         assert owned.exists() is False
         backups = list((tmp_path / "saves" / "gba" / ".romm-backup").glob("game_*.srm"))
         assert [path.read_bytes() for path in backups] == [b"only mine"]
@@ -162,8 +163,8 @@ class TestPruneSaveInventory:
         Path(expected).write_bytes(b"created by emulator")
         result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
 
-        assert result["success"] is False
-        assert "appeared after sealing" in result["message"]
+        assert result.failure is not None
+        assert "appeared after sealing" in result.failure
         assert Path(expected).read_bytes() == b"created by emulator"
 
     def test_expected_absence_is_rechecked_after_quarantine_before_cascade(self, tmp_path):
@@ -175,7 +176,7 @@ class TestPruneSaveInventory:
         inventory = support.inventory_prune_saves([42])
 
         result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
-        assert result["success"] is True
+        assert result.failure is None
 
         expected.parent.mkdir(parents=True, exist_ok=True)
         expected.write_bytes(b"created after absence was consumed")
@@ -192,8 +193,32 @@ class TestPruneSaveInventory:
         assert inventory["source_claims"][str(expected)]["source_identity"]["exists"] is True
 
         result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
-        assert result["success"] is True
+        assert result.failure is None
         expected.write_bytes(b"emulator-recreated")
 
         assert support.validate_prune_absences(inventory["source_claims"]) is False
         assert expected.read_bytes() == b"emulator-recreated"
+
+
+class TestQuarantinePruneSaves:
+    def test_a_quarantine_that_raised_after_moving_a_save_is_ambiguous_and_names_it(self, tmp_path, monkeypatch):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
+        first = _create_save(tmp_path, system="gba", rom_name="game", content=b"first", ext=".srm")
+        second = _create_save(tmp_path, system="gba", rom_name="game", content=b"second", ext=".rtc")
+        inventory = support.inventory_prune_saves([42])
+        store = support._save_file_store
+        rename_claimed = store.rename_claimed
+
+        def rename_once(*args, **kwargs):
+            if not first.exists():
+                raise OSError("backup directory went away")
+            return rename_claimed(*args, **kwargs)
+
+        monkeypatch.setattr(store, "rename_claimed", rename_once)
+
+        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+
+        assert result == SaveQuarantine(moved=[str(first)], ambiguous=True, failure="backup directory went away")
+        assert second.read_bytes() == b"second"

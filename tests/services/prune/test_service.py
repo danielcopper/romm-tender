@@ -16,7 +16,7 @@ from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
-from models.prune import InstalledContentRemoval, SealedSourceClaims
+from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
 
 from domain.fetch_generation import count_rows_for_skip, prune_candidate_ids
 from domain.platform_sync_state import PlatformSyncState
@@ -184,10 +184,10 @@ class FakeSaveCoordinator:
 
     def quarantine_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> dict[str, Any]:
+    ) -> SaveQuarantine:
         del claims
         self.quarantined.append(files)
-        return {"success": True, "moved": []}
+        return SaveQuarantine(moved=[], ambiguous=False)
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
         del claims
@@ -2338,12 +2338,9 @@ async def test_partial_adapter_outcomes_enter_actual_and_ambiguous_mutation_ledg
         monkeypatch.setattr(
             harness.saves,
             "quarantine_prune_saves",
-            lambda *_args: {
-                "success": False,
-                "moved": ["/saves/game.srm"],
-                "ambiguous": True,
-                "message": "save parent fsync failed",
-            },
+            lambda *_args: SaveQuarantine(
+                moved=["/saves/game.srm"], ambiguous=True, failure="save parent fsync failed"
+            ),
         )
         category = "save_quarantine"
     else:

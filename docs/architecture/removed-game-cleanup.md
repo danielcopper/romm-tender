@@ -367,9 +367,10 @@ playtime, and the relevant controller-config value. No artwork base64 crosses fr
 
 Failure is never rewritten into success. Seal, rename and cleanup durability failures surface as exact or ambiguous
 partial mutations. A ROM's content removal that raised is reported as an ambiguous mutation rather than as nothing
-changed, because it cannot tell how far it got; its group is retained like that of any failed removal. If a bundle
-cannot be proven durable it is renamed aside rather than published; if that rename also fails, the reported message
-names what actually remains on disk rather than claiming a preservation that did not happen.
+changed, because it cannot tell how far it got; its group is retained like that of any failed removal. A save quarantine
+that raised is reported the same way: the saves it had already moved are recorded as a change, and the change as
+ambiguous. If a bundle cannot be proven durable it is renamed aside rather than published; if that rename also fails,
+the reported message names what actually remains on disk rather than claiming a preservation that did not happen.
 
 There is no automatic restore. A bundle is machine-readable and documented for future or manual recovery.
 

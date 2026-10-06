@@ -351,14 +351,13 @@ class GroupFinalizer:
             delete_inventory["exclusive"],
             claims if claims is not None else delete_inventory.get("source_claims"),
         )
-        raw_moved = quarantine.get("moved")
-        if isinstance(raw_moved, list) and raw_moved:
+        if quarantine.moved:
             ledger.mutations.append("save_quarantine")
-        if quarantine.get("ambiguous") and "save_quarantine" not in ledger.ambiguous_mutations:
+        if quarantine.ambiguous and "save_quarantine" not in ledger.ambiguous_mutations:
             ledger.ambiguous_mutations.append("save_quarantine")
-        if quarantine.get("success"):
+        if quarantine.failure is None:
             return None
-        return "save_quarantine_failed", quarantine.get("message", "Save quarantine failed.")
+        return "save_quarantine_failed", quarantine.failure
 
     async def _remove_installed_content(
         self,
