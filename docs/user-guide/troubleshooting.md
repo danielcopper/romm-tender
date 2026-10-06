@@ -264,8 +264,8 @@ download completes.
 **Symptom**: The game's detail page shows **Download again** with **File missing** under it, and no Play.
 
 **What happened**: The file Tender downloaded is not where it was put any more — it was deleted, its folder moved, or
-the drive holding it is unmounted. **Forget this download**, under the arrow beside **Download again**, asks first and
-names that path.
+the drive holding it is unmounted. The arrow beside **Download again** opens a menu titled **File missing** that names
+that path.
 
 **Fix**: Put the drive or folder back if that is what happened; otherwise choose one of the two actions, described in
 [Managing Games → When a Downloaded Game's File Is Missing](managing-games.md#when-a-downloaded-games-file-is-missing).

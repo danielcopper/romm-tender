@@ -508,7 +508,8 @@ interrupted one stopped.
 ## When a Downloaded Game's File Is Missing
 
 If a game's downloaded file is no longer where Tender put it, its detail page shows **Download again** where Play would
-be, with **File missing** under it, and the arrow beside it opens **Forget this download**. Tender cannot tell a deleted
+be, with **File missing** under it. The arrow beside the button opens a menu titled **File missing**: it names the full
+path the file was downloaded to and offers **Download again** and **Forget this download**. Tender cannot tell a deleted
 file from a moved ROM folder or an unmounted drive, so it forgets nothing on its own — not at start-up, and not when you
 open the page. If the drive or folder comes back, the game is playable again as it was.
 
@@ -519,8 +520,9 @@ open the page. If the drive or folder comes back, the game is playable again as 
   an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
   came back, so reopen the game page to play it.
 
-While the file is missing, the page's **RomM Actions** menu offers no **Uninstall** — there is nothing to delete — and
-neither the disc picker nor the **CPU button** (the emulator picker) is shown.
+While the file is missing, the **RomM Actions** menu behind the gamepad icon at the right of the play row offers no
+**Uninstall** — there is nothing to delete — and neither the disc picker nor the **CPU button** (the emulator picker) is
+shown.
 
 ## Removing a Platform from Steam
 
