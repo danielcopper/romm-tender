@@ -507,16 +507,17 @@ interrupted one stopped.
 
 ## When a Downloaded Game's File Is Missing
 
-If a game's downloaded file is no longer where Tender put it, its detail page says **File missing at** and names that
-path, and offers **Download again** and **Forget this download** instead of Play. Tender cannot tell a deleted file from
-a moved ROM folder or an unmounted drive, so it forgets nothing on its own — not at start-up, and not when you open the
-page. If the drive or folder comes back, the game is playable again as it was.
+If a game's downloaded file is no longer where Tender put it, its detail page shows **Download again** where Play would
+be, with **File missing** under it, and the arrow beside it opens **Forget this download**. Tender cannot tell a deleted
+file from a moved ROM folder or an unmounted drive, so it forgets nothing on its own — not at start-up, and not when you
+open the page. If the drive or folder comes back, the game is playable again as it was.
 
 - **Download again** is an ordinary download of the game, to where every download goes. Until it completes, the game
   stays as it was; a cancelled or failed download leaves it showing **File missing** again.
-- **Forget this download** is an uninstall without the deletion: the game becomes not downloaded and its shortcut's
-  launch command is cleared, as after an uninstall, and no file is touched. It is refused while the file or folder is in
-  fact there: the drive or folder came back, so reopen the game page to play it.
+- **Forget this download** asks first, naming the game and the path its file was downloaded to. Confirmed, it is an
+  uninstall without the deletion: the game becomes not downloaded and its shortcut's launch command is cleared, as after
+  an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
+  came back, so reopen the game page to play it.
 
 While the file is missing, the page's **RomM Actions** menu offers no **Uninstall** — there is nothing to delete — and
 neither the disc picker nor the **CPU button** (the emulator picker) is shown.

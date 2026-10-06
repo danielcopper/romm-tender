@@ -300,9 +300,9 @@ newest row with `status='completed'`; "is a sync running" is any row with `statu
 
 A `rom_installs` row records a download, not that its file is still on disk. A deleted file, a moved ROM folder and an
 unmounted drive look the same from here, and only the first is gone for good, so a missing file leaves the row in place:
-start-up only logs it, and the game page names the missing path (`file_missing_at`) and leaves the row to the user's
-**Download again** (replaced through the download-complete writer once the new download lands) or **Forget this
-download** (dropped through the uninstall's writer, no file touched).
+start-up only logs it, and the game page says the file is missing, names the path (`file_missing_at`) when the forget
+asks to be confirmed, and leaves the row to the user's **Download again** (replaced through the download-complete writer
+once the new download lands) or **Forget this download** (dropped through the uninstall's writer, no file touched).
 
 ### Foreign keys
 
