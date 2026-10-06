@@ -45,9 +45,13 @@ describe("missingDownloadWording", () => {
   });
 
   it("says the file is back only for the file_present refusal", () => {
-    expect(forgetRefusedToast({ reason: "unknown", message: "Failed to forget the download", path: "/sd/g.z64" })).toBe(
-      "Failed to forget the download",
-    );
+    expect(
+      forgetRefusedToast({
+        reason: "in_progress",
+        message: "This ROM is already being uninstalled or forgotten",
+        path: "/sd/g.z64",
+      }),
+    ).toBe("This ROM is already being uninstalled or forgotten");
   });
 
   it("passes any other refusal's own message through", () => {

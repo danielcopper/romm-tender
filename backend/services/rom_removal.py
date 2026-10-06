@@ -323,12 +323,12 @@ class RomRemovalService:
         ``prune_lease_token`` for the frontend's reset of the shortcut's launch
         command.
 
-        Raises :class:`NotInstalled` for a ROM with no install record, and
-        ``in_progress`` while another removal holds the ROM, and refused with
-        ``file_present``, the ``path`` found in its details, while the recorded
-        folder or file exists. It removes no file, so it has no failure of its
-        own to refuse: anything the record drop raises, a database error
-        included, propagates.
+        Raises :class:`NotInstalled` for a ROM with no install record,
+        ``in_progress`` while another removal holds the ROM, and
+        ``file_present`` -- the ``path`` found among its details -- while the
+        recorded folder or file exists. It removes no file, so it has no
+        failure of its own to refuse: anything the record drop raises, a
+        database error included, propagates.
         """
         async with self._rules.hold("forget_download", update=True, migration=True, prune=True):
             result = await self._forget_download(int(rom_id))
