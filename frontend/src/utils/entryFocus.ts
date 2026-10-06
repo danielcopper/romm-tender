@@ -12,7 +12,11 @@
  * reader while the page stays open — the Sync page's left column. A fourth
  * uses the same delay and {@link placeEntryFocus} for a different moment: the
  * Collections pane putting focus back on the button whose dialog just closed
- * (`frontend/src/bigpicture/library/CollectionsDetail.tsx`).
+ * (`frontend/src/bigpicture/library/CollectionsDetail.tsx`). A fifth does the
+ * same for an emulator source card after a move
+ * (`frontend/src/bigpicture/settings/EmulatorSourcesSection.tsx`), and is the
+ * one whose previous stop stays mounted: the arrow that was pressed is still
+ * there, and has only lost focus.
  *
  * The two that open a page — the frame and the router — take
  * {@link pageEntryStop}, which lets the page they have just mounted name the

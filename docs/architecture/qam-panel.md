@@ -1863,10 +1863,11 @@ The section rows carry no control of their own, so the list is built with `selec
 adds is what makes a row a focus stop, and without it the list is neither walkable nor scrollable. Every read-only row
 in a detail pane — a sign-in result, each row of the registered-devices table, the row naming this device — is a stop
 for the same reason, since a pane scrolls only by moving focus and a group with no stop in it cannot be reached at all.
-Two kinds of line are not, and for two different reasons. Content the region reveals on its own — above the pane's first
-stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is why the migration card carries no handler.
-And the devices table's **column header** carries none under the Tables rule: the names accompany the rows below them
-and a stop there would be a step that leads nowhere.
+Three kinds of line are not, each for a reason of its own. Content the region reveals on its own — above the pane's
+first stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is why the migration card carries no
+handler. The devices table's **column header** carries none under the Tables rule: the names accompany the rows below
+them and a stop there would be a step that leads nowhere. And an emulator source card's folder and health lines sit
+between two stops of that same card, which § Two widths states is enough.
 
 **The install under Updates** is the one part of the page that reads on a clock. While the section is on screen it reads
 `get_update_install_state` every three seconds, one read at a time — a call made while the connection is down waits for
