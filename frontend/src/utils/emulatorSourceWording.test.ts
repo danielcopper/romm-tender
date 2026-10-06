@@ -198,25 +198,25 @@ function source(overrides: Partial<EmulatorSource>): EmulatorSource {
 
 describe("sourceRowLines", () => {
   it("says a healthy source RetroDECK starts games through has no problems", () => {
-    expect(sourceRowLines(source({}))).toEqual(["No problems found."]);
+    expect(sourceRowLines(source({}))).toEqual([{ tone: "ok", text: "No problems found." }]);
   });
 
   it("says EmuDeck's list cannot be read and Tender cannot start games through it", () => {
     expect(sourceRowLines(source({ kind: "emudeck", starts_games: false, catalogue: "sealed" }))).toEqual([
-      "EmuDeck's emulator list cannot be read yet.",
-      "Tender cannot start games through EmuDeck yet.",
+      { tone: "warning", text: "EmuDeck's emulator list cannot be read yet." },
+      { tone: "info", text: "Tender cannot start games through EmuDeck yet." },
     ]);
   });
 
   it("says a RetroArch (Flatpak) without a frontend cannot start games, and nothing else", () => {
     expect(
       sourceRowLines(source({ kind: "bare_retroarch_flatpak", starts_games: false, catalogue: "unavailable" })),
-    ).toEqual(["Tender cannot start games through RetroArch (Flatpak) yet."]);
+    ).toEqual([{ tone: "info", text: "Tender cannot start games through RetroArch (Flatpak) yet." }]);
   });
 
   it("says a list it could not read is not established instead of no problems", () => {
     expect(sourceRowLines(source({ catalogue: "unavailable" }))).toEqual([
-      "RetroDECK's emulator list is not established.",
+      { tone: "warning", text: "RetroDECK's emulator list is not established." },
     ]);
   });
 
@@ -226,16 +226,23 @@ describe("sourceRowLines", () => {
       data: { hub: "/rd/mods", path: "/emu/mods", problem: "missing" },
     };
     expect(sourceRowLines(source({ findings: [{ code: "root-missing", data: { path: "/sd" } }, unwired] }))).toEqual([
-      "RetroDECK: its folder /sd does not exist. If it is on an SD card or another drive, insert it.",
-      "RetroDECK: texture packs or mods in /rd/mods do not reach the emulator, because /emu/mods is missing. " +
-        "Resetting that emulator in RetroDECK fixes it.",
+      {
+        tone: "warning",
+        text: "RetroDECK: its folder /sd does not exist. If it is on an SD card or another drive, insert it.",
+      },
+      {
+        tone: "warning",
+        text:
+          "RetroDECK: texture packs or mods in /rd/mods do not reach the emulator, because /emu/mods is missing. " +
+          "Resetting that emulator in RetroDECK fixes it.",
+      },
     ]);
   });
 
   it("says a RetroArch without a frontend cannot start games", () => {
     expect(
       sourceRowLines(source({ kind: "bare_retroarch_native", starts_games: false, catalogue: "unavailable" })),
-    ).toEqual(["Tender cannot start games through RetroArch (native) yet."]);
+    ).toEqual([{ tone: "info", text: "Tender cannot start games through RetroArch (native) yet." }]);
   });
 
   it("states the section's own lines (#2188 D33)", () => {

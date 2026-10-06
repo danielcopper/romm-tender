@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, within } from "@testing-library/react";
 import { EmulatorSourcesSection } from "./EmulatorSourcesSection";
 import { SOURCES_READING, SOURCES_UNREAD } from "../../utils/emulatorSourceWording";
+import { AMBER, GREEN, MUTED, SELECTION_ACCENT } from "../layout/pane";
 import type { EmulatorSource, EmulatorSourcesListing } from "../../types";
 
 const RETRODECK: EmulatorSource = {
@@ -44,8 +45,9 @@ function pressAsTheDeviceDoes(button: HTMLButtonElement): void {
   props.onClick();
 }
 
-function buttons(container: HTMLElement, text: string): HTMLButtonElement[] {
-  return [...container.querySelectorAll("button")].filter((button) => button.textContent === text);
+/** The arrow that moves the source named *name* in *direction*, by its accessible name — it shows no text. */
+function arrow(container: HTMLElement, name: string, direction: "up" | "down"): HTMLButtonElement {
+  return within(container).getByRole("button", { name: `Move ${name} ${direction}` });
 }
 
 describe("EmulatorSourcesSection", () => {
@@ -96,14 +98,14 @@ describe("EmulatorSourcesSection", () => {
 
   it("moves a source up and down, and the ends are dead", () => {
     const { container, onMove } = renderSection(BOTH);
-    const up = buttons(container, "Move up");
-    const down = buttons(container, "Move down");
 
-    expect(up[0]).toBeDisabled();
-    expect(down[1]).toBeDisabled();
-    fireEvent.click(up[1]!);
-    fireEvent.click(down[0]!);
-    fireEvent.click(up[0]!);
+    expect(arrow(container, "RetroDECK", "up")).toBeDisabled();
+    expect(arrow(container, "RetroDECK", "down")).not.toBeDisabled();
+    expect(arrow(container, "EmuDeck", "up")).not.toBeDisabled();
+    expect(arrow(container, "EmuDeck", "down")).toBeDisabled();
+    fireEvent.click(arrow(container, "EmuDeck", "up"));
+    fireEvent.click(arrow(container, "RetroDECK", "down"));
+    fireEvent.click(arrow(container, "RetroDECK", "up"));
 
     expect(onMove.mock.calls).toEqual([
       ["emudeck", "up"],
@@ -114,8 +116,8 @@ describe("EmulatorSourcesSection", () => {
   it("ignores a press on a dead end button, which the device still reports", () => {
     const { container, onMove } = renderSection(BOTH);
 
-    pressAsTheDeviceDoes(buttons(container, "Move up")[0]!);
-    pressAsTheDeviceDoes(buttons(container, "Move down")[1]!);
+    pressAsTheDeviceDoes(arrow(container, "RetroDECK", "up"));
+    pressAsTheDeviceDoes(arrow(container, "EmuDeck", "down"));
 
     expect(onMove).not.toHaveBeenCalled();
   });
@@ -123,8 +125,8 @@ describe("EmulatorSourcesSection", () => {
   it("ignores a press on a move button while a change is in flight, as the device reports it", () => {
     const { container, onMove } = renderSection(BOTH, true);
 
-    pressAsTheDeviceDoes(buttons(container, "Move up")[1]!);
-    pressAsTheDeviceDoes(buttons(container, "Move down")[0]!);
+    pressAsTheDeviceDoes(arrow(container, "EmuDeck", "up"));
+    pressAsTheDeviceDoes(arrow(container, "RetroDECK", "down"));
 
     expect(onMove).not.toHaveBeenCalled();
   });
@@ -132,17 +134,93 @@ describe("EmulatorSourcesSection", () => {
   it("passes a press on a live move button through", () => {
     const { container, onMove } = renderSection(BOTH);
 
-    pressAsTheDeviceDoes(buttons(container, "Move up")[1]!);
+    pressAsTheDeviceDoes(arrow(container, "EmuDeck", "up"));
+    pressAsTheDeviceDoes(arrow(container, "RetroDECK", "down"));
 
-    expect(onMove).toHaveBeenCalledWith("emudeck", "up");
+    expect(onMove.mock.calls).toEqual([
+      ["emudeck", "up"],
+      ["retrodeck", "down"],
+    ]);
   });
 
   it("takes no press while a change is in flight", () => {
     const { container, getAllByTestId, onMove, onSwitch } = renderSection(BOTH, true);
-    fireEvent.click(buttons(container, "Move up")[1]!);
+    fireEvent.click(arrow(container, "EmuDeck", "up"));
     fireEvent.click(getAllByTestId("toggle-input")[1]!);
     expect(onMove).not.toHaveBeenCalled();
     expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it("disables both arrows of every source while a change is in flight", () => {
+    const { container } = renderSection(BOTH, true);
+    for (const name of ["RetroDECK", "EmuDeck"]) {
+      expect(arrow(container, name, "up")).toBeDisabled();
+      expect(arrow(container, name, "down")).toBeDisabled();
+    }
+  });
+
+  it("names each arrow after the source and the direction, and shows no text on it", () => {
+    const { container } = renderSection(BOTH);
+    const labels = [...container.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
+
+    expect(labels).toEqual(["Move RetroDECK up", "Move RetroDECK down", "Move EmuDeck up", "Move EmuDeck down"]);
+    expect(arrow(container, "EmuDeck", "up")).toHaveTextContent(/^$/);
+  });
+
+  it("puts the arrows on the name's line, before the source's folder and health", () => {
+    const { getByTestId } = renderSection(BOTH);
+    const card = getByTestId("source-card-emudeck");
+    const nameLine = getByTestId("source-name-emudeck").parentElement!;
+
+    expect(within(nameLine).getAllByRole("button")).toHaveLength(2);
+    expect(within(card).getAllByRole("button")).toHaveLength(2);
+    expect(nameLine.compareDocumentPosition(getByTestId("source-lines-emudeck"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("numbers every card by its source's place in the order", () => {
+    const { getByTestId } = renderSection({ sources: [EMUDECK, RETRODECK], answering: "retrodeck" });
+
+    expect(getByTestId("source-place-emudeck")).toHaveTextContent("1");
+    expect(getByTestId("source-place-retrodeck")).toHaveTextContent("2");
+    expect(within(getByTestId("source-card-emudeck")).getByTestId("source-place-emudeck")).toBeInTheDocument();
+  });
+
+  it("fills a switched-on source's number with the accent and greys a switched-off one's, name included", () => {
+    const { getByTestId } = renderSection({
+      sources: [RETRODECK, { ...EMUDECK, enabled: false }],
+      answering: "retrodeck",
+    });
+    const on = getByTestId("source-place-retrodeck");
+    const off = getByTestId("source-place-emudeck");
+
+    expect(on.style.background).toBe(SELECTION_ACCENT);
+    expect(on.style.color).toBe("#ffffff");
+    expect(getByTestId("source-name-retrodeck").style.color).toBe("#ffffff");
+    expect(off.style.background).toBe("transparent");
+    expect(off.style.border).toBe(`2px solid ${MUTED}`);
+    expect(off.style.color).toBe(MUTED);
+    expect(getByTestId("source-name-emudeck").style.color).toBe(MUTED);
+  });
+
+  it("leads every health line with the icon of its tone", () => {
+    const broken = { ...EMUDECK, findings: [{ code: "root-missing", data: { path: "/sd" } }] };
+    const { getByTestId } = renderSection({ sources: [RETRODECK, broken], answering: "retrodeck" });
+    const tones = (kind: string) =>
+      within(getByTestId(`source-lines-${kind}`))
+        .getAllByTestId("source-line-icon")
+        .map((icon) => [icon.dataset.tone, icon.style.color, icon.nextElementSibling?.textContent]);
+
+    expect(tones("retrodeck")).toEqual([["ok", GREEN, "No problems found."]]);
+    expect(tones("emudeck")).toEqual([
+      ["warning", AMBER, "EmuDeck: its folder /sd does not exist. If it is on an SD card or another drive, insert it."],
+      ["warning", AMBER, "EmuDeck's emulator list cannot be read yet."],
+      ["info", MUTED, "Tender cannot start games through EmuDeck yet."],
+    ]);
+    expect(
+      within(getByTestId("source-lines-emudeck")).getAllByTestId("source-line-icon")[2]!.querySelector("svg"),
+    ).not.toBeNull();
   });
 
   it("makes every source's information row a focus stop", () => {

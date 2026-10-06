@@ -144,22 +144,34 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
   return `${sourceName(source.kind)}'s emulator list is not established.`;
 }
 
+/** How a row line reads at a glance: nothing wrong, a fact about what Tender
+ *  does, or something the reader may have to look into. */
+export type SourceRowTone = "ok" | "info" | "warning";
+
+/** One line of a source's row, with the tone its leading icon is drawn in. */
+export interface SourceRowLine {
+  tone: SourceRowTone;
+  text: string;
+}
+
+const warning = (text: string): SourceRowLine => ({ tone: "warning", text });
+
 /** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
-export function sourceRowLines(source: EmulatorSource): string[] {
-  const health = source.findings.map((finding) => findingSentence(source.kind, finding));
+export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
+  const health = source.findings.map((finding) => warning(findingSentence(source.kind, finding)));
   // A sealed catalogue, and a source with no catalogue at all, each have a
   // sentence of their own below that stands in for the "not established" line.
-  const quiet: Record<EmulatorSource["catalogue"], string[]> = {
-    read: ["No problems found."],
+  const quiet: Record<EmulatorSource["catalogue"], SourceRowLine[]> = {
+    read: [{ tone: "ok", text: "No problems found." }],
     sealed: [],
     unavailable: NO_CATALOGUE_KINDS.has(source.kind)
       ? []
-      : [`${sourceName(source.kind)}'s emulator list is not established.`],
+      : [warning(`${sourceName(source.kind)}'s emulator list is not established.`)],
   };
   return [
     ...(health.length > 0 ? health : quiet[source.catalogue]),
-    ...(source.catalogue === "sealed" ? [sealedCatalogueSentence(source.kind)] : []),
-    ...(source.starts_games ? [] : [cannotStartSentence(source.kind)]),
+    ...(source.catalogue === "sealed" ? [warning(sealedCatalogueSentence(source.kind))] : []),
+    ...(source.starts_games ? [] : [{ tone: "info" as const, text: cannotStartSentence(source.kind) }]),
   ];
 }
 

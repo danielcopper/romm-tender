@@ -8,15 +8,15 @@ pick **Settings** from the menu at the bottom of the panel.
 Settings is a wide page split in two: a list of seven sections on the left, and the focused section's controls on the
 right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
 
-| Section              | What is in it                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connections**      | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                  |
-| **Save Sync**        | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
-| **Controller**       | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
-| **Steam Library**    | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
-| **Emulator sources** | every emulator setup Tender found — RetroDECK, EmuDeck, a RetroArch of its own — with its health, **Use this source**, and **Move up** / **Move down**        |
-| **Updates**          | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**    |
-| **Advanced**         | log level                                                                                                                                                     |
+| Section              | What is in it                                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connections**      | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                               |
+| **Save Sync**        | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices              |
+| **Controller**       | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                             |
+| **Steam Library**    | preferred region, collection games in platform groups, collection types in Steam names                                                                                     |
+| **Emulator sources** | every emulator setup Tender found — RetroDECK, EmuDeck, a RetroArch of its own — as a numbered card with its health, **Use this source**, and arrows to move it up or down |
+| **Updates**          | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**                 |
+| **Advanced**         | log level                                                                                                                                                                  |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
 five of those seven; **Emulator sources** and **Updates** are new. Registered Devices is now inside **Save Sync**, the
@@ -280,20 +280,22 @@ picture.
 
 An emulator source is a setup Tender can ask which emulators a system offers, which BIOS files they want and where they
 keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own (**RetroArch (Flatpak)** or **RetroArch
-(native)**). Tender lists every source it finds, each with:
+(native)**). Tender lists every source it finds as a card, numbered by its place in the order — the number filled blue
+while the source is switched on, an empty grey ring and a grey name while it is off. Each card holds:
 
+- the source's name, with two arrows at the end of its line that move it up or down the order, which is the order the
+  sources are used in; the first card's up arrow and the last card's down arrow do nothing;
 - the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
   would show is then only a default;
-- what its health says, one line per problem; with none, **No problems found.** — or, where Tender could not read the
-  source's emulator list, **_Source_'s emulator list is not established.**, unless one of the two lines below already
-  says why;
-- **EmuDeck's emulator list cannot be read yet.** for EmuDeck, whose list Tender cannot read yet;
-- **Tender cannot start games through _source_ yet.** for every source but RetroDECK — every game still starts through
-  RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line stands in place of the "not
-  established" one;
-- **Use this source**: a source switched off offers no emulators and is never asked about a game. It stays listed, so
-  you can switch it on again;
-- **Move up** / **Move down**, which set the order the sources are used in.
+- what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
+  found.** — or, where Tender could not read the source's emulator list, **_Source_'s emulator list is not
+  established.**, with a warning sign, unless one of the two lines below already says why;
+- **EmuDeck's emulator list cannot be read yet.**, with a warning sign, for EmuDeck, whose list Tender cannot read yet;
+- **Tender cannot start games through _source_ yet.**, with an information sign, for every source but RetroDECK — every
+  game still starts through RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line
+  stands in place of the "not established" one;
+- **Use this source**, under a thin line at the bottom of the card: a source switched off offers no emulators and is
+  never asked about a game. It stays listed, so you can switch it on again.
 
 **Which source answers for a game.** While RetroDECK is found and switched on, a game's emulator, BIOS and save answers
 come from RetroDECK, wherever it stands in the order, because every game starts through it. Without it, the first source
