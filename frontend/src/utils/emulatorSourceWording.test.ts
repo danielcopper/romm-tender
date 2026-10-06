@@ -208,6 +208,12 @@ describe("sourceRowLines", () => {
     ]);
   });
 
+  it("says a RetroArch (Flatpak) without a frontend cannot start games, and nothing else", () => {
+    expect(
+      sourceRowLines(source({ kind: "bare_retroarch_flatpak", starts_games: false, catalogue: "unavailable" })),
+    ).toEqual(["Tender cannot start games through RetroArch (Flatpak) yet."]);
+  });
+
   it("says a list it could not read is not established instead of no problems", () => {
     expect(sourceRowLines(source({ catalogue: "unavailable" }))).toEqual([
       "RetroDECK's emulator list is not established.",
@@ -229,13 +235,10 @@ describe("sourceRowLines", () => {
   it("says a RetroArch without a frontend cannot start games", () => {
     expect(
       sourceRowLines(source({ kind: "bare_retroarch_native", starts_games: false, catalogue: "unavailable" })),
-    ).toEqual([
-      "RetroArch (native)'s emulator list is not established.",
-      "Tender cannot start games through RetroArch (native) yet.",
-    ]);
+    ).toEqual(["Tender cannot start games through RetroArch (native) yet."]);
   });
 
-  it("states the section's own lines (D33)", () => {
+  it("states the section's own lines (#2188 D33)", () => {
     expect(SOURCES_READING).toBe("Reading the emulator sources…");
     expect(SOURCES_UNREAD).toBe("Could not read the emulator sources. Reopen the page to try again.");
   });

@@ -312,8 +312,8 @@ export interface CoreInfo {
  * There is no `success`, for the reason its sibling has none: the endpoint has
  * no in-band failure to report. What can go wrong — no emulator list from the
  * answering source — is already `emulator_data_available: false` with its
- * `emulator_data_reason`, and anything
- * else raises, which reaches the caller as a rejected promise.
+ * `emulator_data_reason`, and anything else raises, which reaches the caller as
+ * a rejected promise.
  */
 export interface SystemCoreInfo {
   emulators: EmulatorOption[];
@@ -351,8 +351,8 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
   active_core_label?: string;
   emulators?: EmulatorOption[];
   emulator_data_available?: boolean;
-  emulator_data_reason?: EmulatorDataReason | null;
-  emulator_source?: AnsweringSource | null;
+  emulator_data_reason: EmulatorDataReason | null;
+  emulator_source: AnsweringSource | null;
   // Per-platform BIOS aggregates computed by the backend from the same
   // core-aware classified files (`compute_bios_level`), so the platform detail
   // reads the unknown/ok/partial/missing decision and display counts off the

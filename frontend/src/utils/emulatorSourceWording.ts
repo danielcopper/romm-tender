@@ -26,6 +26,11 @@ const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["bare_retroarch_native", "RetroArch (native)"],
 ]);
 
+// A RetroArch without a frontend has no emulator catalogue at all (emu-atlas
+// answers none for it), so its "cannot start games" line already says why its
+// list is not established.
+const NO_CATALOGUE_KINDS: ReadonlySet<string> = new Set(["bare_retroarch_flatpak", "bare_retroarch_native"]);
+
 const RETRODECK_REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
 
 /** The name a source is shown under: Tender's own for a kind it knows, the kind itself otherwise. */
@@ -143,12 +148,14 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
 /** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
 export function sourceRowLines(source: EmulatorSource): string[] {
   const health = source.findings.map((finding) => findingSentence(source.kind, finding));
-  // A sealed catalogue has a sentence of its own below, which stands in for
-  // the "not established" line.
+  // A sealed catalogue, and a source with no catalogue at all, each have a
+  // sentence of their own below that stands in for the "not established" line.
   const quiet: Record<EmulatorSource["catalogue"], string[]> = {
     read: ["No problems found."],
     sealed: [],
-    unavailable: [`${sourceName(source.kind)}'s emulator list is not established.`],
+    unavailable: NO_CATALOGUE_KINDS.has(source.kind)
+      ? []
+      : [`${sourceName(source.kind)}'s emulator list is not established.`],
   };
   return [
     ...(health.length > 0 ? health : quiet[source.catalogue]),

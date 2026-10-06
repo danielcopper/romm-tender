@@ -19,6 +19,8 @@ describe("biosHeldRatio", () => {
       files: [],
       server_count: 20,
       local_count: 1,
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
     };
 
     expect(biosHeldRatio(gamePage)).toBe(biosHeldRatio(platformPane));
@@ -31,7 +33,12 @@ describe("biosHeldRatio", () => {
     // library holds. Counting the rows instead would answer from a second copy
     // of the backend's rule — see the module header.
     const gamePage: BiosStatus = { needs_bios: true };
-    const platformPane: FirmwarePlatformExt = { platform_slug: "psx", files: [] };
+    const platformPane: FirmwarePlatformExt = {
+      platform_slug: "psx",
+      files: [],
+      emulator_data_reason: null,
+      emulator_source: { kind: "retrodeck", starts_games: true },
+    };
 
     expect(biosHeldRatio(gamePage)).toBe("");
     expect(biosHeldRatio(platformPane)).toBe("");

@@ -125,6 +125,8 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     server_count: 1,
     local_count: 0,
     deletable_count: 0,
+    emulator_data_reason: null,
+    emulator_source: { kind: "retrodeck", starts_games: true },
     ...overrides,
   };
 }
