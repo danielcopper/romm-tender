@@ -32,8 +32,9 @@ if TYPE_CHECKING:
 _MD5_CHUNK_SIZE = 8192
 
 # Zip-decode failures a positive ``zipfile.is_zipfile`` sniff can still hit once
-# the archive is actually read (the sniff only inspects the End-Of-Central-
-# Directory record): a corrupt / truncated central directory or a bad entry CRC
+# the archive is actually read (the sniff inspects the End-Of-Central-Directory
+# record and, from 3.14, the signature of the first central-directory entry —
+# nothing past it): a corrupt / truncated central directory or a bad entry CRC
 # (``BadZipFile``), a compressed stream ``zlib`` cannot inflate (``zlib.error``),
 # or an entry this runtime cannot decode — an encrypted member or a compression
 # method the stdlib lacks (``RuntimeError``; the unknown-method

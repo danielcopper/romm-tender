@@ -227,16 +227,20 @@ def _write_zip(path, entries: list[tuple[str, bytes]]) -> None:
 
 
 def _write_corrupt_central_dir_zip(path) -> None:
-    """Write a real zip, then clobber its central-directory signature.
+    """Write a real two-entry zip, then clobber its SECOND central-directory
+    entry's signature.
 
-    The End-Of-Central-Directory record stays intact, so ``is_zipfile`` still
-    sniffs it as a zip — but ``ZipFile(path)`` raises ``BadZipFile`` on open. The
-    dominant real-world poison: a corrupt / truncated archive.
+    The End-Of-Central-Directory record and the first entry stay intact, so
+    ``is_zipfile`` still sniffs it as a zip — from 3.14 the sniff also checks the
+    first entry's signature — but ``ZipFile(path)`` reads every entry on open and
+    raises ``BadZipFile``. The dominant real-world poison: a corrupt / truncated
+    archive.
     """
     _write_zip(path, [("battery.srm", b"battery-bytes"), ("rtc.bin", b"rtc-bytes")])
     data = bytearray(path.read_bytes())
     cd_offset = struct.unpack("<I", data[-22:][16:20])[0]  # EOCD → central-dir offset
-    data[cd_offset : cd_offset + 4] = b"\x00\x00\x00\x00"  # kill the PK\x01\x02 magic
+    second = data.find(b"PK\x01\x02", cd_offset + 4)
+    data[second : second + 4] = b"\x00\x00\x00\x00"  # kill the second entry's PK\x01\x02 magic
     path.write_bytes(bytes(data))
 
 
