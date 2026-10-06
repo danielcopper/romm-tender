@@ -39,21 +39,21 @@ from domain.emulator_sources import (
     CATALOGUE_READ,
     CATALOGUE_SEALED,
     CATALOGUE_UNAVAILABLE,
+    ORDER_SETTING,
+    SWITCHED_OFF_SETTING,
     ArrangedSource,
     SourceFinding,
     SourceReport,
     answering_source,
     arrange_sources,
     no_answering_source_reason,
+    stored_kinds,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
 
 _T = TypeVar("_T")
-
-ORDER_KEY = "emulator_source_order"
-SWITCHED_OFF_KEY = "emulator_sources_off"
 
 # While a source's settings file is missing, unreadable or damaged, the root
 # the resolver gives is its default (``~/retrodeck`` for RetroDECK), not where
@@ -146,8 +146,8 @@ class EmulatorSourcesAdapter:
             installations = ()
         sources = arrange_sources(
             detected=tuple(installation.kind for installation in installations),
-            stored_order=_kinds(self._settings.get(ORDER_KEY)),
-            switched_off=_kinds(self._settings.get(SWITCHED_OFF_KEY)),
+            stored_order=stored_kinds(self._settings.get(ORDER_SETTING)),
+            switched_off=stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)),
         )
         reading = DetectedSourcesReading(installations=installations, sources=sources)
         self._log_debug(
@@ -196,10 +196,3 @@ class EmulatorSourcesAdapter:
         except Exception as exc:
             self._log_debug(f"[sources] {kind}: resolver failed on {subject}: {exc!r}")
             return None
-
-
-def _kinds(stored: object) -> tuple[str, ...]:
-    """A stored list of kinds, or none where the stored value is not one."""
-    if not isinstance(stored, list):
-        return ()
-    return tuple(kind for kind in stored if isinstance(kind, str))

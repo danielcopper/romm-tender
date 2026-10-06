@@ -28,6 +28,7 @@ from services.data_inventory import DataInventoryService, DataInventoryServiceCo
 from services.disc import DiscService, DiscServiceConfig
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig
+from services.emulator_sources import EmulatorSourcesService, EmulatorSourcesServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
@@ -128,6 +129,7 @@ class ServicesBundle:
     shortcut_removal_service: ShortcutRemovalService
     settings_service: SettingsService
     core_service: CoreService
+    emulator_sources_service: EmulatorSourcesService
     disc_service: DiscService
     version_switch_service: VersionSwitchService
     connection_service: ConnectionService
@@ -546,6 +548,15 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
         ),
     )
+    emulator_sources_service = EmulatorSourcesService(
+        config=EmulatorSourcesServiceConfig(
+            sources=cfg.adapters.emulator_sources,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            loop=cfg.runtime.loop,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
 
     disc_service = DiscService(
         config=DiscServiceConfig(
@@ -785,6 +796,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         shortcut_removal_service=shortcut_removal_service,
         settings_service=settings_service,
         core_service=core_service,
+        emulator_sources_service=emulator_sources_service,
         disc_service=disc_service,
         version_switch_service=version_switch_service,
         connection_service=connection_service,

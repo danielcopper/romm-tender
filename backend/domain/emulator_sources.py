@@ -23,6 +23,10 @@ _T = TypeVar("_T")
 
 RETRODECK = "retrodeck"
 
+# Where the order and the switched-off kinds are stored in ``settings.json``.
+ORDER_SETTING = "emulator_source_order"
+SWITCHED_OFF_SETTING = "emulator_sources_off"
+
 # Every game starts through RetroDECK until Tender starts emulators itself, so
 # it is the one source a game's answers come from while it is detected and
 # switched on, wherever the user put it in the order.
@@ -189,6 +193,13 @@ def switch_source(*, kind: str, enabled: bool, detected: Sequence[str], switched
         raise DomainRefused("unknown_source", f"No emulator source of kind {kind!r} is detected.", kind=kind)
     remaining = tuple(candidate for candidate in switched_off if candidate != kind)
     return remaining if enabled else (*remaining, kind)
+
+
+def stored_kinds(value: object) -> tuple[str, ...]:
+    """A stored list of kinds, or none where the stored value is not a list; non-text entries are dropped."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(kind for kind in value if isinstance(kind, str))
 
 
 def _merged_order(*, detected: Sequence[str], stored_order: Sequence[str]) -> tuple[str, ...]:

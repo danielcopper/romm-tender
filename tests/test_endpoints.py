@@ -210,6 +210,12 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_platform_core_info",
     "get_system_core_info",
     "count_platform_saves",
+    # Settings → Emulator sources: the listing reads the resolver, and the
+    # switch and the move write only the sources' order and switches in
+    # settings.json, never a RetroDECK path.
+    "get_emulator_sources",
+    "set_emulator_source_enabled",
+    "move_emulator_source",
     # Read-only disc-picker state query (the pin-write select_disc names the rule).
     "get_disc_selection",
     # Read-only version-picker state query (the binding-move switch_version names the rule).

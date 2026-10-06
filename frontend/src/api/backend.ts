@@ -46,6 +46,8 @@ import type {
   MigrationStatus,
   MigrationResult,
   RetroDeckStatus,
+  EmulatorSourcesListing,
+  EmulatorSourceDirection,
   RollbackStatus,
   ListFileVersionsResult,
   CopySaveToSlotStatus,
@@ -647,6 +649,25 @@ export const getPlatformCoreInfo = endpoint<[number], CoreInfo>("get_platform_co
 // distinct from the emulator fields on getFirmwareStatus, which cover only the
 // platforms that payload has something to say about.
 export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_core_info");
+
+/** Every detected emulator source, in the user's order, with its health and its switch. */
+export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emulator_sources");
+
+/** Why a switch or a move of an emulator source was refused. */
+export type EmulatorSourceRefusal = EndpointFailure & {
+  reason: "unknown_source" | "cannot_move" | "invalid_direction";
+};
+
+/** Switch a detected source on or off; answers the listing as it now stands. */
+export const setEmulatorSourceEnabled = endpoint<[string, boolean], EmulatorSourcesListing | EmulatorSourceRefusal>(
+  "set_emulator_source_enabled",
+);
+
+/** Move a detected source one place up or down; answers the listing as it now stands. */
+export const moveEmulatorSource = endpoint<
+  [string, EmulatorSourceDirection],
+  EmulatorSourcesListing | EmulatorSourceRefusal
+>("move_emulator_source");
 
 /** One launchable disc image within a multi-disc ROM's install directory. */
 export interface Disc {

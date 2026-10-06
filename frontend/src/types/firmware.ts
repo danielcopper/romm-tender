@@ -3,6 +3,8 @@
  * file status, and the available-cores selection presented in the UI.
  */
 
+import type { AnsweringSource, EmulatorDataReason } from "./emulatorSources";
+
 /**
  * What the machine answers about one firmware file, in the four values the
  * resolver's per-file answer and the reading's completeness together produce.
@@ -270,12 +272,19 @@ export interface EmulatorOption {
  * (#923). The per-game detail page (`RomMPlaySection` / `RomMGameInfoPanel`)
  * reads emulator data from here; the platform-keyed twin for a caller with no
  * ROM to layer is {@link SystemCoreInfo}. `emulator_data_available` is false
- * when `es_systems.xml` cannot be read (RetroDECK not detected), so the picker
- * can say so instead of an empty list.
+ * where the answering emulator source gives no emulator list, and
+ * `emulator_data_reason` says why, so the picker can say so instead of showing
+ * an empty list.
  */
 export interface CoreInfo {
   emulators: EmulatorOption[];
   emulator_data_available: boolean;
+  /** Why `emulators` could not be given; `null` while it is available. The
+   *  backend always sends both fields; they are optional so a fixture written
+   *  before them still type-checks, and an absent one reads as `null`. */
+  emulator_data_reason?: EmulatorDataReason | null;
+  /** The source the answer came from; `null` where no source answers. */
+  emulator_source?: AnsweringSource | null;
   /** The IDENTITY of the emulator this ROM launches with — the same spelling the
    *  picker rows carry in {@link EmulatorOption.emulator} and the same one a
    *  firmware row's `cores` map is keyed on, so the BIOS tab can highlight the
@@ -303,13 +312,17 @@ export interface CoreInfo {
  * says that rather than printing a name or claiming a failure.
  *
  * There is no `success`, for the reason its sibling has none: the endpoint has
- * no in-band failure to report. What can go wrong — an unreadable
- * `es_systems.xml` — is already `emulator_data_available: false`, and anything
+ * no in-band failure to report. What can go wrong — no emulator list from the
+ * answering source — is already `emulator_data_available: false` with its
+ * `emulator_data_reason`, and anything
  * else raises, which reaches the caller as a rejected promise.
  */
 export interface SystemCoreInfo {
   emulators: EmulatorOption[];
   emulator_data_available: boolean;
+  /** As on {@link CoreInfo}. */
+  emulator_data_reason?: EmulatorDataReason | null;
+  emulator_source?: AnsweringSource | null;
   active_core_label: string | null;
 }
 
@@ -340,6 +353,8 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
   active_core_label?: string;
   emulators?: EmulatorOption[];
   emulator_data_available?: boolean;
+  emulator_data_reason?: EmulatorDataReason | null;
+  emulator_source?: AnsweringSource | null;
   // Per-platform BIOS aggregates computed by the backend from the same
   // core-aware classified files (`compute_bios_level`), so the platform detail
   // reads the unknown/ok/partial/missing decision and display counts off the

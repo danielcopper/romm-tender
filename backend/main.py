@@ -246,6 +246,20 @@ class Endpoints:
     async def get_system_core_info(self, platform_slug):
         return await self._services.core_service.get_system_core_info(platform_slug)
 
+    # ── Emulator sources delegation to EmulatorSourcesService ──────────────
+
+    @route
+    async def get_emulator_sources(self):
+        return await self._services.emulator_sources_service.get_emulator_sources()
+
+    @route
+    async def set_emulator_source_enabled(self, kind, enabled):
+        return await self._services.emulator_sources_service.set_emulator_source_enabled(kind, enabled)
+
+    @route
+    async def move_emulator_source(self, kind, direction):
+        return await self._services.emulator_sources_service.move_emulator_source(kind, direction)
+
     # ── Disc picker delegation to DiscService ──────────────
 
     @route

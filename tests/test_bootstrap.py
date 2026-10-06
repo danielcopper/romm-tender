@@ -70,6 +70,7 @@ from services.cores import CoreService
 from services.data_inventory import DataInventoryService
 from services.disc import DiscService
 from services.downloads import DownloadService
+from services.emulator_sources import EmulatorSourcesService
 from services.firmware import FirmwareService
 from services.game_process import GameProcessService
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService
@@ -743,10 +744,11 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 34
+        assert len(fields(result)) == 35
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
+        assert isinstance(result.emulator_sources_service, EmulatorSourcesService)
         assert isinstance(result.disc_service, DiscService)
         assert isinstance(result.version_switch_service, VersionSwitchService)
         assert isinstance(result.prune_service, PruneService)
