@@ -428,7 +428,7 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 | Main            | 348   | notices, status, the conditional slot, the download summary, the menu                                                                          | as described                                                           |
 | Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs                                  | as described; the import choice (#1364) is the one thing still to come |
 | Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as list and detail — the kinds, each kind's collections as a table | as described                                                           |
-| Settings        | 854   | six sections, list and detail                                                                                                                  | as described; RetroAchievements has no sign-in to hold yet (#1627)     |
+| Settings        | 854   | seven sections, list and detail                                                                                                                | as described; RetroAchievements has no sign-in to hold yet (#1627)     |
 | Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                                                        | as described                                                           |
 | Downloads       | 348   | the queue with its controls                                                                                                                    | unchanged                                                              |
 
@@ -712,7 +712,9 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Settings were reset                                            | text, backup path, Dismiss                                                                            | none — the card is the whole of it                                                                                                |
 | Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                                                                   | Settings › Connections, where the accounts are                                                                                    |
-| RetroDECK paths missing or unreadable                          | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
+| An emulator source reports a health finding                    | a warning card per finding, worded per code, no action                                                | none — the fix is outside Tender; Settings › Emulator sources states the same sentence in the source's row                        |
+| No emulator source is detected                                 | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
+| The answering source is one Tender cannot start games through  | warning card, no action                                                                               | none — Settings › Emulator sources states it in the source's row                                                                  |
 | Steam answers for no notifications                             | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
 | RetroArch `input_driver` is wrong                              | text, **Open Controller**                                                                             | Settings › Controller, which holds the Fix button                                                                                 |
 | Sync paused on the session budget                              | text, **Open Sync**                                                                                   | Sync, which holds Restart Steam now and Resume                                                                                    |
@@ -721,6 +723,14 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 | An install from Settings failed or was cancelled               | none — a toast, once                                                                                  | Settings › Updates, where the attempt stands as failed with Try again                                                             |
 | A newer Tender release is out                                  | both versions, **Open Updates**, Dismiss — a toast, once per version, and dots on the way to its home | Settings › Updates, which states both versions and holds the install, the check's switch and Check now                            |
 | Tender was updated, or went back                               | the version, Dismiss — and a toast, once                                                              | none — the card is the whole of it                                                                                                |
+
+**The emulator source notices are Tender's wording, per finding code**, never the resolver's message text
+(`utils/emulatorSourceWording.ts` is the one home of those sentences and of the sources' names): a card per finding of
+every detected source, except `content-tree-unwired`, which concerns nothing Tender does and is stated only in the
+source's row under Settings › Emulator sources; a code with no sentence yet reads "Problem with _source_: _code_". Where
+the answering source gives no emulator list, the platform page and the emulator menu say why from the answer's `reason`
+— no source detected, every source switched off, a broken ES-DE systems file, EmuDeck's list that cannot be read yet, or
+any other refusal — and never "no emulator".
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1339,17 +1349,18 @@ it, for the focused platform:
   "Nothing to switch" states — the read in flight, one emulator on the menu — say it in the tooltip alone: a sentence
   would spend a row of the pane reporting that nothing can be done, which is what the device round asked to remove.
   States that report a PROBLEM keep their line, because a tooltip is a hover and the Deck's controller cannot perform
-  one: the read failed, RetroDECK was not found, **ES-DE lists no emulator at all**, nothing on its menu is bakeable,
-  and the fallback is not installed. The first two of those three are the split above and they are checked in that
-  order: an empty menu is the case where RetroDECK's own fallback fails too, so it is answered before the not-bakeable
-  one, and the surviving count branch then speaks only for a menu that really does hold one bakeable option. A switch
-  the backend refuses is reported in the same place, and the header keeps naming the old core, which every shortcut
-  following the platform's pick still launches with. A switch takes the page's busy hold from the moment it is picked
-  until it is over; an accepted one re-bakes the launch command of every bound shortcut, which is why the hold has to
-  cover the whole of it. The chip and the pane's buttons disable, another platform's pane says `Working on X`, and the
-  acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes that line
-  back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because such a switch
-  either committed or never ran and there is no pane left to report to either way.
+  one: the read failed, the answering source gives no emulator list (worded by why, § Notices and homes), **ES-DE lists
+  no emulator at all**, nothing on its menu is bakeable, and the fallback is not installed. The first two of those three
+  are the split above and they are checked in that order: an empty menu is the case where RetroDECK's own fallback fails
+  too, so it is answered before the not-bakeable one, and the surviving count branch then speaks only for a menu that
+  really does hold one bakeable option. A switch the backend refuses is reported in the same place, and the header keeps
+  naming the old core, which every shortcut following the platform's pick still launches with. A switch takes the page's
+  busy hold from the moment it is picked until it is over; an accepted one re-bakes the launch command of every bound
+  shortcut, which is why the hold has to cover the whole of it. The chip and the pane's buttons disable, another
+  platform's pane says `Working on X`, and the acting pane says `Switching to <emulator>…` in the same status line the
+  outcome lands in — a success takes that line back, a refusal replaces it, and a continuation cancelled by leaving the
+  page takes it back too, because such a switch either committed or never ran and there is no pane left to report to
+  either way.
 
 - **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds all seven
   states and a one-of group's, and answers each in two lengths, and the pane takes both — the short `status` as the
@@ -1818,19 +1829,20 @@ since.
 
 ## Settings
 
-Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Six sections: five hold
+Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Seven sections: five hold
 what the narrow page stacked in eight — Registered Devices sits under Save Sync, SteamGridDB joins the other external
 service under Connections, and the save-sort migration the narrow page carried is gone, because each game now follows
-its own save directory the next time Tender touches its saves — and Updates is new.
+its own save directory the next time Tender touches its saves — and Emulator sources and Updates are new.
 
-| Section       | Holds                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections   | the services Tender talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                                |
-| Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                     |
-| Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
-| Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Updates       | installed and available version, the install (below), "Development build — install updates with the installer." where this is a run from a checkout, the daily-check switch, Check now and what it found where the rows above do not say it. Home of the update notice.                                 |
-| Advanced      | log level                                                                                                                                                                                                                                                                                               |
+| Section          | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Connections      | the services Tender talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                                                                                                                                                                                                                                                                   |
+| Save Sync        | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Controller       | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Steam Library    | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name)                                                                                                                                                                                                                                    |
+| Emulator sources | every emulator source the resolver detects, in the user's order: its name, the folder it lives in (left out while its settings file is missing or broken, since that folder is then a default), a line per health finding — or **No problems found.** — and, where they hold, **_Source_'s emulator list cannot be read yet.** and **Tender cannot start games through _source_ yet.**; then **Use this source** and **Move up** / **Move down**, since a controller cannot drag. A switch or a move answers the listing as it now stands. |
+| Updates          | installed and available version, the install (below), "Development build — install updates with the installer." where this is a run from a checkout, the daily-check switch, Check now and what it found where the rows above do not say it. Home of the update notice.                                                                                                                                                                                                                                                                    |
+| Advanced         | log level                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
 Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from

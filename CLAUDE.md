@@ -465,13 +465,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
-  / `disc_resolver` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by `session_budget.py`, and
-  `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners, never a third. The
-  `service.py` façade may **pass** a seam on (as a call's keyword-argument value, or as a seam-annotated field declared
-  on `LibraryServiceConfig`) and may not **use** one; reading that field in the façade is a finding** — check —
-  `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into a helper slips past
-  it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the `active_core` seam's calls
-  (`check_uow_seam_nesting.py` catches only the inline form)
+  / `disc_resolver` / `emulator_sources` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
+  `session_budget.py`, and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners,
+  never a third. The `service.py` façade may **pass** a seam on (as a call's keyword-argument value, or as a
+  seam-annotated field declared on `LibraryServiceConfig`) and may not **use** one; reading that field in the façade is
+  a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into
+  a helper slips past it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the
+  `active_core` seam's calls (`check_uow_seam_nesting.py` catches only the inline form)
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a

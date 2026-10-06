@@ -151,6 +151,29 @@ system-level `<alternativeEmulator>` promotes, and the adapter discards that by 
 gamelist stays off every launch Tender bakes. When nothing is bakeable, or the catalogue cannot be read, it returns
 `None` and the caller bakes the plain RetroDECK launch.
 
+### Which emulator source answers
+
+The resolver detects every **emulator source** it knows — RetroDECK, EmuDeck, a RetroArch without a frontend, Flatpak or
+native (GLOSSARY.md, "Emulator source") — and `adapters/emulator_sources.py` is the one place they are detected and
+held; the catalogue, firmware and save adapters take their installation from it and choose none themselves. The user
+orders the sources and switches them off under Settings › Emulator sources, stored by kind in `settings.json`
+(`emulator_source_order`, and the deny-list `emulator_sources_off`, so a source seen for the first time is on and joins
+the end of the order); `domain/emulator_sources.py` holds the rules.
+
+**A game's answers come from the source it starts through.** Every game starts through RetroDECK, so while RetroDECK is
+detected and switched on it answers — wherever the user put it in the order; the stored picks are RetroDECK labels and
+are read against RetroDECK only. Without it, the first switched-on source in the order answers, with `starts_games`
+false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every source's emulators,
+the order decides only while RetroDECK is absent or switched off.
+
+**How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
+and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
+library sync's launch resolution (`ShortcutLaunchResolver.do_build_core_overrides`, in the preview and in every unit of
+an apply) takes one reading per run and hands it to every ROM, so a system's catalogue is asked once per run, and a
+switch or a move during the run takes effect from the next one. The resolver's `RealMachine` is one for the process and
+handed to every detection: it remembers only a libretro core's probe, keyed on the core file's path, modification time
+and size, so the probe of an unchanged core runs once while every answer stays live.
+
 ### Standalone-emulator selection: first safely-bakeable
 
 Selection is **data-derived from the live `es_systems.xml` alone** — there is no curated snapshot. The pure kernel
@@ -204,15 +227,19 @@ not visible from outside), an emulator with no find rule, and the whole `es_find
 assumed installed, so it never falsely downgrades. Libretro is always installed (RetroArch ships with RetroDECK), so
 libretro options are never downgraded. See [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) §2.
 
-`get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...]}`. **`available` is `False`
-whenever nothing could be established**: no installation was detected at all; the resolver raised; the catalogue answer
+`get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
+**`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or
+`switched_off` where every detected source is switched off); the resolver raised (`unavailable`); the catalogue answer
 carries one of the four `emulator-catalogue-*` refusals — the arrangement ships no catalogue, the resolver has not
-located one, the one it has could not be read, or only part of it is readable; or it carries `catalogue-invalid`, a file
-ES-DE refuses its whole load on (usually a typo in the user's own `custom_systems` overlay). The picker surfaces all of
-them as "Emulator list unavailable" rather than an empty list it cannot distinguish from a system the frontend knows no
-emulator for; the launch degrades to plain. An empty list carrying none of those codes is that real "knows none", and
-`emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
-gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
+located one, the one it has could not be read (`unavailable`), or only part of it is readable (`sealed`, EmuDeck's
+today); or it carries `catalogue-invalid` (`catalogue_invalid`), a file ES-DE refuses its whole load on (usually a typo
+in the user's own `custom_systems` overlay). `source` is the answering source's `{kind, starts_games}`. The platform
+page and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the
+frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The
+overlay entries the resolver gives beside `emulator-catalogue-sealed` are not used, by the catalogue nor by the save
+adapter: an incomplete list would look complete. An empty list carrying none of those codes is that real "knows none",
+and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole
+catalogue gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
 installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
 picker shape (`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is
 marked, and `needs_setup` / `unbakeable` entries are disabled with their reason. See

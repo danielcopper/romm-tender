@@ -5,22 +5,23 @@ pick **Settings** from the menu at the bottom of the panel.
 
 ## The Settings page
 
-Settings is a wide page split in two: a list of six sections on the left, and the focused section's controls on the
+Settings is a wide page split in two: a list of seven sections on the left, and the focused section's controls on the
 right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
 
-| Section           | What is in it                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Connections**   | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                  |
-| **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
-| **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
-| **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
-| **Updates**       | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**    |
-| **Advanced**      | log level                                                                                                                                                     |
+| Section              | What is in it                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connections**      | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                  |
+| **Save Sync**        | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
+| **Controller**       | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
+| **Steam Library**    | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
+| **Emulator sources** | every emulator setup Tender found — RetroDECK, EmuDeck, a RetroArch of its own — with its health, **Use this source**, and **Move up** / **Move down**        |
+| **Updates**          | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**    |
+| **Advanced**         | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
-five of those six; **Updates** is new. Registered Devices is now inside **Save Sync**, the SteamGridDB key is inside
-**Connections**, and the section that used to be called **Library** is now **Steam Library**: the Library _page_ is
-about what gets synced out of RomM, this section is about how it looks once it is in Steam.
+five of those seven; **Emulator sources** and **Updates** are new. Registered Devices is now inside **Save Sync**, the
+SteamGridDB key is inside **Connections**, and the section that used to be called **Library** is now **Steam Library**:
+the Library _page_ is about what gets synced out of RomM, this section is about how it looks once it is in Steam.
 
 **Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
 accounts.
@@ -274,6 +275,36 @@ renames an existing shortcut — shortcut names are fixed when the shortcut is f
 collections and playtime. Already-synced games keep their bound version and name; run a sync to apply the new preference
 to new games. See [Multiple versions of a game](syncing-your-library.md#multiple-versions-of-a-game) for the full
 picture.
+
+## Emulator sources
+
+An emulator source is a setup Tender can ask which emulators a system offers, which BIOS files they want and where they
+keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own (**RetroArch (Flatpak)** or **RetroArch
+(native)**). Tender lists every source it finds, each with:
+
+- the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
+  would show is then only a default;
+- what its health says, one line per problem, or **No problems found.**;
+- **EmuDeck's emulator list cannot be read yet.** for EmuDeck, whose list Tender cannot read yet;
+- **Tender cannot start games through _source_ yet.** for every source but RetroDECK — every game still starts through
+  RetroDECK;
+- **Use this source**: a source switched off offers no emulators and is never asked about a game. It stays listed, so
+  you can switch it on again;
+- **Move up** / **Move down**, which set the order the sources are used in.
+
+**Which source answers for a game.** While RetroDECK is found and switched on, a game's emulator, BIOS and save answers
+come from RetroDECK, wherever it stands in the order, because every game starts through it. Without it, the first source
+switched on in the order answers, and the main panel says that Tender cannot start games through it yet. A source found
+for the first time joins the end of the order, switched on.
+
+**Problems.** Every problem a source reports also shows as a card on the main panel, named after the source — a settings
+file that is missing, unreadable or damaged, a folder that does not exist (an SD card that is not inserted), a saves
+folder that does not exist (saves of that source's emulators are not synced until it is back), ES-DE's systems file that
+does not load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's
+RetroArch settings that cannot be read. The one exception is texture packs or mods that do not reach an emulator: that
+concerns nothing Tender does, so it is said only in the source's line here. Where Tender cannot get an emulator list,
+the platform page and the emulator menu say why — no source found, every source switched off, a broken systems file, a
+list that cannot be read yet — rather than showing an empty list.
 
 ## Log Level
 
