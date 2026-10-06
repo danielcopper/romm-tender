@@ -91,7 +91,7 @@ import sys
 import zipfile
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, TypeAlias
+from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol, TypeAlias, runtime_checkable
 
 from . import lha, ps2_bios, squashfs, whdload
 
@@ -439,13 +439,14 @@ class CoreInfo:
 
     ``library_name`` (via ``retro_get_system_info``) is the value RetroArch
     uses for sort-by-core directories and override directories — the display
-    name, not the ``.so`` basename: the two disagree for 183 of the 210 loadable
-    cores RetroDECK ships (reference machine, recounted 2026-08-05). ``options``
-    is the set of option definitions the core registered during
-    ``retro_set_environment`` — the observable fact that identifies a
-    core *generation* better than any version string. ``None`` means *not
-    captured* (the probe saw no registration — some cores register later, in
-    ``retro_init``): unknown, never "registers nothing".
+    name, not the ``.so`` basename, and not the ``corename`` an ``.info``
+    states either: that is a display string in the text file beside the core,
+    this one is what the binary answers, and nothing holds the two together,
+    so either may differ. ``options`` is the set of option definitions the
+    core registered during ``retro_set_environment`` — the observable fact
+    that identifies a core *generation* better than any version string.
+    ``None`` means *not captured* (the probe saw no registration — some cores
+    register later, in ``retro_init``): unknown, never "registers nothing".
 
     ``block_extract`` is the same struct's archive statement
     (``retro_system_info.block_extract``): true means RetroArch hands the
@@ -873,6 +874,32 @@ def _plain_bytes(path: str) -> bytes:
         raise _ArchiveOutcome(ARCHIVE_UNREADABLE) from None
 
 
+class FileStamp(NamedTuple):
+    """A file's identity and shape as ``stat`` reports them — the key a cached parse is checked against.
+
+    The inode and device are in it because the time and size are not enough
+    on their own where a file is replaced rather than rewritten: an OSTree
+    deploy, which is what a Flatpak's files are, carries every file at mtime
+    0, so an update that keeps a file's size would keep its key — while the
+    changed file is a new object with a new inode.
+    """
+
+    mtime_ns: int
+    size: int
+    ino: int
+    dev: int
+
+
+@runtime_checkable
+class StampingMachine(Protocol):
+    """A machine whose files can change underneath a handle, and which can say whether one did.
+
+    :class:`RealMachine` is one; a fixture machine is not, and need not be.
+    """
+
+    def file_stamp(self, path: str) -> FileStamp | None: ...
+
+
 class Machine(Protocol):
     """Narrow machine port: read a file, glob, classify a path, follow links, ask a core.
 
@@ -1155,6 +1182,23 @@ class RealMachine:
         except OSError:
             return None
         return st.st_size if _stat.S_ISREG(st.st_mode) else None
+
+    def file_stamp(self, path: str) -> FileStamp | None:
+        """The :class:`FileStamp` of the file *path* names, links followed — ``None`` where it cannot be stat'ed.
+
+        For a caller that keeps a parse of a file between questions: a parse
+        is reused only while the stamp it was made under is the file's stamp
+        now, so a rewrite or a replacement moves the key and is read again. It
+        is the core cache's key in :meth:`read_core` with the file's inode and
+        device added. Not part of :class:`Machine`: a fixture machine's files
+        cannot change underneath a handle, so it has nothing to stamp, and a
+        caller that finds no stamp reads every time.
+        """
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        return FileStamp(st.st_mtime_ns, st.st_size, st.st_ino, st.st_dev)
 
     def file_digest(self, path: str, algorithm: str, *, first_bytes: int | None = None) -> str | None:
         if algorithm not in DIGEST_ALGORITHMS or (first_bytes is not None and first_bytes < 1):

@@ -35,6 +35,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+from ._question import once
+
 
 @dataclass(frozen=True, slots=True)
 class LayoutKeys:
@@ -335,6 +337,17 @@ def parse_cfg(text: str) -> ParsedCfg:
     return ParsedCfg(values, tuple(dropped))
 
 
+def parse_cfg_once(text: str) -> ParsedCfg:
+    """:func:`parse_cfg`, parsed once per text within one question (:mod:`atlas._question`).
+
+    A configuration layer is asked about many keys by many readers in one
+    question; this is the parse they share. Each caller gets its own copy of
+    the settings, so none of them can change what another one reads.
+    """
+    parsed = once(("parse_cfg", text), lambda: parse_cfg(text))
+    return ParsedCfg(dict(parsed.values), parsed.dropped)
+
+
 def parse_cfg_text(text: str) -> dict[str, str]:
     """The settings a cfg text makes — :func:`parse_cfg` without the dropped lines."""
     return parse_cfg(text).values
@@ -560,7 +573,7 @@ DirectoryCheck = Callable[[str], bool]
 
 def _parse_layers(layers: Sequence[CfgLayer]) -> list[_Layer]:
     """Text layers as parsed layers — the global cfg first, its overrides after."""
-    return [(source, parse_cfg(text), index > 0) for index, (source, text) in enumerate(layers)]
+    return [(source, parse_cfg_once(text), index > 0) for index, (source, text) in enumerate(layers)]
 
 
 def _read_layers(layers: Sequence[_Layer], key: str) -> list[_Layer]:
@@ -811,11 +824,11 @@ def resolve_layout(
     layers: list[_Layer] = [
         (
             CfgSource(CFG_LAYER_GLOBAL, cfg_label),
-            parse_cfg(global_text) if global_text is not None else empty,
+            parse_cfg_once(global_text) if global_text is not None else empty,
             False,
         )
     ]
-    layers.extend((source, parse_cfg(text), True) for source, text in overrides)
+    layers.extend((source, parse_cfg_once(text), True) for source, text in overrides)
 
     defaults_label = defaults.label
     in_content_dir, s1, i1 = _resolve_flag(

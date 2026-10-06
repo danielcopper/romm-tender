@@ -17,9 +17,9 @@ Two rules decide the shape here, both from CLAUDE.md's boundary rule:
   installation is broken — that is what :class:`~atlas.installations.Health`
   answers, which is why the evidence note deliberately stays out of it.
 - **The status is data, not code.** It lives in ``data/arrangement_evidence.json``
-  — marked, versioned, source-cited — so the day an arrangement is verified on a
-  reference machine, one file changes and the caveat retires by itself. No
-  resolver mentions any arrangement's evidence state.
+  — marked, versioned, source-cited — so the day a live installation of an
+  arrangement confirms the wiring end to end, one file changes and the caveat
+  retires by itself. No resolver mentions any arrangement's evidence state.
 
 An arrangement absent from the file is unverified: a missing record is not
 evidence, and the safe direction is to say so rather than to fall silent. A

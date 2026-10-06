@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, TypeAlias, TypeVar
 
+from .find_rules import CAVEAT_FIND_RULES_UNREADABLE, FIND_RULES_LAYERS
 from .machine import CORE_UNANSWERED_STATUSES
 from .retroarch_cfg import CFG_LAYER_KINDS, RetroArchCfg
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
@@ -537,6 +538,28 @@ CAVEAT_CORE_GENERATION_UNESTABLISHED = "core-generation-unestablished"
 # the *setting* is unknown — and exclusive with both of the two above it, since
 # each of them has already retired the card before an option can be read.
 CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED = "core-option-value-unestablished"
+# The card applies and the answer is the card's, unchanged — but the installed
+# core registers option keys the card's audit record does not list
+# (``registration`` in core_audit.json). The audit never examined those options,
+# so whether one of them changes where or how this core saves is unknown; the
+# statement is about the audit, not a verdict that the answer is wrong. ``data``
+# names the core and the sorted ``added`` keys, and with them the sorted
+# ``removed`` ones — recorded keys the core no longer registers, ``[]`` where
+# there are none — so the difference is stated whole.
+#
+# What it sees is added keys, and only those. A removal alone never raises it:
+# a removed governing or rule key has already retired the card under
+# core-generation-mismatch, and any other removed key is silent by choice — the
+# caveat speaks where a core offers something the audit never examined. Not
+# seen at all: a changed default or value set of a recorded key, and a build
+# whose save behaviour changes while its options do not. The tripwire in
+# tests/test_oddities.py holds the full recorded registration (keys, defaults,
+# values) against the deployed RetroDECK build, so a removed key and a changed
+# default or value set in THAT build fail the suite on a machine carrying it;
+# only live verification covers a behaviour change with no option change.
+# Silent where either side is unread: a record that says not-captured, or a core
+# whose registration the probe did not capture.
+CAVEAT_CORE_OPTIONS_UNAUDITED = "core-options-unaudited"
 # The governing options file carries an entry for a key this card's core
 # generation retired — an older generation wrote it, the rename or split left
 # it behind, and RetroArch never prunes the file, so the value someone set
@@ -652,6 +675,8 @@ REASON_REGION_DECIDED_BY_DISC = "region-decided-by-disc"
 REASON_DATA_ROOT_DECIDED_BY_LAUNCH = "data-root-decided-by-launch"
 # What sits in an emulated slot (Dolphin's EXI devices): ``slot`` names the
 # slot letter, and ``value`` the raw configured device the card cannot read.
+# ``slot-holds-agp-device`` is the GBA cartridge adapter whose cartridge save
+# could not be examined, so whether it holds anything is unestablished.
 REASON_SLOT_HOLDS_AGP_DEVICE = "slot-holds-agp-device"
 REASON_SLOT_DEVICE_UNINTERPRETED = "slot-device-uninterpreted"
 # A per-session override a movie or netplay session sets — ``key`` names it.
@@ -1295,7 +1320,17 @@ class ModeAlternative:
     (FinalBurn Neo's shared mode writes a per-game save beside a card every
     game shares, and a single value would hide the shared file — the
     understatement issue #128 was about). A client that wants one word reads
-    ``values[0]``, which is exactly what the old single value said.
+    ``values[0]``, which is exactly what the old single value said. Selecting
+    the alternative reaches an answer that states those same distinct
+    groupings, in the same order, wherever that answer's file set is
+    ``declared`` and carries groups; where it is ``declared`` and carries none,
+    there are no groupings to list, and ``values`` is the one word that answer
+    states as its ``granularity.value``. The alternatives tripwire holds both.
+    ``caveats`` is what that answer will say about a switch the mode reads and
+    this answer does not — stated here, before the edit, rather than on this
+    answer, which it is not about. It is where a ``values`` that is short of
+    what the mode keeps says why: a card atlas cannot reach carries no group.
+    The tripwire holds that too.
     """
 
     mode: str
@@ -1308,7 +1343,17 @@ class ModeAlternative:
     """
     values: tuple[str, ...]
     """Every distinct grouping among that mode's groups, in card order with the mode's
-    own first.
+    own first — the same distinct groupings, in the same order, that the answer reached
+    by selecting this alternative states wherever its file set is ``declared`` and
+    carries groups; where that set carries none, the one word that answer states as its
+    ``granularity.value``.
+    """
+    caveats: tuple[Caveat, ...] = ()
+    """The caveats the answer reached by selecting this alternative states about a switch
+    only that mode reads — each one exactly as that answer states it, so a client learns
+    before the edit what that answer will qualify. Today the one such caveat is Dolphin's
+    ``sandbox-path-untranslated`` for a flipped slot's path this host cannot locate, which
+    says the mode writes to a path atlas cannot reach here; empty everywhere else.
     """
 
 
@@ -1392,7 +1437,16 @@ class SavefilePlacement:
 
     dir: str
     """The directory this emulator keeps the save in — concrete where the caller supplied
-    the content path, otherwise a template whose holes ``needs`` lists.
+    the content path, otherwise a template whose holes ``needs`` lists. In the GameCube
+    answer of Dolphin and of PrimeHack, the one fork that answers through it, and in
+    DuckStation's answer, ``dir`` can name a stand-in: where ``file_set.groups`` is empty
+    and ``granularity.value`` is not ``none``, a slot holds a card at a path this host
+    cannot locate, and ``dir`` is not where the card lies but ``Dolphin.ini``'s own
+    directory, or DuckStation's memory-card directory — the one
+    ``[MemoryCards] Directory`` names, or its default. ``physical_dir`` and any link
+    caveat describe that directory too. The card's configured path is the ``data.path``
+    of the ``sandbox-path-untranslated`` caveat whose ``data.key`` names that slot's path
+    key.
     """
     root_kind: RootKind
     """Which anchor ``dir`` hangs off — one of :data:`ROOT_KINDS`, from the configured
@@ -1547,12 +1601,18 @@ UNRESOLVED_EMULATOR_CONFIG_UNREADABLE = "emulator-config-unreadable"
 # Why the read did not settle the question, under ``data["reason"]``, where the
 # refusal has one to state. Two sources, one vocabulary: the scalar reader's own
 # refusal codes (:data:`~atlas.yaml_scalars.REFUSAL_CODES`) say which construct
-# stopped the whole file, and ``key-unread`` says the file parsed but the one
-# key this answer hangs on is stated as a construct the reader does not read —
-# ``data["key"]`` names it. A refusal that simply could not open the file
-# states no reason at all; the file is in ``data["config"]`` either way.
+# stopped the whole file, and two more say the file parsed and the one key this
+# answer hangs on settled nothing all the same, with ``data["key"]`` naming it.
+# ``key-unread`` is a key stated as a construct the reader does not read.
+# ``key-repeated`` is a key the file states more than once, where the program
+# reading it keeps a statement this reader does not: the reader holds the first
+# statement, the way a yaml-cpp lookup answers, and RPCS3 instead applies every
+# statement in turn and keeps the last it reads as a scalar — so which of them
+# governs is not this reader's to say. A refusal that simply could not open the
+# file states no reason at all; the file is in ``data["config"]`` either way.
 REASON_KEY_UNREAD = "key-unread"
-EMULATOR_CONFIG_UNREADABLE_REASONS = (*REFUSAL_CODES, REASON_KEY_UNREAD)
+REASON_KEY_REPEATED = "key-repeated"
+EMULATOR_CONFIG_UNREADABLE_REASONS = (*REFUSAL_CODES, REASON_KEY_UNREAD, REASON_KEY_REPEATED)
 
 # Every file a BIOS search kept and hashed, keyed by path, beside what the
 # emulator's own table made of each one's bytes. Built by
@@ -1600,6 +1660,9 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # keyed by its path, so the vocabulary closes the mapped words rather
         # than the mapping as a whole.
         (CAVEAT_FIRMWARE_SEARCH_CANDIDATES, "readings"): FIRMWARE_SEARCH_READINGS,
+        # Which find-rules layer the frontend could not have read: the one the
+        # verdict hangs on, or the custom one ES-DE skips beside it.
+        (CAVEAT_FIND_RULES_UNREADABLE, "layer"): FIND_RULES_LAYERS,
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
         # The world-knowledge mark carries two keys and only one of them is
         # closed: the evidence level, as the contract spells it rather than in
@@ -1656,6 +1719,16 @@ def _stated_words(value: "DataValue") -> tuple[str, ...]:
 # order (for xemu: the disk image first, then the EEPROM) — whenever it
 # names more than one.
 UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE = "emulator-config-path-untranslatable"
+# The emulator's configuration was read, and a slot in it holds a device atlas
+# cannot interpret while no other slot states anything the answer could stand
+# on: Dolphin's ``SlotA = 42`` beside an empty slot B. What that device keeps,
+# and where, is unestablished, so neither "nothing is kept" nor any location
+# can be said. The same fact the ``core-mode-unestablished`` reason of this
+# spelling states where another slot's statement still stands around it, said
+# as the outcome where nothing else does — one fact, one code. ``data`` names
+# the ``token``, the ``slot``, the configured ``value`` as written, and the
+# ``config`` file that states it.
+UNRESOLVED_SLOT_DEVICE_UNINTERPRETED = "slot-device-uninterpreted"
 
 
 @dataclass(frozen=True, slots=True)

@@ -49,7 +49,7 @@ from .placement import (
 # malformed entries raise instead of coercing — a broken build must fail
 # loudly, never resolve wrongly (REVIEW M3, M10).
 ODDITIES_SCHEMA = 1
-AUDIT_SCHEMA = 3
+AUDIT_SCHEMA = 4
 
 _KNOWN_VERDICTS = {"card", "standard", "standard-dir", "multi-option", "suspect", "unaudited"}
 # The mode a card without a governing option selects. Named here because the
@@ -1093,6 +1093,12 @@ class VerifiedOn:
     date: str | None
 
 
+# How the record spells a registration the probe did not capture: the core
+# answered, and no registration came back during ``retro_set_environment``
+# (``CoreInfo.options is None``).
+REGISTRATION_NOT_CAPTURED = "not-captured"
+
+
 @dataclass(frozen=True, slots=True)
 class AuditEntry:
     """One core's audit verdict, capability summary, and verification record.
@@ -1104,6 +1110,16 @@ class AuditEntry:
     card schema cannot express", so an entry that cannot name them has not
     earned it, and any other verdict naming them would be stating a dependency
     it just denied.
+
+    ``registration`` is every option key the core registered in the deployed
+    build it was recorded from, sorted — what an installed core's own keys are
+    compared with when the card is applied (``core-options-unaudited``, stated
+    in :mod:`atlas.placement`): an installed core that registers a key it lacks
+    carries an option the audit never examined. It is required on the ``card``
+    verdict, the one whose knowledge the resolver applies, and refused on every
+    other. ``None`` on a card is the record's explicit ``not-captured``: no
+    registration was captured from that build, so nothing is compared. How it
+    is recorded is part of the audit method (``docs/research/core-audit.md``).
     """
 
     key: str
@@ -1112,6 +1128,7 @@ class AuditEntry:
     note: str
     verified: Mapping[str, VerifiedOn | None]
     save_options: tuple[str, ...] = ()
+    registration: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "verified", MappingProxyType(dict(self.verified)))
@@ -1135,6 +1152,19 @@ def _verified_on(rec: Any, where: str) -> VerifiedOn | None:
         core_library_version=_expect_opt_str(rec.get("core_library_version"), f"{where}.core_library_version"),
         date=_expect_opt_str(rec.get("date"), f"{where}.date"),
     )
+
+
+def _registered_keys(value: Any, where: str) -> tuple[str, ...] | None:
+    """A card's recorded registration: its sorted, distinct keys, or ``None`` for not-captured."""
+    if value == REGISTRATION_NOT_CAPTURED:
+        return None
+    keys = _expect_str_list(value, where)
+    if not all(keys) or list(keys) != sorted(set(keys)):
+        raise ValueError(
+            f"{where}: expected sorted, distinct, non-empty option keys or {REGISTRATION_NOT_CAPTURED!r}, "
+            f"got {value!r}"
+        )
+    return keys
 
 
 def _audit_entry(key: str, entry: Any) -> AuditEntry:
@@ -1166,7 +1196,22 @@ def _audit_entry(key: str, entry: Any) -> AuditEntry:
         note=note,
         verified=verified,
         save_options=save_options,
+        registration=_registration(entry, verdict, where),
     )
+
+
+def _registration(entry: Any, verdict: str, where: str) -> tuple[str, ...] | None:
+    """The ``registration`` field: required on a ``card`` verdict, refused on every other."""
+    if verdict != "card":
+        if "registration" in entry:
+            raise ValueError(f"{where}: 'registration' belongs to a 'card' verdict, got {verdict!r}")
+        return None
+    if "registration" not in entry:
+        raise ValueError(
+            f"{where}: a 'card' verdict must record its core's option keys in 'registration', "
+            f"or {REGISTRATION_NOT_CAPTURED!r}"
+        )
+    return _registered_keys(entry["registration"], f"{where}: registration")
 
 
 def load_audit(text: str | None = None) -> dict[str, AuditEntry]:

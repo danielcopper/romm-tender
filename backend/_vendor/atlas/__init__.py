@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.21.0"  # x-release-please-version
+__version__ = "0.22.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -99,6 +99,7 @@ from .platforms import (
     load_platform_crosswalk,
     platform_identities,
     platforms_for,
+    systems_for,
 )
 
 # --- The handles every question is asked of ----------------------------------
@@ -213,6 +214,29 @@ from .placement import (
 # here because answers carry them — a requirement's `found` is a path kind, a
 # health finding's `status` is a read status.
 from .esde import CATALOGUE_KINDS, KIND_LIBRETRO, KIND_RETROARCH_FOREIGN_CORE, KIND_STANDALONE
+from .find_rules import (
+    AVAILABILITIES,
+    AVAILABILITY_NOT_INSTALLED,
+    AVAILABILITY_STARTABLE,
+    AVAILABILITY_UNESTABLISHED,
+    CAVEAT_CORE_RULES_MISSING,
+    CAVEAT_EMULATOR_NOT_FOUND,
+    CAVEAT_EMULATOR_RULES_MISSING,
+    CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_PATH_UNESTABLISHED,
+    CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
+    CAVEAT_RUN_GAME_DIFFERS,
+    FIND_RULES_LAYERS,
+    LAUNCH_RULES,
+    LAYER_BUNDLED,
+    LAYER_CUSTOM,
+    RULE_STATICPATH,
+    RULE_SYSTEMPATH,
+    Availability,
+    FindRulesLayer,
+    LaunchRule,
+)
+from .launch import Launcher
 from .retroarch_cfg import (
     CFG_LAYER_CONTENT_DIR_OVERRIDE,
     CFG_LAYER_CORE_OVERRIDE,
@@ -373,8 +397,10 @@ from .installations import (
     HEALTH_ISSUE_MARKER_INVALID,
     HEALTH_ISSUE_MARKER_MISSING,
     HEALTH_ISSUE_MARKER_UNREADABLE,
+    HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_ROOT_MISSING,
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
+    UNRESOLVED_NOT_SET_UP,
 )
 from .machine import (
     CORE_READ_ANSWERED,
@@ -410,6 +436,7 @@ from .placement import (
     CAVEAT_CORE_MULTI_OPTION,
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED,
+    CAVEAT_CORE_OPTIONS_UNAUDITED,
     CAVEAT_CORE_SAVESTATES_UNSUPPORTED,
     CAVEAT_OPTION_ENTRY_RETIRED,
     CAVEAT_CORE_SUSPECT,
@@ -520,6 +547,7 @@ from .placement import (
     REASON_INI_OUTRANKED_BY_CASCADE,
     REASON_INI_PRESENCE_UNESTABLISHED,
     REASON_INI_SEARCH_PATH_UNLISTABLE,
+    REASON_KEY_REPEATED,
     REASON_KEY_UNREAD,
     REASON_LISTED_USER_ACCOUNT_UNESTABLISHED,
     REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG,
@@ -568,6 +596,7 @@ from .placement import (
     UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE,
     UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
     UNRESOLVED_MOD_WIRING_UNESTABLISHED,
+    UNRESOLVED_SLOT_DEVICE_UNINTERPRETED,
     UNRESOLVED_STANDALONE,
     UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED,
     UNRESOLVED_TEXTURE_WIRING_UNESTABLISHED,
@@ -597,7 +626,7 @@ __all__ = [
     "from_esde_system",
     "known_systems",
     "vocabulary_platform_tags",
-    # Platform translation — the crosswalk half (atlas.platforms)
+    # Platform translation — the world-knowledge half (atlas.platforms)
     "KNOWN_PLATFORM_VOCABULARIES",
     "IgdbIdentity",
     "PlatformIdentities",
@@ -605,6 +634,7 @@ __all__ = [
     "load_platform_crosswalk",
     "platform_identities",
     "platforms_for",
+    "systems_for",
     # The aggregate over detect
     "EveryInstallation",
     "InstallationAnswer",
@@ -663,6 +693,7 @@ __all__ = [
     "esde_extension",
     "RomPlacement",
     "EmulatorEntry",
+    "Launcher",
     "FirmwareAnswer",
     "CoreFirmware",
     "FirmwareRequirement",
@@ -700,6 +731,9 @@ __all__ = [
     "firmware_contract",
     "identification_contract",
     # Vocabulary types
+    "Availability",
+    "FindRulesLayer",
+    "LaunchRule",
     "PathKind",
     "ReadStatus",
     "CoreReadStatus",
@@ -741,6 +775,16 @@ __all__ = [
     "CORE_READ_UNUSABLE",
     # Vocabulary values — emulator kinds, save roots, firmware axes
     "CATALOGUE_KINDS",
+    "AVAILABILITIES",
+    "AVAILABILITY_NOT_INSTALLED",
+    "AVAILABILITY_STARTABLE",
+    "AVAILABILITY_UNESTABLISHED",
+    "FIND_RULES_LAYERS",
+    "LAUNCH_RULES",
+    "LAYER_BUNDLED",
+    "LAYER_CUSTOM",
+    "RULE_STATICPATH",
+    "RULE_SYSTEMPATH",
     "KIND_LIBRETRO",
     "KIND_RETROARCH_FOREIGN_CORE",
     "KIND_STANDALONE",
@@ -844,6 +888,7 @@ __all__ = [
     "REASON_INI_OUTRANKED_BY_CASCADE",
     "REASON_INI_PRESENCE_UNESTABLISHED",
     "REASON_INI_SEARCH_PATH_UNLISTABLE",
+    "REASON_KEY_REPEATED",
     "REASON_KEY_UNREAD",
     "REASON_LISTED_USER_ACCOUNT_UNESTABLISHED",
     "REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG",
@@ -920,6 +965,7 @@ __all__ = [
     "HEALTH_ISSUE_CATALOGUE_INVALID",
     "HEALTH_ISSUE_COMPANION_CONFIG_MISSING",
     "HEALTH_ISSUE_CONTENT_TREE_UNWIRED",
+    "HEALTH_ISSUE_NOT_SET_UP",
     # Content-tree wiring (the dir_prep pairs behind that finding)
     "ArrangementWiring",
     "WiringRow",
@@ -948,6 +994,8 @@ __all__ = [
     "UNRESOLVED_EMULATOR_CONFIG_UNREADABLE",
     "UNRESOLVED_TEXTURE_WIRING_UNESTABLISHED",
     "UNRESOLVED_MOD_WIRING_UNESTABLISHED",
+    "UNRESOLVED_SLOT_DEVICE_UNINTERPRETED",
+    "UNRESOLVED_NOT_SET_UP",
     # Caveat codes
     "CAVEAT_APP_RELATIVE_PATH_UNEXPANDED",
     "CAVEAT_ARRANGEMENT_UNVERIFIED",
@@ -967,6 +1015,7 @@ __all__ = [
     "CAVEAT_CORE_NOT_INSTALLED",
     "CAVEAT_CORE_MODE_UNESTABLISHED",
     "CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED",
+    "CAVEAT_CORE_OPTIONS_UNAUDITED",
     "CAVEAT_CORE_SAVESTATES_UNSUPPORTED",
     "CAVEAT_OPTION_ENTRY_RETIRED",
     "CAVEAT_CORE_SUSPECT",
@@ -977,6 +1026,13 @@ __all__ = [
     "CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE",
     "CAVEAT_EMULATOR_CATALOGUE_SEALED",
     "CAVEAT_EMULATOR_LIST_DERIVED",
+    "CAVEAT_CORE_RULES_MISSING",
+    "CAVEAT_EMULATOR_NOT_FOUND",
+    "CAVEAT_EMULATOR_RULES_MISSING",
+    "CAVEAT_FIND_RULES_UNREADABLE",
+    "CAVEAT_LAUNCH_PATH_UNESTABLISHED",
+    "CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED",
+    "CAVEAT_RUN_GAME_DIFFERS",
     "CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE",
     "CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED",
     "CAVEAT_EMULATOR_CATALOGUE_UNREADABLE",

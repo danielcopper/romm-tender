@@ -26,6 +26,7 @@ from typing import Any, cast
 
 import pytest
 from _vendor.atlas import (
+    AVAILABILITY_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
@@ -39,6 +40,7 @@ from _vendor.atlas import (
 )
 from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
+from _vendor.atlas.launch import LaunchResolution
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -83,7 +85,8 @@ def _entry(
 
     The host an entry is bound to answers its identity and its placement
     questions; only the first is asked here, and the adapter reads the spec's
-    other fields directly.
+    other fields directly. Its launch answer is one the adapter does not read,
+    so it is left unestablished.
     """
     return EmulatorEntry(
         cast("Any", _Identifying(emulator)),
@@ -97,6 +100,8 @@ def _entry(
             declared_index=declared_index,
             selection=selection,
         ),
+        caveats=(),
+        launch=LaunchResolution(availability=AVAILABILITY_UNESTABLISHED),
     )
 
 
