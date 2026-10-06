@@ -1,6 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, within } from "@testing-library/react";
+import type { IconBaseProps, IconType } from "react-icons";
+import { FaCheckCircle, FaChevronDown, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import { EmulatorSourcesSection } from "./EmulatorSourcesSection";
 import { SOURCES_READING, SOURCES_UNREAD } from "../../utils/emulatorSourceWording";
 import { AMBER, GREEN, MUTED, SELECTION_ACCENT } from "../layout/pane";
@@ -48,6 +50,14 @@ function pressAsTheDeviceDoes(button: HTMLButtonElement): void {
 /** The arrow that moves the source named *name* in *direction*, by its accessible name — it shows no text. */
 function arrow(container: HTMLElement, name: string, direction: "up" | "down"): HTMLButtonElement {
   return within(container).getByRole("button", { name: `Move ${name} ${direction}` });
+}
+
+/** The markup *Icon* draws on its own, given *props*. */
+function glyph(Icon: IconType, props: IconBaseProps): string {
+  const { container, unmount } = render(<Icon {...props} />);
+  const markup = container.querySelector("svg")!.outerHTML;
+  unmount();
+  return markup;
 }
 
 describe("EmulatorSourcesSection", () => {
@@ -210,17 +220,36 @@ describe("EmulatorSourcesSection", () => {
     const tones = (kind: string) =>
       within(getByTestId(`source-lines-${kind}`))
         .getAllByTestId("source-line-icon")
-        .map((icon) => [icon.dataset.tone, icon.style.color, icon.nextElementSibling?.textContent]);
+        .map((icon) => [
+          icon.dataset.tone,
+          icon.style.color,
+          icon.querySelector("svg")?.outerHTML,
+          icon.nextElementSibling?.textContent,
+        ]);
+    const ok = glyph(FaCheckCircle, { size: 11, "aria-hidden": true });
+    const warning = glyph(FaExclamationTriangle, { size: 11, "aria-hidden": true });
+    const info = glyph(FaInfoCircle, { size: 11, "aria-hidden": true });
 
-    expect(tones("retrodeck")).toEqual([["ok", GREEN, "No problems found."]]);
+    expect(tones("retrodeck")).toEqual([["ok", GREEN, ok, "No problems found."]]);
     expect(tones("emudeck")).toEqual([
-      ["warning", AMBER, "EmuDeck: its folder /sd does not exist. If it is on an SD card or another drive, insert it."],
-      ["warning", AMBER, "EmuDeck's emulator list cannot be read yet."],
-      ["info", MUTED, "Tender cannot start games through EmuDeck yet."],
+      [
+        "warning",
+        AMBER,
+        warning,
+        "EmuDeck: its folder /sd does not exist. If it is on an SD card or another drive, insert it.",
+      ],
+      ["warning", AMBER, warning, "EmuDeck's emulator list cannot be read yet."],
+      ["info", MUTED, info, "Tender cannot start games through EmuDeck yet."],
     ]);
-    expect(
-      within(getByTestId("source-lines-emudeck")).getAllByTestId("source-line-icon")[2]!.querySelector("svg"),
-    ).not.toBeNull();
+  });
+
+  it("points the up arrow up by turning the down chevron over, and leaves the down arrow as drawn", () => {
+    const { container } = renderSection(BOTH);
+    const chevron = (direction: "up" | "down") =>
+      arrow(container, "EmuDeck", direction).querySelector("svg")!.outerHTML;
+
+    expect(chevron("up")).toBe(glyph(FaChevronDown, { size: 12, style: { transform: "rotate(180deg)" } }));
+    expect(chevron("down")).toBe(glyph(FaChevronDown, { size: 12 }));
   });
 
   it("makes every source's information row a focus stop", () => {

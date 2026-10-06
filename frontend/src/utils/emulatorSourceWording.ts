@@ -38,7 +38,7 @@ export function sourceName(kind: string): string {
 }
 
 /** Whether a finding shows as a banner. `content-tree-unwired` concerns nothing
- *  Tender does, so it shows only in the source's own row. */
+ *  Tender does, so it shows only on the source's own card. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
   return finding.code !== "content-tree-unwired";
 }
@@ -115,7 +115,7 @@ export const SOURCES_READING = "Reading the emulator sources…";
 /** The settings section's line where its listing could not be read. */
 export const SOURCES_UNREAD = "Could not read the emulator sources. Reopen the page to try again.";
 
-/** The row of, and Main's banner for, a source Tender cannot start games through. */
+/** The card's line, and Main's banner, for a source Tender cannot start games through. */
 export function cannotStartSentence(kind: string): string {
   return `Tender cannot start games through ${sourceName(kind)} yet.`;
 }
@@ -144,11 +144,11 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
   return `${sourceName(source.kind)}'s emulator list is not established.`;
 }
 
-/** How a row line reads at a glance: nothing wrong, a fact about what Tender
+/** How a card line reads at a glance: nothing wrong, a fact about what Tender
  *  does, or something the reader may have to look into. */
 export type SourceRowTone = "ok" | "info" | "warning";
 
-/** One line of a source's row, with the tone its leading icon is drawn in. */
+/** One line of a source's card, with the tone its leading icon is drawn in. */
 export interface SourceRowLine {
   tone: SourceRowTone;
   text: string;
@@ -156,7 +156,7 @@ export interface SourceRowLine {
 
 const warning = (text: string): SourceRowLine => ({ tone: "warning", text });
 
-/** The lines a source's row under Settings → Emulator sources says about it, below its name and root. */
+/** The lines a source's card under Settings → Emulator sources says about it, below its name and root. */
 export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
   const health = source.findings.map((finding) => warning(findingSentence(source.kind, finding)));
   // A sealed catalogue, and a source with no catalogue at all, each have a
@@ -184,7 +184,7 @@ export interface SourceBanner {
 /**
  * Main's banners about the emulator sources, in the sources' order: one where
  * none is detected, one per banner finding of a switched-on source (a
- * switched-off source's findings stay in its row), and one where the source
+ * switched-off source's findings stay on its card), and one where the source
  * that answers is one Tender cannot start games through.
  */
 export function mainSourceBanners(listing: EmulatorSourcesListing): SourceBanner[] {

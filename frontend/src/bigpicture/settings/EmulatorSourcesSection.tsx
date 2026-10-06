@@ -8,7 +8,7 @@
 
 import { FC, ReactElement } from "react";
 import { PanelSection, PanelSectionRow, DialogButton, Field, Focusable, ToggleField } from "@decky/ui";
-import { FaCheckCircle, FaChevronDown, FaChevronUp, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
+import { FaCheckCircle, FaChevronDown, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import type { EmulatorSource, EmulatorSourceDirection, EmulatorSourcesListing } from "../../types";
 import {
   NO_SOURCE_BANNER,
@@ -46,6 +46,10 @@ const ARROW_BUTTON = {
   alignItems: "center",
   justifyContent: "center",
 } as const;
+
+// The up arrow is the down chevron turned over rather than a glyph of its own:
+// the chevron is symmetric, and a second one would cost bundle bytes.
+const TURNED_OVER = { transform: "rotate(180deg)" } as const;
 
 const PlaceBadge: FC<{ kind: string; place: number; on: boolean }> = ({ kind, place, on }) => (
   <span
@@ -93,7 +97,7 @@ const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, onSwitch, 
         if (!busy && !atEnd) onMove(source.kind, direction);
       }}
     >
-      {direction === "up" ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+      <FaChevronDown size={12} style={direction === "up" ? TURNED_OVER : undefined} />
     </DialogButton>
   );
   return (
