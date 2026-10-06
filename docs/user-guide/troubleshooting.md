@@ -582,7 +582,7 @@ Free-space blocking in the modal covers the installed ROM content you selected. 
 and free space again at copy time, so a later disk-space change can still stop the group safely.
 
 The cleanup report is per group: unrelated groups continue after a skip or failure. A large run's report arrives in
-parts, and the modal shows it once every part has arrived. A **partial** result means the report lists a Steam or
+parts, and the report is shown once every part has arrived. A **partial** result means the report lists a Steam or
 filesystem action that committed or became ambiguous before a later guard failed; read that group's concrete message and
 save warnings before retrying. If a recovery bundle was sealed but a later liveness or Steam check aborted, keep the
 bundle; it is a valid pre-action snapshot even though no local row was deleted. Recovery has no automatic import flow.
