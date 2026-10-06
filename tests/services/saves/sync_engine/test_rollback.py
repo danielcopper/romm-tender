@@ -13,7 +13,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, RommServerError
-from services.saves._refusals import SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.sync_engine.rollback import StaleConflict
 from tests.services.saves._helpers import (
     _create_save,
@@ -755,16 +755,17 @@ class TestResolveSyncConflictContentDirGate:
             device_syncs=[{"device_id": "device-1", "is_current": False}],
         )
 
-        result = await svc.resolve_sync_conflict(
+        resolve = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action=action,
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "savefiles_in_content_dir"
-        assert "content directory" in result["message"]
+        with pytest.raises(SavefilesInContentDir) as refused:
+            await resolve
+
+        assert "content directory" in refused.value.message
         # No server fetch, no download, no upload — gate fired before the orchestrator.
         assert not any(c[0] in ("list_saves", "download_save_content", "upload_save") for c in fake.call_log), (
             fake.call_log

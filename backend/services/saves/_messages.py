@@ -6,14 +6,11 @@ consistent across modules. Add to this file rather than inlining new
 literals in service code.
 """
 
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON
-
 SAVE_SYNC_DISABLED = "Save sync is disabled"
 DEVICE_NOT_REGISTERED = "Device not registered"
-# Bespoke ``reason`` slugs for the canonical failure shape on the save-sync
-# guard returns. Plain strings (not :class:`ErrorCode`) — these are
-# domain-specific skip/guard categories, not server-reachability failures.
-SAVE_SYNC_DISABLED_REASON = "sync_disabled"
+# Bespoke ``reason`` slug for the canonical failure shape on a save-sync guard
+# return. A plain string (not :class:`ErrorCode`) — a domain-specific guard
+# category, not a server-reachability failure.
 DEVICE_NOT_REGISTERED_REASON = "device_not_registered"
 # Wizard legacy-migration precheck: no device is registered yet, so the migration
 # can't upload into the slot. Refused before any local/server mutation so the
@@ -23,26 +20,14 @@ MIGRATION_DEVICE_NOT_REGISTERED = (
 )
 # RomM's per-device ``sync_enabled`` switch is off server-side (the negotiate 400
 # policy stop, #1489). Distinct from ``sync_disabled``, which is the LOCAL toggle.
-DEVICE_SYNC_DISABLED_REASON = "device_sync_disabled"
 DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 # The device-wide save-sync gate was still held by another run when the bounded
 # wait expired, so this run was skipped. A LOCAL scheduling outcome — it says
 # nothing about the server, which the skipped run may never have contacted
 # (#1625). Never collapse it onto ``server_unreachable``.
-SAVE_SYNC_BUSY_REASON = "sync_busy"
 SAVE_SYNC_BUSY = "Another save sync is still running"
 # A save Tender could otherwise sync sits beside the content file
 # (``SaveAnswer.in_content_directory``; RetroArch's ``savefiles_in_content_dir``
 # is the usual cause), outside what Tender syncs. Neutral phrasing that
 # names no emulator — the frontend treats this as a benign skip.
 SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: saves are written to the game's content directory."
-# ``reason`` slug on the sync-gate failure shape; the frontend routes on this to
-# treat the result as a skip (no error, launch proceeds), not a failure. Single
-# source of truth is ``domain.save_answer`` — re-exported here so the saves
-# service code keeps importing it from its own message module.
-SAVE_SYNC_IN_CONTENT_DIR_REASON = SAVE_SYNC_CONTENT_DIR_REASON
-# The emulator's save is not a per-game file set Tender can carry — a
-# shared card, a save inside the game file, a name with a hole in it, or a shape
-# nobody has established. Like the content-dir slug above this is a benign skip
-# and not an error, and the single source of truth is ``domain.save_answer``.
-SAVE_SHAPE_UNSUPPORTED = SAVE_SHAPE_UNSUPPORTED_REASON

@@ -20,6 +20,7 @@ from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
 from lib.errors import Refused
+from services.saves._refusals import SaveShapeUnsupported
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -688,10 +689,11 @@ class TestTheEntryPointsFollowBeforeTheyRefuse:
         _record(svc, str(old))
         _create_save(tmp_path, content=b"progress")
         _seed_answer(svc, _answer(str(new), names=(), state="shared"))
+        sync = svc.pre_launch_sync(_ROM)
 
-        result = await svc.pre_launch_sync(_ROM)
+        with pytest.raises(SaveShapeUnsupported):
+            await sync
 
-        assert result["reason"] == "save_shape_unsupported"
         assert (new / "pokemon.srm").read_bytes() == b"progress"
         assert _recorded(svc) == str(new)
 

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 
 from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent, build_save_answer
-from services.saves._refusals import SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 
 if TYPE_CHECKING:
     from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -147,11 +147,12 @@ class TestARefusalWritesNoState:
     @pytest.mark.parametrize("state", _REFUSING_STATES)
     async def test_sync_rom_saves_writes_nothing(self, tmp_path, state: str):
         svc, _store, _fake = _service(tmp_path, _refusing(state))
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await sync
 
-        assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
-        assert result["synced"] == 0
+        assert refused.value.details == {"synced": 0}
         assert _uow(svc).rom_save_sync_states.get(42) is None
 
     @pytest.mark.asyncio
@@ -378,30 +379,31 @@ class TestASlotSwitchLeavesAnUncarriedFileAlone:
 
 
 class TestTheRefusalIsASkipAndNotAFailure:
-    """The same shape the content-dir skip returns, with its own reason."""
+    """The same refusal the content-dir skip raises, with its own reason."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync", "sync_rom_saves"])
     async def test_every_per_rom_entry_point_reports_the_skip(self, tmp_path, entry: str):
         svc, _store, _fake = _service(tmp_path, _refusing("shared"))
+        sync = getattr(svc, entry)(42)
 
-        result = await getattr(svc, entry)(42)
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
-        assert result["synced"] == 0
-        assert result["errors"] == []
-        assert result["conflicts"] == []
+        assert refused.value.reason == SAVE_SHAPE_UNSUPPORTED_REASON
+        assert refused.value.details == {"synced": 0}
 
     @pytest.mark.asyncio
     async def test_the_message_names_the_emulator_and_not_the_platform(self, tmp_path):
         # PS2 is not unsupported; standalone PCSX2 is, and a libretro core for
         # the same platform could answer per-game.
         svc, _store, _fake = _service(tmp_path, _refusing("shared"))
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await sync
 
-        assert "PCSX2 (Standalone)" in result["message"]
+        assert "PCSX2 (Standalone)" in refused.value.message
 
     @pytest.mark.asyncio
     async def test_an_uninstalled_rom_is_not_reported_as_an_unsupported_shape(self, tmp_path):
@@ -490,10 +492,10 @@ class TestOnlyBesideTheContentGetsTheContentDirectorySkip:
     @pytest.mark.parametrize("overrides", _NOT_SYNCABLE_BESIDE_THE_ROM)
     async def test_a_sync_gets_the_answers_own_refusal(self, tmp_path, overrides):
         svc, _store, _fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, **overrides))
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
-
-        assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
+        with pytest.raises(SaveShapeUnsupported):
+            await sync
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("overrides", _NOT_SYNCABLE_BESIDE_THE_ROM)
@@ -522,12 +524,13 @@ class TestOnlyBesideTheContentGetsTheContentDirectorySkip:
     async def test_a_syncable_save_beside_the_content_still_gets_the_content_directory_skip(self, tmp_path):
         beside = _anchored_in_the_rom_folder(tmp_path, emulator="mGBA", files=("pokemon.srm",))
         svc, _store, _fake = _service(tmp_path, beside)
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
+        with pytest.raises(SavefilesInContentDir):
+            await sync
         status = await svc.get_save_status(42)
 
         assert beside.syncable is True
-        assert result["reason"] == "savefiles_in_content_dir"
         assert status["savefiles_in_content_dir"] is True
 
 

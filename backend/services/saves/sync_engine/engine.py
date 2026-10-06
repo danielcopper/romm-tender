@@ -39,20 +39,24 @@ from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.conflict_rules import MIGRATION_MESSAGE, UPDATE_MESSAGE
-from lib.errors import Refused, RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
-from lib.list_result import ErrorCode
+from lib.errors import (
+    DeviceSyncDisabled,
+    Refused,
+    RommApiError,
+    RommConnectionError,
+    RommSyncDisabledError,
+    RommTimeoutError,
+    ServerUnreachable,
+    SyncBusy,
+)
 from services.saves._messages import (
     DEVICE_NOT_REGISTERED,
-    DEVICE_NOT_REGISTERED_REASON,
     DEVICE_SYNC_DISABLED,
-    DEVICE_SYNC_DISABLED_REASON,
     SAVE_SYNC_BUSY,
-    SAVE_SYNC_BUSY_REASON,
     SAVE_SYNC_DISABLED,
-    SAVE_SYNC_DISABLED_REASON,
     SAVE_SYNC_IN_CONTENT_DIR,
-    SAVE_SYNC_IN_CONTENT_DIR_REASON,
 )
+from services.saves._refusals import SavefilesInContentDir
 from services.saves._save_state import write_save_state
 from services.saves._settings import (
     autocleanup_limit,
@@ -70,7 +74,8 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
-from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, sync_refusal
+from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, refuse_unsyncable
+from services.saves.sync_engine._sweep_stop import SaveSweepIncomplete
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
@@ -426,7 +431,7 @@ class SyncEngine:
             machine_id_provider=self._machine_id_provider,
         )
 
-    async def _ensure_device_live_or_fail(self) -> dict[str, Any] | None:
+    async def _ensure_device_live_or_fail(self) -> None:
         """Register-or-heal the server device id before a sync consumes it.
 
         Runs :meth:`ensure_device_registered` UNCONDITIONALLY — not only when
@@ -441,21 +446,16 @@ class SyncEngine:
         sync: the accepted price of correctness (no "recently validated"
         caching).
 
-        Returns the canonical ``DEVICE_NOT_REGISTERED`` failure dict when a live
-        registration could not be established (the caller returns it verbatim),
-        else ``None`` — the caller proceeds and the sync reads the fresh,
-        possibly-healed id through :meth:`_read_sync_inputs` (and, for the bulk
-        sweep, the re-read at ``sync_all_saves``), never a value captured before
-        the heal.
+        Refuses with ``device_not_registered`` when a live registration could
+        not be established — registration refused, or a RomM error answered it
+        — else returns, and the sync reads the fresh, possibly-healed id through
+        :meth:`_read_sync_inputs` (and, for the bulk sweep, the re-read at
+        ``sync_all_saves``), never a value captured before the heal.
         """
-        reg = await self.ensure_device_registered()
-        if not reg.get("success"):
-            return {
-                "success": False,
-                "reason": DEVICE_NOT_REGISTERED_REASON,
-                "message": DEVICE_NOT_REGISTERED,
-            }
-        return None
+        try:
+            await self.ensure_device_registered()
+        except (Refused, RommApiError) as e:
+            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
 
     async def list_devices(self) -> dict[str, Any]:
         """List all devices registered with the RomM server for this user."""
@@ -571,37 +571,19 @@ class SyncEngine:
             self._log_debug(f"{where}: rom {rom_id} saves beside its content; refusing")
         return blocked
 
-    def _heartbeat_failure_result(self, where: str, exc: Exception) -> dict[str, Any]:
-        """Build the sync-result dict for a heartbeat failure, classified by type.
+    def _server_offline(self, where: str, exc: RommApiError) -> ServerUnreachable:
+        """The refusal a heartbeat that could not reach the server raises, logged.
 
         Only a genuine reachability failure (``RommConnectionError`` /
-        ``RommTimeoutError``) is reported as "Server offline" with the additive
-        ``offline`` flag the launch path routes on. Any other typed error — a
-        revoked token (401 → ``AUTH_FAILED``), an SSL misconfig, a 5xx, etc. —
-        flows through :func:`classify_error` so the result carries its OWN
-        ``reason`` + ``message`` and the UI stops claiming the server is
-        unreachable when it is plainly reachable (#971). The raw exception is
-        always logged at debug so the offline branch is no longer a silent
-        swallow.
+        ``RommTimeoutError``) is "Server offline", with the ``offline`` flag the
+        launch path routes on. Every other RomM error from the heartbeat — a
+        revoked token, an SSL misconfiguration, a 5xx — is not caught, so it
+        answers with its own reason and message and the UI never claims a
+        plainly reachable server is unreachable (#971).
         """
         self._log_debug(f"{where}: heartbeat failed ({type(exc).__name__}: {exc})")
-        if isinstance(exc, (RommConnectionError, RommTimeoutError)):
-            self._logger.info("%s skipped: server offline", where)
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": "Server offline",
-                "synced": 0,
-                "offline": True,
-            }
-        reason, message = classify_error(exc)
-        self._logger.info("%s skipped: %s", where, message)
-        return {
-            "success": False,
-            "reason": reason,
-            "message": message,
-            "synced": 0,
-        }
+        self._logger.info("%s skipped: server offline", where)
+        return ServerUnreachable("Server offline", synced=0, offline=True)
 
     async def _run_rom_sync(
         self,
@@ -788,27 +770,23 @@ class SyncEngine:
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
-                refusal = sync_refusal(save_answer)
-                if refusal is not None:
-                    return refusal
+                refuse_unsyncable(save_answer)
 
                 if not sync_before_launch(self._settings):
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
 
                 # Pre-probe reachability before any sync work — mirror post_exit_sync.
-                # A genuine reachability failure surfaces the canonical unreachable
-                # shape (plus the additive ``offline`` flag) so the launch path can
-                # warn on local drift instead of stalling on a doomed round-trip; an
-                # auth/SSL/server error instead carries its OWN classified reason so
-                # the UI stops lying about reachability (#971).
+                # A genuine reachability failure refuses as unreachable (plus the
+                # ``offline`` flag) so the launch path can warn on local drift
+                # instead of stalling on a doomed round-trip; an auth/SSL/server
+                # error answers its OWN classified reason, so the UI stops lying
+                # about reachability (#971).
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
-                except Exception as e:
-                    return self._heartbeat_failure_result("pre_launch_sync", e)
+                except (RommConnectionError, RommTimeoutError) as e:
+                    raise self._server_offline("pre_launch_sync", e) from e
 
-                failure = await self._ensure_device_live_or_fail()
-                if failure is not None:
-                    return failure
+                await self._ensure_device_live_or_fail()
 
                 uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
@@ -825,16 +803,11 @@ class SyncEngine:
                     "errors": errors,
                     "conflicts": list(conflicts),
                 }
-        except SaveSyncTimeoutError:
+        except SaveSyncTimeoutError as e:
             # Device gate held past the bounded wait — the same LOCAL outcome the other three triggers
-            # report, so it carries the identical busy shape: no reachability reason, no ``offline`` (#1625).
+            # report, so it carries the identical busy refusal: no reachability reason, no ``offline`` (#1625).
             # The launch path routes on ``success: False`` alone (→ ``sync_failed``), so Play is not trapped.
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_BUSY_REASON,
-                "message": SAVE_SYNC_BUSY,
-                "synced": 0,
-            }
+            raise SyncBusy(SAVE_SYNC_BUSY, synced=0) from e
         except RommSyncDisabledError:
             # RomM has save sync disabled for this device server-side. Mirror the
             # LOCAL toggle-off silent skip (a success-shaped result, no ``offline``
@@ -872,19 +845,18 @@ class SyncEngine:
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
-                refusal = sync_refusal(save_answer)
-                if refusal is not None:
-                    self._logger.info("post_exit_sync skipped: %s", refusal["reason"])
-                    return refusal
+                try:
+                    refuse_unsyncable(save_answer)
+                except Refused as refusal:
+                    self._logger.info("post_exit_sync skipped: %s", refusal.reason)
+                    raise
 
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
-                except Exception as e:
-                    return self._heartbeat_failure_result("post_exit_sync", e)
+                except (RommConnectionError, RommTimeoutError) as e:
+                    raise self._server_offline("post_exit_sync", e) from e
 
-                failure = await self._ensure_device_live_or_fail()
-                if failure is not None:
-                    return failure
+                await self._ensure_device_live_or_fail()
 
                 uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
@@ -910,29 +882,17 @@ class SyncEngine:
                     "errors": errors,
                     "conflicts": list(conflicts),
                 }
-        except SaveSyncTimeoutError:
+        except SaveSyncTimeoutError as e:
             # Device gate held past the bounded wait — skip rather than block on a stuck run. No ``offline``
             # flag and no reachability reason (#1625): nothing observed the server. Next sync picks it up.
             self._logger.info("post_exit_sync skipped: save-sync busy")
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_BUSY_REASON,
-                "message": SAVE_SYNC_BUSY,
-                "synced": 0,
-            }
-        except RommSyncDisabledError:
+            raise SyncBusy(SAVE_SYNC_BUSY, synced=0) from e
+        except RommSyncDisabledError as e:
             # RomM has save sync disabled for this device server-side — stop with
             # a visible policy reason. The session-end toast reads the dedicated
             # copy via ``_render_failure_toast`` keyed on this reason (#1489).
             self._logger.info("post_exit_sync stopped: sync disabled for this device on the server")
-            return {
-                "success": False,
-                "reason": DEVICE_SYNC_DISABLED_REASON,
-                "message": DEVICE_SYNC_DISABLED,
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
+            raise DeviceSyncDisabled(DEVICE_SYNC_DISABLED, synced=0) from e
 
     async def sync_rom_saves(self, rom_id: int) -> dict[str, Any]:
         """Bidirectional sync for a single ROM (manual trigger from game detail)."""
@@ -940,12 +900,7 @@ class SyncEngine:
         # Cheap stateless early-out before the device gate — never queue behind
         # an in-flight run just to report the feature is disabled.
         if not self.is_save_sync_enabled():
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_DISABLED_REASON,
-                "message": SAVE_SYNC_DISABLED,
-                "synced": 0,
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED, synced=0)
 
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
@@ -957,13 +912,9 @@ class SyncEngine:
                     raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0)
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
-                refusal = sync_refusal(save_answer)
-                if refusal is not None:
-                    return refusal
+                refuse_unsyncable(save_answer)
 
-                failure = await self._ensure_device_live_or_fail()
-                if failure is not None:
-                    return failure
+                await self._ensure_device_live_or_fail()
 
                 uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
@@ -980,27 +931,13 @@ class SyncEngine:
                     "errors": errors,
                     "conflicts": list(conflicts),
                 }
-        except SaveSyncTimeoutError:
+        except SaveSyncTimeoutError as e:
             # Another save-sync run held the device gate past the bounded wait.
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_BUSY_REASON,
-                "message": SAVE_SYNC_BUSY,
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
-        except RommSyncDisabledError:
+            raise SyncBusy(SAVE_SYNC_BUSY, synced=0) from e
+        except RommSyncDisabledError as e:
             # RomM has save sync disabled for this device server-side — surface it
             # as a policy stop; the game-detail toast renders ``message`` (#1489).
-            return {
-                "success": False,
-                "reason": DEVICE_SYNC_DISABLED_REASON,
-                "message": DEVICE_SYNC_DISABLED,
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
+            raise DeviceSyncDisabled(DEVICE_SYNC_DISABLED, synced=0) from e
 
     def _first_retroarch_rom(self, rom_ids: list[int]) -> int | None:
         """The first of *rom_ids* that launches with a RetroArch core, or ``None``."""
@@ -1044,18 +981,12 @@ class SyncEngine:
             self._logger.warning("sync_all_saves: negotiate session open failed (%s) — per-ROM sessions", e)
             return None
 
-    async def sync_all_saves(self) -> dict[str, Any]:
+    async def sync_all_saves(self) -> dict[str, Any] | SaveSweepIncomplete:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
         # Cheap stateless early-out before the device gate — never queue behind
         # an in-flight run just to report the feature is disabled.
         if not self.is_save_sync_enabled():
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_DISABLED_REASON,
-                "message": SAVE_SYNC_DISABLED,
-                "synced": 0,
-                "conflicts": 0,
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED, synced=0, conflicts=0)
 
         try:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
@@ -1064,9 +995,7 @@ class SyncEngine:
                 # Defense in depth, as in sync_rom_saves.
                 if self._is_update_in_progress():
                     raise Refused("blocked_by_update", UPDATE_MESSAGE, synced=0, conflicts=0)
-                failure = await self._ensure_device_live_or_fail()
-                if failure is not None:
-                    return failure
+                await self._ensure_device_live_or_fail()
 
                 # One whole-device transport-only negotiate session wraps the
                 # sweep (ADR-0017); when it can't open, each confirmed non-legacy
@@ -1110,16 +1039,15 @@ class SyncEngine:
                         # switch mid-sweep (the bulk session had degraded to None).
                         # Abort the loop and report the partial totals accrued so
                         # far (#1489). The finally still closes any bulk session.
-                        return {
-                            "success": False,
-                            "reason": DEVICE_SYNC_DISABLED_REASON,
-                            "message": f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)",
-                            "synced": total_synced,
-                            "conflicts": len(all_conflicts),
-                            "conflicts_list": list(all_conflicts),
-                            "roms_checked": rom_count,
-                            "errors": total_errors,
-                        }
+                        return SaveSweepIncomplete(
+                            reason="device_sync_disabled",
+                            message=f"{DEVICE_SYNC_DISABLED} — stopped after syncing {total_synced} save(s)",
+                            synced=total_synced,
+                            conflicts=len(all_conflicts),
+                            conflicts_list=list(all_conflicts),
+                            roms_checked=rom_count,
+                            errors=total_errors,
+                        )
                     finally:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
@@ -1134,9 +1062,7 @@ class SyncEngine:
                         content_dir_tally.count(
                             await self._loop.run_in_executor(None, live_save_answer, self._rom_info, probe)
                         )
-                content_dir_skip = content_dir_tally.sweep_skip(roms_checked=rom_count)
-                if content_dir_skip is not None:
-                    return content_dir_skip
+                content_dir_tally.refuse_if_all_beside_content(roms_checked=rom_count)
                 conflicts_count = len(all_conflicts)
                 msg = content_dir_tally.annotate(
                     _summarize_sync_result(
@@ -1155,32 +1081,14 @@ class SyncEngine:
                     "roms_checked": rom_count,
                     "errors": total_errors,
                 }
-        except SaveSyncTimeoutError:
+        except SaveSyncTimeoutError as e:
             # Another save-sync run held the device gate past the bounded wait.
-            return {
-                "success": False,
-                "reason": SAVE_SYNC_BUSY_REASON,
-                "message": SAVE_SYNC_BUSY,
-                "synced": 0,
-                "conflicts": 0,
-                "conflicts_list": [],
-                "roms_checked": 0,
-                "errors": [],
-            }
-        except RommSyncDisabledError:
+            raise SyncBusy(SAVE_SYNC_BUSY, synced=0, conflicts=0) from e
+        except RommSyncDisabledError as e:
             # The whole-device bulk pre-negotiate hit RomM's per-device
             # sync-disabled switch before the sweep began — abort with the policy
             # reason and no partial totals (nothing was synced yet, #1489).
-            return {
-                "success": False,
-                "reason": DEVICE_SYNC_DISABLED_REASON,
-                "message": DEVICE_SYNC_DISABLED,
-                "synced": 0,
-                "conflicts": 0,
-                "conflicts_list": [],
-                "roms_checked": 0,
-                "errors": [],
-            }
+            raise DeviceSyncDisabled(DEVICE_SYNC_DISABLED, synced=0, conflicts=0) from e
 
     async def resolve_sync_conflict(
         self,
@@ -1219,11 +1127,7 @@ class SyncEngine:
             save_answer = await self.read_save_answer(rom_id_int)
             await self.follow_save_directory(rom_id_int, save_answer)
             if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
-                return {
-                    "success": False,
-                    "reason": SAVE_SYNC_IN_CONTENT_DIR_REASON,
-                    "message": SAVE_SYNC_IN_CONTENT_DIR,
-                }
+                raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
             return await self._rollback.resolve(
                 rom_id_int,
                 filename,

@@ -294,6 +294,18 @@ class NotInstalled(NamedRefused):
     reason = "not_installed"
 
 
+class SyncBusy(NamedRefused):
+    """Another save sync still held the device when this one's wait ran out; nothing was asked of the server."""
+
+    reason = "sync_busy"
+
+
+class DeviceSyncDisabled(NamedRefused):
+    """The RomM server has save sync turned off for this device."""
+
+    reason = "device_sync_disabled"
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 

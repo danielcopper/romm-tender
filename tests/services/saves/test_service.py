@@ -25,7 +25,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import Refused, RommConnectionError, RommNotFoundError
+from lib.errors import Refused, RommConnectionError, RommNotFoundError, ServerUnreachable
 from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
 from services.saves.service import SaveDeletionIncomplete
@@ -95,9 +95,13 @@ class TestDeviceRegistration:
     async def test_disabled_returns_failure(self, tmp_path):
         svc, _ = make_service(tmp_path)
         # save_sync_enabled defaults to False
-        result = await svc.ensure_device_registered()
-        assert result["success"] is False
-        assert result.get("disabled") is True
+        ensure = svc.ensure_device_registered()
+
+        with pytest.raises(Refused) as refused:
+            await ensure
+
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
+        assert refused.value.details == {}
 
 
 class TestGetDeviceId:
@@ -133,16 +137,34 @@ class TestDeviceRegistrationServer:
 
     @pytest.mark.asyncio
     async def test_returns_failure_on_server_error(self, tmp_path):
-        """If register_device fails with a reachability error, returns the classified failure."""
+        """If register_device fails with a reachability error, that error propagates."""
         fake = FakeSaveApi()
         fake.set_version("4.8.1")  # skip the pre-register heartbeat probe
         fake.fail_on_next(RommConnectionError("server error"))
         svc, _ = make_service(tmp_path, fake_api=fake)
         svc._config.settings["save_sync_enabled"] = True
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
+        with pytest.raises(RommConnectionError):
+            await ensure
+
+        assert _get_device_id(svc) is None
+
+    @pytest.mark.asyncio
+    async def test_a_registration_answered_without_an_id_refuses(self, tmp_path):
+        """A 200 whose body names no device leaves the device unregistered: ``server_unreachable``."""
+        fake = FakeSaveApi()
+        fake.set_version("4.8.1")  # skip the pre-register heartbeat probe
+        fake.arm_register_device_without_id()
+        svc, _ = make_service(tmp_path, fake_api=fake)
+        svc._config.settings["save_sync_enabled"] = True
+        ensure = svc.ensure_device_registered()
+
+        with pytest.raises(ServerUnreachable) as refused:
+            await ensure
+
+        assert refused.value.message == "Could not register device"
+        assert refused.value.details == {}
         assert _get_device_id(svc) is None
 
     @pytest.mark.asyncio
@@ -279,10 +301,11 @@ class TestDeviceRegistrationServer:
         fake = VersionedFakeApi()
         svc, _ = make_service(tmp_path, fake_api=fake)
         # save_sync_enabled defaults to False
-        result = await svc.ensure_device_registered()
+        ensure = svc.ensure_device_registered()
 
-        assert result["success"] is False
-        assert result.get("disabled") is True
+        with pytest.raises(Refused):
+            await ensure
+
         assert fake.heartbeat_calls == 0
 
 
@@ -361,47 +384,49 @@ class TestListDevices:
 
     @pytest.mark.asyncio
     async def test_list_devices_save_sync_disabled(self, tmp_path):
-        """Returns disabled=True when save sync is off."""
+        """Refuses with disabled=True when save sync is off."""
         svc, _ = make_service(tmp_path)
         # save_sync_enabled defaults to False
+        listing = svc.list_devices()
 
-        result = await svc.list_devices()
+        with pytest.raises(Refused) as refused:
+            await listing
 
-        assert result["disabled"] is True
-        assert result["reason"] == "sync_disabled"
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
+        assert refused.value.details == {"disabled": True}
 
     @pytest.mark.asyncio
     async def test_list_devices_adapter_error(self, tmp_path):
-        """Adapter raises a transport error — returns the unreachable response."""
+        """Adapter raises a transport error — it propagates as itself."""
         fake = FakeSaveApi()
         svc, _ = make_service(tmp_path, fake_api=fake)
         svc._config.settings["save_sync_enabled"] = True
 
-        fake.fail_on_next(RommConnectionError("server unavailable"))
-        result = await svc.list_devices()
+        failure = RommConnectionError("server unavailable")
+        fake.fail_on_next(failure)
+        listing = svc.list_devices()
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
+        with pytest.raises(RommConnectionError) as raised:
+            await listing
+
+        assert raised.value is failure
 
     @pytest.mark.asyncio
     async def test_list_devices_not_found(self, tmp_path):
         """A definitive 404 is the server ANSWERING — not an outage (#1570).
 
-        The message stays neutral ("Could not load devices") because it is
-        already true either way; only the routing slug was wrong.
+        It propagates as the 404 it is, which ``classify_error`` answers as
+        ``not_found``, never ``server_unreachable``.
         """
         fake = FakeSaveApi()
         svc, _ = make_service(tmp_path, fake_api=fake)
         svc._config.settings["save_sync_enabled"] = True
 
         fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
-        result = await svc.list_devices()
+        listing = svc.list_devices()
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
-        assert result["message"] == "Could not load devices"
-        assert result["devices"] == []
+        with pytest.raises(RommNotFoundError):
+            await listing
 
     @pytest.mark.asyncio
     async def test_list_devices_no_own_id_all_false(self, tmp_path):
@@ -447,13 +472,14 @@ class TestListDevices:
 
     @pytest.mark.asyncio
     async def test_list_devices_disabled_when_sync_off(self, saves):
-        """Returns disabled=True when save sync is disabled."""
+        """Refuses with disabled=True when save sync is disabled."""
         saves.settings["save_sync_enabled"] = False
+        listing = saves.service.list_devices()
 
-        result = await saves.service.list_devices()
+        with pytest.raises(Refused) as refused:
+            await listing
 
-        assert result["success"] is False
-        assert result.get("disabled") is True
+        assert refused.value.details.get("disabled") is True
 
 
 class TestRetroDeckMigrationBlocksSaveSync:
@@ -575,18 +601,18 @@ class TestConflictRulesAtTheUseCase:
 class TestPostExitSyncConnectivity:
     @pytest.mark.asyncio
     async def test_returns_offline_when_heartbeat_fails(self, tmp_path):
-        """post_exit_sync returns offline=True when the server is genuinely unreachable."""
+        """post_exit_sync refuses with offline=True when the server is genuinely unreachable."""
         fake = FakeSaveApi()
         fake.heartbeat_raises = RommConnectionError("unreachable")
         svc, _ = make_service(tmp_path, fake_api=fake)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
+        sync = svc.post_exit_sync(42)
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(ServerUnreachable) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result.get("offline") is True
-        assert result["synced"] == 0
+        assert refused.value.details == {"synced": 0, "offline": True}
 
     @pytest.mark.asyncio
     async def test_proceeds_when_heartbeat_succeeds(self, tmp_path):
@@ -604,16 +630,18 @@ class TestPostExitSyncConnectivity:
 
     @pytest.mark.asyncio
     async def test_offline_skips_before_device_registration(self, tmp_path):
-        """post_exit_sync returns offline without attempting device registration."""
+        """post_exit_sync refuses as offline without attempting device registration."""
         fake = FakeSaveApi()
         fake.heartbeat_raises = RommConnectionError("connection refused")
         svc, _ = make_service(tmp_path, fake_api=fake)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id — would trigger registration if heartbeat passed
+        sync = svc.post_exit_sync(42)
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(ServerUnreachable) as refused:
+            await sync
 
-        assert result.get("offline") is True
+        assert refused.value.details["offline"] is True
         # Device should not have been registered
         assert not _get_device_id(svc)
 
@@ -719,11 +747,14 @@ class TestSaveSyncFeatureFlag:
 
     @pytest.mark.asyncio
     async def test_ensure_device_disabled(self, saves):
-        """ensure_device_registered returns disabled marker when save sync off."""
+        """ensure_device_registered refuses with sync_disabled when save sync is off."""
         saves.settings["save_sync_enabled"] = False
-        result = await saves.service.ensure_device_registered()
-        assert result["success"] is False
-        assert result.get("disabled") is True
+        ensure = saves.service.ensure_device_registered()
+
+        with pytest.raises(Refused) as refused:
+            await ensure
+
+        assert refused.value.reason == "sync_disabled"
         assert _get_device_id(saves.service) is None
 
     @pytest.mark.asyncio
@@ -746,19 +777,27 @@ class TestSaveSyncFeatureFlag:
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_disabled(self, saves):
-        """sync_rom_saves returns error when save sync disabled."""
+        """sync_rom_saves refuses when save sync disabled."""
         saves.settings["save_sync_enabled"] = False
-        result = await saves.service.sync_rom_saves(42)
-        assert result["success"] is False
-        assert "disabled" in result["message"].lower()
+        sync = saves.service.sync_rom_saves(42)
+
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert refused.value.reason == "sync_disabled"
+        assert "disabled" in refused.value.message.lower()
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_disabled(self, saves):
-        """sync_all_saves returns error when save sync disabled."""
+        """sync_all_saves refuses when save sync disabled."""
         saves.settings["save_sync_enabled"] = False
-        result = await saves.service.sync_all_saves()
-        assert result["success"] is False
-        assert "disabled" in result["message"].lower()
+        sync = saves.service.sync_all_saves()
+
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert refused.value.reason == "sync_disabled"
+        assert "disabled" in refused.value.message.lower()
 
     @pytest.mark.asyncio
     async def test_enable_via_settings_update(self, saves):

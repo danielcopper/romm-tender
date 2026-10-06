@@ -16,6 +16,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
 from domain.playtime import PendingPlaySession, Playtime
 from lib.errors import (
+    Refused,
     RommApiError,
     RommAuthError,
     RommConnectionError,
@@ -24,7 +25,6 @@ from lib.errors import (
     RommSSLError,
     RommTimeoutError,
 )
-from lib.list_result import ErrorCode
 from services.saves.sync_engine.devices import DeviceRegistry
 from tests.services.saves._helpers import (
     _create_save,
@@ -176,9 +176,15 @@ class TestEnsureDeviceRegisteredVersionProbe:
 
 
 class TestEnsureDeviceRegisteredFailurePaths:
-    """When register_device fails, the four sync use cases must surface
-    DEVICE_NOT_REGISTERED instead of proceeding with a missing device_id
-    (engine.py lines 309-311 / 365 / 407 / 437-439)."""
+    """When register_device fails, the four sync use cases must refuse with
+    ``device_not_registered`` instead of proceeding with a missing device_id."""
+
+    @staticmethod
+    async def _assert_device_not_registered(sync):
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", "Device not registered")
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_returns_device_not_registered_on_failure(self, tmp_path):
@@ -186,13 +192,11 @@ class TestEnsureDeviceRegisteredFailurePaths:
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set — triggers ensure_device_registered.
         _install_rom(svc, tmp_path)
-        # register_device raises → ensure_device_registered returns success=False.
+        # register_device raises → the sync refuses with device_not_registered.
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        result = await svc.pre_launch_sync(42)
+        await self._assert_device_not_registered(svc.pre_launch_sync(42))
 
-        assert result["success"] is False
-        assert "Device" in result["message"] or "device" in result["message"]
         # No sync ran — the guard returned early.
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
@@ -205,10 +209,8 @@ class TestEnsureDeviceRegisteredFailurePaths:
         _create_save(tmp_path, content=b"data")
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        result = await svc.post_exit_sync(42)
+        await self._assert_device_not_registered(svc.post_exit_sync(42))
 
-        assert result["success"] is False
-        assert "Device" in result["message"] or "device" in result["message"]
         # No upload ran.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
@@ -220,10 +222,8 @@ class TestEnsureDeviceRegisteredFailurePaths:
         _install_rom(svc, tmp_path)
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        result = await svc.sync_rom_saves(42)
+        await self._assert_device_not_registered(svc.sync_rom_saves(42))
 
-        assert result["success"] is False
-        assert "Device" in result["message"] or "device" in result["message"]
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -234,19 +234,17 @@ class TestEnsureDeviceRegisteredFailurePaths:
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         fake.fail_on_next(RommApiError("Server unreachable"))
 
-        result = await svc.sync_all_saves()
+        await self._assert_device_not_registered(svc.sync_all_saves())
 
-        assert result["success"] is False
-        assert "Device" in result["message"] or "device" in result["message"]
         # No per-ROM sync ran.
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
 
 class TestEnsureDeviceRegisteredErrorClassification:
-    """When register_device raises, the returned dict carries the CLASSIFIED
-    reason + message (auth/SSL get their own slug) instead of every failure
-    collapsing onto a generic SERVER_UNREACHABLE "Could not register device"
-    (#971)."""
+    """When register_device raises a RomM error, it propagates as itself, so the
+    caller answers its OWN classified reason + message (auth/SSL get their own
+    slug) instead of every failure collapsing onto a generic
+    SERVER_UNREACHABLE "Could not register device" (#971)."""
 
     @pytest.mark.asyncio
     async def test_auth_failure_classifies_to_auth_failed(self, tmp_path):
@@ -256,40 +254,43 @@ class TestEnsureDeviceRegisteredErrorClassification:
         # failure must land on register_device, not the non-fatal version probe.
         fake.set_version("4.8.1")
         # No device_id set → registration branch.
-        fake.fail_on_next(RommAuthError("401 Unauthorized"))
+        failure = RommAuthError("401 Unauthorized")
+        fake.fail_on_next(failure)
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        with pytest.raises(RommAuthError) as raised:
+            await ensure
 
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.AUTH_FAILED.value
-        assert "uthentication failed" in result["message"]
-        assert result["message"] != "Could not register device"
+        assert raised.value is failure
+        assert _register_call(fake) is not None
 
     @pytest.mark.asyncio
     async def test_ssl_failure_classifies_with_ssl_message(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         fake.set_version("4.8.1")
-        fake.fail_on_next(RommSSLError("cert verify failed"))
+        failure = RommSSLError("cert verify failed")
+        fake.fail_on_next(failure)
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        with pytest.raises(RommSSLError) as raised:
+            await ensure
 
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert "SSL" in result["message"]
+        assert raised.value is failure
 
     @pytest.mark.asyncio
     async def test_connection_failure_classifies_to_unreachable(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         fake.set_version("4.8.1")
-        fake.fail_on_next(RommConnectionError("Connection refused"))
+        failure = RommConnectionError("Connection refused")
+        fake.fail_on_next(failure)
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        with pytest.raises(RommConnectionError) as raised:
+            await ensure
 
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert "unreachable" in result["message"].lower()
+        assert raised.value is failure
 
 
 class TestEnsureDeviceRegisteredUpdateSwallowLogs:
@@ -429,14 +430,12 @@ class TestEnsureDeviceRegisteredReRegistersDeadDevice:
 
         fake.update_device = _touch_404
         fake.fail_on_next(RommConnectionError("Connection refused"))
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        # Clean, recoverable state: the RomM error propagates, dead id cleared.
+        with pytest.raises(RommConnectionError):
+            await ensure
 
-        # Clean, recoverable state: classified failure, empty id, dead id cleared.
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["message"]
-        assert result["device_id"] == ""
         # The dead id was forgotten and NOT replaced — kv_config is left cleared,
         # so the next ensure_device_registered retries cleanly from None.
         assert _get_device_id(svc) is None
@@ -578,10 +577,11 @@ class TestDeviceHealReAddressesPlaytimeOutbox:
 
         fake.update_device = _touch_404
         fake.fail_on_next(RommConnectionError("Connection refused"))
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        with pytest.raises(RommConnectionError):
+            await ensure
 
-        assert result["success"] is False
         assert self._pending(svc, 42)["s1"].device_id == "server-uuid"
 
 
@@ -620,12 +620,12 @@ class TestPermissionDegradedNeverDropsDeviceId:
         # so the 403 lands on register_device itself.
         fake.set_version("4.9.0")
         fake.fail_on_next(RommForbiddenError("403 Forbidden"))
+        ensure = svc.ensure_device_registered()
 
-        result = await svc.ensure_device_registered()
+        with pytest.raises(RommForbiddenError):
+            await ensure
 
-        assert result["success"] is False
         # No id was minted, and nothing was deleted — kv_config stays absent.
-        assert result["device_id"] == ""
         assert _get_device_id(svc) is None
 
 

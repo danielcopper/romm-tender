@@ -17,15 +17,9 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from domain.identity import DISPLAY_NAME
-from lib.errors import RommNotFoundError, classify_error
-from lib.list_result import ErrorCode
+from lib.errors import Refused, RommNotFoundError, ServerUnreachable
+from services.saves._messages import SAVE_SYNC_DISABLED
 from services.saves._settings import save_sync_enabled
-
-# Both device use cases short-circuit with the identical failure shape when
-# save sync is disabled — kept as one constant so the two branches never drift
-# into a per-call mini-dialect.
-_SYNC_DISABLED_REASON = "sync_disabled"
-_SYNC_DISABLED_MESSAGE = "Save sync is disabled"
 
 if TYPE_CHECKING:
     import asyncio
@@ -223,16 +217,13 @@ class DeviceRegistry:
         forgotten and a fresh one is registered in its place. Every other
         touch failure is a transient miss that leaves the cached id in
         force — a server blip must never churn a re-registration.
+
+        Refuses with ``sync_disabled`` while save sync is off, and with
+        ``server_unreachable`` when the server answers the registration without
+        an id; a RomM error from the registration propagates.
         """
         if not save_sync_enabled(self._settings):
-            return {
-                "success": False,
-                "reason": _SYNC_DISABLED_REASON,
-                "message": _SYNC_DISABLED_MESSAGE,
-                "device_id": "",
-                "device_name": "",
-                "disabled": True,
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
 
         # Probe the RomM version when it has not been observed yet. Device
         # registration is the entrypoint reached from background launchers
@@ -297,101 +288,64 @@ class DeviceRegistry:
         hostname = hostname_provider.get()
         machine_id = machine_id_provider.get()
 
+        result = await loop.run_in_executor(
+            None,
+            lambda: self._romm_api.register_device(
+                name=hostname,
+                platform="linux",
+                client=DISPLAY_NAME,
+                client_version=self._version,
+                hostname=machine_id,
+            ),
+        )
+        server_device_id = result.get("id") or result.get("device_id")
+        if not server_device_id:
+            raise ServerUnreachable("Could not register device")
+        new_id = str(server_device_id)
+        # The kv_config device id is the AUTHORITATIVE "registered"
+        # signal — write it first. The device label is a best-effort
+        # write to settings.json AFTER: ADR-0003 keeps the two in
+        # separate stores, so the writes can't be one atomic op. If the
+        # label write fails (e.g. a settings.json fsync error) the
+        # device is still fully registered and usable — the prior/default
+        # label persists — instead of being left in a broken half-state.
+        await loop.run_in_executor(None, self._set_device_id, new_id)
+        if dead_device_id is not None and dead_device_id != new_id:
+            # A heal, not a first registration: carry the outbox over to
+            # the id the server actually knows (RomM's machine-id dedup
+            # can hand back the SAME id, which needs no re-address).
+            await loop.run_in_executor(None, self._reassign_pending_play_sessions, dead_device_id, new_id)
+        device_name = hostname
         try:
-            result = await loop.run_in_executor(
-                None,
-                lambda: self._romm_api.register_device(
-                    name=hostname,
-                    platform="linux",
-                    client=DISPLAY_NAME,
-                    client_version=self._version,
-                    hostname=machine_id,
-                ),
-            )
-            server_device_id = result.get("id") or result.get("device_id")
-            if server_device_id:
-                new_id = str(server_device_id)
-                # The kv_config device id is the AUTHORITATIVE "registered"
-                # signal — write it first. The device label is a best-effort
-                # write to settings.json AFTER: ADR-0003 keeps the two in
-                # separate stores, so the writes can't be one atomic op. If the
-                # label write fails (e.g. a settings.json fsync error) the
-                # device is still fully registered and usable — the prior/default
-                # label persists — instead of being left in a broken half-state.
-                await loop.run_in_executor(None, self._set_device_id, new_id)
-                if dead_device_id is not None and dead_device_id != new_id:
-                    # A heal, not a first registration: carry the outbox over to
-                    # the id the server actually knows (RomM's machine-id dedup
-                    # can hand back the SAME id, which needs no re-address).
-                    await loop.run_in_executor(None, self._reassign_pending_play_sessions, dead_device_id, new_id)
-                device_name = hostname
-                try:
-                    await loop.run_in_executor(None, self._set_device_name, hostname)
-                except Exception as e:
-                    device_name = self._get_device_name() or ""
-                    self._log_debug(
-                        f"ensure_device_registered: device_name write failed (non-fatal, "
-                        f"device usable with id {new_id}): {e}"
-                    )
-                self._logger.info(f"Device registered with server: {server_device_id} ({hostname})")
-                return {
-                    "success": True,
-                    "device_id": new_id,
-                    "device_name": device_name,
-                    "server_device_id": new_id,
-                }
+            await loop.run_in_executor(None, self._set_device_name, hostname)
         except Exception as e:
-            # Classify the failure so a revoked token (401 → AUTH_FAILED) or an
-            # SSL misconfig carries its OWN reason + message instead of every
-            # failure collapsing onto a generic "Could not register device"
-            # offline slug (#971).
-            self._logger.warning(f"Server device registration failed: {e}")
-            reason, message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": message,
-                "device_id": "",
-                "device_name": "",
-            }
-
+            device_name = self._get_device_name() or ""
+            self._log_debug(
+                f"ensure_device_registered: device_name write failed (non-fatal, device usable with id {new_id}): {e}"
+            )
+        self._logger.info(f"Device registered with server: {server_device_id} ({hostname})")
         return {
-            "success": False,
-            "reason": ErrorCode.SERVER_UNREACHABLE.value,
-            "message": "Could not register device",
-            "device_id": "",
-            "device_name": "",
+            "success": True,
+            "device_id": new_id,
+            "device_name": device_name,
+            "server_device_id": new_id,
         }
 
     async def list_devices(self, *, loop: asyncio.AbstractEventLoop) -> dict[str, Any]:
-        """List all devices registered with the RomM server for this user."""
+        """List all devices registered with the RomM server for this user.
+
+        Refuses with ``sync_disabled`` and ``disabled`` while save sync is off;
+        a RomM error from the server propagates.
+        """
         if not save_sync_enabled(self._settings):
-            return {
-                "success": False,
-                "reason": _SYNC_DISABLED_REASON,
-                "message": _SYNC_DISABLED_MESSAGE,
-                "devices": [],
-                "disabled": True,
-            }
-        try:
-            own_id = await loop.run_in_executor(None, self.get_device_id)
-            devices = await loop.run_in_executor(
-                None,
-                lambda: self._retry.with_retry(lambda: self._romm_api.list_devices()),
-            )
-            own_id_str = str(own_id or "")
-            enriched = [
-                {**d, "is_current_device": bool(own_id_str) and (str(d.get("id") or "")) == own_id_str} for d in devices
-            ]
-            return {"success": True, "devices": enriched}
-        except Exception as e:
-            self._log_debug(f"list_devices failed: {e}")
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                # Neutral and true whichever way the call failed — only the
-                # routing slug was ever wrong here.
-                "message": "Could not load devices",
-                "devices": [],
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED, disabled=True)
+        own_id = await loop.run_in_executor(None, self.get_device_id)
+        devices = await loop.run_in_executor(
+            None,
+            lambda: self._retry.with_retry(lambda: self._romm_api.list_devices()),
+        )
+        own_id_str = str(own_id or "")
+        enriched = [
+            {**d, "is_current_device": bool(own_id_str) and (str(d.get("id") or "")) == own_id_str} for d in devices
+        ]
+        return {"success": True, "devices": enriched}

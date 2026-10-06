@@ -4,6 +4,7 @@ import pytest
 
 from lib.errors import (
     AuthFailed,
+    DeviceSyncDisabled,
     NamedRefused,
     NotConfigured,
     NotInstalled,
@@ -19,6 +20,7 @@ from lib.errors import (
     RommTimeoutError,
     RommUnsupportedError,
     ServerUnreachable,
+    SyncBusy,
     TokenHostMismatchError,
     VersionUnsupported,
     classify_error,
@@ -389,6 +391,8 @@ class TestTheNamedRefusals:
             (ServerUnreachable, "server_unreachable"),
             (VersionUnsupported, "version_error"),
             (NotInstalled, "not_installed"),
+            (SyncBusy, "sync_busy"),
+            (DeviceSyncDisabled, "device_sync_disabled"),
         ],
     )
     def test_each_carries_its_reason(self, named, reason):
