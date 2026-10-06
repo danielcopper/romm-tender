@@ -1815,8 +1815,9 @@ class TestForgetDownload:
         original = service._delete_rom_files
 
         def remove_while_a_forget_arrives(*args, **kwargs):
+            forget = asyncio.run_coroutine_threadsafe(service.forget_download(42), service._loop)
             with pytest.raises(Refused) as refused:
-                asyncio.run_coroutine_threadsafe(service.forget_download(42), service._loop).result()
+                forget.result()
             refusals.append(refused.value)
             return original(*args, **kwargs)
 
