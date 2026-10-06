@@ -473,6 +473,24 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).not.toContain("The list is still loading");
   });
 
+  it("clears a Confirm refused for a list still loading once a page fails", async () => {
+    const second = pendingPage();
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockReturnValueOnce(second.promise);
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(2));
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(modal.container.textContent).toContain("Cleanup did not start: The list is still loading (1 of 2 entries).");
+
+    await act(async () => second.reject(new Error("offline")));
+
+    expect(modal.container.textContent).not.toContain("The list is still loading");
+    expect(modal.container.textContent).toContain("The list stopped loading at 1 of 2 entries.");
+  });
+
   it("clears a Confirm refused for a stopped list as soon as Retry is pressed", async () => {
     const retried = pendingPage();
     vi.mocked(backend.getPrunePreview)
@@ -510,6 +528,27 @@ describe("RemovedGamesCleanup", () => {
     await act(async () => second.resolve({ ...preview, offset: 1, total: 2, items: [rowAs(8, "Second Page Game")] }));
 
     expect(modal.container.textContent).toContain("Second Page Game");
+    expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline");
+  });
+
+  it("keeps a status that is not about the list when Retry is pressed", async () => {
+    const retried = pendingPage();
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValueOnce(retried.promise);
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    await waitFor(() => expect(modal.getByRole("button", { name: "Retry loading" })).toBeTruthy());
+    fireEvent.click(modal.getByRole("button", { name: "Refresh free space" }));
+    await waitFor(() =>
+      expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline"),
+    );
+
+    fireEvent.click(modal.getByRole("button", { name: "Retry loading" }));
+    await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(4));
+
     expect(modal.container.textContent).toContain("Could not refresh recovery space: Error: offline");
   });
 
@@ -1067,11 +1106,26 @@ describe("RemovedGamesCleanup", () => {
         setPruneComplete(
           finishedRun({
             message: "The run stopped.",
-            results: [{ group_id: "g-1", rom_ids: [1], status: "failed", message: "Nothing was removed." }],
+            results: [
+              { group_id: "g-1", rom_ids: [1], status: "failed", message: "Nothing was removed." },
+              { group_id: "g-2", rom_ids: [2], status: "removed", message: "Removed without a word." },
+              {
+                group_id: "g-3",
+                rom_ids: [3],
+                status: "removed",
+                message: "Removed with a warning.",
+                warnings: ["A save was kept aside."],
+                warning_count: 1,
+                warnings_omitted: false,
+              },
+            ],
           }),
         );
       });
-      expect(section.container.textContent).toContain("The run stopped. · Nothing was removed.");
+      expect(section.container.textContent).toContain(
+        "The run stopped. · Nothing was removed. · Removed with a warning. · Warning: A save was kept aside.",
+      );
+      expect(section.container.textContent).not.toContain("Removed without a word.");
       expect(section.container.textContent).not.toContain("omitted");
     });
 

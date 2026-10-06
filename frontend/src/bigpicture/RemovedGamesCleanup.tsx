@@ -605,8 +605,8 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   // so a page that answers for a loop no longer current writes nothing.
   const pageLoadGeneration = useRef(0);
   // The refusal a Confirm press got because the list was still loading or had
-  // stopped, which stops being true once Retry is pressed or the list has all
-  // arrived.
+  // stopped, which stops being true once a page fails, Retry is pressed or the
+  // list has all arrived.
   const listRefusal = useRef<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelRequestedFor, setCancelRequestedFor] = useState<string | null>(null);
@@ -703,6 +703,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
           },
           fail: (message, loaded) => {
             setPageLoadError(message);
+            setStatus((current) => (current === listRefusal.current ? "" : current));
             logWarn(`[prune] Preview page at offset ${loaded} of ${initial.total ?? 0} failed: ${message}`);
           },
           allArrived: () => setStatus((current) => (current === listRefusal.current ? "" : current)),
