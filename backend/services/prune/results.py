@@ -1,4 +1,4 @@
-"""Mutation bookkeeping and the bounded wire frames one cleanup run publishes."""
+"""Mutation bookkeeping and the frames one cleanup run publishes."""
 
 from __future__ import annotations
 
@@ -13,16 +13,17 @@ if TYPE_CHECKING:
     from services.protocols import ConflictRules, EventEmitter
     from services.prune._models import RecoveryHandle
 
-# One group's result travels whole in one completion chunk, so a group with many
-# versions or warnings would otherwise make one oversized chunk. The full numbers
-# travel beside the capped lists (`rom_count`, `removed_count`,
-# `warning_count`), and the panel shows how many warnings were left out.
+# One group's result travels whole in one completion chunk, so these keep a group
+# with many versions or warnings from growing its result by count; the full counts
+# travel beside the capped lists. The progress frame borrows the id cap for its
+# `rom_ids`.
 _COMPLETION_IDS_PER_GROUP = 50
 _COMPLETION_WARNINGS_PER_GROUP = 5
 # Events pass no host size cap (`host/events.py` `EventSink.emit` checks none),
-# so this chosen budget is what keeps each completion event small however large
-# the run. Growing it is not free: the chunking re-encodes the growing chunk
-# after every result it adds.
+# so this chosen budget is what splits a large run's results across events. A
+# chunk holds at least one result, and text is sent whole, so a single result or
+# run message larger than this makes an event of its own size. Growing it is not
+# free: the chunking re-encodes the growing chunk after every result it adds.
 _COMPLETION_BUDGET_BYTES = 48 * 1024
 
 

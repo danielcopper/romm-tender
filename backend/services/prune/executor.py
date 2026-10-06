@@ -155,7 +155,7 @@ class PruneExecutor:
         )
 
     async def run(self, run_id: str, preview: PrunePreview, options: PruneOptions) -> None:
-        """Execute every candidate group and emit bounded terminal chunks."""
+        """Execute every candidate group and emit its terminal chunks."""
         results: list[dict[str, Any]] = []
         self._liveness.bind_run(run_id, preview.server_namespace)
         self._results.bind_run(preview.preview_id)

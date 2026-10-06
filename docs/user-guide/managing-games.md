@@ -193,12 +193,12 @@ remains bound to the new Default. If Steam removal succeeded but every completio
 ambiguous and source data stays retained; the same applies when Steam removal was attempted but its absence could not be
 confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
 in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
-failure message remains visible after earlier groups committed. Warnings past the limit for one game are left out, and
-the detail says how many and never reports zero additional warnings. Progress is tied to the preview that you confirmed,
-so a matching run is still shown if only the successful start response is delayed or lost; a matching terminal event
-makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same run cannot
-replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather than being
-reported as unchanged.
+failure message remains visible after earlier groups committed. At most five warnings are listed for one game; when
+there were more, the detail — and the finished run's line on **Data Management → Gone from RomM** — says how many were
+left out. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
+start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
+result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These
+outcomes are intentional and retryable rather than being reported as unchanged.
 
 ### Region and Languages
 

@@ -2068,32 +2068,32 @@ pane would shrink it in both axes. Its rules do not change; they live in
 **The dialog reads top to bottom as the options, the run's bar, then the candidates.** The four options stand in two
 columns under the intro, each a short label with its full meaning in the line under it, and the acknowledgement a run
 without a recovery bundle asks for appears under the bundle's own toggle. The bar holds the recovery estimate against
-the free space at the target, **Refresh free space**, **Retry loading** and the reason a page failed to load, once one
-has, **Cancel** and **Confirm Cleanup**, and while a run is going its progress and **Stop Cleanup**, then its result and
-the details region, and the line saying why Confirm would refuse a press. **The bar sits above the table, not pinned
-under it** as the layout study drew it: focus follows element order rather than the picture, so a bar after the rows is
-one press per row away however it is drawn — the Sync page keeps its buttons above its tables for the same reason. Retry
-loading is in the bar for that reason too: every row is a stop, and Confirm refuses until every page is loaded, so after
-the table it would be a table's length from the press it unblocks; the rows it adds land below it. The candidates are a
-table (Game, Platform, Verdict, Installed, Keep a copy). **A verdict says what is known now and never the run's
-outcome** — _Gone from RomM_ for a candidate, _Still on RomM_ for a version listed only because a whole-game removal
-could take it, each with _one of 4_ where the game has more than one version. A version still on RomM is removed too if
-the run's check finds every version of its game gone, so neither a verdict nor the section's heading (_Other versions of
-these games — still on RomM_) says _kept_: either would promise more than the preview knows, and a heading is read
-before the line that qualifies it. The full sentence behind a verdict is the cell's title, which is a mouse's way to it
-only: a tooltip is a hover the controller cannot perform, so on the controller the intro and the other versions' section
-line say the same. For the same reason **what tells two versions apart is on screen**: under each row a line names the
-version — its ROM id, and its file name where that says more than the game's name — because two gone versions of one
-game otherwise draw as identical rows, each with a toggle of its own. The other versions are a section of the same table
-under a heading whose line states the sentence for all of them. **Keep a copy** is the per-row toggle that puts a
-version's installed ROM content in the recovery bundle: an installed row carries it and it is that row's focus stop,
-since a second stop on the row would be a dead step in front of it; a row with nothing installed carries a dash and is a
-stop itself, so the table can be walked. A row's warnings — the preview's own warning and the ROM file that goes without
-a backup — are lines under it, inside the row. **The dialog is revealed at both edges**: focus reaching the first option
-scrolls it to its top, so the intro comes back, and focus reaching the last row scrolls it to its end, so that row's own
-lines and the note after the table are not left under the view. Steam scrolls only far enough to reveal the focused
-control, which is why both are needed. The suite pins that each scroll is asked for; whether it lands where it should is
-device-only.
+the free space at the target, **Refresh free space**, **Retry loading** once a page has failed to load, **Cancel** and
+**Confirm Cleanup**, the reason that page failed, and while a run is going its progress and **Stop Cleanup**, then its
+result and the details region, and the line saying why Confirm would refuse a press. **The bar sits above the table, not
+pinned under it** as the layout study drew it: focus follows element order rather than the picture, so a bar after the
+rows is one press per row away however it is drawn — the Sync page keeps its buttons above its tables for the same
+reason. Retry loading is in the bar for that reason too: every row is a stop, and Confirm refuses until every page is
+loaded, so after the table it would be a table's length from the press it unblocks; the rows it adds land below it. The
+candidates are a table (Game, Platform, Verdict, Installed, Keep a copy). **A verdict says what is known now and never
+the run's outcome** — _Gone from RomM_ for a candidate, _Still on RomM_ for a version listed only because a whole-game
+removal could take it, each with _one of 4_ where the game has more than one version. A version still on RomM is removed
+too if the run's check finds every version of its game gone, so neither a verdict nor the section's heading (_Other
+versions of these games — still on RomM_) says _kept_: either would promise more than the preview knows, and a heading
+is read before the line that qualifies it. The full sentence behind a verdict is the cell's title, which is a mouse's
+way to it only: a tooltip is a hover the controller cannot perform, so on the controller the intro and the other
+versions' section line say the same. For the same reason **what tells two versions apart is on screen**: under each row
+a line names the version — its ROM id, and its file name where that says more than the game's name — because two gone
+versions of one game otherwise draw as identical rows, each with a toggle of its own. The other versions are a section
+of the same table under a heading whose line states the sentence for all of them. **Keep a copy** is the per-row toggle
+that puts a version's installed ROM content in the recovery bundle: an installed row carries it and it is that row's
+focus stop, since a second stop on the row would be a dead step in front of it; a row with nothing installed carries a
+dash and is a stop itself, so the table can be walked. A row's warnings — the preview's own warning and the ROM file
+that goes without a backup — are lines under it, inside the row. **The dialog is revealed at both edges**: focus
+reaching the first option scrolls it to its top, so the intro comes back, and focus reaching the last row scrolls it to
+its end, so that row's own lines and the note after the table are not left under the view. Steam scrolls only far enough
+to reveal the focused control, which is why both are needed. The suite pins that each scroll is asked for; whether it
+lands where it should is device-only.
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
 the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —

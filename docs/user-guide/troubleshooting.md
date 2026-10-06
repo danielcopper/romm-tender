@@ -581,12 +581,11 @@ error names the full path of that preserved staging so mounted or uncertain data
 Free-space blocking in the modal covers the installed ROM content you selected. The backend checks actual source size
 and free space again at copy time, so a later disk-space change can still stop the group safely.
 
-The cleanup report is per group: unrelated groups continue after a skip or failure. Large runs deliver terminal details
-in chunks of bounded size, which the UI assembles only after every earlier chunk arrives. A **partial** result means the
-report lists a Steam or filesystem action that committed or became ambiguous before a later guard failed; read that
-group's concrete message and save warnings before retrying. If a recovery bundle was sealed but a later liveness or
-Steam check aborted, keep the bundle; it is a valid pre-action snapshot even though no local row was deleted. Recovery
-has no automatic import flow.
+The cleanup report is per group: unrelated groups continue after a skip or failure. A large run's report arrives in
+parts, and the modal shows it once every part has arrived. A **partial** result means the report lists a Steam or
+filesystem action that committed or became ambiguous before a later guard failed; read that group's concrete message and
+save warnings before retrying. If a recovery bundle was sealed but a later liveness or Steam check aborted, keep the
+bundle; it is a valid pre-action snapshot even though no local row was deleted. Recovery has no automatic import flow.
 
 A bulk shortcut removal is paced so it never freezes the interface, so on a large library it can take a few seconds.
 While one is running, every removal button on every pane is disabled and a spinner above the list names the operation

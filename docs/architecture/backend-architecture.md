@@ -398,14 +398,14 @@ run can confirm a shortcut is already absent and reconcile without repeating Ste
 likewise an explicit `partial` result with the committed action and actual mutation categories recorded, not a claim
 that the group was unchanged. Cancellation can stop final guards and every later group; shielding starts only with the
 first irreversible local mutation and awaits that phase to a known result. Cancellation remains authoritative if that
-shielded child faults: the current group's truthful fault/ledger result is recorded and no later group starts. Terminal
-result strings/arrays are bounded and chunks are built to a serialized byte budget. Every action/progress/completion
-frame carries the originating preview ID, allowing the frontend to adopt a matching run even if the successful start
-response is delayed or lost while still rejecting foreign frames; completion finalizes only a contiguous chunk sequence.
-An accepted contiguous terminal sequence seals that run against every later action, progress, or completion frame, and
-the modal exposes its terminal controls immediately even if the start response is still pending. Committed repoint
-publication performs a bounded/retried backend release acknowledgement before gated cover/status work. Mixed runs
-continue unrelated groups.
+shielded child faults: the current group's truthful fault/ledger result is recorded and no later group starts. A
+terminal result's ROM-id and warning lists are capped per group beside their full counts, its text is sent whole, and
+chunks are built to a serialized byte budget. Every action/progress/completion frame carries the originating preview ID,
+allowing the frontend to adopt a matching run even if the successful start response is delayed or lost while still
+rejecting foreign frames; completion finalizes only a contiguous chunk sequence. An accepted contiguous terminal
+sequence seals that run against every later action, progress, or completion frame, and the modal exposes its terminal
+controls immediately even if the start response is still pending. Committed repoint publication performs a
+bounded/retried backend release acknowledgement before gated cover/status work. Mixed runs continue unrelated groups.
 
 #### LibraryService decomposition (`services/library/`)
 
