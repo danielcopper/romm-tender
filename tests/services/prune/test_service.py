@@ -28,7 +28,7 @@ from lib.errors import OperationAbortedError, Refused, RommConnectionError, Romm
 from lib.prune_conflicts import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import cancellation_state
-from services.prune.results import GroupOutcome
+from services.prune.results import _COMPLETION_BUDGET_BYTES, GroupOutcome
 
 if TYPE_CHECKING:
     from models.prune import MutationOutcome, RecoveryArtifact, SourceClaim, SteamRecoverySnapshot
@@ -1829,7 +1829,10 @@ async def test_completion_results_are_emitted_in_bounded_chunks(harness):
     completions = [payload for name, payload in harness.events.events if name == "prune_complete"]
     assert sum(len(payload["results"]) for payload in completions) == 26
     assert completions[-1]["final"] is True
-    assert all(len(json.dumps(payload, ensure_ascii=True).encode("utf-8")) <= 48 * 1024 for payload in completions)
+    assert all(
+        len(json.dumps(payload, ensure_ascii=True).encode("utf-8")) <= _COMPLETION_BUDGET_BYTES
+        for payload in completions
+    )
 
 
 def test_one_large_group_result_is_explicitly_bounded(harness):
@@ -1843,10 +1846,8 @@ def test_one_large_group_result_is_explicitly_bounded(harness):
     )
     assert len(result["rom_ids"]) == 50
     assert result["rom_count"] == 60
-    assert result["rom_ids_truncated"] is True
     assert len(result["removed_rom_ids"]) == 50
     assert result["removed_count"] == 60
-    assert result["removed_rom_ids_truncated"] is True
     assert len(result["message"]) == 512
     assert result["message_truncated"] is True
 

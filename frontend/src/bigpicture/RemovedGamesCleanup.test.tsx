@@ -11,6 +11,7 @@ import {
   resetPruneState,
   setPruneComplete,
   setPruneProgress,
+  type PruneComplete,
 } from "../utils/pruneStore";
 import {
   openRemovedGamesCleanupModal,
@@ -32,7 +33,6 @@ const preview: backend.PrunePreviewResult = {
       fs_name_truncated: false,
       platform_slug: "gba",
       group_id: "group-1",
-      group_id_truncated: false,
       group_size: 1,
       bound_count: 0,
       candidate: true,
@@ -54,6 +54,26 @@ function shownModal(): ReactElement {
   const element = calls[calls.length - 1]?.[0] as ReactElement | undefined;
   if (!element) throw new Error("Expected cleanup modal");
   return element;
+}
+
+/** A preview answer the test settles by hand, so the dialog can be caught between two pages. */
+function pendingPage(): {
+  promise: Promise<backend.PrunePreviewResult>;
+  resolve: (value: backend.PrunePreviewResult) => void;
+  reject: (reason: Error) => void;
+} {
+  let resolve!: (value: backend.PrunePreviewResult) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<backend.PrunePreviewResult>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/** The preview's one row again as `romId`, for the pages after the first. */
+function rowAs(romId: number, name: string): backend.PrunePreviewItem {
+  return { ...preview.items![0]!, rom_id: romId, name, fs_name: `${name}.gba` };
 }
 
 /**
@@ -339,31 +359,123 @@ describe("RemovedGamesCleanup", () => {
     expect(button.disabled).toBe(false);
   });
 
-  it("requires every preview page to be disclosed before confirmation", async () => {
+  it("loads every page by itself and unlocks Confirm only once the last has arrived", async () => {
+    const second = pendingPage();
+    const third = pendingPage();
     vi.mocked(backend.getPrunePreview)
-      .mockResolvedValueOnce({ ...preview, total: 2 })
-      .mockResolvedValueOnce({
-        ...preview,
-        offset: 1,
-        total: 2,
-        items: [{ ...preview.items![0]!, rom_id: 8, candidate: false, name: "Current sibling" }],
-      });
+      .mockResolvedValueOnce({ ...preview, total: 3 })
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise);
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
     const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
-    expect(modal.container.textContent).toContain("Load every page before confirming");
 
+    expect(modal.queryByRole("button", { name: /Load more/ })).toBeNull();
+    await waitFor(() =>
+      expect(backend.getPrunePreview).toHaveBeenLastCalledWith({
+        scope: "bulk",
+        rom_id: null,
+        preview_id: "preview-1",
+        offset: 1,
+        limit: 50,
+      }),
+    );
     // Pressing early must refuse and SAY so — the run may not start against a
     // half-disclosed list, and a press that does nothing is the reported defect.
     fireEvent.click(confirm);
     await act(async () => Promise.resolve());
-    expect(backend.startPrune).not.toHaveBeenCalled();
-    expect(modal.container.textContent).toContain("Cleanup did not start: Load all 2 entries before confirming.");
+    expect(modal.container.textContent).toContain("Cleanup did not start: Loading the list: 1 of 3 entries.");
 
-    fireEvent.click(modal.getByRole("button", { name: "Load more (1 of 2)" }));
-    await waitFor(() => expect(modal.container.textContent).toContain("Current sibling"));
+    await act(async () => second.resolve({ ...preview, offset: 1, total: 3, items: [rowAs(8, "Second Page Game")] }));
+    expect(modal.container.textContent).toContain("Second Page Game");
+    expect(vi.mocked(backend.getPrunePreview).mock.calls[2]?.[0]).toMatchObject({ offset: 2 });
+    fireEvent.click(confirm);
+    await act(async () => Promise.resolve());
+    expect(modal.container.textContent).toContain("Cleanup did not start: Loading the list: 2 of 3 entries.");
+    expect(backend.startPrune).not.toHaveBeenCalled();
+
+    await act(async () => third.resolve({ ...preview, offset: 2, total: 3, items: [rowAs(9, "Third Page Game")] }));
+    expect(modal.container.textContent).toContain("Third Page Game");
     fireEvent.click(confirm);
     await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
+    expect(backend.getPrunePreview).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops at a page that fails, keeps Confirm refusing, and resumes on Retry", async () => {
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ ...preview, offset: 1, total: 2, items: [rowAs(8, "Second Page Game")] });
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+
+    await waitFor(() =>
+      expect(modal.container.textContent).toContain("Could not load the rest of the list: Error: offline"),
+    );
+    expect(modal.container.textContent).toContain(
+      "The list stopped loading at 1 of 2 entries. Retry loading before confirming.",
+    );
+    expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining("[prune] Preview page at offset 1 of 2 failed"));
+    // A failed page is not retried behind the user's back.
+    await act(async () => Promise.resolve());
+    expect(backend.getPrunePreview).toHaveBeenCalledTimes(2);
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(backend.startPrune).not.toHaveBeenCalled();
+
+    fireEvent.click(modal.getByRole("button", { name: "Retry loading" }));
+    await waitFor(() => expect(modal.container.textContent).toContain("Second Page Game"));
+    expect(vi.mocked(backend.getPrunePreview).mock.calls[2]?.[0]).toMatchObject({ preview_id: "preview-1", offset: 1 });
+    expect(modal.queryByRole("button", { name: "Retry loading" })).toBeNull();
+    expect(modal.container.textContent).not.toContain("Could not load the rest of the list");
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
+  });
+
+  it("shows the backend's refusal of a page and loads no further", async () => {
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 3 })
+      .mockResolvedValueOnce({
+        success: false,
+        reason: "stale_preview",
+        message: "This cleanup preview is out of date. Scan again.",
+      });
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+
+    await waitFor(() =>
+      expect(modal.container.textContent).toContain("This cleanup preview is out of date. Scan again."),
+    );
+    expect(modal.getByRole("button", { name: "Retry loading" })).toBeTruthy();
+    expect(backend.getPrunePreview).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats an empty page short of the total as a failure rather than asking again", async () => {
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockResolvedValueOnce({ ...preview, offset: 1, total: 2, items: [] })
+      .mockResolvedValueOnce({ ...preview, offset: 1, total: 2, items: [rowAs(8, "Second Page Game")] });
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+
+    await waitFor(() => expect(modal.container.textContent).toContain("The list ended before every entry arrived."));
+    expect(backend.getPrunePreview).toHaveBeenCalledTimes(2);
+    expect(modal.container.textContent).toContain("The list stopped loading at 1 of 2 entries.");
+  });
+
+  it("writes nothing and asks for nothing more once the dialog is closed mid-load", async () => {
+    const second = pendingPage();
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 3 })
+      .mockReturnValueOnce(second.promise);
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(2));
+
+    modal.unmount();
+    await act(async () => second.resolve({ ...preview, offset: 1, total: 3, items: [rowAs(8, "Second Page Game")] }));
+
+    expect(backend.getPrunePreview).toHaveBeenCalledTimes(2);
   });
 
   it("clears and disables installed-content selections when recovery is off", async () => {
@@ -546,7 +658,7 @@ describe("RemovedGamesCleanup", () => {
 
       const row = rowFor(modal, "Removed Game");
       expect(row.textContent).toContain("Save ownership is shared.");
-      expect(row.textContent).toContain("One or more display fields were shortened");
+      expect(row.textContent).toContain("Some of this text was too long and was shortened.");
       expect(row.textContent).toContain(
         "Without a backup, the downloaded ROM file is deleted along with this version.",
       );
@@ -619,20 +731,22 @@ describe("RemovedGamesCleanup", () => {
       );
     });
 
-    it("puts Load more and its rule in the bar, beside the Confirm it unblocks", async () => {
-      vi.mocked(backend.getPrunePreview).mockResolvedValue({ ...preview, total: 2 });
+    it("puts Retry loading and its failure in the bar, beside the Confirm it unblocks", async () => {
+      vi.mocked(backend.getPrunePreview)
+        .mockResolvedValueOnce({ ...preview, total: 2 })
+        .mockRejectedValueOnce(new Error("offline"));
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
       const bar = modal.getByTestId("cleanup-bar");
       const table = modal.getByTestId("cleanup-table");
-      const loadMore = modal.getByRole("button", { name: "Load more (1 of 2)" });
+      const retry = await modal.findByRole("button", { name: "Retry loading" });
 
       // Every row is a stop, so after the table it would be a table's length
-      // away from the Confirm that refuses until it has been pressed.
-      expect(bar.contains(loadMore)).toBe(true);
-      expect(precedes(loadMore, modal.getByRole("button", { name: "Confirm Cleanup" }))).toBe(true);
-      expect(precedes(loadMore, table)).toBe(true);
-      expect(bar.textContent).toContain("Load every page before confirming");
+      // away from the Confirm that refuses until the list has loaded.
+      expect(bar.contains(retry)).toBe(true);
+      expect(precedes(retry, modal.getByRole("button", { name: "Confirm Cleanup" }))).toBe(true);
+      expect(precedes(retry, table)).toBe(true);
+      expect(bar.textContent).toContain("Could not load the rest of the list");
     });
 
     it("tells two gone versions of one game apart on screen, not only in a title", async () => {
@@ -814,7 +928,7 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("Warning: Shared save was retained.");
     expect(modal.container.textContent).toContain("6 additional warning(s) omitted.");
     expect(modal.container.textContent).toContain("One or more displayed warnings were shortened.");
-    expect(modal.container.textContent).toContain("Detail was shortened");
+    expect(modal.container.textContent).toContain("Some of this text was too long and was shortened.");
     const details = modal.getByRole("region", { name: "Cleanup details" });
     // The nav option is what makes the region a stop; the tabindex is Steam's to
     // write (`docs/architecture/qam-panel.md`). Asserting that attribute instead
@@ -890,6 +1004,217 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("Warning: A shared save was retained.");
     expect(modal.container.textContent).toContain("One or more displayed warnings were shortened.");
     expect(modal.container.textContent).not.toContain("0 additional warning(s)");
+  });
+
+  describe("text the backend shortened is marked wherever it is shown", () => {
+    const NOTE = "Some of this text was too long and was shortened.";
+
+    const finishedRun = (overrides: Partial<PruneComplete>): PruneComplete => ({
+      success: false,
+      partial: false,
+      run_id: "run-1",
+      preview_id: "preview-1",
+      removed_rom_ids: [],
+      affected_app_ids: [],
+      results: [],
+      ...overrides,
+    });
+
+    /** The details region's line for the group whose line starts with `lead`. */
+    const groupLine = (modal: RenderResult, lead: string): HTMLElement => {
+      const details = modal.getByRole("region", { name: "Cleanup details" });
+      const line = [...details.children].find((child) => child.textContent.startsWith(lead));
+      if (!(line instanceof HTMLElement)) throw new Error(`No details line starting with ${lead}`);
+      return line;
+    };
+
+    it("marks a preview row whose name, file name or warning was shortened, and no other", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({
+        ...preview,
+        total: 4,
+        items: [
+          { ...rowAs(21, "Long Name"), name_truncated: true },
+          { ...rowAs(22, "Long File"), fs_name_truncated: true },
+          { ...rowAs(23, "Long Warning"), warning: "w", warning_truncated: true },
+          rowAs(24, "Whole Row"),
+        ],
+      });
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      expect(rowFor(modal, "Long Name").textContent).toContain(NOTE);
+      expect(rowFor(modal, "Long File").textContent).toContain(NOTE);
+      expect(rowFor(modal, "Long Warning").textContent).toContain(NOTE);
+      expect(rowFor(modal, "Whole Row").textContent).not.toContain(NOTE);
+    });
+
+    it("marks a shortened game name under the running bar, in the dialog and on Data Management", async () => {
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+      const section = render(createElement(RemovedGamesCleanupSection));
+      const frame = {
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "checking",
+        rom_ids: [7],
+        name: "Removed Game",
+      };
+
+      act(() => {
+        beginPruneRun("run-1", "preview-1");
+        setPruneProgress(frame);
+      });
+      expect(modal.container.textContent).not.toContain(NOTE);
+      expect(section.container.textContent).not.toContain(NOTE);
+
+      act(() => setPruneProgress({ ...frame, name_truncated: true }));
+      expect(modal.getByRole("status").textContent).toContain(NOTE);
+      expect(section.container.textContent).toContain(NOTE);
+    });
+
+    it("marks a shortened recovery path on Data Management", () => {
+      const section = render(createElement(RemovedGamesCleanupSection));
+      const frame = {
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 1,
+        stage: "recovery_sealed",
+        rom_ids: [7],
+        name: "Removed Game",
+        bundle_path: "/home/deck/romm-tender-recovery/bundles/x",
+      };
+
+      act(() => {
+        beginPrunePreview("preview-1");
+        beginPruneRun("run-1", "preview-1");
+        setPruneProgress(frame);
+      });
+      expect(section.container.textContent).toContain("Recovery sealed:");
+      expect(section.container.textContent).not.toContain(NOTE);
+
+      act(() => setPruneProgress({ ...frame, bundle_path_truncated: true }));
+      expect(section.container.textContent).toContain(NOTE);
+    });
+
+    it("marks a finished run's shortened message, group name, group key and bundle path in the dialog", async () => {
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      act(() => {
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete(
+          finishedRun({
+            reason: "unknown",
+            message: "The run stopped.",
+            message_truncated: true,
+            results: [
+              {
+                group_id: "g-1",
+                name: "Long Name",
+                name_truncated: true,
+                rom_ids: [1],
+                status: "failed",
+                message: "a",
+              },
+              {
+                group_id: "g-2-key",
+                group_id_truncated: true,
+                name: "Named",
+                rom_ids: [2],
+                status: "failed",
+                message: "b",
+              },
+              { group_id: "g-3-key", group_id_truncated: true, rom_ids: [3], status: "failed", message: "c" },
+              {
+                group_id: "g-4",
+                name: "Long Path",
+                rom_ids: [4],
+                status: "skipped",
+                message: "d",
+                bundle_path: "/recovery/x",
+                bundle_path_truncated: true,
+                removed_rom_ids: [],
+              },
+              { group_id: "g-5", name: "Whole", rom_ids: [5], status: "failed", message: "e" },
+            ],
+          }),
+        );
+      });
+
+      expect(groupLine(modal, "unknown: The run stopped.").textContent).toContain(NOTE);
+      expect(groupLine(modal, "Long Name:").textContent).toContain(NOTE);
+      // The key is shown only where there is no name to lead with.
+      expect(groupLine(modal, "Named:").textContent).not.toContain(NOTE);
+      expect(groupLine(modal, "g-3-key:").textContent).toContain(NOTE);
+      expect(groupLine(modal, "Long Path:").textContent).toContain(NOTE);
+      expect(groupLine(modal, "Whole:").textContent).not.toContain(NOTE);
+    });
+
+    it("marks shortened and omitted text in the finished run's line on Data Management", () => {
+      const section = render(createElement(RemovedGamesCleanupSection));
+      act(() => {
+        beginPrunePreview("preview-1");
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete(
+          finishedRun({
+            message: "The run stopped.",
+            results: [{ group_id: "g-1", rom_ids: [1], status: "failed", message: "Nothing was removed." }],
+          }),
+        );
+      });
+      expect(section.container.textContent).toContain("The run stopped. · Nothing was removed.");
+      expect(section.container.textContent).not.toContain(NOTE);
+      expect(section.container.textContent).not.toContain("omitted");
+    });
+
+    it.each([
+      ["the run's message", { message: "The run stopped.", message_truncated: true }, {}],
+      ["a group's message", {}, { message_truncated: true }],
+      ["a group's warnings", {}, { warnings: ["w"], warning_count: 1, warnings_truncated: true }],
+    ])("marks %s shortened on Data Management", (_, run, group) => {
+      const section = render(createElement(RemovedGamesCleanupSection));
+      act(() => {
+        beginPrunePreview("preview-1");
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete(
+          finishedRun({
+            ...run,
+            results: [{ group_id: "g-1", rom_ids: [1], status: "failed", message: "Nothing was removed.", ...group }],
+          }),
+        );
+      });
+
+      expect(section.container.textContent).toContain(NOTE);
+    });
+
+    it("counts omitted warnings on Data Management", () => {
+      const section = render(createElement(RemovedGamesCleanupSection));
+      act(() => {
+        beginPrunePreview("preview-1");
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete(
+          finishedRun({
+            results: [
+              {
+                group_id: "g-1",
+                rom_ids: [1],
+                status: "removed",
+                message: "Removed.",
+                warnings: ["One", "Two", "Three", "Four", "Five"],
+                warning_count: 7,
+                warnings_omitted: true,
+              },
+            ],
+          }),
+        );
+      });
+
+      expect(section.container.textContent).toContain("Warning: Five · 2 additional warning(s) omitted.");
+      expect(section.container.textContent).not.toContain(NOTE);
+    });
   });
 
   it("blocks confirmation when a selected installed ROM has no measurable size", async () => {
@@ -1030,11 +1355,13 @@ describe("RemovedGamesCleanup", () => {
   });
 
   it("claims nothing about ROM files while a page is still undisclosed", async () => {
-    vi.mocked(backend.getPrunePreview).mockResolvedValue({
-      ...preview,
-      total: 2,
-      items: [{ ...preview.items![0]!, installed: false, installed_bytes: null }],
-    });
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({
+        ...preview,
+        total: 2,
+        items: [{ ...preview.items![0]!, installed: false, installed_bytes: null }],
+      })
+      .mockReturnValueOnce(pendingPage().promise);
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
@@ -1092,18 +1419,21 @@ describe("RemovedGamesCleanup", () => {
   });
 
   it("says why Confirm is unavailable instead of leaving a dead control", async () => {
-    vi.mocked(backend.getPrunePreview).mockResolvedValueOnce({ ...preview, total: 2 });
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockReturnValueOnce(pendingPage().promise);
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    // The "load every page" warning sits far above the button in a scrolling
-    // dialog, so the reason has to be readable from where the button is.
+    // The dialog scrolls, so the reason has to be readable from where the button is.
     expect((modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(modal.container.textContent).toContain("Load all 2 entries before confirming.");
+    expect(modal.container.textContent).toContain("Loading the list: 1 of 2 entries.");
   });
 
   it("reports a locally refused Confirm in the dialog and the log", async () => {
-    vi.mocked(backend.getPrunePreview).mockResolvedValueOnce({ ...preview, total: 2 });
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockReturnValueOnce(pendingPage().promise);
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 

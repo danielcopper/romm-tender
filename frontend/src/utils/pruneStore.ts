@@ -6,9 +6,10 @@ export interface PruneProgress {
   stage: string;
   rom_ids: number[];
   rom_count?: number;
-  rom_ids_truncated?: boolean;
   name: string;
+  name_truncated?: boolean;
   bundle_path?: string;
+  bundle_path_truncated?: boolean;
 }
 
 export interface PruneGroupResult {
@@ -19,17 +20,16 @@ export interface PruneGroupResult {
   name_truncated?: boolean;
   rom_ids: number[];
   rom_count?: number;
-  rom_ids_truncated?: boolean;
   status: "removed" | "repointed" | "partial" | "failed" | "skipped";
   reason?: string;
   message: string;
   message_truncated?: boolean;
   removed_rom_ids?: number[];
   removed_count?: number;
-  removed_rom_ids_truncated?: boolean;
   app_id?: number;
   removed_app_id?: number;
   bundle_path?: string;
+  bundle_path_truncated?: boolean;
   committed_action?: "repoint_shortcut" | "remove_shortcut";
   action_ambiguous?: boolean;
   mutations?: string[];
@@ -58,6 +58,7 @@ export interface PruneComplete {
   results: PruneGroupResult[];
   reason?: string;
   message?: string;
+  message_truncated?: boolean;
 }
 
 type Listener = () => void;

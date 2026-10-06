@@ -832,7 +832,6 @@ export interface PrunePreviewItem {
   fs_name_truncated: boolean;
   platform_slug: string;
   group_id: string;
-  group_id_truncated: boolean;
   group_size: number;
   bound_count: number;
   candidate: boolean;
