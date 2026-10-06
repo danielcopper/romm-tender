@@ -8,10 +8,7 @@ from domain.platform_sync_state import PlatformSyncState
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
-from host.dispatch import DEFAULT_PAYLOAD_LIMIT
-from host.protocol import encode_reply
 from services.prune.preview import PreviewBuilder, PreviewBuilderConfig
-from services.prune.requests import _MAX_PREVIEW_PAGE
 
 
 class _Recovery:
@@ -128,43 +125,38 @@ def test_empty_page_still_carries_both_counts() -> None:
     assert (refreshed["total"], refreshed["candidate_total"]) == (4, 2)
 
 
-def test_a_full_page_at_every_cap_stays_under_the_host_answer_cap() -> None:
-    """The row limit and the text caps bound a page, with nothing measuring its bytes."""
-    # Outside the BMP, so `ensure_ascii` writes each character as twelve bytes:
-    # the most a capped character can cost on the wire.
-    astral = "\U0001f3ae"
-    over = 4096
+def test_a_row_carries_its_text_whole_and_no_truncation_flag() -> None:
+    long = 10_000
     uow = FakeUnitOfWork()
     with uow:
-        for rom_id in range(1, _MAX_PREVIEW_PAGE + 1):
-            row = Rom.synced(
-                rom_id=rom_id,
+        row = Rom.synced(
+            rom_id=1,
+            platform_slug="dc",
+            name="n" * long,
+            fs_name="f" * long,
+            shortcut_app_id=None,
+            synced_at="now",
+            version=VersionMetadata(sibling_group_key="g" * long),
+        )
+        row.record_fetch_generation("old")
+        uow.roms.save(row)
+        uow.rom_installs.save(
+            RomInstall.mark_installed(
+                rom_id=1,
+                file_path="/roms/dc/1.chd",
+                rom_dir=None,
                 platform_slug="dc",
-                name=astral * over,
-                fs_name=astral * over,
-                shortcut_app_id=None,
-                synced_at="now",
-                version=VersionMetadata(sibling_group_key=f"{rom_id}:{astral * over}"),
+                system="dc",
+                installed_at="now",
             )
-            row.record_fetch_generation("old")
-            uow.roms.save(row)
-            uow.rom_installs.save(
-                RomInstall.mark_installed(
-                    rom_id=rom_id,
-                    file_path=f"/roms/dc/{rom_id}.chd",
-                    rom_dir=None,
-                    platform_slug="dc",
-                    system="dc",
-                    installed_at="now",
-                )
-            )
+        )
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
         )
 
     class _UnmeasurableRecovery(_Recovery):
         def measure_path(self, path: str, roms_root: str) -> int:
-            raise OSError(astral * over)
+            raise OSError("w" * long)
 
     builder = PreviewBuilder(
         config=PreviewBuilderConfig(
@@ -175,10 +167,13 @@ def test_a_full_page_at_every_cap_stays_under_the_host_answer_cap() -> None:
         )
     )
 
-    page = builder.page(builder.build("preview", "bulk", None), 0, _MAX_PREVIEW_PAGE)
+    page = builder.page(builder.build("preview", "bulk", None), 0, 50)
 
-    assert len(page["items"]) == _MAX_PREVIEW_PAGE
-    assert all(
-        item["name_truncated"] and item["fs_name_truncated"] and item["warning_truncated"] for item in page["items"]
+    [item] = page["items"]
+    assert (item["name"], item["fs_name"], item["group_id"], item["warning"]) == (
+        "n" * long,
+        "f" * long,
+        "g" * long,
+        "w" * long,
     )
-    assert len(encode_reply(1, page).encode("utf-8")) <= DEFAULT_PAYLOAD_LIMIT
+    assert [key for key in item if key.endswith("_truncated")] == []

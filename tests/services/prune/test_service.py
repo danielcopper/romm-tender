@@ -1205,7 +1205,6 @@ async def test_group_result_leads_with_the_bound_row_s_game_name(harness):
 
     result = complete["results"][0]
     assert result["name"] == "Game 2"
-    assert result["name_truncated"] is False
     # The metadata key stays on the wire for correlation, but it is no longer
     # what a human-facing line has to lead with.
     assert result["group_id"] == "g"
@@ -1841,15 +1840,13 @@ def test_one_large_group_result_is_explicitly_bounded(harness):
         rows,
         "removed",
         None,
-        "x" * 2000,
+        "removed",
         GroupOutcome(removed_rom_ids=list(range(1, 61))),
     )
     assert len(result["rom_ids"]) == 50
     assert result["rom_count"] == 60
     assert len(result["removed_rom_ids"]) == 50
     assert result["removed_count"] == 60
-    assert len(result["message"]) == 512
-    assert result["message_truncated"] is True
 
 
 @pytest.mark.asyncio
@@ -2382,27 +2379,8 @@ async def test_recovery_warnings_are_bounded_and_visible_without_a_bundle(harnes
 
     result = complete["results"][0]
     assert result["warning_count"] == 7
-    assert len(result["warnings"]) == 5
-    assert all(len(value) <= 256 for value in result["warnings"])
-    assert result["warnings_truncated"] is True
+    assert result["warnings"] == harness.saves.warnings[:5]
     assert result["warnings_omitted"] is True
-
-
-@pytest.mark.asyncio
-async def test_omitted_short_warnings_are_not_marked_as_display_truncated(harness):
-    _seed(harness.uow, _rom(1, fetch="old"))
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.saves.warnings = [f"warning {index}" for index in range(6)]
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["warning_count"] == 6
-    assert len(result["warnings"]) == 5
-    assert result["warnings_omitted"] is True
-    assert result["warnings_truncated"] is False
 
 
 @pytest.mark.asyncio

@@ -13,18 +13,16 @@ if TYPE_CHECKING:
     from services.protocols import ConflictRules, EventEmitter
     from services.prune._models import RecoveryHandle
 
-# One group's result travels whole in one completion chunk, so these bound it:
-# text longer than its cap is broken or runaway output rather than information,
-# and the per-group counts keep a huge group from making one oversized chunk.
+# One group's result travels whole in one completion chunk, so a group with many
+# versions or warnings would otherwise make one oversized chunk. The full numbers
+# travel beside the capped lists (`rom_count`, `removed_count`,
+# `warning_count`), and the panel shows how many warnings were left out.
 _COMPLETION_IDS_PER_GROUP = 50
-_COMPLETION_TEXT_CHARS = 512
-_COMPLETION_PATH_CHARS = 2048
-_COMPLETION_REASON_CHARS = 128
-_COMPLETION_WARNING_CHARS = 256
 _COMPLETION_WARNINGS_PER_GROUP = 5
-# Events pass no host size cap, so this chosen budget is what keeps each
-# completion event small however large the run. Growing it is not free: the
-# chunking re-encodes the growing chunk after every result it adds.
+# Events pass no host size cap (`host/events.py` `EventSink.emit` checks none),
+# so this chosen budget is what keeps each completion event small however large
+# the run. Growing it is not free: the chunking re-encodes the growing chunk
+# after every result it adds.
 _COMPLETION_BUDGET_BYTES = 48 * 1024
 
 
@@ -150,12 +148,10 @@ class PruneResultReporter:
             "stage": stage,
             "rom_ids": [row.rom_id for row in rows[:_COMPLETION_IDS_PER_GROUP]],
             "rom_count": len(rows),
-            "name": name[:_COMPLETION_TEXT_CHARS],
-            "name_truncated": len(name) > _COMPLETION_TEXT_CHARS,
+            "name": name,
         }
         if bundle_path is not None:
-            payload["bundle_path"] = bundle_path[:_COMPLETION_PATH_CHARS]
-            payload["bundle_path_truncated"] = len(bundle_path) > _COMPLETION_PATH_CHARS
+            payload["bundle_path"] = bundle_path
         await self._emit("prune_progress", payload)
 
     async def emit_completion(
@@ -171,9 +167,6 @@ class PruneResultReporter:
         removed_count = _removed_count(results)
         partial = _is_partial(results, removed_count, failed=bool(failures) or cancelled or reason is not None)
         publication_required = any(_needs_publication(result) for result in results)
-        bounded_reason = reason[:_COMPLETION_REASON_CHARS] if reason is not None else None
-        bounded_message = message[:_COMPLETION_TEXT_CHARS] if message is not None else None
-        message_truncated = message is not None and len(message) > _COMPLETION_TEXT_CHARS
         chunks: list[list[dict[str, Any]]] = []
         current: list[dict[str, Any]] = []
         for result in results:
@@ -187,9 +180,8 @@ class PruneResultReporter:
                 partial=partial,
                 removed_count=removed_count,
                 problem_count=len(failures),
-                reason=bounded_reason,
-                message=bounded_message,
-                message_truncated=message_truncated,
+                reason=reason,
+                message=message,
                 publication_required=publication_required,
             )
             if current and len(json.dumps(probe, ensure_ascii=True).encode("utf-8")) > _COMPLETION_BUDGET_BYTES:
@@ -209,9 +201,8 @@ class PruneResultReporter:
                 partial=partial,
                 removed_count=removed_count,
                 problem_count=len(failures),
-                reason=bounded_reason,
-                message=bounded_message,
-                message_truncated=message_truncated,
+                reason=reason,
+                message=message,
                 publication_required=publication_required,
             )
             if final and publication_required:
@@ -245,7 +236,6 @@ class PruneResultReporter:
         problem_count: int,
         reason: str | None,
         message: str | None,
-        message_truncated: bool,
         publication_required: bool,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -272,7 +262,6 @@ class PruneResultReporter:
             payload["reason"] = reason
         if message is not None:
             payload["message"] = message
-            payload["message_truncated"] = message_truncated
         return payload
 
     def ledger_result(
@@ -345,58 +334,42 @@ class PruneResultReporter:
     ) -> dict[str, Any]:
         removed_rom_ids = outcome.removed_rom_ids
         warnings = outcome.warnings
-        raw_group_id = rows[0].sibling_group_key or f"rom:{rows[0].rom_id}"
         all_rom_ids = [row.rom_id for row in rows]
-        bounded_removed = (removed_rom_ids or [])[:_COMPLETION_IDS_PER_GROUP]
-        raw_message = str(message)
         # The name the user knows the game by, so a result reads as a sentence
         # instead of being prefixed with a metadata key. The bound row is the
         # group's representative — it is the one with the Steam shortcut — and
         # any member's name identifies the game when nothing is bound.
         bound_row = next((row for row in rows if row.shortcut_app_id is not None), None)
-        raw_name = (bound_row or rows[0]).name
         result: dict[str, Any] = {
-            "group_id": raw_group_id[:_COMPLETION_TEXT_CHARS],
-            "group_id_truncated": len(raw_group_id) > _COMPLETION_TEXT_CHARS,
-            "name": raw_name[:_COMPLETION_TEXT_CHARS],
-            "name_truncated": len(raw_name) > _COMPLETION_TEXT_CHARS,
+            "group_id": rows[0].sibling_group_key or f"rom:{rows[0].rom_id}",
+            "name": (bound_row or rows[0]).name,
             "rom_ids": all_rom_ids[:_COMPLETION_IDS_PER_GROUP],
             "rom_count": len(all_rom_ids),
             "status": status,
-            "message": raw_message[:_COMPLETION_TEXT_CHARS],
-            "message_truncated": len(raw_message) > _COMPLETION_TEXT_CHARS,
+            "message": str(message),
         }
         if reason is not None:
-            result["reason"] = str(reason)[:_COMPLETION_REASON_CHARS]
+            result["reason"] = str(reason)
         if removed_rom_ids is not None:
-            result["removed_rom_ids"] = bounded_removed
+            result["removed_rom_ids"] = removed_rom_ids[:_COMPLETION_IDS_PER_GROUP]
             result["removed_count"] = len(removed_rom_ids)
         if outcome.app_id is not None:
             result["app_id"] = outcome.app_id
         if outcome.removed_app_id is not None:
             result["removed_app_id"] = outcome.removed_app_id
         if outcome.bundle_path is not None:
-            bundle_path = outcome.bundle_path
-            result["bundle_path"] = bundle_path[:_COMPLETION_PATH_CHARS]
-            result["bundle_path_truncated"] = len(bundle_path) > _COMPLETION_PATH_CHARS
+            result["bundle_path"] = outcome.bundle_path
         if outcome.committed_action is not None:
             result["committed_action"] = outcome.committed_action
         if outcome.mutations:
-            result["mutations"] = [str(item)[:_COMPLETION_REASON_CHARS] for item in outcome.mutations]
+            result["mutations"] = [str(item) for item in outcome.mutations]
         if outcome.ambiguous_mutations:
-            result["ambiguous_mutations"] = [
-                str(item)[:_COMPLETION_REASON_CHARS] for item in outcome.ambiguous_mutations
-            ]
+            result["ambiguous_mutations"] = [str(item) for item in outcome.ambiguous_mutations]
         if warnings:
-            bounded_warnings = [
-                str(item)[:_COMPLETION_WARNING_CHARS] for item in warnings[:_COMPLETION_WARNINGS_PER_GROUP]
-            ]
-            result["warnings"] = bounded_warnings
+            shown_warnings = [str(item) for item in warnings[:_COMPLETION_WARNINGS_PER_GROUP]]
+            result["warnings"] = shown_warnings
             result["warning_count"] = len(warnings)
-            result["warnings_omitted"] = len(warnings) > len(bounded_warnings)
-            result["warnings_truncated"] = any(
-                len(str(item)) > _COMPLETION_WARNING_CHARS for item in warnings[:_COMPLETION_WARNINGS_PER_GROUP]
-            )
+            result["warnings_omitted"] = len(warnings) > len(shown_warnings)
         if outcome.action_ambiguous:
             result["action_ambiguous"] = True
         if outcome.target_rom_id is not None:

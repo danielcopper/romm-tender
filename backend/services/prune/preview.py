@@ -10,13 +10,6 @@ from domain.sibling_resolution import group_rows
 from lib.url_host import romm_namespace
 from services.prune._models import PrunePreview
 
-# A server-supplied value longer than these is broken output, not information:
-# the caps keep one such row from making the review unreadable, and with the
-# page's row limit (`requests._MAX_PREVIEW_PAGE`) they keep a page far under the
-# host's answer cap (`host/dispatch.py` `DEFAULT_PAYLOAD_LIMIT`).
-_PREVIEW_TEXT_CHARS = 512
-_PREVIEW_WARNING_CHARS = 1024
-
 if TYPE_CHECKING:
     from domain.rom import Rom
     from domain.rom_install import RomInstall
@@ -62,22 +55,19 @@ def _preview_entry(
     size: int | None,
     warning: str | None,
 ) -> dict[str, Any]:
-    """One disclosure row, with every server-supplied string capped."""
+    """One disclosure row."""
     return {
         "rom_id": row.rom_id,
-        "name": row.name[:_PREVIEW_TEXT_CHARS],
-        "name_truncated": len(row.name) > _PREVIEW_TEXT_CHARS,
-        "fs_name": row.fs_name[:_PREVIEW_TEXT_CHARS],
-        "fs_name_truncated": len(row.fs_name) > _PREVIEW_TEXT_CHARS,
+        "name": row.name,
+        "fs_name": row.fs_name,
         "platform_slug": row.platform_slug,
-        "group_id": group_id[:_PREVIEW_TEXT_CHARS],
+        "group_id": group_id,
         "group_size": group_size,
         "bound_count": bound_count,
         "candidate": candidate,
         "installed": install is not None,
         "installed_bytes": size,
-        "warning": warning[:_PREVIEW_WARNING_CHARS] if warning is not None else None,
-        "warning_truncated": warning is not None and len(warning) > _PREVIEW_WARNING_CHARS,
+        "warning": warning,
     }
 
 

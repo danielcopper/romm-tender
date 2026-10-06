@@ -12,9 +12,9 @@ from services.prune._models import PruneOptions
 _MAX_PREVIEW_PAGE = 100
 _MAX_SELECTION_PAGE = 100
 # A snapshot is echoed back in the `prune_action_required` event as
-# `expected_snapshot` and written into the recovery bundle; events pass no host
-# size cap, so this is what bounds both. The panel checks the same number,
-# measured the same way, before it sends (`frontend/src/utils/pruneActions.ts`).
+# `expected_snapshot` and written into the recovery bundle, and nothing else
+# bounds it in either. The panel checks the same number, measured the same way,
+# before it sends (`frontend/src/utils/pruneActions.ts`).
 _MAX_STEAM_SNAPSHOT_BYTES = 64 * 1024
 
 
