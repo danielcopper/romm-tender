@@ -43,6 +43,28 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  test-314:
+    name: test-3.14
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+
+      - name: Install Python test dependencies
+        run: pip install -r requirements-dev.lock
+
+      - name: Install librsvg for the mark's renderer
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+
+      - name: Run tests
+        run: python -m pytest tests/ -q -n auto
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
