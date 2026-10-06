@@ -50,14 +50,14 @@ describe("missingDownloadWording", () => {
     expect(FORGET_FAILED_TOAST).toBe("Couldn't forget the download");
   });
 
-  it("points a refusal over a file that is there at playing it", () => {
+  it("says where the file is back for a refusal over a file that is there", () => {
     expect(
       forgetRefusedToast({
         reason: "file_present",
         message: "The recorded download exists: /sd/g.z64",
         path: "/sd/g.z64",
       }),
-    ).toBe("The file is back at /sd/g.z64. Reopen the game page to play.");
+    ).toBe("The file is back at /sd/g.z64.");
   });
 
   it("says the file is back only for the file_present refusal", () => {

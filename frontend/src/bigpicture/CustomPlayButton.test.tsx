@@ -139,7 +139,8 @@ vi.mock("../bigpicture/AdoptVanishedModal", () => ({
   showAdoptVanishedModal: vi.fn(),
 }));
 
-import { getCachedGameDetail } from "../utils/cachedGameDetailStore";
+import { getCachedGameDetail, invalidateCachedGameDetail } from "../utils/cachedGameDetailStore";
+import { getGameDetail, subscribeGameDetail } from "../utils/gameDetailStore";
 import { setRommConnectionState, reportServerReachable, getRommConnectionState } from "../utils/connectionState";
 import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import { markLaunchSkipped, consumeLaunchSkip } from "../utils/launchGate";
@@ -5192,6 +5193,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     vi.mocked(toaster.toast).mockReset();
     vi.mocked(showModal).mockClear();
     vi.mocked(showContextMenu).mockClear();
+    vi.mocked(invalidateCachedGameDetail).mockClear();
   });
 
   const cancelledFrame = (): DownloadProgressEvent => ({
@@ -5492,9 +5494,8 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
   it("keeps the missing state and the launch command when the forget is refused", async () => {
     vi.mocked(backend.forgetDownload).mockResolvedValue({
       success: false,
-      reason: "file_present",
-      message: `The recorded download exists: ${MISSING}`,
-      path: MISSING,
+      reason: "in_progress",
+      message: "This ROM is already being uninstalled or forgotten",
     });
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
@@ -5505,8 +5506,55 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(await findByText("File missing")).toBeInTheDocument();
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-      expect.objectContaining({ body: `The file is back at ${MISSING}. Reopen the game page to play.` }),
+      expect.objectContaining({ body: "This ROM is already being uninstalled or forgotten" }),
     );
+  });
+
+  const refuseAsFileBack = () => {
+    vi.mocked(backend.forgetDownload).mockImplementation(() => {
+      // From here on the backend reads the file where the record says it is.
+      mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: null });
+      return Promise.resolve({
+        success: false,
+        reason: "file_present",
+        message: `The recorded download exists: ${MISSING}`,
+        path: MISSING,
+      });
+    });
+  };
+
+  it("offers Play at once when the forget finds the file back", async () => {
+    refuseAsFileBack();
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    await confirm(await chooseForget(container));
+
+    expect(await within(container).findByText("Play")).toBeInTheDocument();
+    expect(queryByText("File missing")).toBeNull();
+    expect(vi.mocked(invalidateCachedGameDetail)).toHaveBeenCalledWith(100);
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+      expect.objectContaining({ body: `The file is back at ${MISSING}.` }),
+    );
+  });
+
+  it("re-reads the page's shared detail when the forget finds the file back", async () => {
+    refuseAsFileBack();
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const unsubscribe = subscribeGameDetail(100, () => {});
+    try {
+      const { container, findByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("Download again");
+      await waitFor(() => expect(getGameDetail(100).fileMissingAt).toBe(MISSING));
+
+      await confirm(await chooseForget(container));
+
+      await waitFor(() => expect(getGameDetail(100).fileMissingAt).toBeNull());
+    } finally {
+      unsubscribe();
+    }
   });
 
   const switchVersion = (romId: number) =>

@@ -29,11 +29,11 @@ export function forgetConfirmDescription(romName: string, path: string): string 
 /**
  * How a refused forget is said. `file_present` means the recorded file or
  * folder is on disk — after a missing file, most likely because the drive or
- * folder came back — so the sentence points at playing it, not at deleting it.
+ * folder came back — so the sentence says where it is, not that it failed.
  */
 export function forgetRefusedToast(result: { reason?: string; message?: string; path?: string }): string {
   if (result.reason === "file_present" && result.path) {
-    return `The file is back at ${result.path}. Reopen the game page to play.`;
+    return `The file is back at ${result.path}.`;
   }
   return result.message || FORGET_FAILED_TOAST;
 }

@@ -534,6 +534,14 @@ async function reloadDetail(appId: number, entry: Entry): Promise<void> {
   await loadDetail(appId, entry);
 }
 
+/** Re-read the cached detail of an appId a surface is showing, for a change no
+ *  event announces — a forget refused because the file is back. Does nothing
+ *  for an appId nothing is subscribed to. */
+export async function reloadGameDetail(appId: number): Promise<void> {
+  const entry = _entries.get(appId);
+  if (entry) await reloadDetail(appId, entry);
+}
+
 async function handleSaveSyncSettingsChange(
   appId: number,
   entry: Entry,

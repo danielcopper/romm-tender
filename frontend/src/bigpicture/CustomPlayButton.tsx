@@ -23,6 +23,7 @@ import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInje
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import {
   getCachedGameDetail,
+  invalidateCachedGameDetail,
   isTargetOccupied,
   cancelDownload,
   pauseDownload,
@@ -72,6 +73,7 @@ import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { getMigrationState } from "../utils/migrationStore";
+import { reloadGameDetail } from "../utils/gameDetailStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
@@ -219,6 +221,41 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     setTargetOccupied(occupied);
     setCandidatePresent(candidate);
     setState("download");
+  };
+
+  /**
+   * Re-read this appId's cached detail, adopt its rom_id, and re-derive the
+   * button from its install status — after a change the button did not make
+   * itself: a version switch, or a forget refused because the file is back. The
+   * caller drops the cached entry first. `trigger` names the change in the log
+   * line a detail that does not resolve leaves behind.
+   */
+  const rederiveFromDetail = async (trigger: string): Promise<void> => {
+    const cached = await getCachedGameDetail(appId);
+    if (!cached.found || cached.rom_id == null) {
+      // Surfaced at warn level: debugLog is dropped at the default level.
+      logError(`CustomPlayButton: ${trigger} for appId ${appId} but cached detail not found — button may be stale`);
+      return;
+    }
+    const rid = cached.rom_id;
+    setRomId(rid);
+    romIdRef.current = rid;
+    if (cached.rom_name) setRomName(cached.rom_name);
+    setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
+    if (cached.installed && cached.file_missing_at) {
+      setDlProgress(null);
+      setActionPending(false);
+      enterDownloadState();
+    } else if (cached.installed) {
+      setState(hasAnySaveConflict(cached.save_status) ? "conflict" : "play");
+    } else {
+      // Not installed — clear any download progress and drop to the Download
+      // button. The occupancy answer comes from the ROM the detail is about; a
+      // previous ROM's answer says nothing about this one's location.
+      setDlProgress(null);
+      setActionPending(false);
+      enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
+    }
   };
 
   useEffect(() => {
@@ -444,39 +481,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     globalThis.addEventListener("romm_rom_uninstalled", onUninstall);
 
     // A version switch re-bound this appId's shortcut to a new rom_id (#1298).
-    // The picker already invalidated the cached detail; re-read it, adopt the new
-    // rom_id, and re-derive the button state so Play↔Download flips with the new
-    // version's install status. appId is stable per mount (the component is keyed
-    // by it), so the `[appId]`-deps closure captures the right one.
-    const handleVersionSwitched = async (): Promise<void> => {
-      const cached = await getCachedGameDetail(appId);
-      if (!cached.found || cached.rom_id == null) {
-        // A switch fired but the rebound detail didn't resolve — the button is now
-        // stale. Surface it at warn level (debugLog is dropped at the default level).
-        logError(`CustomPlayButton: version_switched for appId ${appId} but cached detail not found — button may be stale`);
-        return;
-      }
-      const rid = cached.rom_id;
-      setRomId(rid);
-      romIdRef.current = rid;
-      if (cached.rom_name) setRomName(cached.rom_name);
-      setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
-      if (cached.installed && cached.file_missing_at) {
-        setDlProgress(null);
-        setActionPending(false);
-        enterDownloadState();
-      } else if (cached.installed) {
-        setState(hasAnySaveConflict(cached.save_status) ? "conflict" : "play");
-      } else {
-        // Switched to a not-installed version — clear any download progress and
-        // drop to the Download button. The occupancy answer comes from the ROM
-        // being switched TO, which the detail just above already carries; the
-        // outgoing version's answer says nothing about this one's location.
-        setDlProgress(null);
-        setActionPending(false);
-        enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
-      }
-    };
+    // The picker already invalidated the cached detail. appId is stable per
+    // mount (the component is keyed by it), so the `[appId]`-deps closure
+    // captures the right one.
+    const handleVersionSwitched = (): Promise<void> => rederiveFromDetail("version_switched");
 
     // Listen for save sync updates (e.g. background check found a conflict) and
     // version switches (Play↔Download flip).
@@ -1181,18 +1189,19 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   ): Promise<R> => {
     const admission = capturePruneLeaseAdmission(leaseOwner);
     const result = await remove();
-    if (!result.success) return result;
-    await withPruneLease(
-      result.prune_lease_token,
-      context,
-      async (signal) => {
-        if (signal.aborted) return;
-        await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-      },
-      leaseOwner,
-      admission,
-    );
-    globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: rid } }));
+    if (result.success) {
+      await withPruneLease(
+        result.prune_lease_token,
+        context,
+        async (signal) => {
+          if (signal.aborted) return;
+          await setLaunchOptionsConfirmed(appId, "").catch(() => false);
+        },
+        leaseOwner,
+        admission,
+      );
+      globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: rid } }));
+    }
     return result;
   };
 
@@ -1242,6 +1251,16 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     try {
       const result = await removeInstallRecord(rid, () => forgetDownload(rid), "Forget download");
       showToast(result.success ? downloadForgottenToast(romName) : forgetRefusedToast(result));
+      if (!result.success && result.reason === "file_present") {
+        // The file is back, so the page leaves the missing state now rather
+        // than at its next opening: the button and the page's shared detail
+        // both read the detail again.
+        invalidateCachedGameDetail(appId);
+        detach(reloadGameDetail(appId));
+        await rederiveFromDetail("forget refused with file_present").catch((err) =>
+          logError(`CustomPlayButton: re-reading appId ${appId} after the file came back failed: ${err}`),
+        );
+      }
     } catch {
       showToast(FORGET_FAILED_TOAST);
     } finally {

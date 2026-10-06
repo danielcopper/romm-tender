@@ -9,6 +9,7 @@ import {
   refreshBiosStatus,
   refreshCoreAndBios,
   refreshSaveStatus,
+  reloadGameDetail,
   subscribeGameDetail,
   useGameDetail,
 } from "./gameDetailStore";
@@ -276,6 +277,30 @@ describe("gameDetailStore", () => {
       // Non-vacuous in the other direction: the JOINED answer is the one folded,
       // so this is sharing rather than the load having skipped the read.
       expect(getGameDetail(nextAppId)).toMatchObject({ biosRequiredMissing: true, biosLabel: "0/3" });
+    });
+
+    it("re-reads a shown entry's detail on request, past the cache", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        found({ installed: true, file_missing_at: "/sd/g.z64" }),
+      );
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId).fileMissingAt).toBe("/sd/g.z64");
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, file_missing_at: null }));
+
+      await act(async () => {
+        await reloadGameDetail(nextAppId);
+      });
+
+      expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).toHaveBeenCalledWith(nextAppId);
+      expect(getGameDetail(nextAppId).fileMissingAt).toBeNull();
+    });
+
+    it("reads nothing on a re-read request for an appId nobody is subscribed to", async () => {
+      await reloadGameDetail(nextAppId);
+
+      expect(vi.mocked(cachedStore.getCachedGameDetail)).not.toHaveBeenCalled();
+      expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).not.toHaveBeenCalled();
     });
 
     it("serves a second subscriber from the same entry — one cached-detail read, both notified", async () => {
