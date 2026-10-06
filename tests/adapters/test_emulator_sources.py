@@ -380,31 +380,72 @@ class TestTheRealResolver:
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"
 
 
-def _modules_importing_detect(root: Path) -> list[str]:
-    """Every module under *root* (outside ``_vendor``) that imports the resolver's ``detect``."""
+# What reaches the resolver's detection: ``detect`` itself, the machine a
+# detection reads through, and the installation classes ``detect`` builds.
+_DETECTION_NAMES = frozenset(
+    {"detect", "RealMachine", "RetroDeck", "EmuDeck", "BareRetroArchFlatpak", "BareRetroArchNative"}
+)
+
+
+def _reaches_detection(node: ast.AST) -> bool:
+    if isinstance(node, ast.ImportFrom):
+        module = node.module or ""
+        if module == "_vendor" and any(alias.name == "atlas" for alias in node.names):
+            return True
+        if module.startswith("_vendor.atlas"):
+            return module == "_vendor.atlas.detect" or any(alias.name in _DETECTION_NAMES for alias in node.names)
+        return False
+    if isinstance(node, ast.Import):
+        return any(alias.name.startswith("_vendor.atlas") for alias in node.names)
+    return isinstance(node, ast.Attribute) and node.attr in _DETECTION_NAMES and _names_atlas(node.value)
+
+
+def _names_atlas(node: ast.AST) -> bool:
+    """Whether *node* is ``atlas`` or ``_vendor.atlas`` (an attribute read off the module)."""
+    if isinstance(node, ast.Name):
+        return node.id == "atlas"
+    return isinstance(node, ast.Attribute) and node.attr == "atlas"
+
+
+def _modules_reaching_detection(root: Path) -> list[str]:
+    """Every module under *root* (outside ``_vendor``) that can detect installations or build a machine.
+
+    It sees an import of ``detect``, ``RealMachine`` or an installation class
+    from the resolver, an import of the resolver's package as a module
+    (``import _vendor.atlas``, ``from _vendor import atlas``), and an attribute
+    read of one of those names off it. It does not see a name reached through
+    ``getattr`` or ``importlib``.
+    """
     found: list[str] = []
     for path in sorted(root.rglob("*.py")):
         if "_vendor" in path.relative_to(root).parts:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom) or not (node.module or "").startswith("_vendor.atlas"):
-                continue
-            if node.module == "_vendor.atlas.detect" or any(alias.name == "detect" for alias in node.names):
-                found.append(path.relative_to(root).as_posix())
+        if any(_reaches_detection(node) for node in ast.walk(tree)):
+            found.append(path.relative_to(root).as_posix())
     return found
 
 
 class TestOnlyTheHolderDetects:
-    """The sources are detected in one place; every other adapter asks the holder."""
+    """The sources are detected in one place, through one machine; every other adapter asks the holder."""
 
-    def test_no_module_but_the_holder_imports_detect(self):
-        assert _modules_importing_detect(_BACKEND) == ["adapters/emulator_sources.py"]
+    def test_no_module_but_the_holder_reaches_detection(self):
+        assert _modules_reaching_detection(_BACKEND) == ["adapters/emulator_sources.py"]
 
-    def test_the_scan_sees_an_import_elsewhere(self, tmp_path):
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "from _vendor.atlas import detect\n",
+            "from _vendor.atlas.detect import detect\n",
+            "import _vendor.atlas\nx = _vendor.atlas.detect('/home')\n",
+            "from _vendor import atlas\nx = atlas.detect('/home')\n",
+            "from _vendor.atlas.machine import RealMachine\n",
+            "from _vendor.atlas import RetroDeck\n",
+        ],
+    )
+    def test_the_scan_sees_each_way_in(self, tmp_path, source):
         (tmp_path / "adapters").mkdir()
-        (tmp_path / "adapters" / "rogue.py").write_text("from _vendor.atlas import detect\n", encoding="utf-8")
-        (tmp_path / "adapters" / "deep.py").write_text("from _vendor.atlas.detect import detect\n", encoding="utf-8")
+        (tmp_path / "adapters" / "rogue.py").write_text(source, encoding="utf-8")
         (tmp_path / "adapters" / "fine.py").write_text("from _vendor.atlas import KIND_LIBRETRO\n", encoding="utf-8")
 
-        assert _modules_importing_detect(tmp_path) == ["adapters/deep.py", "adapters/rogue.py"]
+        assert _modules_reaching_detection(tmp_path) == ["adapters/rogue.py"]
