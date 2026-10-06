@@ -162,9 +162,10 @@ the end of the order); `domain/emulator_sources.py` holds the rules.
 
 **A game's answers come from the source it starts through.** Every game starts through RetroDECK, so while RetroDECK is
 detected and switched on it answers, wherever the user put it in the order; the stored picks are RetroDECK labels and
-are read against RetroDECK only. Without it, the first switched-on source in the order answers, with `starts_games`
-false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every source's emulators,
-the order decides only while RetroDECK is absent or switched off.
+are read against RetroDECK only. That holds for a RetroDECK that has not been set up yet too: it is detected and
+answers, and every answer says it is not set up. Without it, the first switched-on source in the order answers, with
+`starts_games` false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every
+source's emulators, the order decides only while RetroDECK is absent or switched off.
 
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
@@ -235,17 +236,20 @@ libretro options are never downgraded. See [ADR-0020](../adr/0020-live-es-system
 carries one of the four `emulator-catalogue-*` refusals — the arrangement ships no catalogue, the resolver has not
 located one, or the one it has could not be read (all three `unavailable`), or only part of it is readable (`sealed`,
 EmuDeck's today); or it carries `catalogue-invalid` (`catalogue_invalid`), a file ES-DE refuses its whole load on
-(usually a typo in the user's own `custom_systems` overlay). `source` is the answering source's `{kind, starts_games}`.
-The platform page and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a
-system the frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to
-plain. The overlay entries the resolver gives beside `emulator-catalogue-sealed` are used nowhere — not for the emulator
-list, not for saves and not for firmware, whose answer beside a sealed catalogue reads as nothing established: an
-incomplete list would look complete. An empty list carrying none of those codes is that real "knows none", and
-`emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
-gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
-installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
-picker shape (`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is
-marked, and `needs_setup` / `unbakeable` entries are disabled with their reason. See
+(usually a typo in the user's own `custom_systems` overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the
+resolver found by its Flatpak deploy with no `retrodeck.json` — not started for this home yet, or its first-run setup
+left unfinished — which answers every question with that finding and an empty enumeration. `source` is the answering
+source's `{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list
+they cannot distinguish from a system the frontend knows no emulator for
+([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The overlay entries the resolver gives
+beside `emulator-catalogue-sealed` are used nowhere — not for the emulator list, not for saves and not for firmware,
+whose answer beside a sealed catalogue reads as nothing established: an incomplete list would look complete. An empty
+list carrying none of those codes is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all:
+a custom `es_systems.xml` declaring itself the whole catalogue gives a complete answer, merely a small one. The test is
+the codes and never an empty caveat list — a broken installation states health findings on every answer it gives.
+`options_to_payload` projects the list to the frontend picker shape
+(`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is marked, and
+`needs_setup` / `unbakeable` entries are disabled with their reason. See
 [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) — including the 27 default flips this selection rule
 produces relative to the old first-libretro default.
 

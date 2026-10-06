@@ -614,26 +614,26 @@ Format: **invariant** — tier — enforced by.
   whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the saves package's own
   `save_answer` wrapper, a full read of the machine per ROM (the first ask about a core also runs that core's probe) —
   the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the seam's detection
-  question (`installation_detected`, which detects the emulator sources afresh), the two path resolvers —
-  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
-  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
-  so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters
-  that answer with a root: `bios_path`, `roms_path`, `saves_path` and `retrodeck_home`, four of the Protocol's five path
-  getters, each resolving on every call. The fifth, `config_path`, stays out because it resolves nothing — it is
-  `os.path.join` over the user home, so calling it costs no I/O. That timing is the only entry a cost was measured for;
-  every other one is listed from reading its implementation. One other real I/O seam was weighed and kept out — the
-  reason is in the script's docstring, and it is not an exemption; nor is it an inventory of what else touches the disk.
-  **"It's only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues
-  `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is in WAL, so readers are unaffected —
-  but every other **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still
-  held then, and `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had drifted across the
-  rule before anything looked (#1779), for the reason the check exists: nothing at a call site reveals that an injected
-  seam touches the disk. **The rule and the gate come from reading code — no measurement of how long any of those
-  transactions actually held the lock exists, and nothing here should be read as one.** What the check sees is the
-  deadlock rule's matcher unchanged — an **attribute** call naming a listed seam, lexically inside a
-  `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of that half: a seam
-  behind a helper one level down, an alias to a local, a factory attribute whose name does not end in `uow_factory`, a
-  nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
+  question (`installation_detected`, which detects the emulator sources afresh and reads the answering one's health),
+  the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that
+  may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on
+  **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks them against) —
+  and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path` and `retrodeck_home`,
+  four of the Protocol's five path getters, each resolving on every call. The fifth, `config_path`, stays out because it
+  resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. That timing is the only entry
+  a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
+  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
+  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
+  in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
+  fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
+  Six call sites had drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at
+  a call site reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no
+  measurement of how long any of those transactions actually held the lock exists, and nothing here should be read as
+  one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam,
+  lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of
+  that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name does not end in
+  `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
   (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam

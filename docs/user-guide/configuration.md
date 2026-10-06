@@ -287,8 +287,8 @@ while the source is switched on, an empty grey ring and a grey name while it is 
   sources are used in; the first card's up arrow and the last card's down arrow do nothing. The card slides into its new
   place and the arrow you pressed keeps the focus — the other arrow takes it once the source reaches the top or the
   bottom — so press again to move the source further;
-- the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
-  would show is then only a default;
+- the folder it lives in — left out while the source's own settings file is missing or broken, or while the source has
+  not been set up yet, because the folder Tender would show is then only a default;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
   found.** — or, where Tender could not read the source's emulator list, **_Source_'s emulator list is not
   established.**, with a warning sign, unless one of the two lines below already says why;
@@ -300,18 +300,21 @@ while the source is switched on, an empty grey ring and a grey name while it is 
   never asked about a game. It stays listed, so you can switch it on again.
 
 **Which source answers for a game.** While RetroDECK is found and switched on, a game's emulator, BIOS and save answers
-come from RetroDECK, wherever it stands in the order, because every game starts through it. Without it, the first source
-switched on in the order answers, and the main panel says that Tender cannot start games through it yet. A source found
-for the first time joins the end of the order, switched on.
+come from RetroDECK, wherever it stands in the order, because every game starts through it — even while it has not been
+set up yet, when it answers that it has not. Without it, the first source switched on in the order answers, and the main
+panel says that Tender cannot start games through it yet. A source found for the first time joins the end of the order,
+switched on.
 
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
-— a settings file that is missing, unreadable or damaged, a folder that does not exist (an SD card that is not
-inserted), a saves folder that does not exist, ES-DE's systems file that does not load (ES-DE then shows no systems, and
-Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch settings that cannot be read. Two kinds
-stay in the source's line here only: texture packs or mods that do not reach an emulator, which concern nothing Tender
-does, and every problem of a source you switched off. Where Tender cannot get an emulator list, the platform page and
-the emulator menu say why — no source found, every source switched off, a broken systems file, a list that cannot be
-read yet — rather than showing an empty list.
+— a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start
+RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a folder that
+does not exist (an SD card that is not inserted), a saves folder that does not exist, ES-DE's systems file that does not
+load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch
+settings that cannot be read. Two kinds stay in the source's line here only: texture packs or mods that do not reach an
+emulator, which concern nothing Tender does, and every problem of a source you switched off. Where Tender cannot get an
+emulator list, the platform page and the emulator menu say why — no source found, every source switched off, a broken
+systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather than showing an empty
+list.
 
 ## Log Level
 
