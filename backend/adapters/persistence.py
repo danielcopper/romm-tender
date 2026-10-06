@@ -93,7 +93,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # resolver's installation kinds and never folders, so a source that moves
     # keeps its place and its switch. Empty order: the resolver's own probe
     # order. Switched-off is a deny-list, so a source seen for the first time is
-    # on. ``domain/emulator_sources.py`` reads both.
+    # on. The rules over both are ``domain/emulator_sources.py``'s.
     "emulator_source_order": [],
     "emulator_sources_off": [],
 }
