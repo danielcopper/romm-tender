@@ -5205,16 +5205,19 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     total_bytes: 1000,
   });
 
-  /** Open the split button's dropdown and return the menu it shows, rendered. */
-  const openMissingMenu = (container: HTMLElement) => {
+  /** Open the split button's arrow and return the menu element it shows. */
+  const openMissingMenuElement = (container: HTMLElement): ReactElement<{ label?: string }> => {
     const chevron = container.querySelector(".romm-btn-dropdown") as HTMLElement | null;
     if (!chevron) throw new Error("dropdown chevron not rendered");
     act(() => {
       chevron.click();
     });
     const calls = vi.mocked(showContextMenu).mock.calls;
-    return within(render(calls[calls.length - 1]![0] as ReactElement).container);
+    return calls[calls.length - 1]![0] as ReactElement<{ label?: string }>;
   };
+
+  /** Open the split button's arrow and return the menu it shows, rendered. */
+  const openMissingMenu = (container: HTMLElement) => within(render(openMissingMenuElement(container)).container);
 
   /**
    * Choose "Forget this download" from the dropdown and return the
@@ -5251,15 +5254,75 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(queryByText("Download")).toBeNull();
   });
 
-  it("offers Forget this download in the split button's dropdown", async () => {
+  it("titles the arrow's menu File missing", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    expect(openMissingMenuElement(container).props.label).toBe("File missing");
+  });
+
+  it("names the arrow's menu, not an action", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    const chevron = container.querySelector(".romm-btn-dropdown")!;
+
+    expect(chevron.getAttribute("aria-label")).toBe("File missing");
+    expect(chevron.getAttribute("title")).toBe("File missing");
+  });
+
+  it("names the full path in the menu as plain text, not as an action", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    const menu = openMissingMenu(container);
+    const pathLine = await menu.findByText(MISSING);
+
+    expect(pathLine.closest("button")).toBeNull();
+    expect(pathLine.getAttribute("tabindex")).toBeNull();
+  });
+
+  it("offers Download again and Forget this download in the menu, and nothing else", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { container, findByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Download again");
 
     const menu = openMissingMenu(container);
 
-    expect(await menu.findByText("Forget this download")).toBeInTheDocument();
-    expect(menu.queryByText("Uninstall")).toBeNull();
+    expect(menu.getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Download again",
+      "Forget this download",
+    ]);
+  });
+
+  it("starts an ordinary download from the menu's Download again", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+    const item = await openMissingMenu(container).findByRole("button", { name: "Download again" });
+
+    await act(async () => {
+      item.click();
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(backend.startDownload)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.startDownload).mock.calls[0]![0]).toBe(42);
+  });
+
+  it("offers no menu download while offline", async () => {
+    setRommConnectionState("offline");
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    const menu = openMissingMenu(container);
+
+    expect(await menu.findByRole("button", { name: "Download again" })).toBeDisabled();
+    expect(menu.getByRole("button", { name: "Forget this download" })).not.toBeDisabled();
   });
 
   it("is the size of the Play button", async () => {
@@ -5392,6 +5455,22 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
     expect(await findByText("File missing")).toBeInTheDocument();
+  });
+
+  it("forgets when asked again after a cancelled confirmation", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+    const first = await chooseForget(container);
+    await act(async () => {
+      first.onCancel?.();
+      for (let index = 0; index < 8; index++) await Promise.resolve();
+    });
+
+    await confirm(await chooseForget(container));
+
+    expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
   });
 
   it("forgets the download once confirmed, clears the shortcut's launch command and offers Download", async () => {
@@ -5540,6 +5619,6 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
       expect.objectContaining({ body: "Couldn't forget the download" }),
     );
     expect(await findByText("File missing")).toBeInTheDocument();
-    expect((await findByText("Download again")).closest("button")).not.toBeDisabled();
+    expect((await within(container).findByText("Download again")).closest("button")).not.toBeDisabled();
   });
 });

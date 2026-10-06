@@ -1,13 +1,15 @@
 /**
- * The words of a download whose file is missing: the game page's note, its two
- * actions, the confirmation a "Forget this download" asks, and how the forget
- * ended. One home, so the button and its tests state the case the same way.
- * The note stays one short line beside the play row's stats; the path the
- * install record holds is named by the confirmation, and nothing says why the
- * file is gone, which Tender cannot know.
+ * The words of a download whose file is missing: the game page's note, the
+ * menu behind its arrow, its two actions, the confirmation a "Forget this
+ * download" asks, and how the forget ended. One home, so the button and its
+ * tests state the case the same way. The note stays one short line beside the
+ * play row's stats; the path the install record holds is named in the menu and
+ * by the confirmation, and nothing says why the file is gone, which Tender
+ * cannot know.
  */
 
-export const FILE_MISSING_NOTE = "File missing";
+/** The note under the split button, and the title of its arrow's menu. */
+export const FILE_MISSING_LABEL = "File missing";
 
 export const DOWNLOAD_AGAIN_LABEL = "Download again";
 

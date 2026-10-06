@@ -4,7 +4,7 @@ import {
   FORGET_DOWNLOAD_LABEL,
   FORGETTING_LABEL,
   FORGET_FAILED_TOAST,
-  FILE_MISSING_NOTE,
+  FILE_MISSING_LABEL,
   FORGET_CONFIRM_BUTTON,
   downloadForgottenToast,
   forgetConfirmDescription,
@@ -12,8 +12,8 @@ import {
 } from "./missingDownloadWording";
 
 describe("missingDownloadWording", () => {
-  it("says the file is missing in the note, without a path", () => {
-    expect(FILE_MISSING_NOTE).toBe("File missing");
+  it("says the file is missing, without a path, for the note and the menu's title", () => {
+    expect(FILE_MISSING_LABEL).toBe("File missing");
   });
 
   it("names the game and the recorded path in the forget confirmation", () => {

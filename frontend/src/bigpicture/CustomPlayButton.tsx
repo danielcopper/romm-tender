@@ -3,8 +3,9 @@
  * detail pages. Primary states (the full set is `PlayButtonState`):
  * - Download: ROM not installed, click to download. The same state, while
  *   the recorded file of an installed ROM is gone, is a split button the size
- *   of Play — Download again, with Forget this download in its dropdown — over
- *   a one-line "File missing" note, and no Play
+ *   of Play — Download again, and an arrow whose "File missing" menu names the
+ *   path and offers Download again and Forget this download — over a one-line
+ *   "File missing" note, and no Play
  * - Play: ROM installed, launches the game (with pre-launch save sync)
  * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
@@ -16,7 +17,7 @@
 import { useState, useEffect, useRef, FC, ReactElement } from "react";
 import { addEventListener, removeEventListener } from "../api/host";
 import { showToast } from "../utils/toast";
-import { Focusable, DialogButton, Menu, MenuItem, Navigation, showContextMenu } from "@decky/ui";
+import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInjector";
 import { hasAnySaveConflict } from "../utils/saveStatus";
@@ -52,7 +53,7 @@ import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { RESUME_TARGET_OCCUPIED_TOAST } from "../utils/adoptWording";
 import {
   DOWNLOAD_AGAIN_LABEL,
-  FILE_MISSING_NOTE,
+  FILE_MISSING_LABEL,
   FORGET_DOWNLOAD_LABEL,
   FORGETTING_LABEL,
   FORGET_FAILED_TOAST,
@@ -1266,11 +1267,38 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
   };
 
-  // The missing-file split button's menu: the one action besides Download
-  // again. The item opens a confirmation rather than forgetting at once.
-  const showMissingDownloadMenu = (e: MouseEvent) => {
+  // The missing-file arrow's menu, where there is room for the full path the
+  // play row's note leaves out. The path is a plain element rather than a
+  // disabled item: Steam's menu renders a child that is not an item as it is,
+  // while a disabled item still takes focus and answers a press with the
+  // failed-navigation sound.
+  const showMissingDownloadMenu = (e: MouseEvent, path: string, downloadDisabled: boolean) => {
     showContextMenu(
-      <Menu label="RomM Actions">
+      <Menu label={FILE_MISSING_LABEL}>
+        <div
+          key="path"
+          className="romm-file-missing-path"
+          style={{
+            maxWidth: "420px",
+            padding: "8px 16px",
+            fontSize: "13px",
+            lineHeight: "18px",
+            color: "#8f98a0",
+            overflowWrap: "anywhere",
+          }}
+        >
+          {path}
+        </div>
+        <MenuSeparator key="path-sep" />
+        <MenuItem
+          key="download-again"
+          disabled={downloadDisabled}
+          onClick={() => {
+            detach(handleDownload());
+          }}
+        >
+          {DOWNLOAD_AGAIN_LABEL}
+        </MenuItem>
         <MenuItem
           key="forget"
           tone="destructive"
@@ -1593,9 +1621,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
 
     if (missingPath !== null && !downloading && !actionPending) {
-      // The Play button's shape — a 200px split of main action and chevron — so
-      // the play row keeps its height and its stats their width. The note sits
-      // out of the flow, under the button, so it adds no height either.
+      // The Play button's shape — a split of main action and chevron — so the
+      // play row keeps its height and its stats their width. The note sits out
+      // of the flow, under the button, so it adds no height either.
       const dropdownBg = isOffline
         ? "linear-gradient(to right, #5a6a7a, #4d5d6d)"
         : "linear-gradient(to right, #1580cc, #0062ad)";
@@ -1617,10 +1645,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
             </DialogButton>
             <DialogButton
               className="romm-btn-dropdown"
-              aria-label={FORGET_DOWNLOAD_LABEL}
-              title={FORGET_DOWNLOAD_LABEL}
+              aria-label={FILE_MISSING_LABEL}
+              title={FILE_MISSING_LABEL}
               style={{ ...dropdownArrowStyle, background: dropdownBg, color: "#fff" }}
-              onClick={showMissingDownloadMenu}
+              onClick={(e: MouseEvent) =>
+                showMissingDownloadMenu(e, missingPath, forgetPending || isOffline || downloadBlockedByVanished)
+              }
               onFocus={scrollToTop}
               disabled={forgetPending}
             >
@@ -1651,7 +1681,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
               textOverflow: "ellipsis",
             }}
           >
-            {FILE_MISSING_NOTE}
+            {FILE_MISSING_LABEL}
           </div>
         </div>
       );
