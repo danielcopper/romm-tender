@@ -205,6 +205,36 @@ class TestDescribe:
         assert reports[1].root == "/run/media/deck/Emulation/Emulation"
         assert reports[1].catalogue == CATALOGUE_SEALED
 
+    def test_a_broken_systems_file_costs_only_its_own_source(self, traces):
+        broken = _Installation(
+            "retrodeck",
+            issues=(
+                Caveat(HEALTH_ISSUE_CATALOGUE_INVALID, "prose", {"path": "/rd/custom.xml", "problem": "parse-error"}),
+            ),
+            systems=SystemsAnswer(caveats=(Caveat(HEALTH_ISSUE_CATALOGUE_INVALID, "prose"),)),
+        )
+        healthy = _Installation("bare_retroarch_native", root="/home/deck/.config/retroarch")
+
+        broken_report, healthy_report = _holder(_Detect(broken, healthy), traces).describe()
+
+        assert broken_report.catalogue == CATALOGUE_UNAVAILABLE
+        assert [finding.code for finding in broken_report.findings] == [HEALTH_ISSUE_CATALOGUE_INVALID]
+        assert healthy_report.findings == ()
+        assert healthy_report.catalogue == CATALOGUE_READ
+        assert healthy_report.root == "/home/deck/.config/retroarch"
+
+    def test_a_given_reading_is_described_as_the_settings_stand_now_without_detecting_again(self, traces):
+        settings: dict[str, Any] = {"emulator_sources_off": []}
+        detect = _Detect(_Installation("retrodeck"), _Installation("emudeck"))
+        holder = _holder(detect, traces, settings)
+        reading = holder.read()
+        settings["emulator_sources_off"] = ["emudeck"]
+
+        reports = holder.describe(reading)
+
+        assert len(detect.machines) == 1
+        assert [(r.kind, r.enabled) for r in reports] == [("retrodeck", True), ("emudeck", False)]
+
     def test_the_root_is_left_out_while_the_settings_file_is_broken(self, traces):
         broken = _Installation(
             "retrodeck", issues=(Caveat(HEALTH_ISSUE_MARKER_INVALID, "prose", {"path": "/rd.json"}),)

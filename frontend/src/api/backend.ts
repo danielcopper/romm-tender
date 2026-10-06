@@ -654,7 +654,7 @@ export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emul
 
 /** Why a switch or a move of an emulator source was refused. */
 export type EmulatorSourceRefusal = EndpointFailure & {
-  reason: "unknown_source" | "cannot_move" | "invalid_direction";
+  reason: "unknown_source" | "cannot_move" | "invalid_direction" | "invalid_value";
 };
 
 /** Switch a detected source on or off; answers the listing as it now stands. */

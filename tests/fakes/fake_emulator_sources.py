@@ -20,6 +20,7 @@ class FakeSourcesReading:
     def __init__(self, sources: tuple[ArrangedSource, ...], installations: dict[str, Any]) -> None:
         self.sources = sources
         self._installations = installations
+        self.installations = tuple(installations.values())
         self.answering = answering_source(sources)
         self._answers: dict[Hashable, Any] = {}
 
@@ -63,5 +64,5 @@ class FakeEmulatorSources:
         self.taken.append(reading)
         return reading
 
-    def describe(self) -> tuple[SourceReport, ...]:
+    def describe(self, reading: Any = None) -> tuple[SourceReport, ...]:
         return self.reports

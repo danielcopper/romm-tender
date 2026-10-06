@@ -27,7 +27,7 @@ from lib.errors import Refused
 if TYPE_CHECKING:
     import asyncio
 
-    from domain.emulator_sources import SourceReport
+    from domain.emulator_sources import SourceReport, SourcesReading
     from services.protocols import DebugLogger, EmulatorSourcesReader, SettingsPersister
 
 _OFFSETS = {"up": -1, "down": 1}
@@ -73,12 +73,16 @@ class EmulatorSourcesService:
         """
         return await self._loop.run_in_executor(None, self._listing_io)
 
-    async def set_emulator_source_enabled(self, kind: str, enabled: bool) -> dict[str, Any]:
+    async def set_emulator_source_enabled(self, kind: str, enabled: object) -> dict[str, Any]:
         """Switch the detected source of *kind* on or off, and answer the listing as it now stands.
 
-        Refuses ``unknown_source`` for a kind that is not detected: only a listed
-        source has a switch.
+        Refuses ``invalid_value`` for an *enabled* that is not a boolean (it
+        arrives off the untrusted frontend wire), and ``unknown_source`` for a
+        kind that is not detected: only a listed source has a switch. One
+        detection serves both the check and the listing the switch answers with.
         """
+        if not isinstance(enabled, bool):
+            raise Refused("invalid_value", f"A source is switched on or off, not {enabled!r}.")
         return await self._loop.run_in_executor(None, self._switch_io, kind, enabled)
 
     async def move_emulator_source(self, kind: str, direction: str) -> dict[str, Any]:
@@ -86,15 +90,16 @@ class EmulatorSourcesService:
 
         Refuses ``invalid_direction`` for anything but those two words,
         ``unknown_source`` for a kind that is not detected, and ``cannot_move``
-        for a move past either end of the list.
+        for a move past either end of the list. One detection serves both the
+        check and the listing the move answers with.
         """
         offset = _OFFSETS.get(direction)
         if offset is None:
             raise Refused("invalid_direction", f"A source moves up or down, not {direction!r}.")
         return await self._loop.run_in_executor(None, self._move_io, kind, offset)
 
-    def _listing_io(self) -> dict[str, Any]:
-        reports = self._sources.describe()
+    def _listing_io(self, reading: SourcesReading | None = None) -> dict[str, Any]:
+        reports = self._sources.describe(reading)
         answering = answering_source(
             tuple(ArrangedSource(kind=r.kind, enabled=r.enabled, starts_games=r.starts_games) for r in reports)
         )
@@ -103,32 +108,36 @@ class EmulatorSourcesService:
             "answering": answering.kind if answering is not None else None,
         }
 
-    def _detected_kinds(self) -> tuple[str, ...]:
-        return tuple(source.kind for source in self._sources.read().sources)
-
     def _switch_io(self, kind: str, enabled: bool) -> dict[str, Any]:
+        reading = self._sources.read()
         switched_off = switch_source(
             kind=kind,
             enabled=enabled,
-            detected=self._detected_kinds(),
+            detected=_detected_kinds(reading),
             switched_off=stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)),
         )
         self._settings[SWITCHED_OFF_SETTING] = list(switched_off)
         self._settings_persister.save_settings()
         self._log_debug(f"[sources] {kind} switched {'on' if enabled else 'off'}; off={list(switched_off)}")
-        return self._listing_io()
+        return self._listing_io(reading)
 
     def _move_io(self, kind: str, offset: int) -> dict[str, Any]:
+        reading = self._sources.read()
         order = move_source(
             kind=kind,
             offset=offset,
-            detected=self._detected_kinds(),
+            detected=_detected_kinds(reading),
             stored_order=stored_kinds(self._settings.get(ORDER_SETTING)),
         )
         self._settings[ORDER_SETTING] = list(order)
         self._settings_persister.save_settings()
         self._log_debug(f"[sources] {kind} moved {offset:+d}; order={list(order)}")
-        return self._listing_io()
+        return self._listing_io(reading)
+
+
+def _detected_kinds(reading: SourcesReading) -> tuple[str, ...]:
+    """The kinds *reading* detected, in the resolver's probe order."""
+    return tuple(installation.kind for installation in reading.installations)
 
 
 def _report_payload(report: SourceReport) -> dict[str, Any]:

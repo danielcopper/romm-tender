@@ -57,6 +57,11 @@ class SourcesReading(Protocol):
     """
 
     @property
+    def installations(self) -> tuple[Any, ...]:
+        """The resolver's handles detected for this reading, in its probe order."""
+        ...
+
+    @property
     def sources(self) -> tuple[ArrangedSource, ...]:
         """Every detected source, in the user's order."""
         ...

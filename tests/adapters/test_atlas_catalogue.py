@@ -708,6 +708,22 @@ class TestWhichSourceAnswers:
         settings["emulator_sources_off"] = []
         assert _labels(adapter, "gba") == ["mGBA"]
 
+    def test_another_source_still_answers_beside_a_broken_systems_file(self, traces):
+        broken = _Installation(catalogue=_answer(caveats=(_refusal(HEALTH_ISSUE_CATALOGUE_INVALID),)))
+        native = _Installation(
+            catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)),
+            kind="bare_retroarch_native",
+        )
+        settings: dict[str, Any] = {"emulator_sources_off": []}
+        adapter = _adapter(None, traces, sources=_sources([broken, native], traces, settings))
+
+        assert adapter.get_emulator_options("gba")["reason"] == "catalogue_invalid"
+        settings["emulator_sources_off"] = ["retrodeck"]
+        answer = adapter.get_emulator_options("gba")
+
+        assert [option.label for option in answer["options"]] == ["mGBA"]
+        assert answer["source"] == {"kind": "bare_retroarch_native", "starts_games": False}
+
     def test_with_only_emudeck_its_answer_says_tender_cannot_start_games_through_it(self, traces):
         emudeck = _Installation(
             catalogue=_answer(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_SEALED),)), kind="emudeck"

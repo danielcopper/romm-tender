@@ -148,13 +148,14 @@ class EmulatorSourcesReader(Protocol):
 
     ``read`` detects afresh and answers one :class:`domain.emulator_sources.SourcesReading`;
     a run that asks the same questions for many games takes one and hands it
-    down. ``describe`` is what the settings list shows of every detected source,
-    from a fresh reading.
+    down. ``describe`` is what the settings list shows of every detected source:
+    over the sources a given reading detected, arranged as the settings stand
+    now, or from a fresh reading.
     """
 
     def read(self) -> SourcesReading: ...
 
-    def describe(self) -> tuple[SourceReport, ...]: ...
+    def describe(self, reading: SourcesReading | None = None) -> tuple[SourceReport, ...]: ...
 
 
 class SaveLocationReader(Protocol):
@@ -247,9 +248,11 @@ class SystemSupportedExtensionsFn(Protocol):
     Default-safe: an empty frozenset for an unknown system or when
     ``es_systems.xml`` cannot be found (every caller treats the empty answer as
     "cannot tell" and falls back to its permissive branch, never to a refusal).
+    *reading* is a run's one reading of the emulator sources, as on
+    :class:`CoreInfoProvider`; without one the call takes a fresh reading.
     """
 
-    def __call__(self, system_name: str) -> frozenset[str]: ...
+    def __call__(self, system_name: str, *, reading: SourcesReading | None = None) -> frozenset[str]: ...
 
 
 class SystemKnownFn(Protocol):

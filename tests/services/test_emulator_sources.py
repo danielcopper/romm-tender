@@ -129,6 +129,15 @@ class TestTheSwitch:
         assert [source["enabled"] for source in listing["sources"]] == [True, True]
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("value", ["false", 0, None])
+    async def test_a_switch_value_that_is_not_a_boolean_is_refused(self, both, value):
+        with pytest.raises(Refused) as refusal:
+            await both.service.set_emulator_source_enabled("emudeck", value)
+
+        assert refusal.value.reason == "invalid_value"
+        assert both.persister.save_count == 0
+
+    @pytest.mark.asyncio
     async def test_a_source_that_is_not_detected_has_no_switch(self, both):
         with pytest.raises(DomainRefused) as refusal:
             await both.service.set_emulator_source_enabled("bare_retroarch_native", False)
@@ -136,6 +145,30 @@ class TestTheSwitch:
         assert refusal.value.reason == "unknown_source"
         assert both.persister.save_count == 0
         assert both.settings["emulator_sources_off"] == []
+
+
+class TestOneDetectionPerWrite:
+    @pytest.mark.asyncio
+    async def test_a_switch_detects_once(self, both):
+        detections: list[int] = []
+        detect = both.sources._detect
+        both.sources._detect = lambda home, machine: detections.append(1) or detect(home, machine)
+
+        listing = await both.service.set_emulator_source_enabled("emudeck", False)
+
+        assert detections == [1]
+        assert [source["enabled"] for source in listing["sources"]] == [True, False]
+
+    @pytest.mark.asyncio
+    async def test_a_move_detects_once(self, both):
+        detections: list[int] = []
+        detect = both.sources._detect
+        both.sources._detect = lambda home, machine: detections.append(1) or detect(home, machine)
+
+        listing = await both.service.move_emulator_source("emudeck", "up")
+
+        assert detections == [1]
+        assert both.kinds(listing) == ["emudeck", "retrodeck"]
 
 
 class TestTheOrder:

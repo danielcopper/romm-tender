@@ -53,6 +53,8 @@ from domain.emulator_sources import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
 
+    from domain.emulator_sources import SourcesReading
+
 _T = TypeVar("_T")
 
 # While a source's settings file is missing, unreadable or damaged, the root
@@ -73,10 +75,16 @@ class DetectedSourcesReading:
     """
 
     def __init__(self, *, installations: tuple[Any, ...], sources: tuple[ArrangedSource, ...]) -> None:
+        self._detected = installations
         self._installations = {installation.kind: installation for installation in installations}
         self._sources = sources
         self._answering = answering_source(sources)
         self._answers: dict[Hashable, Any] = {}
+
+    @property
+    def installations(self) -> tuple[Any, ...]:
+        """The resolver's handles detected for this reading, in its probe order."""
+        return self._detected
 
     @property
     def sources(self) -> tuple[ArrangedSource, ...]:
@@ -144,22 +152,31 @@ class EmulatorSourcesAdapter:
             # honest answer to "could not detect" is the same whatever raised.
             self._log_debug(f"[sources] detection failed, answering with none: {exc!r}")
             installations = ()
+        reading = self._arranged(installations)
+        self._log_debug(
+            f"[sources] detected={[source.kind for source in reading.sources]} "
+            f"off={[source.kind for source in reading.sources if not source.enabled]} "
+            f"answering={reading.answering_kind}"
+        )
+        return reading
+
+    def describe(self, reading: SourcesReading | None = None) -> tuple[SourceReport, ...]:
+        """Every detected source as the settings list shows it.
+
+        Over the sources *reading* detected, arranged as the settings stand now,
+        so a write's answer describes what the write found without detecting
+        again; without one, from a fresh reading.
+        """
+        arranged = self._arranged(reading.installations) if reading is not None else self.read()
+        return tuple(self._report(source, arranged.installation(source.kind)) for source in arranged.sources)
+
+    def _arranged(self, installations: tuple[Any, ...]) -> DetectedSourcesReading:
         sources = arrange_sources(
             detected=tuple(installation.kind for installation in installations),
             stored_order=stored_kinds(self._settings.get(ORDER_SETTING)),
             switched_off=stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)),
         )
-        reading = DetectedSourcesReading(installations=installations, sources=sources)
-        self._log_debug(
-            f"[sources] detected={[source.kind for source in sources]} "
-            f"off={[source.kind for source in sources if not source.enabled]} answering={reading.answering_kind}"
-        )
-        return reading
-
-    def describe(self) -> tuple[SourceReport, ...]:
-        """Every detected source as the settings list shows it, from a fresh reading."""
-        reading = self.read()
-        return tuple(self._report(source, reading.installation(source.kind)) for source in reading.sources)
+        return DetectedSourcesReading(installations=installations, sources=sources)
 
     def _report(self, source: ArrangedSource, installation: Any) -> SourceReport:
         findings = self._findings(source.kind, installation)
