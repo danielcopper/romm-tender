@@ -123,9 +123,11 @@ RomM · one of 4**. They are listed so nothing can be removed without having bee
 **Remove fully vanished games** is on — with that option off they cannot be removed at all, so the list drops them. A
 warning about a version — including that its downloaded ROM file will be deleted without a backup if that version is
 removed — is a line under its row. The headline count always counts the versions that are gone, never these. The modal
-loads the list a page at a time, each kept small; load every page before confirmation. The confirmation run checks every
-exact RomM id again. Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response,
-active-download, and ambiguous multi-shortcut cases are skipped and reported without deleting data.
+loads the rest of the list by itself, a page after another, and **Confirm Cleanup** refuses until every entry is shown,
+saying how many have arrived. If a page fails to load, the modal says why and offers **Retry loading**, which carries on
+from the entries already shown. The confirmation run checks every exact RomM id again. Only a confirmed 404 can be
+removed. Offline, timeout, authentication, server, malformed-response, active-download, and ambiguous multi-shortcut
+cases are skipped and reported without deleting data.
 
 The confirmation options apply to this run only:
 
@@ -145,11 +147,11 @@ The confirmation options apply to this run only:
   installed ROM content in the recovery bundle. Its exact recursive size is in the **Installed** column; selecting more
   than the currently free recovery space blocks confirmation. Turning recovery off clears and disables these selections,
   and so does switching off whole-game removal for a row that is only listed because of it. Large selections are staged
-  in bounded pages before the run without a total selection cap. Unselected installed content is still deleted if the
+  a page at a time before the run, without a total selection cap. Unselected installed content is still deleted if the
   row is removed. When no listed version has ROM files on this device the option has nothing to attach to, so the list
   says so instead of leaving the option apparently missing.
 
-The recovery estimate, **Refresh free space**, **Load more** (while part of the list is not loaded yet), **Cancel** and
+The recovery estimate, **Refresh free space**, **Retry loading** (after part of the list failed to load), **Cancel** and
 **Confirm Cleanup** sit directly under the options, above the table, so they are a few presses away however long the
 list is; a running cleanup's progress, its **Stop Cleanup** button and its result appear there too. The displayed
 selected-content total is a lower-bound preflight, not the complete bundle size. Use **Refresh free space** after
@@ -191,12 +193,14 @@ remains bound to the new Default. If Steam removal succeeded but every completio
 ambiguous and source data stays retained; the same applies when Steam removal was attempted but its absence could not be
 confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
 in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
-failure message remains visible after earlier groups committed. If bounded warning or message text was omitted or
-shortened, the detail distinguishes omitted warnings from shortened displayed text and never reports zero additional
-warnings. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
-start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
-result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These
-outcomes are intentional and retryable rather than being reported as unchanged.
+failure message remains visible after earlier groups committed. A name, path, message or warning too long to be real
+server output is shortened, and wherever it is shown — in the list, under the progress bar, in the result — a line says
+the text was too long and was shortened. Warnings past the limit for one game are left out, and the detail counts them
+separately from shortened text and never reports zero additional warnings. Progress is tied to the preview that you
+confirmed, so a matching run is still shown if only the successful start response is delayed or lost; a matching
+terminal event makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same
+run cannot replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather
+than being reported as unchanged.
 
 ### Region and Languages
 

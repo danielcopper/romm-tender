@@ -313,36 +313,36 @@ completion-stamp update.
 `PruneService` is the only path that deliberately deletes retained `roms` aggregate roots. A bulk preview is local-only:
 for each platform it requires a non-empty completed fetch generation and selects rows whose `last_fetch_id` differs,
 including NULL row generations. An inline preview may nominate one concrete retained ROM without generation evidence.
-Both forms return serialized-byte-budgeted pages plus an ephemeral fingerprint. A page may therefore contain fewer than
-the requested row limit, and the next offset advances by the rows actually returned. Pages include every member of an
-affected sibling group, with generation candidates marked separately, so whole-game deletion cannot reach an undisclosed
-row. `start_prune` consumes a finalized preview-bound installed-content selection. The frontend stages that selection in
-bounded pages, so wire bounds do not cap the total selected set. Start atomically refuses any registered conflicting use
-case and reserves the run before rebuilding the preview; concurrent starts cannot consume one token twice, and shutdown
-owns/cancels an admitted refresh before it can spawn a run. Each sync, download, migration, version-switch, save-write,
-session, uninstall, connection-identity change (including a successful connection test), or cache-mutation use case
-registers for its full lifetime before its first await. Detached status, download, and playtime tasks transfer the claim
-to their task lifetime. Core/disc writes, launch evaluation, and Steam Input application are included because they
-mutate recovered state. Frontend-owned shortcut removal, core/disc writes, version switches, uninstalls, SGDB/icon
-application, download completion, home migration, startup healing, pre-launch healing, and every post-sync Steam branch
-(launch options, collections, playtime, and overview metadata) hold tokenized conflict leases through their final Steam
-write and bounded release. Active continuations heartbeat those leases once per minute. A global frontend registry
-signals cooperative cancellation by owner. A continuation with an owner captures that owner's mount generation once,
-when it starts, and carries it through every backend wait; the owner's teardown tombstones its generation synchronously,
-so a lease-bearing response that arrives afterward is released without running its continuation. Only a genuine remount
-opens a new owner generation. Cancellation stops every not-yet-started Steam mutation and lease renewal, but explicit
-backend release waits for any already-started non-cancellable Steam promise to settle. An unresolved operation stops
-renewing after a bounded five minutes; the backend's five-minute no-heartbeat expiry is the abandonment backstop if it
-never settles. The Play button carries the admission captured at its press through every gate, modal, and launch-options
-confirmation wait. The version picker likewise rechecks its captured owner admission after save-sync and modal waits
-before any successor `switch_version` mutation, so an unmounted chain cannot resume under a new picker. Each non-empty
-`sync_stale` event carries its own lease through the paced removal tail; a later `sync_complete` lease overlaps and
-joins that same promise, so success composes both leases while a post-stale backend failure still leaves the tail
-covered. A terminal prune result that needs repoint publication likewise acquires its lease before event delivery while
-the old run is active; the frontend holds it across release acknowledgement and cover publication. Event delivery
-failure releases a token that never reached the frontend. This closes the reciprocal start/refusal race, and each path
-refuses while a prune claim is active. The update, migration and sync rules additionally guard preview and start,
-checked in the prune service; the start asks them only once its reservation is held.
+Both forms return pages of at most the requested row limit plus an ephemeral fingerprint; the panel fetches them one
+after another until it holds every row. Pages include every member of an affected sibling group, with generation
+candidates marked separately, so whole-game deletion cannot reach an undisclosed row. `start_prune` consumes a finalized
+preview-bound installed-content selection. The frontend stages that selection in bounded pages, so wire bounds do not
+cap the total selected set. Start atomically refuses any registered conflicting use case and reserves the run before
+rebuilding the preview; concurrent starts cannot consume one token twice, and shutdown owns/cancels an admitted refresh
+before it can spawn a run. Each sync, download, migration, version-switch, save-write, session, uninstall,
+connection-identity change (including a successful connection test), or cache-mutation use case registers for its full
+lifetime before its first await. Detached status, download, and playtime tasks transfer the claim to their task
+lifetime. Core/disc writes, launch evaluation, and Steam Input application are included because they mutate recovered
+state. Frontend-owned shortcut removal, core/disc writes, version switches, uninstalls, SGDB/icon application, download
+completion, home migration, startup healing, pre-launch healing, and every post-sync Steam branch (launch options,
+collections, playtime, and overview metadata) hold tokenized conflict leases through their final Steam write and bounded
+release. Active continuations heartbeat those leases once per minute. A global frontend registry signals cooperative
+cancellation by owner. A continuation with an owner captures that owner's mount generation once, when it starts, and
+carries it through every backend wait; the owner's teardown tombstones its generation synchronously, so a lease-bearing
+response that arrives afterward is released without running its continuation. Only a genuine remount opens a new owner
+generation. Cancellation stops every not-yet-started Steam mutation and lease renewal, but explicit backend release
+waits for any already-started non-cancellable Steam promise to settle. An unresolved operation stops renewing after a
+bounded five minutes; the backend's five-minute no-heartbeat expiry is the abandonment backstop if it never settles. The
+Play button carries the admission captured at its press through every gate, modal, and launch-options confirmation wait.
+The version picker likewise rechecks its captured owner admission after save-sync and modal waits before any successor
+`switch_version` mutation, so an unmounted chain cannot resume under a new picker. Each non-empty `sync_stale` event
+carries its own lease through the paced removal tail; a later `sync_complete` lease overlaps and joins that same
+promise, so success composes both leases while a post-stale backend failure still leaves the tail covered. A terminal
+prune result that needs repoint publication likewise acquires its lease before event delivery while the old run is
+active; the frontend holds it across release acknowledgement and cover publication. Event delivery failure releases a
+token that never reached the frontend. This closes the reciprocal start/refusal race, and each path refuses while a
+prune claim is active. The update, migration and sync rules additionally guard preview and start, checked in the prune
+service; the start asks them only once its reservation is held.
 
 The executor processes sibling groups serially and catches ordinary exceptions per group. It rejects multiple shortcut
 bindings and active downloads, pins the preview's canonical RomM origin/token-origin/user namespace, probes every local
