@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -11,9 +10,12 @@ from domain.sibling_resolution import group_rows
 from lib.url_host import romm_namespace
 from services.prune._models import PrunePreview
 
+# A server-supplied value longer than these is broken output, not information:
+# the caps keep one such row from making the review unreadable, and with the
+# page's row limit (`requests._MAX_PREVIEW_PAGE`) they keep a page far under the
+# host's answer cap (`host/dispatch.py` `DEFAULT_PAYLOAD_LIMIT`).
 _PREVIEW_TEXT_CHARS = 512
 _PREVIEW_WARNING_CHARS = 1024
-_PREVIEW_BUDGET_BYTES = 48 * 1024
 
 if TYPE_CHECKING:
     from domain.rom import Rom
@@ -60,7 +62,7 @@ def _preview_entry(
     size: int | None,
     warning: str | None,
 ) -> dict[str, Any]:
-    """One disclosure row, with every server-supplied string bounded for the wire."""
+    """One disclosure row, with every server-supplied string capped."""
     return {
         "rom_id": row.rom_id,
         "name": row.name[:_PREVIEW_TEXT_CHARS],
@@ -69,7 +71,6 @@ def _preview_entry(
         "fs_name_truncated": len(row.fs_name) > _PREVIEW_TEXT_CHARS,
         "platform_slug": row.platform_slug,
         "group_id": group_id[:_PREVIEW_TEXT_CHARS],
-        "group_id_truncated": len(group_id) > _PREVIEW_TEXT_CHARS,
         "group_size": group_size,
         "bound_count": bound_count,
         "candidate": candidate,
@@ -154,7 +155,7 @@ class PreviewBuilder:
         )
 
     def page(self, preview: PrunePreview, offset: int, limit: int) -> dict[str, Any]:
-        """Project one byte-bounded window of a snapshot onto the wire.
+        """Project one window of a snapshot onto the wire.
 
         ``total`` counts every disclosed row — candidates plus the retained
         siblings a whole-game removal could still take — while
@@ -163,11 +164,11 @@ class PreviewBuilder:
         headline count must not inflate itself with rows that are merely
         disclosed.
         """
-        result: dict[str, Any] = {
+        return {
             "success": True,
             "preview_id": preview.preview_id,
             "scope": preview.scope,
-            "items": [],
+            "items": list(preview.entries[offset : offset + limit]),
             "offset": offset,
             "limit": limit,
             "total": len(preview.entries),
@@ -175,19 +176,6 @@ class PreviewBuilder:
             "free_bytes": self._recovery_store.free_bytes(),
             "recovery_root": self._recovery_store.root(),
         }
-        if not limit:
-            return result
-        items: list[dict[str, Any]] = []
-        for entry in preview.entries[offset : offset + limit]:
-            candidate = [*items, entry]
-            result["items"] = candidate
-            if len(json.dumps(result, ensure_ascii=True).encode("utf-8")) > _PREVIEW_BUDGET_BYTES:
-                if not items:
-                    raise ValueError("One cleanup preview entry exceeds the preview page budget")
-                break
-            items = candidate
-        result["items"] = items
-        return result
 
     @staticmethod
     def _fingerprint(groups: list[list[Any]], installs: dict[int, Any]) -> tuple[tuple[object, ...], ...]:
