@@ -293,8 +293,8 @@ _Avoid_: **callable** for a Tender endpoint or for the panel's declaration of on
 Two objects the backend is made of, built in this order:
 
 - **Application** — the backend as `bootstrap/` builds it (`build_application()`): every wired service, plus what the
-  process does with them as a whole — the start-up repairs, the one start-up step that talks to the network, and the
-  shutdown. It runs none of them by itself; the entry point calls each at its moment.
+  process does with them as a whole — the start-up repairs and the shutdown. It runs none of them by itself; the entry
+  point calls each at its moment.
 - **Endpoints** — the class in `main.py` that holds every Tender endpoint, over the Application and the host's status
   record: each endpoint calls a use case on a service, except `get_host_status`, which answers from that record.
   Endpoints answers a refusal the use case raises in the wire's failure shape.

@@ -751,7 +751,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the backup leg through the same funnel. The installer's two rollbacks: one by hand takes the backup leg — the database
   files and `settings.json` it replaces are copied to `rollback-backup/` under the data root first, and a copy that
   cannot be made refuses it — while the automatic one discards only what a version never seen to answer wrote
-  (`tests/scripts/test_install_sh.py`, `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`)
+  (`tests/scripts/test_install_sh.py`, `TestRollingBackByHand` and `TestAnUpdateThatDoesNotStart`). A settings file
+  Tender does not read (older than version 13, or without a usable version) is written over with the defaults and takes
+  neither leg: 1.0.0 is a breaking release, and everything it held can be entered again
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios`, `::TestDeleteOneBiosFile` and

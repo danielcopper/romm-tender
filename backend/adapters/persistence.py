@@ -193,9 +193,9 @@ class PersistenceAdapter:
         *unparseable* file is the data-loss hazard: rather than silently
         returning defaults (which the immediate bootstrap save would then write
         over the corrupt file, destroying the user's server URL, token, and
-        selections), the unparseable file is backed up to ``settings.json.corrupt-<ts>`` and a
-        transient :attr:`_corrupt_reset` flag is set so bootstrap can persist
-        the reset marker. The error is logged loudly. If the backup rename
+        selections), the unparseable file is backed up to
+        ``settings.json.corrupt-<ts>`` and a transient :attr:`_corrupt_reset`
+        flag is set so bootstrap can persist the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
         boot never crashes.
         """

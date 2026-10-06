@@ -8,9 +8,9 @@ password to mint from), ``establish_paired_token`` exchanges a short-lived RomM
 pairing code for a token (the same OIDC path without pasting). Pure I/O happens
 through the ``RommConnectionApi`` Protocol and disk writes through the
 ``SettingsPersister`` Protocol; this service composes that I/O into the results
-the frontend reads and the refusals it raises. The minimum version is injected — ``MIN_ROMM_VERSION`` in
-``domain/identity.py``, passed in by bootstrap — so this service remains a
-pure orchestration layer.
+the frontend reads and the refusals it raises. The minimum version is injected
+— ``MIN_ROMM_VERSION`` in ``domain/identity.py``, passed in by bootstrap — so
+this service remains a pure orchestration layer.
 """
 
 from __future__ import annotations

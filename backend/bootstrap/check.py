@@ -28,8 +28,8 @@ def copy_live_data(*, data_from: str, config_from: str, directories: AppDirector
 
     The copies go into *directories*. Either one missing is nothing to copy — a
     first install has neither — and the build then starts from what is there,
-    as a start would. Raises what the
-    copy raises for a file that is there and cannot be read.
+    as a start would. Raises what the copy raises for a file that is there and
+    cannot be read.
 
     The database copied is the one a start would open — the current name where
     a file has it, the old name otherwise — under the name it has, so the build

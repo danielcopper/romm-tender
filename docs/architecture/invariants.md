@@ -1132,7 +1132,10 @@ Format: **invariant** — tier — enforced by.
   the installer waited for it, and that version was never seen to answer. Both are pinned in
   `tests/scripts/test_install_sh.py` (`TestRollingBackByHand`, and
   `TestAnUpdateThatDoesNotStart::test_it_keeps_no_copy_of_what_the_failed_version_wrote`); what an update and a rollback
-  do, in order: [Running an installed one](../contributing/development.md#running-an-installed-one)
+  do, in order: [Running an installed one](../contributing/development.md#running-an-installed-one). A settings file
+  Tender does not read — older than version 13, without a whole-number version, or not a JSON object — is written over
+  with the defaults by the start's own save and takes neither leg: 1.0.0 is a breaking release, and everything such a
+  file held can be entered again ([PersistenceAdapter notes](backend-architecture.md#persistenceadapter-notes))
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios` and `::TestDeleteOneBiosFile` pin every direction

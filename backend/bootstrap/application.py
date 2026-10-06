@@ -3,8 +3,9 @@
 Contract: :func:`build_application` composes :func:`bootstrap` and
 :func:`wire_services` into an :class:`Application`, and runs nothing. What runs,
 and when, is the entry point's to decide: the start-up repairs before the port
-is bound, :meth:`Application.shutdown` at the end. The endpoints are not here — they are ``main.py``'s, and reach the
-services through :attr:`Application.services`.
+is bound, :meth:`Application.shutdown` at the end. The endpoints are not here —
+they are ``main.py``'s, and reach the services through
+:attr:`Application.services`.
 
 The failure recorder is handed to :meth:`Application.run_startup_repairs` as a
 callable rather than as the host's status record, because ``bootstrap/`` may not

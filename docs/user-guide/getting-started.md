@@ -115,9 +115,8 @@ moves from the username to the password field and confirms only once every requi
 can't be submitted, and **Cancel** leaves your existing sign-in untouched.
 
 The plugin mints a RomM Client API Token from the credentials you enter and discards the password — it is never stored.
-The same applies if the plugin auto-migrates an older install that still had a saved password: the password is discarded
-as soon as a token is minted. If your RomM account is not allowed to create API tokens, the sign-in step reports that
-and you'll need an account with token permissions.
+If your RomM account is not allowed to create API tokens, the sign-in step reports that and you'll need an account with
+token permissions.
 
 <!-- Screenshot: Connection Settings page with URL field, Sign in button, and token status -->
 

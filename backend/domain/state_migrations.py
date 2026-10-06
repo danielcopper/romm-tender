@@ -37,7 +37,7 @@ def unreadable_settings(data: object) -> str | None:
         return "it has no version"
     version = data["version"]
     if isinstance(version, bool) or not isinstance(version, int):
-        return f"its version {json.dumps(version)} is not a whole number"
+        return f"its version {json.dumps(version)} is not written as a whole number"
     if version < OLDEST_SETTINGS_VERSION:
         return f"its version {version} is older than {OLDEST_SETTINGS_VERSION}"
     return None

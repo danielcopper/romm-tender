@@ -1,10 +1,9 @@
 """Running the start-up routines so one failing step cannot take the backend down.
 
 Contract: the wrapper the start-up steps that are not prerequisites are called
-through, and nothing else. Every step goes through it. It belongs to the
-composition root rather than to the services, so the distinction it draws — this
-step is not a prerequisite — is visible at the call site rather than buried in
-each service.
+through, and nothing else. It belongs to the composition root rather than to
+the services, so the distinction it draws — this step is not a prerequisite —
+is visible at the call site rather than buried in each service.
 
 The distinction is not decorative. Most of the routines contain no exception
 handling at all. Under the plugin loader that cost nothing, because the lifecycle

@@ -8,7 +8,6 @@ order below is the whole point of this module::
       -> bind the port (preferred, then falling back)
       -> write the port file
       -> start loading the panel into Steam
-      -> the one start-up step that talks to the network
 
 Because the port is bound only after the schema and the start-up routines are
 through, **"the port file is there" simply means "the backend is ready"**. A
@@ -16,11 +15,6 @@ process that dies at the schema migration has never announced a port, so nothing
 has to wait for a readiness signal and no call has to be held pending one. The
 draft's waiting mechanism — listen at once, queue calls until a ready flag —
 disappears with it.
-
-The credential migration comes last because it is the only start-up step that
-makes a network request. Ahead of the bind it would hold readiness hostage to a
-server that may be unreachable; behind it, a slow or failing RomM costs the
-panel nothing.
 
 **What is fatal and what is not are not the same question.** Without the lock,
 the schema, the wiring or a port there is no backend, so those end the process.

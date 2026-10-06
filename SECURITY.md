@@ -40,8 +40,7 @@ Tender handles:
 
 ### Known security considerations
 
-- The settings file is stored with `0600` permissions (owner-only read/write); Tender actively migrates an older
-  world-readable `0644` file to `0600` on load.
+- The settings file is written with `0600` permissions (owner-only read/write), and so is the backup of a corrupt one.
 - Credentials and tokens are never logged — masked in all log output.
 - The RomM Client API Token is **bound to the origin it was minted or accepted against** (`scheme://host[:port]`) and is
   only ever sent to that exact origin — a user-supplied token is stamped with the origin it was validated against at
