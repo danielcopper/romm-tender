@@ -22,10 +22,6 @@ export interface RegisteredDevice {
   updated_at?: string | null;
 }
 
-export interface ListDevicesResponse {
-  success: boolean;
-  devices: RegisteredDevice[];
-  disabled?: boolean;
-  reason?: string;
-  message?: string;
-}
+export type ListDevicesResponse =
+  | { success: true; devices: RegisteredDevice[] }
+  | { success: false; reason?: string; message?: string; disabled?: boolean };

@@ -398,11 +398,7 @@ describe("SettingsPage", () => {
         ...defaultSaveSyncSettings(),
         save_sync_enabled: true,
       });
-      vi.mocked(backend.ensureDeviceRegistered).mockResolvedValue({
-        success: false,
-        device_id: "",
-        device_name: "",
-      });
+      vi.mocked(backend.ensureDeviceRegistered).mockResolvedValue({ success: false });
       renderPage();
       await flushAsync();
       expect(capturedSaveSync[capturedSaveSync.length - 1]?.deviceInfo).toBeNull();
@@ -468,7 +464,6 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.listDevices).mockResolvedValue({
         success: false,
-        devices: [],
         disabled: true,
       });
       const { queryByTestId } = renderPage();
@@ -487,7 +482,6 @@ describe("SettingsPage", () => {
       // list_failed" leaked the slug).
       vi.mocked(backend.listDevices).mockResolvedValue({
         success: false,
-        devices: [],
         reason: "server_unreachable",
         message: "Could not load devices",
       });
@@ -507,7 +501,6 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.listDevices).mockResolvedValue({
         success: false,
-        devices: [],
       });
       renderPage();
       await flushAsync();

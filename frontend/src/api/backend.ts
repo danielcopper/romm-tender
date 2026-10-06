@@ -1010,9 +1010,10 @@ export const saveShortcutIcon = endpoint<[number, string], { success: boolean; i
 );
 
 // Save sync endpoints
-export const ensureDeviceRegistered = endpoint<[], { success: boolean; device_id: string; device_name: string }>(
-  "ensure_device_registered",
-);
+export const ensureDeviceRegistered = endpoint<
+  [],
+  { success: true; device_id: string; device_name: string } | { success: false; reason?: string; message?: string }
+>("ensure_device_registered");
 
 export const listDevices = endpoint<[], ListDevicesResponse>("list_devices");
 export type SaveStatusResult = SaveStatus | EndpointFailure;
