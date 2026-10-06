@@ -37,8 +37,7 @@ from domain.shortcut_data import extract_version_metadata
 from domain.sibling_group import compute_sibling_group_key, target_in_sibling_group
 from domain.sibling_resolution import AUTO_REGION, fs_name_stem, resolve_group_representative
 from domain.version_metadata import VersionMetadata
-from lib.errors import RommNotFoundError, classify_error
-from lib.list_result import ErrorCode
+from lib.errors import NamedRefused, Refused, RommNotFoundError
 
 if TYPE_CHECKING:
     import logging
@@ -53,6 +52,24 @@ if TYPE_CHECKING:
         SaveDriftProbeFn,
         UnitOfWorkFactory,
     )
+
+
+_NOT_IN_GROUP_MESSAGE = (
+    "This version's metadata match conflicts with this game's — fix the match in RomM to switch to it."
+)
+_VERSION_VANISHED_MESSAGE = "This version is no longer available on RomM."
+
+
+class VersionVanished(NamedRefused):
+    """The switch target is gone from RomM: the server answered a 404 for it."""
+
+    reason = "version_vanished"
+
+
+class UnsyncedSaves(NamedRefused):
+    """The bound version holds saves that drift from their baseline, and the user has not said to switch anyway."""
+
+    reason = "unsynced_saves"
 
 
 @dataclass(frozen=True)
@@ -553,8 +570,7 @@ class VersionSwitchService:
         """
         async with self._rules.hold("switch_version", update=True, migration=True, prune=True):
             result = await self.switch_version_unchecked(app_id, target_rom_id, allow_stranded)
-            if result.get("success"):
-                result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")
+            result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")
             return result
 
     async def switch_version_unchecked(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
@@ -567,7 +583,7 @@ class VersionSwitchService:
         A pure binding move (ADR-0021 §2/§4): the target row is bound to the
         group's ``app_id`` and the repository's collision-unbind clears the old
         representative. Switching away from a *downloaded* version whose local
-        saves drift is soft-blocked (``unsynced_saves``) so the user can sync
+        saves drift is soft-blocked (:class:`UnsyncedSaves`) so the user can sync
         first — the refusal carries ``server_reachable`` (from the reachability
         probe), ``unsynced_rom_id``, and ``unsynced_version_name`` so the frontend
         modal can offer "Sync now & switch" / "Switch anyway" / "Cancel".
@@ -580,16 +596,15 @@ class VersionSwitchService:
         ``{success: True, rom_id, target_installed, launch_options, app_id}``:
         ``launch_options`` is the target install's full Steam launch command when
         it is downloaded (the frontend writes it onto the shortcut), or ``""`` for
-        an uninstalled target (the ADR-0009 placeholder). Guards, each canonical
-        ``{success, reason, message}``: unknown appId → ``not_found``; any group
-        member has an active download → ``download_in_progress`` (cancel it first);
-        target outside the group → ``not_in_group``; target bound to a *different*
-        shortcut (grandfathered duplicate, ADR-0021 §5) → ``bound_elsewhere``; a
-        server-only target whose detail the aggregate rejects → ``invalid_target``;
-        a definitive 404 for either target shape → ``version_vanished``; any other
-        failed mandatory server-only target fetch → the :func:`classify_error` slug
-        for the exception. The optional local probe instead fails open on every
-        non-404 outcome (#1570).
+        an uninstalled target (the ADR-0009 placeholder). Guards, each a raised
+        refusal: unknown appId → ``not_found``; any group member has an active
+        download → ``download_in_progress`` (cancel it first); target outside the
+        group → ``not_in_group``; target bound to a *different* shortcut
+        (grandfathered duplicate, ADR-0021 §5) → ``bound_elsewhere``; a server-only
+        target whose detail the aggregate rejects → ``invalid_target``; a
+        definitive 404 for either target shape → :class:`VersionVanished`. Any other
+        failed mandatory server-only target fetch raises its ``RommApiError``. The
+        optional local probe instead fails open on every non-404 outcome (#1570).
         """
         app_id = int(app_id)
         target_rom_id = int(target_rom_id)
@@ -597,21 +612,13 @@ class VersionSwitchService:
 
         ctx = await self._loop.run_in_executor(None, self._read_switch_context, app_id, target_rom_id)
         if ctx is None:
-            return {
-                "success": False,
-                "reason": ErrorCode.NOT_FOUND.value,
-                "message": f"No game is bound to shortcut {app_id}",
-            }
+            raise Refused("not_found", f"No game is bound to shortcut {app_id}")
 
         # Refuse while any group member has an active download (#1298 F1): the
         # in-progress set is in-memory (not SQLite), so this reads it directly
         # before the write UoW — cancel-first, no in-UoW re-check needed.
         if self._active_downloads() & ctx.group_member_ids:
-            return {
-                "success": False,
-                "reason": "download_in_progress",
-                "message": "Cancel the running download first.",
-            }
+            raise Refused("download_in_progress", "Cancel the running download first.")
 
         if target_rom_id == ctx.bound_rom_id:
             # Already the active version — a harmless no-op. Re-bake its launch
@@ -626,22 +633,12 @@ class VersionSwitchService:
         # Target not persisted locally — the save-stranding gate on the bound
         # version applies first (allow_stranded skips it), then fetch the detail,
         # validate membership, and persist + bind (server-derived facts only).
-        block = await self._save_stranding_block(ctx, allow_stranded)
-        if block is not None:
-            return block
+        await self._refuse_stranding_saves(ctx, allow_stranded)
         try:
             target_dict = await self._loop.run_in_executor(None, self._romm_api.get_rom, target_rom_id)
-        except RommNotFoundError:
+        except RommNotFoundError as e:
             self._logger.warning(f"Version switch: target rom {target_rom_id} is gone from the server")
-            return self._version_vanished()
-        except Exception as e:  # mandatory fetch: preserve every non-404 classified failure
-            self._logger.warning(f"Version switch: target fetch failed for rom {target_rom_id}: {e}")
-            reason, message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": message,
-            }
+            raise VersionVanished(_VERSION_VANISHED_MESSAGE) from e
 
         # Canonical compatibility against the bound key: the target's id at the
         # bound canonical source must be absent-or-equal (its raw ``target_dict``
@@ -656,7 +653,7 @@ class VersionSwitchService:
             target_is_local=False,
             target_is_server_sibling=self._is_sibling(target_dict, ctx.bound_rom_id, ctx.group_key),
         ):
-            return self._not_in_group()
+            raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
 
         return await self._loop.run_in_executor(
             None, self._persist_and_bind, target_dict, app_id, ctx.platform_slug, ctx.group_key
@@ -674,15 +671,13 @@ class VersionSwitchService:
             target_is_local=True,
             target_is_server_sibling=False,
         ):
-            return self._not_in_group()
+            raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
         if ctx.target_app_id is not None and ctx.target_app_id != app_id:
-            return self._bound_elsewhere(target_rom_id)
-        block = await self._save_stranding_block(ctx, allow_stranded)
-        if block is not None:
-            return block
+            raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
+        await self._refuse_stranding_saves(ctx, allow_stranded)
         target_vanished = await self._loop.run_in_executor(None, self._probe_switch_target_vanished, target_rom_id)
         if target_vanished:
-            return self._version_vanished()
+            raise VersionVanished(_VERSION_VANISHED_MESSAGE)
         return await self._switch_local(app_id, target_rom_id, ctx.group_key)
 
     def _probe_switch_target_vanished(self, rom_id: int) -> bool:
@@ -702,7 +697,7 @@ class VersionSwitchService:
             )
         return False
 
-    async def _save_stranding_block(self, ctx: _SwitchContext, allow_stranded: bool) -> dict[str, Any] | None:
+    async def _refuse_stranding_saves(self, ctx: _SwitchContext, allow_stranded: bool) -> None:
         """Soft-block the switch when the bound version has un-uploaded save drift.
 
         Only fires when the currently-bound version is downloaded and
@@ -712,23 +707,21 @@ class VersionSwitchService:
         rom_save_sync_states baseline it reads must not be touched while this service's
         write UoW is open). The reachability probe is fired only on the blocking
         branch so the free switch paths (synced saves, uninstalled, offline
-        override) make no server contact. Returns the ``unsynced_saves`` refusal
-        or ``None`` to proceed.
+        override) make no server contact. Raises :class:`UnsyncedSaves`, or
+        returns to let the switch proceed.
         """
         if allow_stranded or not ctx.bound_installed:
-            return None
+            return
         drift = await self._drift_probe(ctx.bound_rom_id)
         if not drift.get("drifted"):
-            return None
+            return
         reachable = await self._reachability_probe()
-        return {
-            "success": False,
-            "reason": "unsynced_saves",
-            "message": "Unsynced saves on the current version.",
-            "server_reachable": bool(reachable.get("online")),
-            "unsynced_rom_id": ctx.bound_rom_id,
-            "unsynced_version_name": ctx.bound_label,
-        }
+        raise UnsyncedSaves(
+            "Unsynced saves on the current version.",
+            server_reachable=bool(reachable.get("online")),
+            unsynced_rom_id=ctx.bound_rom_id,
+            unsynced_version_name=ctx.bound_label,
+        )
 
     async def _switch_local(self, app_id: int, target_rom_id: int, group_key: str | None) -> dict[str, Any]:
         """Rebind a local target (TOCTOU re-check in the write UoW), then re-bake.
@@ -739,10 +732,9 @@ class VersionSwitchService:
         is downloaded. The relaunch resolver runs *after* the write UoW closes (it
         opens its own — the nested ``BEGIN IMMEDIATE`` would deadlock).
         """
-        write = await self._loop.run_in_executor(None, self._rebind_local_io, app_id, target_rom_id, group_key)
-        if not write.get("success"):
-            return write
-        target_installed = bool(write["target_installed"])
+        target_installed = await self._loop.run_in_executor(
+            None, self._rebind_local_io, app_id, target_rom_id, group_key
+        )
         launch_options = await self._resolve_launch_options(target_rom_id, target_installed)
         await self._record_applied_launch_options(target_rom_id, launch_options)
         return self._switch_success(target_rom_id, target_installed, launch_options, app_id)
@@ -830,35 +822,35 @@ class VersionSwitchService:
             return True
         return group_key is not None and compute_sibling_group_key(target_dict) == group_key
 
-    def _rebind_local_io(self, app_id: int, target_rom_id: int, group_key: str | None) -> dict[str, Any]:
+    def _rebind_local_io(self, app_id: int, target_rom_id: int, group_key: str | None) -> bool:
         """Re-verify the SQLite facts and move the binding in one write UoW.
 
         The pre-write reads (context + drift) happened in earlier, closed UoWs, so
         a download or rebind could have landed since. This re-checks the same
         facts against the fresh rows inside the write transaction — group
         membership and bound-elsewhere — so the committed decision is consistent.
-        Returns a canonical failure dict (``not_in_group`` / ``bound_elsewhere``)
-        or ``{"success": True, "target_installed": bool}``; the caller resolves the
-        launch command outside this UoW (the relaunch resolver opens its own).
+        Raises ``not_in_group`` or ``bound_elsewhere``, which rolls the
+        transaction back, or returns whether the target is downloaded; the caller
+        resolves the launch command outside this UoW (the relaunch resolver opens
+        its own).
         """
         with self._uow_factory() as uow:
             target = uow.roms.get(target_rom_id)
             if target is None:
                 # Raced away between read and write — treat as not_in_group.
-                return self._not_in_group()
+                raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
             if not target_in_sibling_group(
                 bound_group_key=group_key,
                 target_group_key=target.sibling_group_key,
                 target_is_local=True,
                 target_is_server_sibling=False,
             ):
-                return self._not_in_group()
+                raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
             if target.shortcut_app_id is not None and target.shortcut_app_id != app_id:
-                return self._bound_elsewhere(target_rom_id)
+                raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
             target.bind_shortcut(app_id)
             uow.roms.save(target)
-            target_installed = uow.rom_installs.get(target_rom_id) is not None
-        return {"success": True, "target_installed": target_installed}
+            return uow.rom_installs.get(target_rom_id) is not None
 
     def _persist_and_bind(
         self, target_dict: dict[str, Any], app_id: int, fallback_platform: str, bound_group_key: str | None
@@ -901,7 +893,11 @@ class VersionSwitchService:
             )
         except (ValueError, KeyError) as e:
             self._logger.warning(f"Version switch: could not build target row: {e}")
-            return self._invalid_target(int(target_dict.get("id", 0)))
+            target_rom_id = int(target_dict.get("id", 0))
+            raise Refused(
+                "invalid_target",
+                f"Version {target_rom_id}'s server details could not be turned into a local version.",
+            ) from e
         rom.bind_shortcut(app_id)
         # A server-only target is never installed, so its shortcut carries the
         # empty placeholder — record that applied state so the next sync skips it
@@ -912,37 +908,3 @@ class VersionSwitchService:
             uow.roms.save(rom)
             uow.roms.set_applied_launch_options(rom.rom_id, rom.applied_launch_options)
         return self._switch_success(rom.rom_id, False, "", app_id)
-
-    @staticmethod
-    def _not_in_group() -> dict[str, Any]:
-        return {
-            "success": False,
-            "reason": "not_in_group",
-            "message": (
-                "This version's metadata match conflicts with this game's — fix the match in RomM to switch to it."
-            ),
-        }
-
-    @staticmethod
-    def _invalid_target(target_rom_id: int) -> dict[str, Any]:
-        return {
-            "success": False,
-            "reason": "invalid_target",
-            "message": f"Version {target_rom_id}'s server details could not be turned into a local version.",
-        }
-
-    @staticmethod
-    def _bound_elsewhere(target_rom_id: int) -> dict[str, Any]:
-        return {
-            "success": False,
-            "reason": "bound_elsewhere",
-            "message": f"Version {target_rom_id} is already used by another shortcut.",
-        }
-
-    @staticmethod
-    def _version_vanished() -> dict[str, Any]:
-        return {
-            "success": False,
-            "reason": "version_vanished",
-            "message": "This version is no longer available on RomM.",
-        }

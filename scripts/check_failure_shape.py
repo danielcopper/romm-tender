@@ -119,6 +119,7 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/settings.py",
     "backend/services/shortcut_removal.py",
     "backend/services/startup_healing.py",
+    "backend/services/version_switch.py",
 )
 
 # What the paths above are relative to — a name of its own, apart from

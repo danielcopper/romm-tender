@@ -21,6 +21,8 @@ from fakes.system_time import FakeClock
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from lib.errors import (
+    NamedRefused,
+    Refused,
     RommAuthError,
     RommConnectionError,
     RommNotFoundError,
@@ -28,7 +30,7 @@ from lib.errors import (
     RommSSLError,
     RommTimeoutError,
 )
-from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
+from services.version_switch import UnsyncedSaves, VersionSwitchService, VersionSwitchServiceConfig, VersionVanished
 
 _GROUP = "igdb:100:57"
 _APP_ID = 42
@@ -216,6 +218,12 @@ def _run(loop, coro):
     return loop.run_until_complete(coro)
 
 
+def _refusal(loop, coro, refusal: type[Refused] = Refused) -> Refused:
+    with pytest.raises(refusal) as refused:
+        _run(loop, coro)
+    return refused.value
+
+
 def _romm_call_ids(romm: FakeRommApi, name: str) -> list[int]:
     return [int(args[0]) for called_name, args, _kwargs in romm.call_log if called_name == name]
 
@@ -354,9 +362,8 @@ class TestGetVersionList:
         assert by_id[5]["switchable"] is False
 
         # The non-switchable cross-group target IS rejected by the switch...
-        cross = _run(event_loop, service.switch_version(_APP_ID, 5, True))
-        assert cross["success"] is False
-        assert cross["reason"] == "not_in_group"
+        cross = _refusal(event_loop, service.switch_version(_APP_ID, 5, True))
+        assert cross.reason == "not_in_group"
         # ...and the switchable in-group target is NOT rejected as not_in_group.
         in_group = _run(event_loop, service.switch_version(_APP_ID, 2, True))
         assert in_group.get("reason") != "not_in_group"
@@ -376,9 +383,8 @@ class TestGetVersionList:
         assert by_id[6]["switchable"] is False
 
         # The bridged (non-switchable) server-only target IS rejected by the switch...
-        rejected = _run(event_loop, service.switch_version(_APP_ID, 6, True))
-        assert rejected["success"] is False
-        assert rejected["reason"] == "not_in_group"
+        rejected = _refusal(event_loop, service.switch_version(_APP_ID, 6, True))
+        assert rejected.reason == "not_in_group"
         # ...and the matching server-only target is accepted (persisted + bound).
         accepted = _run(event_loop, service.switch_version(_APP_ID, 5, True))
         assert accepted["success"] is True
@@ -630,10 +636,12 @@ def _assert_success(result: dict[str, Any], *, rom_id: int, installed: bool, lau
 
 class TestSwitchVersion:
     def test_unknown_app_id_not_found(self, event_loop, service, romm):
-        result = _run(event_loop, service.switch_version(999, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert "error" not in result
+        refused = _refusal(event_loop, service.switch_version(999, 2, False))
+        assert (refused.reason, refused.message, refused.details) == (
+            "not_found",
+            "No game is bound to shortcut 999",
+            {},
+        )
         assert _romm_call_ids(romm, "get_rom_once") == []
 
     def test_f1_active_download_of_group_member_blocks_switch(
@@ -646,11 +654,12 @@ class TestSwitchVersion:
         _seed_install(uow, 1)
         active_downloads.ids = {2}
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "download_in_progress"
-        assert isinstance(result["message"], str)
-        assert "error" not in result and "error_code" not in result
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert (refused.reason, refused.message, refused.details) == (
+            "download_in_progress",
+            "Cancel the running download first.",
+            {},
+        )
         assert drift_probe.calls == []  # refused upstream of the drift probe
         assert _romm_call_ids(romm, "get_rom_once") == []
         with uow as u:
@@ -664,9 +673,8 @@ class TestSwitchVersion:
         _seed_rom(uow, rom_id=2, app_id=None)
         active_downloads.ids = {1}
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "download_in_progress"
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert refused.reason == "download_in_progress"
 
     def test_f1_active_download_outside_group_does_not_block(self, event_loop, service, uow, active_downloads):
         # A download of an unrelated ROM (not a group member) never blocks.
@@ -700,13 +708,9 @@ class TestSwitchVersion:
         _seed_install(uow, 2)
         romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("HTTP 404: Not Found")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False), VersionVanished)
 
-        assert result == {
-            "success": False,
-            "reason": "version_vanished",
-            "message": "This version is no longer available on RomM.",
-        }
+        assert (refused.message, refused.details) == ("This version is no longer available on RomM.", {})
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         assert _romm_call_ids(romm, "get_rom") == []
         assert relaunch_resolver.calls == []
@@ -724,13 +728,9 @@ class TestSwitchVersion:
         drift_probe.drifted = True
         romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("gone")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, True))
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, True), VersionVanished)
 
-        assert result == {
-            "success": False,
-            "reason": "version_vanished",
-            "message": "This version is no longer available on RomM.",
-        }
+        assert (refused.message, refused.details) == ("This version is no longer available on RomM.", {})
         assert drift_probe.calls == []
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         with uow as current:
@@ -835,14 +835,13 @@ class TestSwitchVersion:
         drift_probe.drifted = True
         reachability_probe.online = True
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "unsynced_saves"
-        assert result["server_reachable"] is True
-        assert result["unsynced_rom_id"] == 1
-        assert result["unsynced_version_name"] == "Game (USA)"
-        assert isinstance(result["message"], str)
-        assert "error" not in result and "error_code" not in result
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False), UnsyncedSaves)
+        assert refused.message == "Unsynced saves on the current version."
+        assert refused.details == {
+            "server_reachable": True,
+            "unsynced_rom_id": 1,
+            "unsynced_version_name": "Game (USA)",
+        }
         assert _romm_call_ids(romm, "get_rom_once") == []
         # Nothing switched — the binding is untouched.
         with uow as u:
@@ -860,10 +859,8 @@ class TestSwitchVersion:
         drift_probe.drifted = True
         reachability_probe.online = False
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "unsynced_saves"
-        assert result["server_reachable"] is False
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False), UnsyncedSaves)
+        assert refused.details["server_reachable"] is False
 
     def test_t5_allow_stranded_switches_even_offline(
         self, event_loop, service, uow, romm, drift_probe, reachability_probe
@@ -892,8 +889,7 @@ class TestSwitchVersion:
         _seed_install(uow, 1)
         drift_probe.drifted = True
 
-        blocked = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert blocked["reason"] == "unsynced_saves"
+        _refusal(event_loop, service.switch_version(_APP_ID, 2, False), UnsyncedSaves)
         assert _romm_call_ids(romm, "get_rom_once") == []
 
         drift_probe.drifted = False
@@ -908,8 +904,7 @@ class TestSwitchVersion:
         _seed_install(uow, 1)
         drift_probe.drifted = True
 
-        blocked = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert blocked["reason"] == "unsynced_saves"
+        _refusal(event_loop, service.switch_version(_APP_ID, 2, False), UnsyncedSaves)
         assert _romm_call_ids(romm, "get_rom_once") == []
 
         forced = _run(event_loop, service.switch_version(_APP_ID, 2, True))
@@ -961,18 +956,19 @@ class TestSwitchVersion:
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=777)  # already a different shortcut
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "bound_elsewhere"
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert (refused.reason, refused.message) == (
+            "bound_elsewhere",
+            "Version 2 is already used by another shortcut.",
+        )
         assert _romm_call_ids(romm, "get_rom_once") == []
 
     def test_local_target_other_group_not_in_group(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)
         _seed_rom(uow, rom_id=2, app_id=None, group_key="igdb:999:57")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "not_in_group"
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert refused.reason == "not_in_group"
         assert _romm_call_ids(romm, "get_rom_once") == []
 
     def test_not_in_group_message_is_human_readable(self, event_loop, service, uow):
@@ -981,21 +977,20 @@ class TestSwitchVersion:
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)
         _seed_rom(uow, rom_id=2, app_id=None, group_key="igdb:999:57")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["reason"] == "not_in_group"
-        assert result["message"] == (
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert refused.reason == "not_in_group"
+        assert refused.message == (
             "This version's metadata match conflicts with this game's — fix the match in RomM to switch to it."
         )
-        assert "sibling group" not in result["message"].lower()
-        assert "error" not in result and "error_code" not in result
+        assert "sibling group" not in refused.message.lower()
+        assert refused.details == {}
 
     def test_unknown_target_not_in_group(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         romm.roms[1] = {"id": 1, "sibling_roms": []}
         # rom 99 has no server entry → get_rom returns {"id": 99}, not a sibling.
-        result = _run(event_loop, service.switch_version(_APP_ID, 99, False))
-        assert result["success"] is False
-        assert result["reason"] == "not_in_group"
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 99, False))
+        assert refused.reason == "not_in_group"
 
     def test_toctou_write_uow_recheck_catches_late_bind(self, event_loop, service, uow, uow_factory):
         # A rebind/download lands during the drift probe (after the context read,
@@ -1015,9 +1010,8 @@ class TestSwitchVersion:
                 return {"drifted": False, "rom_id": rom_id}
 
         service._drift_probe = _MutatingDriftProbe()
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
-        assert result["success"] is False
-        assert result["reason"] == "bound_elsewhere"
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
+        assert refused.reason == "bound_elsewhere"
 
     def test_probe_callback_race_still_hits_write_uow_bound_elsewhere_guard(
         self, event_loop, service, uow, uow_factory, romm, monkeypatch
@@ -1036,10 +1030,9 @@ class TestSwitchVersion:
 
         monkeypatch.setattr(romm, "get_rom_once", rebind_during_probe)
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 2, False))
 
-        assert result["success"] is False
-        assert result["reason"] == "bound_elsewhere"
+        assert refused.reason == "bound_elsewhere"
         assert _romm_call_ids(romm, "get_rom_once") == [2]
         with uow as current:
             assert current.roms.get(1).shortcut_app_id == _APP_ID
@@ -1168,9 +1161,8 @@ class TestSwitchVersion:
         assert set(by_id) == {1, 6}
         assert by_id[6]["switchable"] is False
 
-        rejected = _run(event_loop, service.switch_version(_APP_ID, 6, True))
-        assert rejected["success"] is False
-        assert rejected["reason"] == "not_in_group"
+        rejected = _refusal(event_loop, service.switch_version(_APP_ID, 6, True))
+        assert rejected.reason == "not_in_group"
         with uow as u:
             assert u.roms.get(6) is None
 
@@ -1184,28 +1176,25 @@ class TestSwitchVersion:
         drift_probe.drifted = True
         romm.roms[3] = {"id": 3, "platform_slug": "snes", "sibling_roms": [{"id": 1}]}
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
-        assert result["reason"] == "unsynced_saves"
+        _refusal(event_loop, service.switch_version(_APP_ID, 3, False), UnsyncedSaves)
         assert not any(name == "get_rom" for name, _args, _kwargs in romm.call_log)
 
     def test_server_unreachable_on_target_fetch(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
-        romm.get_rom_side_effect = ConnectionError("down")
+        romm.get_rom_side_effect = RommConnectionError("down")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "error" not in result
+        coro = service.switch_version(_APP_ID, 3, False)
+        with pytest.raises(RommConnectionError):
+            _run(event_loop, coro)
 
-    def test_server_only_target_auth_failure_keeps_classified_reason(self, event_loop, service, uow, romm):
+    def test_server_only_target_auth_failure_reaches_the_caller(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         romm.get_rom_side_effect = RommAuthError("unauthorized")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
+        coro = service.switch_version(_APP_ID, 3, False)
+        with pytest.raises(RommAuthError):
+            _run(event_loop, coro)
 
-        assert result["success"] is False
-        assert result["reason"] == "auth_failed"
-        assert isinstance(result["message"], str)
         assert _romm_call_ids(romm, "get_rom_once") == []
         assert _romm_call_ids(romm, "get_rom") == [3]
 
@@ -1213,12 +1202,8 @@ class TestSwitchVersion:
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         romm.get_rom_side_effect = RommNotFoundError("HTTP 404: Not Found")
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
-        assert result == {
-            "success": False,
-            "reason": "version_vanished",
-            "message": "This version is no longer available on RomM.",
-        }
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 3, False), VersionVanished)
+        assert (refused.message, refused.details) == ("This version is no longer available on RomM.", {})
         assert _romm_call_ids(romm, "get_rom_once") == []
         assert _romm_call_ids(romm, "get_rom") == [3]
         with uow as current:
@@ -1239,12 +1224,12 @@ class TestSwitchVersion:
             "sibling_roms": [{"id": 1}],
         }
 
-        result = _run(event_loop, service.switch_version(_APP_ID, 3, False))
-        assert result["success"] is False
-        assert result["reason"] == "invalid_target"
-        assert isinstance(result["message"], str)
-        assert "error" not in result
-        assert "error_code" not in result
+        refused = _refusal(event_loop, service.switch_version(_APP_ID, 3, False))
+        assert (refused.reason, refused.message, refused.details) == (
+            "invalid_target",
+            "Version 0's server details could not be turned into a local version.",
+            {},
+        )
 
 
 # ── The switch's conflict rules, its lease, and the unchecked twin ────────────
@@ -1281,10 +1266,9 @@ class TestTheVersionSwitchLease:
         assert seen == [["switch_version"]]
 
     def test_a_switch_that_failed_carries_none(self, event_loop, service, prune_conflicts):
-        result = _run(event_loop, service.switch_version(999, 2, False))
+        refused = _refusal(event_loop, service.switch_version(999, 2, False))
 
-        assert result["reason"] == "not_found"
-        assert "prune_lease_token" not in result
+        assert refused.reason == "not_found"
         assert prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.parametrize(
@@ -1335,3 +1319,17 @@ class TestSwitchVersionUnchecked:
 
         assert "prune_lease_token" not in result
         assert prune_conflicts.conflicting_operations == 0
+
+
+class TestTheNamedRefusals:
+    """The two reasons the panel branches on have a class of their own, and each answers with it."""
+
+    @pytest.mark.parametrize(
+        ("named", "reason"),
+        [(VersionVanished, "version_vanished"), (UnsyncedSaves, "unsynced_saves")],
+    )
+    def test_each_carries_its_reason(self, named, reason):
+        refused = named("Not now.", unsynced_rom_id=1)
+
+        assert isinstance(refused, NamedRefused)
+        assert (refused.reason, refused.message, refused.details) == (reason, "Not now.", {"unsynced_rom_id": 1})
