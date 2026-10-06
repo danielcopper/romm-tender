@@ -288,21 +288,27 @@ function confirmBlockedReason(state: {
   insufficientSpace: boolean;
   unknownSelectedSize: boolean;
   anyOptionChosen: boolean;
-}): string | null {
+}): { text: string; aboutList: boolean } | null {
+  const other = (text: string) => ({ text, aboutList: false });
   if (state.completed) return null;
-  if (state.runInFlight) return "A cleanup is already running.";
+  if (state.runInFlight) return other("A cleanup is already running.");
   if (!state.allEntriesLoaded) {
-    return state.pageLoadFailed
-      ? `The list stopped loading at ${state.loaded} of ${state.total} entries. Retry loading before confirming.`
-      : `The list is still loading (${state.loaded} of ${state.total} entries). A cleanup can start once every entry has arrived.`;
+    return {
+      text: state.pageLoadFailed
+        ? `The list stopped loading at ${state.loaded} of ${state.total} entries. Retry loading before confirming.`
+        : `The list is still loading (${state.loaded} of ${state.total} entries). A cleanup can start once every entry has arrived.`,
+      aboutList: true,
+    };
   }
-  if (!state.destructiveConfirmed) return "Confirm you understand there will be no recovery bundle.";
+  if (!state.destructiveConfirmed) return other("Confirm you understand there will be no recovery bundle.");
   if (state.insufficientSpace) {
-    return state.unknownSelectedSize
-      ? "A selected ROM's size can't be measured, so the recovery bundle can't be guaranteed to fit."
-      : "The selected ROM content doesn't fit in the free space at the recovery target.";
+    return other(
+      state.unknownSelectedSize
+        ? "A selected ROM's size can't be measured, so the recovery bundle can't be guaranteed to fit."
+        : "The selected ROM content doesn't fit in the free space at the recovery target.",
+    );
   }
-  if (!state.anyOptionChosen) return "Choose at least one cleanup option above.";
+  if (!state.anyOptionChosen) return other("Choose at least one cleanup option above.");
   return null;
 }
 
@@ -598,8 +604,9 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   // Moved on by every page loop that starts and by the loading effect's cleanup,
   // so a page that answers for a loop no longer current writes nothing.
   const pageLoadGeneration = useRef(0);
-  // The refusal a Confirm press got because the list had not all arrived, which
-  // stops being true the moment it has.
+  // The refusal a Confirm press got because the list was still loading or had
+  // stopped, which stops being true once Retry is pressed or the list has all
+  // arrived.
   const listRefusal = useRef<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [cancelRequestedFor, setCancelRequestedFor] = useState<string | null>(null);
@@ -715,6 +722,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
 
   const retryPageLoad = (): void => {
     setPageLoadError(null);
+    setStatus((current) => (current === listRefusal.current ? "" : current));
     startPageLoad(items.length);
   };
 
@@ -752,10 +760,10 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
       return;
     }
     if (blockedReason !== null) {
-      const refusal = `Cleanup did not start: ${blockedReason}`;
-      listRefusal.current = allEntriesLoaded ? null : refusal;
+      const refusal = `Cleanup did not start: ${blockedReason.text}`;
+      listRefusal.current = blockedReason.aboutList ? refusal : null;
       setStatus(refusal);
-      logWarn(`[prune] Confirm refused locally: ${blockedReason}`);
+      logWarn(`[prune] Confirm refused locally: ${blockedReason.text}`);
       return;
     }
     setStarting(true);
@@ -981,7 +989,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
             </div>
           )}
           {blockedReason !== null && !runInFlight && (
-            <div style={{ marginTop: "10px", color: "#ff8c6a", fontSize: "12px" }}>{blockedReason}</div>
+            <div style={{ marginTop: "10px", color: "#ff8c6a", fontSize: "12px" }}>{blockedReason.text}</div>
           )}
         </div>
 
@@ -1080,7 +1088,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
       }
     } catch (e) {
       logError(`Removed-game cleanup scan failed: ${e}`);
-      showToast("Could not scan removed RomM games.");
+      showToast(`Could not scan removed RomM games: ${e}`);
     } finally {
       setScanning(false);
     }

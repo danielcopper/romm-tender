@@ -54,6 +54,11 @@ function shownModal(): ReactElement {
   return element;
 }
 
+/** What `hostSocket.ts` throws when the host refuses an answer over its cap (`host/dispatch.py`). */
+function answerTooLarge(): HostTransportError {
+  return new HostTransportError("payload_too_large", "answer is 13000000 bytes, over the 12582912-byte limit");
+}
+
 /** A preview answer the test settles by hand, so the dialog can be caught between two pages. */
 function pendingPage(): {
   promise: Promise<backend.PrunePreviewResult>;
@@ -350,11 +355,25 @@ describe("RemovedGamesCleanup", () => {
     await waitFor(() =>
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Could not scan removed RomM games.",
+        body: "Could not scan removed RomM games: Error: offline",
       }),
     );
 
     expect(button.disabled).toBe(false);
+  });
+
+  it("names the reason when the scan's first page is refused by the host", async () => {
+    vi.mocked(backend.getPrunePreview).mockRejectedValue(answerTooLarge());
+    const section = render(createElement(RemovedGamesCleanupSection));
+
+    fireEvent.click(section.getByRole("button", { name: "Clean Up Removed RomM Games" }));
+
+    await waitFor(() =>
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "Could not scan removed RomM games: HostTransportError: answer is 13000000 bytes, over the 12582912-byte limit",
+      }),
+    );
   });
 
   it("loads every page by itself and unlocks Confirm only once the last has arrived", async () => {
@@ -400,14 +419,9 @@ describe("RemovedGamesCleanup", () => {
   });
 
   it("stops at a page that fails, keeps Confirm refusing, and resumes on Retry", async () => {
-    // What `hostSocket.ts` throws when the host refuses an answer over its cap (`host/dispatch.py`).
-    const tooLarge = new HostTransportError(
-      "payload_too_large",
-      "answer is 13000000 bytes, over the 12582912-byte limit",
-    );
     vi.mocked(backend.getPrunePreview)
       .mockResolvedValueOnce({ ...preview, total: 2 })
-      .mockRejectedValueOnce(tooLarge)
+      .mockRejectedValueOnce(answerTooLarge())
       .mockResolvedValueOnce({ ...preview, offset: 1, total: 2, items: [rowAs(8, "Second Page Game")] });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
@@ -427,9 +441,11 @@ describe("RemovedGamesCleanup", () => {
     fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
     await act(async () => Promise.resolve());
     expect(backend.startPrune).not.toHaveBeenCalled();
+    expect(modal.container.textContent).toContain("Cleanup did not start: The list stopped loading at 1 of 2 entries.");
 
     fireEvent.click(modal.getByRole("button", { name: "Retry loading" }));
     await waitFor(() => expect(modal.container.textContent).toContain("Second Page Game"));
+    expect(modal.container.textContent).not.toContain("Cleanup did not start");
     expect(vi.mocked(backend.getPrunePreview).mock.calls[2]?.[0]).toMatchObject({ preview_id: "preview-1", offset: 1 });
     expect(modal.queryByRole("button", { name: "Retry loading" })).toBeNull();
     expect(modal.container.textContent).not.toContain("Could not load the rest of the list");
@@ -453,6 +469,26 @@ describe("RemovedGamesCleanup", () => {
 
     expect(modal.container.textContent).toContain("Second Page Game");
     expect(modal.container.textContent).not.toContain("The list is still loading");
+  });
+
+  it("clears a Confirm refused for a stopped list as soon as Retry is pressed", async () => {
+    const retried = pendingPage();
+    vi.mocked(backend.getPrunePreview)
+      .mockResolvedValueOnce({ ...preview, total: 2 })
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockReturnValueOnce(retried.promise);
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    await waitFor(() => expect(modal.getByRole("button", { name: "Retry loading" })).toBeTruthy());
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(modal.container.textContent).toContain("Cleanup did not start: The list stopped loading at 1 of 2 entries.");
+
+    fireEvent.click(modal.getByRole("button", { name: "Retry loading" }));
+    await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(3));
+
+    expect(modal.container.textContent).not.toContain("Cleanup did not start");
+    expect(modal.container.textContent).toContain("The list is still loading (1 of 2 entries).");
   });
 
   it("keeps a status that is not about the list once the last page has arrived", async () => {
@@ -1390,6 +1426,28 @@ describe("RemovedGamesCleanup", () => {
     expect(button.disabled).toBe(true);
     expect(section.container.textContent).toContain("Cleanup starting...");
     expect(section.container.textContent).toContain("A cleanup is running.");
+  });
+
+  it("shows a sealed recovery bundle's whole path on Data Management", () => {
+    const bundlePath = `/home/deck/romm-tender-recovery/bundles/${"A-Very-Long-Game-Name-".repeat(20)}2026-07-31_07f4953b`;
+    const section = render(createElement(RemovedGamesCleanupSection));
+
+    act(() => {
+      beginPrunePreview("preview-1");
+      beginPruneRun("run-1", "preview-1");
+      setPruneProgress({
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "creating_recovery",
+        rom_ids: [7],
+        name: "Removed Game",
+        bundle_path: bundlePath,
+      });
+    });
+
+    expect(section.container.textContent).toContain(`Recovery sealed: ${bundlePath}`);
   });
 
   it("offers a Stop control on Data Management and sets expectations for it", async () => {
