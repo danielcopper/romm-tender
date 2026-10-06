@@ -32,6 +32,7 @@ from typing import Any, cast
 
 import pytest
 from _vendor.atlas import (
+    CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
@@ -40,6 +41,8 @@ from _vendor.atlas import (
     GRANULARITY_PER_GAME_FILES,
     GRANULARITY_SHARED_CARD,
     GRANULARITY_SHARED_FILE,
+    HEALTH_ISSUE_CATALOGUE_INVALID,
+    HEALTH_ISSUE_SAVES_ROOT_MISSING,
     ROLE_BATTERY,
     ROLE_NOTES,
     ROLE_SETTINGS,
@@ -158,25 +161,29 @@ class _Entry:
 
 
 class _Catalogue:
-    """A catalogue answer carrying the entries a test named."""
+    """A catalogue answer carrying the entries and the caveat codes a test named."""
 
-    def __init__(self, entries: tuple[_Entry, ...]) -> None:
+    def __init__(self, entries: tuple[_Entry, ...], caveats: tuple[str, ...] = ()) -> None:
         self.entries = entries
+        self.caveats = tuple(_caveat(code) for code in caveats)
 
 
 class _Installation:
     """An installation that hands back one catalogue, recording how it was asked."""
 
-    def __init__(self, entries: tuple[_Entry, ...], *, raises: Exception | None = None) -> None:
+    def __init__(
+        self, entries: tuple[_Entry, ...], *, raises: Exception | None = None, caveats: tuple[str, ...] = ()
+    ) -> None:
         self._entries = entries
         self._raises = raises
+        self._caveats = caveats
         self.asked: list[tuple[str, str | None]] = []
 
     def emulators_for(self, system: str, *, content_path: str | None = None) -> Any:
         self.asked.append((system, content_path))
         if self._raises is not None:
             raise self._raises
-        return _Catalogue(self._entries)
+        return _Catalogue(self._entries, self._caveats)
 
 
 @pytest.fixture
@@ -443,6 +450,30 @@ class TestEveryWayTheQuestionCannotBePut:
             ),
             UNESTABLISHED_NOT_ASKED,
         )
+
+    @pytest.mark.parametrize("refusal", [CAVEAT_EMULATOR_CATALOGUE_SEALED, HEALTH_ISSUE_CATALOGUE_INVALID])
+    def test_an_entry_beside_a_refused_catalogue_is_never_asked(self, traces, refusal):
+        entry = _Entry("mGBA", _placement(), states=_states_placement())
+        adapter = _adapter(_Installation((entry,), caveats=(refusal,)), traces)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+        states = adapter.resolve_savestate_location(system="gba", content_path=_CONTENT, emulator_label="mGBA")
+
+        self._assert_refused(answer, UNESTABLISHED_NOT_ASKED)
+        assert states is None
+        assert entry.asked == []
+        assert entry.states_asked == []
+        assert any("the catalogue was refused" in line and refusal in line for line in traces)
+
+    def test_an_entry_beside_a_caveat_that_is_no_refusal_is_asked(self, traces):
+        entry = _Entry("mGBA", _placement())
+        adapter = _adapter(_Installation((entry,), caveats=(HEALTH_ISSUE_SAVES_ROOT_MISSING,)), traces)
+
+        adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True)
+
+        assert entry.asked == [_CONTENT]
 
     def test_detection_itself_raises(self, traces):
         def boom() -> Any:

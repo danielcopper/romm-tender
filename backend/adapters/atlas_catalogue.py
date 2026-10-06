@@ -145,8 +145,14 @@ def _caveat_codes(answer: Any) -> tuple[str, ...]:
     return tuple(caveat.code for caveat in answer.caveats)
 
 
-def _refused(answer: Any) -> bool:
-    """Whether the answer says nobody could read a catalogue for this system."""
+def catalogue_refused(answer: Any) -> bool:
+    """Whether the answer says nobody could read a catalogue for this system.
+
+    Public for :mod:`adapters.atlas_saves`, which looks an emulator up in the
+    same answer and must decline on the same codes: entries beside a refusal
+    (EmuDeck's overlay beside ``emulator-catalogue-sealed``) are an incomplete
+    list, and an incomplete list would look complete.
+    """
     return not _CATALOGUE_REFUSALS.isdisjoint(_caveat_codes(answer))
 
 
@@ -244,7 +250,7 @@ class AtlasCatalogueAdapter:
         platform about".
         """
         answer = self._catalogue_answer(system_name)
-        if answer is None or _refused(answer):
+        if answer is None or catalogue_refused(answer):
             return (None, None)
         for entry in _declared_order(answer.entries):
             if entry.kind == KIND_LIBRETRO and entry.core_so:
@@ -287,7 +293,7 @@ class AtlasCatalogueAdapter:
         catalogue does not declare yields ``available: True`` with an empty list.
         """
         answer = self._catalogue_answer(system_name)
-        if answer is None or _refused(answer):
+        if answer is None or catalogue_refused(answer):
             return _unavailable()
         options = [
             self._probe_installed(classify_command(entry.label, entry.command, emulator=emulator_identity(entry)))
@@ -316,7 +322,7 @@ class AtlasCatalogueAdapter:
         read, and it does not name this system.
         """
         answer = self._systems_answer()
-        if answer is None or _refused(answer):
+        if answer is None or catalogue_refused(answer):
             return None
         return system_name in answer.systems
 

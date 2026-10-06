@@ -16,7 +16,8 @@ shared memory cards where a libretro core would keep a file per game, and asking
 resolved for this ROM — the label
 :class:`services.active_core_resolver.ActiveCoreResolver` already produced,
 which is the label the launch bakes — and this adapter puts the question to that
-entry. Where Tender resolved no emulator, or the catalogue no longer offers
+entry. Where Tender resolved no emulator, the catalogue answer is a refusal
+(:func:`adapters.atlas_catalogue.catalogue_refused`), or it no longer offers
 one under that label, there is nobody to ask and the answer says so.
 
 The catalogue is asked WITH the content path, unlike
@@ -47,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import SavestateAbsence, SavestatePlacement, Unresolved, core_probe_interpreter
 
+from adapters.atlas_catalogue import catalogue_refused
 from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
     SaveAnswer,
@@ -83,7 +85,8 @@ class AtlasSaveLocationAdapter:
 
         *emulator_label* is the emulator Tender resolved for this ROM;
         ``None`` means it resolved none, so there is no entry to ask. That, no
-        installation, and a catalogue no longer offering the label are all
+        installation, a refused catalogue, and a catalogue no longer offering
+        the label are all
         ``not_asked`` — the question never reached the resolver, so none of them
         is a statement about the emulator. An entry that declines and a resolver
         that raises WERE asked, so both are ``nothing_established``.
@@ -100,7 +103,7 @@ class AtlasSaveLocationAdapter:
 
         entry = self._entry(system, content_path, emulator_label)
         if entry is None:
-            # No installation, an unreadable catalogue, or no entry under that
+            # No installation, a refused catalogue, or no entry under that
             # label: the question never reached the resolver, so this says
             # nothing about the emulator itself.
             return unestablished_answer(
@@ -164,6 +167,12 @@ class AtlasSaveLocationAdapter:
             f"emulators_for({system!r})",
         )
         if answer is None:
+            return None
+        if catalogue_refused(answer):
+            self._log_debug(
+                f"[saves] {system}: the catalogue was refused "
+                f"(caveats={sorted({caveat.code for caveat in answer.caveats})}); nothing to ask"
+            )
             return None
         entry = next((candidate for candidate in answer.entries if candidate.label == emulator_label), None)
         if entry is None:
