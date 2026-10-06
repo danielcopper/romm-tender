@@ -190,7 +190,7 @@ def _seed_folder_install(uow: FakeUnitOfWork, *, rom_id: int, system: str) -> No
 
 
 class TestARunAsksTheAcceptListOncePerSystem:
-    """Every folder-backed install of a run is enumerated through the run's one reading (#2188 D4)."""
+    """Every folder-backed install of a run is enumerated through the run's one reading."""
 
     @staticmethod
     def _rig() -> tuple[ShortcutLaunchResolver, EmulatorSourcesAdapter, _CountingInstallation]:

@@ -564,8 +564,8 @@ class TestHowTheQuestionIsPut:
         assert len(detections) == 2
 
     def test_every_call_detects_afresh_through_one_machine(self, traces):
-        # No handle outlives a call (#2188 D4); what keeps a repeat reading
-        # cheap is the one resolver machine every detection is handed.
+        # No handle outlives a call; what keeps a repeat reading cheap is the
+        # one resolver machine every detection is handed.
         machines: list[Any] = []
         entry = _Entry("mGBA", _placement())
         installation = _Installation((entry,))
@@ -585,7 +585,7 @@ class TestHowTheQuestionIsPut:
 
 
 class TestWhichSourceAnswers:
-    """A game's save answer comes from the source it starts through (#2188 D16)."""
+    """A game's save answer comes from the source it starts through."""
 
     def test_retrodeck_answers_with_emudeck_first_in_the_order(self, traces):
         retrodeck_entry = _Entry("mGBA", _placement(files=("Game Title.srm",)))

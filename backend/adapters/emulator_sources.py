@@ -7,10 +7,10 @@ source :func:`domain.emulator_sources.answering_source` names; the order and
 the switches it decides by are the user's, read from the live settings.
 
 **Detected per reading, never at construction.** A reading
-(:class:`DetectedSourcesReading`) is taken per panel call, or once per run that asks
-the same questions for many games, so a source installed later appears on the
-next one. Building this adapter detects nothing, which is what lets the
-pre-install check build it unchanged.
+(:class:`DetectedSourcesReading`) is taken per question a panel call puts, or
+once per run that asks the same questions for many games, so a source installed
+later appears on the next one. Building this adapter detects nothing, which is
+what lets the pre-install check build it unchanged.
 
 **One machine for the process.** ``atlas.detect`` builds a fresh
 ``RealMachine`` whenever it is handed none, and that object is where the
@@ -18,7 +18,7 @@ resolver remembers a libretro core's probe — a subprocess that loads the core,
 which a fresh machine runs again on every save question. The memory is keyed
 on the core file's path, modification time and size (``RealMachine.read_core``,
 atlas 0.21.0), so keeping one machine keeps every answer live while the probe
-of an unchanged core runs once (#2188 D4).
+of an unchanged core runs once.
 """
 
 from __future__ import annotations

@@ -284,7 +284,8 @@ keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own 
 
 - the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
   would show is then only a default;
-- what its health says, one line per problem, or **No problems found.**;
+- what its health says, one line per problem; with none, **No problems found.** — or, where Tender could not read the
+  source's emulator list, **_Source_'s emulator list is not established.**;
 - **EmuDeck's emulator list cannot be read yet.** for EmuDeck, whose list Tender cannot read yet;
 - **Tender cannot start games through _source_ yet.** for every source but RetroDECK — every game still starts through
   RetroDECK;
@@ -297,14 +298,14 @@ come from RetroDECK, wherever it stands in the order, because every game starts 
 switched on in the order answers, and the main panel says that Tender cannot start games through it yet. A source found
 for the first time joins the end of the order, switched on.
 
-**Problems.** Every problem a source reports also shows as a card on the main panel, named after the source — a settings
-file that is missing, unreadable or damaged, a folder that does not exist (an SD card that is not inserted), a saves
-folder that does not exist (saves of that source's emulators are not synced until it is back), ES-DE's systems file that
-does not load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's
-RetroArch settings that cannot be read. The one exception is texture packs or mods that do not reach an emulator: that
-concerns nothing Tender does, so it is said only in the source's line here. Where Tender cannot get an emulator list,
-the platform page and the emulator menu say why — no source found, every source switched off, a broken systems file, a
-list that cannot be read yet — rather than showing an empty list.
+**Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
+— a settings file that is missing, unreadable or damaged, a folder that does not exist (an SD card that is not
+inserted), a saves folder that does not exist, ES-DE's systems file that does not load (ES-DE then shows no systems, and
+Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch settings that cannot be read. Two kinds
+stay in the source's line here only: texture packs or mods that do not reach an emulator, which concern nothing Tender
+does, and every problem of a source you switched off. Where Tender cannot get an emulator list, the platform page and
+the emulator menu say why — no source found, every source switched off, a broken systems file, a list that cannot be
+read yet — rather than showing an empty list.
 
 ## Log Level
 

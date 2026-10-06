@@ -432,9 +432,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       })
       .catch((e) => logError(`Failed to load settings: ${e}`));
 
-    // The emulator sources' health findings, each a banner of its own, and the
-    // two notices about the sources as a whole (none found, or one Tender
-    // cannot start games through answering).
     getEmulatorSources()
       .then((listing) => setSourceBanners(mainSourceBanners(listing)))
       .catch((e) => logError(`Failed to read the emulator sources: ${e}`));

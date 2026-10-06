@@ -1083,7 +1083,7 @@ class TestDegradation:
         assert [placement.file_name for placement in catalogue.placements] == ["read.bin"]
 
     def test_retrodeck_answers_with_emudeck_first_in_the_order(self, monkeypatch, traces):
-        """The source a game starts through answers, never a merge (#2188 D16)."""
+        """The source a game starts through answers, never a merge."""
         retrodeck = _Installation(_answer(_core(requirements=(_requirement(file_name="retrodeck.bin"),))))
         emudeck = _Installation(_answer(_core(requirements=(_requirement(file_name="emudeck.bin"),))), kind="emudeck")
         _detect(monkeypatch, _detecting(retrodeck, emudeck))

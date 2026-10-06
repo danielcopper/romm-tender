@@ -686,9 +686,8 @@ class SaveService:
         that can reach them.
 
         **The walk is per INSTALLED ROM and each one asks the save resolver**,
-        which reads the machine — roughly 170 ms warm on the reference device.
-        Four installed games on a platform is well under a second; fifty is
-        several. The answer is deliberately not cached: this count exists so the
+        which reads the machine — a full read per ROM, so the count grows with
+        the platform's installed games. The answer is deliberately not cached: this count exists so the
         number the button offers equals the number the delete removes, and
         caching one side of that pair breaks the guarantee the sentence above
         makes. A cached answer on a destructive path is worse than a slow one.

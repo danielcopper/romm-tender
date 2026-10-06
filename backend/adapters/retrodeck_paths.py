@@ -11,7 +11,8 @@ Path getters are best-effort and never raise: a missing, unreadable, or
 malformed ``retrodeck.json`` falls back to ``<user_home>/retrodeck/*``.
 On an SD-card install that fallback root is wrong, so the silent
 fallback is paired with :meth:`RetroDeckPathsAdapter.config_health`,
-the loud signal ``main.py`` surfaces to the frontend banner.
+which says when that happened. Nothing reads it any more: the panel's
+health notices come from the resolver's findings per emulator source.
 
 Every root is symlink-resolved, whichever of the two sources answered.
 The content roots are handed to the path guards as safe roots, and the
@@ -57,8 +58,8 @@ class RetroDeckPathsAdapter:
         self._logger = logger
         self._cached_config: dict[str, Any] | None = None
         self._cache_time = 0.0
-        # Load outcome that distinguishes "no file" (ABSENT, quiet) from
-        # "file present but unreadable" (UNREADABLE, loud). The getters
+        # Load outcome that distinguishes "no file" (ABSENT) from "file
+        # present but unreadable" (UNREADABLE). The getters
         # only need the dict-or-None; ``config_health`` needs the reason.
         self._last_load_health: RetroDeckConfigHealth = RetroDeckConfigHealth.ABSENT
 
@@ -131,8 +132,7 @@ class RetroDeckPathsAdapter:
 
         - ``ABSENT``: ``retrodeck.json`` not found — the legitimate
           fresh-install case. Wins over ``ROOT_MISSING`` even when the
-          ``~/retrodeck`` fallback does not exist on disk, so it stays
-          quiet.
+          ``~/retrodeck`` fallback does not exist on disk.
         - ``UNREADABLE``: the file exists but could not be read/parsed.
         - ``ROOT_MISSING``: the file read OK but the resolved RetroDECK
           home directory does not exist on disk (e.g. SD card ejected).

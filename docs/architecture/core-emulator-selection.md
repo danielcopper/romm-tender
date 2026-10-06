@@ -161,18 +161,20 @@ orders the sources and switches them off under Settings › Emulator sources, st
 the end of the order); `domain/emulator_sources.py` holds the rules.
 
 **A game's answers come from the source it starts through.** Every game starts through RetroDECK, so while RetroDECK is
-detected and switched on it answers — wherever the user put it in the order; the stored picks are RetroDECK labels and
+detected and switched on it answers, wherever the user put it in the order; the stored picks are RetroDECK labels and
 are read against RetroDECK only. Without it, the first switched-on source in the order answers, with `starts_games`
 false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every source's emulators,
 the order decides only while RetroDECK is absent or switched off.
 
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
-library sync's launch resolution (`ShortcutLaunchResolver.do_build_core_overrides`, in the preview and in every unit of
-an apply) takes one reading per run and hands it to every ROM, so a system's catalogue is asked once per run, and a
-switch or a move during the run takes effect from the next one. The resolver's `RealMachine` is one for the process and
-handed to every detection: it remembers only a libretro core's probe, keyed on the core file's path, modification time
-and size, so the probe of an unchanged core runs once while every answer stays live.
+library sync's launch resolution takes one reading per run (`ShortcutLaunchResolver.do_read_sources`, in the preview and
+once before the units of an apply) and hands it to every ROM's emulator (`do_build_core_overrides`) and to every
+folder-backed install's disc enumeration (`do_scan_installed_paths`, `do_read_installed_paths`), so a system's catalogue
+and accept-list are asked once per run, and a switch or a move during the run takes effect from the next one. The
+resolver's `RealMachine` is one for the process and handed to every detection: it remembers only a libretro core's
+probe, keyed on the core file's path, modification time and size, so the probe of an unchanged core runs once while
+every answer stays live.
 
 ### Standalone-emulator selection: first safely-bakeable
 
@@ -236,10 +238,11 @@ today); or it carries `catalogue-invalid` (`catalogue_invalid`), a file ES-DE re
 in the user's own `custom_systems` overlay). `source` is the answering source's `{kind, starts_games}`. The platform
 page and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the
 frontend knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The
-overlay entries the resolver gives beside `emulator-catalogue-sealed` are not used, by the catalogue nor by the save
-adapter: an incomplete list would look complete. An empty list carrying none of those codes is that real "knows none",
-and `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole
-catalogue gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
+overlay entries the resolver gives beside `emulator-catalogue-sealed` are used nowhere — not for the emulator list, not
+for saves and not for firmware, whose answer beside a sealed catalogue reads as nothing established: an incomplete list
+would look complete. An empty list carrying none of those codes is that real "knows none", and
+`emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
+gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
 installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
 picker shape (`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is
 marked, and `needs_setup` / `unbakeable` entries are disabled with their reason. See

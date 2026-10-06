@@ -225,7 +225,7 @@ Format: **invariant** — tier — enforced by.
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` /
-  `emulator_sources` (the one reading of the sources a run resolves its ROMs through) by
+  `emulator_sources` (where a run takes its one reading of the sources) by
   `services/library/shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
   `services/library/session_budget.py`, and `artwork` by `services/library/cover_preparer.py` (the apply path's covers)
   **and** `services/library/reporter.py` (commit-time cover-path finalisation) — the one confinement with two owners,
@@ -247,6 +247,14 @@ Format: **invariant** — tier — enforced by.
   own UoW, which is what putting the three methods on one class makes cheapest — is that gate's documented blind spot
   and passes green. On the budget side the confinement holds `session_budget`'s stated promise that no renderer-RSS
   reading is taken anywhere else in the package
+- **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
+  `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
+  `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
+  `tests/adapters/test_emulator_sources.py::TestOnlyTheHolderDetects` (no other backend module imports `detect`). An
+  adapter that detected on its own would pick its own source — the old "first detected" — and would build a fresh
+  machine, so every save question would run its core's probe again. Unseen by the test: a detection reached through
+  `getattr`, and an installation class built by hand. Prompt-only: no adapter keeps a handle or an answer past the
+  reading it came through (a panel call's per question, a run's for the run)
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -597,29 +605,30 @@ Format: **invariant** — tier — enforced by.
   and their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators
   want WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
   64-318 ms per system on the reference machine) and its whole-machine sibling `FirmwareResolver`, the save answer —
-  `resolve_save_answer` and the saves package's own `save_answer` wrapper, 170 ms warm and 490 ms cold per ROM, which
-  makes it the most expensive entry in the list — the savestate question put to the same catalogue entry
-  (`resolve_savestate_location`) and the seam's detection question (`installation_detected`, which detects the emulator
-  sources afresh), the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a
-  directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
-  walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
-  them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path` and
-  `retrodeck_home`, four of the Protocol's five path getters, each resolving on every call. The fifth, `config_path`,
-  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. Those two
-  timings are the only entries a cost was measured for; every other one is listed from reading its implementation. One
-  other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption;
-  nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to
-  refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The
-  database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
-  `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
-  so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
-  check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from
-  reading code — no measurement of how long any of those transactions actually held the lock exists, and nothing here
-  should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a
-  listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every
-  blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name
-  does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound
-  method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
+  `resolve_save_answer` and the saves package's own `save_answer` wrapper, a full read of the machine per ROM (the first
+  ask about a core also runs that core's probe), which makes it the most expensive entry in the list — the savestate
+  question put to the same catalogue entry (`resolve_savestate_location`) and the seam's detection question
+  (`installation_detected`, which detects the emulator sources afresh), the two path resolvers —
+  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
+  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
+  so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters
+  that answer with a root: `bios_path`, `roms_path`, `saves_path` and `retrodeck_home`, four of the Protocol's five path
+  getters, each resolving on every call. The fifth, `config_path`, stays out because it resolves nothing — it is
+  `os.path.join` over the user home, so calling it costs no I/O. That timing is the only entry a cost was measured for;
+  every other one is listed from reading its implementation. One other real I/O seam was weighed and kept out — the
+  reason is in the script's docstring, and it is not an exemption; nor is it an inventory of what else touches the disk.
+  **"It's only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues
+  `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is in WAL, so readers are unaffected —
+  but every other **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still
+  held then, and `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had drifted across the
+  rule before anything looked (#1779), for the reason the check exists: nothing at a call site reveals that an injected
+  seam touches the disk. **The rule and the gate come from reading code — no measurement of how long any of those
+  transactions actually held the lock exists, and nothing here should be read as one.** What the check sees is the
+  deadlock rule's matcher unchanged — an **attribute** call naming a listed seam, lexically inside a
+  `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of that half: a seam
+  behind a helper one level down, an alias to a local, a factory attribute whose name does not end in `uow_factory`, a
+  nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
+  (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure
@@ -1240,9 +1249,10 @@ Format: **invariant** — tier — enforced by.
   would say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by
   `(system, extension)`: a pin that does not name the extension it asked with is pinning nothing, which is how two
   independent measurements of the same systems produced contradictory fact lists. **Every path asks live and nothing
-  caches an answer** — only the installation handle is memoised — because the user changes a core's options in the
-  emulator's own quick menu between a launch and the next sync; a display cache added without invalidating it on every
-  sync entry is the one change that makes this rule fail silently and expensively. Detail:
+  caches an answer** — every call detects the emulator sources afresh, and only the resolver's machine, which remembers
+  a core's probe by the core file's path, modification time and size, outlives it — because the user changes a core's
+  options in the emulator's own quick menu between a launch and the next sync; a display cache added without
+  invalidating it on every sync entry is the one change that makes this rule fail silently and expensively. Detail:
   `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`

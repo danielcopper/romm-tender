@@ -272,8 +272,9 @@ and the row you focus is the one the right-hand pane describes.
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
    and is greyed out otherwise, with the reason shown if you hover it. Where the reason is a problem rather than simply
-   nothing to choose — no emulator for the platform, or RetroDECK not found — a line under the header says so as well,
-   since a tooltip needs a mouse
+   nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
+   source found, every source switched off, a broken ES-DE systems file, a list that cannot be read yet) — a line under
+   the header says so as well, since a tooltip needs a mouse
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
@@ -707,8 +708,9 @@ they may need setting up, or ES-DE's command for them may not be one Tender can 
 picks one itself when a game starts. Where the emulator RetroDECK would have fallen back to is **not installed**, the
 pane names it and says nothing here can pin a different one; those games will not start until it is installed. And a
 platform RetroDECK lists **no** emulator for says so, which is a different thing again: there is nothing for RetroDECK
-to fall back to at all. If the emulator list itself can't be read — RetroDECK not found, or its ES-DE configuration
-missing or unreadable — the pane says it is unavailable rather than showing an empty picker.
+to fall back to at all. If the emulator list itself cannot be established, the pane says why rather than showing an
+empty picker: no emulator source was found, every source is switched off in Settings › Emulator sources, ES-DE's systems
+file is broken, the source's list cannot be read yet (EmuDeck's today), or it is not established for another reason.
 
 Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
 — the change takes effect right away, with no sync needed (games that already have a per-game core keep their own

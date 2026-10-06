@@ -303,17 +303,17 @@ addresses. The fix keeps the getters silent-and-best-effort but pairs them with 
 placed in `lib/` because the adapter and the `RetroDeckPaths` Protocol both import it, and import-linter forbids the
 adapter↔service directions). The four states:
 
-| State          | When                                                                                         | Loud? | Rationale                                                                                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ok`           | `retrodeck.json` read successfully **and** the resolved home exists on disk                  | no    | Healthy — roots are trustworthy.                                                                                                                                              |
-| `absent`       | `retrodeck.json` not found (`FileNotFoundError`)                                             | no    | The legitimate fresh-install case — `~/retrodeck` is RetroDECK's own default root. `absent` wins over `root_missing` even when the `~/retrodeck` fallback does not exist yet. |
-| `unreadable`   | file exists but cannot be read or parsed (`OSError` / `PermissionError` / `JSONDecodeError`) | yes   | We know RetroDECK is configured but cannot read where its roots point — derived paths are likely wrong.                                                                       |
-| `root_missing` | `retrodeck.json` read OK, but the resolved home directory does not exist on disk             | yes   | The library volume is gone (e.g. SD card ejected) — syncs and downloads would target a missing/wrong location.                                                                |
+| State          | When                                                                                         | Meaning                                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ok`           | `retrodeck.json` read successfully **and** the resolved home exists on disk                  | Healthy — roots are trustworthy.                                                                                                                                              |
+| `absent`       | `retrodeck.json` not found (`FileNotFoundError`)                                             | The legitimate fresh-install case — `~/retrodeck` is RetroDECK's own default root. `absent` wins over `root_missing` even when the `~/retrodeck` fallback does not exist yet. |
+| `unreadable`   | file exists but cannot be read or parsed (`OSError` / `PermissionError` / `JSONDecodeError`) | We know RetroDECK is configured but cannot read where its roots point — derived paths are likely wrong.                                                                       |
+| `root_missing` | `retrodeck.json` read OK, but the resolved home directory does not exist on disk             | The library volume is gone (e.g. SD card ejected) — syncs and downloads would target a missing/wrong location.                                                                |
 
 `config_health()` reuses the same 30-second TTL cache as the path getters (`_load_config()`) — no second independent
 file read — and tracks the last load outcome so it can distinguish `absent` from `unreadable` (a bare `None` would
 conflate them). The `root_missing` disk probe (`os.path.isdir`) only runs when the config read OK; it never runs for
-`absent`, so a fresh install stays quiet.
+`absent`.
 
 Nothing reads it any more. The panel's health notices come from the resolver's own health findings, per emulator source
 and worded per finding code (`get_emulator_sources`; [qam-panel.md](qam-panel.md#notices-and-homes)); the RetroDECK

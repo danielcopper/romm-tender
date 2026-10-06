@@ -16,18 +16,19 @@ class RetroDeckConfigHealth(StrEnum):
     """How trustworthy the resolved RetroDECK roots are right now.
 
     The path getters are always best-effort and never raise; this enum
-    is the loud signal that lets the frontend warn the user when the
-    resolved roots are likely wrong.
+    says when the resolved roots are likely wrong. Nothing reads it any
+    more: the panel's health notices come from the resolver's findings
+    per emulator source.
     """
 
     OK = "ok"
     """``retrodeck.json`` read successfully AND the resolved RetroDECK home exists on disk."""
 
     ABSENT = "absent"
-    """``retrodeck.json`` not found — the legitimate fresh-install fallback to ``~/retrodeck``. Stays quiet."""
+    """``retrodeck.json`` not found — the legitimate fresh-install fallback to ``~/retrodeck``."""
 
     UNREADABLE = "unreadable"
-    """``retrodeck.json`` exists but cannot be read or parsed — we know RetroDECK is configured but not where. Loud."""
+    """``retrodeck.json`` exists but cannot be read or parsed — we know RetroDECK is configured but not where."""
 
     ROOT_MISSING = "root_missing"
-    """``retrodeck.json`` read OK, but the resolved home is missing on disk (e.g. SD card ejected). Loud."""
+    """``retrodeck.json`` read OK, but the resolved home is missing on disk (e.g. SD card ejected)."""

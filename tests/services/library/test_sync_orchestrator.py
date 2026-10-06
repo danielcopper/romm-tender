@@ -6342,7 +6342,7 @@ class TestProcessedGamesNumerator:
 
 
 class TestOneReadingOfTheSourcesPerRun:
-    """A run resolves every ROM's emulator through ONE reading of the sources (#2188 D4).
+    """A run resolves every ROM's emulator through ONE reading of the sources.
 
     The reading keeps the run's answers until it ends, so a system asked about
     for many ROMs is asked once, and a switch or a move written during the run

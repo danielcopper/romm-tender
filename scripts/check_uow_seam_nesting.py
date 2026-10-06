@@ -180,8 +180,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "resolve_for_install",
         # CoreInfoProvider (services/protocols/paths.py) — the three catalogue
         # reads. Each is answered by the vendored emu-atlas resolver, which reads
-        # ES-DE's own catalogue off the flatpak install: a system's first read
-        # opens it, and the adapter's per-system cache is what a second one hits.
+        # ES-DE's own catalogue off the flatpak install: every call from the
+        # panel opens it again, and only a run's one reading of the emulator
+        # sources keeps a system's answer for the run.
         # get_emulator_options also globs each BAKEABLE STANDALONE option's
         # emulator install through the find rules, on every call — that probe is
         # not cached, because a component the user installs mid-session has to be
@@ -198,9 +199,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # ES-DE's catalogue for the entry, the emulator's own configuration for
         # the granularity, and the save root for the directory, on EVERY call:
         # this seam caches no answer at all, because a remembered granularity
-        # would have Tender carry a shared card as one game's save. 170 ms
-        # warm and 490 ms cold on the reference machine, which makes it the most
-        # expensive entry in this list. It is a method on an object-shaped
+        # would have Tender carry a shared card as one game's save. It is the
+        # most expensive entry in this list: a full read of the machine per call,
+        # and the first ask about a core also runs that core's probe. It is a method on an object-shaped
         # Protocol, so the method name is what a consumer writes and there is no
         # attribute to list beside it.
         "resolve_save_answer",
@@ -208,9 +209,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # asked where it keeps one game's savestates. The same live reading of
         # the machine as the save answer, taken twice per adoption rename.
         "resolve_savestate_location",
-        # SaveLocationReader's detection question — whether any installation
-        # was found. A found installation is memoised; until one is, every call
-        # runs the resolver's detection again.
+        # SaveLocationReader's detection question — whether any emulator source
+        # answers. Every call runs the resolver's detection again.
         "installation_detected",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the
@@ -263,8 +263,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "_firmware_resolver",
         # SystemSupportedExtensionsFn / SystemKnownFn (services/protocols/paths.py)
         # — two more questions to ES-DE's catalogue, answered by the same
-        # resolver and through the same adapter cache as the CoreInfoProvider
-        # reads above. Both Protocols are call-shaped, and unlike SystemResolver
+        # resolver, and asked afresh the same way, as the CoreInfoProvider reads
+        # above. Both Protocols are call-shaped, and unlike SystemResolver
         # there is no method name a service could write beside the attribute: the
         # implementations (AtlasCatalogueAdapter.get_supported_extensions /
         # .is_known_system) are on no Protocol a service holds. So the attribute

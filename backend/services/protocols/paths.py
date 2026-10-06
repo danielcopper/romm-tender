@@ -169,8 +169,9 @@ class SaveLocationReader(Protocol):
     core.
 
     Implementations never raise and never guess. Every way the question cannot
-    be put — no emulator resolved, no installation, the catalogue not offering
-    the label, the entry declining, the reader failing — comes back as a
+    be put — no emulator resolved, no emulator source answering, a refused
+    catalogue, the catalogue not offering the label, the entry declining, the
+    reader failing — comes back as a
     :class:`domain.save_answer.SaveAnswer` in the ``unestablished`` state, which
     refuses the sync. The one thing an implementation may never do is answer
     "nothing to sync", which a caller reads as a green light.
@@ -187,9 +188,9 @@ class SaveLocationReader(Protocol):
     apart from :class:`domain.savestate_location.NoSavestates`, which is the
     resolver stating that the emulator has none.
 
-    ``installation_detected`` says whether any emulator installation was found
-    to ask at all, so a caller can tell "every answer refused" apart from "there
-    was nothing to ask yet".
+    ``installation_detected`` says whether an emulator source answers at all,
+    so a caller can tell "every answer refused" apart from "there was nothing
+    to ask yet".
 
     The named methods are load-bearing: `scripts/check_uow_seam_nesting.py`
     matches this seam by them, where a call-shaped seam is matchable only by

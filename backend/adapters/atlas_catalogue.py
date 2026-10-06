@@ -154,12 +154,14 @@ def _caveat_codes(answer: Any) -> tuple[str, ...]:
 
 
 def catalogue_refused(answer: Any) -> bool:
-    """Whether the answer says nobody could read a catalogue for this system.
+    """Whether the answer carries one of the catalogue refusals (:data:`_CATALOGUE_REFUSALS`).
 
-    Public for :mod:`adapters.atlas_saves`, which looks an emulator up in the
-    same answer and must decline on the same codes: entries beside a refusal
-    (EmuDeck's overlay beside ``emulator-catalogue-sealed``) are an incomplete
-    list, and an incomplete list would look complete.
+    That is, no catalogue could be read, or what was read cannot be taken as the
+    whole list: a sealed one, or a systems file ES-DE refuses to load. Public for
+    :mod:`adapters.atlas_saves` and :mod:`adapters.emulator_sources`, which decline
+    on the same codes: entries beside a refusal (EmuDeck's overlay beside
+    ``emulator-catalogue-sealed``) are an incomplete list, and an incomplete
+    list would look complete.
     """
     return not _CATALOGUE_REFUSALS.isdisjoint(_caveat_codes(answer))
 

@@ -606,9 +606,9 @@ class TestHowLongAnAnswerIsKept:
         assert installation.catalogue_calls == ["ps3", "psx"]
 
     def test_a_panel_call_asks_the_listing_afresh(self, traces):
-        # Nothing outlives the call that asked it (#2188 D4): each call takes a
-        # reading of its own, so a catalogue edited between two calls is read
-        # again rather than answered from the first.
+        # Nothing outlives the call that asked it: each call takes a reading of
+        # its own, so a catalogue edited between two calls is read again rather
+        # than answered from the first.
         installation = _Installation(systems=SystemsAnswer(systems=("psx", "ps2")))
         adapter = _adapter(installation, traces)
 
@@ -659,7 +659,7 @@ class TestHowLongAnAnswerIsKept:
 
 
 class TestWhichSourceAnswers:
-    """A game's emulator list comes from the source it starts through (#2188 D16)."""
+    """A game's emulator list comes from the source it starts through."""
 
     @staticmethod
     def _two(traces: list[str], settings: dict[str, Any]) -> tuple[AtlasCatalogueAdapter, _Installation]:

@@ -49,11 +49,12 @@ class ArrangedSource:
 class SourcesReading(Protocol):
     """One reading of the emulator sources, and the answers asked through it.
 
-    Taken by the adapter that detects the sources; a run that asks the same
-    questions for many games takes one and hands it down, and every answer asked
-    through it is kept for as long as the reading is. A service holds one
-    without looking inside; the installation it names is the resolver's own
-    handle and only an adapter puts questions to it.
+    Taken by the adapter that detects the sources — per question for a call from
+    the panel, and once by a run that asks the same questions for many games and
+    hands it down — and every answer asked through it is kept for as long as the
+    reading is. A service reads which sources it found and their arrangement;
+    the installations are the resolver's own handles, and only an adapter puts
+    questions to them.
     """
 
     @property
@@ -131,8 +132,8 @@ CATALOGUE_SEALED = "sealed"
 CATALOGUE_INVALID = "catalogue_invalid"
 CATALOGUE_UNAVAILABLE = "unavailable"
 
-# What a source's catalogue is, as the settings row reports it: read, or one
-# of the two refusals above.
+# What a source's catalogue is, as the settings row reports it: read, sealed,
+# or unavailable — every other refusal, a broken systems file among them.
 CATALOGUE_READ = "read"
 
 

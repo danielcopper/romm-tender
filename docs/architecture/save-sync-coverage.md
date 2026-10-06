@@ -117,9 +117,10 @@ which is what the state is about.
 **The last state has three shapes and they are kept apart**, because they are three different sentences to a reader.
 `nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is known and
 the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be wrong.
-`not_asked` — no question reached the resolver: no emulator resolved for this ROM, no installation or catalogue entry to
-ask, or no content name to ask with. The status read reports a save Tender could otherwise sync, sitting beside the
-content, the same way, since no sync runs there. The emulator is not implicated, and saying it is would be wrong too.
+`not_asked` — no question reached the resolver: no emulator resolved for this ROM, no emulator source answering, a
+catalogue the resolver refused (EmuDeck's sealed one among them), no catalogue entry under the label, or no content name
+to ask with. The status read reports a save Tender could otherwise sync, sitting beside the content, the same way, since
+no sync runs there. The emulator is not implicated, and saying it is would be wrong too.
 
 **Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the
 same platform can answer differently. Every state the payload carries names the emulator it is about.

@@ -306,8 +306,9 @@ async def test_a_named_platforms_answer_carries_its_classified_emulators(harness
 async def test_a_named_platform_flags_unavailable_emulator_data(harness):
     """No es_systems → the named platform's answer flags emulator data unavailable.
 
-    Unavailable is not empty: the page says "RetroDECK was not found" off this
-    flag, and an empty list alone would read as a platform with no emulator.
+    Unavailable is not empty: the page says why the list is missing off this
+    flag and its reason, and an empty list alone would read as a platform with
+    no emulator.
     """
     seed_rom(harness, 8, platform_slug="gba")
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
