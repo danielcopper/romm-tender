@@ -430,6 +430,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # The backstop's own effect: the run stops BEFORE the server round-trip.
         # Downstream is redundantly safe — a refusing answer carries no names, so
@@ -516,6 +517,7 @@ class TestOnlyBesideTheContentGetsTheContentDirectorySkip:
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result.get("reason") != "savefiles_in_content_dir"
         assert "skipped" not in result["message"]

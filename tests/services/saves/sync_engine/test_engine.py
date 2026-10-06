@@ -177,6 +177,7 @@ class TestSyncAllSaves:
         # the sweep.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["synced"] == 2
         assert result["roms_checked"] == 2
@@ -205,6 +206,7 @@ class TestSyncAllSaves:
         _create_save(tmp_path, system="snes", rom_name="game2", content=_corrupt_zip_bytes())
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # The run completed (no BadZipFile escaped) and swept both ROMs cleanly.
         assert result["success"] is True
@@ -254,6 +256,7 @@ class TestSyncAllSaves:
         fake.upload_save = flaky_upload
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
         assert result["synced"] >= 1
         assert len(result["errors"]) >= 1
 
@@ -279,6 +282,7 @@ class TestSyncAllSaves:
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["conflicts"] >= 1
@@ -302,6 +306,7 @@ class TestSyncAllSaves:
         # Confirmed non-legacy → the matrix POSTs the local-only save.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["synced"] == 1
@@ -323,6 +328,7 @@ class TestSyncAllSaves:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 0
         assert result["roms_checked"] == 1
@@ -345,6 +351,7 @@ class TestSyncAllSaves:
         # so the single matrix upload is for rom 1 alone.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 1
         assert result["roms_checked"] == 2
@@ -1476,6 +1483,7 @@ class TestSaveSyncContentDirGate:
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result.get("reason") != "savefiles_in_content_dir"
         assert "skipped" not in result["message"]
@@ -1529,6 +1537,7 @@ class TestSaveSyncContentDirGate:
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert "reason" not in result
         assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
@@ -1542,6 +1551,7 @@ class TestSaveSyncContentDirGate:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert "reason" not in result
@@ -1567,6 +1577,7 @@ class TestSaveSyncContentDirGate:
         _seed_save_state_dict(svc, 2, {"active_slot": "default", "slot_confirmed": True}, platform_slug="snes")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert "reason" not in result
@@ -1986,6 +1997,7 @@ class TestSyncAllSavesNegotiate:
         fake.stage_negotiate([], session_id=55)
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 2
         # Exactly ONE whole-device transport session for both ROMs.
@@ -2021,6 +2033,7 @@ class TestSyncAllSavesNegotiate:
         _create_save(tmp_path, system="snes", rom_name="game2", content=b"s2")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # Both ROMs POST via the matrix; one whole-device transport session wraps them.
         assert result["synced"] == 2
@@ -2048,6 +2061,7 @@ class TestSyncAllSavesNegotiate:
         fake.set_server_save_content(900, b"server save for game2")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # rom1 upload + rom2 cross-device download, under one transport session.
         assert result["synced"] == 2
@@ -2074,6 +2088,7 @@ class TestSyncAllSavesNegotiate:
         fake.negotiate_sync = always_fail  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # No session ever opened → none completed; the matrix still POSTed.
         assert any(c[0] == "list_saves" for c in fake.call_log)
@@ -2101,6 +2116,7 @@ class TestSyncAllSavesNegotiate:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"s1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert not any(c[0] == "negotiate_sync" for c in fake.call_log)
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
@@ -2119,6 +2135,7 @@ class TestSyncAllSavesNegotiate:
         fake.complete_raises = RommApiError("complete failed")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["synced"] == 1
@@ -2141,6 +2158,7 @@ class TestSyncAllSavesNegotiate:
         fake.negotiate_sync = malformed  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # No session opened/completed; the ROM still synced via the matrix.
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
@@ -2293,6 +2311,7 @@ class TestSyncPathsHealDeadDevice:
         fake.fail_on_next(RommNotFoundError("Device with ID dead-uuid not found"))
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         new_id = _get_device_id(svc)
