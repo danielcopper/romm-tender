@@ -217,13 +217,6 @@ class TestMigrationEndpointDelegation:
         services.migration_service.dismiss_retrodeck_migration.assert_called_once_with()
         assert result == {"ok": True}
 
-    @pytest.mark.asyncio
-    async def test_get_retrodeck_status_delegates(self, endpoints, services):
-        services.migration_service.get_retrodeck_status.return_value = {"status": "ok"}
-        result = endpoints.get_retrodeck_status()
-        services.migration_service.get_retrodeck_status.assert_called_once_with()
-        assert result == {"status": "ok"}
-
 
 # ── Core / firmware / BIOS endpoints ───────────────────────────────────
 

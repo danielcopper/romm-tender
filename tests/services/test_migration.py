@@ -26,7 +26,6 @@ from fakes.running_loop import running_loop
 
 from adapters.migration_file import MigrationFileAdapter
 from lib.prune_conflicts import PruneConflicts
-from lib.retrodeck_health import RetroDeckConfigHealth
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
@@ -488,41 +487,6 @@ class TestPathChangeDetection:
         assert payload["cleared"] is True
         assert payload["old_path"] == old_home
         assert payload["new_path"] == old_home
-
-
-class TestGetRetroDeckStatus:
-    """The banner's answer: the health discriminant as a plain string, plus the probed paths."""
-
-    def test_ok_status_carries_paths(self, migration):
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(
-            home="/retrodeck",
-            config_path="/cfg/retrodeck.json",
-            health=RetroDeckConfigHealth.OK,
-        )
-        assert migration.service.get_retrodeck_status() == {
-            "status": "ok",
-            "config_path": "/cfg/retrodeck.json",
-            "resolved_home": "/retrodeck",
-        }
-
-    @pytest.mark.parametrize(
-        ("health", "status"),
-        [
-            (RetroDeckConfigHealth.OK, "ok"),
-            (RetroDeckConfigHealth.ABSENT, "absent"),
-            (RetroDeckConfigHealth.UNREADABLE, "unreadable"),
-            (RetroDeckConfigHealth.ROOT_MISSING, "root_missing"),
-        ],
-    )
-    def test_each_health_answers_its_discriminant_as_a_plain_string(self, migration, health, status):
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(
-            home="/missing",
-            config_path="/cfg/retrodeck.json",
-            health=health,
-        )
-        result = migration.service.get_retrodeck_status()
-        assert result == {"status": status, "config_path": "/cfg/retrodeck.json", "resolved_home": "/missing"}
-        assert type(result["status"]) is str
 
 
 class TestIsRetroDeckMigrationPending:

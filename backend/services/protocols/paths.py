@@ -78,10 +78,9 @@ class RetroDeckPaths(Protocol):
     ``def __call__(self) -> str`` shape would make a saves-for-bios
     mix-up silently type-check at the call site. Separate names give
     the type checker enough information to flag it. The path getters are
-    best-effort and never raise; ``config_health`` is the loud signal
-    ``main.py`` surfaces to the frontend when the resolved roots are
-    likely wrong (``retrodeck.json`` unreadable, or its resolved home
-    missing on disk).
+    best-effort and never raise; ``config_health`` says when the resolved
+    roots are likely wrong (``retrodeck.json`` unreadable, or its resolved
+    home missing on disk).
     """
 
     def saves_path(self) -> str: ...

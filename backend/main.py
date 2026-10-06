@@ -211,10 +211,6 @@ class Endpoints:
         return self._services.settings_service.get_settings()
 
     @route
-    def get_retrodeck_status(self):
-        return self._services.migration_service.get_retrodeck_status()
-
-    @route
     def get_whitelist_settings(self):
         return self._services.settings_service.get_whitelist_settings()
 

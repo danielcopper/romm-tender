@@ -176,8 +176,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # has been failing, and blocking the call would hide the diagnosis behind
     # the condition it might explain.
     "get_host_status",
-    # Read-only RetroDECK path-resolution health probe (for the frontend banner).
-    "get_retrodeck_status",
     # Cancel / pause operations — must not be refused mid-operation when
     # migration marker fires so the user can stop in-flight work. (Resume,
     # which re-begins a filesystem transfer, IS migration-blocked.)
