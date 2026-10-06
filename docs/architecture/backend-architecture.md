@@ -1319,13 +1319,13 @@ run-lifecycle state, no run ids, no cancellation — those are out of scope here
 The wait is **bounded** so a stuck run never traps the launch path. Each of the four trigger methods on `SyncEngine`
 wraps its run body in `bounded_run(timeout=…)` with a per-trigger budget — `pre_launch_sync` (30 s), `post_exit_sync`
 (60 s), `sync_rom_saves` (15 s), `sync_all_saves` (60 s). If the gate can't be acquired within the budget the call
-returns its own fallthrough instead of blocking, and all four fallthroughs carry the **same** busy shape:
-`reason: "sync_busy"`, no additive `offline` flag. A busy gate is a local wait — nothing on that path observed the
-server — so it never borrows a server-reachability slug and never sets the offline flag (#1625); the session-end toast
-would otherwise announce "Server offline" about a reachable server. Each caller routes the skip on `success: False`
-alone, and the session-end toast keys on the reason. The launch check never sees the skip: it stops waiting at 15 s,
-before the pre-launch budget runs out, so a busy gate reaches the user as the fallback dialog's no-answer case (Play is
-never trapped). The lock is never leaked on timeout — a timed-out acquire releases any photo-finish hold before raising.
+refuses instead of blocking, and all four raise the **same** busy refusal, `SyncBusy`: `reason: "sync_busy"`, no
+`offline` detail. A busy gate is a local wait — nothing on that path observed the server — so it never borrows a
+server-reachability slug and never sets the offline flag (#1625); the session-end toast would otherwise announce "Server
+offline" about a reachable server. Each caller routes the skip on `success: False` alone, and the session-end toast keys
+on the reason. The launch check never sees the skip: it stops waiting at 15 s, before the pre-launch budget runs out, so
+a busy gate reaches the user as the fallback dialog's no-answer case (Play is never trapped). The lock is never leaked
+on timeout — a timed-out acquire releases any photo-finish hold before raising.
 
 The gate sits **outside** the per-ROM lock (`SyncEngine.rom_lock(rom_id)`): the device gate admits one run at a time
 across the whole device, then each ROM still takes its own `rom_lock` for the read-mutate-write of its

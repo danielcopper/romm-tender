@@ -837,11 +837,11 @@ carry, Tender keeps save sync off for that ROM — syncing saves beside the cont
 not make. Every other answer anchored there (a save **inside** the content file — PUAE on an `.adf`, Hatari on a `.st` —
 writes discarded, nothing named) is not this case: `SaveAnswer.in_content_directory` reads the syncable rule itself, so
 such an answer gets its own save-shape refusal and its own explanation on the status read. The single-ROM sync entry
-points return the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches, no
-error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves beside its
-content, returns the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read no ROM at
-all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order) that
-launches with a RetroArch core, and returns the skip where that one saves beside its content; with no such ROM it
+points refuse with the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches,
+no error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves beside its
+content, refuses with the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read no ROM
+at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order) that
+launches with a RetroArch core, and refuses with the skip where that one saves beside its content; with no such ROM it
 reports as before. The secondary write endpoints (rollback, slot switch, conflict resolve, slot-choice migration, copy
 to slot) refuse with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so
 the game-detail play section shows a banner saying the saves are written beside the game file, and naming RetroArch's
@@ -1546,20 +1546,25 @@ If the RomM server is unreachable when a sync runs:
 failure here is **classified by type**, not collapsed onto a blanket "Server offline"
 ([#971](https://github.com/danielcopper/romm-tender/issues/971)):
 
-- A genuine reachability failure (`RommConnectionError` / `RommTimeoutError`) returns the canonical `SERVER_UNREACHABLE`
-  shape with `message: "Server offline"` **plus** the additive `offline: true` flag the launch path routes on
-  (offline-drift check instead of a doomed round-trip).
-- Any other typed `RommApiError` flows through `lib/errors.py` `classify_error`, so the result carries its **own**
-  `reason` + `message`: a revoked token (401) surfaces `AUTH_FAILED` + "Authentication failed — check your username and
-  password", an SSL misconfig surfaces the SSL message, a 5xx surfaces the server-error message. These branches **omit**
-  the `offline` flag, so the UI never claims a reachable server is unreachable. The Play button's fallback launch modal
-  shows that backend `message` verbatim, so a user whose token expired sees "authentication failed" instead of being
-  told the server is offline forever.
+- A genuine reachability failure (`RommConnectionError` / `RommTimeoutError`) refuses with `ServerUnreachable`
+  (`reason: "server_unreachable"`, `message: "Server offline"`) **plus** the `offline: true` detail the launch path
+  routes on (offline-drift check instead of a doomed round-trip). Only this branch is caught; the raw exception is
+  logged at debug there, so the probe is no silent swallow.
+- Any other `RommApiError` is not caught: it propagates, and both of its readers answer it through `lib/errors.py`
+  `classify_error`, so it carries its **own** `reason` + `message` — the endpoint translator for `pre_launch_sync`, the
+  session lifecycle for `post_exit_sync`. A revoked token (401) surfaces `auth_failed` + "Authentication failed — check
+  your username and password", an SSL misconfig surfaces the SSL message, a 5xx surfaces the server-error message. These
+  answers **omit** the `offline` flag, so the UI never claims a reachable server is unreachable. The Play button's
+  fallback launch modal shows that backend `message` verbatim, so a user whose token expired sees "authentication
+  failed" instead of being told the server is offline forever. Any exception that is not a RomM error is not caught
+  either: the endpoint answers it as a transport error, the session lifecycle with its generic failure toast.
 
-The raw exception is logged at debug in every branch, so the probe is no longer a silent swallow. The same
-classification applies to the device-registration failure path in `services/saves/sync_engine/devices.py`
-(`ensure_device_registered`): an auth/SSL failure during `register_device` produces its own classified `reason` +
-`message` rather than a generic "Could not register device" unreachable slug.
+The same holds for device registration in `services/saves/sync_engine/devices.py`: `ensure_device_registered` and
+`list_devices` catch no RomM error, so the endpoints answer an auth/SSL failure with its own classified `reason` +
+`message` rather than a generic slug, and the device list shows `classify_error`'s message beneath its "Could not load
+devices" heading. A registration the server answers without an id refuses with `server_unreachable` / "Could not
+register device". Inside a sync, a registration that refuses or meets a RomM error refuses the sync with
+`device_not_registered`.
 
 ### `DeviceRegistry` owns device identity
 

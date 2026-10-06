@@ -97,9 +97,9 @@ sync path asks live, and the count exists so the number the button offers equals
 
 The answer classifies every ROM into **exactly one** of five states. Only the first is a save Tender can carry; the
 other four are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no
-sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
-failure — the same shape the `savefiles_in_content_dir` skip returns. A refusing answer that names a directory outside
-the content's own is still recorded and followed when that directory moves, because the files are on the disk either way
+sync state is written, and the sync refuses with the benign skip (`reason: "save_shape_unsupported"`) rather than a
+failure — as the `savefiles_in_content_dir` skip does. A refusing answer that names a directory outside the content's
+own is still recorded and followed when that directory moves, because the files are on the disk either way
 ([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)).
 
 | State                  | What it means                                                                 | Example on a stock RetroDECK        |
