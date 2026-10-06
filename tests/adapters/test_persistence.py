@@ -106,6 +106,21 @@ class TestSettingsSchema:
     def test_default_settings_carry_empty_platform_cores(self):
         assert DEFAULT_SETTINGS["platform_cores"] == {}
 
+    def test_default_settings_carry_no_source_order_and_no_switched_off_source(self):
+        assert DEFAULT_SETTINGS["emulator_source_order"] == []
+        assert DEFAULT_SETTINGS["emulator_sources_off"] == []
+
+    def test_a_settings_file_from_before_the_source_keys_gets_them_without_a_new_version(self, adapter):
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump({"version": 13, "platform_cores": {"gba": "mGBA"}}, f)
+        os.chmod(settings_path, 0o600)
+        result = adapter.load_settings()
+        assert result["emulator_source_order"] == []
+        assert result["emulator_sources_off"] == []
+        assert result["version"] == 13
+        assert _SETTINGS_VERSION == 13
+
     def test_default_settings_carry_virtual_collection_bucket(self):
         # The ownership-carrying first kind is ``standard`` (v13, renamed from the
         # legacy ``user`` bucket key); the ownerless virtual kind is ``virtual``
