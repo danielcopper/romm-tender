@@ -1367,6 +1367,9 @@ describe("RemovedGamesCleanup", () => {
 
     // An unloaded page could still hold an installed row.
     expect(modal.container.textContent).not.toContain("None of these versions has ROM files");
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(backend.startPrune).not.toHaveBeenCalled();
   });
 
   it("shows the installed-content option instead of the empty state when a row has files", async () => {
@@ -1428,6 +1431,10 @@ describe("RemovedGamesCleanup", () => {
     // The dialog scrolls, so the reason has to be readable from where the button is.
     expect((modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
     expect(modal.container.textContent).toContain("Loading the list: 1 of 2 entries.");
+    // Pressable, but locked while the second page is still pending.
+    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    await act(async () => Promise.resolve());
+    expect(backend.startPrune).not.toHaveBeenCalled();
   });
 
   it("reports a locally refused Confirm in the dialog and the log", async () => {
