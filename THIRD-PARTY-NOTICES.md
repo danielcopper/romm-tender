@@ -17,13 +17,14 @@ Tender also ships, and this file does not describe:
 | `backend/_vendor/atlas` (emu-atlas)          | MIT                                              | `backend/_vendor/atlas.LICENSE`, beside the tree                                     |
 | `backend/_vendor/vdf` (ValvePython/vdf)      | MIT                                              | `backend/_vendor/vdf/LICENSE`, inside the tree                                       |
 | `backend/_vendor/backports` (backports.zstd) | PSF-2.0, and BSD for the zstd library it carries | `backend/_vendor/backports/zstd/LICENSE.txt` and `LICENSE_zstd.txt`, inside the tree |
+| `backend/_vendor/png` (pypng)                | MIT                                              | `backend/_vendor/png/LICENCE`, inside the tree                                       |
 | `backend/native/libgavel-x86_64-linux.so`    | MIT                                              | `backend/native/libgavel-x86_64-linux.so.LICENSE`, beside the binary                 |
 
 The vendored trees are not all held the same way, and the difference is deliberate rather than an inconsistency:
 `scripts/check_vendored_trees.py` asserts the sibling `atlas.LICENSE` because upstream's own wheel manifest names a
-licence file to hold it against, while the manifests of `vdf` and `backports` are generated here (each copy carries a
-local patch, so no upstream manifest can ever match it) and their licence texts are covered instead by the tree digests,
-which the same gate requires to match the vendored file set exactly. Provenance for all three is in
+licence file to hold it against, while the manifests of `vdf`, `backports` and `png` are generated here (each copy
+carries a local patch, so no upstream manifest can ever match it) and their licence texts are covered instead by the
+tree digests, which the same gate requires to match the vendored file set exactly. Provenance for all four is in
 [`backend/_vendor/README.md`](backend/_vendor/README.md).
 
 **`backend/native/` is pinned differently from the vendored trees.** The `.so` is a compiled build of
