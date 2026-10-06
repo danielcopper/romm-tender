@@ -67,7 +67,7 @@ from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_failure import UpdateFailureFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from domain.identity import PACKAGE_NAME, VERSION
-from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
+from domain.state_migrations import migrate_settings
 from domain.update_install import UPDATE_DIR_NAME
 from domain.user_data_location import launcher_in_bin_dir, launcher_path
 
@@ -376,15 +376,8 @@ def bootstrap(
     retrodeck_paths = RetroDeckPathsAdapter(user_home=user_home, logger=logger)
     es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
 
-    persistence = PersistenceAdapter(directories.config_dir, directories.data_dir, logger, clock=clock)
-    settings = persistence.load_settings()
-    # One-time JSON→JSON lift (ADR-0003): fold the legacy save-sync knobs +
-    # device_name out of save_sync_state.json before the schema bump stamps
-    # version 4. Idempotent — after the first run save_settings stamps the
-    # new version and this branch is skipped.
-    if settings.get("version", 0) < 4:
-        settings = fold_legacy_save_sync_settings(settings, persistence.load_save_sync_state())
-    settings = migrate_settings(settings)
+    persistence = PersistenceAdapter(directories.config_dir, logger, clock=clock)
+    settings = migrate_settings(persistence.load_settings())
     # If load_settings quarantined a corrupt file this boot, fold the reset into
     # the settings dict as a persistent marker. Set AFTER migration and BEFORE
     # the save so it lands in the fresh settings.json and survives a backend

@@ -1,9 +1,7 @@
-"""Persistence adapter — pure I/O for ``settings.json`` and the legacy save-sync read.
+"""Persistence adapter — pure I/O for ``settings.json``.
 
 Handles atomic writes, file locking, and schema version stamping for
-``settings.json``, plus the one-time legacy ``save_sync_state.json`` read that
-feeds the settings fold. Migration logic lives in
-``domain/state_migrations.py``.
+``settings.json``. Migration logic lives in ``domain/state_migrations.py``.
 """
 
 import contextlib
@@ -15,6 +13,7 @@ import os
 from typing import Any, Protocol
 
 from adapters.system_clock import SystemClock
+from domain.state_migrations import unreadable_settings
 
 _SETTINGS_VERSION = 13
 _LOCK_EXT = ".lock"
@@ -27,9 +26,6 @@ _LOCK_EXT = ".lock"
 # file (``bootstrap/check.py``); the gate carries its own copy of the literal
 # rather than importing this one.
 SETTINGS_FILENAME = "settings.json"
-
-# The legacy save-sync state, read once by the settings fold and never written.
-SAVE_SYNC_STATE_FILENAME = "save_sync_state.json"
 
 
 class _ClockPort(Protocol):
@@ -97,39 +93,30 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 class PersistenceAdapter:
-    """Thin I/O layer for ``settings.json`` and the legacy save-sync read.
-
-    Reads and writes ``settings.json`` and performs the one-time legacy
-    ``save_sync_state.json`` read consumed by the settings fold.
+    """Thin I/O layer for ``settings.json``.
 
     Parameters
     ----------
     settings_dir:
         Absolute path to the directory that holds ``settings.json`` — the
         config root this run was told about.
-    data_dir:
-        Absolute path to the directory that holds ``save_sync_state.json`` —
-        the data root this run was told about.
     logger:
         A standard-library ``logging.Logger`` instance.
     clock:
         Wall-clock source for the corrupt-file backup stamp. Keyword-only;
-        defaults to a real :class:`adapters.system_clock.SystemClock` so the
-        many existing 3-arg construction sites need no change. Bootstrap
-        passes the shared instance so the whole composition root reads one
-        clock.
+        defaults to a real :class:`adapters.system_clock.SystemClock`.
+        Bootstrap passes the shared instance so the whole composition root
+        reads one clock.
     """
 
     def __init__(
         self,
         settings_dir: str,
-        data_dir: str,
         logger: logging.Logger,
         *,
         clock: _ClockPort | None = None,
     ) -> None:
         self._settings_dir = settings_dir
-        self._data_dir = data_dir
         self._logger = logger
         self._clock: _ClockPort = clock if clock is not None else SystemClock()
         # Transient load-time signal of a corrupt-settings reset on the last
@@ -191,19 +178,22 @@ class PersistenceAdapter:
     # ------------------------------------------------------------------
 
     def load_settings(self) -> dict[str, Any]:
-        """Read ``settings.json``, apply defaults, and fix permissions.
+        """Read ``settings.json`` and apply defaults.
 
         Migration logic (e.g. renaming old keys) is intentionally NOT
         included here — that belongs in ``domain/state_migrations.py``.
-        If the ``version`` key is absent the returned dict has ``version: 0``
-        to signal a pre-versioning file to callers.
 
         A missing file is a legitimate first run — defaults are returned
-        silently with no backup and no reset flag. An *unparseable* file is
-        the data-loss hazard: rather than silently returning defaults (which
-        the immediate bootstrap save would then write over the corrupt file,
-        destroying the user's server URL, token, and selections), the
-        unparseable file is backed up to ``settings.json.corrupt-<ts>`` and a
+        silently, at the current version, with no backup and no reset flag. A
+        file ``unreadable_settings`` objects to — older than the oldest version
+        this release reads, without a usable version, or not a JSON object —
+        is not converted: a warning names what was found and the defaults are
+        returned, which the immediate bootstrap save writes over the file with
+        no backup, since everything such a file held can be entered again. An
+        *unparseable* file is the data-loss hazard: rather than silently
+        returning defaults (which the immediate bootstrap save would then write
+        over the corrupt file, destroying the user's server URL, token, and
+        selections), the unparseable file is backed up to ``settings.json.corrupt-<ts>`` and a
         transient :attr:`_corrupt_reset` flag is set so bootstrap can persist
         the reset marker. The error is logged loudly. If the backup rename
         itself fails, the error is logged and defaults are still returned so
@@ -220,6 +210,11 @@ class PersistenceAdapter:
             self._logger.error("settings.json is corrupt/unparseable — backing up and resetting to defaults")
             self._quarantine_corrupt_settings(settings_path)
             settings = {}
+        else:
+            unreadable = unreadable_settings(settings)
+            if unreadable is not None:
+                self._logger.warning("settings.json is not read, because %s — starting on the defaults", unreadable)
+                settings = {}
 
         for key, default in DEFAULT_SETTINGS.items():
             # deepcopy so a mutable default (e.g. the ``platform_cores`` / enabled-*
@@ -228,15 +223,7 @@ class PersistenceAdapter:
             # into the module-level template and contaminate the next load.
             settings.setdefault(key, copy.deepcopy(default))
 
-        # Backfill version=0 to signal pre-versioning file to migration layer
-        settings.setdefault("version", 0)
-
-        # Enforce 0600 on settings file (migrate from world-readable 0644)
-        if os.path.exists(settings_path):
-            current_mode = os.stat(settings_path).st_mode & 0o777
-            if current_mode != 0o600:
-                os.chmod(settings_path, 0o600)
-
+        settings.setdefault("version", _SETTINGS_VERSION)
         return settings
 
     def _quarantine_corrupt_settings(self, settings_path: str) -> None:
@@ -302,29 +289,6 @@ class PersistenceAdapter:
         data["version"] = max(stored, _SETTINGS_VERSION)
         settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
         self._locked_write(settings_path, data)
-
-    # ------------------------------------------------------------------
-    # Save-sync state (legacy read — consumed only by the settings fold)
-    # ------------------------------------------------------------------
-
-    def load_save_sync_state(self) -> dict[str, Any] | None:
-        """Read ``save_sync_state.json`` and return the raw dict.
-
-        Returns ``None`` when the file is missing, corrupt, or not a
-        JSON object. The sole remaining caller is the one-time settings
-        fold in ``bootstrap`` (``fold_legacy_save_sync_settings``), which
-        lifts the legacy save-sync toggles + device label out of this
-        file into ``settings.json``.
-        """
-        state_path = os.path.join(self._data_dir, SAVE_SYNC_STATE_FILENAME)
-        try:
-            with open(state_path) as f:
-                loaded = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return None
-        if not isinstance(loaded, dict):
-            return None
-        return loaded
 
 
 class SettingsPersisterAdapter:

@@ -76,25 +76,6 @@ class TestCopyLiveData:
         assert not (tmp_path / "check").exists()
         assert caplog.records == []
 
-    def test_the_save_sync_state_settings_older_than_their_fourth_version_fold_in_is_copied_too(self, tmp_path, caplog):
-        (tmp_path / "live" / "data").mkdir(parents=True)
-        (tmp_path / "live" / "data" / "save_sync_state.json").write_text('{"device_name": "deck"}\n', encoding="utf-8")
-
-        with caplog.at_level(logging.INFO, logger="test_bootstrap_check"):
-            copy_live_data(
-                data_from=str(tmp_path / "live" / "data"),
-                config_from=str(tmp_path / "live" / "config"),
-                directories=_roots(tmp_path),
-                logger=LOGGER,
-            )
-
-        assert (tmp_path / "check" / "data" / "save_sync_state.json").read_text(encoding="utf-8") == (
-            '{"device_name": "deck"}\n'
-        )
-        assert [record.getMessage() for record in caplog.records] == [
-            f"check: copied the save-sync state from {tmp_path / 'live' / 'data'}"
-        ]
-
 
 class TestWhichDatabaseIsCopied:
     """The one a start would open, under the name it has, so the build renames the copy as a start would."""

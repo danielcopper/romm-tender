@@ -7,9 +7,9 @@ version: a version whose ``main.py`` predated the flag would ignore it and start
 a whole backend beside the running one, where a version without this file is
 simply one the installer cannot check.
 
-The database and the save-sync state under ``--data-from`` and the settings
-under ``--config-from`` are copied into the roots the environment names, and
-the build migrates the copies. Nothing else a start does happens here: no lock,
+The database under ``--data-from`` and the settings under ``--config-from``
+are copied into the roots the environment names, and the build migrates the
+copies. Nothing else a start does happens here: no lock,
 no port, no port file, no ``backend.log``, no start-up repair, no network, no
 Steam.
 

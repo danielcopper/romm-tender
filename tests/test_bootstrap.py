@@ -1,6 +1,7 @@
 """Tests for the bootstrap composition root."""
 
 import asyncio
+import json
 import logging
 import os
 import pathlib
@@ -458,6 +459,61 @@ class TestBootstrapSettingsResetMarker:
         assert "_settings_reset_notice" not in result.stores.settings
 
 
+class TestBootstrapReadsOnlySettingsAtTheOldestVersionOrNewer:
+    """A settings file at version 13 loads as it is; an older one, or one without
+    a usable version, starts on the defaults with a warning and does not crash."""
+
+    def _seed(self, tmp_path, content: Any) -> pathlib.Path:
+        settings_dir = pathlib.Path(_directories_at(tmp_path).config_dir)
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        path = settings_dir / "settings.json"
+        path.write_text(json.dumps(content))
+        return path
+
+    def test_a_file_at_version_13_loads_unchanged(self, tmp_path, caplog):
+        content = {
+            "version": 13,
+            "romm_url": "https://romm.example",
+            "enabled_platforms": {"3": True},
+            "enabled_collections": {"standard": {"1": True}, "smart": {}, "virtual": {"v": True}},
+            "default_slot": "slot-a",
+            "log_level": "debug",
+        }
+        path = self._seed(tmp_path, content)
+
+        with caplog.at_level(logging.WARNING):
+            result = _bootstrap_for(tmp_path)
+
+        assert {key: result.stores.settings[key] for key in content} == content
+        assert {key: json.loads(path.read_text())[key] for key in content} == content
+        assert not [r for r in caplog.records if "settings.json" in r.getMessage()]
+
+    @pytest.mark.parametrize(
+        ("content", "found"),
+        [
+            ({"version": 12, "romm_url": "https://romm.example"}, "version 12"),
+            ({"romm_url": "https://romm.example"}, "no version"),
+            ({"version": "13", "romm_url": "https://romm.example"}, 'version "13"'),
+            ({"version": None, "romm_url": "https://romm.example"}, "version null"),
+            ([], "array"),
+        ],
+        ids=["version-12", "no-version", "version-string", "version-null", "not-an-object"],
+    )
+    def test_a_file_it_does_not_read_starts_on_the_defaults_with_a_warning(self, tmp_path, caplog, content, found):
+        path = self._seed(tmp_path / "old", content)
+        fresh = _bootstrap_for(tmp_path / "fresh").stores.settings
+
+        with caplog.at_level(logging.WARNING):
+            result = _bootstrap_for(tmp_path / "old")
+
+        assert result.stores.settings == fresh
+        assert json.loads(path.read_text()) == fresh
+        warnings = [r for r in caplog.records if "settings.json" in r.getMessage()]
+        assert len(warnings) == 1
+        assert warnings[0].levelno == logging.WARNING
+        assert found in warnings[0].getMessage()
+
+
 class TestBootstrapWarnsWhenCertificateChecksAreOff:
     """A start with ``romm_allow_insecure_ssl`` on says so once, so a log read
     for a later problem shows that the RomM connection was not verified."""
@@ -470,7 +526,7 @@ class TestBootstrapWarnsWhenCertificateChecksAreOff:
 
         settings_dir = pathlib.Path(_directories_at(tmp_path).config_dir)
         settings_dir.mkdir(parents=True, exist_ok=True)
-        (settings_dir / "settings.json").write_text(json.dumps(values))
+        (settings_dir / "settings.json").write_text(json.dumps({"version": 13, **values}))
 
     def test_a_start_with_the_setting_on_logs_one_warning(self, tmp_path, caplog):
         self._seed_settings(tmp_path, romm_allow_insecure_ssl=True)

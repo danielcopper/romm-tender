@@ -17,7 +17,6 @@ from adapters.persistence import (
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
 )
-from domain.state_migrations import migrate_settings
 
 
 @pytest.fixture
@@ -28,10 +27,8 @@ def logger():
 @pytest.fixture
 def adapter(tmp_path, logger):
     settings_dir = str(tmp_path / "settings")
-    runtime_dir = str(tmp_path / "runtime")
     os.makedirs(settings_dir, exist_ok=True)
-    os.makedirs(runtime_dir, exist_ok=True)
-    return PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger)
+    return PersistenceAdapter(settings_dir=settings_dir, logger=logger)
 
 
 # ── Locking tests ──────────────────────────────────────────────────────────────
@@ -166,25 +163,14 @@ class TestLoadingEdgeCases:
         result = adapter.load_settings()
         for key, default_value in DEFAULT_SETTINGS.items():
             assert result[key] == default_value
-        # Fresh install: no file → version backfilled to 0
-        assert result["version"] == 0
+        assert result["version"] == _SETTINGS_VERSION
 
-    def test_load_settings_backfills_version_0(self, adapter):
-        settings_path = os.path.join(adapter._settings_dir, "settings.json")
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://example.com"}, f)
-        os.chmod(settings_path, 0o600)
-        result = adapter.load_settings()
-        assert result["version"] == 0
-        assert result["romm_url"] == "http://example.com"
+    def test_a_missing_file_is_a_first_run_not_a_file_too_old(self, adapter, caplog):
+        with caplog.at_level(logging.DEBUG, logger="test_persistence"):
+            result = adapter.load_settings()
 
-    def test_load_settings_preserves_version(self, adapter):
-        settings_path = os.path.join(adapter._settings_dir, "settings.json")
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://example.com", "version": 1}, f)
-        os.chmod(settings_path, 0o600)
-        result = adapter.load_settings()
-        assert result["version"] == 1
+        assert result["version"] == _SETTINGS_VERSION
+        assert caplog.records == []
 
     def test_load_settings_corrupt_json_returns_defaults(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
@@ -197,21 +183,12 @@ class TestLoadingEdgeCases:
     def test_load_settings_applies_defaults_for_missing_keys(self, adapter):
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
         with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://custom.com"}, f)
+            json.dump({"version": 13, "romm_url": "http://custom.com"}, f)
         os.chmod(settings_path, 0o600)
         result = adapter.load_settings()
         assert result["romm_url"] == "http://custom.com"
         assert result["steam_input_mode"] == "default"
         assert result["romm_allow_insecure_ssl"] is False
-
-    def test_load_settings_fixes_permissions(self, adapter):
-        settings_path = os.path.join(adapter._settings_dir, "settings.json")
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://example.com"}, f)
-        os.chmod(settings_path, 0o644)
-        adapter.load_settings()
-        mode = os.stat(settings_path).st_mode & 0o777
-        assert mode == 0o600
 
     def test_save_settings_sets_permissions(self, adapter):
         adapter.save_settings({"romm_url": "http://example.com"})
@@ -220,41 +197,46 @@ class TestLoadingEdgeCases:
         assert mode == 0o600
 
 
+class TestASettingsFileItDoesNotRead:
+    """A file older than version 13, without a whole-number version, or not a JSON object."""
+
+    @pytest.mark.parametrize(
+        "content",
+        [{"version": 12, "romm_url": "http://example.com"}, {"romm_url": "http://example.com"}, ["http://example.com"]],
+        ids=["version-12", "no-version", "not-an-object"],
+    )
+    def test_it_loads_as_the_defaults_with_one_warning(self, adapter, caplog, content):
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump(content, f)
+
+        with caplog.at_level(logging.WARNING, logger="test_persistence"):
+            result = adapter.load_settings()
+
+        assert result == {**DEFAULT_SETTINGS, "version": _SETTINGS_VERSION}
+        assert [r.levelno for r in caplog.records] == [logging.WARNING]
+        assert "settings.json is not read" in caplog.records[0].getMessage()
+
+    def test_it_is_neither_backed_up_nor_flagged(self, adapter):
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump({"version": 12}, f)
+
+        adapter.load_settings()
+
+        assert os.listdir(adapter._settings_dir) == ["settings.json"]
+        assert adapter.corrupt_reset is None
+
+
 class TestInsecureSslSetting:
     def test_load_settings_defaults_false(self, tmp_path):
         settings_path = os.path.join(str(tmp_path), "settings.json")
         os.makedirs(str(tmp_path), exist_ok=True)
         with open(settings_path, "w") as f:
-            json.dump({"romm_url": "https://romm.local"}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
+            json.dump({"version": 13, "romm_url": "https://romm.local"}, f)
+        persistence = PersistenceAdapter(str(tmp_path), logging.getLogger("test"))
         settings = persistence.load_settings()
         assert settings["romm_allow_insecure_ssl"] is False
-
-
-class TestDebugLoggingMigration:
-    """A settings.json carrying the old ``debug_logging`` flag, loaded and then migrated."""
-
-    def test_migration_debug_logging_true(self, tmp_path):
-        """Old debug_logging=True migrates to log_level='debug'."""
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": True, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in settings
-        assert settings["log_level"] == "debug"
-
-    def test_migration_debug_logging_false(self, tmp_path):
-        """Old debug_logging=False migrates to log_level='warn' (default)."""
-        settings_path = os.path.join(str(tmp_path), "settings.json")
-        os.makedirs(str(tmp_path), exist_ok=True)
-        with open(settings_path, "w") as f:
-            json.dump({"debug_logging": False, "romm_url": ""}, f)
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        settings = migrate_settings(persistence.load_settings())
-        assert "debug_logging" not in settings
-        assert settings["log_level"] == "warn"
 
 
 # ── Crash-safe write: fsync(tmp) before rename, fsync(dir) after ─────────────────
@@ -331,27 +313,17 @@ class TestCrashSafeWrite:
 
 class TestSettingsFilePermissions:
     def test_save_settings_creates_file_with_0600(self, tmp_path, logger):
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+        persistence = PersistenceAdapter(str(tmp_path), logger)
         settings = {"romm_url": "http://example.com"}
         SettingsPersisterAdapter(persistence, settings).save_settings()
         settings_path = tmp_path / "settings.json"
         mode = os.stat(settings_path).st_mode & 0o777
         assert mode == 0o600
 
-    def test_load_settings_fixes_permissions(self, tmp_path):
-        settings_path = tmp_path / "settings.json"
-        with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://example.com"}, f)
-        os.chmod(settings_path, 0o644)
-        assert os.stat(settings_path).st_mode & 0o777 == 0o644
-        persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logging.getLogger("test"))
-        persistence.load_settings()
-        assert os.stat(settings_path).st_mode & 0o777 == 0o600
-
 
 class TestAtomicSettingsWrite:
-    def test_settings_written_atomically(self, tmp_path, logger, data_dir):
-        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+    def test_settings_written_atomically(self, tmp_path, logger):
+        persistence = PersistenceAdapter(str(tmp_path), logger)
 
         settings = {"romm_url": "http://example.com", "romm_user": "user"}
         SettingsPersisterAdapter(persistence, settings).save_settings()
@@ -362,8 +334,8 @@ class TestAtomicSettingsWrite:
         assert data["romm_url"] == "http://example.com"
         assert data["romm_user"] == "user"
 
-    def test_settings_no_tmp_left_after_write(self, tmp_path, logger, data_dir):
-        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+    def test_settings_no_tmp_left_after_write(self, tmp_path, logger):
+        persistence = PersistenceAdapter(str(tmp_path), logger)
 
         settings = {"romm_url": "http://example.com"}
         SettingsPersisterAdapter(persistence, settings).save_settings()
@@ -371,8 +343,8 @@ class TestAtomicSettingsWrite:
         tmp_file = tmp_path / "settings.json.tmp"
         assert not tmp_file.exists()
 
-    def test_settings_crash_preserves_original(self, tmp_path, logger, data_dir):
-        persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
+    def test_settings_crash_preserves_original(self, tmp_path, logger):
+        persistence = PersistenceAdapter(str(tmp_path), logger)
 
         settings = {"romm_url": "http://original.com"}
         persister = SettingsPersisterAdapter(persistence, settings)
@@ -432,10 +404,8 @@ class TestVersionNoDownStamp:
 class TestCorruptQuarantine:
     def _make_adapter(self, tmp_path, logger, clock):
         settings_dir = str(tmp_path / "settings")
-        runtime_dir = str(tmp_path / "runtime")
         os.makedirs(settings_dir, exist_ok=True)
-        os.makedirs(runtime_dir, exist_ok=True)
-        return PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger, clock=clock)
+        return PersistenceAdapter(settings_dir=settings_dir, logger=logger, clock=clock)
 
     def test_corrupt_file_backed_up_with_clock_stamp(self, tmp_path, logger):
         clock = FakeClock(now=datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC))
@@ -513,7 +483,7 @@ class TestCorruptQuarantine:
         adapter = self._make_adapter(tmp_path, logger, FakeClock())
         settings_path = os.path.join(adapter._settings_dir, "settings.json")
         with open(settings_path, "w") as f:
-            json.dump({"romm_url": "http://ok.com"}, f)
+            json.dump({"version": 13, "romm_url": "http://ok.com"}, f)
         os.chmod(settings_path, 0o600)
         result = adapter.load_settings()
         assert result["romm_url"] == "http://ok.com"
@@ -587,10 +557,8 @@ class TestClockInjection:
         """Constructing without an explicit clock must not crash and the corrupt
         backup name carries an integer stamp from the real SystemClock."""
         settings_dir = str(tmp_path / "settings")
-        runtime_dir = str(tmp_path / "runtime")
         os.makedirs(settings_dir, exist_ok=True)
-        os.makedirs(runtime_dir, exist_ok=True)
-        adapter = PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger)
+        adapter = PersistenceAdapter(settings_dir=settings_dir, logger=logger)
         with open(os.path.join(settings_dir, "settings.json"), "w") as f:
             f.write("CORRUPT{{{")
         adapter.load_settings()
@@ -598,36 +566,6 @@ class TestClockInjection:
         assert len(backups) == 1
         stamp = backups[0].rsplit("-", 1)[1]
         assert stamp.isdigit()
-
-
-# ── Save-sync state (legacy read — consumed only by the settings fold) ───────────
-
-
-class TestLoadSaveSyncState:
-    def _write(self, adapter, raw: str) -> None:
-        path = os.path.join(adapter._data_dir, "save_sync_state.json")
-        with open(path, "w") as f:
-            f.write(raw)
-
-    def test_load_round_trip(self, adapter):
-        payload = {
-            "version": 1,
-            "device_id": "dev-1",
-            "saves": {"42": {"files": {"game.srm": {"tracked_save_id": 7}}}},
-        }
-        self._write(adapter, json.dumps(payload))
-        assert adapter.load_save_sync_state() == payload
-
-    def test_load_missing_file_returns_none(self, adapter):
-        assert adapter.load_save_sync_state() is None
-
-    def test_load_corrupt_json_returns_none(self, adapter):
-        self._write(adapter, "CORRUPT{{{")
-        assert adapter.load_save_sync_state() is None
-
-    def test_load_non_dict_json_returns_none(self, adapter):
-        self._write(adapter, json.dumps([1, 2, 3]))
-        assert adapter.load_save_sync_state() is None
 
 
 # ── PlatformCoreReaderAdapter (per-platform core read over live settings) ────────

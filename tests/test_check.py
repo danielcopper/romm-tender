@@ -148,8 +148,6 @@ class TestItBuildsOnCopies:
         assert machine.snapshot() == before
 
     def test_the_copies_are_migrated_where_the_check_was_pointed(self, machine):
-        (machine.live_data / "save_sync_state.json").write_text('{"device_name": "deck"}\n', encoding="utf-8")
-
         result = machine.run()
 
         assert result.returncode == 0, result.stderr
@@ -160,7 +158,6 @@ class TestItBuildsOnCopies:
         finally:
             copy.close()
         assert (machine.check / "config" / "settings.json").is_file()
-        assert (machine.check / "data" / "save_sync_state.json").is_file()
         assert (machine.check / "bin" / "tender-rom-launcher").is_file()
 
     def test_it_takes_no_lock_writes_no_log_and_notes_no_port(self, machine):
