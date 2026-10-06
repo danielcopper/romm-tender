@@ -254,11 +254,12 @@ def _rom(
     app_id: int | None = None,
     fs_name: str | None = None,
     platform: str = "dc",
+    name: str | None = None,
 ) -> Rom:
     rom = Rom.synced(
         rom_id=rom_id,
         platform_slug=platform,
-        name=f"Game {rom_id}",
+        name=name or f"Game {rom_id}",
         fs_name=fs_name or f"Game {rom_id}.gdi",
         shortcut_app_id=app_id,
         synced_at="now",
@@ -1816,8 +1817,8 @@ async def test_shutdown_during_final_removed_progress_preserves_committed_ids(ha
 
 
 @pytest.mark.asyncio
-async def test_completion_results_are_emitted_in_bounded_chunks(harness):
-    rows = [_rom(rom_id, fetch="old") for rom_id in range(1, 27)]
+async def test_a_large_run_s_results_are_split_across_completion_chunks(harness):
+    rows = [_rom(rom_id, fetch="old", name=f"Game {rom_id} " + "x" * 3000) for rom_id in range(1, 27)]
     _seed(harness.uow, *rows, stamp_count=26)
     for row in rows:
         harness.romm.outcomes[row.rom_id] = [RommNotFoundError("gone")] * 3
@@ -1826,6 +1827,7 @@ async def test_completion_results_are_emitted_in_bounded_chunks(harness):
     await _finish(harness)
 
     completions = [payload for name, payload in harness.events.events if name == "prune_complete"]
+    assert len(completions) > 1
     assert sum(len(payload["results"]) for payload in completions) == 26
     assert completions[-1]["final"] is True
     assert all(
