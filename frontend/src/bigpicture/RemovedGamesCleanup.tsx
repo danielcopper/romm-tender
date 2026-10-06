@@ -754,6 +754,13 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
     }
   };
 
+  const refuseLocally = (reason: { text: string; aboutList: boolean }): void => {
+    const refusal = `Cleanup did not start: ${reason.text}`;
+    listRefusal.current = reason.aboutList ? refusal : null;
+    setStatus(refusal);
+    logWarn(`[prune] Confirm refused locally: ${reason.text}`);
+  };
+
   const start = async (): Promise<void> => {
     // Confirm is the destructive commit point, so every press is logged and
     // every outcome is visible in the dialog. A press that returns silently is
@@ -765,10 +772,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
       return;
     }
     if (blockedReason !== null) {
-      const refusal = `Cleanup did not start: ${blockedReason.text}`;
-      listRefusal.current = blockedReason.aboutList ? refusal : null;
-      setStatus(refusal);
-      logWarn(`[prune] Confirm refused locally: ${blockedReason.text}`);
+      refuseLocally(blockedReason);
       return;
     }
     setStarting(true);
