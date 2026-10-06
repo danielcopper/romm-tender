@@ -12,7 +12,9 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import RommApiError, RommNotFoundError
+from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, RommServerError
+from services.saves._refusals import SaveShapeUnsupported
+from services.saves.sync_engine.rollback import StaleConflict
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -154,7 +156,7 @@ class TestResolveSyncConflict:
         """#1478: keep_local with no registered device surfaces the device-not-registered slug.
 
         keep_local would POST the local content, but the do_upload_save
-        device-registration guard refuses it — the failure dict carries the
+        device-registration guard refuses it — the refusal carries the
         ``device_not_registered`` reason + message, not the generic UNKNOWN, and
         ``upload_save`` is never called.
         """
@@ -174,18 +176,17 @@ class TestResolveSyncConflict:
         fake.saves[100] = ss
         fake.uploaded_files[100] = str(other)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result == {
-            "success": False,
-            "reason": "device_not_registered",
-            "message": "Device not registered",
-        }
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("device_not_registered", "Device not registered")
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -306,34 +307,36 @@ class TestResolveSyncConflict:
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="foo",
         )
 
-        assert result["success"] is False
-        assert "invalid" in result["message"].lower()
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("invalid_action", "Invalid action: foo")
 
     @pytest.mark.asyncio
     async def test_resolve_rom_not_installed(self, tmp_path):
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=999,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert result["message"]
+        with pytest.raises(NotInstalled, match="ROM not installed"):
+            await resolving
 
     @pytest.mark.asyncio
     async def test_resolve_server_fetch_failure(self, tmp_path):
-        """When list_saves raises, return failure without mutating state."""
+        """A RomM error from list_saves propagates, and nothing is mutated."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
@@ -345,29 +348,25 @@ class TestResolveSyncConflict:
         )
         _seed_save_state(svc, 42, original_state)
 
-        fake.fail_on_next(RommApiError("network"))
-
-        result = await svc.resolve_sync_conflict(
+        failure = RommApiError("network")
+        fake.fail_on_next(failure)
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "Failed to fetch saves" in result["message"]
+        with pytest.raises(RommApiError) as caught:
+            await resolving
+
+        assert caught.value is failure
         # State left as-is — no mutation
         assert _get_save_state(svc, 42) == original_state
 
     @pytest.mark.asyncio
     async def test_resolve_list_saves_404_is_not_found(self, tmp_path):
-        """The classified verdict is USED, not discarded (#1570).
-
-        This site already called classify_error and then threw its verdict
-        away, keeping only the message — so every failure, 404 included,
-        reported the server as unreachable.
-        """
+        """A 404 from list_saves propagates as itself, never as unreachable."""
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
@@ -379,41 +378,37 @@ class TestResolveSyncConflict:
         _seed_save_state(svc, 42, original_state)
 
         fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
-
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
+        with pytest.raises(RommNotFoundError):
+            await resolving
+
         # State left as-is — no mutation
         assert _get_save_state(svc, 42) == original_state
 
     @pytest.mark.asyncio
     async def test_resolve_no_server_saves_in_slot(self, tmp_path):
-        """Empty slot post-fetch returns success=False with a clear message.
-
-        Implementation note: ``resolve_sync_conflict`` reaches the slot-empty
-        branch via ``filter_saves_to_slot`` and returns
-        ``{"success": False, "message": "No server save in active slot"}``.
-        """
+        """An empty slot after the fetch refuses with ``no_server_save``."""
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert "no server save" in result["message"].lower()
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("no_server_save", "No server save in active slot")
 
     @pytest.mark.asyncio
     async def test_resolve_filename_symmetry_keep_local_uses_canonical_target(self, tmp_path):
@@ -513,9 +508,9 @@ class TestResolveSyncConflict:
         Defensive companion to the symmetry fix: we never silently rename
         across extensions to satisfy a frontend label. A file named
         ``pokemon.sav`` on disk while the server save's canonical target is
-        ``pokemon.srm`` must surface as ``FileNotFoundError`` so the user
-        can rectify the mismatch instead of having two divergent files
-        appear from a successful-looking resolve.
+        ``pokemon.srm`` must surface — a ``FileNotFoundError``, refused as
+        ``resolve_failed`` — so the user can rectify the mismatch instead of
+        having two divergent files appear from a successful-looking resolve.
         """
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
@@ -531,17 +526,80 @@ class TestResolveSyncConflict:
         ss["file_extension"] = "srm"
         fake.saves[100] = ss
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.sav",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert "not found" in result["message"].lower()
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert caught.value.reason == "resolve_failed"
+        assert "not found" in caught.value.message.lower()
         # No upload was attempted.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
+
+
+class TestResolveSyncConflictTransferFailures:
+    """What the transfer raises: a RomM error and any other fault propagate, a local ``OSError`` refuses."""
+
+    def _seed_use_server(self, svc, fake, tmp_path):
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path, content=b"local-stale")
+        fake.saves[100] = _server_save_with_syncs(device_syncs=[{"device_id": "device-1", "is_current": False}])
+        return save_path
+
+    @pytest.mark.asyncio
+    async def test_a_romm_error_from_the_download_propagates(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        save_path = self._seed_use_server(svc, fake, tmp_path)
+        failure = RommServerError("bad gateway", status_code=502)
+
+        def failing_download(*_args, **_kwargs):
+            raise failure
+
+        monkeypatch.setattr(fake, "download_save_content", failing_download)
+        resolving = svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server")
+
+        with pytest.raises(RommServerError) as caught:
+            await resolving
+
+        assert caught.value is failure
+        assert save_path.read_bytes() == b"local-stale"
+
+    @pytest.mark.asyncio
+    async def test_an_os_error_from_the_local_side_refuses_with_resolve_failed(self, tmp_path, monkeypatch, caplog):
+        svc, fake = make_service(tmp_path)
+        self._seed_use_server(svc, fake, tmp_path)
+
+        def failing_download(*_args, **_kwargs):
+            raise PermissionError("save directory is read-only")
+
+        monkeypatch.setattr(fake, "download_save_content", failing_download)
+        resolving = svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server")
+
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("resolve_failed", "save directory is read-only")
+        assert "save directory is read-only" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_any_other_fault_is_not_a_refusal(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        self._seed_use_server(svc, fake, tmp_path)
+
+        def failing_download(*_args, **_kwargs):
+            raise RuntimeError("a bug")
+
+        monkeypatch.setattr(fake, "download_save_content", failing_download)
+        resolving = svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server")
+
+        with pytest.raises(RuntimeError, match="a bug"):
+            await resolving
 
 
 class TestResolveSyncConflictStaleConflict:
@@ -572,16 +630,17 @@ class TestResolveSyncConflictStaleConflict:
         # Snapshot state so the no-mutation assertion is exact.
         state_before = _get_save_state(svc, 42)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "stale_conflict"
-        assert result["message"]
+        with pytest.raises(StaleConflict) as caught:
+            await resolving
+
+        assert caught.value.message == "Server save changed since conflict was shown; please retry sync."
         # No PUT/POST fired against the head save — the whole point of the guard.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
         # State unchanged.
@@ -612,15 +671,16 @@ class TestResolveSyncConflictStaleConflict:
         # Snapshot state so the no-mutation assertion is exact.
         state_before = _get_save_state(svc, 42)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action="use_server",
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "stale_conflict"
+        with pytest.raises(StaleConflict):
+            await resolving
+
         # Local file untouched — no silent download of the wrong server save.
         assert save_path.read_bytes() == b"local-stale"
         # State unchanged.
@@ -725,15 +785,16 @@ class TestResolveSyncConflictContentDirGate:
             device_syncs=[{"device_id": "device-1", "is_current": False}],
         )
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon.srm",
             server_save_id=100,
             action=action,
         )
 
-        assert result["success"] is False
-        assert result["reason"] == "save_shape_unsupported"
+        with pytest.raises(SaveShapeUnsupported):
+            await resolving
+
         assert not any(c[0] in ("list_saves", "download_save_content", "upload_save") for c in fake.call_log), (
             fake.call_log
         )

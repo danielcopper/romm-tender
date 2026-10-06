@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 
 from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent, build_save_answer
+from services.saves._refusals import SaveShapeUnsupported
 
 if TYPE_CHECKING:
     from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -570,11 +571,6 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
                 lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
                 id="confirm-migrate",
             ),
-            pytest.param(
-                lambda svc: svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server"),
-                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
-                id="resolve-conflict",
-            ),
         ],
     )
     async def test_nothing_lands_in_the_roms_folder(self, tmp_path, call, refused):
@@ -588,4 +584,18 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
         result = await call(svc)
 
         assert refused(result), result
+        assert self._rom_folder_saves(tmp_path) == []
+
+    @pytest.mark.asyncio
+    async def test_a_conflict_resolution_writes_nothing_into_the_roms_folder(self, tmp_path):
+        svc, _store, fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, caveats=("save-inside-content",)))
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+        fake.saves[100] = _server_save(save_id=100, slot="default")
+        fake.set_server_save_content(100, b"server progress")
+        resolving = svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server")
+
+        with pytest.raises(SaveShapeUnsupported) as caught:
+            await resolving
+
+        assert "inside the game file" in caught.value.message
         assert self._rom_folder_saves(tmp_path) == []

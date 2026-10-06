@@ -28,6 +28,7 @@ from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import Refused, RommConnectionError, RommNotFoundError
 from services.saves import SaveService
 from services.saves._settings import resolve_default_slot, sanitize_setting
+from services.saves.service import SaveDeletionIncomplete
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -794,6 +795,7 @@ class TestDeleteSaves:
         )
 
         result = await svc.delete_local_saves(42)
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -826,6 +828,7 @@ class TestDeleteSaves:
         )
 
         result = await svc.delete_local_saves(42)
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -852,6 +855,7 @@ class TestDeleteSaves:
         assert _get_save_state(svc, 42) is None
 
         result = await svc.delete_local_saves(42)
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -866,6 +870,7 @@ class TestDeleteSaves:
         _install_rom(svc, tmp_path)
 
         result = await svc.delete_local_saves(42)
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 0
 
@@ -1041,7 +1046,9 @@ class TestPlatformSaves:
 
         assert (await svc.count_platform_saves("gba"))["count"] == 2
 
-        assert (await svc.delete_platform_saves("gba"))["deleted_count"] == 2
+        result = await svc.delete_platform_saves("gba")
+        assert isinstance(result, dict)
+        assert result["deleted_count"] == 2
         # Counting again after the delete answers zero — it looked, it did not
         # remember.
         assert (await svc.count_platform_saves("gba"))["count"] == 0
@@ -1084,6 +1091,7 @@ class TestPlatformSaves:
         _create_save(tmp_path, system="gba", rom_name="game2")
 
         result = await svc.delete_platform_saves("gba")
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 2
 
@@ -1120,6 +1128,7 @@ class TestPlatformSaves:
         )
 
         result = await svc.delete_platform_saves("gba")
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 2
 
@@ -1556,16 +1565,17 @@ class TestPathTraversalDefense:
         # Snapshot files outside saves_dir to assert nothing got written there.
         outside = tmp_path / "outside.txt"
 
-        with caplog.at_level(logging.WARNING):
-            result = await svc.resolve_sync_conflict(
-                rom_id=42,
-                filename="../../etc/passwd",
-                server_save_id=100,
-                action="keep_local",
-            )
+        resolving = svc.resolve_sync_conflict(
+            rom_id=42,
+            filename="../../etc/passwd",
+            server_save_id=100,
+            action="keep_local",
+        )
 
-        assert result["success"] is False
-        assert "invalid" in result["message"].lower()
+        with caplog.at_level(logging.WARNING), pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("invalid_filename", "Invalid filename")
         # No I/O against the server (no list_saves, no upload_save).
         assert not any(c[0] == "list_saves" for c in fake.call_log)
         assert not any(c[0] == "upload_save" for c in fake.call_log)
@@ -1577,20 +1587,22 @@ class TestPathTraversalDefense:
 
     @pytest.mark.asyncio
     async def test_resolve_sync_conflict_rejects_null_byte_filename(self, tmp_path):
-        """NUL byte in filename is rejected with the same shape."""
+        """NUL byte in filename is refused the same way."""
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
 
-        result = await svc.resolve_sync_conflict(
+        resolving = svc.resolve_sync_conflict(
             rom_id=42,
             filename="pokemon\x00.srm",
             server_save_id=100,
             action="keep_local",
         )
 
-        assert result["success"] is False
-        assert "invalid" in result["message"].lower()
+        with pytest.raises(Refused) as caught:
+            await resolving
+
+        assert (caught.value.reason, caught.value.message) == ("invalid_filename", "Invalid filename")
 
 
 class TestPerRomLockSerialization:
@@ -1691,7 +1703,7 @@ class TestBadPathDeleteSavesPartialFailure:
 
     @pytest.mark.asyncio
     async def test_delete_local_saves_partial_failure_returns_error_response(self, tmp_path):
-        """One ``remove`` failure flips success=False but counts the rest."""
+        """One ``remove`` failure answers ``delete_incomplete`` but counts the rest."""
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
 
@@ -1706,17 +1718,17 @@ class TestBadPathDeleteSavesPartialFailure:
 
         result = await svc.delete_local_saves(42)
 
-        assert result["success"] is False
         # The successful remove still counts.
-        assert result["deleted_count"] == 1
-        assert "1 error(s)" in result["message"]
+        assert result == SaveDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s), 1 error(s)", deleted_count=1
+        )
         # The failing path remains; the successful one is gone.
         assert bad_path in fake.files
         assert good_path not in fake.files
 
     @pytest.mark.asyncio
     async def test_delete_platform_saves_partial_failure_returns_error_response(self, tmp_path):
-        """One ``remove`` failure across the platform flips success=False."""
+        """One ``remove`` failure across the platform answers ``delete_incomplete``."""
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
@@ -1732,9 +1744,9 @@ class TestBadPathDeleteSavesPartialFailure:
 
         result = await svc.delete_platform_saves("gba")
 
-        assert result["success"] is False
-        assert result["deleted_count"] == 1
-        assert "1 error(s)" in result["message"]
+        assert result == SaveDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s) from 2 ROM(s), 1 error(s)", deleted_count=1
+        )
         # The failing file remains in place; the successful one is gone.
         assert bad_path in fake.files
         assert good_path not in fake.files

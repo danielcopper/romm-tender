@@ -1068,7 +1068,11 @@ endpoint calls. The façade delegates to `SyncEngine.resolve_sync_conflict`, who
    - `use_server` → `_resolve_conflict_use_server` downloads the picked save and writes it to the local path.
 
 The modal only accepts `keep_local` or `use_server`; `cancel` never reaches the backend. A wrong action string is
-rejected before the lock is acquired.
+refused before the server is asked anything.
+
+A RomM error from fetching the list or from the transfer answers `classify_error`'s reason and message. An `OSError` on
+the local side — a local save missing at the canonical path among them — refuses with `resolve_failed`, and anything
+else is a transport error.
 
 ### Why no defer state
 

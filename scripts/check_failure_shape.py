@@ -117,6 +117,8 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/relaunch_options_resolver.py",
     "backend/services/rom_removal.py",
     "backend/services/saves/prune_support.py",
+    "backend/services/saves/service.py",
+    "backend/services/saves/sync_engine/rollback.py",
     "backend/services/session_lifecycle.py",
     "backend/services/settings.py",
     "backend/services/shortcut_removal.py",

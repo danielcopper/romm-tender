@@ -19,6 +19,7 @@ import pytest
 from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
+from lib.errors import Refused
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -31,9 +32,19 @@ from tests.services.saves._helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 _ROM = 42
+
+
+async def _refusal_or_answer(call: Awaitable[Any]) -> Any:
+    """*call*'s answer, or the refusal it raised: for a test about what happens before the answer."""
+    try:
+        return await call
+    except Refused as refusal:
+        return refusal
 
 
 def _answer(
@@ -459,7 +470,7 @@ class TestTheSecondaryWritePathsFollowFirst:
             lambda svc: svc.rollback_to_version(_ROM, "default", 1),
             lambda svc: svc.copy_save_to_slot(_ROM, 1, "other"),
             lambda svc: svc.confirm_slot_choice(_ROM, "default", True, None),
-            lambda svc: svc.resolve_sync_conflict(_ROM, "pokemon.srm", 1, "keep_local"),
+            lambda svc: _refusal_or_answer(svc.resolve_sync_conflict(_ROM, "pokemon.srm", 1, "keep_local")),
         ],
         ids=["rollback", "copy", "confirm-migrate", "resolve-conflict"],
     )
@@ -498,6 +509,7 @@ class TestTheSecondaryWritePathsFollowFirst:
         result = await svc.delete_local_saves(_ROM)
         await svc.sync_rom_saves(_ROM)
 
+        assert isinstance(result, dict)
         assert result["deleted_count"] == 1
         assert not save.exists()
         assert not (new / "pokemon.srm").exists()
@@ -514,6 +526,7 @@ class TestTheSecondaryWritePathsFollowFirst:
 
         result = await svc.delete_platform_saves("gba")
 
+        assert isinstance(result, dict)
         assert result["deleted_count"] == 1
         assert not save.exists()
         assert not (new / "pokemon.srm").exists()
