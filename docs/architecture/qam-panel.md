@@ -717,7 +717,7 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 | Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                                                                   | Settings › Connections, where the accounts are                                                                                    |
 | An emulator source reports a health finding                    | a warning card per finding, worded per code, no action                                                | none — the fix is outside Tender; Settings › Emulator sources states the same sentence on the source's card                       |
 | No emulator source is detected                                 | warning card, no action                                                                               | none — the fix is outside Tender; Settings › Emulator sources says the same                                                       |
-| The answering source is one Tender cannot start games through  | warning card, no action                                                                               | none — Settings › Emulator sources states it on the source's card                                                                 |
+| A switched-on source is one Tender cannot start games through  | warning card per such source, no action                                                               | none — Settings › Emulator sources states it on the source's card                                                                 |
 | Steam answers for no notifications                             | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
 | RetroArch `input_driver` is wrong                              | text, **Open Controller**                                                                             | Settings › Controller, which holds the Fix button                                                                                 |
 | Sync paused on the session budget                              | text, **Open Sync**                                                                                   | Sync, which holds Restart Steam now and Resume                                                                                    |
@@ -734,7 +734,11 @@ source's card under Settings › Emulator sources, as is every finding of a swit
 yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
 answering source gives no emulator list, the platform page and the emulator menu say why from the answer's `reason` — no
 source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
-EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator".
+EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **Tender cannot start games
+through _source_ yet.** stands on Main once for every switched-on source Tender cannot start games through, whether or
+not it is the one that answers; a switched-off one states it only on its card. Where such a source answers, the platform
+page and the emulator menu keep saying why there is no emulator list — today no such source gives one — and the sentence
+joins them once such a source can give one.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -908,9 +912,9 @@ the absence is ordinary.
 
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
 everything else; the status block — the emulator source cards (a card per finding of every switched-on source, then the
-one for no source found or for a source Tender cannot start games through) and, where Steam answers for no
-notifications, the warning that says so, then Connection, Last sync, Library, then the conditional slot and, while a run
-is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and
+one for no source found, or one per switched-on source Tender cannot start games through) and, where Steam answers for
+no notifications, the warning that says so, then Connection, Last sync, Library, then the conditional slot and, while a
+run is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and
 under all of those the five notices that carry a button (the RetroArch input driver, a run paused on the session budget,
 the version this start runs on, an update that was rolled back, a newer release); the download summary (up to two rows,
 an overflow count, a completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three
