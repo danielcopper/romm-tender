@@ -284,7 +284,9 @@ keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own 
 while the source is switched on, an empty grey ring and a grey name while it is off. Each card holds:
 
 - the source's name, with two arrows at the end of its line that move it up or down the order, which is the order the
-  sources are used in; the first card's up arrow and the last card's down arrow do nothing;
+  sources are used in; the first card's up arrow and the last card's down arrow do nothing. The card slides into its new
+  place and the arrow you pressed keeps the focus — the other arrow takes it once the source reaches the top or the
+  bottom — so press again to move the source further;
 - the folder it lives in — left out while the source's own settings file is missing or broken, because the folder Tender
   would show is then only a default;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems

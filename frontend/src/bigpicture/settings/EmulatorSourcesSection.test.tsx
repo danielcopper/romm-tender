@@ -1,10 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { describe, it, expect, vi } from "vitest";
-import { render, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { act, render, fireEvent, within } from "@testing-library/react";
 import type { IconBaseProps, IconType } from "react-icons";
 import { FaCheckCircle, FaChevronDown, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import { EmulatorSourcesSection } from "./EmulatorSourcesSection";
 import { SOURCES_READING, SOURCES_UNREAD } from "../../utils/emulatorSourceWording";
+import { ENTRY_FOCUS_DELAY_MS, FOCUS_STOPS } from "../../utils/entryFocus";
 import { AMBER, GREEN, MUTED, SELECTION_ACCENT } from "../layout/pane";
 import type { EmulatorSource, EmulatorSourcesListing } from "../../types";
 
@@ -24,13 +25,51 @@ const EMUDECK: EmulatorSource = {
   findings: [],
   catalogue: "sealed",
 };
+const RETROARCH: EmulatorSource = {
+  kind: "bare_retroarch_flatpak",
+  enabled: true,
+  starts_games: false,
+  root: "/home/deck/.var/app/org.libretro.RetroArch",
+  findings: [],
+  catalogue: "unavailable",
+};
 const BOTH: EmulatorSourcesListing = { sources: [RETRODECK, EMUDECK], answering: "retrodeck" };
+
+function listed(...sources: EmulatorSource[]): EmulatorSourcesListing {
+  return { sources, answering: "retrodeck" };
+}
 
 function renderSection(listing: EmulatorSourcesListing | null | undefined, busy = false) {
   const onSwitch = vi.fn();
   const onMove = vi.fn();
   const view = render(<EmulatorSourcesSection listing={listing} busy={busy} onSwitch={onSwitch} onMove={onMove} />);
-  return { ...view, onSwitch, onMove };
+  /** Render the section again with what the parent now holds. */
+  const answer = (next: EmulatorSourcesListing | null | undefined, nextBusy = false) =>
+    view.rerender(<EmulatorSourcesSection listing={next} busy={nextBusy} onSwitch={onSwitch} onMove={onMove} />);
+  return { ...view, onSwitch, onMove, answer };
+}
+
+/**
+ * Lay the cards out one under the other, 100 apart from `shift` down, by their
+ * place in the document — happy-dom lays nothing out, so a card's offset is
+ * mocked and what is pinned is the decision to slide, not the slide.
+ */
+function layCardsOut(): { shift: (by: number) => void } {
+  let shift = 0;
+  vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+    const cards = [...this.ownerDocument.querySelectorAll('[data-testid^="source-card-"]')];
+    const at = cards.indexOf(this);
+    return at === -1 ? 0 : shift + at * 100;
+  });
+  return {
+    shift: (by) => {
+      shift = by;
+    },
+  };
+}
+
+function transformOf(getByTestId: (id: string) => HTMLElement, kind: string): string {
+  return getByTestId(`source-card-${kind}`).style.transform;
 }
 
 /**
@@ -252,11 +291,175 @@ describe("EmulatorSourcesSection", () => {
     expect(chevron("down")).toBe(glyph(FaChevronDown, { size: 12 }));
   });
 
-  it("makes every source's information row a focus stop", () => {
-    const { getAllByTestId } = renderSection(BOTH);
-    const rows = getAllByTestId("field");
-    expect(rows).toHaveLength(2);
-    expect(rows.every((row) => row.getAttribute("tabindex") === "0")).toBe(true);
+  it("leaves the folder and health lines out of the focus stops, between the arrows and the switch", () => {
+    const { getByTestId } = renderSection(BOTH);
+    const card = getByTestId("source-card-emudeck");
+    const lines = getByTestId("source-lines-emudeck");
+    const stops = [...card.querySelectorAll<HTMLElement>(FOCUS_STOPS)];
+
+    expect(stops.map((stop) => stop.getAttribute("aria-label") ?? stop.dataset.testid)).toEqual([
+      "Move EmuDeck up",
+      "Move EmuDeck down",
+      "toggle-input",
+    ]);
+    expect(stops.filter((stop) => stop.contains(lines) || lines.contains(stop))).toEqual([]);
+    expect(stops[1]!.compareDocumentPosition(lines)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(lines.compareDocumentPosition(stops[2]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  /** Sliding a card to its new place (D34). The slide itself is the device's to show. */
+  describe("when the order changes", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("draws each card whose place changed back at its old place, and leaves the others as they are", () => {
+      layCardsOut();
+      const { getByTestId, answer } = renderSection(listed(RETRODECK, EMUDECK, RETROARCH));
+
+      answer(listed(EMUDECK, RETRODECK, RETROARCH));
+
+      expect(transformOf(getByTestId, "retrodeck")).toBe("translateY(-100px)");
+      expect(transformOf(getByTestId, "emudeck")).toBe("translateY(100px)");
+      expect(transformOf(getByTestId, RETROARCH.kind)).toBe("");
+    });
+
+    it("lets a moved card go to its new place on the next frame, eased", async () => {
+      layCardsOut();
+      const { getByTestId, answer } = renderSection(BOTH);
+
+      answer(listed(EMUDECK, RETRODECK));
+
+      const card = getByTestId("source-card-emudeck");
+      await vi.waitFor(() => {
+        expect(card.style.transform).toBe("");
+        expect(card.style.transition).toBe("transform 200ms ease-out");
+      });
+    });
+
+    it("draws nothing back on the first render", () => {
+      layCardsOut();
+      const { getByTestId } = renderSection(listed(EMUDECK, RETRODECK));
+
+      expect(transformOf(getByTestId, "emudeck")).toBe("");
+      expect(transformOf(getByTestId, "retrodeck")).toBe("");
+    });
+
+    it("draws nothing back where a card only shifted and the order stayed", () => {
+      const layout = layCardsOut();
+      const { getByTestId, answer } = renderSection(BOTH);
+
+      layout.shift(40);
+      answer(listed(RETRODECK, EMUDECK), true);
+
+      expect(transformOf(getByTestId, "retrodeck")).toBe("");
+      expect(transformOf(getByTestId, "emudeck")).toBe("");
+    });
+
+    it("draws nothing back for a source that joins the list", () => {
+      layCardsOut();
+      const { getByTestId, answer } = renderSection(BOTH);
+
+      answer(listed(RETRODECK, EMUDECK, RETROARCH));
+
+      expect(transformOf(getByTestId, RETROARCH.kind)).toBe("");
+    });
+
+    it("draws nothing back when the list comes back after a notice", () => {
+      layCardsOut();
+      const { getByTestId, answer } = renderSection(BOTH);
+
+      answer(undefined);
+      answer(listed(EMUDECK, RETRODECK));
+
+      expect(transformOf(getByTestId, "emudeck")).toBe("");
+      expect(transformOf(getByTestId, "retrodeck")).toBe("");
+    });
+  });
+
+  /** Focus after a move (D34). That Steam's own pointer follows is the device's to show. */
+  describe("after a move", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Let the placement's delay run out. */
+    function settle(): void {
+      act(() => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+    }
+
+    it("hands focus to the moved source's other arrow where the move took it to the end", () => {
+      vi.useFakeTimers();
+      const { container, answer } = renderSection(BOTH);
+
+      fireEvent.click(arrow(container, "EmuDeck", "up"));
+      answer(BOTH, true);
+      answer(listed(EMUDECK, RETRODECK));
+      settle();
+
+      expect(arrow(container, "EmuDeck", "down")).toHaveFocus();
+    });
+
+    it("keeps focus on the pressed arrow where the source can move on", () => {
+      vi.useFakeTimers();
+      const { container, answer } = renderSection(listed(RETRODECK, EMUDECK, RETROARCH));
+
+      fireEvent.click(arrow(container, "RetroArch (Flatpak)", "up"));
+      answer(listed(RETRODECK, RETROARCH, EMUDECK));
+      settle();
+
+      expect(arrow(container, "RetroArch (Flatpak)", "up")).toHaveFocus();
+    });
+
+    it("places nothing until the listing the press asked for has arrived and the change is over", () => {
+      vi.useFakeTimers();
+      const { container, answer } = renderSection(BOTH);
+      const moved = listed(EMUDECK, RETRODECK);
+
+      fireEvent.click(arrow(container, "RetroDECK", "down"));
+      answer(BOTH, true);
+      settle();
+      expect(document.body).toHaveFocus();
+      answer(BOTH);
+      settle();
+      expect(document.body).toHaveFocus();
+      answer(moved, true);
+      settle();
+      expect(document.body).toHaveFocus();
+      answer(moved);
+      settle();
+
+      expect(arrow(container, "RetroDECK", "up")).toHaveFocus();
+    });
+
+    it("leaves focus where the reader took it outside the cards in the meantime", () => {
+      vi.useFakeTimers();
+      const { container, answer } = renderSection(BOTH);
+      const elsewhere = document.createElement("button");
+      document.body.append(elsewhere);
+
+      fireEvent.click(arrow(container, "EmuDeck", "up"));
+      answer(BOTH, true);
+      elsewhere.focus();
+      answer(listed(EMUDECK, RETRODECK));
+      settle();
+
+      expect(elsewhere).toHaveFocus();
+      elsewhere.remove();
+    });
+
+    it("places nothing for a source the answer no longer lists", () => {
+      vi.useFakeTimers();
+      const { container, answer } = renderSection(BOTH);
+
+      fireEvent.click(arrow(container, "EmuDeck", "up"));
+      answer(listed(RETRODECK));
+      settle();
+
+      expect(document.body).toHaveFocus();
+    });
   });
 
   const NOTHING: EmulatorSourcesListing = { sources: [], answering: null };

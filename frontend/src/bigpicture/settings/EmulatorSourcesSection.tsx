@@ -6,7 +6,7 @@
  * the listing and the writes.
  */
 
-import { FC, ReactElement } from "react";
+import { FC, ReactElement, RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import { PanelSection, PanelSectionRow, DialogButton, Field, Focusable, ToggleField } from "@decky/ui";
 import { FaCheckCircle, FaChevronDown, FaExclamationTriangle, FaInfoCircle } from "react-icons/fa";
 import type { EmulatorSource, EmulatorSourceDirection, EmulatorSourcesListing } from "../../types";
@@ -18,6 +18,7 @@ import {
   sourceRowLines,
   type SourceRowTone,
 } from "../../utils/emulatorSourceWording";
+import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
 import { AMBER, GREEN, MUTED, SECONDARY_FONT, SELECTION_ACCENT, TABLE_LINE } from "../layout/pane";
 
 interface EmulatorSourcesSectionProps {
@@ -79,29 +80,35 @@ interface SourceCardProps {
   index: number;
   last: number;
   busy: boolean;
+  cardRef: (card: HTMLDivElement | null) => void;
   onSwitch: EmulatorSourcesSectionProps["onSwitch"];
   onMove: EmulatorSourcesSectionProps["onMove"];
 }
 
-const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, onSwitch, onMove }) => {
+const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, cardRef, onSwitch, onMove }) => {
   const name = sourceName(source.kind);
   const arrow = (direction: EmulatorSourceDirection, atEnd: boolean): ReactElement => (
-    <DialogButton
-      aria-label={`Move ${name} ${direction}`}
-      title={`Move ${name} ${direction}`}
-      style={ARROW_BUTTON}
-      disabled={busy || atEnd}
-      // Dead at either end, in the handler too: a disabled control still
-      // reports a press on the device.
-      onClick={() => {
-        if (!busy && !atEnd) onMove(source.kind, direction);
-      }}
-    >
-      <FaChevronDown size={12} style={direction === "up" ? TURNED_OVER : undefined} />
-    </DialogButton>
+    // In a wrapper of its own, so focus can be handed back to it after a move
+    // (`arrowOf`); `display: contents` keeps the wrapper out of the line.
+    <span data-move={direction} style={{ display: "contents" }}>
+      <DialogButton
+        aria-label={`Move ${name} ${direction}`}
+        title={`Move ${name} ${direction}`}
+        style={ARROW_BUTTON}
+        disabled={busy || atEnd}
+        // Dead at either end, in the handler too: a disabled control still
+        // reports a press on the device.
+        onClick={() => {
+          if (!busy && !atEnd) onMove(source.kind, direction);
+        }}
+      >
+        <FaChevronDown size={12} style={direction === "up" ? TURNED_OVER : undefined} />
+      </DialogButton>
+    </span>
   );
   return (
     <div
+      ref={cardRef}
       data-testid={`source-card-${source.kind}`}
       style={{ background: "rgba(255, 255, 255, 0.04)", borderRadius: "4px", padding: "8px 12px", marginBottom: "8px" }}
     >
@@ -120,47 +127,40 @@ const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, onSwitch, 
               {arrow("down", index === last)}
             </Focusable>
           </div>
-          {/* Read-only, and focusable for the reason every such row on a wide
-              pane is: the region scrolls by moving focus. The root line is
-              left out where the root is a default (the settings file is
-              missing or broken), which the lines below it say. */}
-          <Field
-            description={
-              <span data-testid={`source-lines-${source.kind}`}>
-                {source.root !== null && (
-                  <div
-                    data-testid={`source-root-${source.kind}`}
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: SECONDARY_FONT,
-                      color: MUTED,
-                      overflowWrap: "anywhere",
-                    }}
+          {/* No focus stop of its own: the arrows above it and the switch
+              below it are stops of the same card, and the region brings it
+              into view on the way between them. The root line is left out
+              where the root is a default (the settings file is missing or
+              broken), which the lines below it say. */}
+          <div data-testid={`source-lines-${source.kind}`} style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>
+            {source.root !== null && (
+              <div
+                data-testid={`source-root-${source.kind}`}
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: SECONDARY_FONT,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {source.root}
+              </div>
+            )}
+            {sourceRowLines(source).map(({ tone, text }) => {
+              const { Icon, color } = TONE_ICONS[tone];
+              return (
+                <div key={text} style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                  <span
+                    data-testid="source-line-icon"
+                    data-tone={tone}
+                    style={{ flex: "0 0 auto", color, position: "relative", top: "1px" }}
                   >
-                    {source.root}
-                  </div>
-                )}
-                {sourceRowLines(source).map(({ tone, text }) => {
-                  const { Icon, color } = TONE_ICONS[tone];
-                  return (
-                    <div key={text} style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                      <span
-                        data-testid="source-line-icon"
-                        data-tone={tone}
-                        style={{ flex: "0 0 auto", color, position: "relative", top: "1px" }}
-                      >
-                        <Icon size={11} aria-hidden={true} />
-                      </span>
-                      <span>{text}</span>
-                    </div>
-                  );
-                })}
-              </span>
-            }
-            padding="compact"
-            bottomSeparator="none"
-            focusable={true}
-          />
+                    <Icon size={11} aria-hidden={true} />
+                  </span>
+                  <span>{text}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       <div style={{ borderTop: TABLE_LINE, marginTop: "4px" }}>
@@ -189,14 +189,138 @@ export const EmulatorSourcesSection: FC<EmulatorSourcesSectionProps> = ({ listin
       </PanelSection>
     );
   }
-  const last = listing.sources.length - 1;
   return (
     <PanelSection title="Emulator sources">
-      {listing.sources.map((source, index) => (
-        <PanelSectionRow key={source.kind}>
-          <SourceCard source={source} index={index} last={last} busy={busy} onSwitch={onSwitch} onMove={onMove} />
-        </PanelSectionRow>
-      ))}
+      <SourceCards sources={listing.sources} busy={busy} onSwitch={onSwitch} onMove={onMove} />
     </PanelSection>
   );
 };
+
+/** The cards, mounted only while there are sources to list, so a list that
+ *  comes back after a notice starts from no remembered places. */
+const SourceCards: FC<Omit<EmulatorSourcesSectionProps, "listing"> & { sources: EmulatorSource[] }> = ({
+  sources,
+  busy,
+  onSwitch,
+  onMove,
+}) => {
+  const cards = useSlideOnReorder(sources.map((source) => source.kind).join("\n"));
+  const pressed = useFocusFollowsMove(cards, sources, busy);
+  const last = sources.length - 1;
+  return sources.map((source, index) => (
+    <PanelSectionRow key={source.kind}>
+      <SourceCard
+        source={source}
+        index={index}
+        last={last}
+        busy={busy}
+        cardRef={(card) => {
+          if (card === null) cards.current.delete(source.kind);
+          else cards.current.set(source.kind, card);
+        }}
+        onSwitch={onSwitch}
+        onMove={(kind, direction) => {
+          pressed(kind, direction);
+          onMove(kind, direction);
+        }}
+      />
+    </PanelSectionRow>
+  ));
+};
+
+const SLIDE = "transform 200ms ease-out";
+
+/**
+ * Slide every card whose place changed with the order from where it stood to
+ * where it stands: the card is drawn back at its old place, then let go.
+ * Answers the cards it slides, by kind, which each card enters itself into.
+ *
+ * Places are layout offsets (`offsetTop`), which neither a scroll of the region
+ * nor a slide still under way changes. The frame is asked of the card's own
+ * window: the panel's code runs in another one (CLAUDE.md, the `instanceof`
+ * trap).
+ */
+function useSlideOnReorder(order: string): RefObject<Map<string, HTMLDivElement>> {
+  const cards = useRef(new Map<string, HTMLDivElement>());
+  const placed = useRef<{ order: string; tops: Map<string, number> } | null>(null);
+  useLayoutEffect(() => {
+    const tops = new Map([...cards.current].map(([kind, card]) => [kind, layoutTop(card)]));
+    const before = placed.current;
+    placed.current = { order, tops };
+    if (before === null || before.order === order) return;
+    for (const [kind, card] of cards.current) {
+      const from = before.tops.get(kind);
+      const to = tops.get(kind);
+      const view = card.ownerDocument.defaultView;
+      if (from === undefined || to === undefined || from === to || view === null) continue;
+      card.style.transition = "";
+      card.style.transform = `translateY(${from - to}px)`;
+      // Reading the box makes the browser apply the old place now; without it
+      // both writes land in the same frame and nothing slides.
+      card.getBoundingClientRect();
+      view.requestAnimationFrame(() => {
+        card.style.transition = SLIDE;
+        card.style.transform = "";
+      });
+    }
+  });
+  return cards;
+}
+
+function layoutTop(element: HTMLElement): number {
+  let top = 0;
+  let node: HTMLElement | null = element;
+  while (node) {
+    top += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return top;
+}
+
+/**
+ * Hand focus back to the arrow that was pressed once the listing it asked for
+ * has arrived — or to the card's other arrow, where the move took the source to
+ * the end its own arrow is dead at. Answers the function a press is recorded
+ * with.
+ *
+ * Two things stand between the press and the arrow keeping focus: every arrow
+ * is disabled while the change is in flight, and React reorders by taking a
+ * card's node out and putting it back, which drops the focus it held. Focus is
+ * placed the way entry focus is, after Steam has settled its own pointer — and
+ * not where the reader has gone somewhere outside the cards in the meantime,
+ * which they chose.
+ */
+function useFocusFollowsMove(
+  cards: RefObject<Map<string, HTMLDivElement>>,
+  sources: EmulatorSource[],
+  busy: boolean,
+): (kind: string, direction: EmulatorSourceDirection) => void {
+  const press = useRef<{ kind: string; direction: EmulatorSourceDirection; sources: EmulatorSource[] } | null>(null);
+  useEffect(() => {
+    const pressed = press.current;
+    if (pressed === null || busy || pressed.sources === sources) return;
+    press.current = null;
+    const card = cards.current.get(pressed.kind);
+    if (card === undefined) return;
+    setTimeout(() => {
+      const doc = card.ownerDocument;
+      const active = doc.activeElement;
+      if (
+        active !== null &&
+        active !== doc.body &&
+        ![...cards.current.values()].some((other) => other.contains(active))
+      ) {
+        return;
+      }
+      const back = pressed.direction === "up" ? "down" : "up";
+      placeEntryFocus(card, (root) => arrowOf(root, pressed.direction) ?? arrowOf(root, back));
+    }, ENTRY_FOCUS_DELAY_MS);
+  }, [cards, sources, busy]);
+  return (kind, direction) => {
+    press.current = { kind, direction, sources };
+  };
+}
+
+function arrowOf(card: ParentNode, direction: EmulatorSourceDirection): HTMLElement | null {
+  return card.querySelector<HTMLElement>(`[data-move="${direction}"] button:not([disabled])`);
+}
